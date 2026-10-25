@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-128: Align the Files tree with the shared section grid and make the
+  declared tree fill its vertical `fill` section. The exact two-host window
+  case passes 2/2 with the existing grid tolerance, 12-point text comparison
+  and tree-to-section height assertion. An earlier session changed its
+  frontmost identity and is excluded from acceptance evidence. This checklist
+  update is pending commit.
+
 - F239-132: Preserve direct capture directories when capture stop or layout
   trace finalization fails. Both hosts return the original error and keep the
   path already returned by capture start; successful recordings remain

@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-128: Files tree를 공유 section grid에 맞추고 세로 fill section에서
+  선언된 tree가 남은 높이를 차지하도록 한다. 기존 grid 허용오차, 12-point 글자
+  비교, tree와 section 높이 assertion을 유지한 정확한 두 host window case가
+  2/2 통과한다. Frontmost identity가 바뀐 앞선 실행은 acceptance 근거에서
+  제외한다. 이 checklist 변경은 아직 commit되지 않았다.
+
 - F239-132: capture stop 또는 layout trace finalization이 실패해도 직접
   capture directory를 보존한다. 두 host는 capture start가 이미 반환한
   경로를 남기고 원래 오류를 반환하며, 성공한 녹화는 계속 요청자가

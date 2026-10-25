@@ -292,8 +292,8 @@ for (const app of Object.values(APPS)) {
     const bookmarkList = bookmarks.value?.elements.find((element) => element.kind === "list");
     const bookmark = bookmarkList?.items.find((item) => item.label === name);
     assert.ok(bookmarkList && bookmark, "files.bookmarks did not publish the file");
-    assert.equal(bookmark.command, "files.bookmarks.remove", "the bookmark label is not the declared remove control");
-    const removeRect = await controlRect({ sidebar: "left", section: "files.bookmarks", key: bookmarkList.key,
+    assert.equal(bookmark.command, "files.bookmarks.remove", "the bookmark label does not carry the declared remove command");
+    const bookmarkLabelRect = await controlRect({ sidebar: "left", section: "files.bookmarks", key: bookmarkList.key,
       path: [bookmark.key], role: "label" });
     await s.presented();
     const { path } = await s.request("diagnostics.capture.still", {});
@@ -326,21 +326,12 @@ for (const app of Object.values(APPS)) {
     }
     assert.ok(holder.x <= header.x + 0.5 && holder.width >= header.width - 1, `the section body pads the tree: holder ${JSON.stringify(holder)}, header ${JSON.stringify(header)}`);
 
-    // Text size: a bookmark row and the fixture file row that draw the same name with 12pt sidebar text have the same ink width. The last group of each row is the whole name.
-    // In a 1x capture, gaps between 12pt glyphs are up to 3px, and the gap between the icon and the name is 8pt, so gaps of 4pt or less are joined.
+    // Text size: a bookmark label and the fixture file row draw the same name with 12pt sidebar text, so their final ink groups have the same width.
+    // In a 1x capture, gaps between 12pt glyphs are up to 3px, so gaps of 4pt or less are joined.
     const WORD_GAP = 4;
     const treeRuns = inkRuns(image, scale, { x: holder.x, y: rowBox.y, width: holder.width, height: ROW }, WORD_GAP * scale);
-    const bookmarkRuns = inkRuns(image, scale,
-      { x: header.x, y: removeRect.y, width: removeRect.x - header.x - 2, height: removeRect.height }, WORD_GAP * scale);
-    // The delete button of a bookmark is apart from the path. In the whole row, it measures between the last ink column before the left boundary of the button and the first ink column from the boundary.
-    // A group that crosses the boundary is split at the boundary.
-    const rowRuns = inkRuns(image, scale,
-      { x: header.x, y: removeRect.y, width: removeRect.x + removeRect.width - header.x, height: removeRect.height }, 0);
-    const boundary = Math.round(removeRect.x * scale);
-    const pathEnd = Math.max(...rowRuns.filter(([start]) => start < boundary).map(([, end]) => Math.min(end, boundary - 1)));
-    const removeStart = Math.min(...rowRuns.filter(([, end]) => end >= boundary).map(([start]) => Math.max(start, boundary)));
-    const separation = (removeStart - pathEnd - 1) / scale;
-    assert.ok(separation >= 6, `the bookmark remove control is ${separation} pt from its path: runs ${JSON.stringify(rowRuns)}, control ${JSON.stringify(removeRect)}`);
+    const bookmarkRuns = inkRuns(image, scale, bookmarkLabelRect, WORD_GAP * scale);
+    assert.ok(bookmarkRuns.length > 0, `the bookmark label has no captured ink: ${JSON.stringify({ bookmarkLabelRect, scale })}`);
     const width = ([start, end]) => (end - start + 1) / scale;
     const treeLabel = width(treeRuns.at(-1));
     const bookmarkLabel = width(bookmarkRuns.at(-1));

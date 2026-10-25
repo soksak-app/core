@@ -644,6 +644,9 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
    width when the sidebar is horizontal (docs/spec/declared-ui.md, sidebar section form). */
 .set__body[data-declared]{display:flex;flex-direction:column;gap:6px}
 .set__body[data-declared]:has(> .declared-tree){padding:0}
+/* Keep the declared project line and tree ink on the section head's first-icon grid while the tree body stays full-bleed. */
+.set__body[data-declared]:has(> .declared-tree) > .declared-status-line{padding-inline-start:var(--space-3)}
+.set__body[data-declared]:has(> .declared-tree) > .declared-tree{padding-inline-start:var(--space-2)}
 .set[data-orientation=horizontal] .set__body[data-declared]{flex-direction:row;flex-wrap:wrap;align-items:flex-start}
 /* A tree takes a full line of a horizontal section, because its width follows its deepest visible row, which changes when a branch expands
    or collapses; in a row flow that change would reflow the sibling elements. A tree box scrolls horizontally, with a thin scrollbar, when a
@@ -669,6 +672,8 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* A fill section shares the height that the other sections leave and scrolls its body inside it. When collapsed, only the head remains. */
 .set__section[data-fill=true]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:min-content;display:flex;flex-direction:column}
 .set__section[data-fill=true]:not([data-folded=true]) > .set__body{flex:1 1 auto;min-height:min-content;overflow:auto}
+/* A virtual tree is the scrollable content of a fill section, not an intrinsic-height child of its body. */
+.set[data-orientation=vertical] .set__section[data-fill=true]:not([data-folded=true]) > .set__body[data-declared]:has(> .declared-tree) > .declared-tree{flex:1 1 auto;min-height:0;overflow:auto}
 /* A horizontal list divides the section width within the same height and scrolls each body. */
 .set[data-orientation=horizontal][data-layout=list]{flex-direction:row;min-width:0}
 .set[data-orientation=horizontal][data-layout=list] > .set__section:not([data-folded=true]){flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column}
