@@ -427,11 +427,12 @@ fn the_log_rotates_at_the_bound_and_keeps_every_generation() {
     assert_eq!(current[1]["event"], "log.rotated");
     assert_eq!(current[1]["fields"]["generation"], files.len() - 1);
     assert!(current[1]["fields"].get("kept").is_none());
-    // A file is closed when the next line would pass the bound, so it is full to within one line of 150 bytes.
+    // The latest archived file contains the exact number of bytes reported by log.rotated.
     let full = current[1]["fields"]["bytes"].as_u64().unwrap();
-    assert!(
-        (4000 - 150..=4000).contains(&full),
-        "log.rotated bytes {full}"
+    assert_eq!(
+        full,
+        fs::metadata(generation(files.len() - 1)).unwrap().len(),
+        "log.rotated bytes"
     );
     // Every generation is a file of the contract: it opens with log.open, and its seq is consecutive.
     for file in &files {

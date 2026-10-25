@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-124: Go와 Rust rotation test에서 `log.rotated.bytes`를 가장 최근
+  archived generation의 실제 크기와 비교한다. 기존 test는 회전을 유발한 line의
+  크기를 가정하고 가장 오래된 archive를 비교했다. 집중 Go 및 Rust rotation test가
+  각각 1/1 통과하며 rotation 동작은 바뀌지 않았다.
+
 - F239-113-1: Go와 Rust event-log audit consumer fixture를 catalog schema 2에서
   Draft 2020-12 field schema를 사용하는 schema 3으로 갱신한다. Raw event-log line
   schema 2와 audit의 구형 catalog 거부는 유지한다. 보존된 Go default 및

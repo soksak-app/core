@@ -439,9 +439,12 @@ func TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration(t *testing.T) {
 		t.Fatalf("a rotated file starts with %v and %v", current[0]["event"], current[1]["event"])
 	}
 	rotated := current[1]["fields"].(map[string]any)
-	// A file is closed when the next line would pass the bound, so it is full to within one line of 150 bytes. The file at the path
-	// follows the last generation.
-	if rotated["generation"] != float64(len(names)-1) || rotated["bytes"].(float64) > 4000 || rotated["bytes"].(float64) < 4000-150 {
+	// The latest archived file contains the exact number of bytes reported by log.rotated.
+	archived, err := os.Stat(names[len(names)-1])
+	if err != nil {
+		t.Fatalf("latest archived generation: %v", err)
+	}
+	if rotated["generation"] != float64(len(names)-1) || rotated["bytes"] != float64(archived.Size()) {
 		t.Fatalf("log.rotated fields %v with %d generations", rotated, len(names)-1)
 	}
 	if _, has := rotated["kept"]; has {

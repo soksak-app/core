@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-124: Compare `log.rotated.bytes` with the actual size of the latest
+  archived generation in the Go and Rust rotation tests. The previous tests
+  assumed a triggering line size and compared the oldest archive. The focused
+  Go and Rust rotation tests pass individually (1/1 each); rotation behavior
+  is unchanged.
+
 - F239-113-1: Update the Go and Rust event-log audit consumer fixtures from
   catalog schema 2 to schema 3 with Draft 2020-12 field schemas. Preserve raw
   event-log line schema 2 and the audit's rejection of old catalog formats.
