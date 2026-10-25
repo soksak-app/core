@@ -4,42 +4,10 @@
 
 ## Unreleased
 
-- F239-109: Show each Rust test build's start and elapsed pass/fail result through
-  the shared test runner while retaining its per-build timeout. Controlled
-  negative: temporarily restoring the no-output callback makes the tracked
-  discovery assertion fail with `no build start line: []`
-  (`/tmp/F239-109-rust-build-progress-red.log`). Green:
-  the same owner test passes (`/tmp/F239-109-rust-build-progress-green.log`), and
-  the Rust discovery plus Cargo metadata owner cases pass 2/2
-  (`/tmp/F239-109-rust-build-progress-green-plus-cargo-metadata.log`).
-
-- F239-102: Select Rust host-contract declarations from Cargo-listed test
-  executables and their target source paths. The preserved initial static audit
-  included Linux-only and Windows-only Tauri sok declarations in the macOS
-  inventory. The focused selector owner test passes 1/1
-  (`/tmp/F239-102-rust-declaration-inventory-green.log`). The current full
-  declaration audit remains pending while other F239-93 owner changes land.
-
-- F239-129: Pass the existing `WindowData` to view retirement so the helper
-  reads its source origins, channels and event stream from their owner. Replace
-  the sidecar root `filter_map(bool.then(...))` with `filter` and `map`. The
-  view-order and retained-root owner tests pass 1/1 each; required clippy checks
-  pass for diagnostics and default builds. Behavior is unchanged.
-
-- F239-125: Register a test-owned filesystem platform for the Go CLI event-log
-  loss tests and restore the previous registration during cleanup. The package
-  tests do not run through `cmd/sok`, which registers the operating-system
-  platform. Both focused loss tests pass (2/2); CLI and event-log production
-  behavior is unchanged.
-
-- F239-112: Format the event catalog source and owner tests:
-  `packages/sok/tauriv2/src/plugin_catalog.rs` and
-  `packages/sok/tauriv2/tests/plugin_catalog_test.rs` with
-  `rustfmt --edition 2024 --config skip_children=true`. Red: the final format
-  check reported both files as unformatted. Green: `make rust-format-check` and
-  `make go-format-check` pass after the required formatting command
-  (`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`).
-  No semantic changes were made.
+- F239-142: Align the committed canonical record translations and remove
+  duplicate checklist rows while preserving identifiers and completed states.
+  Retain the complete paired feature and changelog contents so translated
+  entries keep the same ordering and repository facts.
 
 - F239-141: Run the independent terminal compose/cursor reads, followed by the
   independent verification compose/cursor/window reads, concurrently around
@@ -56,100 +24,46 @@
   passes with both error sources, and the default non-activation owner passes.
   No activation or key input was run.
 
-- F239-124: Compare `log.rotated.bytes` with the actual size of the latest
-  archived generation in the Go and Rust rotation tests. The previous tests
-  assumed a triggering line size and compared the oldest archive. The focused
-  Go and Rust rotation tests pass individually (1/1 each); rotation behavior
-  is unchanged.
-
-- F239-113-1: Update the Go and Rust event-log audit consumer fixtures from
-  catalog schema 2 to schema 3 with Draft 2020-12 field schemas. Preserve raw
-  event-log line schema 2 and the audit's rejection of old catalog formats.
-  The preserved Go default and diagnostics host-contract runs fail because the
-  fixture uses schema 2. The focused Go and Rust audit tests pass individually
-  (1/1 each).
-
-- F239-120: Prepare the Go view-sync fixtures with the current page's declared
-  composition and plugin so the origin and rectangle assertions reach their
-  intended validation. The preserved host-contract run exposed both fixture
-  failures before the intended assertions. The two Go owner tests and two
-  matching Rust geometry tests pass individually (1/1 each). The Go origin and
-  rectangle tests also pass in diagnostics builds (1/1 each; see the F239-120
-  feature record). Production behavior is unchanged.
-
 - F239-114: Complete the fallback audit after its JavaScript, TypeScript,
   Rust and Objective-C corrections are committed. The fallback owner passes
   10/10 and the enabled-rule census owner passes 1/1; independent runtime
   acceptance remains open.
 
-- F239-115: State the caller-visible reason at each of the 11 Objective-C
-  `m.error-return` sites in process identity, capture, image matching, image
-  regions and input activation. Red: the preserved Node run reported all 11
-  sites without reasons (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`).
-  Green: the tracked repository census owner test passes 1/1 after the scoped
-  reason comments (`/tmp/F239-140-census-green.log`). No behavior or census rule
-  changed.
+- F239-109: Show each Rust test build's start and elapsed pass/fail result through
+  the shared test runner while retaining its per-build timeout. Controlled
+  negative: temporarily restoring the no-output callback makes the tracked
+  discovery assertion fail with `no build start line: []`
+  (`/tmp/F239-109-rust-build-progress-red.log`). Green:
+  the same owner test passes (`/tmp/F239-109-rust-build-progress-green.log`), and
+  the Rust discovery plus Cargo metadata owner cases pass 2/2
+  (`/tmp/F239-109-rust-build-progress-green-plus-cargo-metadata.log`).
 
-- F239-114-3: State why both capture artifact serialization catches preserve
-  the exception reason and return it through the existing capture error path.
-  Red: the preserved Node run reported both catch clauses without reasons
-  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: the
-  fallback owner file passes 10/10 after the precise reason comments
-  (`/tmp/F239-139-fallback-owner-final.log`). No capture error is suppressed.
-
-- F239-116: Align the closed-checklist negative fixture with the validator’s
-  shared missing-record error. Keep validation criteria unchanged. The focused
-  checklist file passes 29/29 on the current source; all three negative
-  fixtures still reject invalid closed records with file-qualified errors.
-
-- F239-114-2: Resolve the Rust fallback and census findings against their
-  owning contracts. Map PID and timeout parse errors explicitly, use the
-  registered-window Option API where window closure is expected, and state
-  precise reasons for contract-preserving queue classification and poisoned
-  lock recovery. Red: the preserved audits reported Rust findings. Green:
-  fallback tests pass 10/10, census tests pass 3/3, and the process-wait invalid
-  input test passes 1/1.
+- F239-102: Select Rust host-contract declarations from Cargo-listed test
+  executables and their target source paths. The preserved initial static audit
+  included Linux-only and Windows-only Tauri sok declarations in the macOS
+  inventory. The focused selector owner test passes 1/1
+  (`/tmp/F239-102-rust-declaration-inventory-green.log`). The current full
+  declaration audit remains pending while other F239-93 owner changes land.
 
 - F239-140: Explain six typed image detach acknowledgement parse conversions.
   Each maps malformed or missing input to a named protocol error; the handler
   logs it and retains an unidentifiable waiter until timeout or fails an exact
   matched waiter. The census owner test passes 1/1.
+
+- F239-138: Restore the boundary between `sp_capture_wait` and `registerCaptureStopBoundary`.
+  Red: the unchanged `capture_metadata_test` target
+  failed to compile with a nested function definition and an undeclared helper.
+  Green: the same target compiles and passes 1/1 in 1.103 s after moving the
+  existing wait completion before the helper and removing its duplicate trailing
+  block. The helper predicate, stop deadline, callback summary and runtime
+  behavior are unchanged.
+
 - F239-117: Clear inherited run metadata from E2E subprocess fixtures before
   applying each case's overrides. Preserve the production requirement for both
   nonempty values. Red: with valid outer metadata, missing and partial cases
   probed the baseline and started a child (`/tmp/F239-117-red.log`). Green: the
   same focused owner test passes 4/4 (`/tmp/F239-117-green.log`). Production
   runner behavior is unchanged.
-
-- F239-138: Restore the boundary between `sp_capture_wait` and `registerCaptureStopBoundary`.
-  Red: the unchanged `capture_metadata_test` target failed to compile with a nested
-  function definition and an undeclared helper. Green: the same target compiles
-  and passes 1/1 in 1.103 s after moving the existing wait completion before the
-  helper and removing its duplicate trailing block. The helper predicate, stop
-  deadline, callback summary and runtime behavior are unchanged.
-
-
-- F239-118: Move four unpaired Go and Rust host test files into their existing
-  owning test files, remove redundant module includes, and correct the parity
-  inventory. The focused moved tests pass, and the paired-host structure check
-  no longer reports those four paths. One unrelated Tauri `sok` process-wait
-  parity finding remains.
-
-- F239-107-2: Verify view replacement event ordering through the production
-  retirement and source-registration operations. Preserve the existing order:
-  retire the old source, emit `view-process-ended`, then register the
-  replacement. The Tauri owner test passes 1/1, and the Wails counterpart
-  passes 1/1 in default and diagnostics builds. No product behavior changed.
-
-- F239-137: Include every installed plugin manifest catalog in per-configuration event-log audits. Validate the installed manifest, plugin identity, catalog layer and namespace, and report missing or invalid catalog files explicitly. `composeCatalogs` now preserves sidecar validation while adding plugin event declarations and layers. Red: the owner assertion failed because the installed plugin event was absent from `catalogOf` (`actual: undefined`). Green: both installed-plugin owner cases pass in one run, including a disabled installed plugin and invalid manifest/catalog cases; sidecar audit and log-contract composition regressions each pass 3/3. Runtime host catalog loading already included plugin catalogs and was unchanged. The Wails catalog preflight passed in `/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log` and `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`: the stored-catalog check passed, and all ten reference/terminal steps and capture stop ran without the plugin-catalog error. Both runs still failed the separate F134 frame-message/accepted-marker join and the 33 ms capture-gap check (33.287 ms and 33.800 ms); this is not IME visual acceptance.
-
-- F239-139: Require `layers` when composing a base catalog and normalize the
-  optional plugin diagnostic source once. Preserve supplied source paths and
-  keep the empty `extends` default for catalogs without chain extensions. Red:
-  the fallback owner found seven unexplained defaults, and the new base-layer
-  assertion failed because composition returned without an error. Green: the
-  fallback owner file passes 10/10 and focused base-layer/sidecar composition
-  cases pass 7/7.
 
 - F239-134: Join captured rasters only to exact matching host screen bodies and
   accepted frame markers. Preserve unmatched records outside the retained
@@ -172,6 +86,16 @@
   registers its boundary, including idle callbacks with display times. Keep
   the resize guard, existing target and one-second deadline. The owner test
   passes 1/1; runtime acceptance remains pending.
+
+- F239-137: Include every installed plugin manifest catalog in per-configuration event-log audits. Validate the installed manifest, plugin identity, catalog layer and namespace, and report missing or invalid catalog files explicitly. `composeCatalogs` now preserves sidecar validation while adding plugin event declarations and layers. Red: the owner assertion failed because the installed plugin event was absent from `catalogOf` (`actual: undefined`). Green: both installed-plugin owner cases pass in one run, including a disabled installed plugin and invalid manifest/catalog cases; sidecar audit and log-contract composition regressions each pass 3/3. Runtime host catalog loading already included plugin catalogs and was unchanged. The Wails catalog preflight passed in `/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log` and `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`: the stored-catalog check passed, and all ten reference/terminal steps and capture stop ran without the plugin-catalog error. Both runs still failed the separate F134 frame-message/accepted-marker join and the 33 ms capture-gap check (33.287 ms and 33.800 ms); this is not IME visual acceptance.
+
+- F239-139: Require `layers` when composing a base catalog and normalize the
+  optional plugin diagnostic source once. Preserve supplied source paths and
+  keep the empty `extends` default for catalogs without chain extensions. Red:
+  the fallback owner found seven unexplained defaults, and the new base-layer
+  assertion failed because composition returned without an error. Green: the
+  fallback owner file passes 10/10 and focused base-layer/sidecar composition
+  cases pass 7/7.
 
 - F239-136: Move Vision frame identity decoding out of the ScreenCaptureKit
   sample callback. Snapshot issued source and region state and geometry, copy
@@ -207,29 +131,18 @@
   summaries. The `capture_callback_test` Red assertion now passes 1/1; the
   rebuilt-host comparison remains pending. Capture timing and stop behavior
   are unchanged.
-- F239-127: Read image detach acknowledgements from their declared Serde path
-  and parse only the declared acknowledgement fields. Red: the original owner
-  test failed for a 140-level root member; its three-location extension exposed
-  an unsettled waiter when the member was inside the acknowledgement. An
-  intermediate correction still read the old envelope path and did not settle
-  the waiter. Green: Rust root, `image`, and acknowledgement deep-member cases
-  pass 1/1, as do exact-owner, mismatch, rejection, and multi-region tests; the
-  Wails counterpart passes all three locations 1/1. Request, sidecar, surface,
-  image, and generation validation remains intact.
+
+- F239-129: Pass the existing `WindowData` to view retirement so the helper
+  reads its source origins, channels and event stream from their owner. Replace
+  the sidecar root `filter_map(bool.then(...))` with `filter` and `map`. The
+  view-order and retained-root owner tests pass 1/1 each; required clippy checks
+  pass for diagnostics and default builds. Behavior is unchanged.
 
 - F239-93-6: Add the Tauri stdio counterpart for late image cancellation.
   The controlled child emits its image after stdin EOF; the owner test confirms
   the closed surface receives no message and the child exits. The focused test
   passed 1/1 in 0.409 s previously; the current rerun passes 1/1 in 0.737 s.
   Production behavior is unchanged.
-
-- F239-93-5: Map current and retired sidecar image-owner dispositions to
-  shared host-contract cases. Add the Wails scripted-protocol handshake that
-  proves retired non-image and malformed-image messages receive no response
-  before the next close request, while retaining the closed answer for a
-  valid retired image. The focused Wails owner test passes 1/1; the moved
-  Tauri combined current/retired test and valid-retired-image test each pass
-  1/1. The declaration audit remains pending.
 
 - F239-113: Update the JavaScript event-catalog fixtures to schema 3 and
   Draft 2020-12 field schemas. Keep raw event-log line schema 2 and reject old
@@ -241,6 +154,38 @@
   test CLI's configured core version. The focused catalog and install tests
   pass in default, diagnostics and dev configurations for both hosts.
 
+- F239-131: Preserve the original capture-stop error when the host removes the
+  recording directory before returning failure. Store failed-stop state under
+  the identity captured at start and prevent the IME cleanup from sending a
+  second stop. The recording owner file passes 10/10; the IME fixture passes
+  `node --check`. No application or window test was run.
+
+- F239-93-5: Map current and retired sidecar image-owner dispositions to
+  shared host-contract cases. Add the Wails scripted-protocol handshake that
+  proves retired non-image and malformed-image messages receive no response
+  before the next close request, while retaining the closed answer for a
+  valid retired image. The focused Wails owner test passes 1/1; the moved
+  Tauri combined current/retired test and valid-retired-image test each pass
+  1/1. The declaration audit remains pending.
+
+- F239-127: Read image detach acknowledgements from their declared Serde path
+  and parse only the declared acknowledgement fields. Red: the original owner
+  test failed for a 140-level root member; its three-location extension exposed
+  an unsettled waiter when the member was inside the acknowledgement. An
+  intermediate correction still read the old envelope path and did not settle
+  the waiter. Green: Rust root, `image`, and acknowledgement deep-member cases
+  pass 1/1, as do exact-owner, mismatch, rejection, and multi-region tests; the
+  Wails counterpart passes all three locations 1/1. Request, sidecar, surface,
+  image, and generation validation remains intact.
+
+- F239-114-2: Resolve the Rust fallback and census findings against their
+  owning contracts. Map PID and timeout parse errors explicitly, use the
+  registered-window Option API where window closure is expected, and state
+  precise reasons for contract-preserving queue classification and poisoned
+  lock recovery. Red: the preserved audits reported Rust findings. Green:
+  fallback tests pass 10/10, census tests pass 3/3, and the process-wait invalid
+  input test passes 1/1.
+
 - F239-126: Record the exact Rust private unit-test path for the CLI process-wait
   platform-error case. The Rust child module exercises the private injected
   boundary; the Go external test covers the same public CLI result. The C6
@@ -248,18 +193,18 @@
   coverage required in both hosts. The focused mapping test passes 1/1, and
   `node scripts/check-hosts.mjs` passes all three pairs.
 
-- F239-131: Preserve the original capture-stop error when the host removes the
-  recording directory before returning failure. Store failed-stop state under
-  the identity captured at start and prevent the IME cleanup from sending a
-  second stop. The recording owner file passes 10/10; the IME fixture passes
-  `node --check`. No application or window test was run.
-
 - F239-119: Require the project member in Tauri ProjectShown while
   preserving explicit `null`. The production `Argument<ProjectShown>` decoder
   Red accepted `{}` as `None`; the same MockRuntime owner case now passes 1/1,
   rejecting omission without state mutation and accepting `{"project":null}`.
   The focused Go and Tauri project, starter, view and sidecar cases pass; the
   unrelated Tauri `sok` process-wait parity finding remains open.
+
+- F239-118: Move four unpaired Go and Rust host test files into their existing
+  owning test files, remove redundant module includes, and correct the parity
+  inventory. The focused moved tests pass, and the paired-host structure check
+  no longer reports those four paths. One unrelated Tauri `sok` process-wait
+  parity finding remains.
 
 - F239-122: Update the Tauri null-result and null-event fixtures with their
   required page generation fields, and expect the current `soksak` scheme in
@@ -288,6 +233,33 @@
   test passes 10/10, plugin-api event checks pass 30/30, and log-contract
   audits pass 36/36. Application bundles were not rebuilt.
 
+- F239-120: Prepare the Go view-sync fixtures with the current page's declared
+  composition and plugin so the origin and rectangle assertions reach their
+  intended validation. The preserved host-contract run exposed both fixture
+  failures before the intended assertions. The two Go owner tests and two
+  matching Rust geometry tests pass individually (1/1 each). The Go origin and
+  rectangle tests also pass in diagnostics builds (1/1 each; see the F239-120
+  feature record). Production behavior is unchanged.
+
+- F239-113-1: Update the Go and Rust event-log audit consumer fixtures from
+  catalog schema 2 to schema 3 with Draft 2020-12 field schemas. Preserve raw
+  event-log line schema 2 and the audit's rejection of old catalog formats.
+  The preserved Go default and diagnostics host-contract runs fail because the
+  fixture uses schema 2. The focused Go and Rust audit tests pass individually
+  (1/1 each).
+
+- F239-124: Compare `log.rotated.bytes` with the actual size of the latest
+  archived generation in the Go and Rust rotation tests. The previous tests
+  assumed a triggering line size and compared the oldest archive. The focused
+  Go and Rust rotation tests pass individually (1/1 each); rotation behavior
+  is unchanged.
+
+- F239-125: Register a test-owned filesystem platform for the Go CLI event-log
+  loss tests and restore the previous registration during cleanup. The package
+  tests do not run through `cmd/sok`, which registers the operating-system
+  platform. Both focused loss tests pass (2/2); CLI and event-log production
+  behavior is unchanged.
+
 - F239-111: Dispatch AppKit events in the input-reference test's existing
   50 ms drain interval so queued main-queue document checks run during the
   owner test. The full native suite log contains seven failed input-reference
@@ -295,6 +267,40 @@
   278.858 s). The focused target rebuild succeeds and the existing runner
   passes `input_reference_test` 1/1 in 7.205 s. Production wait bounds and
   completion behavior are unchanged; the full suite had another failure.
+
+- F239-116: Align the closed-checklist negative fixture with the validator’s
+  shared missing-record error. Keep validation criteria unchanged. The focused
+  checklist file passes 29/29 on the current source; all three negative
+  fixtures still reject invalid closed records with file-qualified errors.
+
+- F239-112: Format the event catalog source and owner tests:
+  `packages/sok/tauriv2/src/plugin_catalog.rs` and
+  `packages/sok/tauriv2/tests/plugin_catalog_test.rs` with
+  `rustfmt --edition 2024 --config skip_children=true`. Red: the final format
+  check reported both files as unformatted. Green: `make rust-format-check` and
+  `make go-format-check` pass after the required formatting command
+  (`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`).
+  No semantic changes were made.
+
+- F239-114-3: State why both capture artifact serialization catches preserve
+  the exception reason and return it through the existing capture error path.
+  Red: the preserved Node run reported both catch clauses without reasons
+  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: the
+  fallback owner file passes 10/10 after the precise reason comments
+  (`/tmp/F239-139-fallback-owner-final.log`). No capture error is suppressed.
+
+- F239-115: State the caller-visible reason at each of the 11 Objective-C
+  `m.error-return` sites in process identity, capture, image matching, image
+  regions and input activation. Red: the preserved Node run reported all 11
+  sites without reasons (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`).
+  Green: the tracked repository census owner test passes 1/1 after the scoped
+  reason comments (`/tmp/F239-140-census-green.log`). No behavior or census rule
+  changed.
+
+- F239-110: Correct stale parity feature-link references, add implementation and
+  owner-test links for completed capabilities, and update the recorded workspace
+  inventory counts. The preserved structure run reported these metadata errors;
+  validation of this correction is pending.
 
 - F239-103: Preserve tag-scoped identity after source pixel-history eviction by
   joining the existing bounded source and tag artifact ledgers. Parse committed
@@ -318,10 +324,25 @@
   decode fields and a no-code result without capture error. The 33 ms cadence
   limit remains unchanged; neither run establishes full-recording cadence or
   attributes the earlier callback gap to Vision.
-
 - F239-105: Remove the duplicate plugin-only row for `sidecars.retain.keeps-session-first-sent-during-start` and test the checked-in English and Korean tables for unique case IDs. Red: the owner test failed on
   the duplicate ID in the canonical table. Green: it parses both real tables,
   confirms unique IDs and matching case sets, and passes 1/1.
+
+- F239-107-1: Keep plugin-host provider creation behind successful
+  source-generation issuance. The exhausted allocator leaves the source
+  snapshot unchanged and does not invoke provider creation. Tauri startup uses
+  the tested issuance helper; the Wails owner case exercises
+  `createPluginHost`. The original production ordering already issued the
+  generation before provider creation, so no product-defect Red is claimed.
+  Green: Tauri provider and source-snapshot tests pass 1/1 each; Wails provider
+  startup passes 1/1 in default and diagnostics builds, and its source-snapshot
+  test passes 1/1.
+
+- F239-107-2: Verify view replacement event ordering through the production
+  retirement and source-registration operations. Preserve the existing order:
+  retire the old source, emit `view-process-ended`, then register the
+  replacement. The Tauri owner test passes 1/1, and the Wails counterpart
+  passes 1/1 in default and diagnostics builds. No product behavior changed.
 
 - F239-106: Validate the shape of a view message before canceling a callback
   from a retired generation. Keep event payload decoding, dispatch and state
@@ -332,16 +353,6 @@
   passes 1/1 in default and diagnostics builds
   (`/tmp/F239-106-envelope-green-default-01.log`,
   `/tmp/F239-106-envelope-green-diagnostics-01.log`).
-
-- F239-107-1: Keep plugin-host provider creation behind successful
-  source-generation issuance. Exhaustion leaves the origin snapshot unchanged
-  and does not invoke the provider operation. Tauri startup uses the tested
-  issuance helper; the Wails owner case exercises `createPluginHost`. The
-  original production ordering already issued generation before provider
-  creation, so this is test coverage and a deterministic test seam, not a
-  product-defect correction. Green: Tauri provider and source-snapshot tests
-  pass 1/1 each; Wails provider startup passes 1/1 in default and diagnostics
-  builds, and its source-snapshot test passes 1/1.
 
 - F239-100: Identify the visible webview that remains pending after native
   activation. The activity-state waiter reports exact unresolved members and
@@ -439,8 +450,6 @@
   over-limit failure and combined visual/cadence reporting; the helper passes
   18/18 (`/tmp/F239-98-1-1-cadence-green-01.log`).
 
-
-
 - F239-98-2: Project visual input text from rows-only terminal status. The
   `terminal.screen` status has no frame identity; the consumer incorrectly
   passed those rows through the strict framed `terminal.screen.read` helper.
@@ -489,13 +498,13 @@
   focused owning route tests pass 2/2, including live-owner and malformed-body
   controls. The preserved shutdown audit was not rerun, so this change does not
   claim a new runtime acceptance.
+
 - F239-96: Claim the Tauri retired-image route tests in parity metadata. The
   new Rust test file was absent from the Tauri test lane. The existing lane now
   owns the test, and the F239-90 feature link names the owner lookup, dispatcher
-  and both route cases. The inventory reports zero uncovered tests and no
-  F239-90 feature-link error; 23 unrelated audit findings remain. `make
-  boundaries` passes all 16 components.
-
+  and both route cases.
+  The inventory reports zero uncovered tests and no F239-90 feature-link error;
+  23 unrelated audit findings remain. `make boundaries` passes all 16 components.
 
 - F239-94: Retain the frontmost application description from the activation callback under MRC and release the previous snapshot. Red: a controlled owner callback test observed deallocation when its inner autorelease pool drained; the F84 activation run then crashed in failure reporting after `SP_ACTIVATE_REFUSED`. Green: the same non-activation owner target passes 17 assertions; the targeted activation retry reports refusal without crashing and restores the captured frontmost PID. This does not resolve the activation refusal. `make docs-check` passes.
 
@@ -536,6 +545,8 @@
   press-origin state is retired. The fixture does not count global
   `sp_log_error` calls, so it verifies the successful receipt path only. Its log
   omits baseline process identity and does not establish prior-app restoration.
+  This is controlled AppKit event coverage, not live HID acceptance.
+
 - F239-97: Preserve click-through focus in receipt-backed pointer input.
   Resolve a logical surface to its actual host webview before waiting for the
   page release receipt. Scope the hit point or stored press origin around the
@@ -546,8 +557,19 @@
   `image_region_test --activation` passes 233 assertions on macOS 26.6.2
   (25G83), arm64. The run restores and verifies the original frontmost process.
   This native owner check does not establish host runtime acceptance.
-  This is controlled AppKit event coverage, not live HID acceptance.
 
+- F239-99: Align the English private native API procedure with the receipt-backed
+  pointer call condition. It now documents the phase-specific scoped context and
+  its restoration before asynchronous receipt handling. Source behavior is unchanged.
+
+- F239-87: Match activation receipts to the physical key action. The F84 Tauri
+  trace contained eight `k` key-downs, one Backspace, and one Space, but the
+  helper counted ten `k` receipts because it accepted every non-empty insert.
+  An owning replay failed at ten; the corrected matcher excludes transactions
+  carrying another key action or command and excludes whitespace inserts.
+  Focused owner tests pass 38/38, `make e2e-check` passes, and `make docs-check`
+  passes. Terminal and native input behavior is unchanged. The separate Wails
+  AppKit reference timeout remains unresolved.
 
 - F239-91: Read current ordered native input transactions in the macOS IME
   document helper. The old helper rejected the image region's transaction
@@ -556,9 +578,7 @@
   activation consumer reads transaction actions and final preedit. The owner
   test passes 15 assertions. The prior activation failure remains unresolved;
   this change does not claim runtime acceptance.
-- F239-99: Align the English private native API procedure with the receipt-backed
-  pointer call condition. It now documents the phase-specific scoped context and
-  its restoration before asynchronous receipt handling. Source behavior is unchanged.
+
 - F239-86: Check activation fixtures for unresolved identifiers with the
   declared TypeScript compiler. F84 failed at `applyTerminalInput` because
   `promptPrefix` was block-scoped; visual measurement also referenced
@@ -570,17 +590,7 @@
   `missingStates` value. `make e2e-check` and focused `node --check` pass. No
   app run or bundle build was done.
 
-- F239-87: Match activation receipts to the physical key action. The F84 Tauri
-  trace contained eight `k` key-downs, one Backspace, and one Space, but the
-  helper counted ten `k` receipts because it accepted every non-empty insert.
-  An owning replay failed at ten; the corrected matcher excludes transactions
-  carrying another key action or command and excludes whitespace inserts.
-  Focused owner tests pass 38/38, `make e2e-check` passes, and `make docs-check`
-  passes. Terminal and native input behavior is unchanged. The separate Wails
-  AppKit reference timeout remains unresolved.
-- F239-92: Correct the Tauri-only scope spelling to the checker host ID `tauriv2`. Red: the unchanged static check rejected `tauri`, and the preserved `make host-contract-check` stopped before running host tests. Green: the exact-scope owner case passes and `scripts/test/check-host-contract.test.mjs` passes 16/16. `make docs-check` passes 112 documents, 431 failure records and 1836 record checks. The full static audit still reports 130 unrelated declaration issues; no host suite was run.
 - F239-88: Encode lifecycle callback Mach ticks as canonical decimal strings, matching the event catalog. F84 observed 14 numeric values across Wails and Tauri: seven `first-sample` and seven `start-completion` events; other non-null Mach-tick fields already matched the schema. The controlled owner Red failed the phase type assertions and `uint64` maximum case. The producer now preserves the exact unsigned value and null state; `capture_callback_test` passes 1/1.
-
 
 - F239-84: Include `error-text.js` in the Workbench package payload. Both
   candidate windows failed startup because `plugin-operations.js`, `exposure.js`
@@ -596,6 +606,15 @@
   is implemented. Existing cross-compilation and completed R2-7-1/2/3 checks retain
   only their recorded scope. Shared macOS requirements are unchanged; Windows/Linux
   runtime behavior remains unverified.
+
+- F239-81: Reject samples from a replaced or retired ScreenCaptureKit stream
+  before they update the shared capture sink, counts, errors or stop boundary.
+  Preserve each callback's originating attempt diagnostics. Close sample intake
+  on its serial queue before artifact finalization. Record each rejected callback
+  as a gated `sample-discarded` lifecycle event on the original attempt; report
+  a discarded callback without attempt context as an error. The metadata, callback,
+  cleanup and late-stop owner tests pass 1/1; both-host runtime verification is
+  pending.
 
 - F239-77: Validate role-specific `host.sampler.memory` records with strict
   schema-3 JSON Schema declarations. Keep event-log line schema 2 unchanged.
@@ -617,23 +636,28 @@
   case passes 1/1, the fallback listing recognizes the adjacent reason, and
   `make docs-check` passes. This verifies the existing contract; no lost-call
   defect was reproduced.
-- F239-79: Use the declared app name for lifecycle artifact paths and compare cleanup roots after canonicalization. `APPS` has no `id` field; the project registry stores the resolved root, while `mkdtempSync` can return a symlinked path. Red: both hosts failed artifact-directory setup on undefined `app.id`, and a later case reported the removed temporary project as missing. The correction uses `app.name` and `realpathSync(projectRoot)`. Runtime confirmation remains pending.
 
 - F239-66: Correct three Workbench test fixtures that failed at module setup rather than exercising their assertions. The chrome tests use test-scoped runtime mocks; the presentation test exports the runtime binding and prepares its mounted view and theme; the plugin-host test supplies the plugin API exports required by its loaded module graph. The three owning files pass 31/31, with no production changes.
 
+- F239-79: Use the declared app name for lifecycle artifact paths and compare cleanup roots after canonicalization. `APPS` has no `id` field; the project registry stores the resolved root, while `mkdtempSync` can return a symlinked path. Red: both hosts failed artifact-directory setup on undefined `app.id`, and a later case reported the removed temporary project as missing. The correction uses `app.name` and `realpathSync(projectRoot)`. Runtime confirmation remains pending.
+
 - F239-75: Bind the selected terminal card before opt-in identity capture.
-  The consumer previously referenced a loop-local card after that loop ended,
-  raising a ReferenceError before terminal creation. Syntax validation passes;
-  two-host runtime verification remains pending.
+  Red: the consumer referenced a loop-local card after its loop and raised a
+  ReferenceError before terminal creation. Green: the F84 two-host frame-identity
+  cases pass 2/2 and verify the matched current tuple, unknown rows, complete
+  artifacts, and clean audits.
 
 - F239-76: Issue `terminal.focus` before waiting for the host region to report focus in the IME helper, while retaining active/key-window and cursor-focus checks. Syntax, E2E source and documentation checks pass. Attempt-02 reached this helper twice per host and passed its focus preconditions, then failed later during lifecycle artifact setup on undefined `app.id` before the terminal gesture. Dedicated F8-9/F143 runtime confirmation remains pending.
 
+- F239-63: Classify helper-only E2E modules explicitly and run the shared
+  project-window lifecycle through each selected adapter. Keep the
   `WebviewWindow #... not found` stderr assertion scoped to Wails. Red: the
   consolidated Node run found three parity-audit classifications. Green:
-  the parity owner test passes 1/1 and `make e2e-check` passes. The added
-  Tauri case body ran and its host-liveness assertion passed, but the session
-  was rejected after an external foreground change. The audit passed and the
-  tested hosts ended; this is not accepted Tauri runtime evidence.
+  the parity owner test passes 1/1 and `make e2e-check` passes. F84 runtime
+  Green: Tauri passes 1/1 and Wails passes the required repeat 3/3. Both host
+  audits pass, the baseline is restored, and Wails reports no new missing-window
+  warnings.
+
 - F239-74: Select the lifecycle window from the `host.windows` value returned by `Session.until`. The method returns the watched status value, not the predicate result. Red: Wails and Tauri rejected the undefined window ID before project open. The selector now filters the returned list and validates its new string ID. `node --check`, `make e2e-check`, and `make docs-check` pass; Wails and Tauri cycle 01 runtime confirmation remains pending.
 
 - F239-61: Resolve the final Rust format and Clippy findings without
@@ -641,13 +665,13 @@
   cleanup. Default and diagnostics Clippy checks for `soksak-host-tauriv2`
   pass with `-D warnings`; the focused project-window cleanup test passes
   1/1, and `cargo fmt --all --check` passes. The Windows-target check stopped
-- F239-63: Classify helper-only E2E modules explicitly and run the shared
-  project-window lifecycle through each selected adapter. Keep the
   in `ring` because `aarch64-w64-mingw32-clang` is unavailable, so Windows
   Rust compilation remains unverified. No app was built or launched.
 
 - F239-70-1: Check the input actions across the controlled `unmarkText` and `insertNewline:` transactions. The owner Red showed that the final transaction carries the newline command while the preceding transaction commits `ㅏㅏ` once. The corrected assertion verifies both actions and empty errors/preedit; `image_region_decoration_test` passes 1/1.
+
 - F239-70-2: Consume the capture checker’s injected stop error once. The preserved native full-suite Red showed that the persistent override contaminated later recordings and failed three stop-error assertions. The test wrapper now retains fault evidence while limiting the injected error to one read; `capture_checker_test` passes 1/1.
+
 - F239-71: Give the late-stop fixture the private output directory required by
   capture finalization and assert all four recordings performed by the embedded
   acceptance case. Red: finalization wrote to a nil path and the lifecycle
@@ -662,7 +686,6 @@
 
 - F239-65: Resolve the E2E runner test entrypoint from its module location so the test does not depend on the caller's working directory. Red: running `node --test test/run.test.mjs` from `e2e/` attempted to load the nonexistent `e2e/e2e/run.mjs`. Green: the focused test passes 10/10 from both `e2e/` and repository root; `node --check e2e/test/run.test.mjs` and `make docs-check` pass.
 
-
 - F239-62: Add the required canonical `displayName` to the installed-sidecar
   fixtures in `audit-run.test.mjs` and `check-events.test.mjs`. Red: the
   consolidated Node run failed one and three tests respectively because
@@ -670,13 +693,15 @@
   the two owner scripts pass 19/19; the missing-catalog case now reaches its
   intended error assertion. `make docs-check` passes.
 
+
 - F239-68: Set the candidate registry file URL from `make install-plugins`;
   distinguish runner-injected run metadata from
   workflow-owned environment. The workflow test passes 6/6 and the runner test
   passes 14/14.
-- F239-60: Subscribe to terminal status before reading the pre-key screen and cursor baseline, so a frame advance during those reads remains observable. Persist the baseline frame and setup failures before waiting for matching status events. The owner test reproduces the lost notification and passes after the ordering change; its document suite passes 37/37. No activation run was performed.
 
 - F239-67: Preserve structured starter-install errors in operation status, the application log and the displayed message. The owning Red showed that a plain-object rejection retained only its message in operation status. A pure shared formatter now preserves code, message and data in all three outputs. The formatter and plugin-operations tests pass 24/24; `node --check` and `make docs-check` pass.
+
+- F239-60: Subscribe to terminal status before reading the pre-key screen and cursor baseline, so a frame advance during those reads remains observable. Persist the baseline frame and setup failures before waiting for matching status events. The owner test reproduces the lost notification and passes after the ordering change; its document suite passes 37/37. No activation run was performed.
 
 - F239-58: Correct the lifecycle selector window target. `fresh(s)` leaves a project open in the original window; with `projectOpening: windows`, the disposable project opens in a new window. The selector now creates an unassigned window and sends project, gesture, close/reopen, and cleanup operations through its session. Eight preserved Wails failures stopped at `core.project` before the gesture. `node --check`, `make e2e-check`, and `make docs-check` pass; two-host runtime acceptance remains pending.
 
@@ -1979,9 +2004,9 @@
   pass 1/1 each. The mismatch follow-up Red showed that a wrong-generation ACK
   settled its waiter; its correction passes 1/1 and leaves the waiter pending
   for the exact ACK. The separate VT S77 implementation reports seven owning
-  tests passing. The preserved reload run is ordering evidence, not full
-  acceptance. Two-host runtime verification with the staged VT release remains
-  open under F212.10-core-5-6.
+  tests passing. The preserved reload run is ordering evidence, not full acceptance. The later
+  two-host hidden-reload case with the staged VT release passes under
+  F212.10-core-5-6.
 
 - F239-47-2: Add `test-activation-backspace` as a focused Korean IME
   comparison between an AppKit text view and an image region in one window,
@@ -4694,11 +4719,4 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   explicit failure event. `make docs-check` and `make events-check` pass. `make census-check` no longer
   reports this registration and still reports 30 findings outside this item. No
   IME input was sent.
-- F239-81: Reject samples from a replaced or retired ScreenCaptureKit stream
-  before they update the shared capture sink, counts, errors or stop boundary.
-  Preserve each callback's originating attempt diagnostics. Close sample intake
-  on its serial queue before artifact finalization. Record each rejected callback
-  as a gated `sample-discarded` lifecycle event on the original attempt; report
-  a discarded callback without attempt context as an error. The metadata, callback,
-  cleanup and late-stop owner tests pass 1/1; both-host runtime verification is
-  pending.
+- F239-92: Correct the Tauri-only scope spelling to the checker host ID `tauriv2`. Red: the unchanged static check rejected `tauri`, and the preserved `make host-contract-check` stopped before running host tests. Green: the exact-scope owner case passes and `scripts/test/check-host-contract.test.mjs` passes 16/16. `make docs-check` passes 112 documents, 431 failure records and 1836 record checks. The full static audit still reports 130 unrelated declaration issues; no host suite was run.

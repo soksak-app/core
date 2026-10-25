@@ -4,6 +4,27 @@
 
 ## 미배포
 
+- F239-142: 식별자와 완료 상태를 유지하며 커밋된 canonical record 번역을
+  맞추고 중복 checklist 행을 제거한다. Feature 및 changelog 쌍의 전체 내용을
+  보존해 번역된 entry가 같은 순서와 저장소 사실을 유지하게 한다.
+
+- F239-141: 기존 screen read 앞뒤의 terminal compose/cursor status 읽기와
+  검증 compose/cursor/window status 읽기를 각각 동시에 실행한다. Controlled
+  Red는 각 batch가 직렬로 시작되고 뒤이은 오류가 누락되는 것을 확인했다.
+  같은 owner case가 단계 순서와 모든 read 오류를 보존하며 2/2 통과한다.
+  집중 activation helper test, JavaScript syntax 검사, `make exposure-check`,
+  `make docs-check`가 통과했다. App 또는 activation 실행은 없으며 IME
+  acceptance와 33 ms capture gate는 계속 열린 상태다.
+
+- F239-108: view-focus fixture에서 app DOM을 등록하고 모든 출처의 activation
+  오류를 보존한다. 이전 input-inject 전용 filter는 확장한 오류 보고 assertion에서
+  실패했다. 동일 CLI owner가 두 오류를 보존하며 통과했고 기본 비활성화 owner도
+  통과했다. Activation이나 key input은 실행하지 않았다.
+
+- F239-114: JavaScript, TypeScript, Rust, Objective-C 수정 커밋 이후
+  fallback audit을 완료한다. Fallback owner는 10/10, enabled-rule census
+  owner는 1/1 통과하며 별도 runtime acceptance는 열린 상태로 유지한다.
+
 - F239-109: Rust test build마다 시작 및 경과 시간이 포함된 pass/fail 결과를
   공통 test runner로 출력하며 build별 timeout을 유지한다. 제어된 negative:
   no-output callback을 일시적으로 복원하면 tracked discovery assertion이
@@ -19,106 +40,10 @@
   통과했다(`/tmp/F239-102-rust-declaration-inventory-green.log`). 다른 F239-93 owner
   변경이 반영되기 전까지 current 전체 declaration audit은 대기한다.
 
-- F239-129: View-retirement helper가 기존 `WindowData`를 사용해 source origin,
-  channel, event stream을 읽도록 한다. Sidecar root의
-  `filter_map(bool.then(...))`를 `filter`와 `map`으로 바꾼다. View order 및
-  retained-root owner test가 각각 1/1 통과하고 diagnostics와 default clippy가
-  통과했다. 동작은 바뀌지 않았다.
-
-- F239-127: 선언된 Serde 경로에서 image detach acknowledgement를 읽고
-  선언된 acknowledgement field만 파싱한다. Red: 원래 owner test는 140단계 root
-  member에서 실패했고, 세 위치로 확장한 테스트는 acknowledgement 내부 member에서
-  waiter가 settle되지 않는 문제를 드러냈다. 중간 수정도 이전 envelope 경로를 계속
-  읽어 waiter를 완료하지 못했다. Green: Rust root, `image`, acknowledgement 내부
-  deep-member case가 1/1 통과하고 exact-owner, mismatch, rejection, multi-region
-  test도 각각 1/1 통과한다. Wails counterpart도 세 위치 모두 1/1 통과한다.
-  Request, sidecar, surface, image, generation 검사는 유지한다.
-
-- F239-125: Go CLI event-log loss test에 test-owned filesystem platform을
-  등록하고 cleanup에서 이전 registration을 복원한다. Package test는 OS platform을
-  등록하는 `cmd/sok`를 통해 실행되지 않는다. 집중 loss test 두 개가 2/2 통과하며
-  CLI 및 event-log production 동작은 바뀌지 않았다.
-
-- F239-112: Event catalog source와 owner test의 format을 맞춘다.
-  `rustfmt --edition 2024 --config skip_children=true`로
-  `packages/sok/tauriv2/src/plugin_catalog.rs`와
-  `packages/sok/tauriv2/tests/plugin_catalog_test.rs`를 포맷한다. Red: 최종
-  format 검사가 두 파일을 unformatted로 보고했다. Green: 지정한 명령 뒤
-  `make rust-format-check`와 `make go-format-check`가 통과한다
-  (`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`).
-  Semantic change는 없었다.
-
-- F239-141: 기존 screen read 앞뒤의 terminal compose/cursor status 읽기와
-  검증 compose/cursor/window status 읽기를 각각 동시에 실행한다. Controlled
-  Red는 각 batch가 직렬로 시작되고 뒤이은 오류가 누락되는 것을 확인했다.
-  같은 owner case가 단계 순서와 모든 read 오류를 보존하며 2/2 통과한다.
-  집중 activation helper test, JavaScript syntax 검사, `make exposure-check`,
-  `make docs-check`가 통과했다. App 또는 activation 실행은 없으며 IME
-  acceptance와 33 ms capture gate는 계속 열린 상태다.
-
-- F239-108: view-focus fixture에서 app DOM을 등록하고 모든 출처의 activation
-  오류를 보존한다. 이전 input-inject 전용 filter는 확장한 오류 보고 assertion에서
-  실패했다. 동일 CLI owner가 두 오류를 보존하며 통과했고 기본 비활성화 owner도
-  통과했다. Activation이나 key input은 실행하지 않았다.
-
-- F239-124: Go와 Rust rotation test에서 `log.rotated.bytes`를 가장 최근
-  archived generation의 실제 크기와 비교한다. 기존 test는 회전을 유발한 line의
-  크기를 가정하고 가장 오래된 archive를 비교했다. 집중 Go 및 Rust rotation test가
-  각각 1/1 통과하며 rotation 동작은 바뀌지 않았다.
-
-- F239-113-1: Go와 Rust event-log audit consumer fixture를 catalog schema 2에서
-  Draft 2020-12 field schema를 사용하는 schema 3으로 갱신한다. Raw event-log line
-  schema 2와 audit의 구형 catalog 거부는 유지한다. 보존된 Go default 및
-  diagnostics host-contract 실행은 fixture의 schema 2 때문에 실패했다. 집중 Go
-  audit test와 Rust audit test가 각각 1/1 통과한다.
-
-- F239-120: origin과 rectangle assertion이 의도한 검증에 도달하도록 Go
-  view-sync fixture에 현재 페이지의 선언된 composition과 plugin을 준비한다.
-  보존된 host-contract 실행은 두 fixture가 의도한 assertion 전에 실패함을
-  보였다. Go owner test 두 개와 대응하는 Rust geometry test 두 개가 각각 1/1
-  통과했다. Go origin 및 rectangle test도 diagnostics 구성에서 각각 1/1
-  통과했다(F239-120 feature record 참조). Production 동작은 바뀌지 않았다.
-
-- F239-114: JavaScript, TypeScript, Rust, Objective-C 수정 커밋 이후
-  fallback audit을 완료한다. Fallback owner는 10/10, enabled-rule census
-  owner는 1/1 통과하며 별도 runtime acceptance는 열린 상태로 유지한다.
-
-- F239-115: process identity, capture, image matching, image regions, input
-  activation의 Objective-C `m.error-return` 11곳에 caller가 관찰하는 이유를
-  기록한다. Red: 보존된 Node 실행이 이유 없는 11개 지점을 보고했다
-  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: scoped
-  reason comment를 추가한 뒤 tracked repository census owner test가 1/1 통과했다
-  (`/tmp/F239-140-census-green.log`). 동작과 census rule은 바뀌지 않았다.
-
-- F239-114-3: capture artifact serialization catch 두 곳이 exception reason을
-  보존해 기존 capture error 경로로 반환하는 이유를 기록한다. Red: 보존된 Node
-  실행이 reason 없는 catch 두 곳을 보고했다
-  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: 정확한
-  reason comment 뒤 fallback owner file이 10/10 통과했다
-  (`/tmp/F239-139-fallback-owner-final.log`). Capture error는 억제되지 않는다.
-
-- F239-116: closed checklist의 누락 record negative fixture를 validator의
-  공통 오류에 맞춘다. 검증 기준은 유지한다. 현재 source에서 집중 checklist file은
-  29/29 통과한다. 세 negative fixture 모두 잘못된 closed record를 파일명이 포함된
-  오류로 계속 거부한다.
-
-- F239-114-2: Rust fallback 및 census finding을 소유 계약에 맞춰 해결한다.
-  PID와 timeout parse 오류를 명시적으로 변환하고, window 종료가 정상적인
-  상태 조회에는 등록 전용 Option API를 사용하며, 계약을 지키는 queue 판별과
-  poisoned lock 복구에 정확한 이유를 기록한다. Red: 보존된 audit가 Rust
-  finding을 보고했다. Green: fallback test 10/10, census test 3/3,
-  process-wait invalid input test 1/1 통과.
-
 - F239-140: Image detach acknowledgement typed parse 변환 여섯 곳의 이유를
   기록한다. 잘못되거나 누락된 입력은 이름이 있는 protocol 오류가 된다.
   Handler는 이를 기록하고 식별할 수 없는 waiter는 timeout까지 유지하거나
   정확히 일치한 waiter를 실패시킨다. Census owner test가 1/1 통과한다.
-- F239-117: E2E subprocess fixture가 각 case override를 적용하기 전에
-  상속된 run metadata를 제거한다. 두 nonempty 값을 요구하는 production
-  조건은 유지한다. Red: 유효한 외부 metadata 아래 누락·부분 case가 baseline을
-  조회하고 child를 시작했다(`/tmp/F239-117-red.log`). Green: 같은 focused owner
-  test가 4/4 통과한다(`/tmp/F239-117-green.log`). Production runner 동작은 바뀌지
-  않았다.
 
 - F239-138: `sp_capture_wait` 뒤에서 `registerCaptureStopBoundary`의 file-scope
   경계를 복구한다. Red: 변경 전 `capture_metadata_test` target이 중첩 함수 정의와
@@ -127,27 +52,12 @@
   통과했다. Helper predicate, stop deadline, callback summary와 runtime 동작은
   바뀌지 않았다.
 
-
-- F239-118: 짝이 없던 Go/Rust host test file 네 개를 기존 owning test file로
-  옮기고 중복 module include를 제거하며 parity inventory를 수정한다. 이동한
-  집중 test가 통과했고 paired-host structure check에서 해당 네 경로는 더 이상
-  보고되지 않는다. 무관한 Tauri `sok` process-wait parity finding 하나는 남아
-  있다.
-
-- F239-107-2: Production retirement 및 source-registration operation을 통해
-  view replacement event 순서를 검증한다. 기존 순서인 이전 source retire,
-  `view-process-ended` 전달, replacement 등록을 보존한다. Tauri owner test는
-  1/1, Wails 대응 test는 default와 diagnostics build에서 각각 1/1 통과한다.
-  제품 동작은 바뀌지 않았다.
-
-- F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다. Wails catalog preflight 두 번(`/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log`, `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`)은 stored-catalog 확인을 통과했고 plugin catalog 오류 없이 reference/terminal 단계 10개와 capture stop까지 실행했다. 두 실행은 별도 F134 frame-message/accepted-marker 결합 문제와 33 ms capture-gap 검사(33.287 ms, 33.800 ms)에서 실패했으며 IME visual acceptance 결과는 아니다.
-
-- F239-139: Base catalog 합성에 `layers` 선언을 요구하고 선택적 plugin
-  diagnostic source를 한 번 정규화한다. 제공된 source 경로와 chain extension이
-  없는 catalog의 빈 `extends` default는 유지한다. Red: fallback owner가 설명되지
-  않은 default 7개를 찾았고 새 base-layer assertion은 합성이 오류 없이 끝나
-  실패했다. Green: fallback owner file 10/10, focused base-layer/sidecar composition
-  case 7/7이 통과한다.
+- F239-117: E2E subprocess fixture가 각 case override를 적용하기 전에
+  상속된 run metadata를 제거한다. 두 nonempty 값을 요구하는 production
+  조건은 유지한다. Red: 유효한 외부 metadata 아래 누락·부분 case가 baseline을
+  조회하고 child를 시작했다(`/tmp/F239-117-red.log`). Green: 같은 focused owner
+  test가 4/4 통과한다(`/tmp/F239-117-green.log`). Production runner 동작은 바뀌지
+  않았다.
 
 - F239-134: 캡처 raster를 정확히 일치하는 host screen body와 수락된 frame
   marker에만 결합한다. 보존 source 집합 밖의 일치하지 않는 record는 진단으로
@@ -169,6 +79,15 @@
   qualifying callback을 재사용하며 display time이 있는 idle callback도 포함한다.
   Resize 조건, 기존 target과 1초 deadline은 유지한다. Owner test가 1/1 통과했고
   runtime acceptance는 남아 있다.
+
+- F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다. Wails catalog preflight 두 번(`/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log`, `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`)은 stored-catalog 확인을 통과했고 plugin catalog 오류 없이 reference/terminal 단계 10개와 capture stop까지 실행했다. 두 실행은 별도 F134 frame-message/accepted-marker 결합 문제와 33 ms capture-gap 검사(33.287 ms, 33.800 ms)에서 실패했으며 IME visual acceptance 결과는 아니다.
+
+- F239-139: Base catalog 합성에 `layers` 선언을 요구하고 선택적 plugin
+  diagnostic source를 한 번 정규화한다. 제공된 source 경로와 chain extension이
+  없는 catalog의 빈 `extends` default는 유지한다. Red: fallback owner가 설명되지
+  않은 default 7개를 찾았고 새 base-layer assertion은 합성이 오류 없이 끝나
+  실패했다. Green: fallback owner file 10/10, focused base-layer/sidecar composition
+  case 7/7이 통과한다.
 
 - F239-136: Vision frame identity decode를 ScreenCaptureKit sample callback 밖으로
   옮긴다. Issued source·region 상태와 geometry를 snapshot하고 compact ROI byte를
@@ -202,11 +121,33 @@
   target, 등록 tick, 최신 accepted sample 사실을 기록한다. `capture_callback_test`
   Red assertion이 1/1 통과했다. Rebuilt host 비교는 남아 있다. Capture timing과
   stop 동작은 바뀌지 않았다.
+
+- F239-129: View-retirement helper가 기존 `WindowData`를 사용해 source origin,
+  channel, event stream을 읽도록 한다. Sidecar root의
+  `filter_map(bool.then(...))`를 `filter`와 `map`으로 바꾼다. View order 및
+  retained-root owner test가 각각 1/1 통과하고 diagnostics와 default clippy가
+  통과했다. 동작은 바뀌지 않았다.
+
 - F239-93-6: 늦은 image cancellation의 Tauri stdio counterpart를 추가한다.
   제어된 child가 stdin EOF 뒤 image를 보내며, owner test는 닫힌 surface에
   message가 전달되지 않고 child가 종료됨을 확인한다. 집중 test는 0.409초에
   기존 실행은 1/1 통과했고, 이번 집중 실행도 0.737초에 1/1 통과한다.
   Production 동작은 바뀌지 않았다.
+
+- F239-113: JavaScript event-catalog fixture를 schema 3 및 Draft 2020-12
+  field schema로 갱신한다. Raw event-log line schema 2와 구형 catalog 거부는
+  유지한다. 보존된 Node 실행은 audit-run의 schema 2 base catalog 때문에 실패했다.
+  집중 owner file은 12/12와 2/2 통과한다.
+
+- F239-113-2: Host plugin-catalog fixture를 현재 field schema를 포함한 schema 3으로
+  갱신하고 각 plugin-install registry의 core range를 test CLI가 설정한 core version에
+  맞춘다. 집중 catalog 및 install test가 양쪽 host의 default, diagnostics, dev
+  구성에서 통과한다.
+
+- F239-131: Host가 failure 반환 전에 recording directory를 제거해도 원래
+  capture-stop 오류를 보존한다. 시작 때 저장한 identity로 실패를 기록하고 IME
+  cleanup의 두 번째 stop 요청을 막는다. Recording owner file은 10/10, IME
+  fixture `node --check`는 통과했으며 application이나 window test는 실행하지 않았다.
 
 - F239-93-5: Current 및 retired sidecar image-owner disposition을 공유
   host-contract case에 연결한다. Wails scripted-protocol handshake를 추가해
@@ -215,14 +156,21 @@
   Wails owner test 1/1과 이동한 Tauri combined current/retired test 및
   valid-retired-image test가 각각 1/1 통과한다. Declaration audit은 대기 중이다.
 
-- F239-113: JavaScript event-catalog fixture를 schema 3 및 Draft 2020-12
-  field schema로 갱신한다. Raw event-log line schema 2와 구형 catalog 거부는
-  유지한다. 보존된 Node 실행은 audit-run의 schema 2 base catalog 때문에 실패했다.
-  집중 owner file은 12/12와 2/2 통과한다.
-- F239-113-2: Host plugin-catalog fixture를 현재 field schema를 포함한 schema 3으로
-  갱신하고 각 plugin-install registry의 core range를 test CLI가 설정한 core version에
-  맞춘다. 집중 catalog 및 install test가 양쪽 host의 default, diagnostics, dev
-  구성에서 통과한다.
+- F239-127: 선언된 Serde 경로에서 image detach acknowledgement를 읽고
+  선언된 acknowledgement field만 파싱한다. Red: 원래 owner test는 140단계 root
+  member에서 실패했고, 세 위치로 확장한 테스트는 acknowledgement 내부 member에서
+  waiter가 settle되지 않는 문제를 드러냈다. 중간 수정도 이전 envelope 경로를 계속
+  읽어 waiter를 완료하지 못했다. Green: Rust root, `image`, acknowledgement 내부
+  deep-member case가 1/1 통과하고 exact-owner, mismatch, rejection, multi-region
+  test도 각각 1/1 통과한다. Wails counterpart도 세 위치 모두 1/1 통과한다.
+  Request, sidecar, surface, image, generation 검사는 유지한다.
+
+- F239-114-2: Rust fallback 및 census finding을 소유 계약에 맞춰 해결한다.
+  PID와 timeout parse 오류를 명시적으로 변환하고, window 종료가 정상적인
+  상태 조회에는 등록 전용 Option API를 사용하며, 계약을 지키는 queue 판별과
+  poisoned lock 복구에 정확한 이유를 기록한다. Red: 보존된 audit가 Rust
+  finding을 보고했다. Green: fallback test 10/10, census test 3/3,
+  process-wait invalid input test 1/1 통과.
 
 - F239-126: CLI process-wait platform-error case의 정확한 Rust 비공개
   unit-test 경로를 기록한다. Rust child module은 비공개 injected 경계를 검사하고,
@@ -230,17 +178,18 @@
   명시하며 양쪽 host의 공통 동작 검사는 계속 필수다. 집중 mapping test 1/1과
   `node scripts/check-hosts.mjs`의 세 pair 검사가 통과했다.
 
-- F239-131: Host가 failure 반환 전에 recording directory를 제거해도 원래
-  capture-stop 오류를 보존한다. 시작 때 저장한 identity로 실패를 기록하고 IME
-  cleanup의 두 번째 stop 요청을 막는다. Recording owner file은 10/10, IME
-  fixture `node --check`는 통과했으며 application이나 window test는 실행하지 않았다.
-
 - F239-119: 명시적 null 의미는 유지하면서 Tauri ProjectShown의 project
   member를 필수로 요구한다. Production `Argument<ProjectShown>` decoder Red는
   `{}`를 `None`으로 허용했다. 같은 MockRuntime owner case는 이제 1/1 통과하며,
   member 생략은 상태를 바꾸지 않고 거부하고 `{"project":null}`은 허용한다.
   집중 Go/Tauri project, starter, view, sidecar case가 통과했다. 무관한 Tauri
   `sok` process-wait parity finding은 남아 있다.
+
+- F239-118: 짝이 없던 Go/Rust host test file 네 개를 기존 owning test file로
+  옮기고 중복 module include를 제거하며 parity inventory를 수정한다. 이동한
+  집중 test가 통과했고 paired-host structure check에서 해당 네 경로는 더 이상
+  보고되지 않는다. 무관한 Tauri `sok` process-wait parity finding 하나는 남아
+  있다.
 
 - F239-122: Tauri null-result 및 null-event fixture에 필수 page generation
   field를 추가하고 start-document fixture가 현재 `soksak` scheme을 기대하게
@@ -268,6 +217,29 @@
   plugin-api event check 30/30, log-contract audit 36/36 통과했다. 앱 bundle은
   재빌드하지 않았다.
 
+- F239-120: origin과 rectangle assertion이 의도한 검증에 도달하도록 Go
+  view-sync fixture에 현재 페이지의 선언된 composition과 plugin을 준비한다.
+  보존된 host-contract 실행은 두 fixture가 의도한 assertion 전에 실패함을
+  보였다. Go owner test 두 개와 대응하는 Rust geometry test 두 개가 각각 1/1
+  통과했다. Go origin 및 rectangle test도 diagnostics 구성에서 각각 1/1
+  통과했다(F239-120 feature record 참조). Production 동작은 바뀌지 않았다.
+
+- F239-113-1: Go와 Rust event-log audit consumer fixture를 catalog schema 2에서
+  Draft 2020-12 field schema를 사용하는 schema 3으로 갱신한다. Raw event-log line
+  schema 2와 audit의 구형 catalog 거부는 유지한다. 보존된 Go default 및
+  diagnostics host-contract 실행은 fixture의 schema 2 때문에 실패했다. 집중 Go
+  audit test와 Rust audit test가 각각 1/1 통과한다.
+
+- F239-124: Go와 Rust rotation test에서 `log.rotated.bytes`를 가장 최근
+  archived generation의 실제 크기와 비교한다. 기존 test는 회전을 유발한 line의
+  크기를 가정하고 가장 오래된 archive를 비교했다. 집중 Go 및 Rust rotation test가
+  각각 1/1 통과하며 rotation 동작은 바뀌지 않았다.
+
+- F239-125: Go CLI event-log loss test에 test-owned filesystem platform을
+  등록하고 cleanup에서 이전 registration을 복원한다. Package test는 OS platform을
+  등록하는 `cmd/sok`를 통해 실행되지 않는다. 집중 loss test 두 개가 2/2 통과하며
+  CLI 및 event-log production 동작은 바뀌지 않았다.
+
 - F239-111: input-reference test의 기존 50ms drain 구간에 AppKit event
   전달을 추가해 대기 중인 main-queue document check가 owner test에서 실행되게
   한다. 보존된 Native 전체 suite log에 input-reference wait 및 timer 등록
@@ -275,6 +247,38 @@
   집중 target rebuild가 성공하고 기존 runner의 `input_reference_test`가 1/1,
   7.205초에 통과한다. Production wait 제한과 completion 동작은 바꾸지 않았으며
   전체 suite에는 다른 실패가 남아 있다.
+
+- F239-116: closed checklist의 누락 record negative fixture를 validator의
+  공통 오류에 맞춘다. 검증 기준은 유지한다. 현재 source에서 집중 checklist file은
+  29/29 통과한다. 세 negative fixture 모두 잘못된 closed record를 파일명이 포함된
+  오류로 계속 거부한다.
+
+- F239-112: Event catalog source와 owner test의 format을 맞춘다.
+  `rustfmt --edition 2024 --config skip_children=true`로
+  `packages/sok/tauriv2/src/plugin_catalog.rs`와
+  `packages/sok/tauriv2/tests/plugin_catalog_test.rs`를 포맷한다. Red: 최종
+  format 검사가 두 파일을 unformatted로 보고했다. Green: 지정한 명령 뒤
+  `make rust-format-check`와 `make go-format-check`가 통과한다
+  (`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`).
+  Semantic change는 없었다.
+
+- F239-114-3: capture artifact serialization catch 두 곳이 exception reason을
+  보존해 기존 capture error 경로로 반환하는 이유를 기록한다. Red: 보존된 Node
+  실행이 reason 없는 catch 두 곳을 보고했다
+  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: 정확한
+  reason comment 뒤 fallback owner file이 10/10 통과했다
+  (`/tmp/F239-139-fallback-owner-final.log`). Capture error는 억제되지 않는다.
+
+- F239-115: process identity, capture, image matching, image regions, input
+  activation의 Objective-C `m.error-return` 11곳에 caller가 관찰하는 이유를
+  기록한다. Red: 보존된 Node 실행이 이유 없는 11개 지점을 보고했다
+  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: scoped
+  reason comment를 추가한 뒤 tracked repository census owner test가 1/1 통과했다
+  (`/tmp/F239-140-census-green.log`). 동작과 census rule은 바뀌지 않았다.
+
+- F239-110: 오래된 parity 기능 링크를 고치고 완료 기능의 구현과 소유 테스트를
+  연결하며 기록된 workspace inventory 수를 갱신한다. 보존된 structure 실행에서
+  이 metadata 오류가 확인됐고, 이번 수정의 검증은 아직 실행하지 않았다.
 
 - F239-103: Source pixel-history eviction 뒤에도 기존의 제한된 source 및 tag
   artifact ledger를 결합해 tag-scoped identity를 보존한다. Committed 10진
@@ -297,11 +301,24 @@
   null 및 capture error 없는 no-code 결과를 검사한다. 33 ms cadence limit은
   유지하며 두 실행 모두 full-recording cadence나 이전 callback gap의 Vision 원인을
   증명하지 않는다.
-
 - F239-105: `sidecars.retain.keeps-session-first-sent-during-start`의 중복 plugin-only host-contract 행을 제거하고 실제 English 및 Korean table의 case ID
   유일성을 검사한다. Red: owner test가 canonical table의 중복 ID에서 실패했다.
   Green: 두 실제 table을 parse해 중복 ID가 없고 case 집합이 일치함을 확인하며
   1/1 통과한다.
+
+- F239-107-1: Source-generation 발급이 성공한 뒤에만 plugin-host provider를
+  생성한다. 발급 한계 초과 시 source snapshot은 유지되고 provider 생성은 호출되지
+  않는다. Tauri startup은 검증한 발급 helper를 사용하며 Wails owner case는
+  `createPluginHost`를 호출한다. 기존 production 순서는 이미 provider 생성 전에
+  generation을 발급했으므로 제품 결함 Red는 주장하지 않는다. Green: Tauri provider와
+  source-snapshot test가 각각 1/1, Wails provider startup은 default와 diagnostics
+  build에서 각각 1/1, Wails source-snapshot test는 1/1 통과한다.
+
+- F239-107-2: Production retirement 및 source-registration operation을 통해
+  view replacement event 순서를 검증한다. 기존 순서인 이전 source retire,
+  `view-process-ended` 전달, replacement 등록을 보존한다. Tauri owner test는
+  1/1, Wails 대응 test는 default와 diagnostics build에서 각각 1/1 통과한다.
+  제품 동작은 바뀌지 않았다.
 
 - F239-106: Retired generation callback을 취소하기 전에 view message shape를
   검증한다. Event payload decoding, dispatch 및 state mutation은 current-generation
@@ -311,15 +328,6 @@
   Green: 같은 owner test가 default와 diagnostics build에서 각각 1/1 통과했다
   (`/tmp/F239-106-envelope-green-default-01.log`,
   `/tmp/F239-106-envelope-green-diagnostics-01.log`).
-
-- F239-107-1: Source-generation 발급이 성공한 뒤에만 plugin-host provider를
-  생성한다. 발급 한계 초과 시 origin snapshot은 유지되고 provider 작업은 호출되지
-  않는다. Tauri startup은 검증한 발급 helper를 사용하고 Wails owner case는
-  `createPluginHost`를 검사한다. 기존 production 순서는 이미 provider 생성 전에
-  generation을 발급했으므로 이 변경은 테스트 범위와 결정적 test seam을 추가하며
-  제품 결함을 수정하지 않는다. Green: Tauri provider 및 source-snapshot test가
-  각각 1/1, Wails provider startup은 default와 diagnostics build에서 각각 1/1,
-  Wails source-snapshot test는 1/1 통과한다.
 
 - F239-100: native activation 뒤 대기 중인 visible webview를 식별한다.
   Activity-state waiter는 미완료 member를 정확히 보고하고 callback
@@ -404,8 +412,6 @@
   33 ms 경계 통과, 제한 초과 전 record 저장, visual/cadence 동시 실패 보고를 확인하며
   helper 18/18이 통과한다(`/tmp/F239-98-1-1-cadence-green-01.log`).
 
-
-
 - F239-98-2: rows-only terminal status에서 visual input text를 투영한다.
   `terminal.screen` status에는 frame identity가 없지만 consumer가 해당 rows를
   strict framed `terminal.screen.read` helper에 전달했다. Red: 실제 rows-only
@@ -451,17 +457,17 @@
   `closed` image 응답을 보낸다. Live-owner와 malformed-body control을 포함한
   focused owning route test 2개가 통과한다. 보존된 shutdown audit는 재실행하지
   않았으므로 새로운 runtime acceptance를 주장하지 않는다.
+
 - F239-96: Tauri retired-image route test를 parity metadata에 등록한다. 새 Rust
   test file이 Tauri test lane에서 누락됐다. 기존 lane이 해당 test를 소유하고
-  F239-90 feature link가 owner lookup, dispatcher 및 두 route case를 가리킨다.
-  Inventory는 미등록 test 0개와 F239-90 feature-link 오류 없음을 보고하며,
-  무관한 finding 23개는 남아 있다. `make boundaries`는 16개 component 모두 통과한다.
-
+  F239-90 feature link가 owner lookup,
+  dispatcher 및 두 route case를 가리키도록 한다. Inventory는 미등록 test 0개와
+  F239-90 feature-link 오류 없음을 보고하며, 무관한 finding 23개는 남아 있다.
+  `make boundaries`는 16개 component 모두 통과한다.
 
 - F239-94: MRC 환경에서 activation callback의 frontmost application 설명을 retain하고 이전 snapshot을 release한다. Red: 제어된 owner callback test는 inner autorelease pool 종료 때 설명이 해제되는 것을 확인했고, F84 activation run은 `SP_ACTIVATE_REFUSED` 뒤 failure 보고 중 crash했다. Green: 같은 비활성 owner target이 assertion 17개를 통과하며, targeted activation 재시도는 crash 없이 거부 결과를 보고하고 저장한 frontmost PID를 복원한다. Activation 거부 자체는 해결되지 않았다. `make docs-check`가 통과한다.
 
 - F239-95: view-focus check가 activation을 기다리는 동안 AppKit event를 pump한다. 기존 `waitFor`는 `NSRunLoop`를 실행하면서 대기 중인 `NSEvent`를 dequeue하고 전달하지 않았다. Red: 제어된 application-defined event가 `waitFor` 안에서 전달되지 않아 정확한 owner target의 해당 assertion만 실패했다 (0.500s). Green: 같은 target이 AppKit event queue로 event를 전달하고 assertion 18개와 함께 1/1 (0.391s) 통과한다. Targeted activation 실행 1회는 application 활성화와 key window에 도달했지만, 보이는 web view가 5초 제한 시간 안에 activity-state update를 완료하지 않아 `SP_ACTIVATE_PENDING`을 반환했다. 저장된 frontmost PID 935는 복원됐다. AppKit event pump는 수정했으며 activation 수용 기준은 web view activity-state 완료 단계에서 계속 열린 상태다.
-
 
 - F239-85: Native-view 제거와 authoritative layout retain 중 persistent
   sidecar session을 보존한다. Runtime evidence는 logical surface가 project layout에
@@ -494,6 +500,7 @@
   전역 `sp_log_error` 호출 수를 세지 않아 성공 receipt 경로만 검증한다. Log에 baseline
   process identity가 없어 이전 app 복원도 입증하지 않는다. 이는 제어된 AppKit event
   검사이며 live HID acceptance가 아니다.
+
 - F239-97: Receipt-backed pointer input에서 click-through focus를 유지한다.
   Logical surface에서 실제 host webview를 찾아 page release receipt를 기다린다.
   Pointer press와 release의 동기 responder preflight 동안 hit point 또는 저장된
@@ -504,6 +511,17 @@
   assertion을 통과했다. 실행은 원래 frontmost process를 복원하고 확인했다. 이
   native owner 검사는 host runtime acceptance를 입증하지 않는다.
 
+- F239-99: Receipt-backed pointer의 call condition을 private native API 영문
+  절차에 반영한다. Phase별 scoped context와 비동기 receipt 처리 전 복원을
+  기록한다. Source 동작은 바뀌지 않았다.
+
+- F239-87: Activation receipt를 실제 key action에 맞춰 계산한다. F84 Tauri
+  trace에는 `k` key-down 8개, Backspace 1개, Space 1개가 있었지만 non-empty
+  insert를 모두 허용해 helper가 `k` receipt를 10개로 셌다. Owning replay는
+  10개에서 실패했다. 수정된 matcher는 다른 key action이나 command가 포함된
+  transaction과 공백 insert를 제외한다. Focused owner test 38/38,
+  `make e2e-check`, `make docs-check`가 통과했다. Terminal과 native 입력 동작은
+  바뀌지 않았다. Wails의 별도 AppKit reference timeout은 미해결 상태다.
 
 - F239-91: macOS IME document helper가 현재 순서가 있는 native input
   transaction을 읽도록 한다. 기존 helper는 image region의 transaction
@@ -511,10 +529,8 @@
   반환하지 못했다. 현재 형식 전용 reader는 range와 preedit snapshot을
   검증하고 activation consumer는 transaction actions와 최종 preedit을
   읽는다. Owner test가 assertion 15개를 통과한다. 이전 activation 실패는
-- F239-99: Receipt-backed pointer의 call condition을 private native API 영문
-  절차에 반영한다. Phase별 scoped context와 비동기 receipt 처리 전 복원을
-  기록한다. Source 동작은 바뀌지 않았다.
   해결되지 않았으며 이 변경은 runtime acceptance를 주장하지 않는다.
+
 - F239-86: 선언된 TypeScript compiler로 activation fixture의 unresolved identifier를
   검사한다. F84에서 `applyTerminalInput`이 block scope의 `promptPrefix`를 사용해
   실패했고 visual measurement에는 선언되지 않은 `frameCallbacks`와 `missingStates`를
@@ -525,17 +541,7 @@
   통과한다. `make e2e-check`와 focused `node --check`도 통과한다. Application 실행과
   bundle build는 하지 않았다.
 
-- F239-87: Activation receipt를 실제 key action에 맞춰 계산한다. F84 Tauri
-  trace에는 `k` key-down 8개, Backspace 1개, Space 1개가 있었지만 non-empty
-  insert를 모두 허용해 helper가 `k` receipt를 10개로 셌다. Owning replay는
-  10개에서 실패했다. 수정된 matcher는 다른 key action이나 command가 포함된
-  transaction과 공백 insert를 제외한다. Focused owner test 38/38,
-  `make e2e-check`, `make docs-check`가 통과했다. Terminal과 native 입력 동작은
-  바뀌지 않았다. Wails의 별도 AppKit reference timeout은 미해결 상태다.
-
-- F239-92: Tauri-only scope 표기를 checker host ID `tauriv2`로 바로잡았다. Red: 변경 전 static check가 `tauri`를 거부했고 보존된 `make host-contract-check`는 host test를 실행하기 전에 중단됐다. Green: exact-scope owner case가 통과하고 `scripts/test/check-host-contract.test.mjs`가 16/16 통과한다. `make docs-check`는 문서 112개, failure record 431개, record check 1836개로 통과한다. 전체 static audit은 무관한 declaration issue 130개를 계속 보고한다. Host suite는 실행하지 않았다.
 - F239-88: Lifecycle callback Mach tick을 canonical decimal string으로 기록해 event catalog 형식과 맞춘다. F84에서 Wails와 Tauri에 number 값 14건이 확인됐다. `first-sample` 7건과 `start-completion` 7건이며 나머지 non-null Mach-tick field는 schema와 일치했다. 제어된 owner Red는 phase별 형식 assertion과 `uint64` 최대값 사례에서 실패했다. Producer는 정확한 unsigned 값과 null 상태를 보존하며 `capture_callback_test`가 1/1 통과한다.
-
 
 - F239-84: Workbench package payload에 `error-text.js`를 포함한다. 양쪽
   candidate window는 `plugin-operations.js`, `exposure.js`, `plugin-host.js`가
@@ -549,6 +555,14 @@
   환경은 없고 Linux host application은 구현되지 않았다. 기존 cross-compilation과
   완료된 R2-7-1/2/3 검사는 기록된 범위로 유지한다. 공통 macOS 요구사항은 바뀌지
   않았으며 Windows/Linux runtime 동작은 검증되지 않았다.
+
+- F239-81: 교체되거나 종료된 ScreenCaptureKit stream의 sample이 shared capture
+  sink, count, error, stop boundary를 변경하지 않게 거부한다. Callback은 원래
+  attempt 진단을 보존한다. Artifact finalization 전에 serial queue에서 sample
+  intake를 닫는다. 거부 callback마다 원래 attempt에 gated `sample-discarded`
+  lifecycle event를 기록하고 attempt context가 없는 callback은 error로 보고한다.
+  Metadata, callback, cleanup, late-stop owner test가 각각 1/1
+  통과했으며 두 host runtime 검증은 남아 있다.
 
 - F239-77: 역할별 `host.sampler.memory` record를 schema 3 JSON Schema로 엄격히
   검증한다. Event-log line schema 2는 유지한다. Owner test는 문서화된 성공 및 오류
@@ -574,37 +588,41 @@
   focused case는 1/1 통과하고 fallback listing은 인접 reason을 인식하며
   `make docs-check`도 통과한다. 기존 계약을 검증했으며 lost-call defect는
   재현되지 않았다.
-- F239-79: Lifecycle artifact 경로에는 선언된 app 이름을 사용하고 canonical root로 cleanup 대상을 비교한다. `APPS`에는 `id` field가 없으며 project registry는 resolved root를 저장하고 `mkdtempSync`는 symbolic link가 포함된 경로를 반환할 수 있다. Red: 두 host 모두 undefined `app.id`로 artifact directory 생성에 실패했고 이후 case는 제거된 임시 project를 찾지 못했다고 보고했다. 수정은 `app.name`과 `realpathSync(projectRoot)`를 사용한다. Runtime 확인은 대기 중이다.
 
 - F239-66: assertion을 실행하지 못하던 Workbench test fixture 세 개를 수정한다. Chrome test는 test-scoped runtime mock을 사용하고, presentation test는 runtime binding을 export하며 mounted view와 theme을 준비한다. Plugin-host test는 로드된 module graph가 요구하는 plugin API export를 제공한다. 소유 파일 세 개가 31/31 통과하며 production 변경은 없다.
 
+- F239-79: Lifecycle artifact 경로에는 선언된 app 이름을 사용하고 canonical root로 cleanup 대상을 비교한다. `APPS`에는 `id` field가 없으며 project registry는 resolved root를 저장하고 `mkdtempSync`는 symbolic link가 포함된 경로를 반환할 수 있다. Red: 두 host 모두 undefined `app.id`로 artifact directory 생성에 실패했고 이후 case는 제거된 임시 project를 찾지 못했다고 보고했다. 수정은 `app.name`과 `realpathSync(projectRoot)`를 사용한다. Runtime 확인은 대기 중이다.
+
 - F239-75: Opt-in identity capture 전에 선택한 terminal card를 바인딩한다.
-  Consumer는 loop-local card를 loop가 끝난 뒤 참조해 terminal 생성 전에
-  ReferenceError를 냈다. Syntax 검사는 통과했고 두 host runtime 검증은
-  대기 중이다.
+  Red: consumer는 loop가 끝난 뒤 loop-local card를 참조해 terminal 생성 전에
+  ReferenceError를 냈다. Green: F84 두 host frame-identity case 2/2가 통과해
+  matched current tuple, unknown 행, 완전한 artifact 및 clean audit을 확인했다.
 
 - F239-76: IME helper에서 host region의 focus를 기다리기 전에 `terminal.focus`를 실행하고 active/key-window 및 cursor-focus 검사를 유지한다. Syntax, E2E source, 문서 검사가 통과한다. Attempt-02는 host마다 이 helper를 두 번 통과했지만 이후 lifecycle artifact 설정에서 undefined `app.id`로 실패해 terminal gesture에 도달하지 못했다. F8-9/F143 전용 runtime 확인은 대기 중이다.
 
+- F239-63: Helper-only E2E module을 명시적으로 분류하고 공통
+  project-window lifecycle을 선택된 각 adapter에서 실행한다.
   `WebviewWindow #... not found` stderr assertion은 Wails에 한정한다.
   Red: 통합 Node run은 parity audit에서 세 경로 분류 오류를 찾았다.
   Green: parity owner test가 1/1 통과하고 `make e2e-check`도 통과한다.
-  추가한 Tauri case body는 host-liveness assertion까지 통과했으나 external
-  foreground 변경 뒤 session이 거부됐다. Audit는 통과했고 테스트 host는
-  종료됐다. 이는 승인된 Tauri runtime evidence가 아니다.
+  F84 runtime Green: Tauri는 1/1, Wails는 요구된 repeat 3/3 통과했다.
+  두 host audit가 통과하고 baseline이 복원됐으며 Wails에 새 missing-window
+  warning이 없었다.
+
 - F239-74: `Session.until`이 반환한 `host.windows` 값에서 lifecycle window를 선택한다. 이 method는 predicate 결과가 아니라 watch한 status 값을 반환한다. Red: Wails와 Tauri가 project open 전에 undefined window ID를 거부했다. Selector는 반환 목록에서 새 window를 고르고 문자열 ID인지 검증한다. `node --check`, `make e2e-check`, `make docs-check`가 통과했으며 Wails와 Tauri의 cycle 01 runtime 확인은 대기 중이다.
 
 - F239-61: Image presentation 순서, view attachment, project-window
   cleanup을 바꾸지 않고 최종 Rust format 및 Clippy finding을 해결한다.
   `soksak-host-tauriv2`의 default 및 diagnostics Clippy가 `-D warnings`로
-- F239-63: Helper-only E2E module을 명시적으로 분류하고 공통
-  project-window lifecycle을 선택된 각 adapter에서 실행한다.
   통과하고, focused project-window cleanup test는 1/1, `cargo fmt --all
   --check`도 통과한다. Windows-target 검사는 `ring`에서
   `aarch64-w64-mingw32-clang`을 찾지 못해 중단되어 Windows Rust compilation은
   검증되지 않았다. 앱은 빌드하거나 실행하지 않았다.
 
 - F239-70-1: 제어된 `unmarkText` 및 `insertNewline:` transaction의 input action을 확인한다. Owner Red는 마지막 transaction에 newline command가 있고 앞 transaction이 `ㅏㅏ`를 한 번 commit함을 보였다. 수정된 assertion은 두 action과 빈 error/preedit를 확인하며 `image_region_decoration_test`가 1/1 통과한다.
-- F239-70-2: Capture checker의 injected stop error를 한 번 소비한다. 보존된 native full-suite Red는 지속되는 override가 이후 recording에 영향을 주어 stop-error assertion 세 건이 실패했음을 보였다. Test wrapper는 fault 증거를 유지하면서 injected error를 한 번의 read로 제한하고 `capture_checker_test`가 1/1 통과한다.
+
+- F239-70-2: Capture checker의 injected stop error를 한 번 소비한다. 보존된 native full-suite Red는 지속되는 override가 이후 recording에 영향을 주어 stop-error assertion 세 건을 실패시켰음을 보였다. Test wrapper는 fault 증거를 유지하면서 injected error를 한 번의 read로 제한하고 `capture_checker_test`가 1/1 통과한다.
+
 - F239-71: Late-stop fixture에 capture finalization이 요구하는 private output
   directory를 제공하고 embedded acceptance case가 수행하는 네 recording을 모두
   검사한다. Red: finalization이 nil path에 쓰다 중단됐고 lifecycle wrapper가
@@ -618,19 +636,20 @@
 
 - F239-65: E2E runner test entrypoint를 module 위치 기준으로 해석해 호출자의 working directory에 의존하지 않게 한다. Red: `e2e/`에서 실행한 `node --test test/run.test.mjs`가 존재하지 않는 `e2e/e2e/run.mjs`를 불러오려 했다. Green: focused test는 `e2e/`와 repository root 양쪽에서 10/10 통과한다. `node --check e2e/test/run.test.mjs`와 `make docs-check`가 통과한다.
 
-
 - F239-62: Installed-sidecar fixture에 필수 canonical `displayName`을
   추가한다. `audit-run.test.mjs`와 `check-events.test.mjs`의 Red: 통합 Node run은
   validation이 catalog 동작 전에 fixture record를 거부해 각각 한 개와 세 개
   test가 실패했다. Green: 두 owner script가 19/19 통과하고 missing-catalog
   case가 의도한 오류 assertion까지 진행한다. `make docs-check`가 통과한다.
 
+
 - F239-68: `make install-plugins`가 만든 index의 candidate registry file URL을
   설정하고 runner가 주입하는 run metadata와 workflow 소유 환경을 구분한다.
   Workflow test 6/6, runner test 14/14 통과.
-- F239-60: Pre-key screen/cursor baseline을 읽기 전에 terminal status를 구독해 read 중 발생한 frame 전진도 관측한다. Matching status event를 기다리기 전에 baseline frame과 setup 실패를 저장한다. Owner test는 notification 유실을 재현하고 순서 수정 뒤 통과하며 document suite는 37/37 통과한다. Activation은 실행하지 않았다.
 
 - F239-67: 구조화된 starter 설치 오류를 operation status, application log, 화면 메시지에 보존한다. Owner Red는 plain-object rejection에서 operation status가 message만 남기고 code와 data를 잃는 것을 확인했다. 순수 shared formatter가 세 출력 모두에 code, message, data를 보존한다. Formatter와 plugin-operations test 24/24, `node --check`, `make docs-check`가 통과한다.
+
+- F239-60: Pre-key screen/cursor baseline을 읽기 전에 terminal status를 구독해 read 중 발생한 frame 전진도 관측한다. Matching status event를 기다리기 전에 baseline frame과 setup 실패를 저장한다. Owner test는 notification 유실을 재현하고 순서 수정 뒤 통과하며 document suite는 37/37 통과한다. Activation은 실행하지 않았다.
 
 - F239-58: Lifecycle selector의 window 대상을 수정한다. `fresh(s)`는 기존 window에 project를 남기며 `projectOpening: windows`에서는 임시 project가 새 window에 열린다. Selector는 unassigned window를 만든 뒤 project, gesture, close/reopen, cleanup operation을 해당 session으로 보낸다. 보존된 Wails 실패 8건은 gesture 전에 `core.project` 대기에서 멈췄다. `node --check`, `make e2e-check`, `make docs-check`가 통과했으며 두 host runtime acceptance는 대기 중이다.
 
@@ -641,8 +660,11 @@
 - F239-47-40-8: Opt-in frame identity의 window consumer check를 추가한다.
   Capture 전에 기존 terminal image를 숨기고 visible terminal 하나를 만든 뒤,
   decoded captured tuple을 현재 presented tuple 및 발급 source artifact와 대조한다.
-  Unknown 행과 capture artifact를 보존한다. `node --check`, `make e2e-check`,
-  `make docs-check`가 통과했으며 두 host window acceptance는 남아 있다.
+  Unknown 행과 capture artifact를 보존한다. F84 runtime Green: Wails와 Tauri가
+  정확한 issued/current tuple에 일치했고(Wails matched 28, unknown 23; Tauri
+  matched 40, unknown 24) unknown 행을 보존했으며 artifact error/drop은 없었다.
+  이는 current host presentation에 대한 sample identity를 확인하며 physical
+  scanout이나 33 ms cadence를 검증하지 않는다.
 - F239-47-40-4-2-1-2: 현재 `SCStream`이 없는 identity startup 실패 뒤 live
   image-region layer를 복원한다. Queued cleanup은 stream이 current이거나 stream과
   identity session이 모두 없을 때 복원하고 새 pre-stream session의 tag는 보존한다.
@@ -1820,7 +1842,8 @@
   ACK가 waiter를 완료했다. 수정 후 검사는 1/1 통과하며 정확한 ACK가 올 때까지
   waiter를 유지한다. 분리된 VT S77 구현은 owning test 7개 통과를 보고했다.
   보존 reload run은 순서 증거이며 전체 acceptance 결과는 아니다. staged VT
-  release를 포함한 양 host runtime 검증은 F212.10-core-5-6에서 계속한다.
+  release를 포함한 이후 양 host hidden-reload case는 F212.10-core-5-6에서
+  통과했다.
 
 - F239-47-2: `test-activation-backspace`는 같은 창의 AppKit text view와
   image region을 비교하고 양쪽 host의 e2e terminal case를 추가한다. E2E는
@@ -4491,10 +4514,4 @@
   entrance는 main thread 바깥 호출과 잘못된 인자를 명시적인 failure event로
   거부한다. `make docs-check`, `make events-check`가 통과한다. `make census-check`는 이 등록을 더 이상
   보고하지 않지만 이 항목 범위 밖 finding 30개를 계속 보고한다. IME 입력은 보내지 않았다.
-- F239-81: 교체되거나 종료된 ScreenCaptureKit stream의 sample이 shared capture
-  sink, count, error, stop boundary를 변경하지 않게 거부한다. Callback은 원래
-  attempt 진단을 보존한다. Artifact finalization 전에 serial queue에서 sample
-  intake를 닫는다. 거부 callback마다 원래 attempt에 gated `sample-discarded`
-  lifecycle event를 기록하고 attempt context가 없는 callback은 error로 보고한다.
-  Metadata, callback, cleanup, late-stop owner test가 각각 1/1
-  통과했으며 두 host runtime 검증은 남아 있다.
+- F239-92: Tauri-only scope 표기를 checker host ID `tauriv2`로 바로잡았다. Red: 변경 전 static check가 `tauri`를 거부했고 보존된 `make host-contract-check`는 host test를 실행하기 전에 중단됐다. Green: exact-scope owner case가 통과하고 `scripts/test/check-host-contract.test.mjs`가 16/16 통과한다. `make docs-check`는 문서 112개, failure record 431개, record check 1836개로 통과한다. 전체 static audit은 무관한 declaration issue 130개를 계속 보고한다. Host suite는 실행하지 않았다.
