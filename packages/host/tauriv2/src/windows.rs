@@ -911,13 +911,11 @@ pub(crate) struct OpenProject {
 
 /// The project that a page has selected after loading its project data context.
 #[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub(crate) struct ProjectShown {
     project: Option<ShownProject>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct ShownProject {
     id: String,
     root: String,
@@ -1762,6 +1760,10 @@ pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
 #[cfg(test)]
 #[path = "windows_records_test.rs"]
 mod records_test;
+
+#[cfg(test)]
+#[path = "windows_project_shown_test.rs"]
+mod project_shown_test;
 
 #[cfg(test)]
 #[path = "../tests/project_data_order/project_data_order_test.rs"]

@@ -5451,6 +5451,33 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-47-40-6",
+    implementation: [
+      { file: "packages/host/wailsv3/src/projects.go", symbol: "func (h *Host) ProjectShown(" },
+      { file: "packages/host/wailsv3/src/projects.go", symbol: "type ProjectShown struct" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/projects_test.go", id: "TestProjectShownDecodesStandardArguments" },
+      { file: "packages/host/wailsv3/src/projects_test.go", id: "TestProjectShownPostsTheCommittedProjectAndNull" },
+      { file: "packages/host/wailsv3/tests/arguments_test.go", id: "TestEveryBindingDecodesItsArgumentsFirst" },
+    ],
+    expected: "Wails ProjectShown arguments use the standard host decoder, keep explicit null projects, and ignore undeclared fields.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-40-7",
+    implementation: [
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) struct ProjectShown" },
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "struct ShownProject" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/src/windows_project_shown_test.rs", id: "project_shown_ignores_unknown_outer_fields" },
+      { file: "packages/host/tauriv2/src/windows_project_shown_test.rs", id: "shown_project_ignores_unknown_nested_fields" },
+    ],
+    expected: "Tauri ProjectShown and ShownProject ignore undeclared fields as required by the shared host-call contract.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-55",
     implementation: [{ file: "e2e/run.mjs", symbol: "export function runE2E(" }],
     tests: [
