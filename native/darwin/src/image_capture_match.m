@@ -18,6 +18,17 @@ static const NSUInteger kImageCaptureHistoryCountLimit = 512;
 static const size_t kImageCaptureArtifactPendingLimit = 64 * 1024 * 1024;
 static const NSUInteger kIdentityDecodePendingJobLimit = 8;
 
+static NSString *identityCapacityMessage(NSString *stage, uint64_t frame, NSUInteger pendingJobs,
+    size_t pendingCropBytes, size_t incomingCropBytes, size_t artifactPendingBytes,
+    BOOL jobLimitExceeded, BOOL byteLimitExceeded) {
+    return [NSString stringWithFormat:
+        @"frame identity decoder pending capacity was exceeded: stage=%@ frame=%llu pendingJobs=%lu jobLimit=%lu pendingCropBytes=%zu incomingCropBytes=%zu artifactPendingBytes=%zu byteLimit=%zu jobLimitExceeded=%d byteLimitExceeded=%d",
+        stage, (unsigned long long)frame, (unsigned long)pendingJobs,
+        (unsigned long)kIdentityDecodePendingJobLimit, pendingCropBytes, incomingCropBytes,
+        artifactPendingBytes, kImageCaptureArtifactPendingLimit,
+        jobLimitExceeded, byteLimitExceeded];
+}
+
 @interface SPImageCaptureSource : NSObject
 @property sp_image_capture_identity identity;
 @property(retain) NSData *pixels;
@@ -1296,11 +1307,14 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
                 || cropBytes > kImageCaptureArtifactPendingLimit - artifactPendingBytes
                     - identityDecodePendingBytes - bytes;
             if (byteLimitExceeded) {
-                if (!identitySessionFailure) identitySessionFailure = [@"frame identity decoder pending capacity was exceeded" copy];
+                NSString *capacityError = identityCapacityMessage(@"roi-copy", frame_number,
+                    identityDecodePendingJobs, identityDecodePendingBytes, cropBytes + bytes,
+                    artifactPendingBytes, NO, YES);
+                if (!identitySessionFailure) identitySessionFailure = [capacityError copy];
                 atomic_store(&identitySessionEnabled, false);
                 [snapshot release];
                 [historyLock unlock];
-                return identityFailure(error, "frame identity decoder pending capacity was exceeded");
+                return identityFailure(error, capacityError.UTF8String);
             }
             NSMutableData *crop = [[NSMutableData alloc] initWithLength:bytes];
             if (!crop) {
@@ -1342,17 +1356,28 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
     job.retentionMarker = retentionMarker;
     job.cropBytes = cropBytes;
     job.colorSpace = CGColorSpaceRetain(color_space);
-    if (!identityDecodeAccepting || identityDecodePendingJobs >= kIdentityDecodePendingJobLimit
-        || cropBytes > kImageCaptureArtifactPendingLimit
+    BOOL jobLimitExceeded = identityDecodePendingJobs >= kIdentityDecodePendingJobLimit;
+    BOOL byteLimitExceeded = cropBytes > kImageCaptureArtifactPendingLimit
         || artifactPendingBytes > kImageCaptureArtifactPendingLimit - cropBytes
-        || identityDecodePendingBytes > kImageCaptureArtifactPendingLimit - artifactPendingBytes - cropBytes) {
-        if (!identitySessionFailure) identitySessionFailure = [@"frame identity decoder pending capacity was exceeded" copy];
+        || identityDecodePendingBytes > kImageCaptureArtifactPendingLimit - artifactPendingBytes - cropBytes;
+    if (!identityDecodeAccepting || jobLimitExceeded || byteLimitExceeded) {
+        if (!identityDecodeAccepting) {
+            [historyLock unlock];
+            CGColorSpaceRelease(job.colorSpace);
+            job.colorSpace = NULL;
+            [job release];
+            return identityFailure(error, "frame identity decoder intake is closed");
+        }
+        NSString *capacityError = identityCapacityMessage(@"job-admission", frame_number,
+            identityDecodePendingJobs, identityDecodePendingBytes, cropBytes, artifactPendingBytes,
+            jobLimitExceeded, byteLimitExceeded);
+        if (!identitySessionFailure) identitySessionFailure = [capacityError copy];
         atomic_store(&identitySessionEnabled, false);
         [historyLock unlock];
         CGColorSpaceRelease(job.colorSpace);
         job.colorSpace = NULL;
         [job release];
-        return identityFailure(error, "frame identity decoder pending capacity was exceeded");
+        return identityFailure(error, capacityError.UTF8String);
     }
     identityDecodePendingJobs++;
     identityDecodePendingBytes += cropBytes;

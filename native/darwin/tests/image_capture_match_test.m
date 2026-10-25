@@ -389,9 +389,20 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     BOOL overflowAccepted = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
         stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
         9, 9000, &overflowError);
+    BOOL overflowHasMeasuredCapacity = overflowError
+        && strstr(overflowError, "stage=job-admission")
+        && strstr(overflowError, "frame=9")
+        && strstr(overflowError, "pendingJobs=8")
+        && strstr(overflowError, "jobLimit=8")
+        && strstr(overflowError, "pendingCropBytes=")
+        && strstr(overflowError, "incomingCropBytes=147456")
+        && strstr(overflowError, "artifactPendingBytes=")
+        && strstr(overflowError, "byteLimit=67108864")
+        && strstr(overflowError, "jobLimitExceeded=1")
+        && strstr(overflowError, "byteLimitExceeded=0");
     check(acceptedThroughLimit && !overflowAccepted && overflowError != NULL
-        && strstr(overflowError, "pending capacity") != NULL,
-        @"the decoder admits eight pending jobs and reports overflow without dropping an accepted frame");
+        && strstr(overflowError, "pending capacity") != NULL && overflowHasMeasuredCapacity,
+        @"the decoder admits eight pending jobs and reports the rejected branch with its job and byte counts");
     free(overflowError);
     char *sessionOverflow = sp_image_capture_match_identity_session_error_copy();
     check(sessionOverflow != NULL && strstr(sessionOverflow, "pending capacity") != NULL,
@@ -461,18 +472,21 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     check(sp_image_capture_match_identity_region_nonce(regionToken, &exceptionNonce, &error) && error == NULL,
         @"the exception fixture receives a fresh session nonce");
     free(error); error = NULL;
-    check(sp_image_capture_match_identity_issue(regionToken, sourceIdentity, &exceptionPayload, &error) && error == NULL,
-        @"the exception fixture receives a fresh issued identity");
+    const sp_image_capture_identity exceptionIdentity = { 19, 23, 30 };
+    check(sp_image_capture_match_retain(exceptionIdentity, raw.bytes, width, height, stride,
+        sourceBounds, 2, "DeviceRGB"), @"the exception fixture retains a distinct source identity");
+    check(sp_image_capture_match_identity_issue(regionToken, exceptionIdentity, &exceptionPayload, &error)
+        && error == NULL, @"the exception fixture issues its distinct source identity");
     free(error); error = NULL;
     CGImageRef exceptionImage = NULL;
     NSData *exceptionPixels = nil;
     BOOL exceptionEncoded = sp_capture_frame_identity_encode(raw.bytes, width, height, stride, colorSpace,
-        roi, exceptionNonce, (SPCaptureFrameIdentity){ sourceIdentity.generation, sourceIdentity.raster,
-            sourceIdentity.sequence }, &exceptionImage, &exceptionPixels, &exceptionEncodedPayload,
+        roi, exceptionNonce, (SPCaptureFrameIdentity){ exceptionIdentity.generation, exceptionIdentity.raster,
+            exceptionIdentity.sequence }, &exceptionImage, &exceptionPixels, &exceptionEncodedPayload,
         &exceptionEncodeError);
     check(exceptionEncoded && exceptionImage != NULL,
         @"the exception fixture builds a sample carrying its new issued identity");
-    check(sp_image_capture_match_identity_record(regionToken, sourceIdentity, roi, exceptionPixels.bytes,
+    check(sp_image_capture_match_identity_record(regionToken, exceptionIdentity, roi, exceptionPixels.bytes,
         width, height, stride, "DeviceRGB", &error) && error == NULL,
         @"the exception fixture records its tagged source artifact");
     free(error); error = NULL;
@@ -491,7 +505,8 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         ? [NSJSONSerialization JSONObjectWithData:identityManifestData options:0 error:nil] : nil;
     NSString *identityFailure = identityManifest[@"identityFailure"];
     check(!exceptionManifestAccepted && [identityFailure containsString:@"F239143InjectedVisionException"],
-        @"an asynchronous Vision exception is reported and fails manifest finalization after decoder drain");
+        [NSString stringWithFormat:@"an asynchronous Vision exception is reported and fails manifest finalization after decoder drain (failure=%@)",
+            identityFailure ?: @"missing"]);
     check(!sp_image_capture_match_identity_session_active(),
         @"an asynchronous Vision exception permanently disables identity intake for the session");
     sp_capture_frame_identity_test_set_decode_hook(NULL);

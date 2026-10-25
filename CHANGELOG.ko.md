@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F239-144: 기존 frame-identity capacity 오류에 거부 stage, pending job 및 crop-byte 수치, incoming crop, artifact pending bytes와 적용된 limit을 기록한다. 8-job 및 64 MiB 상한은 유지한다. 보존된 Tauri trace는 crop-byte 총량이 64 MiB보다 낮은 상태에서 두 장기 Vision decode로 8개 pending job이 채워졌음을 보여준다.
+
+
 - F239-143: Frame identity Vision decode를 최대 두 operation에서 실행하며 기존 serial identity lane에서 intake 순서대로 JSONL을 commit한다. Artifact write가 끝날 때까지 admitted job을 pending으로 유지하고 8-job 및 64 MiB 제한을 보존하며 writer 전에 decoder를 drain한다. 세 focused owner target이 각각 1/1 통과했고 Vision exception 정리 및 finalization 오류 보고를 검증했다. Full-recording cadence는 열린 상태다.
 
 

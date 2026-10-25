@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F239-144: Report the rejection stage, pending job and crop-byte counts, incoming crop, artifact pending bytes, and applicable limits in the existing frame-identity capacity error. Keep the eight-job and 64 MiB limits unchanged. The preserved Tauri trace shows two long Vision decodes filling eight pending jobs while total crop bytes remain below 64 MiB.
+
+
 - F239-143: Run frame identity Vision decoding on at most two operations while preserving intake-ordered JSONL commits on the existing serial identity lane. Keep admitted jobs pending through artifact writes, preserve the eight-job and 64 MiB limits, and drain the decoder before the writer. All three focused owner targets pass 1/1 and verify Vision exception cleanup and finalization error reporting. Full-recording cadence remains open.
 
 
