@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-48-3-14: Move the two `ProjectShown` unknown-field tests into the existing Tauri project-data-order child module. Their assertions remain unchanged. The exact lib tests pass 1/1 each; the paired-host audit no longer reports the old source test path and retains four unrelated findings. The parity inventory passes with 101 lanes, 703 implementation files, and 1004 test files. No host behavior changed.
+
 - F239-48-3-12: Record the exact view-record test placement difference. Go tests need `package host` to access private fixture state, while Rust counterparts use public `ViewChannels` APIs and do not need private-module placement. Keep both sides’ logging assertions. The focused owner assertion passes 1/1, accepts only the four listed paths, and rejects an unlisted sibling. The host audit drops from 9 findings to 5; `make parity-check` and `make docs-check` pass. No host behavior changes.
 
 - F239-48-3-11: Record the exact Tauri source-channel adapter test paths. The framework injects `Channel<DeclaredSourceEvent>` and has no Wails typed-channel counterpart. Shared ordering and lifecycle behavior remain covered by Wails owner tests; neither host suite proves live framework IPC delivery. The focused assertion passes 1/1, accepts only the two listed paths and rejects an unlisted sibling. The paired-host audit drops from 10 findings to 8; other findings remain. `make docs-check` passes.
