@@ -13,6 +13,8 @@
 
 - F239-63: Classify helper-only E2E modules explicitly and run the shared
   project-window lifecycle through each selected adapter. Keep the
+- F239-76: Issue `terminal.focus` before waiting for the host region to report focus in the IME helper, while retaining active/key-window and cursor-focus checks. Syntax, E2E source and documentation checks pass. Attempt-02 reached this helper twice per host and passed its focus preconditions, then failed later during lifecycle artifact setup on undefined `app.id` before the terminal gesture. Dedicated F8-9/F143 runtime confirmation remains pending.
+
   `WebviewWindow #... not found` stderr assertion scoped to Wails. Red: the
   consolidated Node run found three parity-audit classifications. Green:
   the parity owner test passes 1/1 and `make e2e-check` passes. The added

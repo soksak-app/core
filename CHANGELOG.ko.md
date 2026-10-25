@@ -13,6 +13,8 @@
 
 - F239-63: Helper-only E2E module을 명시적으로 분류하고 공통
   project-window lifecycle을 선택된 각 adapter에서 실행한다.
+- F239-76: IME helper에서 host region의 focus를 기다리기 전에 `terminal.focus`를 실행하고 active/key-window 및 cursor-focus 검사를 유지한다. Syntax, E2E source, 문서 검사가 통과한다. Attempt-02는 host마다 이 helper를 두 번 통과했지만 이후 lifecycle artifact 설정에서 undefined `app.id`로 실패해 terminal gesture에 도달하지 못했다. F8-9/F143 전용 runtime 확인은 대기 중이다.
+
   `WebviewWindow #... not found` stderr assertion은 Wails에 한정한다.
   Red: 통합 Node run은 parity audit에서 세 경로 분류 오류를 찾았다.
   Green: parity owner test가 1/1 통과하고 `make e2e-check`도 통과한다.

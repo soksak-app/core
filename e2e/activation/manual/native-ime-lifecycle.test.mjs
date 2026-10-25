@@ -22,10 +22,10 @@ async function focusedTerminal(s, surface) {
   const y = view.document.y + view.y + view.height / 2;
   await s.pointer(x, y, "move", { activate: true });
   await s.click(x, y);
+  await s.run("terminal.focus", {}, surface);
   await s.until("host.window", (host) => host.active && host.key &&
     host.regions.some((region) => region.surface === surface && region.focused),
   "the terminal did not become the focused view of the active key window");
-  await s.run("terminal.focus", {}, surface);
   await s.until("terminal.cursor", (cursor) => cursor.focused,
     "the terminal did not report native focus", { surface });
 }
