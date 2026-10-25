@@ -12,8 +12,9 @@
   host owner tests establish the exact detach acknowledgement barrier; this
   window case checks application continuity without claiming to measure that
   boundary. `node --check`,
-  `make e2e-check`, and `make docs-check` pass. Two-host runtime acceptance
-  remains pending.
+  `make e2e-check`, `make docs-check`, and `make parity-check` pass with the
+  inventory at 100 lanes, 697 implementation files, and 997 test files.
+  Two-host runtime acceptance remains pending.
 - F239-48-3-8: Pair both real start-module entries through module hooks.
   Both owner tests pass 2/2. The current host audit drops from 14 to 12
   findings, removing the two app-start paths without an allowance. The
@@ -3802,3 +3803,8 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   values. The focused consumer cases pass 2/2 after reproducing the rejection of
   sequence zero. P87 runtime input remains incomplete because that rejection
   stopped each host after its first terminal key; no visual acceptance is claimed.
+- F212.10: Record plugin-owned view migration completion separately from
+  measurements and publication. Browser P27.3, editor E24, terminal P49 and HWP
+  H22 complete their functional migrations with owner Red/Green evidence.
+  Measurements remain under P27.4, E25, P49.2 and H23. Publication gates remain
+  under P29/P31, E26-1, P68-1 and H29-1. No plugin source changed.

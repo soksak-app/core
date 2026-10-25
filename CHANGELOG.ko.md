@@ -11,7 +11,8 @@
   숨은 view가 표시 전에 다시 연결될 수 있다. F212.10-core-5-5 host owner test가
   정확한 detach acknowledgement barrier를 입증한다. 이 window case는 해당 경계를
   측정한다고 주장하지 않고 application 연속성을 확인한다. `node --check`,
-  `make e2e-check`, `make docs-check`가 통과한다. 양 host runtime acceptance는
+  `make e2e-check`, `make docs-check`, `make parity-check`가 lane 100개, 구현 파일
+  697개, 테스트 파일 997개 inventory로 통과한다. 양 host runtime acceptance는
   진행 중이다.
 - F239-48-3-8: 양쪽 실제 start-module entry를 module hook으로 짝지어
   검증한다. Owner test는 2/2 통과한다. 현재 host 감사는 예외 추가 없이
@@ -3664,3 +3665,8 @@
   값을 거부한다. sequence 0 거부를 재현한 뒤 집중 consumer case가 2/2
   통과한다. P87 runtime input은 해당 거부 때문에 각 host에서 terminal key
   하나 뒤 중단됐으므로 visual acceptance를 주장하지 않는다.
+- F212.10: plugin 소유 view 이전의 기능 완료와 측정 및 publication을 구분해
+  기록한다. Browser P27.3, editor E24, terminal P49, HWP H22의 기능 이전은 각
+  소유 저장소의 Red/Green 근거와 함께 완료됐다. P27.4, E25, P49.2, H23 측정은
+  남아 있다. P29/P31, E26-1, P68-1, H29-1 publication gate도 별도 추적한다.
+  Plugin source 변경은 없다.
