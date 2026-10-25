@@ -59,7 +59,7 @@ export function registerSourceOrigin(plugin, surface, generation) {
   if (generation <= floor) return current === generation;
   floor = generation;
   table.set(identity, generation);
-  for (const listener of registrationListeners.get(surface)?.get(identity) ?? []) listener(generation);
+  for (const listener of registrationListeners.get(surface)?.get(identity) ?? []) listener(generation); // default: a source without observers has nobody to notify.
   return true;
 }
 

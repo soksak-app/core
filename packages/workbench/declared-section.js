@@ -56,7 +56,7 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
   let pullState = { phase: "idle", seq: null, valueNull: null };
   let acceptedSeq = null;
 
-  const notify = () => changed?.();
+  const notify = () => changed?.(); // default: standalone section consumers may omit the optional redraw callback.
 
   function accept(seq, value, source = current) {
     const ok = receive(body, value, {
@@ -146,7 +146,7 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
         // The window ingress validates and acknowledges snapshots before routing them to sections. A source can have several
         // section recipients, so a section only accepts its own status and never acknowledges the shared push.
         if (message.status !== status || mine !== generation || !sameSource(current, next)) return;
-        if (message.skipped > 0) skipped?.(message.skipped);
+        if (message.skipped > 0) skipped?.(message.skipped); // default: skipped-count tracing is optional for section consumers.
         accept(message.seq, message.value, next);
       });
       Promise.resolve(ready).then((unsubscribe) => {

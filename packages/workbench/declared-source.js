@@ -15,7 +15,7 @@ let bufferedOrigins = [];
 let originSnapshotReady = false;
 
 function report(error) {
-  dispatchEvent(new ErrorEvent("error", { message: `declared UI snapshot ingress: ${error?.message ?? error}` }));
+  dispatchEvent(new ErrorEvent("error", { message: `declared UI snapshot ingress: ${error?.message ?? error}` })); // default: thrown non-Error values are included as their text.
 }
 
 function acknowledge(event, generation, message) {
@@ -29,14 +29,14 @@ function acknowledge(event, generation, message) {
 }
 
 function activeGeneration(plugin, surface) {
-  return sourceOrigin(plugin, surface ?? null);
+  return sourceOrigin(plugin, surface ?? null); // default: an absent surface identifies the plugin-host source.
 }
 
 function acceptGeneration(event) {
   if (!Number.isSafeInteger(event?.generation) || event.generation < 1) {
     throw new TypeError("declared UI snapshot has no positive source generation");
   }
-  const surface = event.surface ?? null;
+  const surface = event.surface ?? null; // default: a source lifecycle event without a surface belongs to the plugin host.
   const previous = activeGeneration(event.plugin, surface);
   const accepted = registerSourceOrigin(event.plugin, surface, event.generation);
   if (accepted && previous !== event.generation) replaceSnapshotSource(event.plugin, surface, event.generation);
@@ -53,8 +53,8 @@ function receive(event) {
   }
   if (!acceptGeneration(event)) return;
   const generation = event.generation;
-  const listeners = recipients.get(recipientKey(event.plugin, surface ?? null, event.status, generation));
-  const targets = [...(listeners ?? [])];
+  const listeners = recipients.get(recipientKey(event.plugin, surface ?? null, event.status, generation)); // default: absent surface identifies the plugin-host source.
+  const targets = [...(listeners ?? [])]; // default: a status without subscribers has no recipients.
   let ack;
   // The SDK receiver is ephemeral: its synchronous transport delivers this one wire event and retains no listener after return.
   const receiver = createSnapshotReceiver({
@@ -69,7 +69,7 @@ function receive(event) {
       const delivery = Promise.resolve(ack).then((accepted) => {
         if (!accepted || activeGeneration(event.plugin, surface) !== generation) return;
         if (registry.declared("status", `${event.plugin}.${status}`)) {
-          acceptSnapshotSequence(event.plugin, status, surface ?? null, generation, seq);
+          acceptSnapshotSequence(event.plugin, status, surface ?? null, generation, seq); // default: absent surface identifies the plugin-host source.
         }
         for (const recipient of targets) {
           if (listeners?.has(recipient) && activeGeneration(event.plugin, surface) === generation) {
@@ -91,7 +91,7 @@ function receiveOriginLifecycle(event, ended) {
   if (!event || typeof event !== "object" || typeof event.plugin !== "string" || event.plugin === "") {
     throw new TypeError("declared UI source lifecycle event requires a plugin id");
   }
-  const surface = event.surface ?? null;
+  const surface = event.surface ?? null; // default: a source lifecycle event without a surface belongs to the plugin host.
   if (event.surface !== undefined && (typeof surface !== "string" || surface === "")) {
     throw new TypeError(`declared UI source lifecycle event of ${event.plugin} has an invalid surface`);
   }

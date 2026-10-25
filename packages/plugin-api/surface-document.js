@@ -50,7 +50,7 @@ export function observeSurfaceDocument(view) {
       scale: view.devicePixelRatio,
       // default: the body may not exist yet; its absent scroll extent is zero.
       body: { width: Math.max(viewport.width, root.scrollWidth, document.body?.scrollWidth ?? 0),
-        height: Math.max(viewport.height, root.scrollHeight, document.body?.scrollHeight ?? 0) },
+        height: Math.max(viewport.height, root.scrollHeight, document.body?.scrollHeight ?? 0) }, // default: before body creation its scroll extent is zero.
       viewport, filter: style.filter, unbound: auditDocument(root),
     };
   };
@@ -66,7 +66,7 @@ export function observeSurfaceDocument(view) {
   const onInput = (event) => {
     // default: keys have no pointer coordinates, and pointers have no key.
     events.push({ sequence: ++sequence, type: event.type, trusted: event.isTrusted,
-      x: event.clientX ?? null, y: event.clientY ?? null, key: event.key ?? null,
+      x: event.clientX ?? null, y: event.clientY ?? null, key: event.key ?? null, // default: input event types without a coordinate or key store null for that field.
       modifiers: MODIFIERS.filter(([property]) => event[property]).map(([, name]) => name) });
     if (events.length > INPUT_KEPT) events.shift();
     for (const listener of inputListeners) listener(readInput());

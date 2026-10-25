@@ -153,6 +153,33 @@ test("ordered event listener errors are reported without blocking later subscrib
   }
 });
 
+test("ordered listener failures fail explicitly when the page error path is unavailable", async () => {
+  const channels = [];
+  class Channel {
+    constructor() { channels.push(this); }
+  }
+  globalThis.window = { __TAURI__: {
+    core: { Channel, invoke: async () => null },
+    event: { listen: async () => () => {} },
+    webview: { getCurrentWebview: () => ({ label: "main" }) },
+  } };
+  globalThis.location = { search: "" };
+  globalThis.dispatchEvent = undefined;
+  try {
+    const { host } = await import("../runtime/index.js?test=ordered-error-path-required");
+    await host.on("view-call", () => { throw new Error("subscriber failed"); });
+    assert.throws(
+      () => channels[0].onmessage({ name: "view-call", value: "one" }),
+      /dispatchEvent/,
+      "the runtime must not silently discard a listener failure when its page error path is absent",
+    );
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+    delete globalThis.dispatchEvent;
+  }
+});
+
 test("a late view notification without a surface subscriber does not block later events", async () => {
   const channels = [];
   const errors = [];

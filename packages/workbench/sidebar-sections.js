@@ -107,14 +107,14 @@ function mountDeclared(entry, record) {
     // The plugin host that registered the status, under plugin:<plugin id>, is the source after the surfaces
     // (docs/spec/declared-ui.md#declared-status).
     choose: () => {
-      const active = record.context.surface ?? null;
+      const active = record.context.surface ?? null; // default: a sidebar without a linked surface has no active tab.
       const host = registry.hostRegistrant("status", statusId);
       return chooseSource({
         // default: a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
         active,
         activeGeneration: active === null ? null : sourceOrigin(owner, active),
         registrants: registry.registrants("status", statusId),
-        host: host?.id ?? null,
+        host: host?.id ?? null, // default: a status without a plugin-host registrant has no host source.
         hostGeneration: host === null ? null : host.generation === sourceOrigin(owner, null) ? host.generation : null,
       });
     },

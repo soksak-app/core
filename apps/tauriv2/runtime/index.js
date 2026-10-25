@@ -187,8 +187,8 @@ export const host = (() => {
   const orderedSubscribers = new Map();
   let orderedStreamReady = null;
   const reportListenerError = (event, error) => {
-    const message = `native event ${event}: ${error?.message ?? error}`;
-    globalThis.dispatchEvent?.(new ErrorEvent("error", { message, error }));
+    const message = `native event ${event}: ${error?.message ?? error}`; // default: thrown non-Error values are retained as error text.
+    globalThis.dispatchEvent(new ErrorEvent("error", { message, error }));
   };
   const dispatchOrderedEvent = (message) => {
     if (message === null || typeof message !== "object" || typeof message.name !== "string" || !Object.hasOwn(message, "value")) {

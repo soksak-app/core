@@ -86,7 +86,7 @@ export function validateCatalog(catalog, source = "event catalog") {
   const validators = new Map();
   for (const [name, event] of Object.entries(catalog.events)) {
     const schema = event?.fields;
-    const branches = schema?.oneOf ?? [schema];
+    const branches = schema?.oneOf ?? [schema]; // default: a JSON Schema without oneOf declares this schema as its sole branch.
     const objectShape = (branch) => branch?.type === "object"
       && branch.properties !== null && typeof branch.properties === "object" && !Array.isArray(branch.properties)
       && Array.isArray(branch.required)
@@ -284,7 +284,7 @@ export function composeCatalogs(base, ...sidecars) {
   // default: a catalog without extensions has none to carry over.
   const extensions = [...(base.extends ?? [])];
   for (const catalog of sidecars) {
-    validateCatalog(catalog, `sidecar ${catalog?.sidecar ?? ""} event catalog`);
+    validateCatalog(catalog, `sidecar ${catalog?.sidecar ?? ""} event catalog`); // default: a malformed catalog may lack its name before schema validation.
     if (typeof catalog.sidecar !== "string" || catalog.sidecar === "") throw new Error("sidecar catalog: the member sidecar must name the sidecar");
     const where = `sidecar ${catalog.sidecar}`;
     if (JSON.stringify(catalog.layers) !== '["sidecar"]') throw new Error(`${where}: layers must be ["sidecar"], found ${JSON.stringify(catalog.layers)}`);

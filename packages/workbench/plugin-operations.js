@@ -179,7 +179,7 @@ export function createPluginOperations({ host, loaded, changed }) {
    */
   async function installStarter(pack, defaultRegistry, log, show) {
     if (!host) return false;
-    let job = state?.starter ?? null;
+    let job = state?.starter ?? null; // default: no persisted starter job means this is a first-run candidate.
     if (job?.state === "complete") return false;
     if (!job && (pack === null || !state?.firstRun)) return false;
     try {
@@ -222,7 +222,7 @@ export function createPluginOperations({ host, loaded, changed }) {
       if (state.starter?.state !== "complete") throw new Error("starter job was not recorded as complete");
       return installedAny;
     } catch (error) {
-      const failedPack = job?.pack ?? pack;
+      const failedPack = job?.pack ?? pack; // default: before the pending job is persisted, report the requested pack.
       log(`first run: the starter pack ${failedPack} was not installed: ${errorText(error)}`);
       show(`시작 플러그인 묶음 ${failedPack}을 설치하지 못했습니다 · ${errorText(error)}.`);
       return false;

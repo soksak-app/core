@@ -21,6 +21,15 @@
   디렉터리로 실패할 수 있었다. 집중 relay-expiry test는 `make go-repeat`에서
   3/3 통과하며 production relay 동작은 바뀌지 않았다.
 
+- F239-114-1: ordered listener 오류를 보고할 때 Tauri page error path를
+  필수로 사용하고, workbench view mount 및 composition-wait export가 없으면
+  no-op 함수로 대체하지 않도록 한다. Event census helper의 중복 required-field
+  fallback과 view sync의 optional module 접근을 제거한다. 나머지 JavaScript
+  후보에는 소유 계약의 이유를 기록한다. 제어된 runtime Red/Green assertion은
+  2/2, workbench Red/Green assertion은 2/2 통과했다. Fallback owner test 10/10,
+  plugin-api event check 30/30, log-contract audit 36/36 통과했다. 앱 bundle은
+  재빌드하지 않았다.
+
 - F239-111: input-reference test의 기존 50ms drain 구간에 AppKit event
   전달을 추가해 대기 중인 main-queue document check가 owner test에서 실행되게
   한다. 보존된 Native 전체 suite log에 input-reference wait 및 timer 등록

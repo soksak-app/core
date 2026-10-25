@@ -56,7 +56,7 @@ function createMountRegistration() {
 function recordMountFailure(entry, phase, error) {
   const record = entry.mountRegistration;
   if (!record || record.attempt === null || record.state === "failed") return;
-  const reason = String(error?.message ?? error);
+  const reason = String(error?.message ?? error); // default: a thrown non-Error value is retained as the failure text.
   record.state = "failed";
   record.phase = phase;
   record.reason = reason;
@@ -70,7 +70,7 @@ function traceComposition(entry, action, field, value) {
   trace("surface.composition", {
     page: String(document.defaultView.performance.timeOrigin),
     surface: entry.surfaceId,
-    attempt: entry.mountRegistration?.attempt ?? null,
+    attempt: entry.mountRegistration?.attempt ?? null, // default: a surface without an active mount attempt has no attempt number.
     action,
     [field]: value,
   });
@@ -81,7 +81,7 @@ function mountFailureError(surfaceId, record) {
 }
 
 function viewCallCancellationFields(plugin, surface, event, generation = event?.generation) {
-  const fields = { plugin, surface, id: event?.id, command: String(event?.command ?? "") };
+  const fields = { plugin, surface, id: event?.id, command: String(event?.command ?? "") }; // default: cancellation records retain the available id and use empty command text when absent.
   if (Number.isSafeInteger(generation) && generation > 0) fields.generation = generation;
   return fields;
 }
@@ -247,13 +247,13 @@ export function viewStartValues(surface, project) {
     origin: originOf(surface),
     project: project === null ? null : { id: project.id, root: project.root },
     declarations: Object.fromEntries(["status", "commands", "dom"].map((kind) =>
-      [kind, [...registry.surfaceDeclarations()[kind], ...(surface.declarations[kind] ?? [])]])),
+      [kind, [...registry.surfaceDeclarations()[kind], ...(surface.declarations[kind] ?? [])]])), // default: a surface without plugin declarations contributes none beyond core declarations.
   };
 }
 
 /** Builds the canonical surface descriptor from the tab, including its stored start parameters. */
 export function surfaceForTab(tab) {
-  return { ...plugin(tab.plugin).surface(tab.id), surfaceId: tab.id, pluginId: tab.plugin, params: tab.params ?? null };
+  return { ...plugin(tab.plugin).surface(tab.id), surfaceId: tab.id, pluginId: tab.plugin, params: tab.params ?? null }; // default: a tab without stored params starts with null params.
 }
 
 /** Adds the document-start values to each view using the descriptor supplied by its slot or stored tab. */
@@ -315,7 +315,7 @@ function collectNativeListeners(registrations) {
     try {
       off();
     } catch (error) {
-      dispatchEvent(new ErrorEvent("error", { message: `native listener cleanup: ${error?.message ?? error}` }));
+      dispatchEvent(new ErrorEvent("error", { message: `native listener cleanup: ${error?.message ?? error}` })); // default: thrown non-Error values are retained as failure text.
     }
   };
   const remove = () => {
@@ -747,11 +747,11 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
         theme: scoped.theme,
         // Actual text scale of this surface (docs/spec/text-size.md). It is read again at each notification and only a changed value is delivered.
         textSize: { read: () => {
-          factor = surfaceTextSize(surface.surfaceId) ?? factor;
+          factor = surfaceTextSize(surface.surfaceId) ?? factor; // default: without a surface override, keep the current layout scale.
           if (factor === null) throw new Error(`surface ${surface.surfaceId} is not in the layout`);
           return factor;
         }, on: (listener) => {
-          let last = surfaceTextSize(surface.surfaceId) ?? factor;
+          let last = surfaceTextSize(surface.surfaceId) ?? factor; // default: without a surface override, start from the current layout scale.
           return onTextSize(() => {
             const next = surfaceTextSize(surface.surfaceId);
             if (next === null || next === last) return;
@@ -817,18 +817,18 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
         };
       }, async (error) => {
         const cleanup = closeView().catch((cleanupError) => {
-          dispatchEvent(new ErrorEvent("error", { message: `view listener cleanup after registration failure: ${cleanupError?.message ?? cleanupError}` }));
+          dispatchEvent(new ErrorEvent("error", { message: `view listener cleanup after registration failure: ${cleanupError?.message ?? cleanupError}` })); // default: thrown non-Error values are retained as failure text.
         });
         if (entry.disposed) {
           await cleanup;
-          dispatchEvent(new ErrorEvent("error", { message: `view listener registration after dispose: ${error?.message ?? error}` }));
+          dispatchEvent(new ErrorEvent("error", { message: `view listener registration after dispose: ${error?.message ?? error}` })); // default: thrown non-Error values are retained as failure text.
         } else if (entry.compositionDeclared) {
           recordMountFailure(entry, "listener-registration", error);
           const releasing = releaseFailedMount(entry, { present: true, value: error }, cleanup);
           context.status.report("error", error);
           for (const listener of mountListeners) listener(surface.surfaceId, error);
           await releasing.catch((releaseError) => {
-            dispatchEvent(new ErrorEvent("error", { message: `surface ${surface.surfaceId} release after listener registration failure: ${releaseError?.message ?? releaseError}` }));
+            dispatchEvent(new ErrorEvent("error", { message: `surface ${surface.surfaceId} release after listener registration failure: ${releaseError?.message ?? releaseError}` })); // default: thrown non-Error values are retained as failure text.
           });
         } else await cleanup;
         return null;
@@ -842,10 +842,10 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
       closing.signal.addEventListener("abort", () => {
         listenerCollection.remove();
         closeView().catch((error) => {
-          dispatchEvent(new ErrorEvent("error", { message: `view listener cleanup: ${error?.message ?? error}` }));
+          dispatchEvent(new ErrorEvent("error", { message: `view listener cleanup: ${error?.message ?? error}` })); // default: thrown non-Error values are retained as failure text.
         });
-        listenerSetup.then((cleanup) => cleanup?.().catch((error) => {
-          dispatchEvent(new ErrorEvent("error", { message: `view listener cleanup: ${error?.message ?? error}` }));
+        listenerSetup.then((cleanup) => cleanup?.().catch((error) => { // default: registration failure already ran cleanup and resolves this setup with null.
+          dispatchEvent(new ErrorEvent("error", { message: `view listener cleanup: ${error?.message ?? error}` })); // default: thrown non-Error values are retained as failure text.
         }), () => {});
         forgetView(surface.surfaceId);
       }, { once: true });

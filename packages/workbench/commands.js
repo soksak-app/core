@@ -22,7 +22,7 @@ const runFrom = (name, params = {}, el) => {
   // registration paths, and neither may fall back to another owner.
   if (windowSection) {
     const sourceBody = el?.closest("[data-declared]");
-    const source = sourceBody && windowSection.contains(sourceBody) ? sourceBody.dataset.commandSource ?? null : null;
+    const source = sourceBody && windowSection.contains(sourceBody) ? sourceBody.dataset.commandSource ?? null : null; // default: commands outside a declared section have no status source.
     const plugin = pluginOfHostKey(source);
     return plugin === null ? registry.runOwned(name, params, source) : registry.runHosted(name, params, plugin);
   }

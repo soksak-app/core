@@ -382,10 +382,10 @@ async function showProject(id, prepared = null, openedProject = null, stagedOwne
     await keep("library replacement");
     await refresh();
   }
-  const project = openedProject ?? projects.find((p) => p.id === id);
+  const project = openedProject ?? projects.find((p) => p.id === id); // default: when no opened record was supplied, resolve it from the refreshed project list.
   if (!project) throw new Error(`Unknown project: ${id}`);
   if (!openedProject) checkProject(project);
-  const nextContext = prepared ?? await prepareData({ id, root: project.root });
+  const nextContext = prepared ?? await prepareData({ id, root: project.root }); // default: prepare data when the caller did not provide a staged context.
   const previous = { id: activeProjectId, browsing };
   try {
     await selectProject(id);

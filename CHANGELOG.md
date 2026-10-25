@@ -21,6 +21,16 @@
   to fail with a nonempty directory. The focused relay-expiry test passes 3/3
   through `make go-repeat`; production relay behavior is unchanged.
 
+- F239-114-1: Require the Tauri page error path when reporting an ordered
+  listener failure, and require the workbench view mount and composition-wait
+  exports instead of substituting no-op functions. Remove the redundant
+  required-field fallback in the event census helper and the optional view
+  module access on view sync. State the contract reason for each remaining
+  JavaScript candidate. The controlled runtime Red and Green assertions pass
+  (2/2); the workbench Red and Green assertions pass (2/2); the fallback owner
+  test passes 10/10, plugin-api event checks pass 30/30, and log-contract
+  audits pass 36/36. Application bundles were not rebuilt.
+
 - F239-111: Dispatch AppKit events in the input-reference test's existing
   50 ms drain interval so queued main-queue document checks run during the
   owner test. The full native suite log contains seven failed input-reference

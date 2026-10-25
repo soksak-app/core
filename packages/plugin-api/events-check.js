@@ -383,7 +383,7 @@ export function sitesOf(path, text, emitters = {}) {
 /** The properties and fields required in every branch of a JSON Schema declaration. */
 function fieldSchemaMembers(schema) {
   if (schema?.$schema !== 'https://json-schema.org/draft/2020-12/schema') return null;
-  const branches = schema?.oneOf ?? [schema];
+  const branches = schema?.oneOf ?? [schema]; // default: a JSON Schema without oneOf declares this schema as its sole branch.
   if (!Array.isArray(branches) || branches.length === 0) return null;
   const propertyNames = new Set();
   let required = null;
@@ -396,7 +396,7 @@ function fieldSchemaMembers(schema) {
     requiredByBranch.push(requiredBranch);
     required = required === null ? new Set(requiredBranch) : new Set([...required].filter((field) => requiredBranch.includes(field)));
   }
-  return { properties: [...propertyNames], required: [...(required ?? [])], requiredByBranch };
+  return { properties: [...propertyNames], required: [...required], requiredByBranch };
 }
 
 export function catalogFindings(catalog, catalogPath) {
@@ -473,7 +473,7 @@ export function emitFindings(catalog, sources, catalogPath, config = { emitters:
       // A family whose entry declares no properties leaves the fields of each of its events to the site (the performance trace of the page).
       const fieldsDeclared = !(key.includes('<') && shape?.properties.length === 0);
       if (site.fields !== null && fieldsDeclared) {
-        const declared = shape?.properties ?? [];
+        const declared = shape?.properties ?? []; // default: an invalid shape declares no usable fields; catalogFindings reports the schema error.
         if (!site.fields.open) {
           if (shape?.requiredByBranch.length > 1) {
             const emitted = new Set(site.fields.keys);
@@ -481,7 +481,7 @@ export function emitFindings(catalog, sources, catalogPath, config = { emitters:
               report(site.line, `${site.name} does not provide the required fields of any declared JSON Schema branch`);
             }
           } else {
-            for (const field of shape?.required ?? []) {
+            for (const field of shape?.required ?? []) { // default: an invalid shape declares no usable required fields; catalogFindings reports the schema error.
               if (!site.fields.keys.includes(field)) report(site.line, `${site.name} lacks the field ${field} that the catalog requires`);
             }
           }

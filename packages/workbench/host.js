@@ -384,7 +384,7 @@ async function syncSurfaces(request, surfaceModules) {
   const requestId = enabled ? ++nextSurfaceSyncRequestId : null;
   const views = enabled ? request.surfaces
     .filter(({ composition }) => composition?.kind === "view")
-    .map(({ id }) => ({ surface: id, attempt: surfaceModules?.mountedSurface(id)?.mountRegistration?.attempt ?? null })) : null;
+    .map(({ id }) => ({ surface: id, attempt: surfaceModules.mountedSurface(id)?.mountRegistration?.attempt ?? null })) : null; // default: a view not mounted yet has no registration attempt to report.
   const record = (outcome) => {
     if (!enabled) return;
     trace("surface.sync", {
@@ -525,8 +525,8 @@ export const surfaces = native ? {
       return orderedSurfacePlacement(async () => {
         const viewRecords = record.surfaces.filter(({ surface }) => surface?.composition?.kind === "view");
         const surfaceModules = viewRecords.length ? await import("./surface-modules.js") : null;
-        const mountedSurface = surfaceModules?.mountedSurface ?? (() => null);
-        const waitSurfaceCompositionDeclared = surfaceModules?.waitSurfaceCompositionDeclared ?? (() => Promise.resolve());
+        const mountedSurface = surfaceModules?.mountedSurface;
+        const waitSurfaceCompositionDeclared = surfaceModules?.waitSurfaceCompositionDeclared;
         const surfaces = record.surfaces.map((s) => ({
           id: s.id,
           dim: s.dim,
@@ -545,7 +545,7 @@ export const surfaces = native ? {
           ? record.surfaces.filter(({ id, surface }) => {
             if (surface?.composition?.kind !== "view") return false;
             const mounted = mountedSurface(id);
-            return !mounted || mounted.disposed;
+            return !mounted || mounted.disposed; // default: an absent or disposed view mount stays deferred until it is ready.
           }).map(({ id }) => id)
           : [];
         const deferredIds = new Set(deferredViews);

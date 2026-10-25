@@ -46,7 +46,7 @@ const slotSurfaces = new WeakMap();
 /** Associates the complete declaration and start values with the DOM slot for this render. */
 export function setSlotSurface(slot, surface) {
   if (!slot || slot.dataset.nativeSurfaceId !== surface?.surfaceId || slot.dataset.nativePlugin !== surface?.pluginId) {
-    throw new TypeError(`surface descriptor does not match slot ${slot?.dataset.nativeSurfaceId ?? "none"}`);
+    throw new TypeError(`surface descriptor does not match slot ${slot?.dataset.nativeSurfaceId ?? "none"}`); // default: the diagnostic names a missing slot explicitly.
   }
   slotSurfaces.set(slot, surface);
 }
@@ -238,7 +238,7 @@ function validatePlacementAnswer(record, answer, nativeKinds = app.kinds) {
       throw new Error(`surface placement cannot defer ${id}: plugin ${surface.plugin} has no native surface`);
     }
     const kind = surface.surface?.composition?.kind;
-    if (kind !== "view") throw new Error(`surface placement cannot defer ${id}: composition kind is ${kind ?? "missing"}`);
+    if (kind !== "view") throw new Error(`surface placement cannot defer ${id}: composition kind is ${kind ?? "missing"}`); // default: the diagnostic names a missing composition explicitly.
   }
   if (answer.placements.some((placement) => !placement || typeof placement !== "object"
       || typeof placement.id !== "string" || placement.id === "")) {

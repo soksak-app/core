@@ -90,7 +90,7 @@ function dataOf(project, plugin, declared, failures) {
 }
 
 async function prepare(project) {
-  const context = { project: project ?? null, access: new Map() };
+  const context = { project: project ?? null, access: new Map() }; // default: a library window has no visible project.
   if (!project) return context;
   for (const [plugin, declared] of declaredData) {
     const failures = await checkStored(project, plugin, declared);

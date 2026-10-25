@@ -238,7 +238,7 @@ export function hostCommandsOf(plugin) {
 
 /** The generation of the command layer of plugin, or null while it has no layer. */
 export function hostCommandGeneration(plugin) {
-  return layerGenerations.get(plugin) ?? null;
+  return layerGenerations.get(plugin) ?? null; // default: a host without an active command layer has no generation.
 }
 
 /**

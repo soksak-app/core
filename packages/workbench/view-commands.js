@@ -35,7 +35,7 @@ export function viewCommandsOf(surfaceId) {
 
 /** The generation of the command layer of surfaceId, or null while it has no layer. */
 export function viewCommandGenerationOf(surfaceId) {
-  return layerGenerations.get(surfaceId) ?? null;
+  return layerGenerations.get(surfaceId) ?? null; // default: a closed or unregistered command layer has no generation.
 }
 
 /**
@@ -69,10 +69,10 @@ export function createViewCommands({ plugin, post, timeoutOf, report, generation
         if (disposition === null || disposition === undefined) return;
         if (typeof disposition !== "object" || disposition.cancelled !== true ||
             !Number.isSafeInteger(disposition.sourceGeneration) || disposition.sourceGeneration < 1) {
-          deliver?.({ id: message.id, error: { code: FAILED_COMMAND, message: "native command post returned an invalid disposition" } });
+          deliver?.({ id: message.id, error: { code: FAILED_COMMAND, message: "native command post returned an invalid disposition" } }); // default: the view may close before the asynchronous post settles.
           return;
         }
-        deliver?.({ id: message.id, result: disposition });
+        deliver?.({ id: message.id, result: disposition }); // default: the view may close before the asynchronous post settles.
       }, (error) => {
         // default: a refusal that is not an Error carries its value as the text.
         deliver?.({ id: message.id, error: { code: FAILED_COMMAND, message: String(error?.message ?? error) } });

@@ -16,7 +16,7 @@ const documentConnections = new WeakMap();
 const documentDelegations = new WeakMap();
 const documentListeners = new WeakMap();
 const notifyDocument = (document) => {
-  for (const listener of documentListeners.get(document) ?? []) listener();
+  for (const listener of documentListeners.get(document) ?? []) listener(); // default: a document with no binding observer has nobody to notify.
 };
 
 /** Observes connection changes in one document without changing an individual binder's audit scope. */
@@ -40,7 +40,7 @@ const auditRow = (element, connected) => ({
   tag: element.tagName.toLowerCase(),
   // default: an absent exposure or command is reported as null.
   expose: element.dataset.expose ?? null,
-  command: connected ? element.dataset.command ?? null : null,
+  command: connected ? element.dataset.command ?? null : null, // default: an absent command is reported as null in the audit row.
   // default: an element without an accessible name, title or text has empty text.
   text: (element.getAttribute("aria-label") || element.title || element.textContent || "").trim().slice(0, 40),
 });
