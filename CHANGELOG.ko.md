@@ -41,6 +41,13 @@
   1건이 포함된다. Darwin owner test는 통과한다. macOS에서는 Linux test 파일이
   build constraint에 제외되므로 Linux package test는 실행하지 않았다.
 
+- F239-93-3-3: Go의 변경 가능한 platform 등록을 통한 event-log 시작과 준비
+  오류 처리를 위한 Wails-only host-contract case를 추가한다. 기존 ownership
+  test는 configuration lock 및 path-error case에 연결한다. Static audit은
+  119개 finding에서 117개로 줄어 남아 있던 event-log 선언 두 건을 제거한다.
+  원래 121개 audit과 비교하면 대상 선언 네 건 모두 해결됐으며 새 finding은
+  없다. Rust API와 제품 동작은 바뀌지 않았다.
+
 - F239-101: 설정된 platform 및 build-tag 실행별로 `go list`를 사용해 Wails
   host-contract declaration inventory를 만든다. 현재 platform이 선택한 Go
   internal/external test file을 포함하고 실패하거나 비어 있는 package

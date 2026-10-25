@@ -12,7 +12,7 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-// contract: cli.private-files.ownership-uses-platform-operation
+// contract: cli.plugin.writing-commands-own-the-configuration
 func TestConfigurationOwnershipUsesPrivateProcessLockOperation(t *testing.T) {
 	recorder := installPrivateFilesRecorder(t)
 	config := t.TempDir()
@@ -30,7 +30,7 @@ func TestConfigurationOwnershipUsesPrivateProcessLockOperation(t *testing.T) {
 	}
 }
 
-// contract: cli.private-files.lock-operation-failure-rejects-a-writing-command
+// contract: cli.file.errors-name-the-path-and-the-reason
 func TestConfigurationOwnershipReportsPrivateProcessLockFailure(t *testing.T) {
 	recorder := installPrivateFilesRecorder(t)
 	recorder.openProcessLockFileError = fmt.Errorf("process lock file is not implemented on windows")

@@ -122,8 +122,8 @@ func installPrivateFilesRecorder(t *testing.T) *privateFilesRecorder {
 	return recorder
 }
 
-// contract: cli.private-files.event-log-uses-platform-operations
-func TestEventLogUsesPrivateFilePlatformOperations(t *testing.T) {
+// contract: cli.log.registered-platform-file-operations
+func TestEventLogUsesRegisteredPlatformFileOperations(t *testing.T) {
 	recorder := installPrivateFilesRecorder(t)
 	log, err := sok.StartToolEventLog(t.TempDir())
 	if err != nil {
@@ -135,8 +135,8 @@ func TestEventLogUsesPrivateFilePlatformOperations(t *testing.T) {
 	}
 }
 
-// contract: cli.private-files.event-log-startup-failure-is-reported
-func TestEventLogStartupReportsPrivateFilePlatformFailure(t *testing.T) {
+// contract: cli.log.registered-platform-prepare-error
+func TestEventLogStartupReportsRegisteredPlatformPrepareError(t *testing.T) {
 	recorder := installPrivateFilesRecorder(t)
 	recorder.prepareLogDirError = errors.New("event log directory is not implemented on windows")
 	config := t.TempDir()

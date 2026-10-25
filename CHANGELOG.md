@@ -46,6 +46,14 @@
   test passes. The Linux package test was not run on macOS because its build
   constraints exclude all files.
 
+- F239-93-3-3: Add Wails-only host-contract cases for event-log startup through
+  the mutable Go platform registration and for its preparation-error path.
+  Map the existing ownership tests to configuration-lock and path-error cases.
+  The static audit moves from 119 findings to 117, removing the two remaining
+  event-log declarations; compared with the original 121-finding audit, all
+  four target declarations are resolved with no new finding. No Rust API or
+  product behavior changes.
+
 - F239-101: Derive the Wails host-contract declaration inventory with `go list`
   for each configured platform and build-tag run. Include internal and external
   Go test files selected for the current platform, reject failed or empty

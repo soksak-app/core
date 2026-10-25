@@ -5608,8 +5608,8 @@ const FEATURE_LINKS = [
       { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func ownConfiguration" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestEventLogUsesPrivateFilePlatformOperations" },
-      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestEventLogStartupReportsPrivateFilePlatformFailure" },
+      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestEventLogUsesRegisteredPlatformFileOperations" },
+      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestEventLogStartupReportsRegisteredPlatformPrepareError" },
       { file: "packages/sok/wailsv3/tests/ownership_test.go", id: "TestConfigurationOwnershipUsesPrivateProcessLockOperation" },
       { file: "packages/sok/wailsv3/tests/ownership_test.go", id: "TestConfigurationOwnershipReportsPrivateProcessLockFailure" },
       { file: "packages/sok/wailsv3/tests/platform/darwin/private_files_test.go", id: "TestPrepareLogDirectoryCreatesAndRestrictsDirectory" },
