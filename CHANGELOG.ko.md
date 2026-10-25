@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-147: Browser만 호환되지 않는 core 후보가 되도록 application-update
+  fixture에서 나머지 설치 plugin 선언의 engine range를 candidate와 호환되게
+  한다. 설치 선언이 없으면 fixture setup을 명시적으로 실패시킨다. Update
+  계약과 production 동작은 바뀌지 않았다. Wails와 Tauri의 focused selector는
+  별도 session에서 통과했다. 앞선 Tauri session은 기대한 refused-download
+  assertion까지 진행했지만 frontmost application이 Chrome에서 Terminal로 바뀌어
+  cleanup에 실패했다. 이후 새 session은 baseline을 유지했다.
+
 - F239-145: Native application deactivation 시 frontmost process를 기록한다. Activity observer는 event gate를 확인한 뒤 `NSWorkspace.frontmostApplication`을 조회하고 nullable PID와 bundle field를 저장한다. Red: `make -C native/darwin repeat TEST=activity_observers_test COUNT=1`은 `native.app.deactivated`에 fields가 없어 실패했다(`/tmp/F239-145-activity-observers-red-01.log`). Green: 같은 target이 0.498초에 통과했다(`/tmp/F239-145-activity-observers-green-01.log`). 이 값은 key event를 받는 process만 식별하며 focus 변경 이유를 증명하거나 보존된 F143 실패를 해결하지 않는다.
 
 - F239-144: 기존 frame-identity capacity 오류에 거부 stage, pending job 및 crop-byte 수치, incoming crop, artifact pending bytes와 적용된 limit을 기록한다. 8-job 및 64 MiB 상한은 유지한다. 보존된 Tauri trace는 crop-byte 총량이 64 MiB보다 낮은 상태에서 두 장기 Vision decode로 8개 pending job이 채워졌음을 보여준다.

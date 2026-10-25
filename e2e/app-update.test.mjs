@@ -40,6 +40,22 @@ for (const app of Object.values(APPS)) {
     return s.until("core.app", (value) => value.available?.version === NEWER, "the registry with a newer core did not list an update");
   }
 
+  function installedPluginVersion(index, row) {
+    if (typeof row?.id !== "string" || typeof row.installed?.version !== "string") {
+      throw new Error("application update fixture: installed plugin has no id or version");
+    }
+    const plugin = index.plugins.find((item) => item.id === row.id);
+    if (!plugin) throw new Error(`application update fixture: installed plugin ${row.id} is absent from the served index`);
+    const version = plugin.versions.find((item) => item.version === row.installed.version);
+    if (!version) {
+      throw new Error(`application update fixture: installed version ${row.installed.version} of ${row.id} is absent from the served index`);
+    }
+    if (typeof version.engines?.soksak !== "string") {
+      throw new Error(`application update fixture: installed version ${row.installed.version} of ${row.id} has no declared core engine range`);
+    }
+    return version;
+  }
+
   test(`${app.name}: the update list shows the core release first and a refused release fails the operation`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
@@ -47,16 +63,25 @@ for (const app of Object.values(APPS)) {
     const before = await s.get("core.plugins");
     const url = "https://127.0.0.1:9/soksak-app/core/releases/download/v99.0.0/soksak-99.0.0.zip";
     // The installed version of browser needs a core below 99.0.0, and a newer version of it needs a core from 99.0.0.
-    const installed = before.plugins.find((row) => row.id === "browser").installed.version;
+    const browser = before.plugins.find((row) => row.id === "browser");
+    if (typeof browser?.installed?.version !== "string") {
+      throw new Error("application update fixture: installed browser version is missing");
+    }
+    const installed = browser.installed.version;
     const newer = `${installed.split(".").slice(0, 2).join(".")}.${Number(installed.split(".")[2]) + 1}`;
     const listed = await serve(s, before, url, "0".repeat(64), (index) => {
-      const browser = index.plugins.find((plugin) => plugin.id === "browser");
-      browser.versions.find((item) => item.version === installed).engines.soksak = ">=0.0.1 <99.0.0";
-      browser.versions.push({ ...structuredClone(browser.versions.at(-1)), version: newer, engines: { soksak: ">=99.0.0" } });
+      for (const row of before.plugins) {
+        if (row.id === "browser" || row.installed === null || row.installed === undefined) continue;
+        installedPluginVersion(index, row).engines.soksak = ">=0.0.1";
+      }
+      const browserVersion = installedPluginVersion(index, browser);
+      browserVersion.engines.soksak = `>=0.0.1 <${NEWER}`;
+      const browserDeclaration = index.plugins.find((plugin) => plugin.id === browser.id);
+      browserDeclaration.versions.push({ ...structuredClone(browserDeclaration.versions.at(-1)), version: newer, engines: { soksak: `>=${NEWER}` } });
     });
     assert.equal(listed.available.release, "https://127.0.0.1:9/soksak-app/core/releases/tag/v99.0.0");
     assert.equal(listed.operation, null);
-    assert.deepEqual(listed.incompatible, [{ id: "browser", installed, range: ">=0.0.1 <99.0.0", compatible: newer }]);
+    assert.deepEqual(listed.incompatible, [{ id: "browser", installed, range: `>=0.0.1 <${NEWER}`, compatible: newer }]);
 
     // The window shows the update control with the update count for the core release, which opens the plugin screen at the update list.
     const control = await s.rect("core.chrome.updates");
