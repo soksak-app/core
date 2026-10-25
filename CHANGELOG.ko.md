@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-141: 기존 screen read 앞뒤의 terminal compose/cursor status 읽기와
+  검증 compose/cursor/window status 읽기를 각각 동시에 실행한다. Controlled
+  Red는 각 batch가 직렬로 시작되고 뒤이은 오류가 누락되는 것을 확인했다.
+  같은 owner case가 단계 순서와 모든 read 오류를 보존하며 2/2 통과한다.
+  집중 activation helper test, JavaScript syntax 검사, `make exposure-check`,
+  `make docs-check`가 통과했다. App 또는 activation 실행은 없으며 IME
+  acceptance와 33 ms capture gate는 계속 열린 상태다.
+
 - F239-108: view-focus fixture에서 app DOM을 등록하고 모든 출처의 activation
   오류를 보존한다. 이전 input-inject 전용 filter는 확장한 오류 보고 assertion에서
   실패했다. 동일 CLI owner가 두 오류를 보존하며 통과했고 기본 비활성화 owner도

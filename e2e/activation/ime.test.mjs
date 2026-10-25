@@ -30,6 +30,7 @@ import {
   terminalInputReceiptMatches,
   initialCursorFrameMatchesScreen,
   observeTerminalBaseline,
+  readTerminalObservationSnapshot,
   terminalObserverStatusesMatch,
   terminalLineBeforeCursor,
   selectCoherentTerminalObservation,
@@ -392,12 +393,13 @@ for (const app of Object.values(APPS)) {
       let attempt = 0;
       const readSnapshot = async () => {
         attempt += 1;
-        const compose = await s.get("terminal.compose", surface);
-        const cursor = await s.get("terminal.cursor", surface);
-        const screen = await presentedScreen(s, surface);
-        const currentCompose = await s.get("terminal.compose", surface);
-        const currentCursor = await s.get("terminal.cursor", surface);
-        const host = await s.get("host.window");
+        const { compose, cursor, screen, currentCompose, currentCursor, host } =
+          await readTerminalObservationSnapshot({
+            readCompose: () => s.get("terminal.compose", surface),
+            readCursor: () => s.get("terminal.cursor", surface),
+            readScreen: () => presentedScreen(s, surface),
+            readHost: () => s.get("host.window"),
+          });
         const region = host.regions.find((item) => item.surface === surface && item.name === "view");
         const currentEvents = terminalStageEvents(observedStateEvents, eventOffset);
         const snapshot = {

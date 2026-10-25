@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-141: Run the independent terminal compose/cursor reads, followed by the
+  independent verification compose/cursor/window reads, concurrently around
+  the existing screen read. The controlled Red showed each batch starting
+  serially and losing later failures; the same owner cases pass 2/2 with phase
+  order and all read errors preserved. The focused activation helper test,
+  JavaScript syntax checks, `make exposure-check`, and `make docs-check` pass.
+  No app or activation run was performed; IME acceptance and the 33 ms capture
+  gate remain open.
+
 - F239-108: Register the app DOM in the view-focus fixture and preserve
   captured activation errors from every source. The old input-inject-only
   filter failed the expanded error-report assertion; the same CLI owner now

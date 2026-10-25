@@ -2,6 +2,8 @@
 
 [English](features.md)
 
+- [o] F239-141 — P1: 기존 IME, focus, semantic, visual, frame identity 및 33 ms cadence 요구사항을 유지하면서 독립 status 요청을 동시에 읽어 terminal IME observer 부담을 줄인다. Status pair → screen read → status pair 순서, 모든 관측값 및 취합 오류를 보존한다. Phase 순서와 전체 오류 보고를 제어된 Promise로 검사하는 owning Red/Green test를 추가한다. Runtime acceptance는 대기 상태이며 이 observer 변경이 capture-gap 실패를 해결한다고 추론하지 않는다.
+
 - [o] F239-108 — P1, F239-100 및 F212.12-2-1-2 연결: view-focus activation fixture가 host window 등록을 따르고 캡처한 모든 native 오류를 timeout에 보존한다. Surface 생성 전에 app DOM을 `sp_window_set_main_webview`로 등록한다. Activation 실패 reporter는 WebKit과 document view 오류를 포함한 모든 캡처 `native.record.error`의 `where`와 `text`를 보존한다. Red: document-view 오류도 캡처하는 확장 `--activity-error-report-test` assertion이 변경 전 input-inject 전용 filter에서 실패했다(`/tmp/F239-108-activity-error-red.log`). Green: 같은 CLI owner가 두 오류 기록을 출력하며 통과했고(`/tmp/F239-108-activity-error-green.log`), main-view 등록 assertion을 포함한 기본 비활성화 `view_focus_test`도 통과했다(`/tmp/F239-108-view-focus-default-green.log`). 기존 activation timeout은 등록된 activity-state callback 하나가 미완료였다는 사실만 증명하며 fixture 수정은 이를 해결하지 않는다. Activation이나 key input은 실행하지 않았다.
 
 - [o] F239-124 — P1: Go와 Rust event-log rotation test의 byte-count oracle을 바로잡는다. Writer는 다음 line이 설정 bound를 넘기기 전에 rotate하고 `log.rotated.bytes`에 방금 닫은 generation의 정확한 크기를 기록한다. 해당 event의 generation과 일치하는 archived file의 실제 크기를 비교하며 설정 bound와 generation assertion을 유지한다. Red: 보존된 host-contract 실행은 generation 16에 3841 bytes를 기록했지만 test는 triggering line이 최대 150 bytes라고 가정했다. 첫 local 수정도 generation 1을 골라 실패했다. Green: 집중 Go 및 Rust rotation test가 각각 1/1 통과했다.

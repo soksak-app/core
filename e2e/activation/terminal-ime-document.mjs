@@ -336,6 +336,30 @@ export async function observeTerminalBaseline(startObserver, readBaseline) {
   }
 }
 
+/** Reads a before/screen/after snapshot while keeping the screen between the status pairs. */
+export async function readTerminalObservationSnapshot({ readCompose, readCursor, readScreen, readHost }) {
+  const [compose, cursor] = await readObservationBatch([
+    { name: "terminal.compose", read: readCompose },
+    { name: "terminal.cursor", read: readCursor },
+  ], "before-screen");
+  const screen = await readScreen();
+  const [currentCompose, currentCursor, host] = await readObservationBatch([
+    { name: "terminal.compose", read: readCompose },
+    { name: "terminal.cursor", read: readCursor },
+    { name: "host.window", read: readHost },
+  ], "after-screen");
+  return { compose, cursor, screen, currentCompose, currentCursor, host };
+}
+
+async function readObservationBatch(reads, phase) {
+  const results = await Promise.allSettled(reads.map(({ read }) => Promise.resolve().then(read)));
+  const errors = results.flatMap((result, index) => result.status === "rejected"
+    ? [new Error(`${reads[index].name} read failed`, { cause: result.reason })]
+    : []);
+  if (errors.length > 0) throw new AggregateError(errors, `terminal observation ${phase} reads failed`);
+  return results.map((result) => result.value);
+}
+
 const TERMINAL_INPUT_STATUSES = ["terminal.compose", "terminal.cursor", "terminal.screen"];
 
 /** Resolves after a status event newer than the caller's sample offset arrives. */

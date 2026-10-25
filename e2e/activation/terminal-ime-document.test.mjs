@@ -11,6 +11,7 @@ import {
   inputTraceTransactions,
   terminalInputReceiptMatches,
   observeTerminalBaseline,
+  readTerminalObservationSnapshot,
   initialCursorFrameMatchesScreen,
   terminalObserverStatusesMatch,
   terminalStageMatchesReference,
@@ -92,6 +93,98 @@ test("a failed initial baseline stops its observer and preserves the read error"
   }), async () => { throw failure; }), (error) => error === failure);
   assert.equal(stopped, true, "the observer remains active after a failed baseline read");
 });
+
+test("terminal observation reads status pairs concurrently around the screen sample", { timeout: 5000 }, async () => {
+  const started = [];
+  const beforeCompose = deferred();
+  const beforeCursor = deferred();
+  const screen = deferred();
+  const afterCompose = deferred();
+  const afterCursor = deferred();
+  const host = deferred();
+  const readStarted = new Map(["before.compose", "before.cursor", "screen", "after.compose", "after.cursor", "host"]
+    .map((name) => [name, deferred()]));
+  const markStarted = (name) => { started.push(name); readStarted.get(name).resolve(); };
+  let composeReads = 0;
+  let cursorReads = 0;
+  const task = readTerminalObservationSnapshot({
+    readCompose() {
+      const name = composeReads++ === 0 ? "before.compose" : "after.compose";
+      markStarted(name);
+      return composeReads === 1 ? beforeCompose.promise : afterCompose.promise;
+    },
+    readCursor() {
+      const name = cursorReads++ === 0 ? "before.cursor" : "after.cursor";
+      markStarted(name);
+      return cursorReads === 1 ? beforeCursor.promise : afterCursor.promise;
+    },
+    readScreen() { markStarted("screen"); return screen.promise; },
+    readHost() { markStarted("host"); return host.promise; },
+  });
+  await readStarted.get("before.compose").promise;
+  const beforeStarted = started.slice();
+  beforeCompose.resolve("compose-before");
+  await readStarted.get("before.cursor").promise;
+  beforeCursor.resolve("cursor-before");
+  await readStarted.get("screen").promise;
+  const afterScreenStarted = started.slice();
+  screen.resolve("screen");
+  await readStarted.get("after.compose").promise;
+  const afterStarted = started.slice();
+  afterCompose.resolve("compose-after");
+  await readStarted.get("after.cursor").promise;
+  afterCursor.resolve("cursor-after");
+  await readStarted.get("host").promise;
+  host.resolve("host-after");
+  const snapshot = await task;
+
+  assert.deepEqual(beforeStarted, ["before.compose", "before.cursor"]);
+  assert.deepEqual(afterScreenStarted, ["before.compose", "before.cursor", "screen"]);
+  assert.deepEqual(afterStarted, ["before.compose", "before.cursor", "screen", "after.compose", "after.cursor", "host"]);
+  assert.deepEqual(snapshot, { compose: "compose-before", cursor: "cursor-before", screen: "screen",
+    currentCompose: "compose-after", currentCursor: "cursor-after", host: "host-after" });
+});
+
+test("terminal observation reports every failed read in each concurrent phase", { timeout: 5000 }, async () => {
+  const composeError = new Error("compose unavailable");
+  const cursorError = new Error("cursor unavailable");
+  const result = readTerminalObservationSnapshot({
+    readCompose() { throw composeError; },
+    readCursor() { throw cursorError; },
+    readScreen() { assert.fail("screen must not run after a failed before-status batch"); },
+    readHost() { assert.fail("after-status reads must not run after a failed batch"); },
+  });
+  await assert.rejects(result, (error) => error instanceof AggregateError && error.errors.length === 2 &&
+    error.errors.some((entry) => entry.message === "terminal.compose read failed" && entry.cause === composeError) &&
+    error.errors.some((entry) => entry.message === "terminal.cursor read failed" && entry.cause === cursorError));
+
+  const afterComposeError = new Error("current compose unavailable");
+  const afterCursorError = new Error("current cursor unavailable");
+  const hostError = new Error("host status unavailable");
+  let composeReads = 0;
+  let cursorReads = 0;
+  await assert.rejects(readTerminalObservationSnapshot({
+    readCompose() {
+      if (composeReads++ === 0) return "compose-before";
+      throw afterComposeError;
+    },
+    readCursor() {
+      if (cursorReads++ === 0) return "cursor-before";
+      throw afterCursorError;
+    },
+    readScreen() { return "screen"; },
+    readHost() { throw hostError; },
+  }), (error) => error instanceof AggregateError && error.errors.length === 3 &&
+    error.errors.some((entry) => entry.message === "terminal.compose read failed" && entry.cause === afterComposeError) &&
+    error.errors.some((entry) => entry.message === "terminal.cursor read failed" && entry.cause === afterCursorError) &&
+    error.errors.some((entry) => entry.message === "host.window read failed" && entry.cause === hostError));
+});
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
 
 test("waits for the seven-vowel Backspace document after a coherent eight-vowel intermediate", { timeout: 5000 }, async () => {
   const empty = { text: "", markedRange: null, selectedRange: { location: 0, length: 0 },
