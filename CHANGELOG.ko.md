@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-105: `sidecars.retain.keeps-session-first-sent-during-start`의 중복 plugin-only host-contract 행을 제거하고 실제 English 및 Korean table의 case ID
+  유일성을 검사한다. Red: owner test가 canonical table의 중복 ID에서 실패했다.
+  Green: 두 실제 table을 parse해 중복 ID가 없고 case 집합이 일치함을 확인하며
+  1/1 통과한다.
+
 - F239-47-8: Native activation input-source 복원 검증을 완료한다. 추적 repeat은 명시적인
   ABC baseline으로 focused 실행 세 번을 통과한다. 각 실행에서 두 input context의 Korean
   adoption, 종료 전 ABC 복원, 종료 후 독립 조회에서 ABC와 원래 전면 application 복원을

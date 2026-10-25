@@ -474,8 +474,6 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.keeps-session-first-sent-during-start` | Persistent service가 시작된 뒤 keep 목록을 모으기 전에 처음 보낸 plugin 및 state session도 해당 retain에 포함된다. | both |
 | `sidecars.retain.keeps-surface-first-sent-during-start` | Persistent service가 시작된 뒤 keep 목록을 모으기 전에 처음 보낸 일반 surface session도 해당 retain에 포함된다. | both |
 | `sidecars.retain.closes-sessions-absent-from-layout` | 이전에 알려진 일반 surface를 retain에서 생략하면 stale owner와 root를 제거하고 persistent service에 그 surface가 없는 keep 목록을 보낸다. | both |
-| `sidecars.retain.keeps-session-first-sent-during-start` | retain의 서비스가 시작되는 동안 처음 보내진 session은 그 retain의 keep 목록에 든다. keep 목록은 서비스가 시작된 뒤에 읽기 때문이다. | both |
-| `sidecars.retain.keeps-session-first-sent-during-start` | persistent service가 시작된 뒤 유지할 표면을 모으기 전에 처음 보낸 plugin session도 해당 retain에 포함된다. | both |
 | `sidecars.close-owned.selects-the-closed-surfaces` | project를 release하면 그 소유자가 가진 해당 project의 plugin session만 닫고, 같은 소유자가 계속 보유한 다른 project의 session은 유지한다. | both |
 | `sidecars.retain.rejects-after-stop` | 사이드카가 멈춘 뒤 시작한 retain이나 서비스를 준비한 뒤 멈춤이 끼어든 retain은 "sidecars are stopped"로 실패하고 서비스에 retain을 보내지 않는다. | both |
 | `menu.application.view-has-full-screen-and-text-size` | 애플리케이션 메뉴의 View 메뉴에는 전체 화면과 Command `=`, `-`, `0`의 [글자 크기](text-size.ko.md) 항목이 있고, 웹뷰 전체를 확대하거나 다시 읽는 메뉴 항목이 없다. | both |

@@ -125,6 +125,14 @@ test('the late provider error case uses the registered Tauri host scope', () => 
   assert.deepEqual(contract?.hosts, ['tauriv2']);
 });
 
+test('the checked-in English and Korean host contract tables contain unique case ids', () => {
+  const english = readFileSync(new URL('../../docs/spec/host-contract.md', import.meta.url), 'utf8');
+  const korean = readFileSync(new URL('../../docs/spec/host-contract.ko.md', import.meta.url), 'utf8');
+  const englishCases = parseContractCases(english);
+  const koreanCases = parseContractCases(korean);
+  assert.deepEqual([...koreanCases.keys()].sort(), [...englishCases.keys()].sort());
+});
+
 test('results are grouped by run and owner, and a name that one owner shares keeps a failure, then a pass, then a skip', () => {
   const item = (name, run, owner, testName) => ({ name, run, owner, testName });
   const items = [item('r1 p1.A', 'r1', 'p1', 'A'), item('r1 p2.A', 'r1', 'p2', 'A'), item('r1 p1.B', 'r1', 'p1', 'B'),

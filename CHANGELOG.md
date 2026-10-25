@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- F239-105: Remove the duplicate plugin-only row for `sidecars.retain.keeps-session-first-sent-during-start` and test the checked-in English and Korean tables for unique case IDs. Red: the owner test failed on
+  the duplicate ID in the canonical table. Green: it parses both real tables,
+  confirms unique IDs and matching case sets, and passes 1/1.
+
 - F239-47-8: Complete the native activation input-source restoration
   verification. The tracked repeat passes three focused runs with an
   explicit ABC baseline; each run confirms Korean adoption in both input

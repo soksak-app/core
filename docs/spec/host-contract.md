@@ -471,7 +471,6 @@ Items:
 | `sidecars.retain.keeps-session-first-sent-during-start` | A persistent service retain includes plugin and state sessions first sent after service startup and before the retained surfaces are collected. | both |
 | `sidecars.retain.keeps-surface-first-sent-during-start` | A persistent service retain includes an ordinary surface session first sent after service startup and before the retained surfaces are collected. | both |
 | `sidecars.retain.closes-sessions-absent-from-layout` | A retain that omits a previously known ordinary surface removes its stale owner and root, and sends the persistent service a keep list without that surface. | both |
-| `sidecars.retain.keeps-session-first-sent-during-start` | A persistent service retain includes a plugin session first sent after service startup and before the retained surfaces are collected. | both |
 | `sidecars.close-owned.selects-the-closed-surfaces` | Releasing a project closes its owner's plugin session for that project and keeps sessions for other projects the owner still holds. | both |
 | `sidecars.retain.rejects-after-stop` | A retain that starts after the sidecars stop, or that a stop interrupts after the service is prepared, fails with "sidecars are stopped" and sends no retain to the service. | both |
 | `menu.application.view-has-full-screen-and-text-size` | The application menu's View menu has full screen and the [text size](text-size.md) items with Command `=`, `-`, and `0`; no menu item zooms or reloads the whole webview. | both |
