@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.13: 보존된 F239-47-6/F239-179 acceptance로 승인된 양 host IME activation-check 집계를 완료한다. 두 AppKit reference가 terminal document 열 단계와 일치하고 전체 363/515-sample 녹화의 열 glyph/underline 단계 모두 측정 근거가 있다. Error 감사, 입력기 및 공통 baseline 복원과 정상 종료가 통과한다. Application 검사 반복이나 publication은 포함하지 않으며 별도 client lifecycle은 미완료로 유지한다.
+
 - F262-11: Project persistence 및 placeholder case에 명시적 개별 시험 시간 한도를 지정하고 macOS arm64 양 host에서 소유 projects file 전체를 완료한다. Application run-log 감사, 공통 baseline 복원과 정상 종료를 포함해 14개 case가 모두 통과한다. 이 집계 runtime acceptance로 F262-11과 상위 F262를 완료하며 관련 없는 전체 검사나 release는 포함하지 않는다.
 
 - F212.12-1-15: 검증된 하위 다섯 항목의 결과로 view-display 결함 집계를 완료한다. 보존된 view 실행은 subscription reply 및 surface 종료를 확인하고 소유 검사는 null decode와 sidecar-loss 사실을 확인하며 F239-157은 오류 없는 감사가 포함된 양 host의 실제 project-window 종료를 증명한다. 이 집계 완료를 위해 추가 동작 변경이나 검사 반복을 수행하지 않는다.

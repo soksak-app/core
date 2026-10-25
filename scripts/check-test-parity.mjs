@@ -734,6 +734,18 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F212.13",
+    implementation: [
+      { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference(" },
+      { file: "e2e/activation/ime.test.mjs", symbol: "runRepeatedVowelScenario" },
+    ],
+    tests: [
+      { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
+    ],
+    expected: "Approved same-window AppKit and terminal activation inputs match all documents and measured glyph/underline stages with complete captures, restored baseline and clean shutdown.",
+    levels: ["application"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },
