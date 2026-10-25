@@ -61,10 +61,9 @@ export async function discoverRust({ packageName, features, cwd, env, id, write,
   const build = await runTests({
     tests: [{ name: `build ${id}`, command: 'cargo', cwd, env, timeoutMs: BUILD_TIMEOUT_MS,
       args: ['test', '-p', packageName, ...(features ? ['--features', features] : []), '--no-run', '--message-format=json'] }],
-    concurrency: 1, write: () => {},
+    concurrency: 1, write,
   });
   const result = build.results.get(`build ${id}`);
-  write(`${result.status === 'pass' ? 'PASS' : 'FAIL'} build ${id} ${(result.elapsedMs / 1000).toFixed(3)}s`);
   if (result.status !== 'pass') return { tests: [], failures: [`${id}: the build failed`] };
   const executables = cargoTestExecutables(result.output);
   const tests = [];

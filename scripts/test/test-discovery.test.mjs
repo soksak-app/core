@@ -52,6 +52,7 @@ test("a Rust package lists its tests, each test runs by itself, and an ignored t
   const { tests, failures } = await discoverRust({ packageName: "fixture", cwd: root, env, id: "rs", write: (l) => lines.push(l), timeoutMs: 20000 });
   assert.deepEqual(failures, []);
   assert.deepEqual(tests.map((item) => item.testName).sort(), ["fails", "passes", "skipped"]);
+  assert.ok(lines.some((line) => /^RUN  build rs /.test(line)), `no build start line: ${JSON.stringify(lines)}`);
   assert.ok(lines.some((line) => /^PASS build rs \d+\.\d{3}s$/.test(line)));
   const { results } = await runTests({ tests, concurrency: 3, write() {} });
   assert.deepEqual(tests.map((item) => [item.testName, auditStatus(results.get(item.name))]).sort(),

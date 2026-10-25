@@ -2,6 +2,8 @@
 
 [English](features.md)
 
+    - [o] F239-109 — P1, F239-102 연결: 각 Cargo test build의 시작과 경과 시간이 포함된 pass/fail 결과를 공통 test runner로 출력한다. Build별 timeout과 compiler-selected inventory는 유지한다. 제어된 negative: no-output callback을 일시적으로 복원하면 tracked discovery owner assertion이 `no build start line: []`로 실패한다(`/tmp/F239-109-rust-build-progress-red.log`). Green: 시작 및 경과 결과를 출력하는 같은 test가 통과했다(`/tmp/F239-109-rust-build-progress-green.log`). Cargo metadata 검증과 discovery test는 2/2 통과했다(`/tmp/F239-109-rust-build-progress-green-plus-cargo-metadata.log`).
+
 - [o] F239-125 — P1: Go CLI event-log loss test에 test-owned filesystem platform을 등록한다. `StartEventLog`는 `platform.Current()` 구현을 요구하지만 package test는 OS 등록 package를 import하는 `cmd/sok`를 통해 실행되지 않는다. Test 범위에서 `platform.Register`로 fixture를 등록하고 cleanup에서 이전 registration을 복원하며 platform boundary를 넘어 implementation import를 추가하지 않는다. Red: 보존된 host-contract 실행에서 두 test가 event-log 동작 전에 platform 미등록 오류로 실패했다. Green: 집중 loss test 두 개가 2/2 통과했다.
 
 - [o] F239-112 — P1, F239-61 연결: `rustfmt --edition 2024 --config skip_children=true`로 `packages/sok/tauriv2/src/plugin_catalog.rs`와 `packages/sok/tauriv2/tests/plugin_catalog_test.rs`를 포맷한다. 기본 rustfmt 호출은 edition과 style이 달라 workspace format 검사를 만족하지 못했다. Red: 최종 format 검사가 두 파일을 unformatted로 보고했다. Green: 지정한 Rust format 명령 뒤 `make rust-format-check`와 `make go-format-check`가 통과한다(`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`). Semantic change는 없었다.

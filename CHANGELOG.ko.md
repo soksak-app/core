@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F239-109: Rust test build마다 시작 및 경과 시간이 포함된 pass/fail 결과를
+  공통 test runner로 출력하며 build별 timeout을 유지한다. 제어된 negative:
+  no-output callback을 일시적으로 복원하면 tracked discovery assertion이
+  `no build start line: []`로 실패한다(`/tmp/F239-109-rust-build-progress-red.log`).
+  Green: 같은 owner test가 통과했고
+  (`/tmp/F239-109-rust-build-progress-green.log`), Rust discovery와 Cargo metadata
+  owner case는 2/2 통과했다
+  (`/tmp/F239-109-rust-build-progress-green-plus-cargo-metadata.log`).
+
 - F239-102: Cargo가 나열한 test executable과 target source path에서 Rust
   host-contract 선언을 선택한다. 보존된 초기 static audit은 Linux 및 Windows 전용
   Tauri sok 선언을 macOS inventory에 포함했다. 집중 selector owner test는 1/1

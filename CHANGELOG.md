@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-109: Show each Rust test build's start and elapsed pass/fail result through
+  the shared test runner while retaining its per-build timeout. Controlled
+  negative: temporarily restoring the no-output callback makes the tracked
+  discovery assertion fail with `no build start line: []`
+  (`/tmp/F239-109-rust-build-progress-red.log`). Green:
+  the same owner test passes (`/tmp/F239-109-rust-build-progress-green.log`), and
+  the Rust discovery plus Cargo metadata owner cases pass 2/2
+  (`/tmp/F239-109-rust-build-progress-green-plus-cargo-metadata.log`).
+
 - F239-102: Select Rust host-contract declarations from Cargo-listed test
   executables and their target source paths. The preserved initial static audit
   included Linux-only and Windows-only Tauri sok declarations in the macOS
