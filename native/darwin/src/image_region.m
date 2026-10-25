@@ -623,7 +623,7 @@ static void spEnsurePressOriginMonitor(void) {
 }
 
 - (BOOL)rejectCallbackAfterInputFailure:(NSString *)call fields:(NSString *)fields before:(NSString *)before {
-    if (!self.inputFailureReason) return NO;
+    if (!self.inputFailureReason) return NO; // silent: NO means the input scope is still valid and the caller should continue.
     NSString *prefix = fields.length ? [fields stringByAppendingString:@","] : @"";
     NSString *record = [NSString stringWithFormat:
         @"%@\"dropped\":\"input scope already failed\",\"failure\":\"%@\"",

@@ -12,12 +12,12 @@ static void setError(char *error, size_t capacity, const char *operation, int st
 
 static BOOL validDisplayName(const char *name) {
     static const char prefix[] = "soksak://sidecar/";
-    if (name == NULL || strncmp(name, prefix, sizeof(prefix) - 1) != 0) return NO;
+    if (name == NULL || strncmp(name, prefix, sizeof(prefix) - 1) != 0) return NO; // silent: this predicate rejects names that the caller reports as invalid.
     const unsigned char *id = (const unsigned char *)name + sizeof(prefix) - 1;
-    if (*id < 'a' || *id > 'z') return NO;
+    if (*id < 'a' || *id > 'z') return NO; // silent: this predicate rejects ids that the caller reports as invalid.
     for (; *id; id++) {
         if ((*id >= 'a' && *id <= 'z') || (*id >= '0' && *id <= '9') || *id == '-') continue;
-        return NO;
+        return NO; // silent: this predicate rejects characters that the caller reports as an invalid display name.
     }
     return YES;
 }

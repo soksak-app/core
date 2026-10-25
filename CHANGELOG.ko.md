@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-115: process identity, capture, image matching, image regions, input
+  activation의 Objective-C `m.error-return` 11곳에 caller가 관찰하는 이유를
+  기록한다. Red: 보존된 Node 실행이 이유 없는 11개 지점을 보고했다
+  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: scoped
+  reason comment를 추가한 뒤 tracked repository census owner test가 1/1 통과했다
+  (`/tmp/F239-140-census-green.log`). 동작과 census rule은 바뀌지 않았다.
+
 - F239-114-3: capture artifact serialization catch 두 곳이 exception reason을
   보존해 기존 capture error 경로로 반환하는 이유를 기록한다. Red: 보존된 Node
   실행이 reason 없는 catch 두 곳을 보고했다

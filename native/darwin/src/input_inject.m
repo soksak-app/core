@@ -410,7 +410,7 @@ static void collectVisibleWebViews(NSView *view, NSMutableArray<WKWebView *> *fo
 - (BOOL)installIfActivationPending:(BOOL)pending store:(void (^)(SPInputActivityWait *))store {
     if (!pending) {
         [self finishAtTimeout];
-        return NO;
+        return NO; // silent: a completed activation discards this late waiter after releasing its completion callback.
     }
     store(self);
     return YES;

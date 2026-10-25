@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-115: State the caller-visible reason at each of the 11 Objective-C
+  `m.error-return` sites in process identity, capture, image matching, image
+  regions and input activation. Red: the preserved Node run reported all 11
+  sites without reasons (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`).
+  Green: the tracked repository census owner test passes 1/1 after the scoped
+  reason comments (`/tmp/F239-140-census-green.log`). No behavior or census rule
+  changed.
+
 - F239-114-3: State why both capture artifact serialization catches preserve
   the exception reason and return it through the existing capture error path.
   Red: the preserved Node run reported both catch clauses without reasons

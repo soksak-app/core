@@ -688,7 +688,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
             setCaptureError([NSString stringWithFormat:@"capture callback status trace capacity exceeded (%d records)",
                 kCaptureMaxCallbackStatusRecords]);
         }
-        return NO;
+        return NO; // silent: setCaptureError retains the capacity failure, which sp_capture_error returns after capture stop.
     }
     id statusValue = hasStatus ? @((int)status) : [NSNull null];
     id timeValue = hasDisplayTime ? [NSString stringWithFormat:@"%llu", (unsigned long long)shown] : [NSNull null];

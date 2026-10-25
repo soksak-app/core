@@ -688,10 +688,10 @@ bool sp_image_capture_match_write_manifest(const char *capture_directory) {
 
 static BOOL equalPixels(const SPImageCaptureSource *source, const uint8_t *pixels,
     size_t width, size_t height, size_t stride) {
-    if (source.width != width || source.height != height) return NO;
+    if (source.width != width || source.height != height) return NO; // silent: dimension mismatch makes this source unequal, so matching continues.
     const uint8_t *sourceBytes = source.pixels.bytes;
     for (size_t row = 0; row < height; row++) {
-        if (memcmp(sourceBytes + row * source.stride, pixels + row * stride, width * 4) != 0) return NO;
+        if (memcmp(sourceBytes + row * source.stride, pixels + row * stride, width * 4) != 0) return NO; // silent: byte mismatch makes this source unequal, so matching continues.
     }
     return YES;
 }
@@ -735,7 +735,7 @@ static BOOL mapSourceCrop(const SPImageCaptureSource *source, CGRect content_rec
         || CGRectGetMinX(bounds) < CGRectGetMinX(screen_rect)
         || CGRectGetMaxX(bounds) > CGRectGetMaxX(screen_rect)
         || CGRectGetMinY(bounds) < CGRectGetMinY(screen_rect)
-        || CGRectGetMaxY(bounds) > CGRectGetMaxY(screen_rect)) return NO;
+        || CGRectGetMaxY(bounds) > CGRectGetMaxY(screen_rect)) return NO; // silent: invalid bounds leave the caller without a mapped crop and produce unknown geometry.
     double left = CGRectGetMinX(content_rect) + (CGRectGetMinX(bounds) - CGRectGetMinX(screen_rect)) * pixels_per_point;
     double top = CGRectGetMinY(content_rect) + (CGRectGetMinY(bounds) - CGRectGetMinY(screen_rect)) * pixels_per_point;
     double width = CGRectGetWidth(bounds) * pixels_per_point;
@@ -745,7 +745,7 @@ static BOOL mapSourceCrop(const SPImageCaptureSource *source, CGRect content_rec
     if (fabs(left - rounded_left) > 0.000001 || fabs(top - rounded_top) > 0.000001
         || fabs(width - rounded_width) > 0.000001 || fabs(height - rounded_height) > 0.000001
         || rounded_left < 0 || rounded_top < 0 || rounded_width != source.width || rounded_height != source.height
-        || rounded_left + rounded_width > frame_width || rounded_top + rounded_height > frame_height) return NO;
+        || rounded_left + rounded_width > frame_width || rounded_top + rounded_height > frame_height) return NO; // silent: invalid crop geometry produces an unknown or unmapped result at the caller.
     *crop = CGRectMake(rounded_left, rounded_top, rounded_width, rounded_height);
     return YES;
 }
@@ -778,7 +778,7 @@ static NSString *identityDecodeReason(NSString *helperReason) {
 
 static BOOL queueIdentityDecodeRecords(NSArray<NSDictionary *> *records, uint64_t frame_number, char **error) {
     if (error) *error = NULL;
-    if (!error) return NO;
+    if (!error) return NO; // silent: the public decoder validates its required error output before calling this helper.
     NSMutableData *lines = [NSMutableData data];
     for (NSDictionary *record in records) {
         NSError *encodingError = nil;
