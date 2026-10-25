@@ -1,6 +1,7 @@
 // Checks through the real write path that the recording path rejects with an explicit error a sample that lacks a required field of a completed frame (state, presentation time, window rectangle, scale, image),
 // and that an idle frame without an image is only counted.
 #import "../src/capture.m"
+#import "../src/capture_frame_identity.h"
 #import "support/records.h"
 #import <CommonCrypto/CommonDigest.h>
 #import "event_ring.h"
@@ -556,15 +557,34 @@ int main(void) { @autoreleasepool {
         ((uint8_t *)identitySourcePixels.mutableBytes)[offset] = 255;
     uint8_t identityRegionToken[16] = { 1, 2, 3, 4 };
     sp_image_capture_identity identitySource = { 17, 19, 23 };
-    NSString *identityPayload = nil;
+    NSString *identityNonce = nil, *identityPayload = nil, *identityEncodedPayload = nil, *identityEncodeError = nil;
+    const CGRect identityTagROI = CGRectMake(8, 0, 192, 192);
+    CGColorSpaceRef identityColorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGImageRef identityTaggedImage = NULL;
+    NSData *identityTaggedPixels = nil;
+    char *identityArtifactError = NULL;
     BOOL identitySourceReady = identityTimingStarted
+        && identityColorSpace
+        && sp_image_capture_match_identity_region_nonce(identityRegionToken, &identityNonce, &identityTimingError)
         && sp_image_capture_match_identity_issue(identityRegionToken, identitySource, &identityPayload, &identityTimingError)
         && sp_image_capture_match_retain(identitySource, identitySourcePixels.bytes, identityWidth, identityHeight,
-            identityStride, CGRectMake(0, 0, identityWidth, identityHeight), 1, "kCGColorSpaceSRGB");
-    check(identitySourceReady, [NSString stringWithFormat:@"the identity timing source is issued and retained (%s)",
-        identityTimingError ?: ""]);
+            identityStride, CGRectMake(0, 0, identityWidth, identityHeight), 1, "kCGColorSpaceSRGB")
+        && sp_capture_frame_identity_encode(identitySourcePixels.bytes, identityWidth, identityHeight, identityStride,
+            identityColorSpace, identityTagROI, identityNonce,
+            (SPCaptureFrameIdentity){ identitySource.generation, identitySource.raster, (uint64_t)identitySource.sequence },
+            &identityTaggedImage, &identityTaggedPixels, &identityEncodedPayload, &identityEncodeError)
+        && [identityPayload isEqualToString:identityEncodedPayload]
+        && sp_image_capture_match_identity_record(identityRegionToken, identitySource, identityTagROI,
+            identityTaggedPixels.bytes, identityWidth, identityHeight, identityStride, "kCGColorSpaceSRGB",
+            &identityArtifactError);
+    check(identitySourceReady, [NSString stringWithFormat:@"the identity timing tag artifact is issued and retained (%s, %@)",
+        identityTimingError ?: identityArtifactError ?: "", identityEncodeError ?: @""]);
     free(identityTimingError); identityTimingError = NULL;
-    [identityPayload release];
+    free(identityArtifactError); identityArtifactError = NULL;
+    [identityNonce release]; [identityPayload release]; [identityEncodedPayload release]; [identityEncodeError release];
+    [identityTaggedPixels release];
+    if (identityTaggedImage) CGImageRelease(identityTaggedImage);
+    if (identityColorSpace) CGColorSpaceRelease(identityColorSpace);
 
     CVPixelBufferRef identityBuffer = NULL;
     CMVideoFormatDescriptionRef identityFormat = NULL;
@@ -627,6 +647,13 @@ int main(void) { @autoreleasepool {
         @"frame-identities/decoded-frames.jsonl"];
     NSString *identityDecodeTrace = [NSString stringWithContentsOfFile:identityDecodeTracePath
         encoding:NSUTF8StringEncoding error:nil];
+    NSString *identityTimingFailure = [NSString stringWithFormat:
+        @"sourceReady=%@ clockIndex=%d callback=%@ writeStart=%@ imageMatch=%@..%@ decode=%@..%@ writeComplete=%@ decodedTrace=%@ captureError=%@",
+        identitySourceReady ? @"YES" : @"NO", controlledTimeIndex, identityTimedCallback[@"callbackTime"],
+        identityTimedCallback[@"writeStartTime"], identityTimedCallback[@"imageMatchStartTime"],
+        identityTimedCallback[@"imageMatchCompleteTime"], identityTimedCallback[@"frameIdentityDecodeStartTime"],
+        identityTimedCallback[@"frameIdentityDecodeCompleteTime"], identityTimedCallback[@"writeCompleteTime"],
+        identityDecodeTrace ?: @"<missing>", [NSString stringWithUTF8String:sp_capture_error()]];
     check(identitySourceReady && controlledTimeIndex == 7
         && [identityTimedCallback[@"callbackTime"] isEqual:@"300"]
         && [identityTimedCallback[@"writeStartTime"] isEqual:@"310"]
@@ -637,7 +664,8 @@ int main(void) { @autoreleasepool {
         && [identityTimedCallback[@"writeCompleteTime"] isEqual:@"360"]
         && [identityDecodeTrace containsString:@"no-code"]
         && [NSString stringWithUTF8String:sp_capture_error()].length == 0,
-        @"the active identity callback records exact match/decode helper bounds and completes its no-code result without errors");
+        [NSString stringWithFormat:@"the active identity callback records exact match/decode helper bounds and completes its no-code result without errors (%@)",
+            identityTimingFailure]);
     sp_image_capture_match_end();
 
     sp_image_capture_match_begin(directory.fileSystemRepresentation, captureWriter);
