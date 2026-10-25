@@ -42,3 +42,5 @@ Multi-host window-check session은 test worker를 시작하기 전에 frontmost 
 OS 입력기는 활성 애플리케이션의 키 창만 처리하므로 입력기 동작은 사용자 승인 아래 실행하는 활성화 등급 검사로만 검증한다. 각 실행은 같은 창의 AppKit 텍스트 뷰에도 같은 키를 보내며, 그 대조군이 기대한 문서를 만들 때만 결과를 증거로 인정한다.
 
 네이티브 좌표·픽셀 검사는 요청한 캡처 속도로 전체 제스처를 포함한다. 녹화 상한 도달은 실제 프레임 수와 `limited: true`를 갖는 정상 결과지만 끝을 기록하지 못한 제스처를 검증할 수 없다. 검사 후 녹화를 제거한다. 독립된 초기 상태 두 번과 같은 인스턴스의 생성·사용·종료·재생성을 반복한다. 전체 구현을 마친 뒤 필수 스위트를 실행하며 단언을 완화하거나 이전 빌드 결과를 대입하지 않는다.
+
+IME 기능 acceptance는 승인된 전체 입력 gesture, 동일 window의 일치하는 AppKit reference document, 일관된 terminal 상태 및 각 입력 단계의 녹화된 glyph와 underline 증거를 요구한다. Capture cadence는 별도 성능 측정으로 기록한다. ScreenCaptureKit API가 요청한 update 간격을 보장하지 않으므로 고정 sample-gap 목표는 기능 acceptance 기준이 아니다. 잘린 recording, frame 누락, decode하지 못한 identity, 필요한 단계 증거 누락 및 잘못된 입력은 계속 실패한다.

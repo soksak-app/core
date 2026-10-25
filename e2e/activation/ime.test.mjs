@@ -15,7 +15,7 @@ import { fresh } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
 import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexAcceptedFrameTrace,
-  MAXIMUM_IME_FRAME_GAP_MS, persistThenRequireVisualProof,
+  persistThenRequireVisualProof,
   attachImeFrameIdentities, planVisualStage, readImeFrameIdentities, readRetainedSources,
   sealTerminalSequenceEndBoundary, startImeCapture }
   from "./ime-visual-capture.mjs";
@@ -1015,16 +1015,12 @@ for (const app of Object.values(APPS)) {
         statusConflicts: frameStatus.conflicts,
       })[0]);
     } catch (error) {
-      const cadence = { longestFrameGap, maximumFrameGap: MAXIMUM_IME_FRAME_GAP_MS, frameGaps };
+      const cadence = { longestFrameGap, frameGaps };
       const collectionFailure = { name: error.name, error: error.message };
-      const cadenceFailure = longestFrameGap > MAXIMUM_IME_FRAME_GAP_MS
-        ? { name: "AssertionError", error: `${app.name}: capture has a ${longestFrameGap}ms frame gap; ` +
-          `maximum is ${MAXIMUM_IME_FRAME_GAP_MS}ms` }
-        : null;
       persist("visual-measurements.json", {
         collectionError: { name: error.name, error: error.message },
         cadence,
-        failures: [collectionFailure, cadenceFailure].filter(Boolean),
+        failures: [collectionFailure],
         inputStages: visualStageInputs,
         targetStages: visualStages.map(({ key, frame, cells, glyphs, semantic }) =>
           ({ key, frame, cells, glyphs, semantic })),
@@ -1036,8 +1032,6 @@ for (const app of Object.values(APPS)) {
         unjoinedFrameMessages: frameStatus?.unjoinedMessages ?? [],
         callbackStatus: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
       });
-      if (cadenceFailure) throw new AggregateError([error, new Error(cadenceFailure.error)],
-        `${app.name}: visual collection and capture cadence both failed`);
       throw error;
     }
     const visualRecord = {
@@ -1051,7 +1045,7 @@ for (const app of Object.values(APPS)) {
       noRasterMessages: frameStatus.noRasterMessages,
       unjoinedFrameMessages: frameStatus.unjoinedMessages,
       sampleCount: frameCallbacks.length,
-      cadence: { longestFrameGap, maximumFrameGap: MAXIMUM_IME_FRAME_GAP_MS, frameGaps },
+      cadence: { longestFrameGap, frameGaps },
       imageMatch: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
       tagScopedVisualMeasurements: visualMeasurements.map(({ key, tagScoped }) => ({ key, ...tagScoped })),
       terminalSequenceEndBoundary,

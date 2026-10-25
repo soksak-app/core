@@ -7,7 +7,6 @@ import { terminalComposeMatchesPreedit, visibleInputBeforeCursor, visibleInputFr
   from "./terminal-ime-document.mjs";
 
 const BGRA_PIXEL_FORMAT = 0x42475241;
-export const MAXIMUM_IME_FRAME_GAP_MS = 33;
 
 export function requireImeRenderer(cursor) {
   if (cursor?.render == null) {
@@ -370,7 +369,7 @@ export function capturesByInputStage(frameCallbacks, decodedFrames, stages) {
   return grouped;
 }
 
-/** Requires cadence evidence, persists visual results, then rejects incomplete proof or cadence. */
+/** Persists cadence measurements and rejects incomplete functional visual proof. */
 export function persistThenRequireVisualProof(measurements, record, persist, label = "rendered") {
   const cadence = record?.cadence;
   assert.ok(cadence && typeof cadence === "object" && !Array.isArray(cadence),
@@ -388,13 +387,9 @@ export function persistThenRequireVisualProof(measurements, record, persist, lab
   if (!measurements.every((result) => (tagScopedMode ? result.tagScoped?.result : result.result) === "measured")) {
     failures.push(new Error(`${label}: rendered glyph/underline proof is incomplete: ${JSON.stringify(measurements)}`));
   }
-  if (cadence.longestFrameGap > MAXIMUM_IME_FRAME_GAP_MS) {
-    failures.push(new Error(`${label}: capture has a ${cadence.longestFrameGap}ms frame gap; ` +
-      `maximum is ${MAXIMUM_IME_FRAME_GAP_MS}ms`));
-  }
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) throw new AggregateError(failures,
-    `${label}: visual proof and capture cadence both failed`);
+    `${label}: visual proof contains multiple failures`);
 }
 
 /** Persists the actual terminal input end boundary before later collection can fail. */

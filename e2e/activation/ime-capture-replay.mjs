@@ -4,7 +4,7 @@ import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { capturesByInputStage, evaluateVisualStages, indexAcceptedFrameTrace,
-  MAXIMUM_IME_FRAME_GAP_MS, persistThenRequireVisualProof, attachImeFrameIdentities,
+  persistThenRequireVisualProof, attachImeFrameIdentities,
   planVisualStage, readImeFrameIdentities, readRetainedSources, sealTerminalSequenceEndBoundary }
   from "./ime-visual-capture.mjs";
 import { terminalInputReceiptMatches } from "./terminal-ime-document.mjs";
@@ -154,7 +154,6 @@ export function replayImeCapture({ artifactDir, resultFile }) {
     tagArtifacts: identityCapture.artifactRecords, statusConflicts: frameStatus.conflicts,
   })[0]);
   const glyphProof = visualMeasurements.every((measurement) => measurement.tagScoped?.result === "measured");
-  const cadencePass = longestFrameGap <= MAXIMUM_IME_FRAME_GAP_MS;
   const result = {
     artifactDir: directory,
     app: manifest.app,
@@ -169,8 +168,9 @@ export function replayImeCapture({ artifactDir, resultFile }) {
       unknownRecords: identityCapture.unknownRecords.length },
     captureFrames: decoded.length,
     glyphProof: { passed: glyphProof, measurements: visualMeasurements },
-    cadence: { longestFrameGap, maximumFrameGap: MAXIMUM_IME_FRAME_GAP_MS, passed: cadencePass, frameGaps },
-    overallAccepted: glyphProof && cadencePass,
+    cadence: { longestFrameGap, frameGaps },
+    overallAccepted: glyphProof && comparisons.length === 10 &&
+      comparisons.every(({ expected, actual }) => expected === actual),
   };
   let acceptanceError = null;
   try {

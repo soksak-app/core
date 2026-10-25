@@ -858,7 +858,7 @@ testWithTimeout("error and no-proof measurements are persisted before the caller
     { visualMeasurements: missingTagProof, cadence }, () => {}, "Tauri"), /proof is incomplete/);
 });
 
-testWithTimeout("visual results are persisted before cadence failure and both failures are reported", () => {
+testWithTimeout("visual proof preserves cadence measurements without a functional gap threshold", () => {
   let missingCadencePersisted = false;
   assert.throws(() => persistThenRequireVisualProof([{ key: "k-1", result: "measured" }],
     { visualMeasurements: [{ key: "k-1", result: "measured" }] },
@@ -878,17 +878,14 @@ testWithTimeout("visual results are persisted before cadence failure and both fa
     frameGaps: [{ from: "frame-0001.bgra", to: "frame-0002.bgra", milliseconds: 34 }] };
   const visualMeasurements = [{ key: "k-1", result: "measured" }];
   const persisted = [];
-  assert.throws(() => persistThenRequireVisualProof(visualMeasurements,
-    { visualMeasurements, cadence }, (record) => persisted.push(record), "Tauri"),
-  /34ms frame gap/);
+  assert.doesNotThrow(() => persistThenRequireVisualProof(visualMeasurements,
+    { visualMeasurements, cadence }, (record) => persisted.push(record), "Tauri"));
   assert.deepEqual(persisted, [{ visualMeasurements, cadence }]);
 
   const failedMeasurements = [{ key: "k-1", result: "no-proof", reason: "no-capture-roi-candidate" }];
   const failuresPersisted = [];
   assert.throws(() => persistThenRequireVisualProof(failedMeasurements,
     { visualMeasurements: failedMeasurements, cadence }, (record) => failuresPersisted.push(record), "Tauri"),
-  (error) => error instanceof AggregateError && error.errors.length === 2 &&
-    error.errors.some((failure) => /proof is incomplete/.test(failure.message)) &&
-    error.errors.some((failure) => /34ms frame gap/.test(failure.message)));
+  /proof is incomplete/);
   assert.deepEqual(failuresPersisted, [{ visualMeasurements: failedMeasurements, cadence }]);
 });
