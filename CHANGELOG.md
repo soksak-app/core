@@ -33,6 +33,18 @@
   mismatches still tracked under F239-93 and no new F85 findings; the full
   host-contract suite was not run.
 
+- F239-47-10: Complete the local renderer metadata publication and core
+  calculator implementation. VT S78/S78.1 provide the declared draw fields;
+  terminal P75 validates and publishes them with the exact frame; core
+  F239-47-12/-13/-14 validates and measures the producer shape. Owner Greens
+  pass: terminal tests 171/171, core calculator 10/10, VT diagnostic-frame,
+  exact-frame message and serve-contract cases. A fresh two-host diagnostic
+  run confirmed complete frame-matched render records in preflight and all
+  ten saved input stages for each host and input mode. Live pixel collection
+  failed at k-1 without indexed prior screen rows, and capture gaps exceeded
+  33 ms; both remain under F239-47-6. Terminal and VT candidate packages are
+  unreleased.
+
 - F239-98: Connect the IME consumer to opt-in frame identities. The recording
   requires exact cursor-frame renderer metadata and a glyph list before
   capture setup, requests `frameIdentity:true`, validates the complete decoder

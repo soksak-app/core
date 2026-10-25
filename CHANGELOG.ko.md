@@ -28,6 +28,17 @@
   static audit에는 F239-93에서 추적하는 declaration 불일치 121건이 남았고
   F85 신규 finding은 없다. Full host-contract suite는 실행하지 않았다.
 
+- F239-47-10: Local renderer metadata publication과 core calculator 구현을
+  완료한다. VT S78/S78.1은 선언된 draw field를 제공하고 terminal P75는
+  정확한 frame과 함께 검증·공개하며 core F239-47-12/-13/-14는 producer
+  형식을 검증하고 측정한다. Owner Green은 terminal test 171/171, core
+  calculator 10/10, VT diagnostic-frame, exact-frame message,
+  serve-contract case에서 통과한다. Fresh 양 host diagnostic run에서 입력
+  전 완전한 frame-matched render record와 host/input mode별 저장된 열 단계
+  전체를 확인했다. Live pixel collection은 k-1에서 indexed prior screen
+  rows를 찾지 못해 실패했고 capture gap은 33 ms를 넘었다. 두 결과는
+  F239-47-6에 남긴다. Terminal 및 VT candidate package는 미출시 상태다.
+
 - F239-98: IME consumer를 opt-in frame identity에 연결한다.
   Recording은 capture setup 전에 cursor와 일치하는 renderer metadata 및 glyph list를
   요구하고 `frameIdentity:true`를 요청하며 완전한 decoder manifest와 발급된
