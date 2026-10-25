@@ -4,13 +4,21 @@
 #import "capture.h"
 
 static BOOL faultApplied;
+static BOOL faultPending;
 static int stopWithError(double after) {
     int frames = sp_capture_stop(after);
-    if (frames > 0) faultApplied = YES;
+    if (frames > 0 && !faultApplied) {
+        faultApplied = YES;
+        faultPending = YES;
+    }
     return frames;
 }
 static const char *controlledError(void) {
-    return faultApplied ? "fixture recording stop error" : sp_capture_error();
+    if (faultPending) {
+        faultPending = NO;
+        return "fixture recording stop error";
+    }
+    return sp_capture_error();
 }
 
 #define sp_capture_stop stopWithError
