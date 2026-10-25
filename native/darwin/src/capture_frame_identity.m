@@ -297,7 +297,7 @@ bool sp_capture_frame_identity_decode(const uint8_t *bgra, size_t byte_length, s
             break;
         }
         if (!insideCount) {
-            *unknown_reason = unknown(intersectingCount ? @"cropped-code-in-expected-roi" : @"no-code-in-expected-roi");
+            *unknown_reason = unknown(intersectingCount ? @"code-outside-expected-roi" : @"no-code-in-expected-roi");
             break;
         }
         if (!ZXing_Barcode_isValid(code)) {

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-149: Return the existing canonical `code-outside-expected-roi` helper reason when a detected QR crosses the expected ROI boundary. The matcher already maps it to `cropped`, while valid payloads absent from the issued set remain `unissued`. Red: `capture_frame_identity_test` reported the synonymous `cropped-code-in-expected-roi` at all four measured clipped edges (`/tmp/F239-149-capture-frame-identity-helper-red-01.log`). Green: the same owner passes 1/1 in 0.444 s (`/tmp/F239-149-capture-frame-identity-helper-green-01.log`).
+
 - F239-146: Replace the QR frame-identity decoder with pinned ZXing-C++ v3.1.1 after preserved recordings reached the existing eight-job Vision backlog limit. Verify the source release SHA-256, build the QR-only static C API into the existing macOS static library, and stage the Apache-2.0 license in both app bundles. Preserve exact payload, ROI, ambiguity, error, artifact ordering, resource bounds, and raw-frame behavior. Five focused native owners pass, the pkg-config owner passes, and bundle preparation verifies the license in both hosts. Both host builds and full-recording cadence acceptance remain pending.
 
 - F239-147: Make every other installed plugin declaration in the application

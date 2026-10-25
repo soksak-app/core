@@ -321,7 +321,7 @@ int main(void) { @autoreleasepool {
                 &edgeIdentity, &edgeReason, &edgeError);
             NSString *edgeMessage = [NSString stringWithFormat:@"%s (decoded=%d, reason=%@, error=%@)",
                 clippedLabels[edge], edgeDecoded, edgeReason ?: @"nil", edgeError ?: @"nil"];
-            check(!edgeDecoded && [edgeReason isEqualToString:@"cropped-code-in-expected-roi"] && edgeError == nil,
+            check(!edgeDecoded && [edgeReason isEqualToString:@"code-outside-expected-roi"] && edgeError == nil,
                 edgeMessage.UTF8String);
             [edgeReason release]; [edgeError release];
         }
