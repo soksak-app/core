@@ -6602,10 +6602,48 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.12-3",
+    implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
+    tests: [
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "the terminal document fills its native frame before and after a divider drag" },
+    ],
+    expected: "Complete recordings verify card movement, symmetric content alignment, final size and document fill while retaining separate performance measurements.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.7c",
+    implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
+    tests: [
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "the terminal document fills its native frame before and after a divider drag" },
+    ],
+    expected: "Complete recordings verify card movement, symmetric content alignment, final size and document fill while retaining separate performance measurements.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.12-3-1",
+    implementation: [
+      { file: "e2e/drag-measurement.mjs", symbol: "export function assertFinalContentSize(" },
+      { file: "e2e/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
+      { file: "e2e/alignment.mjs", symbol: "export function alignmentDelta(" },
+    ],
+    tests: [
+      { file: "e2e/test/drag-measurement.test.mjs", id: "final content size rejects a late correction and a later regression" },
+      { file: "e2e/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
+      { file: "e2e/test/alignment.test.mjs", id: "a terminal raster that leaves a growing right inset is misaligned" },
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+    ],
+    expected: "Both raster edges remain aligned, final size converges by the second recorded frame, and valid performance measurements remain separate from functional correctness.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-159",
     implementation: [{ file: "e2e/drag-measurement.mjs", symbol: "export function assertDragFrameCadence(" }],
     tests: [{ file: "e2e/test/drag-measurement.test.mjs", id: "view drag cadence requires every frame within 33 milliseconds" }],
-    expected: "View drag recording cadence includes every decoded frame and rejects gaps above 33 milliseconds.",
+    expected: "The dedicated view-drag performance check includes every decoded frame and rejects gaps above 33 milliseconds.",
     levels: ["unit"],
   },
   {

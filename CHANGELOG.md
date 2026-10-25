@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-3-1: Reject growing right raster insets, measure every post-drag content edge and require convergence by the second captured frame. Run functional geometry and movement checks independently of timing targets; preserve cadence and latency values, invalid-data failures and executable benchmark limits. All 14 owning measurement cases and all six two-host window cases pass, including white-frame, document-fill, error-audit and shutdown checks. Close F212.12-3 and F212.7c for functional acceptance; retain measured performance failures under F212.14. Align the IME cadence wording with F239-175.
+
 - F239-172-1: Restore ten completed input/capture correction links and four renamed behavior-test references in the parity audit. Match the current sixteen-job admission and functional visual-proof contracts. The audit fails before correction and passes afterward with unchanged inventory counts; no additional application run is used as evidence for this metadata correction.
 
 - F239-179: End terminal status observation immediately after capture stop, before artifact copying and visual analysis. Make repeated/concurrent stop calls idempotent and retry only incomplete unsubscriptions. Two owner cases fail before correction; all 46 document owners pass afterward. The complete repeated-vowel and Backspace check now passes on both macOS arm64 hosts: 363/515 samples, ten measured visual stages each, no application errors, one restored baseline and normal shutdown. Close F239-47-6 and F239-47-24 with this current acceptance evidence.

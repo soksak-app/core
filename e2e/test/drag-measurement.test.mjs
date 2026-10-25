@@ -50,3 +50,49 @@ test("view drag cadence rejects missing or invalid frame times", { timeout: 1000
     assert.throws(() => assertDragFrameCadence(times), /frame times/);
   }
 });
+
+
+test("final content size reaches the card edges by the second captured frame", { timeout: 1000 }, () => {
+  assert.equal(typeof measurement.assertFinalContentSize, "function", "final content size measurement is required");
+  assert.deepEqual(measurement.assertFinalContentSize([
+    { time: 9, left: 1, right: 40 },
+    { time: 11, left: 1, right: 20 },
+    { time: 12, left: 1, right: 2 },
+    { time: 13, left: 1, right: 1 },
+  ], 10), { frames: 3, settledFrame: 2 });
+});
+
+test("final content size rejects a late correction and a later regression", { timeout: 1000 }, () => {
+  for (const edges of [[20, 20, 1], [1, 1, 20]]) {
+    assert.throws(() => measurement.assertFinalContentSize(edges.map((right, index) =>
+      ({ time: 11 + index, left: 1, right })), 10), /final content.*frame/);
+  }
+});
+
+test("final content size rejects missing post-input evidence", { timeout: 1000 }, () => {
+  assert.throws(() => measurement.assertFinalContentSize([{ time: 11, left: 1, right: 1 }], 10),
+    /two.*post-input/);
+  assert.throws(() => measurement.assertFinalContentSize([
+    { time: 11, left: 1, right: 1 }, { time: 12, left: null, right: null },
+  ], 10), /geometry/);
+});
+
+
+test("drag cadence measurement retains intervals beyond the performance target", { timeout: 1000 }, () => {
+  assert.equal(typeof measurement.measureDragFrameCadence, "function", "separate cadence measurement is required");
+  assert.equal(measurement.measureDragFrameCadence([0, 34, 68]), 34);
+  assert.throws(() => measurement.measureDragFrameCadence([0, 0]), /frame times/);
+  assert.throws(() => measurement.assertDragFrameCadence([0, 34, 68]), /exceeds 33ms/);
+});
+
+
+test("drag performance keeps existing targets separate from valid measurements", { timeout: 1000 }, () => {
+  assert.equal(typeof measurement.measureDragPerformance, "function", "separate performance results are required");
+  const report = measurement.measureDragPerformance([0, 34, 68], { lag: 100, median: 40, p90: 70 }, 60);
+  assert.deepEqual(report.exceeded, ["cadence", "p90", "worst"]);
+  assert.throws(() => measurement.assertDragPerformance([0, 34, 68], { lag: 100, median: 40, p90: 70 }, 60),
+    /performance targets/);
+  assert.equal(measurement.assertDragPerformance([0, 16, 32], { lag: 20, median: 10, p90: 15 }, 120).targetsMet, true);
+  assert.throws(() => measurement.measureDragPerformance([0, 16], { lag: NaN, median: 1, p90: 2 }, 60), /latency/);
+  assert.throws(() => measurement.measureDragPerformance([0, 16], { lag: 1, median: 1, p90: 1 }, 0), /refresh/);
+});

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-3-1: 오른쪽 raster inset 증가를 거부하고 drag 후 각 content edge를 측정해 두 번째 capture frame까지 수렴하도록 요구한다. 시간 목표와 독립적으로 기능 geometry 및 이동을 검사하며 cadence/latency 값, 잘못된 데이터 실패 및 실행 가능한 benchmark 제한을 보존한다. 흰 frame, document 채움, 오류 감사 및 종료 검사를 포함해 소유 측정 검사 14개와 양쪽 host window 검사 6개가 모두 통과한다. F212.12-3과 F212.7c의 기능 acceptance를 완료하고 측정된 성능 실패는 F212.14에 유지한다. IME cadence 설명은 F239-175와 일치시킨다.
+
 - F239-172-1: Parity 감사에서 완료된 input/capture 수정 연결 10개와 이름이 바뀐 behavior-test 참조 4개를 복원한다. 현재 16-job admission 및 기능 visual-proof contract와 일치시킨다. 감사는 수정 전 실패하고 수정 후 inventory count 변경 없이 통과한다. 이 metadata 수정의 증거로 추가 application 검사를 실행하지 않는다.
 
 - F239-179: Capture stop 직후 artifact 복사와 visual 분석 전에 terminal status 관측을 끝낸다. 반복/동시 stop을 idempotent하게 하고 끝내지 못한 구독 해제만 재시도한다. 소유 검사 두 개가 수정 전 실패하고 수정 후 document 소유 검사 46개가 통과한다. 전체 연속 모음 및 Backspace 검사는 양쪽 macOS arm64 host에서 sample 363/515개, 각각 측정된 visual 10단계, application 오류 없음, 하나의 baseline 복원 및 정상 종료로 통과한다. 현재 acceptance 증거로 F239-47-6과 F239-47-24를 완료한다.

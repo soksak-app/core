@@ -33,13 +33,7 @@ export function alignment(frame, at) {
   };
 }
 
-/**
- * The largest distance (points) between the first measured layout and the layout of this frame. While the terminal is resized, the raster of the previous size is
- * shown attached to the left, so the right inner margin (contentRight) can grow. That margin has the card color, which is the usual background of the terminal,
- * and the alignment must prevent content leaving the card or the left edge moving, so only the amount by which that margin shrinks is counted.
- */
+/** Measures the largest change in same-frame content, card, sidebar and rail offsets, in points. */
 export function alignmentDelta(initial, geometry) {
-  return Math.max(...Object.keys(initial).map((key) => key === "contentRight"
-    ? Math.max(0, initial[key] - geometry[key])
-    : Math.abs(geometry[key] - initial[key])));
+  return Math.max(...Object.keys(initial).map((key) => Math.abs(geometry[key] - initial[key])));
 }

@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 
-/** Requires complete view-drag frame times, including frames whose geometry cannot be measured. */
-export function assertDragFrameCadence(times) {
+/** Measures every view-drag frame interval, including frames whose geometry cannot be measured. */
+export function measureDragFrameCadence(times) {
   assert.ok(Array.isArray(times) && times.length >= 2 && times.every((time, index) =>
     Number.isFinite(time) && (index === 0 || time > times[index - 1])),
   "view drag frame times are missing, non-finite or not strictly increasing");
   let longest = 0;
   for (let index = 1; index < times.length; index++) longest = Math.max(longest, times[index] - times[index - 1]);
+  return longest;
+}
+
+/** Applies the dedicated view-drag cadence performance target. */
+export function assertDragFrameCadence(times) {
+  const longest = measureDragFrameCadence(times);
   assert.ok(longest <= 33, `view drag recording gap ${longest.toFixed(3)}ms exceeds 33ms`);
   return longest;
 }
@@ -161,4 +167,46 @@ export function transactionCadence(layouts) {
     drawing: spread(between("begun", "requested")),
     waiting: spread(between("requested", "presented")),
   };
+}
+
+
+/** Requires final raster edges within 2 pt by the second complete frame after the last drag input. */
+export function assertFinalContentSize(samples, ended) {
+  assert.ok(Number.isFinite(ended), "final content input time is invalid");
+  assert.ok(Array.isArray(samples) && samples.every((sample, index) =>
+    sample && Number.isFinite(sample.time) && (index === 0 || sample.time > samples[index - 1].time)),
+  "final content frame times are missing or invalid");
+  const after = samples.filter((sample) => sample.time > ended);
+  assert.ok(after.length >= 2, "final content requires two measured post-input frames");
+  for (const [index, sample] of after.entries()) {
+    assert.ok(Number.isFinite(sample.left) && Number.isFinite(sample.right),
+      `final content geometry is missing at post-input frame ${index + 1}`);
+    if (index > 0) assert.ok(Math.abs(sample.left) <= 2 && Math.abs(sample.right) <= 2,
+      `final content edges differ at post-input frame ${index + 1}: left ${sample.left}pt, right ${sample.right}pt`);
+  }
+  return { frames: after.length,
+    settledFrame: Math.abs(after[0].left) <= 2 && Math.abs(after[0].right) <= 2 ? 1 : 2 };
+}
+
+
+/** Records the cadence and refresh-rate-based latency targets without treating valid slow data as missing data. */
+export function measureDragPerformance(times, lag, refreshRate) {
+  const longest = measureDragFrameCadence(times);
+  assert.ok(Number.isFinite(refreshRate) && refreshRate > 0, "drag display refresh rate is invalid");
+  const latency = { median: lag?.median, p90: lag?.p90, worst: lag?.lag };
+  assert.ok(Object.values(latency).every((value) => Number.isFinite(value) && value >= 0),
+    "drag latency measurements are missing or invalid");
+  const period = 1000 / refreshRate;
+  const targets = { median: 2.5 * period, p90: 3 * period, worst: 4 * period };
+  const exceeded = longest > 33 ? ["cadence"] : [];
+  for (const key of Object.keys(targets)) if (latency[key] > targets[key]) exceeded.push(key);
+  return { cadence: { measured: longest, target: 33 }, latency, targets, refreshRate,
+    exceeded, targetsMet: exceeded.length === 0 };
+}
+
+/** Applies the unchanged targets in a dedicated performance benchmark. */
+export function assertDragPerformance(times, lag, refreshRate) {
+  const report = measureDragPerformance(times, lag, refreshRate);
+  assert.ok(report.targetsMet, `drag performance targets exceeded: ${JSON.stringify(report)}`);
+  return report;
 }
