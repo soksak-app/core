@@ -1,5 +1,7 @@
 # 기능 상태
 
+- [~] F239-171 — P0, F212.12-3 연결: 관찰 중인 연결에 각 host.sidecars closing 전이를 보존한다. 세 terminal을 닫는 집중 검사가 양쪽 diagnostic host에서 실패한다. 수집한 closing 목록에 세 surface가 모두 없으며 application error audit은 통과하고 양쪽 host는 정상 종료한다. 최종 PTY process snapshot 이전에 assertion이 실패하므로 이 실행은 shell 회수를 입증하지 않는다. 양쪽 host callback은 producer가 lock을 해제한 뒤 mutable state를 다시 읽으며 Tauri는 별도 thread까지 읽기를 지연한다. 따라서 빠른 close answer가 관측 전에 전이를 제거할 가능성이 있지만 production code 변경 전에 통제된 owning 재현이 필요하다. 재현을 추가하고 diagnostic history 없이 mutation 순서와 immutable 전이 값을 보존한 뒤 영향받는 owner와 집중 two-host close case만 다시 실행한다. 기존 sidecar contract와 assertion을 유지한다. 이 실패를 해결할 때까지 VT S88-2-1 package acceptance는 열린 상태다.
+
 
 - [o] F239-168 — P1: Rust 소유 검사 target에 선언된 Cargo build 환경을 적용한다. Application build는 CARGO_ENV로 MACOSX_DEPLOYMENT_TARGET을 설정하지만 rust-repeat 및 rust-tests-alone의 두 Cargo 진입점은 이를 생략하고 외부 target을 상속한다. 기존 fake Cargo fixture로 실제 Make target의 불일치를 재현한 뒤 test 선택, 제한 및 기준을 바꾸지 않고 같은 선언 환경을 사용한다. Red: 실제 Make target fixture 두 개는 선언된 14.4 대신 외부 deployment target 10.9를 상속한다. 초기 rust-tests-alone fixture는 실제 Cargo를 찾아 package 조회에 실패했으며 해당 setup 실패는 Red 증거에서 제외한다. Green: 세 recipe 진입점에 CARGO_ENV를 적용한 뒤 수정한 양 fixture가 모든 Cargo 호출에서 14.4를 관측한다. 소유 runner case 12개가 모두 통과하며 Cargo target 선택, 유효하지 않은 selector 거부, feature 전달, 이름별 doctest 및 test별 timeout을 유지한다. Fixture는 HOME을 바꾸지 않고 PATH를 격리한다. Build 시간 단축 또는 drag 승인을 주장하지 않는다.
 
