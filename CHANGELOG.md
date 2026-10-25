@@ -144,6 +144,16 @@
   (`/tmp/F239-106-envelope-green-default-01.log`,
   `/tmp/F239-106-envelope-green-diagnostics-01.log`).
 
+- F239-107-1: Keep plugin-host provider creation behind successful
+  source-generation issuance. Exhaustion leaves the origin snapshot unchanged
+  and does not invoke the provider operation. Tauri startup uses the tested
+  issuance helper; the Wails owner case exercises `createPluginHost`. The
+  original production ordering already issued generation before provider
+  creation, so this is test coverage and a deterministic test seam, not a
+  product-defect correction. Green: Tauri provider and source-snapshot tests
+  pass 1/1 each; Wails provider startup passes 1/1 in default and diagnostics
+  builds, and its source-snapshot test passes 1/1.
+
 - F239-100: Identify the visible webview that remains pending after native
   activation. The activity-state waiter reports exact unresolved members and
   distinguishes timeout before and after callback registration. The view-focus

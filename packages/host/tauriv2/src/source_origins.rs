@@ -123,6 +123,16 @@ impl DeclaredSourceOrigins {
     }
 }
 
+/// Starts the provider operation with a newly issued window-wide source generation.
+pub(crate) fn with_plugin_host_generation<T>(
+    origins: &DeclaredSourceOrigins,
+    plugin: &str,
+    start: impl FnOnce(u64) -> Result<T, String>,
+) -> Result<T, String> {
+    let generation = origins.issue_plugin_host(plugin)?;
+    start(generation)
+}
+
 #[cfg(test)]
 #[path = "source_origins_test.rs"]
 mod tests;

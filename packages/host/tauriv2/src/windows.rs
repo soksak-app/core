@@ -1445,82 +1445,97 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
         let theme = theme.clone();
         let start_script = crate::plugin_host::host_start_script(project.as_ref(), &plugin.exposes);
         let host_window = window.clone();
-        let generation = data.declared_source_origins.issue_plugin_host(&plugin.id)?;
-        let instance = data
-            .plugin_host_channels
-            .register(&plugin.id, plugin.state, generation);
-        if let Err(error) = emit_declared_source_event(
-            window,
-            "declared-ui-source-registered",
-            declared_source_origin_event(&plugin.id, None, generation),
-        ) {
-            data.plugin_host_channels.unregister(&plugin.id);
-            data.declared_source_origins
-                .end_plugin_host(&plugin.id, generation);
-            return Err(error);
-        }
-        let view = crate::plugin_host::HostView {
-            directory: &directory,
-            folder: &folder,
-            plugin: &plugin.id,
-            page: &plugin.page,
-        };
-        let created = crate::plugin_host::create_host(
-            channel,
-            view,
-            |channel, view| {
-                let (state_window, state_plugin) = (host_window.clone(), host_plugin.clone());
-                let handle = platform.create_plugin_host(
-                    owner,
-                    view.directory,
-                    view.folder,
-                    view.plugin,
+        let handle = crate::source_origins::with_plugin_host_generation(
+            &data.declared_source_origins,
+            &plugin.id,
+            |generation| {
+                let instance =
+                    data.plugin_host_channels
+                        .register(&plugin.id, plugin.state, generation);
+                if let Err(error) = emit_declared_source_event(
+                    window,
+                    "declared-ui-source-registered",
+                    declared_source_origin_event(&plugin.id, None, generation),
+                ) {
+                    data.plugin_host_channels.unregister(&plugin.id);
+                    data.declared_source_origins
+                        .end_plugin_host(&plugin.id, generation);
+                    return Err(error);
+                }
+                let view = crate::plugin_host::HostView {
+                    directory: &directory,
+                    folder: &folder,
+                    plugin: &plugin.id,
+                    page: &plugin.page,
+                };
+                let created = crate::plugin_host::create_host(
                     channel,
-                    Box::new(move |state: String| {
-                        // A navigation of the page clears its ready document (docs/spec/plugin-host.md#channel).
-                        crate::plugin_host_channel::state(&state_window, &state_plugin, &state);
-                    }),
-                )?;
-                let (message_window, message_plugin, message_instance) =
-                    (host_window.clone(), host_plugin.clone(), instance.clone());
-                platform.set_view_message(
-                    handle,
-                    Box::new(move |value: String| {
-                        crate::plugin_host_channel::message(
-                            &message_window,
-                            &message_plugin,
+                    view,
+                    |channel, view| {
+                        let (state_window, state_plugin) =
+                            (host_window.clone(), host_plugin.clone());
+                        let handle = platform.create_plugin_host(
+                            owner,
+                            view.directory,
+                            view.folder,
+                            view.plugin,
+                            channel,
+                            Box::new(move |state: String| {
+                                // A navigation of the page clears its ready document (docs/spec/plugin-host.md#channel).
+                                crate::plugin_host_channel::state(
+                                    &state_window,
+                                    &state_plugin,
+                                    &state,
+                                );
+                            }),
+                        )?;
+                        let (message_window, message_plugin, message_instance) =
+                            (host_window.clone(), host_plugin.clone(), instance.clone());
+                        platform.set_view_message(
                             handle,
-                            &message_instance,
-                            &value,
-                        );
-                    }),
-                )?;
-                let (ended_window, ended_plugin) = (host_window.clone(), host_plugin.clone());
-                platform.set_view_ended(
-                    handle,
-                    Box::new(move || {
-                        crate::plugin_host_channel::ended(&ended_window, &ended_plugin, handle);
-                    }),
-                )?;
-                platform.add_document_script(handle, &theme)?;
-                platform.add_document_script(handle, &start_script)?;
-                Ok(handle)
+                            Box::new(move |value: String| {
+                                crate::plugin_host_channel::message(
+                                    &message_window,
+                                    &message_plugin,
+                                    handle,
+                                    &message_instance,
+                                    &value,
+                                );
+                            }),
+                        )?;
+                        let (ended_window, ended_plugin) =
+                            (host_window.clone(), host_plugin.clone());
+                        platform.set_view_ended(
+                            handle,
+                            Box::new(move || {
+                                crate::plugin_host_channel::ended(
+                                    &ended_window,
+                                    &ended_plugin,
+                                    handle,
+                                );
+                            }),
+                        )?;
+                        platform.add_document_script(handle, &theme)?;
+                        platform.add_document_script(handle, &start_script)?;
+                        Ok(handle)
+                    },
+                    |handle, address| platform.load_document(handle, address),
+                    |handle| platform.close_document(handle),
+                );
+                created.inspect_err(|_| {
+                    data.plugin_host_channels.unregister(&plugin.id);
+                    data.declared_source_origins
+                        .end_plugin_host(&plugin.id, generation);
+                    if let Err(error) = emit_declared_source_event(
+                        &host_window,
+                        "declared-ui-source-ended",
+                        declared_source_origin_event(&plugin.id, None, generation),
+                    ) {
+                        log_error("plugin host", error);
+                    }
+                })
             },
-            |handle, address| platform.load_document(handle, address),
-            |handle| platform.close_document(handle),
-        );
-        let handle = created.inspect_err(|_| {
-            data.plugin_host_channels.unregister(&plugin.id);
-            data.declared_source_origins
-                .end_plugin_host(&plugin.id, generation);
-            if let Err(error) = emit_declared_source_event(
-                &host_window,
-                "declared-ui-source-ended",
-                declared_source_origin_event(&plugin.id, None, generation),
-            ) {
-                log_error("plugin host", error);
-            }
-        })?;
+        )?;
         data.plugin_hosts.insert(&plugin.id, handle);
         crate::event_record::emit_host(
             crate::event_log::Level::Debug,

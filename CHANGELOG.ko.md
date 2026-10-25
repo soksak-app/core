@@ -128,6 +128,15 @@
   (`/tmp/F239-106-envelope-green-default-01.log`,
   `/tmp/F239-106-envelope-green-diagnostics-01.log`).
 
+- F239-107-1: Source-generation 발급이 성공한 뒤에만 plugin-host provider를
+  생성한다. 발급 한계 초과 시 origin snapshot은 유지되고 provider 작업은 호출되지
+  않는다. Tauri startup은 검증한 발급 helper를 사용하고 Wails owner case는
+  `createPluginHost`를 검사한다. 기존 production 순서는 이미 provider 생성 전에
+  generation을 발급했으므로 이 변경은 테스트 범위와 결정적 test seam을 추가하며
+  제품 결함을 수정하지 않는다. Green: Tauri provider 및 source-snapshot test가
+  각각 1/1, Wails provider startup은 default와 diagnostics build에서 각각 1/1,
+  Wails source-snapshot test는 1/1 통과한다.
+
 - F239-100: native activation 뒤 대기 중인 visible webview를 식별한다.
   Activity-state waiter는 미완료 member를 정확히 보고하고 callback
   registration 전후 timeout을 구분한다. View-focus test는 process event ring을
