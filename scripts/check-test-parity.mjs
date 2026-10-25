@@ -6011,6 +6011,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-143",
+    implementation: [
+      { file: "native/darwin/src/image_capture_match.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
+      { file: "native/darwin/src/image_capture_match.m", symbol: "commitIdentityDecodeJob(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_capture_match_test.m", id: "the second Vision decode starts before the blocked first decode is released" },
+      { file: "native/darwin/tests/image_capture_match_test.m", id: "an asynchronous Vision exception is reported and fails manifest finalization after decoder drain" },
+    ],
+    expected: "Two bounded decode workers progress independently while results commit in sample order and decoder exceptions fail and drain explicitly.",
+    levels: ["native"],
+  },
+  {
     id: "F239-98-4",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function evaluateTagScopedStage(" }],
     tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],

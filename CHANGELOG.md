@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F239-143: Run frame identity Vision decoding on at most two operations while preserving intake-ordered JSONL commits on the existing serial identity lane. Keep admitted jobs pending through artifact writes, preserve the eight-job and 64 MiB limits, and drain the decoder before the writer. All three focused owner targets pass 1/1 and verify Vision exception cleanup and finalization error reporting. Full-recording cadence remains open.
+
+
 - F239-93-4: Map Tauri CLI assertions to their exact contract cases across the configured compiler-selected targets. The current static audit has no declaration gaps.
 
 - F239-93-3-5: Map the remaining Wails CLI plugin and release assertions to exact contract cases without changing their behavior. The current declaration audit passes.

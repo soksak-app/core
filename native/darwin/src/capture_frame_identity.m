@@ -218,18 +218,21 @@ bool sp_capture_frame_identity_decode(CGImageRef image, CGRect roi, NSSet<NSStri
         roi.size.width / CGImageGetWidth(image), roi.size.height / CGImageGetHeight(image));
     request.regionOfInterest = visionROI;
     NSError *visionError = nil;
+    BOOL performed = NO;
+    NSArray<VNBarcodeObservation *> *codes = nil;
+    @try {
 #ifdef SOKSAK_DIAGNOSTIC
     if (captureFrameIdentityDecodeTestHook && !captureFrameIdentityDecodeTestHook()) {
-        [request release];
-        [handler release];
         *error = [@"Vision QR decode test failure" copy];
         return false;
     }
 #endif
-    BOOL performed = [handler performRequests:@[ request ] error:&visionError];
-    NSArray<VNBarcodeObservation *> *codes = [[request.results copy] autorelease];
-    [request release];
-    [handler release];
+    performed = [handler performRequests:@[ request ] error:&visionError];
+    codes = [[request.results copy] autorelease];
+    } @finally {
+        [request release];
+        [handler release];
+    }
     if (!performed) {
         *error = [[NSString alloc] initWithFormat:@"Vision QR decode failed: %@", visionError.localizedDescription ?: @"unknown error"];
         return false;

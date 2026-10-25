@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F239-143: Frame identity Vision decode를 최대 두 operation에서 실행하며 기존 serial identity lane에서 intake 순서대로 JSONL을 commit한다. Artifact write가 끝날 때까지 admitted job을 pending으로 유지하고 8-job 및 64 MiB 제한을 보존하며 writer 전에 decoder를 drain한다. 세 focused owner target이 각각 1/1 통과했고 Vision exception 정리 및 finalization 오류 보고를 검증했다. Full-recording cadence는 열린 상태다.
+
+
 - F239-93-4: 설정된 compiler-selected target 전체에서 Tauri CLI assertion을 정확한 contract case에 연결한다. 현재 static audit에 선언 누락이 없다.
 
 - F239-93-3-5: 남은 Wails CLI plugin 및 release assertion의 동작을 바꾸지 않고 정확한 contract case에 연결한다. 현재 선언 audit이 통과한다.

@@ -6,8 +6,9 @@
 #include <stdatomic.h>
 
 static int failures;
-static atomic_bool identityDecodeGateClaimed;
+static atomic_uint identityDecodeHookCount;
 static dispatch_semaphore_t identityDecodeGateEntered;
+static dispatch_semaphore_t identityDecodeSecondEntered;
 static dispatch_semaphore_t identityDecodeGateRelease;
 static void check(BOOL ok, NSString *label) {
     fprintf(stderr, "%s: %s\n", ok ? "PASS" : "FAIL", label.UTF8String);
@@ -15,13 +16,22 @@ static void check(BOOL ok, NSString *label) {
 }
 
 static bool blockFirstIdentityDecode(void) {
-    if (atomic_exchange(&identityDecodeGateClaimed, true)) return true;
-    dispatch_semaphore_signal(identityDecodeGateEntered);
-    dispatch_semaphore_wait(identityDecodeGateRelease, DISPATCH_TIME_FOREVER);
+    unsigned index = atomic_fetch_add(&identityDecodeHookCount, 1);
+    if (index == 0) {
+        dispatch_semaphore_signal(identityDecodeGateEntered);
+        dispatch_semaphore_wait(identityDecodeGateRelease, DISPATCH_TIME_FOREVER);
+    } else if (index == 1) {
+        dispatch_semaphore_signal(identityDecodeSecondEntered);
+    }
     return true;
 }
 
 static bool failIdentityDecode(void) { return false; }
+
+static bool throwIdentityDecode(void) {
+    @throw [NSException exceptionWithName:@"F239143InjectedVisionException"
+        reason:@"controlled Vision decode exception" userInfo:nil];
+}
 
 static void frameIdentitySessionChecks(void) {
     const uint8_t regionA[16] = { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -321,16 +331,18 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         @"the callback queue fixture records its tagged source artifact");
     free(error); error = NULL;
 
-    atomic_store(&identityDecodeGateClaimed, false);
+    atomic_store(&identityDecodeHookCount, 0);
     identityDecodeGateEntered = dispatch_semaphore_create(0);
+    identityDecodeSecondEntered = dispatch_semaphore_create(0);
     identityDecodeGateRelease = dispatch_semaphore_create(0);
     sp_capture_frame_identity_test_set_decode_hook(blockFirstIdentityDecode);
     __block BOOL firstEnqueued = NO, secondEnqueued = NO;
     __block char *firstError = NULL, *secondError = NULL;
     dispatch_semaphore_t firstReturned = dispatch_semaphore_create(0);
     dispatch_semaphore_t secondReturned = dispatch_semaphore_create(0);
+    NSMutableData *mutableFirstSample = [taggedPixels mutableCopy];
     dispatch_async(sampleQueue, ^{
-        firstEnqueued = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
+        firstEnqueued = sp_image_capture_match_identity_enqueue_frame(mutableFirstSample.bytes, width, height,
             stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
             1, 1000, &firstError);
         dispatch_semaphore_signal(firstReturned);
@@ -350,8 +362,20 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
     check(firstWait == 0 && firstEnqueued && firstError == NULL,
         @"the blocked first frame was admitted without changing its decode input");
+    memset(mutableFirstSample.mutableBytes, 0, mutableFirstSample.length);
+    dispatch_semaphore_t writerProgress = dispatch_semaphore_create(0);
+    dispatch_async(writer, ^{ dispatch_semaphore_signal(writerProgress); });
+    long writerProgressWait = dispatch_semaphore_wait(writerProgress,
+        dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    check(writerProgressWait == 0,
+        @"the capture artifact writer remains available while Vision decode is blocked");
+    dispatch_release(writerProgress);
     check(secondWait == 0 && secondEnqueued && secondError == NULL,
         @"the later sample callback returns while the earlier Vision decode remains blocked");
+    long secondDecodeBeforeRelease = dispatch_semaphore_wait(identityDecodeSecondEntered,
+        dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC));
+    check(secondDecodeBeforeRelease == 0,
+        @"the second Vision decode starts before the blocked first decode is released");
     BOOL acceptedThroughLimit = YES;
     for (uint64_t frame = 3; frame <= 8; frame++) {
         char *enqueueError = NULL;
@@ -413,9 +437,19 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         }
     }
     BOOL orderedFrames = decodedFrames.count == 8;
+    BOOL firstSnapshotMatched = NO;
     for (NSUInteger index = 0; index < decodedFrames.count && orderedFrames; index++)
         orderedFrames = [decodedFrames[index] unsignedLongLongValue] == index + 1;
+    for (NSString *line in decodedLines) {
+        if (line.length == 0) continue;
+        NSDictionary *row = [NSJSONSerialization JSONObjectWithData:[line dataUsingEncoding:NSUTF8StringEncoding]
+            options:0 error:nil];
+        if ([row[@"frame"] unsignedLongLongValue] == 1)
+            firstSnapshotMatched = [row[@"status"] isEqual:@"matched"];
+    }
     check(orderedFrames, @"all admitted frames drain in sample order before session state is released, despite later overflow");
+    check(firstSnapshotMatched,
+        @"the first frame decodes its intake-time ROI after the caller mutates the source sample");
     check(measuredEveryDecode, @"every Vision result owns ordered enqueue, start, and completion ticks for its display time");
     check(sp_image_capture_match_identity_session_begin(&error) && error == NULL,
         @"a new identity session starts only after the previous decoder drained");
@@ -423,13 +457,53 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     char *replacementFailure = sp_image_capture_match_identity_session_error_copy();
     check(replacementFailure == NULL, @"the drained predecessor cannot carry its failure into a new decoder session");
     free(replacementFailure);
-    check(sp_image_capture_match_write_manifest(directory),
-        @"the idle replacement session closes cleanly before manifest generation");
+    NSString *exceptionNonce = nil, *exceptionPayload = nil, *exceptionEncodedPayload = nil, *exceptionEncodeError = nil;
+    check(sp_image_capture_match_identity_region_nonce(regionToken, &exceptionNonce, &error) && error == NULL,
+        @"the exception fixture receives a fresh session nonce");
+    free(error); error = NULL;
+    check(sp_image_capture_match_identity_issue(regionToken, sourceIdentity, &exceptionPayload, &error) && error == NULL,
+        @"the exception fixture receives a fresh issued identity");
+    free(error); error = NULL;
+    CGImageRef exceptionImage = NULL;
+    NSData *exceptionPixels = nil;
+    BOOL exceptionEncoded = sp_capture_frame_identity_encode(raw.bytes, width, height, stride, colorSpace,
+        roi, exceptionNonce, (SPCaptureFrameIdentity){ sourceIdentity.generation, sourceIdentity.raster,
+            sourceIdentity.sequence }, &exceptionImage, &exceptionPixels, &exceptionEncodedPayload,
+        &exceptionEncodeError);
+    check(exceptionEncoded && exceptionImage != NULL,
+        @"the exception fixture builds a sample carrying its new issued identity");
+    check(sp_image_capture_match_identity_record(regionToken, sourceIdentity, roi, exceptionPixels.bytes,
+        width, height, stride, "DeviceRGB", &error) && error == NULL,
+        @"the exception fixture records its tagged source artifact");
+    free(error); error = NULL;
+    sp_capture_frame_identity_test_set_decode_hook(throwIdentityDecode);
+    BOOL exceptionEnqueued = sp_image_capture_match_identity_enqueue_frame(exceptionPixels.bytes, width,
+        height, stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
+        10, 10000, &error);
+    check(exceptionEnqueued && error == NULL,
+        @"the controlled Vision exception is admitted as an asynchronous decode job");
+    free(error); error = NULL;
+    BOOL exceptionManifestAccepted = sp_image_capture_match_write_manifest(directory);
+    NSString *identityManifestPath = [[NSString stringWithUTF8String:directory]
+        stringByAppendingPathComponent:@"frame-identities/manifest.json"];
+    NSData *identityManifestData = [NSData dataWithContentsOfFile:identityManifestPath];
+    NSDictionary *identityManifest = identityManifestData
+        ? [NSJSONSerialization JSONObjectWithData:identityManifestData options:0 error:nil] : nil;
+    NSString *identityFailure = identityManifest[@"identityFailure"];
+    check(!exceptionManifestAccepted && [identityFailure containsString:@"F239143InjectedVisionException"],
+        @"an asynchronous Vision exception is reported and fails manifest finalization after decoder drain");
+    check(!sp_image_capture_match_identity_session_active(),
+        @"an asynchronous Vision exception permanently disables identity intake for the session");
     sp_capture_frame_identity_test_set_decode_hook(NULL);
+    if (exceptionImage) CGImageRelease(exceptionImage);
+    [exceptionPixels release]; [exceptionNonce release]; [exceptionPayload release];
+    [exceptionEncodedPayload release]; [exceptionEncodeError release];
     free(firstError); free(secondError);
     dispatch_release(firstReturned); dispatch_release(secondReturned);
     dispatch_release(identityDecodeGateEntered);
+    dispatch_release(identityDecodeSecondEntered);
     dispatch_release(identityDecodeGateRelease);
+    [mutableFirstSample release];
     [nonce release]; [payload release]; [encodedPayload release]; [encodeError release]; [taggedPixels release];
     if (taggedImage) CGImageRelease(taggedImage);
     if (colorSpace) CGColorSpaceRelease(colorSpace);
