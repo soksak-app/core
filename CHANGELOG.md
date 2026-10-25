@@ -3,6 +3,14 @@
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
+
+- F239-47-40-4-2-1-2: Restore live image-region layers when no `SCStream` exists
+  after identity startup failure. A queued cleanup restores when its
+  stream remains current, or when no stream and no identity session are active;
+  it preserves tags from a newer pre-stream session. Red: `capture_test`
+  failed because startup cleanup returned on a nil stream and left both layers
+  tagged. Green: `capture_test`, `image_region_test`, and `capture_cleanup_test`
+  pass 1/1 each, including preservation of a replacement pre-stream session.
 - F239-47-40-4-2-1-1: Fence queued cleanup to the current `SCStream`
   that reported the current failure and fail its identity session
   before accepting another tagged presentation. Retaining the stream through
