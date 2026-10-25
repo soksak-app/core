@@ -789,6 +789,17 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F212.14-2",
+    implementation: [
+      { file: "e2e/benchmark/view-drag.test.mjs", symbol: "const report =" },
+    ],
+    tests: [
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "terminal view drag meets performance targets without diagnostic tracing" },
+    ],
+    expected: "A declared candidate build profile produces complete measured drag reports with unchanged targets and explicit performance failure rather than inferred optimization acceptance.",
+    levels: ["application"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },

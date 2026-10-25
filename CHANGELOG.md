@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-2: Record the same-source optimized diagnostic VT build and local installation comparison. Both installed hashes match the build; complete 139/132-frame benchmark reports, error audits, baseline restoration and normal shutdown are retained. Latency targets still fail on both hosts. Different cohort loads prevent attributing the observed reduction solely to optimization. Complete the build-profile comparison and keep F212.14 performance acceptance open. Restore both automated profiles to their original declarations and executable hashes after comparison.
+
 - F212.14-1: Add an opt-in drag benchmark that rejects diagnostic tracing, verifies the actual application mode and writes complete measurements before applying unchanged performance targets. Both hosts produce complete 137/141-frame reports with clean error audits and shutdown, then fail cadence and all latency targets. Calculator owners pass 12/12. Complete the runner and retain performance acceptance under F212.14.
 
 - F212.7-14: Complete the view-composition aggregate against the current ready/queued-attachment contract rather than the obsolete first-pull task wording. All 52 channel owners, the native page-world channel owner and both editor/HWP start-value handoff cases pass with clean run-log audit and normal shutdown. Close F212.7-14 and functional parent F212.7; keep view cost and performance benchmarks separate. No product protocol is changed.
