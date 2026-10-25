@@ -536,6 +536,12 @@ const extensionFixture = async (name) => {
 const extensionCatalog = async () => composeCatalogs(JSON.parse(await extensionFixture("base.json")), JSON.parse(await extensionFixture("alpha.json")));
 const extensionLogs = async (...names) => Promise.all(names.map(async (file) => ({ file, text: await extensionFixture(file) })));
 
+test("catalog composition rejects a base catalog without its declared layers", { timeout: 5000 }, async () => {
+  const base = JSON.parse(await extensionFixture("base.json"));
+  delete base.layers;
+  assert.throws(() => composeCatalogs(base), /base event catalog: layers must be an array/);
+});
+
 test("a chain extension of a sidecar catalog is complete when its events follow the request that names the sidecar, in any file", async () => {
   const catalog = await extensionCatalog();
   assert.deepEqual(auditLogs(await extensionLogs("host-1-2.jsonl", "alpha-3-4.jsonl"), catalog), []);

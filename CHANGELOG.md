@@ -32,6 +32,14 @@
 
 - F239-137: Include every installed plugin manifest catalog in per-configuration event-log audits. Validate the installed manifest, plugin identity, catalog layer and namespace, and report missing or invalid catalog files explicitly. `composeCatalogs` now preserves sidecar validation while adding plugin event declarations and layers. Red: the owner assertion failed because the installed plugin event was absent from `catalogOf` (`actual: undefined`). Green: both installed-plugin owner cases pass in one run, including a disabled installed plugin and invalid manifest/catalog cases; sidecar audit and log-contract composition regressions each pass 3/3. Runtime host catalog loading already included plugin catalogs and was unchanged. The Wails catalog preflight passed in `/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log` and `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`: the stored-catalog check passed, and all ten reference/terminal steps and capture stop ran without the plugin-catalog error. Both runs still failed the separate F134 frame-message/accepted-marker join and the 33 ms capture-gap check (33.287 ms and 33.800 ms); this is not IME visual acceptance.
 
+- F239-139: Require `layers` when composing a base catalog and normalize the
+  optional plugin diagnostic source once. Preserve supplied source paths and
+  keep the empty `extends` default for catalogs without chain extensions. Red:
+  the fallback owner found seven unexplained defaults, and the new base-layer
+  assertion failed because composition returned without an error. Green: the
+  fallback owner file passes 10/10 and focused base-layer/sidecar composition
+  cases pass 7/7.
+
 - F239-134: Join captured rasters only to exact matching host screen bodies and
   accepted frame markers. Preserve unmatched records outside the retained
   source set as diagnostics while each required source ID still needs a full

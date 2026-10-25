@@ -32,6 +32,13 @@
 
 - F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다. Wails catalog preflight 두 번(`/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log`, `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`)은 stored-catalog 확인을 통과했고 plugin catalog 오류 없이 reference/terminal 단계 10개와 capture stop까지 실행했다. 두 실행은 별도 F134 frame-message/accepted-marker 결합 문제와 33 ms capture-gap 검사(33.287 ms, 33.800 ms)에서 실패했으며 IME visual acceptance 결과는 아니다.
 
+- F239-139: Base catalog 합성에 `layers` 선언을 요구하고 선택적 plugin
+  diagnostic source를 한 번 정규화한다. 제공된 source 경로와 chain extension이
+  없는 catalog의 빈 `extends` default는 유지한다. Red: fallback owner가 설명되지
+  않은 default 7개를 찾았고 새 base-layer assertion은 합성이 오류 없이 끝나
+  실패했다. Green: fallback owner file 10/10, focused base-layer/sidecar composition
+  case 7/7이 통과한다.
+
 - F239-134: 캡처 raster를 정확히 일치하는 host screen body와 수락된 frame
   marker에만 결합한다. 보존 source 집합 밖의 일치하지 않는 record는 진단으로
   남기며, 필요한 각 source ID에는 완전하고 정확한 결합을 계속 요구한다.

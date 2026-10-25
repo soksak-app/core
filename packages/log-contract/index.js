@@ -279,21 +279,23 @@ function checkExtension(catalog, extension) {
  */
 export function composeCatalogs(base, ...catalogs) {
   validateCatalog(base, "base event catalog");
+  if (!Array.isArray(base.layers)) throw new Error("base event catalog: layers must be an array");
   const events = { ...base.events };
-  const layers = new Set(base.layers ?? []);
+  const layers = new Set(base.layers);
   // default: a catalog without extensions has none to carry over.
   const extensions = [...(base.extends ?? [])];
   for (const entry of catalogs) {
     if (entry?.kind === "plugin") {
       const { id, catalog, source } = entry;
-      const where = `plugin ${id}`;
-      validateCatalog(catalog, `${source ?? where + " event catalog"}`);
-      if (typeof id !== "string" || id === "") throw new Error(`${source ?? "plugin event catalog"}: the installed plugin id is required`);
-      if (JSON.stringify(catalog.layers) !== '["plugin"]') throw new Error(`${source ?? where}: layers must be ["plugin"], found ${JSON.stringify(catalog.layers)}`);
+      // default: direct composition callers may omit a file path; identify the plugin in diagnostics without inventing one.
+      const sourceLabel = source ?? (typeof id === "string" && id !== "" ? `plugin ${id} event catalog` : "plugin event catalog");
+      if (typeof id !== "string" || id === "") throw new Error(`${sourceLabel}: the installed plugin id is required`);
+      validateCatalog(catalog, sourceLabel);
+      if (JSON.stringify(catalog.layers) !== '["plugin"]') throw new Error(`${sourceLabel}: layers must be ["plugin"], found ${JSON.stringify(catalog.layers)}`);
       for (const [name, declared] of Object.entries(catalog.events)) {
-        if (declared.layer !== "plugin") throw new Error(`${source ?? where}: event ${name} has the layer ${declared.layer}, not plugin`);
-        if (!name.startsWith(`plugin.${id}.`)) throw new Error(`${source ?? where}: event ${name} is outside plugin.${id}.`);
-        if (events[name] !== undefined) throw new Error(`${source ?? where}: event ${name} is declared twice`);
+        if (declared.layer !== "plugin") throw new Error(`${sourceLabel}: event ${name} has the layer ${declared.layer}, not plugin`);
+        if (!name.startsWith(`plugin.${id}.`)) throw new Error(`${sourceLabel}: event ${name} is outside plugin.${id}.`);
+        if (events[name] !== undefined) throw new Error(`${sourceLabel}: event ${name} is declared twice`);
         events[name] = declared;
       }
       layers.add("plugin");
