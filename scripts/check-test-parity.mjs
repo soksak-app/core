@@ -680,6 +680,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.12-1-15",
+    implementation: [
+      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "PluginHostReply" },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "revivePersistent" },
+      { file: "e2e/view-display.mjs", symbol: "core.tab.close" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/arguments_test.rs", id: "a_plugin_host_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value" },
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
+      { file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_closing_window_keeps_its_plugin_host_records_for_the_close_step" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "the_end_of_a_host_whose_window_is_closed_is_not_reported" },
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+      { file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" },
+    ],
+    expected: "The five completed child contracts preserve null replies and sidecar-loss facts and close the intended surface and real project window without closed-window errors.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },

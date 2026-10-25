@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-1-15: 검증된 하위 다섯 항목의 결과로 view-display 결함 집계를 완료한다. 보존된 view 실행은 subscription reply 및 surface 종료를 확인하고 소유 검사는 null decode와 sidecar-loss 사실을 확인하며 F239-157은 오류 없는 감사가 포함된 양 host의 실제 project-window 종료를 증명한다. 이 집계 완료를 위해 추가 동작 변경이나 검사 반복을 수행하지 않는다.
+
 - F239-182: 원래 baseline 활성화 오류와 함께 요청 전 및 거부 후 frontmost PID 관측을 보존한다. 후속 관측도 실패하면 두 오류를 유지하며 나중 읽기가 baseline을 찾아도 거부된 활성화를 수락하지 않는다. 수정 전 owner assertion 세 개가 실패하고 수정 후 frontmost owner 14개가 모두 통과한다. 관련 Wails cycle-02 runtime은 통과하지만 기존 거부를 재현하거나 설명하지 않는다.
 
 - F239-181: Lifecycle AppKit 비교를 reference-step 소유 module로 옮기고 키별 presentation checkpoint를 재사용한다. 모든 단계의 예상 document를 요구하고 reference focus 상실을 거부하며 단계별 상태를 검사 출력에 보존한다. 제어된 assertion 세 개가 각각 수정 전 실패하고 수정 후 owner 네 개가 모두 통과한다. 엄격한 Wails cycle 06/09 및 Tauri cycle 06이 오류 없는 감사, 입력 상태 복원과 정상 종료를 통과한다. 과거 reference 누락의 미분류 원인과 별도 활성화 거부 finding은 유지한다.

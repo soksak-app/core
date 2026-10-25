@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-1-15: Complete the aggregate view-display defect item from the five verified child results. The retained view run covers subscription reply and surface close, owning tests cover null decoding and sidecar-loss facts, and F239-157 supplies both-host real project-window close with clean error audits. No additional behavior change or repeated check is used for this aggregate closure.
+
 - F239-182: Preserve pre-request and post-refusal frontmost PID observations with the original baseline activation error. Retain both errors when the follow-up observation fails; never accept a refused activation because a later read finds the baseline. Three owner assertions fail before correction and all 14 frontmost owners pass afterward. The focused Wails cycle-02 runtime passes, but does not reproduce or explain the earlier refusal.
 
 - F239-181: Move lifecycle AppKit comparison into the reference-step owner and reuse per-key presentation checkpoints. Require expected documents for every step, reject lost reference focus and retain each step state in the check output. Three controlled assertions fail before their corrections; all four owner cases pass afterward. Strict Wails cycles 06/09 and Tauri cycle 06 pass with clean error audits, restored input state and normal shutdown. Preserve the unclassified cause of earlier reference loss and the separate activation-refusal finding.
