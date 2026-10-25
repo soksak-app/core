@@ -4,6 +4,9 @@
 #import <Vision/Vision.h>
 #include <limits.h>
 #include <math.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static NSString *payloadPrefix(NSString *nonce, SPCaptureFrameIdentity identity) {
@@ -34,13 +37,31 @@ static bool validRaster(const uint8_t *bgra, size_t width, size_t height, size_t
 
 static bool validROI(CGRect roi, size_t width, size_t height) {
     if (!isfinite(roi.origin.x) || !isfinite(roi.origin.y) || !isfinite(roi.size.width)
-        || !isfinite(roi.size.height) || roi.size.width < 64 || roi.size.height < 64) return false;
+        || !isfinite(roi.size.height) || roi.size.width < 1 || roi.size.height < 1) return false;
     return roi.origin.x >= 0 && roi.origin.y >= 0 && CGRectGetMaxX(roi) <= width && CGRectGetMaxY(roi) <= height
         && floor(roi.origin.x) == roi.origin.x && floor(roi.origin.y) == roi.origin.y
         && floor(roi.size.width) == roi.size.width && floor(roi.size.height) == roi.size.height;
 }
 
 static NSString *unknown(NSString *reason) { return [reason copy]; }
+
+static bool parseCanonicalUInt64(NSString *field, uint64_t *value) {
+    if (!field.length || (field.length > 1 && [field hasPrefix:@"0"])) return false;
+    for (NSUInteger index = 0; index < field.length; index++) {
+        unichar character = [field characterAtIndex:index];
+        if (character < '0' || character > '9') return false;
+    }
+    const char *text = field.UTF8String;
+    errno = 0;
+    char *end = NULL;
+    unsigned long long parsed = strtoull(text, &end, 10);
+    if (errno == ERANGE || !end || *end != '\0' || end == text) return false;
+    char canonical[32];
+    int count = snprintf(canonical, sizeof(canonical), "%llu", parsed);
+    if (count < 0 || (NSUInteger)count != strlen(text) || memcmp(canonical, text, (size_t)count) != 0) return false;
+    *value = (uint64_t)parsed;
+    return *value != 0;
+}
 
 bool sp_capture_frame_identity_encode(const uint8_t *bgra, size_t width, size_t height, size_t row_bytes,
     CGColorSpaceRef color_space, CGRect roi, NSString *nonce, SPCaptureFrameIdentity identity,
@@ -82,17 +103,55 @@ bool sp_capture_frame_identity_encode(const uint8_t *bgra, size_t width, size_t 
         *error = [@"CoreImage QR rasterization failed" copy];
         return false;
     }
-    CGFloat side = MIN(roi.size.width, roi.size.height) - 8;
-    CGRect inset = CGRectMake(roi.origin.x + (roi.size.width - side) / 2,
-        roi.origin.y + (roi.size.height - side) / 2, side, side);
+    size_t module_width = CGImageGetWidth(qrImage);
+    size_t module_height = CGImageGetHeight(qrImage);
+    const size_t quiet_modules = 4;
+    if (!module_width || module_width != module_height || module_width > SIZE_MAX - quiet_modules * 2) {
+        CGImageRelease(qrImage);
+        CGContextRelease(context);
+        [pixels release];
+        *error = [@"CoreImage QR generator returned invalid module dimensions" copy];
+        return false;
+    }
+    size_t total_modules = module_width + quiet_modules * 2;
+    size_t scale = (size_t)floor(MIN(roi.size.width, roi.size.height) / total_modules);
+    if (!scale) {
+        CGImageRelease(qrImage);
+        CGContextRelease(context);
+        [pixels release];
+        *error = [@"frame identity ROI cannot fit QR modules and four-module quiet zone" copy];
+        return false;
+    }
+    CGFloat total_side = (CGFloat)(total_modules * scale);
+    CGFloat code_side = (CGFloat)(module_width * scale);
+    CGFloat left = roi.origin.x + floor((roi.size.width - total_side) / 2);
+    CGFloat top = roi.origin.y + floor((roi.size.height - total_side) / 2);
+    CGRect fullRect = CGRectMake(left, (CGFloat)height - top - total_side, total_side, total_side);
+    CGRect codeRect = CGRectInset(fullRect, (CGFloat)(quiet_modules * scale), (CGFloat)(quiet_modules * scale));
+    CGContextSetBlendMode(context, kCGBlendModeCopy);
+    CGContextSetRGBFillColor(context, 1, 1, 1, 1);
+    CGContextFillRect(context, fullRect);
     CGContextSetInterpolationQuality(context, kCGInterpolationNone);
-    CGContextDrawImage(context, inset, qrImage);
+    if (codeRect.size.width != code_side || codeRect.size.height != code_side) {
+        CGImageRelease(qrImage);
+        CGContextRelease(context);
+        [pixels release];
+        *error = [@"frame identity QR module geometry is not integral" copy];
+        return false;
+    }
+    CGContextDrawImage(context, codeRect, qrImage);
     CGImageRelease(qrImage);
     CGContextRelease(context);
 
-    CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)pixels);
+    NSData *immutablePixels = [pixels copy];
+    [pixels release];
+    if (!immutablePixels) {
+        *error = [@"frame identity immutable raster copy failed" copy];
+        return false;
+    }
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)immutablePixels);
     if (!provider) {
-        [pixels release];
+        [immutablePixels release];
         *error = [@"frame identity image data provider creation failed" copy];
         return false;
     }
@@ -101,11 +160,11 @@ bool sp_capture_frame_identity_encode(const uint8_t *bgra, size_t width, size_t 
         kCGRenderingIntentDefault);
     CGDataProviderRelease(provider);
     if (!*image) {
-        [pixels release];
+        [immutablePixels release];
         *error = [@"frame identity image creation failed" copy];
         return false;
     }
-    *instrumented_bgra = pixels;
+    *instrumented_bgra = immutablePixels;
     *payload = [issued copy];
     return true;
 }
@@ -123,6 +182,10 @@ bool sp_capture_frame_identity_decode(CGImageRef image, CGRect roi, NSSet<NSStri
     VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCGImage:image options:@{}];
     VNDetectBarcodesRequest *request = [[VNDetectBarcodesRequest alloc] init];
     request.symbologies = @[ VNBarcodeSymbologyQR ];
+    CGRect visionROI = CGRectMake(roi.origin.x / CGImageGetWidth(image),
+        (CGImageGetHeight(image) - CGRectGetMaxY(roi)) / CGImageGetHeight(image),
+        roi.size.width / CGImageGetWidth(image), roi.size.height / CGImageGetHeight(image));
+    request.regionOfInterest = visionROI;
     NSError *visionError = nil;
     BOOL performed = [handler performRequests:@[ request ] error:&visionError];
     NSArray<VNBarcodeObservation *> *codes = [[request.results copy] autorelease];
@@ -132,11 +195,13 @@ bool sp_capture_frame_identity_decode(CGImageRef image, CGRect roi, NSSet<NSStri
         *error = [[NSString alloc] initWithFormat:@"Vision QR decode failed: %@", visionError.localizedDescription ?: @"unknown error"];
         return false;
     }
-    if (codes.count != 1) { *unknown_reason = unknown(@"ambiguous-code-count"); return false; }
+    if (codes.count == 0) { *unknown_reason = unknown(@"no-code-in-expected-roi"); return false; }
+    if (codes.count > 1) { *unknown_reason = unknown(@"ambiguous-code-count"); return false; }
     VNBarcodeObservation *code = codes.firstObject;
-    CGRect box = CGRectMake(code.boundingBox.origin.x * CGImageGetWidth(image),
-        code.boundingBox.origin.y * CGImageGetHeight(image), code.boundingBox.size.width * CGImageGetWidth(image),
-        code.boundingBox.size.height * CGImageGetHeight(image));
+    CGRect lowerLeftBox = VNImageRectForNormalizedRectUsingRegionOfInterest(code.boundingBox,
+        CGImageGetWidth(image), CGImageGetHeight(image), visionROI);
+    CGRect box = CGRectMake(lowerLeftBox.origin.x,
+        CGImageGetHeight(image) - CGRectGetMaxY(lowerLeftBox), lowerLeftBox.size.width, lowerLeftBox.size.height);
     if (!CGRectContainsRect(roi, box)) { *unknown_reason = unknown(@"code-outside-expected-roi"); return false; }
     NSString *value = code.payloadStringValue;
     if (!value) { *unknown_reason = unknown(@"payload-unreadable"); return false; }
@@ -144,15 +209,9 @@ bool sp_capture_frame_identity_decode(CGImageRef image, CGRect roi, NSSet<NSStri
     NSArray<NSString *> *fields = [value componentsSeparatedByString:@":"];
     if (fields.count != 7 || ![fields[0] isEqualToString:@"soksak-frame-id"] || ![fields[1] isEqualToString:@"v1"]
         || !validNonce(fields[2])) { *unknown_reason = unknown(@"payload-malformed"); return false; }
-    NSScanner *scanner = nil;
     uint64_t values[3] = { 0 };
     for (NSUInteger index = 0; index < 3; index++) {
-        NSString *field = fields[index + 3];
-        if (!field.length || (field.length > 1 && [field hasPrefix:@"0"])) {
-            *unknown_reason = unknown(@"payload-malformed"); return false;
-        }
-        scanner = [NSScanner scannerWithString:field];
-        if (![scanner scanUnsignedLongLong:&values[index]] || !scanner.isAtEnd || !values[index]) {
+        if (!parseCanonicalUInt64(fields[index + 3], &values[index])) {
             *unknown_reason = unknown(@"payload-malformed"); return false;
         }
     }

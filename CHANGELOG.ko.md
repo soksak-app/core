@@ -4,6 +4,16 @@
 
 ## 미배포
 
+- F239-47-40-2: QR helper의 ROI, 탐지, payload, ownership 경계를 수정한다.
+  Red: 변경 전 owner test는 Vision 전체 이미지 탐지, mutable image backing,
+  대칭 좌표 가정, 정규 형식이 아닌 부호 및 공백 숫자, uint64 overflow,
+  너무 작은 ROI에서 실패했다. 첫 수정 뒤에도 홀수 ROI가 반 pixel 중심 배치로
+  pixel-grid assertion에서 실패했다. Green: native owner test가 1/1 통과하며
+  ROI 배치 및 디코딩, crop 방향, ROI 밖 코드 필터링, 모호성, 정수 module pixel,
+  quiet zone, immutable backing, nonce 범위, canonical uint64 parsing, 작은 ROI
+  거부를 확인한다. Matcher와 capture cadence 한계는 그대로이며 물리적 scanout은
+  검증하지 않았다.
+
 - F239-47-40-1: opt-in native QR frame-identity helper를 추가한다. Red: 구현 전
   owner test는 helper가 immutable image와 raster copy를 반환하지 않아 동작
   assertion에서 실패했다. Green: 같은 test가 1/1 통과하며 exact identity

@@ -1,4 +1,6 @@
 #import "capture_frame_identity.h"
+#import <CommonCrypto/CommonDigest.h>
+#import <CoreImage/CoreImage.h>
 #include <stdio.h>
 
 static int failures;
@@ -6,6 +8,79 @@ static void check(BOOL ok, const char *label) {
     fprintf(stderr, "%s: %s\n", ok ? "PASS" : "FAIL", label);
     if (!ok) failures++;
 }
+
+static NSString *testPayload(NSString *prefix) {
+    NSData *bytes = [prefix dataUsingEncoding:NSUTF8StringEncoding];
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(bytes.bytes, (CC_LONG)bytes.length, digest);
+    NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+    for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++) [hex appendFormat:@"%02x", digest[index]];
+    return [NSString stringWithFormat:@"%@:%@", prefix, hex];
+}
+
+static BOOL testRasterHasIntegerQRGeometry(NSData *raster, size_t width, size_t height, size_t row_bytes,
+    CGRect roi, NSString *payload, CGColorSpaceRef color_space) {
+    CIFilter *filter = [CIFilter filterWithName:@"CIQRCodeGenerator"];
+    if (!filter) { check(NO, "CoreImage creates a QR generator for ROI geometry checks"); return NO; }
+    [filter setValue:[payload dataUsingEncoding:NSUTF8StringEncoding] forKey:@"inputMessage"];
+    [filter setValue:@"H" forKey:@"inputCorrectionLevel"];
+    CIImage *qr = filter.outputImage;
+    CIContext *context = [CIContext contextWithOptions:@{ kCIContextWorkingColorSpace: (__bridge id)color_space }];
+    CGImageRef matrix = qr && context ? [context createCGImage:qr fromRect:qr.extent] : NULL;
+    if (!matrix) { check(NO, "CoreImage rasterizes a QR matrix for ROI geometry checks"); return NO; }
+    size_t modules = CGImageGetWidth(matrix);
+    size_t scale = (size_t)floor(MIN(roi.size.width, roi.size.height) / (modules + 8));
+    size_t full_side = (modules + 8) * scale;
+    size_t code_side = modules * scale;
+    size_t left = (size_t)roi.origin.x + ((size_t)roi.size.width - full_side) / 2;
+    size_t top = (size_t)roi.origin.y + ((size_t)roi.size.height - full_side) / 2;
+    BOOL valid = scale >= 2 && left + full_side <= width && top + full_side <= height;
+    const uint8_t *bytes = raster.bytes;
+    for (size_t my = 0; valid && my < modules; my++) for (size_t mx = 0; mx < modules; mx++) {
+        size_t x = left + 4 * scale + mx * scale;
+        size_t y = top + 4 * scale + my * scale;
+        const uint8_t *first = bytes + y * row_bytes + x * 4;
+        for (size_t dy = 0; dy < scale; dy++) for (size_t dx = 0; dx < scale; dx++) {
+            if (memcmp(first, bytes + (y + dy) * row_bytes + (x + dx) * 4, 4) != 0) valid = NO;
+        }
+    }
+    for (size_t y = top; valid && y < top + full_side; y++) for (size_t x = left; x < left + full_side; x++) {
+        BOOL quiet = x < left + 4 * scale || x >= left + 4 * scale + code_side
+            || y < top + 4 * scale || y >= top + 4 * scale + code_side;
+        if (!quiet) continue;
+        const uint8_t *pixel = bytes + y * row_bytes + x * 4;
+        if (pixel[0] != 255 || pixel[1] != 255 || pixel[2] != 255 || pixel[3] != 255) valid = NO;
+    }
+    CGImageRelease(matrix);
+    return valid;
+}
+
+static CGImageRef testImageForPayload(NSString *payload, size_t width, size_t height, CGColorSpaceRef color_space) {
+    CIFilter *filter = [CIFilter filterWithName:@"CIQRCodeGenerator"];
+    if (!filter) { check(NO, "CoreImage test QR generator is available"); return NULL; }
+    [filter setValue:[payload dataUsingEncoding:NSUTF8StringEncoding] forKey:@"inputMessage"];
+    [filter setValue:@"H" forKey:@"inputCorrectionLevel"];
+    CIImage *qr = filter.outputImage;
+    if (!qr) { check(NO, "CoreImage test QR output exists"); return NULL; }
+    CIContext *ci = [CIContext contextWithOptions:@{ kCIContextWorkingColorSpace: (__bridge id)color_space }];
+    CGImageRef qr_image = [ci createCGImage:qr fromRect:qr.extent];
+    if (!qr_image) { check(NO, "CoreImage test QR rasterization succeeds"); return NULL; }
+    NSMutableData *pixels = [NSMutableData dataWithLength:width * height * 4];
+    CGContextRef context = CGBitmapContextCreate(pixels.mutableBytes, width, height, 8, width * 4,
+        color_space, kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+    if (!context) { check(NO, "test QR bitmap context is created"); CGImageRelease(qr_image); return NULL; }
+    CGContextSetRGBFillColor(context, 1, 1, 1, 1);
+    CGContextFillRect(context, CGRectMake(0, 0, width, height));
+    CGContextSetInterpolationQuality(context, kCGInterpolationNone);
+    CGFloat side = MIN(width, height) - 64;
+    CGContextDrawImage(context, CGRectMake(32, 32, side, side), qr_image);
+    CGImageRef image = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    CGImageRelease(qr_image);
+    if (!image) check(NO, "test QR output image is created");
+    return image;
+}
+
 
 int main(void) { @autoreleasepool {
     fprintf(stderr, "START: native capture frame identity\n");
@@ -35,6 +110,50 @@ int main(void) { @autoreleasepool {
                 (const uint8_t *)instrumented.bytes + y * row_bytes + x * 4, 4) != 0) outsideMatches = NO;
         }
         check(outsideMatches, "every BGRA pixel outside the reserved ROI remains byte-identical");
+        CIFilter *qr_filter = [CIFilter filterWithName:@"CIQRCodeGenerator"];
+        check(qr_filter != nil, "CoreImage creates a QR generator for module checks");
+        CIImage *qr_ci_image = nil;
+        [qr_filter setValue:[payload dataUsingEncoding:NSUTF8StringEncoding] forKey:@"inputMessage"];
+        [qr_filter setValue:@"H" forKey:@"inputCorrectionLevel"];
+        qr_ci_image = qr_filter.outputImage;
+        check(qr_ci_image != nil, "CoreImage creates a QR matrix for module checks");
+        CIContext *qr_context = [CIContext contextWithOptions:@{ kCIContextWorkingColorSpace: (__bridge id)color_space }];
+        CGImageRef qr_matrix = qr_ci_image && qr_context
+            ? [qr_context createCGImage:qr_ci_image fromRect:qr_ci_image.extent] : NULL;
+        check(qr_matrix != NULL, "CoreImage rasterizes a QR matrix for module checks");
+        size_t modules = qr_matrix ? CGImageGetWidth(qr_matrix) : 0;
+        size_t scale = (size_t)floor(MIN(roi.size.width, roi.size.height) / (modules + 8));
+        size_t full_side = (modules + 8) * scale;
+        size_t code_side = modules * scale;
+        size_t left = (size_t)roi.origin.x + ((size_t)roi.size.width - full_side) / 2;
+        size_t top = (size_t)roi.origin.y + ((size_t)roi.size.height - full_side) / 2;
+        BOOL integer_modules = qr_matrix && scale > 0;
+        for (size_t module_y = 0; integer_modules && module_y < modules; module_y++) {
+            for (size_t module_x = 0; module_x < modules; module_x++) {
+                size_t pixel_x = left + 4 * scale + module_x * scale;
+                size_t pixel_y = top + 4 * scale + module_y * scale;
+                const uint8_t *first = (const uint8_t *)instrumented.bytes + pixel_y * row_bytes + pixel_x * 4;
+                for (size_t dy = 0; dy < scale; dy++) for (size_t dx = 0; dx < scale; dx++) {
+                    const uint8_t *sample = (const uint8_t *)instrumented.bytes
+                        + (pixel_y + dy) * row_bytes + (pixel_x + dx) * 4;
+                    if (memcmp(first, sample, 4) != 0) integer_modules = NO;
+                }
+            }
+        }
+        BOOL four_module_quiet_zone = integer_modules;
+        for (size_t y = top; four_module_quiet_zone && y < top + full_side; y++) {
+            for (size_t x = left; x < left + full_side; x++) {
+                BOOL quiet = x < left + 4 * scale || x >= left + 4 * scale + code_side
+                    || y < top + 4 * scale || y >= top + 4 * scale + code_side;
+                if (!quiet) continue;
+                const uint8_t *pixel = (const uint8_t *)instrumented.bytes + y * row_bytes + x * 4;
+                if (pixel[0] != 255 || pixel[1] != 255 || pixel[2] != 255 || pixel[3] != 255)
+                    four_module_quiet_zone = NO;
+            }
+        }
+        check(integer_modules && four_module_quiet_zone,
+            "QR modules use integer pixel blocks surrounded by four white quiet modules");
+        if (qr_matrix) CGImageRelease(qr_matrix);
         SPCaptureFrameIdentity decoded = { 0 };
         NSString *unknown_reason = nil;
         NSSet *issued = [NSSet setWithObject:payload];
@@ -51,7 +170,7 @@ int main(void) { @autoreleasepool {
         unknown_reason = nil;
         didDecode = sp_capture_frame_identity_decode(image, CGRectMake(0, 0, 64, 64), issued,
             &decoded, &unknown_reason, &error);
-        check(!didDecode && [unknown_reason isEqualToString:@"code-outside-expected-roi"],
+        check(!didDecode && [unknown_reason isEqualToString:@"no-code-in-expected-roi"],
             "a complete code outside the expected ROI is explicitly unknown");
         [unknown_reason release];
         unknown_reason = nil;
@@ -66,21 +185,153 @@ int main(void) { @autoreleasepool {
         NSMutableData *pair_pixels = [NSMutableData dataWithLength:row_bytes * height * 2];
         CGContextRef pair_context = CGBitmapContextCreate(pair_pixels.mutableBytes, width * 2, height, 8,
             row_bytes * 2, CGImageGetColorSpace(image), kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
-        CGContextDrawImage(pair_context, CGRectMake(0, 0, width, height), image);
-        CGContextDrawImage(pair_context, CGRectMake(width, 0, width, height), image);
-        CGImageRef pair_image = CGBitmapContextCreateImage(pair_context);
-        CGContextRelease(pair_context);
-        didDecode = sp_capture_frame_identity_decode(pair_image, CGRectMake(0, 0, width * 2, height), issued,
+        check(pair_context != NULL, "multiple-code fixture bitmap context is created");
+        if (pair_context) {
+            CGContextDrawImage(pair_context, CGRectMake(0, 0, width, height), image);
+            CGContextDrawImage(pair_context, CGRectMake(width, 0, width, height), image);
+        }
+        CGImageRef pair_image = pair_context ? CGBitmapContextCreateImage(pair_context) : NULL;
+        if (pair_context) CGContextRelease(pair_context);
+        check(pair_image != NULL, "multiple-code fixture image is created");
+        didDecode = pair_image && sp_capture_frame_identity_decode(pair_image, roi, issued,
+            &decoded, &unknown_reason, &error);
+        check(didDecode && decoded.sequence == expected.sequence,
+            "a complete target code decodes when a second QR code is outside the expected ROI");
+        [unknown_reason release]; unknown_reason = nil;
+        didDecode = pair_image && sp_capture_frame_identity_decode(pair_image, CGRectMake(0, 0, width * 2, height), issued,
             &decoded, &unknown_reason, &error);
         check(!didDecode && [unknown_reason isEqualToString:@"ambiguous-code-count"],
             "multiple complete codes in the expected ROI are explicitly ambiguous");
         [unknown_reason release];
-        CGImageRelease(pair_image);
+        if (pair_image) CGImageRelease(pair_image);
+
+        BOOL immutable_raster = ![instrumented isKindOfClass:[NSMutableData class]];
+        NSMutableData *raster_copy = [instrumented mutableCopy];
+        uint8_t original_first_byte = ((const uint8_t *)instrumented.bytes)[0];
+        ((uint8_t *)raster_copy.mutableBytes)[0] ^= 0xff;
+        CFDataRef provider_bytes = CGDataProviderCopyData(CGImageGetDataProvider(image));
+        check(immutable_raster && ((const uint8_t *)instrumented.bytes)[0] == original_first_byte
+            && ((const uint8_t *)CFDataGetBytePtr(provider_bytes))[0] == original_first_byte,
+            "mutating the returned raster cannot mutate the immutable image backing");
+        CFRelease(provider_bytes);
+        [raster_copy release];
+
+        CGImageRef other_region = NULL;
+        NSData *other_region_raster = nil;
+        NSString *other_region_payload = nil;
+        BOOL other_region_encoded = sp_capture_frame_identity_encode(source.bytes, width, height, row_bytes,
+            color_space, CGRectMake(0, 0, 192, 192), @"fedcba9876543210fedcba9876543210", expected,
+            &other_region, &other_region_raster, &other_region_payload, &error);
+        unknown_reason = nil;
+        didDecode = other_region_encoded && sp_capture_frame_identity_decode(other_region, CGRectMake(0, 0, 192, 192),
+            issued, &decoded, &unknown_reason, &error);
+        check(!didDecode && [unknown_reason isEqualToString:@"payload-unissued"],
+            "an identity nonce issued for one region cannot identify the same tuple in another region");
+        [unknown_reason release];
+        CGImageRelease(other_region); [other_region_raster release]; [other_region_payload release];
     }
     if (image) CGImageRelease(image);
     [instrumented release];
     [payload release];
     [error release];
+    CGColorSpaceRelease(color_space);
+
+    const size_t asymmetric_size = 320, asymmetric_stride = asymmetric_size * 4;
+    NSMutableData *asymmetric_source = [NSMutableData dataWithLength:asymmetric_stride * asymmetric_size];
+    memset(asymmetric_source.mutableBytes, 0x70, asymmetric_source.length);
+    color_space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGRect top_roi = CGRectMake(8, 16, 160, 144);
+    CGRect bottom_roi = CGRectMake(152, 168, 160, 144);
+    CGRect asymmetric_rois[] = { top_roi, bottom_roi };
+    for (NSUInteger roi_index = 0; roi_index < 2; roi_index++) {
+        image = NULL; instrumented = nil; payload = nil; error = nil;
+        encoded = sp_capture_frame_identity_encode(asymmetric_source.bytes, asymmetric_size, asymmetric_size,
+            asymmetric_stride, color_space, asymmetric_rois[roi_index],
+            roi_index ? @"11111111111111111111111111111111" : @"22222222222222222222222222222222",
+            expected, &image, &instrumented, &payload, &error);
+        BOOL changed_only_inside_roi = YES;
+        for (size_t y = 0; encoded && y < asymmetric_size; y++) for (size_t x = 0; x < asymmetric_size; x++) {
+            BOOL inside = x >= (size_t)asymmetric_rois[roi_index].origin.x
+                && x < (size_t)CGRectGetMaxX(asymmetric_rois[roi_index])
+                && y >= (size_t)asymmetric_rois[roi_index].origin.y
+                && y < (size_t)CGRectGetMaxY(asymmetric_rois[roi_index]);
+            if (!inside && memcmp((const uint8_t *)asymmetric_source.bytes + y * asymmetric_stride + x * 4,
+                (const uint8_t *)instrumented.bytes + y * asymmetric_stride + x * 4, 4) != 0) changed_only_inside_roi = NO;
+        }
+        check(encoded && image && changed_only_inside_roi,
+            roi_index ? "bottom ROI writes only within its top-left pixel rectangle"
+                : "top ROI writes only within its top-left pixel rectangle");
+        SPCaptureFrameIdentity decoded = { 0 };
+        NSString *unknown_reason = nil;
+        BOOL didDecode = encoded && image && sp_capture_frame_identity_decode(image, asymmetric_rois[roi_index],
+            [NSSet setWithObject:payload], &decoded, &unknown_reason, &error);
+        check(didDecode && decoded.sequence == expected.sequence,
+            roi_index ? "bottom top-left ROI identity round-trips" : "top top-left ROI identity round-trips");
+        if (!roi_index && encoded && image) {
+            CGImageRef top_crop = CGImageCreateWithImageInRect(image, top_roi);
+            SPCaptureFrameIdentity crop_identity = { 0 };
+            NSString *crop_reason = nil;
+            NSString *crop_error = nil;
+            BOOL crop_decoded = top_crop && sp_capture_frame_identity_decode(top_crop,
+                CGRectMake(0, 0, top_roi.size.width, top_roi.size.height), [NSSet setWithObject:payload],
+                &crop_identity, &crop_reason, &crop_error);
+            check(crop_decoded && crop_identity.sequence == expected.sequence,
+                "CGImage top-left crop contains the code written to the top-left BGRA ROI");
+            [crop_reason release]; [crop_error release]; if (top_crop) CGImageRelease(top_crop);
+        }
+        [unknown_reason release]; [error release]; [instrumented release]; [payload release];
+        if (image) CGImageRelease(image);
+    }
+    CGRect odd_roi = CGRectMake(9, 11, 161, 145);
+    image = NULL; instrumented = nil; payload = nil; error = nil;
+    encoded = sp_capture_frame_identity_encode(asymmetric_source.bytes, asymmetric_size, asymmetric_size,
+        asymmetric_stride, color_space, odd_roi, @"33333333333333333333333333333333", expected,
+        &image, &instrumented, &payload, &error);
+    check(encoded && testRasterHasIntegerQRGeometry(instrumented, asymmetric_size, asymmetric_size,
+        asymmetric_stride, odd_roi, payload, color_space),
+        "an odd-sized ROI centers integer QR modules and the complete quiet zone on pixel boundaries");
+    SPCaptureFrameIdentity odd_decoded_identity = { 0 };
+    NSString *odd_reason = nil;
+    BOOL odd_decoded = encoded && sp_capture_frame_identity_decode(image, odd_roi, [NSSet setWithObject:payload],
+        &odd_decoded_identity, &odd_reason, &error);
+    check(odd_decoded && odd_decoded_identity.sequence == expected.sequence,
+        "an odd-sized top-left ROI identity round-trips");
+    [odd_reason release]; [error release]; [instrumented release]; [payload release];
+    if (image) CGImageRelease(image);
+    CGColorSpaceRelease(color_space);
+
+    color_space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    NSString *malformed_prefixes[] = {
+        @"soksak-frame-id:v1:0123456789abcdef0123456789abcdef:+7:11:13",
+        @"soksak-frame-id:v1:0123456789abcdef0123456789abcdef: 7:11:13",
+        @"soksak-frame-id:v1:0123456789abcdef0123456789abcdef:18446744073709551616:11:13"
+    };
+    for (NSUInteger index = 0; index < sizeof(malformed_prefixes) / sizeof(malformed_prefixes[0]); index++) {
+        NSString *issued_malformed = testPayload(malformed_prefixes[index]);
+        CGImageRef malformed_image = testImageForPayload(issued_malformed, width, height, color_space);
+        check(malformed_image != NULL, "CoreImage creates a malformed-payload fixture image");
+        SPCaptureFrameIdentity decoded = { 0 };
+        NSString *unknown_reason = nil;
+        NSString *error = nil;
+        BOOL didDecode = malformed_image && sp_capture_frame_identity_decode(malformed_image, roi,
+            [NSSet setWithObject:issued_malformed], &decoded, &unknown_reason, &error);
+        check(!didDecode && [unknown_reason isEqualToString:@"payload-malformed"],
+            "an issued payload with noncanonical or overflowing uint64 text is rejected");
+        [unknown_reason release]; [error release]; if (malformed_image) CGImageRelease(malformed_image);
+    }
+    NSString *max_prefix = @"soksak-frame-id:v1:0123456789abcdef0123456789abcdef:18446744073709551615:18446744073709551615:18446744073709551615";
+    NSString *max_payload = testPayload(max_prefix);
+    CGImageRef max_image = testImageForPayload(max_payload, width, height, color_space);
+    check(max_image != NULL, "CoreImage creates the maximum-uint64 fixture image");
+    SPCaptureFrameIdentity max_identity = { 0 };
+    NSString *max_reason = nil;
+    NSString *max_error = nil;
+    BOOL max_decoded = max_image && sp_capture_frame_identity_decode(max_image, roi, [NSSet setWithObject:max_payload],
+        &max_identity, &max_reason, &max_error);
+    check(max_decoded && max_identity.generation == UINT64_MAX && max_identity.raster == UINT64_MAX
+        && max_identity.sequence == UINT64_MAX,
+        "canonical uint64 maximum values decode without overflow or coercion");
+    [max_reason release]; [max_error release]; if (max_image) CGImageRelease(max_image);
     CGColorSpaceRelease(color_space);
 
     color_space = CGColorSpaceCreateWithName(kCGColorSpaceDisplayP3);
@@ -98,6 +349,14 @@ int main(void) { @autoreleasepool {
 
     color_space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
     image = NULL; instrumented = nil; payload = nil; error = nil;
+    encoded = sp_capture_frame_identity_encode(source.bytes, width, height, row_bytes, color_space,
+        CGRectMake(0, 0, 64, 64), @"0123456789abcdef0123456789abcdef", expected,
+        &image, &instrumented, &payload, &error);
+    check(!encoded && error != nil && image == NULL,
+        "an ROI too small for QR modules and the quiet zone is explicitly rejected");
+    [error release]; error = nil;
+
+    image = NULL; instrumented = nil; payload = nil;
     encoded = sp_capture_frame_identity_encode(source.bytes, width, height, row_bytes, color_space,
         roi, @"invalid", expected, &image, &instrumented, &payload, &error);
     check(!encoded && error != nil && image == NULL && instrumented == nil && payload == nil,

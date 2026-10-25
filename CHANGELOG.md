@@ -4,6 +4,17 @@
 
 ## Unreleased
 
+- F239-47-40-2: Correct the QR helper's ROI, detection, payload, and
+  ownership boundaries. Red: the unchanged owner test failed for whole-image
+  Vision detection, mutable image backing, symmetric-coordinate assumptions,
+  noncanonical signed and whitespace numbers, uint64 overflow, and an
+  undersized ROI. After the first corrections, an odd-sized ROI still failed
+  the pixel-grid assertion because centering used half-pixel offsets. Green:
+  the focused native owner test passes 1/1 and checks ROI placement and decode,
+  crop direction, outside-code filtering, ambiguity, integer module pixels,
+  quiet zone, immutable backing, nonce scope, canonical uint64 parsing, and
+  undersized ROI rejection. The matcher and capture cadence limit are
+  unchanged; physical scanout remains unverified.
 - F239-47-40-1: Add the opt-in native QR frame-identity helper. Red: the
   owning test failed against the unimplemented helper because it returned no
   immutable image or raster copy. Green: the same test passes 1/1, covering

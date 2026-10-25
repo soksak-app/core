@@ -175,6 +175,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin process identity", "objective-c", ["native/darwin/process-identity/src/process_identity.m"], ["native/darwin/process-identity/tests/**/*.m", "native/darwin/process-identity/tests/**/*.sh"], { testExtensions: new Set([".m", ".sh"]) }),
   lane("Darwin webview navigation", "objective-c", ["native/darwin/src/webview_navigation.m"], ["native/darwin/tests/webview_navigation_test.m"], { sharedTests: true }),
   lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_lifecycle_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m", "native/darwin/tests/capture_callback_test.m"], { sharedTests: true }),
+  lane("Darwin capture frame identity", "objective-c", ["native/darwin/src/capture_frame_identity.m"], ["native/darwin/tests/capture_frame_identity_test.m"], { sharedTests: true }),
   lane("Darwin dock menu", "objective-c", ["native/darwin/src/dock_menu.m"], ["native/darwin/tests/dock_menu_test.m"], { sharedTests: true }),
   lane("Darwin appearance", "objective-c", ["native/darwin/src/appearance.m"], ["native/darwin/tests/appearance_test.m"], { sharedTests: true }),
   lane("Darwin native interfaces", "native-interface", ["native/darwin/src/**/*.h", "native/darwin/process-identity/**/*.h"], ["native/darwin/tests/**/*.m", "native/darwin/tests/support/*.h"], { testLanguage: "objective-c", sharedTests: true, testExtensions: new Set([".m", ".mm", ".h"]) }),
@@ -5346,6 +5347,23 @@ const FEATURE_LINKS = [
     ],
     expected: "The diagnostic query reports the actual AppKit color-space name and ICC fingerprint without changing the host window's color policy.",
     levels: ["native", "unit"],
+  },
+  {
+    id: "F239-47-40-1",
+    implementation: [
+      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_encode(" },
+      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "Vision decodes the exact issued nonce and source identity" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "a complete target code decodes when a second QR code is outside the expected ROI" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "QR modules use integer pixel blocks surrounded by four white quiet modules" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "an odd-sized ROI centers integer QR modules and the complete quiet zone on pixel boundaries" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "mutating the returned raster cannot mutate the immutable image backing" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "canonical uint64 maximum values decode without overflow or coercion" },
+    ],
+    expected: "The opt-in native helper encodes and decodes the exact issued source identity inside one top-left ROI, using integer QR modules and a four-module quiet zone, preserving bytes and color metadata, and returning immutable raster data. It does not change exact matching or capture cadence.",
+    levels: ["native"],
   },
   {
     id: "F239-47-30-2",
