@@ -4078,7 +4078,9 @@ impl Owner for Window {
             surface,
             &data.images,
             |work: Box<dyn Fn() -> Result<(), String> + Send>| {
-                crate::exposure::on_main(&window, work)
+                crate::images::present_on_ui(work, |work| {
+                    crate::platform::current()?.enqueue_ui(work)
+                })
             },
             |image, response| {
                 // Every answer to a frame, consumed or refused with its reason, is an image.frame event of the

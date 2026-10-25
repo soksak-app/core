@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-164: Run Tauri image presentation through the existing native UI queue outside the framework event lock. Wait for the native result before answering the sidecar and preserve enqueue and presentation failures. A controlled lock-boundary owner fails before correction and passes afterward; three queue/result owners and all 31 image-envelope owners pass. Both diagnostic hosts build. The focused Tauri drag error-log audit passes, but its 34.193 ms capture gap exceeds the unchanged 33 ms criterion, so drag acceptance remains open.
+
 - F239-163: Read prepared Tauri surface frames in one main-thread turn while preserving order, visibility and read failures. The controlled reader reproduces the repeated dispatch before correction; three reader owners and four layout-order owners pass afterward. Both diagnostic hosts build. The focused drag check passes its error-log audit but fails the unchanged 33 ms recording bound on both hosts, so drag acceptance remains open. Correct the native inventory to the already-locked Tao 0.37.2 after inspecting its selector; no dependency changed.
 
 - F239-162: Classify supplier screen-only frame records separately from

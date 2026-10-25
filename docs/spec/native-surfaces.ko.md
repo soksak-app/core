@@ -8,6 +8,8 @@
 
 Placement 응답의 준비된 surface frame은 하나의 main-thread turn에서 읽으며 요청 순서와 visibility를 유지한다. Frame 읽기 오류는 부분 목록을 반환하지 않고 응답을 거부한다.
 
+Tauri host의 native 이미지 표시 commit은 framework event callback 밖의 native UI queue에서 실행한다. Sidecar는 native 표시 결과 이후에만 consumed 또는 refused 응답을 받으며 enqueue 및 native 오류는 명시적 실패로 유지한다.
+
 ## 책임
 
 - 배치 라이브러리는 카드 사각형을 계산하고 카드 DOM 요소를 갱신한다.

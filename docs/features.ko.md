@@ -1,6 +1,8 @@
 # 기능 상태
 
 
+- [o] F239-164 — P0, F212.12-3 연결: Tauri native 이미지 표시를 framework event callback 밖에서 실행한다. 현재 sidecar 경로는 framework executor로 이미지를 표시하며 이미지 표시는 Core Animation transaction을 commit한다. 기록된 Tao event lock은 commit 중 redraw로 재진입될 수 있다. 기존 native UI queue로 작업을 보내기 전에 소유 잠금 경계 재현을 추가하고 native 결과 및 enqueue 오류를 유지한다. 이 발견은 기록된 drag 지연의 원인을 입증하지 않는다. Red: 제어된 owner는 framework event 잠금을 유지한 상태에서 image 작업의 재진입을 시도하며 기존 경로는 redraw 잠금 실패를 반환한다. Green: 기존 native UI queue로 작업을 보낸 뒤 같은 owner와 enqueue 오류 및 native 오류 전달 owner가 통과한다. Image-envelope owner 31개가 모두 통과한다. 양 diagnostic host가 macOS arm64에서 다시 빌드된다. 해당 Tauri drag 실행은 error-log 감사를 통과하고 양 host가 정상 종료하지만 capture 간격 34.193 ms가 변경하지 않은 33 ms 기준을 초과한다. Runtime drag 승인과 지연 원인은 남아 있으며 지연 개선은 입증되지 않았다.
+
 - [o] F239-163 — P1, F212.12-3 연결: 준비된 Tauri surface frame을 한 main-thread turn에서 읽는다. 준비 단계가 frame마다 별도의 동기 main-thread 작업을 보내므로 placement 응답 하나가 여러 event turn에 걸치고 surface마다 queue 대기를 추가한다. 묶어서 읽기 전에 소유 placement reader에서 반복 dispatch를 재현하고 error, 순서, visibility, trace 기록을 유지한다. Runtime drag 지연 승인은 별도로 남는다. Red: 제어된 placement reader는 target 두 개에 main-thread turn 한 번 대신 두 번을 보낸다. Green: 같은 owner는 순서와 visibility를 유지하는 일괄 읽기로 통과하며 빈 목록 및 읽기 오류 owner와 layout 순서 owner 네 개가 통과한다. 양 diagnostic host가 macOS arm64에서 다시 빌드된다. 해당 drag 검사는 application log 감사를 통과하고 양 host가 정상 종료하지만 Wails 35.450 ms와 Tauri 33.597 ms의 capture 간격이 변경하지 않은 33 ms 기준을 초과하여 지연 승인 전에 실패한다. 지연 개선은 입증되지 않았다. Native API inventory는 이미 lock된 Tao 0.37.2 및 확인한 selector 구현과 일치하도록 수정했으며 의존성 version은 변경하지 않았다.
 [English](features.md)
 

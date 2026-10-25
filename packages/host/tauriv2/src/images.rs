@@ -1670,3 +1670,30 @@ pub fn presentation_outcome(
         ),
     )
 }
+
+/// Runs an image presentation selected by the sidecar frame handler.
+pub(crate) fn present_on_ui(
+    work: Box<dyn Fn() -> Result<(), String> + Send>,
+    enqueue: impl FnOnce(Box<dyn FnOnce() + Send>) -> Result<(), String>,
+) -> Result<(), String> {
+    let (done, result) = std::sync::mpsc::sync_channel(1);
+    enqueue(Box::new(move || match done.send(work()) {
+        Ok(()) => {}
+        Err(std::sync::mpsc::SendError(Err(error))) => {
+            log_error("image present", error);
+        }
+        Err(std::sync::mpsc::SendError(Ok(()))) => {
+            crate::application_log::log_info(
+                "image present",
+                "native result arrived after its request ended",
+            );
+        }
+    }))?;
+    result
+        .recv()
+        .map_err(|error| format!("native image presentation result: {error}"))?
+}
+
+#[cfg(test)]
+#[path = "../tests/images/presentation_queue_test.rs"]
+mod presentation_queue_test;

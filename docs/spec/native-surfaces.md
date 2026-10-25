@@ -8,6 +8,8 @@ This specification defines surface placement in the example applications. Implem
 
 Prepared surface frames in a placement reply are read in one main-thread turn, preserving request order and visibility. A frame-read error rejects the reply instead of returning a partial list.
 
+The Tauri host runs native image presentation commits through the native UI queue outside framework event callbacks. The sidecar receives its consumed or refused response only after the native presentation result; enqueue and native errors remain explicit failures.
+
 ## Ownership
 
 - The layout library computes card rectangles and updates their DOM elements.

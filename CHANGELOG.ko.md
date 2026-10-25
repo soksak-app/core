@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-164: Tauri 이미지 표시를 framework event lock 밖의 기존 native UI queue에서 실행한다. Sidecar에 응답하기 전에 native 결과를 기다리고 enqueue 및 표시 실패를 유지한다. 제어된 잠금 경계 owner는 수정 전 실패하고 수정 후 통과하며 queue/result owner 세 개 및 image-envelope owner 31개가 모두 통과한다. 양 diagnostic host가 빌드된다. 해당 Tauri drag error-log 감사는 통과하지만 capture 간격 34.193 ms가 변경하지 않은 33 ms 기준을 초과하여 drag 승인은 남는다.
+
 - F239-163: 준비된 Tauri surface frame을 하나의 main-thread turn에서 읽고 순서, visibility 및 읽기 오류를 유지한다. 제어된 reader는 수정 전 반복 dispatch를 재현하며 수정 후 reader owner 세 개 및 layout 순서 owner 네 개가 통과한다. 양 diagnostic host가 빌드된다. 해당 drag 검사는 error-log 감사를 통과하지만 양 host가 변경하지 않은 33 ms 기록 기준에 실패하여 drag 승인은 남는다. Selector를 확인한 뒤 native inventory를 이미 lock된 Tao 0.37.2로 바로잡았으며 의존성은 변경하지 않았다.
 
 - F239-162: Supplier screen-only frame 기록을 raster draw와 별도로 분류하고
