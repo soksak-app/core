@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-174: Remove the separate 600-frame recording cutoff. Keep the existing 4096-callback and 64-pending-write bounds, report callback exhaustion as an explicit error and limited state, and retain every admitted frame. The controlled sample-writer test fails before correction and passes after it, including the 601st frame file and capacity rejection.
+
 - F239-173: Accept an unchanged empty terminal prompt after reference focus restoration when fresh status notifications match the coherent reads. Keep per-key change requirements and frame limits unchanged. The unchanged-prompt owner fails before correction and all 43 document owners pass after it.
 
 - F239-47-6: Correct the input acceptance record from the preserved visual artifacts. Both check-shell hosts measure all ten document, glyph and underline stages, with zero missing source states or conflicting/unjoined frames. Close the opt-in consumer, decoder replacement and reference-checkpoint units with their owning and runtime evidence. The only errors in those two runs are cadence gaps of 33.872625 ms and 43.406708 ms; retain the unchanged 33 ms continuous-recording failure and the separate zsh follow-up.

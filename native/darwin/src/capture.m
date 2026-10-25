@@ -44,10 +44,6 @@ static long captureWindowNumber;
 static dispatch_queue_t captureWriter;
 static dispatch_semaphore_t capturePending;
 static const long kCapturePending = 64;
-// A diagnostic recording is a short bounded continuous record, not an unbounded video output.
-// Reaching the limit is reported as an incomplete recording. Frames are not dropped without notice and
-// then accepted as a pass.
-static const int kCaptureMaxFrames = 600;
 // ScreenCaptureKit can deliver idle and incomplete callbacks between recorded images. Keep a bounded timeline so a display-time gap
 // can be classified; a full timeline is a capture failure rather than silently omitted evidence.
 static const int kCaptureMaxCallbackStatusRecords = 4096;
@@ -689,6 +685,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     if (self.callbackStatusTrace.count >= kCaptureMaxCallbackStatusRecords) {
         if (!self.callbackStatusTraceOverflowed) {
             self.callbackStatusTraceOverflowed = YES;
+            captureLimitReached = true;
             setCaptureError([NSString stringWithFormat:@"capture callback status trace capacity exceeded (%d records)",
                 kCaptureMaxCallbackStatusRecords]);
         }
@@ -872,13 +869,6 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         (size_t)llround(rect.size.width / contentScale * scaleFactor),
         (size_t)llround(rect.size.height / contentScale * scaleFactor));
     if (captureStartedAt != 0 && shown < captureStartedAt) return;
-    if (self.queued - captureBefore >= kCaptureMaxFrames) {
-        if (!captureLimitReached) {
-            captureLimitReached = true;
-            sp_log_info("capture", [NSString stringWithFormat:@"frame limit reached (%d)", kCaptureMaxFrames].UTF8String);
-        }
-        return;
-    }
     self.complete++;
     if (self.lastShown != 0 && shown > self.lastShown && shown - self.lastShown > self.longestGap) {
         self.longestGap = shown - self.lastShown;

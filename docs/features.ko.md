@@ -11,6 +11,8 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
+- [o] F239-174 — P0, F239-47-6 연결: 별도 600-frame capture 차단을 제거하고 4096-callback 증거 제한과 pending write 64개는 유지한다. Callback 용량 초과는 오류와 limited=true를 보고해야 한다. 수정 전에 소유 sample writer로 차단을 재현한다. Red: 변경 전 sample writer가 601번째 frame을 거부하고 파일을 만들지 않는다. Green: capture_pressure_test에서 601번째 파일 저장과 callback 용량 거부가 통과하며 capture_frame_test 및 capture_metadata_test도 통과한다. 전체 gesture cadence는 F239-47-6에 남긴다. 양쪽 diagnostic host build도 통과한다.
+
 - [o] F239-173 — P0, F239-152 연결: Reference focus 복원 후 빈 prompt가 변하지 않은 경우에도 일치하는 새 status 증거가 있을 때만 baseline을 수락한다. 현재 양쪽 host 검사가 terminal 입력 전에 이 유효한 baseline을 거부한다. Key별 변경 요구와 capture 제한은 유지한다. Red: 변경 없는 prompt 소유 검사가 missing-status assertion으로 실패한다. Green: document 소유 검사 43개가 통과하며 key별 변경 없는 상태와 누락 notification은 계속 거부한다.
 
 - [o] F239-172 — P1: Parity audit의 누락된 capability-to-test 연결과 현재 inventory 수치를 복원한다. Red: 구조 감사가 F239-163부터 F239-170 및 F239-81의 연결 9개 누락과 두 operations 번역본의 test 수 1028 대신 발견된 1034를 보고한다. 각 구현 기호와 owning assertion을 확인해 9개 mapping 및 이 audit 단위를 추가하고 discovery나 기준을 바꾸지 않고 양쪽 현재 inventory 수치를 갱신한다. Green: parity는 누락 연결 없이 102 track, 710 implementation file, 1034 test file을 보고하며 집중 feature-link, completed-capability, count-drift owner 3개가 통과한다. 이는 구조 증거이며 application 동작을 다시 실행하거나 입증하지 않는다.

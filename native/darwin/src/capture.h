@@ -17,14 +17,13 @@ const char *sp_capture_error(void);
 int sp_capture_wait(void);
 // Stops the recording after the screen of the later of the display time after (ms, mach absolute time) and the call
 // time
-// has been delivered to the stream, and returns the number of recorded frames. If the recording stopped by itself at
-// the limit, the recorded count is returned as it is. Check sp_capture_limited to learn whether the limit was
-// reached.
+// has been delivered to the stream, and returns the number of recorded frames. Callback evidence capacity
+// exhaustion rejects further samples and reports an error. Check sp_capture_limited for this capacity failure.
 // If the write queue capacity is exhausted, the recording fails. Stopping keeps both the earlier recording error and
 // the
 // stop error in sp_capture_error, so success is not judged by the returned frame count alone.
 int sp_capture_stop(double after);
-// Returns true if the last recording stopped because it reached the finite frame limit.
+// Returns true if the last recording exhausted its callback evidence capacity.
 bool sp_capture_limited(void);
 // The longest display interval (ms) between consecutive completed frames of the last stopped recording. An interval
 // longer than this holds a screen that was not recorded.

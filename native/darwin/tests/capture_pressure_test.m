@@ -95,6 +95,28 @@ int main(void) { @autoreleasepool {
     check(strlen(sp_capture_error()) == 0 && captureSink.queued == 1 && captureSink.written == 1,
         @"available writer capacity preserves a complete frame");
 
+    reset(directory, 1);
+    captureSink.queued = 600; captureSink.written = 600;
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    check(captureSink.queued == 601 && captureSink.written == 601,
+        @"a healthy recording writes the frame after 600 accepted frames");
+    check(!sp_capture_limited() && strlen(sp_capture_error()) == 0,
+        @"600 accepted frames do not limit a healthy recording");
+    check([[NSFileManager defaultManager] fileExistsAtPath:
+        [directory stringByAppendingPathComponent:@"frame-0601.bgra"]],
+        @"the frame after the former cutoff is committed to disk");
+    for (int index = (int)captureSink.callbackStatusTrace.count;
+        index < kCaptureMaxCallbackStatusRecords; index++) {
+        [captureSink.callbackStatusTrace addObject:@{}];
+    }
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+    check(sp_capture_limited() && strstr(sp_capture_error(), "callback status trace capacity") != NULL,
+        @"callback evidence capacity reports a limit and an explicit error");
+    check(captureSink.queued == 601 && captureSink.written == 601,
+        @"callback capacity exhaustion cannot accept an unrecorded frame");
+    reset(directory, 1);
+    [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
+
     captureStream = (SCStream *)[NSObject new];
     check(sp_capture_wait() == 1,
         @"a written first frame without recording errors is ready");
