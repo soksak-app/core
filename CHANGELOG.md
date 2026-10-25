@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-47-36: Complete fixed zsh ZLE repeated-vowel and Backspace acceptance on both macOS arm64 hosts. All ten AppKit/terminal documents and glyph/underline stages pass with complete 189/242-frame captures, clean error audits, restored input source and baseline, and normal shutdown. Retain cadence as a separate measurement under F239-175; no personal shell configuration is covered.
+
 - F239-79: Complete the pending two-host runtime acceptance for lifecycle fixture corrections F239-58, F239-74 and F239-79. Cycle 01 selects the dedicated window, preserves app-named artifacts, matches the AppKit and terminal documents and completes two project close/reopen passes per host. Canonical cleanup, error audits, input-source and baseline restoration, and normal shutdown pass. Close these three fixture corrections; keep the separate ten-cycle input-client acceptance open under F239-47-33.
 
 - F212.7d-1: Record new view creation in dark and light modes and compare three document-background points in every decoded frame against the declared card token. Both macOS arm64 hosts pass complete recordings, error audits and normal shutdown. Close F212.7d-1 and the implemented first-script theme parent F212.7d.

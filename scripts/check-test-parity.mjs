@@ -632,6 +632,17 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F239-47-36",
+    implementation: [
+      { file: "e2e/activation/ime.test.mjs", symbol: "runRepeatedVowelScenario(t, \"zsh\")" },
+    ],
+    tests: [
+      { file: "e2e/activation/ime.test.mjs", id: "zsh ZLE redraw retains the eight-vowel Backspace and Space input trace" },
+    ],
+    expected: "The fixed zsh ZLE gesture preserves all reference documents and measured glyph/underline stages with complete captures and independent cadence metrics.",
+    levels: ["application"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },
