@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-114-3: capture artifact serialization catch 두 곳이 exception reason을
+  보존해 기존 capture error 경로로 반환하는 이유를 기록한다. Red: 보존된 Node
+  실행이 reason 없는 catch 두 곳을 보고했다
+  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: 정확한
+  reason comment 뒤 fallback owner file이 10/10 통과했다
+  (`/tmp/F239-139-fallback-owner-final.log`). Capture error는 억제되지 않는다.
+
 - F239-116: closed checklist의 누락 record negative fixture를 validator의
   공통 오류에 맞춘다. 검증 기준은 유지한다. 현재 source에서 집중 checklist file은
   29/29 통과한다. 세 negative fixture 모두 잘못된 closed record를 파일명이 포함된

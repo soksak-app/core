@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-114-3: State why both capture artifact serialization catches preserve
+  the exception reason and return it through the existing capture error path.
+  Red: the preserved Node run reported both catch clauses without reasons
+  (`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: the
+  fallback owner file passes 10/10 after the precise reason comments
+  (`/tmp/F239-139-fallback-owner-final.log`). No capture error is suppressed.
+
 - F239-116: Align the closed-checklist negative fixture with the validator’s
   shared missing-record error. Keep validation criteria unchanged. The focused
   checklist file passes 29/29 on the current source; all three negative

@@ -2,6 +2,8 @@
 
 [English](features.md)
 
+- [o] F239-114-3 — P1, F239-114-2 연결: `native/darwin/src/capture.m`의 두 `@catch`가 JSON serialization exception을 잡는 이유를 기록한다. 두 곳 모두 exception reason을 보존하고 serialization failure를 recording operation이 반환하는 capture error로 변환한다. Red: 보존된 Node 실행이 reason 없는 catch 두 곳을 보고했다(`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: 두 catch에 exception reason을 보존해 명시적 capture error로 전달한다는 이유를 기록했고 fallback owner file이 10/10 통과했다(`/tmp/F239-139-fallback-owner-final.log`). Exception이나 capture failure는 억제되지 않는다.
+
 - [o] F239-116 — P2: 누락되거나 빈 `Not reproduced` 및 `Platform excluded` record에 대해 validator가 사용하는 공통 오류에 closed-checklist negative fixture를 맞춘다. Validator의 거부 기준은 바꾸지 않는다. Red: 보존된 Node 실행에서 잘못된 fixture 세 개는 모두 거부됐지만 assertion이 더 좁은 `not reproduced checklist item` 문구를 기대했다. Validator는 두 허용 record 형식을 함께 명시하는 `closed checklist item` 오류를 올바르게 반환했다. Green: 현재 fixture에서 거부 기준을 유지한 owner case 29개가 모두 통과했다(`/tmp/F239-116-checklist-owner-current-green.log`). 보존된 Node 실행에 원래 diagnostic assertion 실패 세 개가 남아 있다. 거부 기준을 바꾸지 않은 상태에서 documentation 검증이 통과한다.
 
 - [o] F239-114-2 — P1, F239-115 연결: Node fallback 및 census 검사에서 보고한 Rust 후보를 소유 계약과 대조한다. 숫자 parse 결과를 버리지 않고 명시적 usage 오류로 바꾸고, 등록 window 전용 Option API를 사용하며, 계약을 지키는 queue 판별과 poisoned-lock 복구에는 정확한 이유를 추가한다. Red: 보존된 실행에서 두 audit 모두 Rust finding을 보고했다(`/tmp/soksak-final-development-20261025.7QLhon/node-suite.log`). Green: fallback test 10/10, census test 3/3, `process_wait_rejects_invalid_inputs_before_waiting` 1/1 통과(`/tmp/f239-114-2-fallbacks-green-20261025.log`, `/tmp/f239-114-2-census-green-20261025.log`, `/tmp/f239-114-2-process-wait-green-20261025.log`). 연결된 F239-127에서 deep detach-ack finding을 해결한다.

@@ -1188,7 +1188,7 @@ static bool writeCaptureCallbackStatusTrace(SPCapture *sink) {
         NSString *encodingFailure = nil;
         @try {
             line = [NSJSONSerialization dataWithJSONObject:record options:0 error:&error];
-        } @catch (NSException *exception) {
+        } @catch (NSException *exception) { // silent: preserve the exception reason for the explicit capture error below.
             encodingFailure = exception.reason ?: exception.name;
         }
         if (line == nil) {
@@ -1221,7 +1221,7 @@ static bool writeCaptureDisplayLinkTrace(SPCapture *sink) {
     NSString *encodingFailure = nil;
     @try {
         data = [NSJSONSerialization dataWithJSONObject:[sink displayLinkRecord] options:NSJSONWritingPrettyPrinted error:&error];
-    } @catch (NSException *exception) {
+    } @catch (NSException *exception) { // silent: preserve the exception reason for the explicit capture error below.
         encodingFailure = exception.reason ?: exception.name;
     }
     if (data == nil) {
