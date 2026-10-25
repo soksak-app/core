@@ -120,6 +120,62 @@ int main(void) { @autoreleasepool {
         && [stopFields[@"latestSampleDisplayTimeMachTicks"] isEqual:@"888"],
         @"stop failure summaries preserve the requested boundary and latest callback facts");
     [stopFactsAttempt release];
+    SPCapture *registrationFixture = [[SPCapture alloc] init];
+    registrationFixture.latestCallbackSeen = YES;
+    registrationFixture.latestCallbackMachTicks = 900;
+    registrationFixture.latestCallbackStatusPresent = YES;
+    registrationFixture.latestCallbackStatus = SCFrameStatusIdle;
+    registrationFixture.latestCallbackDisplayTimePresent = YES;
+    registrationFixture.latestCallbackDisplayTimeMachTicks = 1200;
+    SPCaptureAttempt *registrationAttempt = [[SPCaptureAttempt alloc] init];
+    registrationAttempt.session = @"capture-stop-registration";
+    dispatch_semaphore_t registrationSemaphore = dispatch_semaphore_create(0);
+    registerCaptureStopBoundary(registrationFixture, registrationAttempt, 0, 1000, 1100,
+        registrationSemaphore);
+    BOOL alreadySignaled = dispatch_semaphore_wait(registrationSemaphore, DISPATCH_TIME_NOW) == 0;
+    check(alreadySignaled && captureStopAfter == 0,
+        @"stop registration immediately reuses an already processed qualifying idle callback");
+    check(registrationAttempt.latestSampleCallbackMachTicks == 900
+        && registrationAttempt.latestSampleStatusPresent
+        && registrationAttempt.latestSampleStatus.intValue == SCFrameStatusIdle
+        && registrationAttempt.latestSampleDisplayTimePresent
+        && registrationAttempt.latestSampleDisplayTimeMachTicks == 1200,
+        @"stop registration seeds its failure summary from the latest pre-registration callback");
+    captureCaughtUp = NULL;
+    captureStopAfter = 0;
+    dispatch_release(registrationSemaphore);
+    [registrationAttempt release];
+    [registrationFixture release];
+    SPCapture *belowTargetFixture = [[SPCapture alloc] init];
+    belowTargetFixture.latestCallbackSeen = YES;
+    belowTargetFixture.latestCallbackDisplayTimePresent = YES;
+    belowTargetFixture.latestCallbackDisplayTimeMachTicks = 999;
+    dispatch_semaphore_t belowTargetSemaphore = dispatch_semaphore_create(0);
+    registerCaptureStopBoundary(belowTargetFixture, nil, 0, 1000, 1100, belowTargetSemaphore);
+    check(dispatch_semaphore_wait(belowTargetSemaphore, DISPATCH_TIME_NOW) != 0 && captureStopAfter == 1000,
+        @"a pre-registration callback before the target does not satisfy stop");
+    captureCaughtUp = NULL; captureStopAfter = 0;
+    dispatch_release(belowTargetSemaphore); [belowTargetFixture release];
+    SPCapture *missingTimeFixture = [[SPCapture alloc] init];
+    missingTimeFixture.latestCallbackSeen = YES;
+    missingTimeFixture.latestCallbackDisplayTimePresent = NO;
+    dispatch_semaphore_t missingTimeSemaphore = dispatch_semaphore_create(0);
+    registerCaptureStopBoundary(missingTimeFixture, nil, 0, 1000, 1100, missingTimeSemaphore);
+    check(dispatch_semaphore_wait(missingTimeSemaphore, DISPATCH_TIME_NOW) != 0 && captureStopAfter == 1000,
+        @"a pre-registration callback without display time does not satisfy stop");
+    captureCaughtUp = NULL; captureStopAfter = 0;
+    dispatch_release(missingTimeSemaphore); [missingTimeFixture release];
+    SPCapture *resizingFixture = [[SPCapture alloc] init];
+    resizingFixture.latestCallbackSeen = YES;
+    resizingFixture.latestCallbackDisplayTimePresent = YES;
+    resizingFixture.latestCallbackDisplayTimeMachTicks = 1200;
+    captureResizing = true;
+    dispatch_semaphore_t resizingSemaphore = dispatch_semaphore_create(0);
+    registerCaptureStopBoundary(resizingFixture, nil, 0, 1000, 1100, resizingSemaphore);
+    check(dispatch_semaphore_wait(resizingSemaphore, DISPATCH_TIME_NOW) != 0 && captureStopAfter == 1000,
+        @"a pre-registration callback does not satisfy stop while resizing");
+    captureResizing = false; captureCaughtUp = NULL; captureStopAfter = 0;
+    dispatch_release(resizingSemaphore); [resizingFixture release];
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: native delayed stream callback isolation\n");
     [NSApplication sharedApplication]; [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];

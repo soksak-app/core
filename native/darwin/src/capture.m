@@ -261,6 +261,12 @@ static SPCaptureAttempt *captureAttemptForStream(SCStream *stream) {
 @property (nonatomic) double slowestWrite;
 @property (nonatomic) uint64_t lastShown;
 @property (nonatomic) uint64_t longestGap;
+@property (nonatomic) BOOL latestCallbackSeen;
+@property (nonatomic) uint64_t latestCallbackMachTicks;
+@property (nonatomic) BOOL latestCallbackStatusPresent;
+@property (nonatomic) SCFrameStatus latestCallbackStatus;
+@property (nonatomic) BOOL latestCallbackDisplayTimePresent;
+@property (nonatomic) uint64_t latestCallbackDisplayTimeMachTicks;
 - (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown
     hasDisplayTime:(BOOL)hasDisplayTime callbackTime:(uint64_t)callbackTime writeStartTime:(uint64_t)writeStartTime
     timebase:(mach_timebase_info_data_t)timebase;
@@ -754,7 +760,20 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     // A complete frame without a time is left as a recording error by write:, and the stop reports that error.
     // While the stream follows the window size, the stop is deferred until a frame of the new size arrives.
     uint64_t shown = 0;
-    if (captureCaughtUp != NULL && captureStopAfter != 0 && !captureResizing && displayTime(sample, &shown)
+    BOOL hasDisplayTime = displayTime(sample, &shown);
+    SCFrameStatus latestStatus = SCFrameStatusComplete;
+    BOOL hasStatus = frameStatus(sample, &latestStatus);
+    self.latestCallbackSeen = YES;
+    self.latestCallbackMachTicks = callbackTime;
+    self.latestCallbackStatusPresent = hasStatus;
+    self.latestCallbackStatus = latestStatus;
+    self.latestCallbackDisplayTimePresent = hasDisplayTime;
+    self.latestCallbackDisplayTimeMachTicks = hasDisplayTime ? shown : 0;
+    if (captureCaughtUp != NULL && attempt != nil) {
+        [attempt recordLatestSampleStatusPresent:hasStatus status:latestStatus displayTimePresent:hasDisplayTime
+            displayTimeMachTicks:shown callbackMachTicks:callbackTime];
+    }
+    if (captureCaughtUp != NULL && captureStopAfter != 0 && !captureResizing && hasDisplayTime
         && shown >= captureStopAfter) {
         captureStopAfter = 0;
         dispatch_semaphore_signal(captureCaughtUp);
@@ -1480,6 +1499,12 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         capturePending = dispatch_semaphore_create(kCapturePending);
     }
     captureBefore = captureSink.written;
+    captureSink.latestCallbackSeen = NO;
+    captureSink.latestCallbackMachTicks = 0;
+    captureSink.latestCallbackStatusPresent = NO;
+    captureSink.latestCallbackStatus = SCFrameStatusComplete;
+    captureSink.latestCallbackDisplayTimePresent = NO;
+    captureSink.latestCallbackDisplayTimeMachTicks = 0;
     captureSink.queued = captureSink.written;
     captureSink.rejected = 0;
     captureSink.idle = 0;
@@ -1594,6 +1619,26 @@ int sp_capture_wait(void) {
     }
     if (dispatch_semaphore_wait(captureFirstFrame,
         dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) != 0) {
+static void registerCaptureStopBoundary(SPCapture *sink, SPCaptureAttempt *attempt, double after,
+    uint64_t targetMachTicks, uint64_t registrationMachTicks, dispatch_semaphore_t caughtUp) {
+    captureCaughtUp = caughtUp;
+    captureStopAfter = targetMachTicks;
+    [attempt recordStopBoundaryAfterMilliseconds:after targetMachTicks:targetMachTicks
+        registrationMachTicks:registrationMachTicks];
+    if (sink.latestCallbackSeen) {
+        [attempt recordLatestSampleStatusPresent:sink.latestCallbackStatusPresent status:sink.latestCallbackStatus
+            displayTimePresent:sink.latestCallbackDisplayTimePresent
+            displayTimeMachTicks:sink.latestCallbackDisplayTimeMachTicks callbackMachTicks:sink.latestCallbackMachTicks];
+    }
+    // The serial capture queue may have processed a qualifying callback before this boundary was registered.
+    // Reuse that callback instead of waiting for another one; idle callbacks also satisfy the stop predicate.
+    if (!captureResizing && sink.latestCallbackSeen && sink.latestCallbackDisplayTimePresent
+        && sink.latestCallbackDisplayTimeMachTicks >= targetMachTicks) {
+        captureStopAfter = 0;
+        dispatch_semaphore_signal(caughtUp);
+    }
+}
+
         setCaptureError(@"no capture frame arrived within 10000ms");
         return 0;
     }
@@ -1624,10 +1669,7 @@ int sp_capture_stop(double after) {
     uint64_t until = shown > now ? shown : now;
     dispatch_semaphore_t caughtUp = dispatch_semaphore_create(0);
     dispatch_sync(captureQueue, ^{
-        captureCaughtUp = caughtUp;
-        captureStopAfter = until;
-        [attempt recordStopBoundaryAfterMilliseconds:after targetMachTicks:until
-            registrationMachTicks:captureRawClock()];
+        registerCaptureStopBoundary(captureSink, attempt, after, until, captureRawClock(), caughtUp);
     });
     if (dispatch_semaphore_wait(caughtUp, dispatch_time(until, NSEC_PER_SEC)) != 0) {
         NSString *message = captureResizing

@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-133: Reuse a qualifying callback already processed when capture stop
+  registers its boundary, including idle callbacks with display times. Keep
+  the resize guard, existing target and one-second deadline. The owner test
+  passes 1/1; runtime acceptance remains pending.
+
 - F239-128: Align the Files tree with the shared section grid and make the
   declared tree fill its vertical `fill` section. The exact two-host window
   case passes 2/2 with the existing grid tolerance, 12-point text comparison

@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-133: Capture stop이 경계를 등록할 때 sample queue가 이미 처리한
+  qualifying callback을 재사용하며 display time이 있는 idle callback도 포함한다.
+  Resize 조건, 기존 target과 1초 deadline은 유지한다. Owner test가 1/1 통과했고
+  runtime acceptance는 남아 있다.
+
 - F239-128: Files tree를 공유 section grid에 맞추고 세로 fill section에서
   선언된 tree가 남은 높이를 차지하도록 한다. 기존 grid 허용오차, 12-point 글자
   비교, tree와 section 높이 assertion을 유지한 정확한 두 host window case가
