@@ -746,6 +746,36 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F212.7",
+    implementation: [
+      { file: "packages/plugin-api/view-start.js", symbol: "window.sokView = Object.freeze(" },
+      { file: "packages/host/wailsv3/src/documents.go", symbol: "const viewChannelPath =" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "the injected script posts the ready message with a document identifier at document start" },
+      { file: "packages/plugin-api/test/view.test.mjs", id: "host messages posted before createViewChannel() are delivered in order after the attach" },
+      { file: "native/darwin/tests/view_channel_test.m", id: "the view configuration runs the channel script at document start" },
+      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach editor and HWP pages" },
+    ],
+    expected: "The view composition uses the staged document-start channel with ready and ordered queued delivery and completes two-host page start-value handoff.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F212.7-14",
+    implementation: [
+      { file: "packages/plugin-api/view-start.js", symbol: "window.sokView = Object.freeze(" },
+      { file: "packages/host/wailsv3/src/documents.go", symbol: "const viewChannelPath =" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "the injected script posts the ready message with a document identifier at document start" },
+      { file: "packages/plugin-api/test/view.test.mjs", id: "host messages posted before createViewChannel() are delivered in order after the attach" },
+      { file: "native/darwin/tests/view_channel_test.m", id: "the view configuration runs the channel script at document start" },
+      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach editor and HWP pages" },
+    ],
+    expected: "The view composition uses the staged document-start channel with ready and ordered queued delivery and completes two-host page start-value handoff.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },

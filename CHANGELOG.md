@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.7-14: Complete the view-composition aggregate against the current ready/queued-attachment contract rather than the obsolete first-pull task wording. All 52 channel owners, the native page-world channel owner and both editor/HWP start-value handoff cases pass with clean run-log audit and normal shutdown. Close F212.7-14 and functional parent F212.7; keep view cost and performance benchmarks separate. No product protocol is changed.
+
 - F212.13: Complete the approved two-host IME activation-check aggregate from the retained F239-47-6/F239-179 acceptance. Both AppKit references match all ten terminal documents, and all ten glyph/underline stages have measured proof in complete 363/515-sample recordings. Error auditing, input-source and shared baseline restoration, and normal shutdown pass. No repeated application check or publication is included; the separate client lifecycle remains open.
 
 - F262-11: Give the project persistence and placeholder cases explicit per-test time limits and complete the entire owning projects file on both macOS arm64 hosts. All 14 cases pass with clean application run-log audit, restored shared baseline and normal shutdown. Close F262-11 and parent F262 from this aggregate runtime acceptance; no unrelated full suite or release is included.
