@@ -1609,6 +1609,14 @@ int sp_capture_wait(void) {
     }
     if (dispatch_semaphore_wait(captureFirstFrame,
         dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) != 0) {
+        setCaptureError(@"no capture frame arrived within 10000ms");
+        return 0;
+    }
+    // The first frame can arrive before the start completes. The recording has started only when the start finishes.
+    if (!waitCaptureStart(10000)) return 0;
+    return hasCaptureError() ? 0 : 1;
+}
+
 static void registerCaptureStopBoundary(SPCapture *sink, SPCaptureAttempt *attempt, double after,
     uint64_t targetMachTicks, uint64_t registrationMachTicks, dispatch_semaphore_t caughtUp) {
     captureCaughtUp = caughtUp;
@@ -1627,14 +1635,6 @@ static void registerCaptureStopBoundary(SPCapture *sink, SPCaptureAttempt *attem
         captureStopAfter = 0;
         dispatch_semaphore_signal(caughtUp);
     }
-}
-
-        setCaptureError(@"no capture frame arrived within 10000ms");
-        return 0;
-    }
-    // The first frame can arrive before the start completes. The recording has started only when the start finishes.
-    if (!waitCaptureStart(10000)) return 0;
-    return hasCaptureError() ? 0 : 1;
 }
 
 // Stops the stream and reports the number of frames recorded on disk.

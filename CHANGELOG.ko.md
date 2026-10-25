@@ -3,6 +3,13 @@
 [English](CHANGELOG.md)
 
 ## 미배포
+- F239-138: `sp_capture_wait` 뒤에서 `registerCaptureStopBoundary`의 file-scope
+  경계를 복구한다. Red: 변경 전 `capture_metadata_test` target이 중첩 함수 정의와
+  helper 미선언 오류로 compile에 실패했다. Green: 기존 wait 완료 처리를 helper 앞에
+  두고 뒤쪽 중복 block을 제거한 뒤 같은 target이 compile되고 1.103초에 1/1을
+  통과했다. Helper predicate, stop deadline, callback summary와 runtime 동작은
+  바뀌지 않았다.
+
 
 - F239-118: 짝이 없던 Go/Rust host test file 네 개를 기존 owning test file로
   옮기고 중복 module include를 제거하며 parity inventory를 수정한다. 이동한

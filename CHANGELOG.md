@@ -3,6 +3,13 @@
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
+- F239-138: Restore the boundary between `sp_capture_wait` and `registerCaptureStopBoundary`.
+  Red: the unchanged `capture_metadata_test` target failed to compile with a nested
+  function definition and an undeclared helper. Green: the same target compiles
+  and passes 1/1 in 1.103 s after moving the existing wait completion before the
+  helper and removing its duplicate trailing block. The helper predicate, stop
+  deadline, callback summary and runtime behavior are unchanged.
+
 
 - F239-118: Move four unpaired Go and Rust host test files into their existing
   owning test files, remove redundant module includes, and correct the parity
