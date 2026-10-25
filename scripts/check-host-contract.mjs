@@ -1,13 +1,14 @@
 // Checks that the two hosts (Wails and Tauri) run the contract cases of the host specification at the same level.
 //
 // The contract cases are defined by the "Contract cases" table of docs/spec/host-contract.md. The test function of each host declares the case it runs with the line
-// `// contract: <id>[, <id>]` right above it. The check actually runs the tests of both hosts in the default configuration and the diagnostics
-// configuration and judges from the results whether the declared tests ran and passed. It does not use file names or counts.
+// `// contract: <id>[, <id>]` right above it. The dynamic check runs the tests of both hosts in the default, diagnostics and development
+// configurations and judges from the results whether the declared tests ran and passed. The static check builds and lists the current-target
+// Rust tests without executing test bodies. Neither check uses file names or counts to infer coverage.
 import { parseArgs } from 'node:util';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, posix, relative } from 'node:path';
+import { isAbsolute, join, posix, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cpus } from 'node:os';
 import { auditStatus, discoverGo, discoverRust } from './test-discovery.mjs';
@@ -356,7 +357,6 @@ function goTestSourceInventory(runs) {
 
 const HOST_SOURCES = {
   wailsv3: { language: 'go', files: () => goTestSourceInventory(GO_RUNS('')) },
-  tauriv2: { language: 'rust', files: () => [...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs'), ...sources('packages/sok/tauriv2/tests', '.rs'), ...sources('packages/sok/tauriv2/src', '.rs')] },
 };
 
 /** The limit of one contract test. A test that needs more is reported by the run and gets its own limit with its reason. */
@@ -378,8 +378,80 @@ const RUST_RUNS = [
   { id: 'tauriv2-sok-dev-tests', packageName: 'soksak-sok-tauriv2', features: 'diagnostics,dev' },
 ];
 
-/** The declarations of the test sources of one host, read without running them. */
-function parseHostSources(name) {
+/** The source files in the Rust host and CLI crates, including files excluded by this target's cfg. */
+function rustSourceFiles() {
+  return [...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs'),
+    ...sources('packages/sok/tauriv2/tests', '.rs'), ...sources('packages/sok/tauriv2/src', '.rs')];
+}
+
+/**
+ * Matches only tests listed by the compiler-selected executables to their source declarations. The test leaf must have one
+ * declaration in its crate; a target source file disambiguates an integration-test leaf when possible. Ambiguous leaves
+ * fail explicitly instead of assigning an annotation by directory or platform name.
+ */
+export function selectRustDeclarations(items, sourceFiles) {
+  const parsedFiles = sourceFiles.map(({ file, owner, source }) => ({ file, parsed: parseDeclarations(source, 'rust', file, owner) }));
+  const parsed = parsedFiles.flatMap(({ parsed: source }) => source.tests);
+  const byOwnerAndName = new Map();
+  for (const declaration of parsed) {
+    const key = `${declaration.owner}\n${declaration.name}`;
+    byOwnerAndName.set(key, [...(byOwnerAndName.get(key) ?? []), declaration]);
+  }
+  const selected = new Map();
+  const selectedFiles = new Set();
+  const errors = [];
+  for (const item of items) {
+    const leaf = item.testName.split('::').pop();
+    const candidates = byOwnerAndName.get(`${item.owner}\n${leaf}`) ?? [];
+    if (typeof item.sourcePath !== 'string' || !isAbsolute(item.sourcePath)) {
+      errors.push(`${item.run} ${item.target}::${item.testName} has no absolute Cargo target source path`);
+      continue;
+    }
+    const targetSource = relative(ROOT, item.sourcePath).split('\\').join('/');
+    if (targetSource === '..' || targetSource.startsWith('../') || targetSource.startsWith('/')) {
+      errors.push(`${item.run} ${item.target}::${item.testName} has a target source outside the repository: ${item.sourcePath}`);
+      continue;
+    }
+    if (!existsSync(join(ROOT, targetSource))) {
+      errors.push(`${item.run} ${item.target}::${item.testName} has a missing target source: ${targetSource}`);
+      continue;
+    }
+    if (crateOwnerOf(targetSource) !== item.owner) {
+      errors.push(`${item.run} ${item.target}::${item.testName} target source belongs to another crate: ${targetSource}`);
+      continue;
+    }
+    const targetCandidates = targetSource ? candidates.filter((candidate) => candidate.file === targetSource) : [];
+    const matches = targetCandidates.length === 1 ? targetCandidates : candidates;
+    if (matches.length !== 1) {
+      const paths = matches.map((candidate) => candidate.file).join(', ') || '(none)';
+      errors.push(`${item.run} ${item.target}::${item.testName} has ${matches.length === 0 ? 'no' : 'ambiguous'} source declaration in ${item.owner}: ${paths}`);
+      continue;
+    }
+    const declaration = matches[0];
+    selectedFiles.add(declaration.file);
+    const key = `${declaration.file}\n${declaration.line}`;
+    if (!selected.has(key)) selected.set(key, declaration);
+  }
+  for (const { file, parsed: source } of parsedFiles) {
+    if (selectedFiles.has(file)) errors.push(...source.errors);
+  }
+  return { tests: [...selected.values()], errors };
+}
+
+function rustSourceDeclarations() {
+  return rustSourceFiles().map((file) => ({
+    file,
+    owner: crateOwnerOf(file),
+    source: readFileSync(join(ROOT, file), 'utf8'),
+  }));
+}
+
+/** The declarations of the test sources of one host, read without running test bodies. */
+function parseHostSources(name, rustItems = []) {
+  if (name === 'tauriv2') {
+    const selected = selectRustDeclarations(rustItems, rustSourceDeclarations());
+    return { language: 'rust', tests: selected.tests, errors: selected.errors };
+  }
   const { language, files: sourceInventory } = HOST_SOURCES[name];
   const tests = [];
   const inventory = sourceInventory();
@@ -393,9 +465,10 @@ function parseHostSources(name) {
   return { language, tests, errors };
 }
 
-/** The static check: the declarations of both hosts agree with the contract cases. It runs no test. */
-function checkDeclarations(cases) {
-  const hosts = HOSTS.map((name) => ({ name, ...parseHostSources(name) }));
+/** The static check builds and lists selected Rust tests but does not execute test bodies. */
+function checkDeclarations(cases, rustItems, rustFailures = []) {
+  const hosts = HOSTS.map((name) => ({ name, ...parseHostSources(name, name === 'tauriv2' ? rustItems : []) }));
+  hosts.find((host) => host.name === 'tauriv2').errors.push(...rustFailures);
   const { errors, declared } = auditDeclarations(cases, hosts);
   errors.push(...uncoveredCases(cases, declared));
   for (const host of hosts) {
@@ -417,8 +490,14 @@ async function main(argv) {
     options: { 'go-ldflags': { type: 'string' }, run: { type: 'string' }, only: { type: 'string' }, static: { type: 'boolean' } },
   });
   const cases = parseContractCases(readFileSync(join(ROOT, SPEC), 'utf8'));
-  // --static checks only the declarations, so it needs no Go link flags and builds nothing.
-  if (values.static) return checkDeclarations(cases);
+  // --static checks declarations from the current compiler target. Rust test executables are built and listed, but never run.
+  if (values.static) {
+    const write = (line) => process.stdout.write(`${line}\n`);
+    const rustFound = [];
+    for (const run of RUST_RUNS) rustFound.push(await discoverRust({ ...run, cwd: ROOT, write, timeoutMs: TEST_TIMEOUT_MS }));
+    const rustItems = rustFound.flatMap((entry) => entry.tests);
+    return checkDeclarations(cases, rustItems, rustFound.flatMap((entry) => entry.failures));
+  }
   if (!values['go-ldflags']) throw new Error('usage: check-host-contract.mjs --go-ldflags=<flags> [--run <text>] [--only <text>] | --static');
   const write = (line) => process.stdout.write(`${line}\n`);
   const concurrency = Math.max(2, cpus().length - 2);
@@ -451,9 +530,9 @@ async function main(argv) {
   const { results } = await runTests({ tests: items, concurrency, write });
   const hosts = [];
   for (const name of HOSTS) {
-    const { language, tests, errors: sourceErrors } = parseHostSources(name);
-    const errors = [...found[name].flatMap((entry) => entry.failures), ...sourceErrors];
     const own = found[name].flatMap((entry) => entry.tests);
+    const { language, tests, errors: sourceErrors } = parseHostSources(name, name === 'tauriv2' ? own : []);
+    const errors = [...found[name].flatMap((entry) => entry.failures), ...sourceErrors];
     for (const item of own) {
       if (results.get(item.name).status === 'timeout') errors.push(`${item.name} exceeded its limit of ${TEST_TIMEOUT_MS / 1000}s`);
     }

@@ -4,7 +4,7 @@
 // `go test` and `cargo test` give it.
 import { execFile } from 'node:child_process';
 import { mkdirSync, realpathSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import { runTests } from './test-runner.mjs';
 
@@ -68,13 +68,14 @@ export async function discoverRust({ packageName, features, cwd, env, id, write,
   if (result.status !== 'pass') return { tests: [], failures: [`${id}: the build failed`] };
   const executables = cargoTestExecutables(result.output);
   const tests = [];
-  for (const { executable, dir, target } of executables) {
+  for (const { executable, dir, target, srcPath } of executables) {
     const listed = await execFileAsync(executable, ['--list', '--format', 'terse'], { cwd: dir, maxBuffer: 1 << 24 });
     for (const line of listed.stdout.split('\n')) {
       const match = line.match(/^(.+): test$/);
-      if (match) tests.push({ name: `${id} ${target}::${match[1]}`, run: id, testName: match[1], owner: relative(realpathSync(cwd), dir), target, command: executable, args: ['--exact', match[1]], cwd: dir, env, timeoutMs });
+      if (match) tests.push({ name: `${id} ${target}::${match[1]}`, run: id, testName: match[1], owner: relative(realpathSync(cwd), dir), target, sourcePath: srcPath, command: executable, args: ['--exact', match[1]], cwd: dir, env, timeoutMs });
     }
   }
+  if (tests.length === 0) return { tests, failures: [`${id}: the compiler listed no tests`] };
   return { tests, failures: [] };
 }
 
@@ -91,7 +92,12 @@ export function cargoTestExecutables(output) {
       throw new Error(`cargo message is not JSON (${error.message}): ${line}`, { cause: error });
     }
     if (message.reason === 'compiler-artifact' && message.profile?.test && message.executable) {
-      executables.push({ executable: message.executable, dir: dirname(message.manifest_path), target: message.target.name });
+      if (typeof message.manifest_path !== 'string' || !isAbsolute(message.manifest_path)
+          || typeof message.target?.name !== 'string' || message.target.name.length === 0
+          || typeof message.target?.src_path !== 'string' || !isAbsolute(message.target.src_path)) {
+        throw new Error(`cargo test artifact is missing or has invalid manifest path, target name or source path: ${line}`);
+      }
+      executables.push({ executable: message.executable, dir: dirname(message.manifest_path), target: message.target.name, srcPath: message.target.src_path });
     }
   }
   return executables;

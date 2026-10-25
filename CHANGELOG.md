@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-102: Select Rust host-contract declarations from Cargo-listed test
+  executables and their target source paths. The preserved initial static audit
+  included Linux-only and Windows-only Tauri sok declarations in the macOS
+  inventory. The focused selector owner test passes 1/1
+  (`/tmp/F239-102-rust-declaration-inventory-green.log`). The current full
+  declaration audit remains pending while other F239-93 owner changes land.
+
 - F239-129: Pass the existing `WindowData` to view retirement so the helper
   reads its source origins, channels and event stream from their owner. Replace
   the sidecar root `filter_map(bool.then(...))` with `filter` and `map`. The

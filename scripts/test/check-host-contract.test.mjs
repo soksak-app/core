@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { auditDeclarations, auditHostContract, parseContractCases, groupResults, goTestSourceFilesForRun, parseDeclarations, uncoveredCases } from '../check-host-contract.mjs';
+import { auditDeclarations, auditHostContract, parseContractCases, groupResults, goTestSourceFilesForRun, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../check-host-contract.mjs';
 
 const SPEC = `# Hosts
 
@@ -108,6 +108,42 @@ test('rust declarations bind through attributes and match module paths in result
   assert.deepEqual(parsed.tests.map((item) => [item.name, item.cases]), [['shared', ['area.shared']]]);
   const { errors } = auditHostContract(parseContractCases(SPEC), hosts({ rust, rustRuns: [owners('.', [['a::tests::shared', 'pass']])] }));
   assert.deepEqual(errors, []);
+});
+
+test('Rust declarations follow compiler-listed tests and reject ambiguous crate leaves', () => {
+  const owner = 'packages/host/tauriv2';
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const activeFile = `${owner}/tests/surfaces_geometry_test.rs`;
+  const inactiveFile = `${owner}/tests/project_data_order/bindings_test.rs`;
+  const otherFile = `${owner}/tests/declared_source_origins/view_generation_test.rs`;
+  const files = [
+    { file: activeFile, owner, source: '// contract: area.shared\n#[test]\nfn active() {}\n' },
+    { file: inactiveFile, owner, source: '// contract: area.shared\n#[test]\nfn windows_only() {}\n' },
+  ];
+  const selected = selectRustDeclarations([
+    { run: 'host', target: 'active', testName: 'active', owner, sourcePath: join(root, activeFile) },
+  ], files);
+  assert.deepEqual(selected.errors, []);
+  assert.deepEqual(selected.tests.map(({ file, name }) => [file, name]), [[activeFile, 'active']]);
+
+  const duplicate = [...files, { file: otherFile, owner, source: '// contract: area.wails-only\n#[test]\nfn active() {}\n' }];
+  const ambiguous = selectRustDeclarations([
+    { run: 'host', target: 'lib', testName: 'module::active', owner, sourcePath: join(root, inactiveFile) },
+  ], duplicate);
+  assert.deepEqual(ambiguous.tests, []);
+  assert.match(ambiguous.errors[0], /has ambiguous source declaration/);
+
+  const exact = selectRustDeclarations([
+    { run: 'host', target: 'other', testName: 'module::active', owner, sourcePath: join(root, otherFile) },
+  ], duplicate);
+  assert.deepEqual(exact.errors, []);
+  assert.deepEqual(exact.tests.map(({ file }) => file), [otherFile]);
+
+  const missing = selectRustDeclarations([
+    { run: 'host', target: 'active', testName: 'not_declared', owner, sourcePath: join(root, activeFile) },
+  ], files);
+  assert.deepEqual(missing.tests, []);
+  assert.match(missing.errors[0], /has no source declaration/);
 });
 
 test('the case table rejects duplicate ids, invalid ids, and a limited scope without a reason', () => {

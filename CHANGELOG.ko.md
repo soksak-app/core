@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-102: Cargo가 나열한 test executable과 target source path에서 Rust
+  host-contract 선언을 선택한다. 보존된 초기 static audit은 Linux 및 Windows 전용
+  Tauri sok 선언을 macOS inventory에 포함했다. 집중 selector owner test는 1/1
+  통과했다(`/tmp/F239-102-rust-declaration-inventory-green.log`). 다른 F239-93 owner
+  변경이 반영되기 전까지 current 전체 declaration audit은 대기한다.
+
 - F239-129: View-retirement helper가 기존 `WindowData`를 사용해 source origin,
   channel, event stream을 읽도록 한다. Sidecar root의
   `filter_map(bool.then(...))`를 `filter`와 `map`으로 바꾼다. View order 및
