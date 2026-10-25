@@ -41,7 +41,10 @@
   artifact write와 manifest 생성 전에 decoder 결과를 drain한다. 실제 QR
   encode/decode readiness 확인이 stream 시작 전에 성공해야 한다. 집중 native owner
   test 네 개가 통과했고 callback enqueue tick과 비동기 decode tick을 분리해 기록한다.
-  Runtime cadence 검증은 남아 있으므로 측정된 frame-gap 문제가 해결됐다고 보지 않는다.
+  Runtime capture-identity acceptance는 두 host에서 통과했다. Wails는 matched decoded
+  row 18개, Tauri는 27개이며 각 실행에서 다른 row 20개도 filtering 없이 보존했다.
+  Decoder 단위는 완료했지만 연결된 full-recording cadence gate는 열려 있다. 33 ms
+  frame-gap 문제가 해결됐다고 주장하지 않는다.
 
 - F239-128: Files tree를 공유 section grid에 맞추고 세로 fill section에서
   선언된 tree가 남은 높이를 차지하도록 한다. 기존 grid 허용오차, 12-point 글자

@@ -42,8 +42,10 @@
   and manifest generation. An actual QR encode/decode readiness check must
   pass before stream startup. The four focused native owner tests pass;
   callback enqueue and asynchronous decode ticks are recorded separately.
-  Runtime cadence verification remains pending, so the measured frame-gap
-  issue is not claimed resolved.
+  Runtime capture-identity acceptance passes on both hosts: Wails has 18 matched
+  decoded rows and Tauri has 27, with 20 other rows retained without filtering
+  in each run. The decoder unit is complete; the linked full-recording cadence
+  gate remains open, and this does not claim the 33 ms frame-gap issue resolved.
 
 - F239-128: Align the Files tree with the shared section grid and make the
   declared tree fill its vertical `fill` section. The exact two-host window
