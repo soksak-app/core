@@ -13,6 +13,7 @@ import {
   capturesByInputStage,
   hostClockBoundary,
   evaluateVisualStages,
+  indexAcceptedFrameTrace,
   indexFrameStatus,
   planVisualStage,
   persistThenRequireVisualProof,
@@ -260,6 +261,72 @@ testWithTimeout("source manifest loads only digest-verified frame-bound rasters"
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+testWithTimeout("indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker", () => {
+  const frame = renderFixture.frame;
+  const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const body = { event: "screen", segment: "boot-1", sequence: 4, frame, rows: 1, cols: 2,
+    cursor: { row: 0, col: 1, focused: true, visible: true, preedit },
+    cells: [{ grapheme: "$", width: 1, fg: "#000000", bg: "#ffffff", attributes: 0 },
+      { grapheme: "", width: 1, fg: "#000000", bg: "#ffffff", attributes: 0 }],
+    render: { ...renderFixture, frame } };
+  const events = [
+    { seq: 11, level: "debug", class: "call", event: "host.trace.sidecar.receive",
+      fields: { sidecar: "@soksak/sidecar-vt-alacritty", surface: "tab-a", body } },
+    { seq: 12, level: "debug", class: "frame", event: "plugin.terminal.frame",
+      fields: { session: "session-a", segment: "boot-1", sequence: 4, rows: 1, cols: 2,
+        hash: "a".repeat(64) } },
+  ];
+  const states = indexAcceptedFrameTrace(events, { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
+  assert.equal(states.get("1/2/3")?.semantic.document, "ㅏ");
+  assert.deepEqual(states.get("1/2/3")?.rows, [[{ ch: "$", width: 1 }, { width: 1 }]]);
+  assert.equal(states.get("1/2/3")?.accepted[0].session, "session-a");
+  assert.deepEqual(states.rejections, []);
+  assert.throws(() => indexAcceptedFrameTrace(events.slice(0, 1), { row: 0, col: 0, text: "$" },
+    "tab-a", "session-a"), /no accepted frame markers/);
+  assert.throws(() => indexAcceptedFrameTrace([
+    { ...events[0], truncated: 1200 }, events[1],
+  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /truncated host screen bodies/);
+  assert.throws(() => indexAcceptedFrameTrace([
+    ...events, { ...events[1], seq: 13 },
+  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /counts differ/);
+  assert.throws(() => indexAcceptedFrameTrace([
+    ...events, { seq: 14, event: "log.gated", fields: { class: "call", level: "debug", count: 1 } },
+  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /reports log loss/);
+});
+
+testWithTimeout("retains null preedit and repairs a partial then full record for one frame identity", () => {
+  const frame = renderFixture.frame;
+  const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const body = { event: "screen", segment: "boot-1", sequence: 4, frame, rows: 1, cols: 2,
+    cursor: { row: 0, col: 1, focused: true, visible: true, preedit },
+    cells: [{ grapheme: "$", width: 1, fg: "#000000", bg: "#ffffff", attributes: 0 },
+      { grapheme: "", width: 1, fg: "#000000", bg: "#ffffff", attributes: 0 }],
+    render: { ...renderFixture, frame } };
+  const receive = (seq, value) => ({ seq, level: "debug", class: "call",
+    event: "host.trace.sidecar.receive", fields: { sidecar: "@soksak/sidecar-vt-alacritty", surface: "tab-a", body: value } });
+  const marker = (seq) => ({ seq, level: "debug", class: "frame", event: "plugin.terminal.frame",
+    fields: { session: "session-a", segment: "boot-1", sequence: 4, rows: 1, cols: 2,
+      hash: "b".repeat(64) } });
+  const partial = { ...body, cursor: { ...body.cursor, preedit: null }, render: null };
+  const repaired = indexAcceptedFrameTrace([receive(11, partial), marker(12), receive(13, body), marker(14)],
+    { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
+  const state = repaired.get("1/2/3");
+  assert.equal(state?.semantic.document, "ㅏ");
+  assert.equal(state?.render.frame.sequence, 3);
+  assert.equal(state?.accepted.length, 1);
+  assert.equal(state?.accepted[0].receiveSeqs.length, 2);
+  assert.equal(repaired.rejections[0].reason, "cursor-frame-or-render-missing");
+
+  const emptyBody = { ...body, cursor: { ...body.cursor, preedit: null } };
+  const empty = indexAcceptedFrameTrace([receive(21, emptyBody), { ...marker(22),
+    fields: { ...marker(22).fields, hash: "c".repeat(64) } }],
+  { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
+  assert.equal(empty.get("1/2/3")?.semantic.document, "");
+  assert.equal(empty.get("1/2/3")?.semantic.compose.text, "");
 });
 
 testWithTimeout("cursor frame state uses prior screen rows and the exact cursor render identity", () => {

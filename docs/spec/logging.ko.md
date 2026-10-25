@@ -64,7 +64,7 @@ event는 class 하나에 속하며 catalog가 이를 선언한다. class가 저�
 
 설정 `diagnostics.log`가 상세히 저장할 category를 고른다. host는 적용 중인 정책을 `<config-dir>/log-policy.json`에 쓴다. [정책 파일](#정책-파일)이 그 schema와 프로세스가 바뀐 것을 아는 방법을 정한다. 정책을 나르는 프로토콜 연산은 없다.
 
-화면의 셀 같은 큰 값은 event에 쓰지 않고 크기와 hash를 쓴다. 값은 정책이 class `frame`을 level `trace`로 저장하는 동안 저장한다. 터미널 화면의 내용은 저장하지 않는다. 입력과 화면마다의 hash를 저장하며, [재생](replay.ko.md)이 내용을 파생한다.
+일반 frame record는 screen cell 같은 큰 값 대신 metadata와 hash를 저장한다. 발생마다 저장하는 producer는 정책이 선언된 level에서 해당 class를 저장하는 동안에만 기록한다. Performance trace를 켜면 `host.trace.sidecar.receive`는 host event-field 크기 제한 안에서 screen cell을 포함한 전체 sidecar message body를 class `call`, level `debug`로 기록한다. Terminal plugin은 수락한 screen message의 session, segment, sequence, 크기와 hash를 class `frame`, level `debug`의 `plugin.terminal.frame`에 별도로 기록한다. 기본 정책은 이 record를 저장하지 않는다. 정확한 screen content가 필요한 consumer는 두 class를 모두 활성화하고 잘림이나 보고된 로그 손실을 거부해야 한다. Screen message 자체가 보존되지 않으면 [재생](replay.ko.md)은 sidecar input에서 내용을 파생한다.
 
 ### 정책
 

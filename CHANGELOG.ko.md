@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-134: 기존 host performance trace body와 수락된 frame hash record를
+  사용해 보존된 source raster를 정확한 terminal screen message에 연결한다.
+  Owning consumer test는 23/23 통과했다. 새 runtime 검증은 남아 있으며 visual
+  acceptance를 주장하지 않는다.
+
 - F239-133: Capture stop이 경계를 등록할 때 sample queue가 이미 처리한
   qualifying callback을 재사용하며 display time이 있는 idle callback도 포함한다.
   Resize 조건, 기존 target과 1초 deadline은 유지한다. Owner test가 1/1 통과했고

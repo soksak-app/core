@@ -423,6 +423,154 @@ export function sealTerminalSequenceEndBoundary(boundary, stages, persist) {
   return sealedStages;
 }
 
+/**
+ * Joins complete sidecar screen bodies to the accepted page frame records in one sealed event-log range.
+ * The host body supplies pixels' source state; the page marker proves that the matching screen message passed validation.
+ */
+export function indexAcceptedFrameTrace(events, prompt, surface, session) {
+  assert.ok(Array.isArray(events), "accepted frame trace requires event records");
+  assert.ok(typeof surface === "string" && surface.length > 0, "accepted frame trace requires a surface");
+  assert.ok(typeof session === "string" && session.length > 0, "accepted frame trace requires a terminal session");
+  const losses = events.filter((event) => {
+    if (["log.dropped", "log.pruned", "host.buffer.dropped"].includes(event.event)) return true;
+    const fields = event.fields;
+    if (!["log.gated", "page.log.gated"].includes(event.event)) return false;
+    return (fields?.class === "call" && fields.level === "debug") ||
+      (fields?.class === "frame" && fields.level === "debug");
+  });
+  assert.equal(losses.length, 0, `frame trace range reports log loss: ${JSON.stringify(losses)}`);
+
+  const truncatedReceives = events.filter((event) => event.event === "host.trace.sidecar.receive" &&
+    (event.fields?.surface === surface || event.fields?.surface === undefined) && event.truncated !== undefined);
+  assert.equal(truncatedReceives.length, 0,
+    `frame trace has truncated host screen bodies: ${JSON.stringify(truncatedReceives.map(({ seq }) => seq))}`);
+  const receives = events.filter((event) => event.event === "host.trace.sidecar.receive" &&
+    event.fields?.surface === surface && event.fields?.body?.event === "screen");
+  const markers = events.filter((event) => event.event === "plugin.terminal.frame" &&
+    event.fields?.session === session);
+  assert.ok(receives.length > 0, `frame trace has no screen bodies for ${surface}`);
+  assert.ok(markers.length > 0, `frame trace has no accepted frame markers for ${session}`);
+  const messageKey = (segment, sequence) => `${session}/${segment}/${sequence}`;
+  const receiveGroups = new Map();
+  const markerGroups = new Map();
+  for (const receive of receives) {
+    const body = receive.fields.body;
+    assert.ok(typeof body.segment === "string" && body.segment.length > 0,
+      `host screen event ${receive.seq}: segment is missing`);
+    assert.ok(Number.isSafeInteger(body.sequence) && body.sequence > 0,
+      `host screen event ${receive.seq}: sequence is invalid`);
+    const key = messageKey(body.segment, body.sequence);
+    const group = receiveGroups.get(key) ?? [];
+    group.push(receive);
+    receiveGroups.set(key, group);
+  }
+  for (const marker of markers) {
+    const fields = marker.fields;
+    assert.ok(typeof fields?.segment === "string" && fields.segment.length > 0,
+      `plugin frame event ${marker.seq}: segment is missing`);
+    assert.ok(Number.isSafeInteger(fields.sequence) && fields.sequence > 0,
+      `plugin frame event ${marker.seq}: sequence is invalid`);
+    const key = messageKey(fields.segment, fields.sequence);
+    const group = markerGroups.get(key) ?? [];
+    group.push(marker);
+    markerGroups.set(key, group);
+  }
+  assert.deepEqual([...markerGroups.keys()].sort(), [...receiveGroups.keys()].sort(),
+    "frame trace screen messages and accepted marker keys differ");
+
+  const statusEvents = [];
+  const acceptedByFrame = new Map();
+  for (const [key, messageReceives] of receiveGroups) {
+    const messageMarkers = markerGroups.get(key);
+    assert.equal(messageMarkers.length, messageReceives.length,
+      `${key}: received screen message and accepted marker counts differ`);
+    const orderedReceives = [...messageReceives].sort((left, right) => left.seq - right.seq);
+    const orderedMarkers = [...messageMarkers].sort((left, right) => left.seq - right.seq);
+    const firstReceiveSequence = orderedReceives[0].seq;
+    const markerHashes = new Set();
+    let frameIdentity = null;
+    let baseMessage = null;
+    for (const receive of orderedReceives) {
+      const label = `host screen event ${receive.seq}`;
+      assert.equal(receive.level, "debug", `${label}: performance trace body was not recorded at DEBUG`);
+      assert.equal(receive.class, "call", `${label}: screen body has the wrong event class`);
+      assert.ok(Number.isSafeInteger(receive.seq) && receive.seq > 0, `${label}: host sequence is invalid`);
+      assert.equal(receive.truncated, undefined, `${label}: host event fields are truncated`);
+      const body = receive.fields.body;
+      assert.equal(body.event, "screen", `${label}: body is not a screen message`);
+      assert.equal(body.segment, key.split("/").at(-2), `${label}: segment differs from its message key`);
+      assert.equal(body.sequence, Number(key.split("/").at(-1)), `${label}: sequence differs from its message key`);
+      const identity = frameKey(body.frame, `${label}.frame`);
+      assert.ok(Number.isInteger(body.rows) && body.rows > 0 && Number.isInteger(body.cols) && body.cols > 0,
+        `${label}: screen dimensions are invalid`);
+      assert.ok(Array.isArray(body.cells) && body.cells.length === body.rows * body.cols,
+        `${label}: complete screen cells are missing`);
+      assert.ok(body.cursor && typeof body.cursor === "object" && !Array.isArray(body.cursor),
+        `${label}: cursor is missing`);
+      const frameMessage = { frame: body.frame, rows: body.rows, cols: body.cols, cells: body.cells,
+        cursor: { row: body.cursor.row, col: body.cursor.col, visible: body.cursor.visible } };
+      if (frameIdentity === null) {
+        frameIdentity = identity;
+        baseMessage = frameMessage;
+      } else {
+        assert.equal(identity, frameIdentity, `${label}: one message key names conflicting native frames`);
+        assert.deepEqual(frameMessage, baseMessage,
+          `${label}: repeated message key changes its screen cells or engine cursor`);
+      }
+      const compose = body.cursor.preedit ?? { text: "", markedRange: null, selectedRange: null,
+        replacementRange: null, attributed: false };
+      assert.ok(compose && typeof compose.text === "string", `${label}: preedit snapshot is invalid`);
+      const render = body.render ?? null;
+      if (render !== null) {
+        assert.ok(render && typeof render === "object" && !Array.isArray(render),
+          `${label}: renderer metadata is invalid`);
+        assert.equal(frameKey(render.frame, `${label}.render.frame`), identity,
+          `${label}: renderer metadata belongs to another frame`);
+        assert.ok(Array.isArray(render.glyphs), `${label}: renderer glyph list is missing`);
+      }
+      const rows = Array.from({ length: body.rows }, () => []);
+      for (let index = 0; index < body.cells.length; index++) {
+        const cell = body.cells[index];
+        assert.ok(cell && typeof cell === "object" && typeof cell.grapheme === "string" &&
+          Number.isInteger(cell.width) && cell.width >= 0, `${label}: cell ${index} is invalid`);
+        rows[Math.floor(index / body.cols)].push({
+          ...(cell.grapheme === "" ? {} : { ch: cell.grapheme }), width: cell.width,
+        });
+      }
+      const cursor = { ...body.cursor, frame: body.frame, render };
+      statusEvents.push({ name: "terminal.screen", value: rows });
+      statusEvents.push({ name: "terminal.compose", value: compose });
+      statusEvents.push({ name: "terminal.cursor", value: cursor });
+    }
+    for (const marker of orderedMarkers) {
+      const label = `plugin frame event ${marker.seq}`;
+      assert.equal(marker.level, "debug", `${label}: accepted frame marker was not DEBUG`);
+      assert.equal(marker.class, "frame", `${label}: accepted frame marker has the wrong class`);
+      assert.ok(Number.isSafeInteger(marker.seq) && marker.seq > firstReceiveSequence,
+        `${label}: accepted marker does not follow its screen message`);
+      assert.equal(marker.truncated, undefined, `${label}: accepted hash marker is truncated`);
+      assert.equal(marker.fields.session, session, `${label}: session differs`);
+      assert.equal(marker.fields.rows, baseMessage.rows, `${label}: row count differs from the screen body`);
+      assert.equal(marker.fields.cols, baseMessage.cols, `${label}: column count differs from the screen body`);
+      assert.match(marker.fields.hash ?? "", /^[a-f0-9]{64}$/, `${label}: screen hash is invalid`);
+      markerHashes.add(marker.fields.hash);
+    }
+    assert.equal(markerHashes.size, 1, `${key}: repeated accepted records have conflicting screen hashes`);
+    const existing = acceptedByFrame.get(frameIdentity) ?? [];
+    existing.push({ session, segment: key.split("/").at(-2), sequence: Number(key.split("/").at(-1)),
+      frame: baseMessage.frame, hash: markerHashes.values().next().value,
+      receiveSeqs: orderedReceives.map((event) => event.seq), markerSeqs: orderedMarkers.map((event) => event.seq) });
+    acceptedByFrame.set(frameIdentity, existing);
+  }
+  const states = indexFrameStatus(statusEvents, prompt);
+  for (const [key, state] of states) {
+    const accepted = acceptedByFrame.get(key);
+    assert.ok(accepted?.length, `frame ${key} has status but no accepted message marker`);
+    state.accepted = accepted;
+  }
+  return states;
+}
+
 /** Indexes frame-bound cursor metadata with only the latest earlier screen rows observed on the active status stream. */
 export function indexFrameStatus(events, prompt) {
   const states = new Map();

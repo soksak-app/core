@@ -64,7 +64,7 @@ An event belongs to one class, which the catalog declares. The class decides how
 
 The setting `diagnostics.log` selects the categories that are stored in detail. The host writes the effective policy to `<config-dir>/log-policy.json`; [Policy file](#policy-file) states its schema and how a process learns of a change. No protocol operation carries the policy.
 
-A large value, such as the cells of a screen, is not written into an event; its size and hash are. The value is stored while the policy stores the class `frame` at the level `trace`. The content of a terminal screen is not stored: its inputs and the hash of each screen are, and [replay](replay.md) derives the content.
+Ordinary frame records store metadata and hashes rather than a large value such as screen cells. A producer that stores each occurrence writes it only while the policy stores its class at the declared level. With the performance trace enabled, `host.trace.sidecar.receive` records the complete sidecar message body, including screen cells, as class `call` at level `debug`, subject to the host event-field bound. The terminal plugin separately writes `plugin.terminal.frame` as class `frame` at level `debug` with the accepted screen message session, segment, sequence, dimensions and hash. These records are not stored by the default policy; a consumer that needs exact screen content must enable both classes and reject truncation or reported log loss. [Replay](replay.md) derives screen content from sidecar inputs when the screen message itself is not retained.
 
 ### Policy
 

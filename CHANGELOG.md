@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-134: Join retained source rasters to exact accepted terminal screen
+  messages using the existing host performance trace body and accepted frame
+  hash record. The owning consumer test passes 23/23. Fresh runtime verification
+  remains pending; no visual acceptance is claimed.
+
 - F239-133: Reuse a qualifying callback already processed when capture stop
   registers its boundary, including idle callbacks with display times. Keep
   the resize guard, existing target and one-second deadline. The owner test

@@ -14,7 +14,7 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
-import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexFrameStatus,
+import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexAcceptedFrameTrace,
   MAXIMUM_IME_FRAME_GAP_MS, persistThenRequireVisualProof,
   attachImeFrameIdentities, planVisualStage, readImeFrameIdentities, readRetainedSources,
   sealTerminalSequenceEndBoundary, startImeCapture }
@@ -319,7 +319,9 @@ for (const app of Object.values(APPS)) {
 
   const runRepeatedVowelScenario = async (t, shellFixture) => {
     const s = await open(t, app);
-    await fresh(s, { shell: shellFixture, log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
+    await fresh(s, { shell: shellFixture, performanceTrace: true,
+      log: { input: "info", call: "debug", frame: "debug" },
+      reads: ["native.input.key_down", "native.input.callback", "host.trace.sidecar.receive", "plugin.terminal.frame"] });
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => /[$%#>]$/.test(line)),
@@ -727,6 +729,11 @@ for (const app of Object.values(APPS)) {
     };
 
     const nativeInputOffsets = currentEventOffsets(app.configDir);
+    const frameTraceOffsets = nativeInputOffsets;
+    const terminalSession = await s.get("terminal.session", surface);
+    assert.ok(typeof terminalSession.sessionId === "string" && terminalSession.sessionId.length > 0,
+      `${app.name}: terminal session identity is missing before frame capture`);
+    await presentedScreen(s, surface);
     const visualStageInputs = [];
     let visualStages = [];
     for (let index = 0; index < 8; index++) {
@@ -945,7 +952,20 @@ for (const app of Object.values(APPS)) {
     let visualMeasurements;
     try {
       persist("visual-stage-inputs.json", visualStageInputs);
-      frameStatus = indexFrameStatus(observedStateEvents, prompt);
+      const frameLogEvents = readEvents(app.configDir, frameTraceOffsets).events;
+      const frameEvidenceEvents = frameLogEvents.filter((event) => {
+        if (event.event === "host.trace.sidecar.receive") {
+          return (event.fields?.surface === surface && event.fields?.body?.event === "screen") ||
+            event.truncated !== undefined;
+        }
+        if (event.event === "plugin.terminal.frame") return event.fields?.session === terminalSession.sessionId;
+        if (["log.dropped", "log.pruned", "host.buffer.dropped"].includes(event.event)) return true;
+        return ["log.gated", "page.log.gated"].includes(event.event) &&
+          ((event.fields?.class === "call" && event.fields?.level === "debug") ||
+            (event.fields?.class === "frame" && event.fields?.level === "debug"));
+      });
+      persist("frame-state-log-events.json", frameEvidenceEvents);
+      frameStatus = indexAcceptedFrameTrace(frameEvidenceEvents, prompt, surface, terminalSession.sessionId);
       visualStages = visualStageInputs.map((stage) => ({
         ...planVisualStage({ ...stage, frameStatus }),
         clockDomain: stage.clockDomain,
