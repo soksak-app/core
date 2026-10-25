@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-178: Decode worker 두 개와 공유 64 MiB byte budget을 유지하며 미완료 identity job 16개를 수락한다. 제어된 admission/drain assertion은 이전 8-job budget에서 실패하고 17번째 job의 명시적 거부까지 통과한다. 양쪽 host gesture는 capture sample 334/630개 전체를 보존하고 decode하며 각각 visual 10단계를 측정한다. 유한 burst admission을 검증한 결과이며 Tauri 입력 후 timeout 실패는 별도 미완료로 유지한다.
+
 - F239-176-1: Application 사용량 귀속과 해당 호출부에서 비동기 launchd 조회를 기다린다. Promise를 순회하지 않고 host별 결과와 실패를 보존한다. 기존 귀속 검사 두 개가 수정 전 실패하고 수정 후 측정 소유 검사 16개가 통과한다.
 
 - F239-177: 현재 terminal compose/cursor 쌍을 host 표시 상태보다 먼저 읽고 host read 전에 선언된 presentation checkpoint를 기다린다. 각 독립 read phase의 오류를 모두 보존하고 표시 상태 read 실패를 거부한다. 순서/오류 소유 검사 두 개가 수정 전 실패하고 수정 후 terminal-document 소유 검사 44개가 통과한다.

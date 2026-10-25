@@ -16,7 +16,8 @@
 static const size_t kImageCaptureHistoryLimit = 64 * 1024 * 1024;
 static const NSUInteger kImageCaptureHistoryCountLimit = 512;
 static const size_t kImageCaptureArtifactPendingLimit = 64 * 1024 * 1024;
-static const NSUInteger kIdentityDecodePendingJobLimit = 8;
+// The budget includes ordered record completion after decode; crop bytes keep their independent 64 MiB limit.
+static const NSUInteger kIdentityDecodePendingJobLimit = 16;
 
 static NSString *identityCapacityMessage(NSString *stage, uint64_t frame, NSUInteger pendingJobs,
     size_t pendingCropBytes, size_t incomingCropBytes, size_t artifactPendingBytes,

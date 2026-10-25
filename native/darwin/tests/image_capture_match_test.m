@@ -379,7 +379,7 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     check(secondDecodeBeforeRelease == 0,
         @"the second QR decode starts before the blocked first decode is released");
     BOOL acceptedThroughLimit = YES;
-    for (uint64_t frame = 3; frame <= 8; frame++) {
+    for (uint64_t frame = 3; frame <= 16; frame++) {
         char *enqueueError = NULL;
         BOOL accepted = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
             stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
@@ -390,12 +390,12 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     char *overflowError = NULL;
     BOOL overflowAccepted = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
         stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
-        9, 9000, &overflowError);
+        17, 17000, &overflowError);
     BOOL overflowHasMeasuredCapacity = overflowError
         && strstr(overflowError, "stage=job-admission")
-        && strstr(overflowError, "frame=9")
-        && strstr(overflowError, "pendingJobs=8")
-        && strstr(overflowError, "jobLimit=8")
+        && strstr(overflowError, "frame=17")
+        && strstr(overflowError, "pendingJobs=16")
+        && strstr(overflowError, "jobLimit=16")
         && strstr(overflowError, "pendingCropBytes=")
         && strstr(overflowError, "incomingCropBytes=147456")
         && strstr(overflowError, "artifactPendingBytes=")
@@ -404,7 +404,7 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         && strstr(overflowError, "byteLimitExceeded=0");
     check(acceptedThroughLimit && !overflowAccepted && overflowError != NULL
         && strstr(overflowError, "pending capacity") != NULL && overflowHasMeasuredCapacity,
-        @"the decoder admits eight pending jobs and reports the rejected branch with its job and byte counts");
+        @"the decoder admits sixteen pending jobs and reports the rejected branch with its job and byte counts");
     free(overflowError);
     char *sessionOverflow = sp_image_capture_match_identity_session_error_copy();
     check(sessionOverflow != NULL && strstr(sessionOverflow, "pending capacity") != NULL,
@@ -449,7 +449,7 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
                 && enqueued <= started && started <= completed;
         }
     }
-    BOOL orderedFrames = decodedFrames.count == 8;
+    BOOL orderedFrames = decodedFrames.count == 16;
     BOOL firstSnapshotMatched = NO;
     for (NSUInteger index = 0; index < decodedFrames.count && orderedFrames; index++)
         orderedFrames = [decodedFrames[index] unsignedLongLongValue] == index + 1;
@@ -495,7 +495,7 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     sp_capture_frame_identity_test_set_decode_hook(throwIdentityDecode);
     BOOL exceptionEnqueued = sp_image_capture_match_identity_enqueue_frame(exceptionPixels.bytes, width,
         height, stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
-        10, 10000, &error);
+        18, 18000, &error);
     check(exceptionEnqueued && error == NULL,
         @"the controlled decoder exception is admitted as an asynchronous decode job");
     free(error); error = NULL;

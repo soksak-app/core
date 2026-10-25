@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-178: Allow sixteen uncommitted identity jobs while retaining two decode workers and the shared 64 MiB byte budget. Controlled admission/drain assertions fail with the earlier eight-job budget and pass with explicit seventeenth-job rejection. Both host gestures preserve and decode all 334/630 captured samples with ten measured visual stages each. This validates finite-burst admission; Tauri post-input timeout failures remain separately open.
+
 - F239-176-1: Await asynchronous launchd discovery in application usage attribution and its caller. Preserve each host result and failure instead of iterating a Promise. Two existing attribution cases fail before correction; all 16 measurement owners pass afterward.
 
 - F239-177: Read the current terminal compose/cursor pair before the host presentation state, and await the declared presentation checkpoint before that host read. Preserve all errors within each independent read phase and reject a failed presentation read. Two ordering/error owners fail before correction; all 44 terminal-document owners pass after correction.
