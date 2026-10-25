@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-60: Pre-key screen/cursor baseline을 읽기 전에 terminal status를 구독해 read 중 발생한 frame 전진도 관측한다. Matching status event를 기다리기 전에 baseline frame과 setup 실패를 저장한다. Owner test는 notification 유실을 재현하고 순서 수정 뒤 통과하며 document suite는 37/37 통과한다. Activation은 실행하지 않았다.
+
 - F239-58: Lifecycle selector의 window 대상을 수정한다. `fresh(s)`는 기존 window에 project를 남기며 `projectOpening: windows`에서는 임시 project가 새 window에 열린다. Selector는 unassigned window를 만든 뒤 project, gesture, close/reopen, cleanup operation을 해당 session으로 보낸다. 보존된 Wails 실패 8건은 gesture 전에 `core.project` 대기에서 멈췄다. `node --check`, `make e2e-check`, `make docs-check`가 통과했으며 두 host runtime acceptance는 대기 중이다.
 
 - F239-57: Darwin process identity 패키지의 native test를 `node --test` package entrypoint로 노출한다. 두 Node test는 각기 별도 Make target을 위임 실행하고, 기존 Objective-C 및 relocation assertion은 native owner에 유지한다. Red: workspace discovery owner test가 package의 `make test` script를 test 시작 전에 거부했다. Green: owner test 1/1, package entrypoint 2/2가 통과하고 각 native target도 1/1 통과한다. Workspace runner가 package entrypoint를 발견해 실행한다. Parity 목록은 lane 102개, 구현 파일 704개, 테스트 파일 1010개이며 미연결 파일이 없다.

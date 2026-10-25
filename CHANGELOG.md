@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-60: Subscribe to terminal status before reading the pre-key screen and cursor baseline, so a frame advance during those reads remains observable. Persist the baseline frame and setup failures before waiting for matching status events. The owner test reproduces the lost notification and passes after the ordering change; its document suite passes 37/37. No activation run was performed.
+
 - F239-58: Correct the lifecycle selector window target. `fresh(s)` leaves a project open in the original window; with `projectOpening: windows`, the disposable project opens in a new window. The selector now creates an unassigned window and sends project, gesture, close/reopen, and cleanup operations through its session. Eight preserved Wails failures stopped at `core.project` before the gesture. `node --check`, `make e2e-check`, and `make docs-check` pass; two-host runtime acceptance remains pending.
 
 - F239-57: Expose the Darwin process identity package's native tests through a `node --test` package entrypoint. The two Node tests delegate to separate Make targets; existing Objective-C and relocation assertions remain in their native owners. Red: the workspace discovery owner test rejected the package's `make test` script before tests started. Green: the owner test passes 1/1, the package entrypoint passes 2/2 with each native target passing 1/1, and the workspace runner discovers and runs the package entrypoint. The parity inventory now reports 102 lanes, 704 implementation files, and 1010 test files with no uncovered files.

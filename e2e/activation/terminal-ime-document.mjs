@@ -314,6 +314,25 @@ export function terminalInputReceiptMatches(entries, key) {
   return [...transactions.native, ...transactions.terminal].some((transaction) => transactionMatchesKey(transaction, key));
 }
 
+/** Reads the initial terminal baseline while retaining statuses emitted during the read. */
+export async function observeTerminalBaseline(startObserver, readBaseline) {
+  assert.equal(typeof startObserver, "function", "terminal observer starter must be a function");
+  assert.equal(typeof readBaseline, "function", "terminal baseline reader must be a function");
+  const events = [];
+  const observer = await startObserver((event) => events.push(event));
+  try {
+    const baseline = await readBaseline();
+    return { baseline, events, observer };
+  } catch (error) {
+    try {
+      await observer.stop();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "reading the terminal baseline and stopping its observer failed");
+    }
+    throw error;
+  }
+}
+
 const TERMINAL_INPUT_STATUSES = ["terminal.compose", "terminal.cursor", "terminal.screen"];
 
 /** Resolves after a status event newer than the caller's sample offset arrives. */

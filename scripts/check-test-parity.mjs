@@ -5442,6 +5442,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-60",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function observeTerminalBaseline" }],
+    tests: [
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "the initial terminal baseline observes a frame advanced during its read" },
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "a failed initial baseline stops its observer and preserves the read error" },
+    ],
+    expected: "The terminal observer is active before baseline reads can advance the frame, and a failed baseline read stops the observer while preserving its error.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-51",
     implementation: [{ file: "e2e/files-open-failure.mjs", symbol: "export function treeNodes(snapshot)" }],
     tests: [

@@ -27,6 +27,7 @@ import {
   terminalCompositionState,
   terminalInputReceiptMatches,
   initialCursorFrameMatchesScreen,
+  observeTerminalBaseline,
   terminalObserverStatusesMatch,
   terminalLineBeforeCursor,
   selectCoherentTerminalObservation,
@@ -466,57 +467,100 @@ for (const app of Object.values(APPS)) {
       return observation;
     };
 
-    const baselineScreen = await presentedScreen(s, surface);
-    const baselineCursor = await s.get("terminal.cursor", surface);
-    const baselineCompose = await s.get("terminal.compose", surface);
-    assert.equal(terminalComposeMatchesPreedit(baselineCompose, baselineCursor), true,
-      "the pre-key terminal composition baseline must be coherent");
-    let knownState = { compose: baselineCompose, cursor: baselineCursor, screen: baselineScreen };
-    const promptPrefix = terminalLineBeforeCursor(baselineScreen, baselineCursor, "empty terminal prompt");
-    assert.ok(promptPrefix.length > 0, "the empty terminal prompt has no visible prefix");
-    const prompt = { row: baselineCursor.row, col: 0, text: promptPrefix };
-    manifest.prompt = prompt;
-    persist("manifest.json", manifest);
-
-    const observedStateEvents = [];
     const statusEventsPath = join(artifactDir, "status-events.jsonl");
     writeFileSync(statusEventsPath, "");
-    const stateObserver = await startTerminalStatusObserver(s, surface, (event) => {
-      appendFileSync(statusEventsPath, `${JSON.stringify(event)}\n`);
-      observedStateEvents.push(event);
-      for (const notify of [...stateEventWaiters]) notify();
-    });
+    let initialObservation;
+    try {
+      initialObservation = await observeTerminalBaseline((onEvent) =>
+        startTerminalStatusObserver(s, surface, (event) => {
+          appendFileSync(statusEventsPath, `${JSON.stringify(event)}\n`);
+          onEvent(event);
+          for (const notify of [...stateEventWaiters]) notify();
+        }), async () => {
+        const screen = await presentedScreen(s, surface);
+        manifest.initialBaseline = { screenFrame: screen.frame };
+        persist("manifest.json", manifest);
+        const cursor = await s.get("terminal.cursor", surface);
+        manifest.initialBaseline.cursorFrame = cursor.frame ?? null;
+        persist("manifest.json", manifest);
+        const compose = await s.get("terminal.compose", surface);
+        return { screen, cursor, compose };
+      });
+    } catch (error) {
+      manifest.initialObservationFailure = { name: error.name, message: error.message, stack: error.stack };
+      persist("manifest.json", manifest);
+      throw error;
+    }
+    const { baseline: { screen: baselineScreen, cursor: baselineCursor, compose: baselineCompose },
+      events: observedStateEvents, observer: stateObserver } = initialObservation;
+    const recordInitialObservationFailure = (error) => {
+      manifest.initialObservationFailure = { name: error.name, message: error.message, stack: error.stack,
+        screenFrame: baselineScreen.frame, cursorFrame: baselineCursor.frame ?? null };
+      persist("manifest.json", manifest);
+    };
+    let knownState;
+    let prompt;
+    try {
+      assert.equal(terminalComposeMatchesPreedit(baselineCompose, baselineCursor), true,
+        "the pre-key terminal composition baseline must be coherent");
+      knownState = { compose: baselineCompose, cursor: baselineCursor, screen: baselineScreen };
+      const promptPrefix = terminalLineBeforeCursor(baselineScreen, baselineCursor, "empty terminal prompt");
+      assert.ok(promptPrefix.length > 0, "the empty terminal prompt has no visible prefix");
+      prompt = { row: baselineCursor.row, col: 0, text: promptPrefix };
+      manifest.prompt = prompt;
+      persist("manifest.json", manifest);
+    } catch (error) {
+      try {
+        await stateObserver.stop();
+      } catch (cleanupError) {
+        const combined = new AggregateError([error, cleanupError],
+          "the initial terminal baseline failed and its observer did not stop");
+        recordInitialObservationFailure(combined);
+        throw combined;
+      }
+      recordInitialObservationFailure(error);
+      throw error;
+    }
+
     s.cleanup(async () => {
       stateEventWaiters.clear();
       await stateObserver.stop();
     });
-    const initialScreenEvent = await waitForObservedStatusEvent(observedStateEvents, 0,
-      (notify) => { stateEventWaiters.add(notify); return () => stateEventWaiters.delete(notify); },
-      "terminal.screen", (rows) => Array.isArray(rows), "initial terminal screen status", 1500);
-    const initialComposeEvent = await waitForObservedStatusEvent(observedStateEvents, 0,
-      (notify) => { stateEventWaiters.add(notify); return () => stateEventWaiters.delete(notify); },
-      "terminal.compose", (compose) => compose && typeof compose === "object",
-      "initial terminal compose status", 1500);
-    const initialCursorEvent = await waitForObservedStatusEvent(observedStateEvents, 0,
-      (notify) => { stateEventWaiters.add(notify); return () => stateEventWaiters.delete(notify); },
-      "terminal.cursor", (cursor) => initialCursorFrameMatchesScreen(cursor, baselineScreen),
-      "initial frame-bound terminal cursor status", 1500);
-    assert.deepEqual(initialScreenEvent.value, baselineScreen.rows,
-      "the observed initial terminal screen differs from the pre-key baseline rows");
-    assert.equal(sameTerminalComposition(terminalCompositionState(initialComposeEvent.value, initialCursorEvent.value),
-      terminalCompositionState(baselineCompose, baselineCursor)), true,
-    "initial compose/cursor observer state differs from the pre-key baseline");
-    assert.equal(initialCursorFrameMatchesScreen(initialCursorEvent.value, baselineScreen), true,
-      "initial cursor status does not belong to the accepted screen frame");
-    persist("observer-baseline.json", {
-      screenEventIndex: observedStateEvents.indexOf(initialScreenEvent),
-      composeEventIndex: observedStateEvents.indexOf(initialComposeEvent),
-      cursorEventIndex: observedStateEvents.indexOf(initialCursorEvent),
-      screenRows: initialScreenEvent.value,
-      compose: initialComposeEvent.value,
-      cursor: initialCursorEvent.value,
-      baselineRowsMatched: true,
-    });
+    let initialScreenEvent;
+    let initialComposeEvent;
+    let initialCursorEvent;
+    try {
+      initialScreenEvent = await waitForObservedStatusEvent(observedStateEvents, 0,
+        (notify) => { stateEventWaiters.add(notify); return () => stateEventWaiters.delete(notify); },
+        "terminal.screen", (rows) => Array.isArray(rows), "initial terminal screen status", 1500);
+      initialComposeEvent = await waitForObservedStatusEvent(observedStateEvents, 0,
+        (notify) => { stateEventWaiters.add(notify); return () => stateEventWaiters.delete(notify); },
+        "terminal.compose", (compose) => compose && typeof compose === "object",
+        "initial terminal compose status", 1500);
+      initialCursorEvent = await waitForObservedStatusEvent(observedStateEvents, 0,
+        (notify) => { stateEventWaiters.add(notify); return () => stateEventWaiters.delete(notify); },
+        "terminal.cursor", (cursor) => initialCursorFrameMatchesScreen(cursor, baselineScreen),
+        "initial frame-bound terminal cursor status", 1500);
+      assert.deepEqual(initialScreenEvent.value, baselineScreen.rows,
+        "the observed initial terminal screen differs from the pre-key baseline rows");
+      assert.equal(sameTerminalComposition(terminalCompositionState(initialComposeEvent.value, initialCursorEvent.value),
+        terminalCompositionState(baselineCompose, baselineCursor)), true,
+      "initial compose/cursor observer state differs from the pre-key baseline");
+      assert.equal(initialCursorFrameMatchesScreen(initialCursorEvent.value, baselineScreen), true,
+        "initial cursor status does not belong to the accepted screen frame");
+      persist("observer-baseline.json", {
+        screenEventIndex: observedStateEvents.indexOf(initialScreenEvent),
+        composeEventIndex: observedStateEvents.indexOf(initialComposeEvent),
+        cursorEventIndex: observedStateEvents.indexOf(initialCursorEvent),
+        screenRows: initialScreenEvent.value,
+        compose: initialComposeEvent.value,
+        cursor: initialCursorEvent.value,
+        baselineRowsMatched: true,
+      });
+    } catch (error) {
+      recordInitialObservationFailure(error);
+      throw error;
+    }
     const waitForStateEvent = async (after, key,
       missingMessage = "no terminal compose, cursor or screen status notification followed the input",
       timeoutMs = 1500) => {

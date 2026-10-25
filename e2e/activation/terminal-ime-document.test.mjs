@@ -10,6 +10,7 @@ import {
   assertInputTraceDelivery,
   inputTraceTransactions,
   terminalInputReceiptMatches,
+  observeTerminalBaseline,
   initialCursorFrameMatchesScreen,
   terminalObserverStatusesMatch,
   terminalStageMatchesReference,
@@ -58,6 +59,38 @@ test("initial cursor baseline accepts null render only for the accepted screen f
   assert.equal(initialCursorFrameMatchesScreen({ ...current,
     render: { frame: { ...current.frame, sequence: current.frame.sequence + 1 } } }, acceptedScreen), false,
   "non-null renderer identity must match the cursor frame");
+});
+
+test("the initial terminal baseline observes a frame advanced during its read", { timeout: 5000 }, async () => {
+  const listeners = new Set();
+  const frame = { generation: 2, raster: 3, sequence: 5 };
+  const cursor = { row: 0, col: 8, focused: true, frame, render: null };
+  const publish = (event) => { for (const listener of listeners) listener(event); };
+  const observed = await observeTerminalBaseline(async (listener) => {
+    listeners.add(listener);
+    return { async stop() { listeners.delete(listener); } };
+  }, async () => {
+    publish({ name: "terminal.cursor", value: cursor });
+    return { screen: { frame, rows: [] }, cursor };
+  });
+  try {
+    assert.ok(observed.events.some((event) => event.name === "terminal.cursor" &&
+      event.value.frame?.generation === observed.baseline.screen.frame.generation &&
+      event.value.frame?.raster === observed.baseline.screen.frame.raster &&
+      event.value.frame?.sequence === observed.baseline.screen.frame.sequence),
+    "the observer missed the cursor notification for the baseline frame");
+  } finally {
+    await observed.observer.stop();
+  }
+});
+
+test("a failed initial baseline stops its observer and preserves the read error", { timeout: 5000 }, async () => {
+  const failure = new Error("baseline read failed");
+  let stopped = false;
+  await assert.rejects(observeTerminalBaseline(async () => ({
+    async stop() { stopped = true; },
+  }), async () => { throw failure; }), (error) => error === failure);
+  assert.equal(stopped, true, "the observer remains active after a failed baseline read");
 });
 
 test("waits for the seven-vowel Backspace document after a coherent eight-vowel intermediate", { timeout: 5000 }, async () => {
