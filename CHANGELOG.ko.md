@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F239-158: Capture fixture 네 곳에서 workspace 구현 이름 대신 consumer
+  소유 sidecar identity를 사용한다. Payload assertion 변경이나 checker 예외
+  없이 동일 owner 24 case 및 boundary 16 component가 모두 통과한다.
+
 - F239-155: Project를 로컬에서 소유하기 전에 모든 저장 space의 tab origin을
   복원한다. Dormant placement는 plane에 layout을 불러오지 않고 inactive-space
   view를 시작할 수 있다. Activation owner는 수정 전에 origin 누락을 재현하고

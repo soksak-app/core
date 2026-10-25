@@ -6073,6 +6073,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-158",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.test.mjs", symbol: "@capture-fixture/sidecar" }],
+    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" }],
+    expected: "Consumer capture fixtures retain wire behavior without naming a workspace sidecar implementation.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-155",
     implementation: [{ file: "packages/workbench/projects.js", symbol: "async function showProject(" }],
     tests: [{ file: "packages/workbench/test/projects-switch.test.mjs", id: "a reopened project restores inactive-space origins before retained views can start" }],

@@ -255,7 +255,7 @@ testWithTimeout("source manifest loads only digest-verified frame-bound rasters"
     assert.deepEqual(readRetainedSources(directory, new Map()).missingStates, ["1/2/3"]);
     const unjoinedNeededFrame = indexAcceptedFrameTrace([{
       seq: 30, level: "debug", class: "call", event: "host.trace.sidecar.receive",
-      fields: { sidecar: "@soksak/sidecar-vt-alacritty", surface: "tab-a",
+      fields: { sidecar: "@capture-fixture/sidecar", surface: "tab-a",
         body: { event: "screen", segment: "boot-1", sequence: 4,
           frame: { generation: 1, raster: 2, sequence: 3 } } },
     }], { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
@@ -283,7 +283,7 @@ testWithTimeout("indexes an accepted screen frame from its exact TRACE body and 
     render: { ...renderFixture, frame } };
   const events = [
     { seq: 11, level: "debug", class: "call", event: "host.trace.sidecar.receive",
-      fields: { sidecar: "@soksak/sidecar-vt-alacritty", surface: "tab-a", body } },
+      fields: { sidecar: "@capture-fixture/sidecar", surface: "tab-a", body } },
     { seq: 12, level: "debug", class: "frame", event: "plugin.terminal.frame",
       fields: { session: "session-a", segment: "boot-1", sequence: 4, rows: 1, cols: 2,
         frame, hash: "a".repeat(64) } },
@@ -350,7 +350,7 @@ testWithTimeout("joins repeated screen messages to every exact accepted native f
     render: { ...renderFixture, frame: { generation: 2, raster: 2, sequence: nativeSequence } },
   });
   const receive = (seq, body) => ({ seq, level: "debug", class: "call",
-    event: "host.trace.sidecar.receive", fields: { sidecar: "@soksak/sidecar-vt-alacritty",
+    event: "host.trace.sidecar.receive", fields: { sidecar: "@capture-fixture/sidecar",
       surface: "tab-a", body } });
   const marker = (seq, frame) => ({ seq, level: "debug", class: "frame", event: "plugin.terminal.frame",
     fields: { session: "session-a", segment: "boot-1", sequence: 12, rows: 1, cols: 2,
@@ -413,7 +413,7 @@ testWithTimeout("retains null preedit and repairs a partial then full record for
       { grapheme: "", width: 1, fg: "#000000", bg: "#ffffff", attributes: 0 }],
     render: { ...renderFixture, frame } };
   const receive = (seq, value) => ({ seq, level: "debug", class: "call",
-    event: "host.trace.sidecar.receive", fields: { sidecar: "@soksak/sidecar-vt-alacritty", surface: "tab-a", body: value } });
+    event: "host.trace.sidecar.receive", fields: { sidecar: "@capture-fixture/sidecar", surface: "tab-a", body: value } });
   const marker = (seq) => ({ seq, level: "debug", class: "frame", event: "plugin.terminal.frame",
     fields: { session: "session-a", segment: "boot-1", sequence: 4, rows: 1, cols: 2,
       frame, hash: "b".repeat(64) } });

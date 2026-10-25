@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-158: Use a consumer-owned sidecar identity in four capture fixtures
+  instead of naming a workspace implementation. The same 24 owner cases
+  and all 16 boundary components pass without changing payload assertions
+  or adding checker exceptions.
+
 - F239-155: Restore tab origins from every stored space before a project
   becomes locally owned. Dormant placement can start inactive-space views
   without loading their layout into the plane. The activation owner
