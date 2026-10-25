@@ -126,6 +126,43 @@ func TestRetiredViewCallbackPreservesMalformedAndTransportErrors(t *testing.T) {
 	}
 }
 
+// contract: view.origin.retired-malformed-envelope-is-reported
+func TestRetiredGenerationMalformedInnerEnvelopeKeepsItsChannelError(t *testing.T) {
+	isolateTraceRecords(t)
+	clock := &fakeClock{}
+	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s.views = map[string]*nativeWebview{"probe-surface": {}}
+	_, retiredGeneration := retireAndReplaceView(t, s, fake)
+	current, ok := s.documents.view("probe-surface")
+	if !ok || current.generation == retiredGeneration {
+		t.Fatalf("replacement generation: %+v, want a generation newer than %d", current, retiredGeneration)
+	}
+
+	for _, value := range []string{
+		`{"message":"not-an-object"}`,
+		`{"message":{}}`,
+		`{"message":{"event":"","command":"probe.run"}}`,
+	} {
+		accepted, err := s.viewMessageFrom("probe-surface", "probe", retiredGeneration, value)
+		if !accepted || err == nil {
+			t.Fatalf("retired malformed envelope %s: accepted %t, error %v; want the channel error without dispatch", value, accepted, err)
+		}
+		retiredError := err.Error()
+		accepted, err = s.viewMessageFrom("probe-surface", "probe", current.generation, value)
+		if !accepted || err == nil {
+			t.Fatalf("current malformed envelope %s: accepted %t, error %v; want the current channel error", value, accepted, err)
+		}
+		if err.Error() != retiredError {
+			t.Fatalf("current malformed envelope error %q differs from retired error %q", err, retiredError)
+		}
+	}
+
+	accepted, err := s.viewMessageFrom("probe-surface", "probe", retiredGeneration, `{"message":{"sok":1,"id":7,"command":"probe.run","params":{}}}`)
+	if accepted || err != nil {
+		t.Fatalf("valid retired call: accepted %t, error %v; want cancellation without error", accepted, err)
+	}
+}
+
 // contract: view.channel.overflow-closes
 func TestViewChannelOverflowClosesTheViewAndCreatesItAgain(t *testing.T) {
 	clock := &fakeClock{}

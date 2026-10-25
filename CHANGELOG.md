@@ -134,6 +134,16 @@
   the duplicate ID in the canonical table. Green: it parses both real tables,
   confirms unique IDs and matching case sets, and passes 1/1.
 
+- F239-106: Validate the shape of a view message before canceling a callback
+  from a retired generation. Keep event payload decoding, dispatch and state
+  mutation behind the current-generation check, and preserve the Tauri handling
+  of non-null reply, command and cancel markers. Red: unchanged Go behavior
+  canceled a retired malformed envelope with `accepted=false, error=nil`
+  (`/tmp/F239-106-envelope-red-standard-01.log`). Green: the same owner test
+  passes 1/1 in default and diagnostics builds
+  (`/tmp/F239-106-envelope-green-default-01.log`,
+  `/tmp/F239-106-envelope-green-diagnostics-01.log`).
+
 - F239-100: Identify the visible webview that remains pending after native
   activation. The activity-state waiter reports exact unresolved members and
   distinguishes timeout before and after callback registration. The view-focus

@@ -119,6 +119,15 @@
   Green: 두 실제 table을 parse해 중복 ID가 없고 case 집합이 일치함을 확인하며
   1/1 통과한다.
 
+- F239-106: Retired generation callback을 취소하기 전에 view message shape를
+  검증한다. Event payload decoding, dispatch 및 state mutation은 current-generation
+  검사 뒤에 두고, non-null reply, command 및 cancel marker를 처리하는 Tauri의
+  경계를 유지한다. Red: 변경 전 Go 구현은 retired malformed envelope를
+  `accepted=false, error=nil`로 취소했다(`/tmp/F239-106-envelope-red-standard-01.log`).
+  Green: 같은 owner test가 default와 diagnostics build에서 각각 1/1 통과했다
+  (`/tmp/F239-106-envelope-green-default-01.log`,
+  `/tmp/F239-106-envelope-green-diagnostics-01.log`).
+
 - F239-100: native activation 뒤 대기 중인 visible webview를 식별한다.
   Activity-state waiter는 미완료 member를 정확히 보고하고 callback
   registration 전후 timeout을 구분한다. View-focus test는 process event ring을

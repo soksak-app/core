@@ -1611,6 +1611,9 @@ func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, va
 	if received.Message == nil {
 		return false, fmt.Errorf("%s: view message has neither message nor error", surface)
 	}
+	if err := validateViewMessageEnvelope(surface, received.Message); err != nil {
+		return true, err
+	}
 	if !s.documents.currentGeneration(surface, plugin, generation) {
 		return false, nil
 	}
@@ -1697,6 +1700,43 @@ func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, va
 		return true, nil
 	}
 	return true, fmt.Errorf("%s: view event %q is unknown", surface, event.Event)
+}
+
+// validateViewMessageEnvelope rejects malformed message shapes before a retired view callback is canceled. It does not validate
+// event payloads or dispatch messages; those operations remain scoped to the current generation.
+func validateViewMessageEnvelope(surface string, message json.RawMessage) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(message, &fields); err != nil {
+		return fmt.Errorf("%s: view message is not an object: %w", surface, err)
+	}
+	if fields == nil {
+		return fmt.Errorf("%s: view message is not an object", surface)
+	}
+	if raw, ok := fields["event"]; ok {
+		var event *string
+		if err := json.Unmarshal(raw, &event); err == nil && event != nil {
+			switch *event {
+			case "view.ready", declaredSnapshotEvent:
+				return nil
+			case "view.error":
+				var fields struct {
+					Reason string `json:"reason"`
+				}
+				if err := json.Unmarshal(message, &fields); err != nil || fields.Reason == "" {
+					return fmt.Errorf("%s: view.error has no reason", surface)
+				}
+				return nil
+			default:
+				return fmt.Errorf("%s: view event %q is unknown", surface, *event)
+			}
+		}
+	}
+	for _, name := range []string{"reply", "command", "cancel"} {
+		if raw, ok := fields[name]; ok && strings.TrimSpace(string(raw)) != "null" {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s: view message has no event, reply, command or cancel", surface)
 }
 
 // viewState records the navigation state of the view of surface. A navigation that starts after the last state clears the ready record
