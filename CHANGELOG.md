@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-118: Move four unpaired Go and Rust host test files into their existing
+  owning test files, remove redundant module includes, and correct the parity
+  inventory. The focused moved tests pass, and the paired-host structure check
+  no longer reports those four paths. One unrelated Tauri `sok` process-wait
+  parity finding remains.
+
 - F239-107-2: Verify view replacement event ordering through the production
   retirement and source-registration operations. Preserve the existing order:
   retire the old source, emit `view-process-ended`, then register the

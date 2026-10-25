@@ -321,3 +321,38 @@ func TestPluginsUseRegistrySetsTheRegistryLikeTheCommand(t *testing.T) {
 		}
 	}
 }
+
+// contract: cli.plugin.starter-job-transitions-are-bound-to-snapshot
+func TestPluginsStarterPendingAndCompletedStatesSurviveManagerRecreation(t *testing.T) {
+	config := t.TempDir()
+	index, _ := pluginRegistry(t)
+	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
+		t.Fatalf("use registry: %v", err)
+	}
+	plugins, _ := newPlugins(t, config)
+	request := host.PluginsStarterRequest{
+		State: "pending", Pack: "starter", Registry: "file://" + index, Plugins: []string{"probe"},
+	}
+	if job, err := plugins.SetStarter(request); err != nil || job.State != "pending" {
+		t.Fatalf("save pending starter job = %#v, %v", job, err)
+	}
+
+	plugins, _ = newPlugins(t, config)
+	state, err := plugins.State()
+	if err != nil || state.Starter == nil || state.Starter.State != "pending" {
+		t.Fatalf("pending starter state after manager recreation = %#v, %v", state, err)
+	}
+	if _, err := plugins.Run(host.PluginsRunRequest{Action: "install", Plugin: "probe"}); err != nil {
+		t.Fatalf("install starter plugin: %v", err)
+	}
+	request.State = "complete"
+	if job, err := plugins.SetStarter(request); err != nil || job.State != "complete" {
+		t.Fatalf("save completed starter job = %#v, %v", job, err)
+	}
+
+	plugins, _ = newPlugins(t, config)
+	state, err = plugins.State()
+	if err != nil || state.Starter == nil || state.Starter.State != "complete" {
+		t.Fatalf("completed starter state after manager recreation = %#v, %v", state, err)
+	}
+}

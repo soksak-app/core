@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-118: 짝이 없던 Go/Rust host test file 네 개를 기존 owning test file로
+  옮기고 중복 module include를 제거하며 parity inventory를 수정한다. 이동한
+  집중 test가 통과했고 paired-host structure check에서 해당 네 경로는 더 이상
+  보고되지 않는다. 무관한 Tauri `sok` process-wait parity finding 하나는 남아
+  있다.
+
 - F239-107-2: Production retirement 및 source-registration operation을 통해
   view replacement event 순서를 검증한다. 기존 순서인 이전 source retire,
   `view-process-ended` 전달, replacement 등록을 보존한다. Tauri owner test는

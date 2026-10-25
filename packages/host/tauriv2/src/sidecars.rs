@@ -4137,9 +4137,5 @@ mod image_detach;
 mod lock_test;
 
 #[cfg(test)]
-#[path = "sidecars_closed_image_test.rs"]
-mod closed_image_test;
-
-#[cfg(test)]
 #[path = "sidecars_session_retention_test.rs"]
 mod session_retention_test;
