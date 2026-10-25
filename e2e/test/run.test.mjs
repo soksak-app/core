@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { runE2E } from "../run.mjs";
 
-const runner = resolve("e2e/run.mjs");
+const runner = fileURLToPath(new URL("../run.mjs", import.meta.url));
 
 test("runE2E rejects missing or partial metadata before injected operations", async (t) => {
   for (const env of [{}, { SOKSAK_RUN_ID: "run-only" }, { SOKSAK_RUN_FOLDER: "/tmp/folder-only" }]) {

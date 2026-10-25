@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F239-65: E2E runner test entrypoint를 module 위치 기준으로 해석해 호출자의 working directory에 의존하지 않게 한다. Red: `e2e/`에서 실행한 `node --test test/run.test.mjs`가 존재하지 않는 `e2e/e2e/run.mjs`를 불러오려 했다. Green: focused test는 `e2e/`와 repository root 양쪽에서 10/10 통과한다. `node --check e2e/test/run.test.mjs`와 `make docs-check`가 통과한다.
+
+
 - F239-62: Installed-sidecar fixture에 필수 canonical `displayName`을
   추가한다. `audit-run.test.mjs`와 `check-events.test.mjs`의 Red: 통합 Node run은
   validation이 catalog 동작 전에 fixture record를 거부해 각각 한 개와 세 개

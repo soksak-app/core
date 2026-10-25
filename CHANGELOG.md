@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F239-65: Resolve the E2E runner test entrypoint from its module location so the test does not depend on the caller's working directory. Red: running `node --test test/run.test.mjs` from `e2e/` attempted to load the nonexistent `e2e/e2e/run.mjs`. Green: the focused test passes 10/10 from both `e2e/` and repository root; `node --check e2e/test/run.test.mjs` and `make docs-check` pass.
+
+
 - F239-62: Add the required canonical `displayName` to the installed-sidecar
   fixtures in `audit-run.test.mjs` and `check-events.test.mjs`. Red: the
   consolidated Node run failed one and three tests respectively because
