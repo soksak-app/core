@@ -824,6 +824,20 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F212.14-4",
+    implementation: [
+      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func PrepareRasterUpdate(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/surface_layout_order_test.go", id: "TestContinuousPreparationStartsRasterBeforeReply" },
+      { file: "packages/host/wailsv3/tests/surface_layout_order_test.go", id: "TestRasterPreparationFailureCancelsBeforeReply" },
+      { file: "packages/host/wailsv3/tests/surface_layout_order_test.go", id: "TestRasterPreparationRetainsCancellationSchedulingError" },
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+    ],
+    expected: "Every Wails layout preparation starts raster configuration before replying and preserves cancellation failures and geometry acceptance.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F212.14-3",
     implementation: [
       { file: "e2e/drag-measurement.mjs", symbol: "committing: spread(" },

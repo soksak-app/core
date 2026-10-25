@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-4: 연속 layout을 포함한 모든 준비 응답 전에 Wails raster configuration을 시작한다. Post-DOM refresh, exact-raster 대기 및 cancellation 오류를 유지한다. 수정 전 누락 작업 assertion 두 개가 실패하며 수정 후 owner 다섯 개와 녹화 geometry 사례 세 개가 통과하고 감사, baseline 복원 및 종료도 통과한다. 완전한 trace 없는 benchmark는 여전히 모든 성능 목표를 실패하므로 F212.14를 열어 둔다.
+
 - F239-184: 표준 random-text API로 opaque image-detach request identifier를 생성하여 application 재시작이 persistent supplier request ID를 재사용하지 않게 한다. 수정 전 독립 manager 충돌 검사가 실패하며 수정 후 소유 detach 검사 여덟 개가 모두 통과한다. 재빌드한 Wails runtime이 reload와 녹화된 divider-drag 정렬, 오류 감사, frontmost baseline 복원 및 정상 종료를 통과하여 F239-183과 F239-184를 완료한다. 성능 acceptance는 별도로 유지한다.
 
 - F239-183: 성공한 reply, event 및 request 전달의 view 종료 기록을 제거한다. 이 worker 경로는 UI-thread lifecycle 상태를 잘못 변경하고 살아 있는 view를 종료로 표시한다. 수정 전 전달 하위 검사 세 개가 실패하며 수정 후 전달 및 실제 종료 소유 검사 네 개가 통과한다. Runtime crash 복구는 아직 검증 전이다.

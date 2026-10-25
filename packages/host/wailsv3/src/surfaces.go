@@ -773,27 +773,28 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		s.closeRemovedSurface(id)
 	}
 	s.surfacesClosed(gone)
-	// A continuous frame updates only the native position. If the image raster were rebuilt
-	// at every divider step, the sidecar work would be serialized behind the display queue. The settled frame below
-	// performs the raster update that serves as the reference.
-	if req.Settled {
-		if err := s.refreshImageRasters(); err != nil {
-			// A cancel commits the transaction, so the title bar is restored first to match the row before drawing.
-			restore := outcome.restore
-			if cancel := system.EnqueueUI(func() {
-				if failure := restore(); failure != nil {
-					LogError("surface layout title bar restore", failure)
-				}
-				if failure := system.CancelLayout(win.NativeWindow()); failure != nil {
-					LogError("surface layout cancel", failure)
-				}
-			}); cancel != nil {
-				return prepared, fmt.Errorf("%w; scheduling layout cancellation: %v", err, cancel)
+	err = PrepareRasterUpdate(s.refreshImageRasters, func() error {
+		return system.EnqueueUI(func() {
+			if failure := outcome.restore(); failure != nil {
+				LogError("surface layout title bar restore", failure)
 			}
-			return prepared, err
+			if failure := system.CancelLayout(win.NativeWindow()); failure != nil {
+				LogError("surface layout cancel", failure)
+			}
+		})
+	})
+	return prepared, err
+}
+
+// PrepareRasterUpdate starts the prepared raster configuration before the caller replies, and cancels a failed preparation.
+func PrepareRasterUpdate(refresh, cancel func() error) error {
+	if err := refresh(); err != nil {
+		if cancellation := cancel(); cancellation != nil {
+			return fmt.Errorf("%w; scheduling layout cancellation: %v", err, cancellation)
 		}
+		return err
 	}
-	return prepared, nil
+	return nil
 }
 
 // RunLayout starts the surface layout transaction after it places the window cover. The cover is placed before the layout, so when the cover is rejected,

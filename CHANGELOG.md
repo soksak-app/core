@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-4: Start Wails raster configuration before every preparation reply, including continuous layouts. Preserve post-DOM refresh, exact-raster waiting and cancellation errors. Two skipped-work assertions fail before correction; five owners and three recorded geometry cases pass afterward with clean audit, baseline restoration and shutdown. The complete untraced benchmark still fails all performance targets; F212.14 remains open.
+
 - F239-184: Generate opaque image-detach request identifiers with the standard random-text API so application restarts do not reuse a persistent supplier request ID. The independent-manager collision fails before correction; all eight owning detach tests pass afterward. The rebuilt Wails runtime passes reload and recorded divider-drag alignment with clean error audit, restored frontmost baseline and normal shutdown; close F239-183 and F239-184. Performance acceptance remains separate.
 
 - F239-183: Remove view-end recording from successful reply, event and request delivery. These worker paths incorrectly mutate UI-thread lifecycle state and mark live views ended. Three owning delivery subcases fail before correction; four top-level delivery and actual-termination owners pass afterward. Runtime crash recovery remains unverified.

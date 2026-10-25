@@ -4,6 +4,7 @@ package host_test
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
@@ -93,5 +94,38 @@ func TestTitlebarIsSetInTheBegunLayoutBeforeTheSurfaces(t *testing.T) {
 	err = host.ApplyOrCancel(titlebar(nil, errors.New("restore failed")), step("surfaces", errors.New("surface failed")), step("cancel", nil))
 	if want := "surface failed; restoring the title bar: restore failed"; err == nil || err.Error() != want {
 		t.Fatalf("ApplyOrCancel = %v, want %q", err, want)
+	}
+}
+
+func TestContinuousPreparationStartsRasterBeforeReply(t *testing.T) {
+	var calls []string
+	err := host.PrepareRasterUpdate(func() error {
+		calls = append(calls, "configure")
+		return nil
+	}, func() error { t.Fatal("a valid preparation must not cancel"); return nil })
+	calls = append(calls, "reply")
+	if err != nil || !reflect.DeepEqual(calls, []string{"configure", "reply"}) {
+		t.Fatalf("continuous preparation returned %v with steps %v; want configure before reply", err, calls)
+	}
+}
+
+func TestRasterPreparationFailureCancelsBeforeReply(t *testing.T) {
+	failed := errors.New("raster configure failed")
+	var calls []string
+	err := host.PrepareRasterUpdate(func() error {
+		calls = append(calls, "configure")
+		return failed
+	}, func() error { calls = append(calls, "cancel"); return nil })
+	if !errors.Is(err, failed) || !reflect.DeepEqual(calls, []string{"configure", "cancel"}) {
+		t.Fatalf("failed preparation returned %v with steps %v; want configure then cancel", err, calls)
+	}
+}
+
+func TestRasterPreparationRetainsCancellationSchedulingError(t *testing.T) {
+	failed := errors.New("raster configure failed")
+	err := host.PrepareRasterUpdate(func() error { return failed },
+		func() error { return errors.New("cancel scheduling failed") })
+	if !errors.Is(err, failed) || !strings.Contains(err.Error(), "cancel scheduling failed") {
+		t.Fatalf("preparation lost an error: %v", err)
 	}
 }

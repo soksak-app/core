@@ -21,6 +21,8 @@ Tauri host의 native 이미지 표시 commit은 framework event callback 밖의 
 
 ## 배치 순서
 
+연속 layout 변경을 포함한 모든 준비는 응답 전에 적용된 native geometry의 raster update를 시작한다. Page가 대응 DOM을 그리고 표시하는 동안 raster를 생성할 수 있다. Presentation 단계는 해당 DOM이 변경한 region geometry를 다시 refresh하고 commit 전에 정확한 필수 raster를 계속 기다린다. 조기 update는 presentation 확인이 아니다.
+
 1. 카드 DOM을 갱신하기 전에 페이지가 다음 표면 사각형을 제출한다.
 2. 호스트는 해당 창의 배치를 위해 UI 스레드의 레이어 트랜잭션 사용을 시작하고 네이티브 사각형 전체를 적용한다. 응답에는 실제 좌표와 준비 전체의 식별자 하나를 포함한다.
 3. 준비가 완료되면 페이지가 카드 DOM을 갱신하고 해당 식별자의 표시를 요청한다.
