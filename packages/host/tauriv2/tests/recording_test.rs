@@ -83,13 +83,19 @@ fn a_finished_recording_keeps_its_folder_and_reports_frames() {
     let recording = Recording::new();
     let fake = Fake::default();
     recording
-        .start(&fake, WINDOW, &folder, false, &make)
+        .start(&fake, WINDOW, &folder, true, &make)
         .unwrap();
     assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
-    let (directory, count) = recording.finish(&fake).unwrap();
-    assert_eq!((directory, count), (folder.clone(), 3));
+    let (directory, count, frame_identity) = recording.finish(&fake).unwrap();
+    assert_eq!(
+        (directory, count, frame_identity),
+        (folder.clone(), 3, true)
+    );
     assert!(folder.is_dir());
-    assert_eq!(calls(&fake), ["open 7", "start", "wait", "stop"]);
+    assert_eq!(
+        calls(&fake),
+        ["open 7", "start frameIdentity", "wait", "stop"]
+    );
     assert!(recording.finish(&fake).is_err());
 }
 
@@ -249,7 +255,7 @@ fn recording_start_forwards_frame_identity() {
 // contract: diagnostics.capture-stop.payload-reports-frame-limit
 #[test]
 fn the_stop_payload_reports_a_normal_frame_limit() {
-    let payload = stop_payload(Path::new("/tmp/frames"), 600, true, 42.5, &[]);
+    let payload = stop_payload(Path::new("/tmp/frames"), 600, true, 42.5, &[], false);
     assert_eq!(
         payload,
         serde_json::json!({"frames": "/tmp/frames", "callbackStatus": "/tmp/frames/callback-status.jsonl", "displayLink": "/tmp/frames/display-link.json", "count": 600, "limited": true, "longestGap": 42.5, "layouts": []})
@@ -259,24 +265,35 @@ fn the_stop_payload_reports_a_normal_frame_limit() {
 // contract: diagnostics.capture-stop.payload-reports-callback-status
 #[test]
 fn the_stop_payload_names_the_callback_status_artifact() {
-    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[]);
+    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[], false);
     assert_eq!(
         payload["callbackStatus"],
         "/tmp/frames/callback-status.jsonl"
     );
 }
 
+// contract: diagnostics.capture-stop.payload-names-opt-in-frame-identity-artifact
+#[test]
+fn the_stop_payload_names_the_opt_in_frame_identity_artifact() {
+    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[], true);
+    assert_eq!(payload["frameIdentity"]["status"], "complete");
+    assert_eq!(
+        payload["frameIdentity"]["manifest"],
+        "/tmp/frames/frame-identities/manifest.json"
+    );
+}
+
 // contract: diagnostics.capture-stop.payload-reports-unbounded
 #[test]
 fn the_stop_payload_reports_an_unbounded_recording() {
-    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[]);
+    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[], false);
     assert_eq!(payload["limited"], false);
 }
 
 // contract: diagnostics.capture-stop.payload-reports-layout-timeline
 #[test]
 fn the_stop_payload_requires_a_layout_timeline() {
-    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[]);
+    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[], false);
     assert!(
         payload["layouts"].is_array(),
         "capture stop omitted layouts: {payload}"
@@ -292,6 +309,7 @@ fn the_stop_payload_preserves_layout_stages() {
         false,
         0.0,
         &[[7.0, 10.0, 20.0, 30.0, 15.0]],
+        false,
     );
     assert_eq!(
         payload["layouts"],

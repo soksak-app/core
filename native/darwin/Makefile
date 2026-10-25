@@ -275,6 +275,7 @@ NATIVE_TESTS = observe_test \
   capture_presentation_test \
   image_capture_match_test \
   capture_frame_identity_test \
+  capture_frame_identity_capture_test \
   capture_resize_test \
   capture_frame_test \
   dock_menu_test \

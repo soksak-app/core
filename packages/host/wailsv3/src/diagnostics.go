@@ -228,8 +228,8 @@ type captureStatus interface {
 	LongestGap() float64
 }
 
-func captureStopPayload(c captureStatus, directory string, count int, records [][5]float64) map[string]any {
-	return map[string]any{
+func captureStopPayload(c captureStatus, directory string, count int, records [][5]float64, frameIdentity bool) map[string]any {
+	payload := map[string]any{
 		"frames":         directory,
 		"callbackStatus": filepath.Join(directory, "callback-status.jsonl"),
 		"displayLink":    filepath.Join(directory, "display-link.json"),
@@ -238,6 +238,13 @@ func captureStopPayload(c captureStatus, directory string, count int, records []
 		"longestGap":     c.LongestGap(),
 		"layouts":        layoutTrace(records),
 	}
+	if frameIdentity {
+		payload["frameIdentity"] = map[string]any{
+			"status":   "complete",
+			"manifest": filepath.Join(directory, "frame-identities", "manifest.json"),
+		}
+	}
+	return payload
 }
 
 // recorder returns the recording device of this platform.
@@ -545,7 +552,7 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage)
 		}
 		capture.after = *p.After
 	}
-	directory, count, err := recording.Finish(capture)
+	directory, count, frameIdentity, err := recording.Finish(capture)
 	if err != nil {
 		return nil, err
 	}
@@ -554,7 +561,7 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	if err != nil {
 		return nil, errors.Join(err, os.RemoveAll(directory))
 	}
-	return captureStopPayload(captureStatusAdapter{capture}, directory, count, records), nil
+	return captureStopPayload(captureStatusAdapter{capture}, directory, count, records, frameIdentity), nil
 }
 
 type captureStatusAdapter struct{ platformCapture }

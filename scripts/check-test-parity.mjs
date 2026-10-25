@@ -5366,6 +5366,21 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F239-47-40-3",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut)" },
+      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func parseCaptureStartOptions(params json.RawMessage)" },
+      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "frame_identity = match params.get(\"frameIdentity\")" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_test.m", id: "identity capture without a prepared target is rejected" },
+      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestCaptureStartOptionsParseFrameIdentity" },
+      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "recording_start_forwards_frame_identity" },
+    ],
+    expected: "The diagnostic start option is strictly boolean and defaults off; both hosts pass it through, and native capture rejects identity mode until its implementation is available.",
+    levels: ["native", "unit"],
+  },
+  {
     id: "F239-47-30-2",
     implementation: [{ file: "scripts/check-host-parity.mjs", symbol: "export function goEndpointMethods(" }],
     tests: [{ file: "scripts/test/check-host-parity.test.mjs", id: "hyphenated diagnostic endpoint methods are read from both hosts" }],

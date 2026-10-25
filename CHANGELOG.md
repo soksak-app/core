@@ -38,9 +38,20 @@
   small-raster finalization failure. Green: `image_region_test`,
   `image_capture_match_test`, and `capture_test` pass 1/1 each; Wails Darwin
   cgo and Tauri diagnostics recording targets compile and link against the
-  native library with CoreImage and Vision declared. ScreenCaptureKit frame
-  decoding remains open under F239-47-40-4-3; physical scanout and terminal
-  IME acceptance remain unverified.
+  native library with CoreImage and Vision declared. ScreenCaptureKit frame decoding is completed under F239-47-40-4-3; physical
+  scanout and terminal IME acceptance remain unverified.
+- F239-47-40-4-3: Decode complete BGRA ScreenCaptureKit samples inside
+  mapped tag ROIs for retained source regions. Accept only exact currently
+  issued payloads, write per-frame results to a separate JSONL artifact, and
+  expose its format-1 manifest in the opt-in stop response. Preserve raw sample
+  bytes and exact matcher results. Red: the owner test against F40-4-2 failed
+  decoded artifact, geometry, multi-region, no-code, unissued, partial,
+  ambiguity, duplicate ROI, retention and write-failure assertions (11).
+  Green: `capture_frame_identity_capture_test` passes 1/1 in 0.542 s; focused
+  Wails stop/recording tests pass 2/2 and Tauri exact recording tests pass 2/2.
+  Vision API errors and artifact writes fail capture finalization. Unknown
+  identities are never inferred from time or sequence. This evidence does not
+  establish physical scanout or terminal IME acceptance.
 - F239-47-40-2: Correct the QR helper's ROI, detection, payload, and
   ownership boundaries. Red: the unchanged owner test failed for whole-image
   Vision detection, mutable image backing, symmetric-coordinate assumptions,

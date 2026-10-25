@@ -38,8 +38,9 @@ type Capture interface {
 
 // Recording is the folder of the recording in progress. The zero value is used.
 type Recording struct {
-	mu        sync.Mutex
-	directory string
+	mu            sync.Mutex
+	directory     string
+	frameIdentity bool
 }
 
 // Start creates directory and starts recording target into that folder. It returns after the first frame is recorded.
@@ -64,6 +65,7 @@ func (r *Recording) Start(capture Capture, target CaptureTarget, directory strin
 		return err
 	}
 	r.directory = directory
+	r.frameIdentity = frameIdentity
 	return nil
 }
 
@@ -93,6 +95,7 @@ func (r *Recording) Abort(capture Capture) error {
 	r.mu.Lock()
 	directory := r.directory
 	r.directory = ""
+	r.frameIdentity = false
 	r.mu.Unlock()
 	if directory == "" {
 		return nil
@@ -108,16 +111,18 @@ func (r *Recording) Abort(capture Capture) error {
 }
 
 // Finish ends the recording in progress and returns the folder and the number of frames. The requester deletes the folder.
-func (r *Recording) Finish(capture Capture) (string, int, error) {
+func (r *Recording) Finish(capture Capture) (string, int, bool, error) {
 	r.mu.Lock()
 	directory := r.directory
+	frameIdentity := r.frameIdentity
 	r.directory = ""
+	r.frameIdentity = false
 	r.mu.Unlock()
 	if directory == "" {
-		return "", 0, errors.New("no capture is running")
+		return "", 0, false, errors.New("no capture is running")
 	}
 	count, err := capture.Stop()
-	return directory, count, err
+	return directory, count, frameIdentity, err
 }
 
 // Running is the folder of the recording in progress. It is an empty string when there is no recording.

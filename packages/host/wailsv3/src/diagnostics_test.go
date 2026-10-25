@@ -95,12 +95,26 @@ func TestRecordingStartForwardsFrameIdentity(t *testing.T) {
 	}
 }
 
+// contract: recording.finish.preserves-frame-identity-option
+func TestRecordingFinishPreservesFrameIdentityOption(t *testing.T) {
+	fake := &captureStartProbe{}
+	var recording Recording
+	directory := filepath.Join(t.TempDir(), "frames")
+	if err := recording.Start(fake, CaptureTarget{Window: 7}, directory, true); err != nil {
+		t.Fatal(err)
+	}
+	finishedDirectory, _, frameIdentity, err := recording.Finish(fake)
+	if err != nil || finishedDirectory != directory || !frameIdentity {
+		t.Fatalf("finish directory=%q frameIdentity=%v error=%v", finishedDirectory, frameIdentity, err)
+	}
+}
+
 func (c fakeCaptureStatus) Limited() bool       { return c.limited }
 func (c fakeCaptureStatus) LongestGap() float64 { return c.gap }
 
 // contract: diagnostics.capture-stop.payload-reports-frame-limit
 func TestCaptureStopPayloadReportsNormalFrameLimit(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{limited: true, gap: 42.5}, "/tmp/frames", 600, nil)
+	payload := captureStopPayload(fakeCaptureStatus{limited: true, gap: 42.5}, "/tmp/frames", 600, nil, false)
 	if payload["frames"] != "/tmp/frames" || payload["callbackStatus"] != "/tmp/frames/callback-status.jsonl" || payload["displayLink"] != "/tmp/frames/display-link.json" || payload["count"] != 600 || payload["limited"] != true || payload["longestGap"] != 42.5 {
 		t.Fatalf("payload = %#v", payload)
 	}
@@ -108,15 +122,23 @@ func TestCaptureStopPayloadReportsNormalFrameLimit(t *testing.T) {
 
 // contract: diagnostics.capture-stop.payload-reports-callback-status
 func TestCaptureStopPayloadNamesCallbackStatusArtifact(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil)
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, false)
 	if payload["callbackStatus"] != filepath.Join("/tmp/frames", "callback-status.jsonl") {
 		t.Fatalf("callback status path = %#v", payload["callbackStatus"])
 	}
 }
 
+func TestCaptureStopPayloadNamesOptInFrameIdentityArtifact(t *testing.T) {
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, true)
+	identity, ok := payload["frameIdentity"].(map[string]any)
+	if !ok || identity["status"] != "complete" || identity["manifest"] != filepath.Join("/tmp/frames", "frame-identities", "manifest.json") {
+		t.Fatalf("opt-in identity artifact was not returned: %#v", payload)
+	}
+}
+
 // contract: diagnostics.capture-stop.payload-reports-unbounded
 func TestCaptureStopPayloadReportsUnboundedRecording(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{limited: false}, "/tmp/frames", 3, nil)
+	payload := captureStopPayload(fakeCaptureStatus{limited: false}, "/tmp/frames", 3, nil, false)
 	if payload["limited"] != false {
 		t.Fatalf("payload = %#v", payload)
 	}
@@ -124,7 +146,7 @@ func TestCaptureStopPayloadReportsUnboundedRecording(t *testing.T) {
 
 // contract: diagnostics.capture-stop.payload-reports-layout-timeline
 func TestCaptureStopPayloadRequiresLayoutTimeline(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil)
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, false)
 	if _, ok := payload["layouts"]; !ok {
 		t.Fatalf("capture stop omitted layouts: %#v", payload)
 	}
@@ -132,7 +154,7 @@ func TestCaptureStopPayloadRequiresLayoutTimeline(t *testing.T) {
 
 // contract: diagnostics.capture-stop.payload-preserves-layout-stages
 func TestCaptureStopPayloadPreservesLayoutStages(t *testing.T) {
-	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, [][5]float64{{7, 10, 20, 30, 15}})
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, [][5]float64{{7, 10, 20, 30, 15}}, false)
 	layouts := payload["layouts"].([]map[string]any)
 	if len(layouts) != 1 || layouts[0]["ticket"] != uint64(7) || layouts[0]["begun"] != float64(10) || layouts[0]["requested"] != float64(15) || layouts[0]["presented"] != float64(20) || layouts[0]["committed"] != float64(30) {
 		t.Fatalf("layout stages changed: %#v", payload)

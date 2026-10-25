@@ -704,6 +704,36 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     callbackRecord[@"imageMatch"] = imageMatchRecord(match, matchMilliseconds, width, height, stride,
         rect, screen, hasScreenRect, contentScale, scaleFactor, CVPixelBufferGetPixelFormatType(buffer), colorName);
     sp_image_capture_match_result_dispose(&match);
+    if (sp_image_capture_match_identity_session_active()) {
+        CGImageRef capturedImage = NULL;
+        CFDataRef capturedBytes = CFDataCreate(kCFAllocatorDefault,
+            copy + sizeof(head) + sizeof(info), (CFIndex)(stride * height));
+        CGDataProviderRef provider = capturedBytes ? CGDataProviderCreateWithCFData(capturedBytes) : NULL;
+        CGColorSpaceRef decodeColorSpace = captureColorSpace ? CGColorSpaceRetain(captureColorSpace)
+            : CGColorSpaceCreateDeviceRGB();
+        if (provider && decodeColorSpace && CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_32BGRA) {
+            capturedImage = CGImageCreate(width, height, 8, 32, stride, decodeColorSpace,
+                kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst,
+                provider, NULL, false, kCGRenderingIntentDefault);
+        }
+        if (provider) CGDataProviderRelease(provider);
+        if (decodeColorSpace) CGColorSpaceRelease(decodeColorSpace);
+        if (capturedBytes) CFRelease(capturedBytes);
+        NSArray<NSDictionary *> *identityRecords = nil;
+        char *identityError = NULL;
+        BOOL decoded = capturedImage && sp_image_capture_match_identity_decode_frame(capturedImage,
+            width, height, rect, hasScreenRect ? screen : CGRectZero, contentScale, scaleFactor,
+            (uint64_t)number, shown, &identityRecords, &identityError);
+        if (capturedImage) CGImageRelease(capturedImage);
+        if (!decoded) {
+            NSString *message = [NSString stringWithUTF8String:identityError
+                ?: "captured sample image could not be prepared for frame identity decoding"];
+            free(identityError);
+            setCaptureError([NSString stringWithFormat:@"frame identity decode failed: %@", message]);
+            sp_log_error("frame identity", message.UTF8String);
+        }
+        [identityRecords release];
+    }
     if (colorAttachment) CFRelease(colorAttachment);
     self.queued = number;
     NSString* path = [self.directory stringByAppendingPathComponent:[NSString stringWithFormat:@"frame-%04d.bgra", number]];

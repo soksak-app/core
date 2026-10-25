@@ -17,10 +17,15 @@ pub fn stop_payload(
     limited: bool,
     longest_gap: f64,
     layouts: &[[f64; 5]],
+    frame_identity: bool,
 ) -> Value {
     let callback_status = directory.join("callback-status.jsonl");
     let display_link = directory.join("display-link.json");
-    json!({"frames": directory.to_string_lossy(), "callbackStatus": callback_status.to_string_lossy(), "displayLink": display_link.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap, "layouts": layout_trace(layouts)})
+    let mut payload = json!({"frames": directory.to_string_lossy(), "callbackStatus": callback_status.to_string_lossy(), "displayLink": display_link.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap, "layouts": layout_trace(layouts)});
+    if frame_identity {
+        payload["frameIdentity"] = json!({"status": "complete", "manifest": directory.join("frame-identities/manifest.json").to_string_lossy()});
+    }
+    payload
 }
 
 /// Converts the placement transaction record into {ticket, begun, presented, committed}. A stage that did not happen is
@@ -71,6 +76,7 @@ pub trait Capture {
 
 struct State {
     directory: Option<PathBuf>,
+    frame_identity: bool,
 }
 
 /// The folder of the recording in progress.
@@ -87,7 +93,10 @@ impl Default for Recording {
 impl Recording {
     pub const fn new() -> Recording {
         Recording {
-            state: Mutex::new(State { directory: None }),
+            state: Mutex::new(State {
+                directory: None,
+                frame_identity: false,
+            }),
         }
     }
 
@@ -130,6 +139,7 @@ impl Recording {
         match started {
             Ok(()) => {
                 state.directory = Some(directory.to_path_buf());
+                state.frame_identity = frame_identity;
                 Ok(())
             }
             Err(error) => match std::fs::remove_dir_all(directory) {
@@ -143,14 +153,16 @@ impl Recording {
 
     /// Stops the recording in progress and deletes the folder. It does nothing when there is no recording.
     pub fn abort(&self, capture: &dyn Capture) -> Result<(), String> {
-        let directory = self
-            .state
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the recording state, which the stop amends; the
-            // panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner)
-            .directory
-            .take();
+        let directory = {
+            let mut state = self
+                .state
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the recording state, which the stop amends; the
+                // panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            state.frame_identity = false;
+            state.directory.take()
+        };
         if let Some(directory) = directory {
             let stop_error = capture.stop().err();
             let cleanup_error = std::fs::remove_dir_all(directory)
@@ -171,16 +183,20 @@ impl Recording {
 
     /// Ends the recording in progress and returns the folder and the number of frames. The requester deletes the
     /// folder.
-    pub fn finish(&self, capture: &dyn Capture) -> Result<(PathBuf, i32), String> {
-        let directory = self
-            .state
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the recording state, which the stop amends;
-            // the panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner)
-            .directory
-            .take()
-            .ok_or_else(|| "no capture is running".to_string())?;
+    pub fn finish(&self, capture: &dyn Capture) -> Result<(PathBuf, i32, bool), String> {
+        let (directory, frame_identity) = {
+            let mut state = self
+                .state
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the recording state, which the stop amends;
+                // the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            (
+                state.directory.take(),
+                std::mem::replace(&mut state.frame_identity, false),
+            )
+        };
+        let directory = directory.ok_or_else(|| "no capture is running".to_string())?;
         let count = match capture.stop() {
             Ok(count) => count,
             Err(error) => {
@@ -192,7 +208,7 @@ impl Recording {
                 };
             }
         };
-        Ok((directory, count))
+        Ok((directory, count, frame_identity))
     }
 
     /// The folder of the recording in progress.

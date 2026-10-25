@@ -35,9 +35,20 @@
   finalization 실패 처리 누락에서 실패했다. Green: `image_region_test`,
   `image_capture_match_test`, `capture_test`가 각각 1/1 통과한다. Wails Darwin cgo와
   Tauri diagnostics recording target은 CoreImage 및 Vision을 포함한 native library에
-  compile/link한다. ScreenCaptureKit frame 디코딩은 F239-47-40-4-3에서 계속하며
-  물리적 scanout 및 terminal IME acceptance는 검증하지 않았다.
+  compile/link한다. ScreenCaptureKit frame 디코딩은 F239-47-40-4-3에서 완료했다. 물리적
+  scanout 및 terminal IME acceptance는 검증하지 않았다.
 
+- F239-47-40-4-3: Complete BGRA ScreenCaptureKit sample을 retained source
+  region의 mapped tag ROI 안에서 디코딩한다. 현재 발급된 exact payload만
+  수락하고 frame별 결과를 별도 JSONL artifact에 기록하며 format-1 manifest를
+  opt-in stop 응답에 포함한다. Raw sample byte와 exact matcher 결과는 유지한다.
+  Red: F40-4-2 기준 owner test에서 decoded artifact, geometry, 여러 region,
+  no-code, 미발급, partial, 모호성, 중복 ROI, retention, write-failure assertion이
+  실패했다(11개). Green: `capture_frame_identity_capture_test` 0.542초 1/1,
+  Wails stop/recording focused test 2/2, Tauri exact recording test 2/2 통과.
+  Vision API 오류와 artifact 기록 실패는 capture finalization을 실패시킨다.
+  시간이나 sequence로 unknown identity를 추정하지 않는다. 이 결과는 물리적
+  scanout이나 terminal IME acceptance를 입증하지 않는다.
 - F239-47-40-2: QR helper의 ROI, 탐지, payload, ownership 경계를 수정한다.
   Red: 변경 전 owner test는 Vision 전체 이미지 탐지, mutable image backing,
   대칭 좌표 가정, 정규 형식이 아닌 부호 및 공백 숫자, uint64 overflow,

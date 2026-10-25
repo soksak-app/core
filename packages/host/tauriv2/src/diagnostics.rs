@@ -851,14 +851,19 @@ fn capture_start(window: &Window, display: bool, frame_identity: bool) -> Result
 /// frames.
 fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
     let recorder = PlatformCapture(recorder()?.0, after);
-    let (directory, count) = RECORDING.finish(&recorder).map_err(internal)?;
+    let (directory, count, frame_identity) = RECORDING.finish(&recorder).map_err(internal)?;
     let finished = (|| -> Result<Value, Failure> {
         let platform = recorder.0;
         let layouts = on_main(window, move || platform.layout_trace_stop()).map_err(internal)?;
         let limited = recorder.0.capture_limited().map_err(internal)?;
         let gap = recorder.0.capture_longest_gap().map_err(internal)?;
         Ok(crate::recording::stop_payload(
-            &directory, count, limited, gap, &layouts,
+            &directory,
+            count,
+            limited,
+            gap,
+            &layouts,
+            frame_identity,
         ))
     })();
     if let Err(error) = finished {

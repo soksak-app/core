@@ -80,18 +80,18 @@ func TestFinishedRecordingKeepsItsFolderAndReportsFrames(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
 	fake := &fakeCapture{}
-	if err := recording.Start(fake, window, folder, false); err != nil {
+	if err := recording.Start(fake, window, folder, true); err != nil {
 		t.Fatal(err)
 	}
 	if recording.Running() != folder {
 		t.Fatalf("running %q", recording.Running())
 	}
-	directory, count, err := recording.Finish(fake)
-	if err != nil || directory != folder || count != 3 || !exists(folder) {
-		t.Fatalf("finish %q %d %v", directory, count, err)
+	directory, count, frameIdentity, err := recording.Finish(fake)
+	if err != nil || directory != folder || count != 3 || !frameIdentity || !exists(folder) {
+		t.Fatalf("finish %q %d frameIdentity=%v %v", directory, count, frameIdentity, err)
 	}
 	expectCalls(t, fake, "open 7", "start", "wait", "stop")
-	if _, _, err := recording.Finish(fake); err == nil {
+	if _, _, _, err := recording.Finish(fake); err == nil {
 		t.Fatal("a second finish succeeded")
 	}
 }
@@ -175,14 +175,14 @@ func TestDifferentTargetIsPreparedAgain(t *testing.T) {
 	if err := recording.Start(fake, window, filepath.Join(parent, "window"), false); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := recording.Finish(fake); err != nil {
+	if _, _, _, err := recording.Finish(fake); err != nil {
 		t.Fatal(err)
 	}
 	display := host.CaptureTarget{Window: 7, Display: true}
 	if err := recording.Start(fake, display, filepath.Join(parent, "display"), false); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := recording.Finish(fake); err != nil {
+	if _, _, _, err := recording.Finish(fake); err != nil {
 		t.Fatal(err)
 	}
 	expectCalls(t, fake, "open 7", "start", "wait", "stop", "open 7 display", "start", "wait", "stop")
