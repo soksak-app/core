@@ -141,7 +141,21 @@ export function activateApp(pid) {
 export async function restoreFrontmost({ name, baseline, host, hosts, read = frontmostApp, activate = activateApp, inactive }) {
   const before = read();
   if (before === host) {
-    activate(baseline);
+    try {
+      activate(baseline);
+    } catch (activationError) {
+      let after;
+      try {
+        after = read();
+      } catch (observationError) {
+        throw new AggregateError([activationError, observationError],
+          `${name}: baseline activation request and post-refusal observation failed; ` +
+          `baseline ${baseline}, frontmost before request ${before}`);
+      }
+      throw new Error(`${name}: baseline activation request failed; baseline ${baseline}, ` +
+        `frontmost before request ${before}, frontmost after refusal ${after}: ${activationError.message}`,
+        { cause: activationError });
+    }
     await inactive();
   }
   const after = read();

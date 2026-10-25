@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-182: Preserve pre-request and post-refusal frontmost PID observations with the original baseline activation error. Retain both errors when the follow-up observation fails; never accept a refused activation because a later read finds the baseline. Three owner assertions fail before correction and all 14 frontmost owners pass afterward. The focused Wails cycle-02 runtime passes, but does not reproduce or explain the earlier refusal.
+
 - F239-181: Move lifecycle AppKit comparison into the reference-step owner and reuse per-key presentation checkpoints. Require expected documents for every step, reject lost reference focus and retain each step state in the check output. Three controlled assertions fail before their corrections; all four owner cases pass afterward. Strict Wails cycles 06/09 and Tauri cycle 06 pass with clean error audits, restored input state and normal shutdown. Preserve the unclassified cause of earlier reference loss and the separate activation-refusal finding.
 
 - F239-180: Reuse coherent terminal observations and the event-backed document wait in the lifecycle check, preserving intermediate reads until the complete AppKit result arrives. Give each execution a fresh artifact directory and decode every preserved frame against the finalized count. The original cycle 05 fails without trailing Space; all 46 observation owners and the corrected two-host cycle pass with clean error audits and normal shutdown. Keep the separate reference-input and baseline-activation failures open.

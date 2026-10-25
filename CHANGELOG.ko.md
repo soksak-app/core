@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-182: 원래 baseline 활성화 오류와 함께 요청 전 및 거부 후 frontmost PID 관측을 보존한다. 후속 관측도 실패하면 두 오류를 유지하며 나중 읽기가 baseline을 찾아도 거부된 활성화를 수락하지 않는다. 수정 전 owner assertion 세 개가 실패하고 수정 후 frontmost owner 14개가 모두 통과한다. 관련 Wails cycle-02 runtime은 통과하지만 기존 거부를 재현하거나 설명하지 않는다.
+
 - F239-181: Lifecycle AppKit 비교를 reference-step 소유 module로 옮기고 키별 presentation checkpoint를 재사용한다. 모든 단계의 예상 document를 요구하고 reference focus 상실을 거부하며 단계별 상태를 검사 출력에 보존한다. 제어된 assertion 세 개가 각각 수정 전 실패하고 수정 후 owner 네 개가 모두 통과한다. 엄격한 Wails cycle 06/09 및 Tauri cycle 06이 오류 없는 감사, 입력 상태 복원과 정상 종료를 통과한다. 과거 reference 누락의 미분류 원인과 별도 활성화 거부 finding은 유지한다.
 
 - F239-180: Lifecycle 검사에서 coherent terminal observation과 event 기반 document 대기를 재사용하고 완전한 AppKit 결과가 도착할 때까지 중간 읽기를 보존한다. 실행마다 새 artifact directory를 사용하며 보존 frame 전체를 finalized count와 대조해 decode한다. 최초 cycle 05는 끝의 Space 없이 실패했고 수정 후 observation owner 46개 및 양 host cycle이 오류 없는 감사와 정상 종료를 포함해 통과한다. 별도 reference 입력 및 baseline 활성화 실패는 미완료로 유지한다.

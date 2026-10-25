@@ -103,3 +103,34 @@ test("a wait that succeeds returns its result without measuring the covering win
   assert.equal(await unlessCovered(async () => "line", async () => { measured = true; return null; }), "line");
   assert.equal(measured, false);
 });
+
+for (const after of [10, 20]) {
+  test(`a refused baseline activation records both frontmost observations (${after})`, { timeout: 5000 }, async () => {
+    const denied = new Error("activation request refused");
+    const f = fake([20, after]);
+    f.activate = () => { throw denied; };
+    await assert.rejects(restoreFrontmost({ name: "wailsv3", baseline: 10, host: 20, hosts: [20, 21], ...f }), error => {
+      assert.match(error.message, /baseline activation request failed/);
+      assert.match(error.message, /frontmost before request 20/);
+      assert.ok(error.message.includes(`frontmost after refusal ${after}`));
+      assert.match(error.message, /activation request refused/);
+      assert.equal(error.cause, denied);
+      return true;
+    });
+  });
+}
+
+test("a failed observation after activation refusal preserves both errors", { timeout: 5000 }, async () => {
+  const denied = new Error("activation request refused");
+  const failedRead = new Error("frontmost observation failed");
+  let reads = 0;
+  await assert.rejects(restoreFrontmost({ name: "wailsv3", baseline: 10, host: 20, hosts: [20, 21],
+    read: () => { if (reads++ === 0) return 20; throw failedRead; },
+    activate: () => { throw denied; },
+    inactive: () => assert.fail("a refused activation cannot enter the inactive wait"),
+  }), error => {
+    assert.ok(error instanceof AggregateError);
+    assert.deepEqual(error.errors, [denied, failedRead]);
+    return true;
+  });
+});

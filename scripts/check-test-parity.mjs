@@ -668,6 +668,18 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F239-182",
+    implementation: [
+      { file: "packages/window-check/frontmost.mjs", symbol: "frontmost after refusal" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/frontmost.test.mjs", id: "a refused baseline activation records both frontmost observations (${after})" },
+      { file: "packages/window-check/test/frontmost.test.mjs", id: "a failed observation after activation refusal preserves both errors" },
+    ],
+    expected: "Baseline activation refusal preserves both process observations and the original errors without becoming a passing check.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },
