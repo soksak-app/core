@@ -92,7 +92,7 @@
 
 - F239-57: Darwin process identity 패키지의 native test를 `node --test` package entrypoint로 노출한다. 두 Node test는 각기 별도 Make target을 위임 실행하고, 기존 Objective-C 및 relocation assertion은 native owner에 유지한다. Red: workspace discovery owner test가 package의 `make test` script를 test 시작 전에 거부했다. Green: owner test 1/1, package entrypoint 2/2가 통과하고 각 native target도 1/1 통과한다. Workspace runner가 package entrypoint를 발견해 실행한다. Parity 목록은 lane 102개, 구현 파일 704개, 테스트 파일 1010개이며 미연결 파일이 없다.
 
-- F239-47-40-8: 현재 목록에 captured-frame identity window check를 포함해 lane 101개, 구현 파일 703개, 테스트 파일 1009개가 있다. Window acceptance는 아직 실행하지 않았다.
+- F239-47-40-8: F84에서 captured-frame identity window 검사가 두 host에서 승인됐다. Wails는 tuple 28개를 matched 처리하고 unknown 행 23개를 보존했으며, Tauri는 40개를 matched 처리하고 24개를 보존했다. Artifact error/drop은 없었다. 이는 current host presentation에 대한 sample identity를 확인하며 physical scanout이나 33 ms cadence를 검증하지 않는다.
 
 - F239-47-40-8: Opt-in frame identity의 window consumer check를 추가한다.
   Capture 전에 기존 terminal image를 숨기고 visible terminal 하나를 만든 뒤,
