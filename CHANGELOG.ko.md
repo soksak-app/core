@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-172-1: Parity 감사에서 완료된 input/capture 수정 연결 10개와 이름이 바뀐 behavior-test 참조 4개를 복원한다. 현재 16-job admission 및 기능 visual-proof contract와 일치시킨다. 감사는 수정 전 실패하고 수정 후 inventory count 변경 없이 통과한다. 이 metadata 수정의 증거로 추가 application 검사를 실행하지 않는다.
+
 - F239-179: Capture stop 직후 artifact 복사와 visual 분석 전에 terminal status 관측을 끝낸다. 반복/동시 stop을 idempotent하게 하고 끝내지 못한 구독 해제만 재시도한다. 소유 검사 두 개가 수정 전 실패하고 수정 후 document 소유 검사 46개가 통과한다. 전체 연속 모음 및 Backspace 검사는 양쪽 macOS arm64 host에서 sample 363/515개, 각각 측정된 visual 10단계, application 오류 없음, 하나의 baseline 복원 및 정상 종료로 통과한다. 현재 acceptance 증거로 F239-47-6과 F239-47-24를 완료한다.
 
 - F239-178: Decode worker 두 개와 공유 64 MiB byte budget을 유지하며 미완료 identity job 16개를 수락한다. 제어된 admission/drain assertion은 이전 8-job budget에서 실패하고 17번째 job의 명시적 거부까지 통과한다. 양쪽 host gesture는 capture sample 334/630개 전체를 보존하고 decode하며 각각 visual 10단계를 측정한다. 유한 burst admission을 검증한 결과이며 Tauri 입력 후 timeout 실패는 별도 미완료로 유지한다.

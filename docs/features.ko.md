@@ -11,6 +11,8 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
+- [o] F239-172-1 — P1, F239-172 연결: 완료된 input 및 capture 수정의 증거 연결을 복원하고 이름이 바뀐 소유 검사 식별자를 갱신한다. Red: parity 감사가 완료 feature 연결 누락 10개와 오래된 behavior-test 참조 4개를 보고한다. 기록된 동작과 검증 범위를 유지한다. Green: 수정 연결 10개와 이름이 바뀐 검사 참조 4개를 복원한 parity 감사가 통과하며 inventory는 track 102개, implementation file 710개, test file 1034개로 유지된다. 연결은 unit 및 application 검증 범위를 보존한다.
+
 - [o] F239-179 — P0, F239-47-6 연결: Capture stop 후 동기 artifact 복사 및 visual 분석 전에 소유 terminal status observer를 끝낸다. 이 시점에는 모든 입력 단계와 boundary가 이미 저장돼 있다. Stop을 idempotent하게 하고 오류를 보존하면서 끝내지 못한 구독 해제를 재시도한다. Capture 증거를 모두 보존하고 runtime 검사가 통과할 때까지 Tauri acceptance는 실패 상태를 유지한다. Red: 반복 및 동시 stop이 구독을 중복 해제하고 재시도가 이미 끝난 구독을 다시 해제한다. Green: document 소유 검사 46개가 통과한다. 이후 양쪽 host F239-47-6 session에서 기능 검사 두 개, 오류 감사, baseline 복원 및 정상 종료가 모두 통과한다.
 
 - [o] F239-178 — P0, F239-47-6 연결: 측정된 commit burst에 대해 end-to-end identity admission budget 16개를 검증한다. 거부 callback보다 앞서 decode 7개가 최대 약 65 ms 전에 끝났지만 job 8개가 commit을 마치지 못했다. Worker 두 개, 공유 64 MiB byte budget, FIFO record, frame 무손실과 명시적 overflow는 유지한다. 이 크기 변경 수락 전에 제어된 Red/Green과 전체 양쪽 host 회복 증거를 요구한다. Red: 첫 작업을 보류한 소유 검사가 16개 이전에 admission을 거부하고 16-row drain assertion에 실패한다. Green: 동일 검사가 17번째 명시적 거부와 16-row 순서 drain까지 통과한다. 양쪽 host 회복 기록은 Wails sample 334개와 Tauri sample 630개에 decoded-frame 수가 일치하고 identity/write/drop 실패가 없으며 각각 glyph/underline 10단계를 측정한다. 양쪽 host는 정상 종료한다. 이는 검증한 유한 burst의 근거이며 지속 부하 처리량 보장은 아니다. Wails activation은 통과하고 Tauri activation은 F239-47-6의 입력 후 runtime timeout 5건으로 실패 상태를 유지한다. Review는 근거 없는 64-job 증가를 거부하고 측정된 전체 gesture 회복 증거로 이 bounded 단위만 수락한다.

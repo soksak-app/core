@@ -197,6 +197,237 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-172-1",
+    implementation: [
+      {
+        file: "scripts/check-test-parity.mjs",
+        symbol: "const FEATURE_LINKS = ["
+      }
+    ],
+    tests: [
+      {
+        file: "scripts/test/test-parity.test.mjs",
+        id: "completed capability entries all have feature evidence links"
+      }
+    ],
+    expected: "Completed corrections retain current implementation and owning-test evidence links.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-173",
+    implementation: [
+      {
+        file: "e2e/activation/terminal-ime-document.mjs",
+        symbol: "export function terminalInputBaselineAfterReference("
+      }
+    ],
+    tests: [
+      {
+        file: "e2e/activation/terminal-ime-document.test.mjs",
+        id: "post-reference baseline accepts an unchanged prompt with fresh focus evidence"
+      }
+    ],
+    expected: "A restored unchanged prompt requires matching fresh status evidence while per-key acceptance still requires change.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-174",
+    implementation: [
+      {
+        file: "native/darwin/src/capture.m",
+        symbol: "captureLimitReached = true;"
+      }
+    ],
+    tests: [
+      {
+        file: "native/darwin/tests/capture_pressure_test.m",
+        id: "a healthy recording writes the frame after 600 accepted frames"
+      }
+    ],
+    expected: "Recording retains the 601st frame while callback evidence overflow fails explicitly.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-175",
+    implementation: [
+      {
+        file: "e2e/activation/ime-visual-capture.mjs",
+        symbol: "export function persistThenRequireVisualProof("
+      }
+    ],
+    tests: [
+      {
+        file: "e2e/activation/ime-visual-capture.test.mjs",
+        id: "visual proof preserves cadence measurements without a functional gap threshold"
+      }
+    ],
+    expected: "Complete IME visual proof preserves cadence measurements while missing proof remains a failure.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-176",
+    implementation: [
+      {
+        file: "packages/window-check/stall-sample.mjs",
+        symbol: "export async function sampleProcess("
+      }
+    ],
+    tests: [
+      {
+        file: "packages/window-check/test/stall-sample.test.mjs",
+        id: "native stall sampling keeps the check event loop responsive"
+      }
+    ],
+    expected: "Asynchronous native stall sampling keeps endpoint reads and deadlines responsive.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-176-1",
+    implementation: [
+      {
+        file: "scripts/measure-app-usage.mjs",
+        symbol: "export async function attributeWebKit("
+      }
+    ],
+    tests: [
+      {
+        file: "scripts/test/measure-app-usage.test.mjs",
+        id: "attributes the WebKit services of two hosts that started in the same second by the launchd domain of each host"
+      }
+    ],
+    expected: "Usage attribution awaits asynchronous discovery and preserves per-host attribution and errors.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-177",
+    implementation: [
+      {
+        file: "e2e/activation/terminal-ime-document.mjs",
+        symbol: "export async function readTerminalObservationSnapshot("
+      },
+      {
+        file: "e2e/activation/ime.test.mjs",
+        symbol: "readHost: async () =>"
+      }
+    ],
+    tests: [
+      {
+        file: "e2e/activation/terminal-ime-document.test.mjs",
+        id: "terminal observation reads status pairs concurrently around the screen sample"
+      }
+    ],
+    expected: "Current terminal status reads precede the dependent host presentation checkpoint and read.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-178",
+    implementation: [
+      {
+        file: "native/darwin/src/image_capture_match.m",
+        symbol: "kIdentityDecodePendingJobLimit = 16"
+      }
+    ],
+    tests: [
+      {
+        file: "native/darwin/tests/image_capture_match_test.m",
+        id: "the decoder admits sixteen pending jobs and reports the rejected branch with its job and byte counts"
+      }
+    ],
+    expected: "Sixteen bounded identity jobs drain in order and a seventeenth admission fails explicitly.",
+    levels: [
+      "unit"
+    ]
+  },
+  {
+    id: "F239-179",
+    implementation: [
+      {
+        file: "e2e/activation/terminal-ime-document.mjs",
+        symbol: "let stopping = null;"
+      },
+      {
+        file: "e2e/activation/ime.test.mjs",
+        symbol: "await stateObserver.stop();"
+      }
+    ],
+    tests: [
+      {
+        file: "e2e/activation/terminal-ime-document.test.mjs",
+        id: "terminal observer stop releases each subscription once across repeated and concurrent calls"
+      },
+      {
+        file: "e2e/activation/terminal-ime-document.test.mjs",
+        id: "terminal observer stop retries only subscriptions whose release did not succeed"
+      },
+      {
+        file: "e2e/activation/ime.test.mjs",
+        id: "eight Korean vowels and one Backspace retain an exact input trace"
+      }
+    ],
+    expected: "Observation ends before offline analysis and repeated cleanup retries only unfinished subscription releases.",
+    levels: [
+      "unit",
+      "application"
+    ]
+  },
+  {
+    id: "F239-47-24",
+    implementation: [
+      {
+        file: "packages/window-check/frontmost.mjs",
+        symbol: "export function parseSessionBaseline("
+      }
+    ],
+    tests: [
+      {
+        file: "packages/window-check/test/frontmost.test.mjs",
+        id: "a propagated baseline requires the same live process identity and excludes tested hosts"
+      },
+      {
+        file: "e2e/activation/ime.test.mjs",
+        id: "eight Korean vowels and one Backspace retain an exact input trace"
+      }
+    ],
+    expected: "Both hosts share the same validated baseline identity and restore it after their checks.",
+    levels: [
+      "unit",
+      "application"
+    ]
+  },
+  {
+    id: "F239-47-6",
+    implementation: [
+      {
+        file: "e2e/activation/ime.test.mjs",
+        symbol: "const runRepeatedVowelScenario = async"
+      }
+    ],
+    tests: [
+      {
+        file: "e2e/activation/ime.test.mjs",
+        id: "eight Korean vowels and one Backspace retain an exact input trace"
+      }
+    ],
+    expected: "The complete approved two-host IME gesture retains matching documents, exact visual proof and error-free cleanup.",
+    levels: [
+      "application"
+    ]
+  },
+  {
     id: "F239-98",
     implementation: [
       { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export async function startImeCapture(" },
@@ -6008,15 +6239,15 @@ const FEATURE_LINKS = [
   {
     id: "F239-98-1-1",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
-    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "visual results are persisted before cadence failure and both failures are reported" }],
+    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
     expected: "Visual proof persistence requires complete cadence evidence and records measured outcomes before rejection.",
     levels: ["unit"],
   },
   {
     id: "F239-98-1",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
-    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "visual results are persisted before cadence failure and both failures are reported" }],
-    expected: "Complete visual results are persisted before cadence rejection, and simultaneous visual and cadence failures are both reported.",
+    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
+    expected: "Complete visual results and cadence measurements are persisted before incomplete functional proof is rejected.",
     levels: ["unit"],
   },
   {
@@ -6191,10 +6422,10 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
     ],
     tests: [
-      { file: "native/darwin/tests/image_capture_match_test.m", id: "the decoder admits eight pending jobs and reports the rejected branch with its job and byte counts" },
+      { file: "native/darwin/tests/image_capture_match_test.m", id: "the decoder admits sixteen pending jobs and reports the rejected branch with its job and byte counts" },
       { file: "native/darwin/tests/image_capture_match_test.m", id: "all admitted frames drain in sample order before session state is released, despite later overflow" },
     ],
-    expected: "The bounded identity decoder accepts eight jobs, reports overflow without dropping admitted frames, and drains accepted work in sample order.",
+    expected: "The bounded identity decoder accepts sixteen jobs, reports overflow without dropping admitted frames, and drains accepted work in sample order.",
     levels: ["native"],
   },
   {
@@ -6237,7 +6468,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-144",
     implementation: [{ file: "native/darwin/src/image_capture_match.m", symbol: "static NSString *identityCapacityMessage(" }],
-    tests: [{ file: "native/darwin/tests/image_capture_match_test.m", id: "the decoder admits eight pending jobs and reports the rejected branch with its job and byte counts" }],
+    tests: [{ file: "native/darwin/tests/image_capture_match_test.m", id: "the decoder admits sixteen pending jobs and reports the rejected branch with its job and byte counts" }],
     expected: "Decoder admission errors report the exhausted job or crop-byte bound with measured counters.",
     levels: ["native"],
   },
