@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,44 @@ import (
 
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
+
+// contract: cli.private-files.ownership-uses-platform-operation
+func TestConfigurationOwnershipUsesPrivateProcessLockOperation(t *testing.T) {
+	recorder := installPrivateFilesRecorder(t)
+	config := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	code := sok.Run([]string{"plugin", "disable", "probe", "extra", "--config-dir", config}, &stdout, &stderr,
+		sok.Options{Identifier: "com.soksak.test", CoreVersion: "0.0.21"})
+	if code != 2 || stdout.Len() != 0 {
+		t.Fatalf("code %d stdout %q stderr %q, want usage failure after lock acquisition", code, stdout.String(), stderr.String())
+	}
+	if recorder.openProcessLockFile != 1 {
+		t.Fatalf("process lock operation calls %d, want one", recorder.openProcessLockFile)
+	}
+	if _, err := os.Stat(filepath.Join(config, "process.lock")); !os.IsNotExist(err) {
+		t.Fatalf("process lock remains after command: %v", err)
+	}
+}
+
+// contract: cli.private-files.lock-operation-failure-rejects-a-writing-command
+func TestConfigurationOwnershipReportsPrivateProcessLockFailure(t *testing.T) {
+	recorder := installPrivateFilesRecorder(t)
+	recorder.openProcessLockFileError = fmt.Errorf("process lock file is not implemented on windows")
+	config := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	code := sok.Run([]string{"plugin", "disable", "probe", "--config-dir", config}, &stdout, &stderr,
+		sok.Options{Identifier: "com.soksak.test", CoreVersion: "0.0.21"})
+	if code != 1 || stdout.Len() != 0 {
+		t.Fatalf("code %d stdout %q stderr %q, want writing command failure", code, stdout.String(), stderr.String())
+	}
+	want := "sok: " + filepath.Join(config, "process.lock") + ": process lock file is not implemented on windows\n"
+	if got := stderr.String(); got != want {
+		t.Fatalf("stderr %q, want %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(config, "process.lock")); !os.IsNotExist(err) {
+		t.Fatalf("failed lock operation created its path: %v", err)
+	}
+}
 
 // contract: cli.plugin.writing-commands-own-the-configuration
 func TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration(t *testing.T) {

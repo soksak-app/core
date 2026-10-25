@@ -19,6 +19,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
 // EventLogSchema is the schema number of the lines that this writer writes. Schema 2 adds `mono_ns` to every line.
@@ -157,6 +159,7 @@ const gatedReportInterval = time.Second
 
 // EventLog is the writer of one process.
 type EventLog struct {
+	system       platform.Platform
 	messages     chan eventMessage
 	queuedEvents atomic.Int64
 	queuedBytes  atomic.Int64
@@ -204,16 +207,16 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 	if options.RotateBytes < 0 {
 		return nil, fmt.Errorf("event writer: RotateBytes must not be negative, not %d", options.RotateBytes)
 	}
-	if err := os.MkdirAll(options.Directory, 0o700); err != nil {
+	system, err := platform.Current()
+	if err != nil {
 		return nil, err
 	}
-	// A folder that existed before keeps its mode; the log folder of the contract is private.
-	if err := os.Chmod(options.Directory, 0o700); err != nil {
+	if err := system.PrepareLogDirectory(options.Directory); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(options.Directory, fmt.Sprintf("%s-%s.jsonl", options.Role, options.Boot))
 	debugPath := filepath.Join(options.Directory, fmt.Sprintf("%s-%s.debug.jsonl", options.Role, options.Boot))
-	file, err := openLogFile(path)
+	file, err := system.CreateLogFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +227,7 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		return nil, err
 	}
 	log := &EventLog{
+		system:      system,
 		messages:    make(chan eventMessage, options.QueueEvents+reservedForRequests),
 		queueEvents: int64(options.QueueEvents),
 		queueBytes:  int64(options.QueueBytes),
@@ -243,12 +247,6 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 	open := log.writerEvent(LevelInfo, "log.open", fields)
 	options.Spawn("event-log-writer", func() { log.write(file, options.BatchInterval, open) })
 	return log, nil
-}
-
-// openLogFile creates a file of the writer (mode 0600, created new). os.OpenFile opens it close-on-exec, so a child process does not
-// inherit it.
-func openLogFile(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_APPEND|os.O_WRONLY, 0o600)
 }
 
 // CountLoss adds events and bytes of a channel that a producer of this process refused before they reached the writer; the
@@ -646,7 +644,7 @@ func (l *EventLog) rotateFiles(f *logFile, n int) (*os.File, error) {
 	if err := os.Rename(f.path, generation); err != nil {
 		return nil, fmt.Errorf("rotation could not move %s: %v", f.path, err)
 	}
-	next, err := openLogFile(f.path)
+	next, err := l.system.CreateLogFile(f.path)
 	if err != nil {
 		if undo := os.Rename(generation, f.path); undo != nil {
 			fmt.Fprintf(os.Stderr, "event writer: rotation could not undo the move of %s: %v\n", f.path, undo)
@@ -728,7 +726,7 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 	push = func(e *pendingEvent) {
 		f := files[ChannelOf(e.level)]
 		if f.file == nil {
-			file, err := openLogFile(f.path)
+			file, err := l.system.CreateLogFile(f.path)
 			if err != nil {
 				// The event is not written. Its seq is the gap, and log.dropped names the gap with the cause in the main file
 				// (docs/spec/logging.md#event). A log.dropped that cannot be opened has no further record.

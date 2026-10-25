@@ -6,7 +6,7 @@
 
 ## 운영체제
 
-`sok`은 macOS와 Linux에서 실행된다. platform key는 `arm64`나 `x64`를 쓴 `<os>-<arch>`다([설치](installation.ko.md)). Linux에서 설정 폴더는 `$XDG_CONFIG_HOME` 아래, 그것이 없으면 `~/.config` 아래의 애플리케이션 식별자이고, 엔드포인트는 macOS처럼 Unix socket이다([엔드포인트](endpoint.ko.md)). Linux에는 경로 항목 폴더가 없으므로 `sok path install`과 `sok path remove`는 거기서 `path entries are not implemented on linux`로 실패한다. Windows에서는 platform interface의 모든 동작이 `<operation> is not implemented on windows`로 실패한다.
+`sok`은 macOS와 Linux에서 실행된다. platform key는 `arm64`나 `x64`를 쓴 `<os>-<arch>`다([설치](installation.ko.md)). Linux에서 설정 폴더는 `$XDG_CONFIG_HOME` 아래, 그것이 없으면 `~/.config` 아래의 애플리케이션 식별자이고, 엔드포인트는 macOS처럼 Unix socket이다([엔드포인트](endpoint.ko.md)). Linux에는 경로 항목 폴더가 없으므로 `sok path install`과 `sok path remove`는 거기서 `path entries are not implemented on linux`로 실패한다. Windows에서는 private event-log 디렉터리와 파일, process ownership lock file을 지원하지 않는다. 이 동작은 경로를 만들기 전에 `event log directory <path> is not implemented on windows`, `event log file <path> is not implemented on windows`, `process lock file <path> is not implemented on windows`를 보고한다. Event-log 준비 실패는 표준 오류에 보고한 뒤 기록 없이 명령을 실행하며, process-lock 실패는 쓰기 명령을 거부한다.
 
 현재 Linux와 Windows platform 구현은 process 종료 대기를 지원하지 않는다고 보고한다. 따라서 해당 시스템에서 `sok process wait`는 명시적인 오류로 실패한다. macOS에서는 kernel process-exit notification을 사용한다.
 

@@ -148,3 +148,26 @@ func (darwin) BundleVersion(bundle string) (string, error) {
 	}
 	return strings.TrimSpace(string(output)), nil
 }
+
+// PrepareLogDirectory creates the missing event-log directories with private access and restricts the final directory to mode 0700.
+func (darwin) PrepareLogDirectory(path string) error {
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o700)
+}
+
+// CreateLogFile creates a new event-log file for appending with private access (mode 0600).
+func (darwin) CreateLogFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_APPEND|os.O_WRONLY, 0o600)
+}
+
+// AppendLogFile opens an event-log file for appending, creating it with private access when absent.
+func (darwin) AppendLogFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+}
+
+// OpenProcessLockFile opens or creates the configuration ownership lock with private access (mode 0600).
+func (darwin) OpenProcessLockFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+}

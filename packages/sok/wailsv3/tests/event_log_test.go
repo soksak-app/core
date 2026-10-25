@@ -7,6 +7,7 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"github.com/soksak-app/core/packages/sok/wailsv3/tests/support"
 	"io"
 	"os"
@@ -16,7 +17,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak-app/core/packages/sok/wailsv3/src"
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
 type loggedEvent struct {
@@ -65,6 +67,96 @@ func eventsOf(t *testing.T, config string) []loggedEvent {
 	}
 	sort.SliceStable(events, func(i, j int) bool { return events[i].Seq < events[j].Seq })
 	return events
+}
+
+type privateFilesRecorder struct {
+	platform.Platform
+	prepareLogDirectory      int
+	createLogFile            int
+	appendLogFile            int
+	openProcessLockFile      int
+	prepareLogDirError       error
+	openProcessLockFileError error
+}
+
+func (p *privateFilesRecorder) PrepareLogDirectory(path string) error {
+	p.prepareLogDirectory++
+	if p.prepareLogDirError != nil {
+		return p.prepareLogDirError
+	}
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o700)
+}
+
+func (p *privateFilesRecorder) CreateLogFile(path string) (*os.File, error) {
+	p.createLogFile++
+	return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_APPEND|os.O_WRONLY, 0o600)
+}
+
+func (p *privateFilesRecorder) AppendLogFile(path string) (*os.File, error) {
+	p.appendLogFile++
+	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+}
+
+func (p *privateFilesRecorder) OpenProcessLockFile(path string) (*os.File, error) {
+	p.openProcessLockFile++
+	if p.openProcessLockFileError != nil {
+		return nil, p.openProcessLockFileError
+	}
+	return os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+}
+
+func (p *privateFilesRecorder) TryLockFile(*os.File) (bool, error) { return true, nil }
+
+func installPrivateFilesRecorder(t *testing.T) *privateFilesRecorder {
+	t.Helper()
+	current, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := &privateFilesRecorder{Platform: current}
+	platform.Register(recorder)
+	t.Cleanup(func() { platform.Register(current) })
+	return recorder
+}
+
+// contract: cli.private-files.event-log-uses-platform-operations
+func TestEventLogUsesPrivateFilePlatformOperations(t *testing.T) {
+	recorder := installPrivateFilesRecorder(t)
+	log, err := sok.StartToolEventLog(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Close()
+	if recorder.prepareLogDirectory != 1 || recorder.createLogFile != 1 {
+		t.Fatalf("private log operations: prepare=%d create=%d, want one each", recorder.prepareLogDirectory, recorder.createLogFile)
+	}
+}
+
+// contract: cli.private-files.event-log-startup-failure-is-reported
+func TestEventLogStartupReportsPrivateFilePlatformFailure(t *testing.T) {
+	recorder := installPrivateFilesRecorder(t)
+	recorder.prepareLogDirError = errors.New("event log directory is not implemented on windows")
+	config := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	called := false
+	status := sok.Logged([]string{"--config-dir", config}, &stdout, &stderr,
+		sok.Options{Identifier: "com.soksak.test", CoreVersion: "0.0.21"},
+		func([]string, io.Writer, io.Writer, sok.Options) int {
+			called = true
+			return 5
+		})
+	if status != 5 || !called || stdout.Len() != 0 {
+		t.Fatalf("status %d called %t stdout %q, want command status 5 after reported log setup failure", status, called, stdout.String())
+	}
+	if got, want := stderr.String(), "sok: event log: event log directory is not implemented on windows\n"; got != want {
+		t.Fatalf("stderr %q, want %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(config, "logs")); !os.IsNotExist(err) {
+		t.Fatalf("event-log failure created its path: %v", err)
+	}
 }
 
 func named(events []loggedEvent, name string) []loggedEvent {

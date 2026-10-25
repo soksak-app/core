@@ -97,3 +97,26 @@ func (linux) LockFile(file *os.File) error {
 func (linux) PathsDir() (string, error) {
 	return "", errors.New("path entries are not implemented on linux")
 }
+
+// PrepareLogDirectory creates the missing event-log directories with private access and restricts the final directory to mode 0700.
+func (linux) PrepareLogDirectory(path string) error {
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o700)
+}
+
+// CreateLogFile creates a new event-log file for appending with private access (mode 0600).
+func (linux) CreateLogFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_APPEND|os.O_WRONLY, 0o600)
+}
+
+// AppendLogFile opens an event-log file for appending, creating it with private access when absent.
+func (linux) AppendLogFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+}
+
+// OpenProcessLockFile opens or creates the configuration ownership lock with private access (mode 0600).
+func (linux) OpenProcessLockFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+}

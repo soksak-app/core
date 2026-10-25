@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-48-3-13: Route Wails CLI event-log and process-lock private-file operations through platform methods. Darwin and Linux retain the 0700 directory and 0600 file behavior; Windows reports explicit unsupported errors before creating paths. Consumer tests pass 4/4 and Darwin owner tests pass 4/4. Linux/arm64 and Windows/amd64 test targets cross-compile but were not executed. The paired-host structure audit removes the three private-files paths; after H17, no unmatched paths remain. `make docs-check` passes; parity reports no uncovered implementation/test or feature-link issue and retains two unrelated stale examples counts.
+
 - F239-48-3-14: Move the two `ProjectShown` unknown-field tests into the existing Tauri project-data-order child module. Their assertions remain unchanged. The exact lib tests pass 1/1 each; the paired-host audit no longer reports the old source test path and retains four unrelated findings. The parity inventory passes with 101 lanes, 703 implementation files, and 1004 test files. No host behavior changed.
 - F239-48-3-16: Record the exact Rust view-generation test placement in H17. The shared generation and reply assertions remain covered by Wails owner tests; the Rust test is a private child of `documents.rs`. The focused checker passes 1/1, allows only the declared path, and rejects an unlisted sibling. The host audit retains only the three private-files platform paths. No host behavior changed.
 - F239-48-3-15: Settle Wails view calls only after their replies post to the

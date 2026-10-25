@@ -6,7 +6,7 @@
 
 ## Operating systems
 
-`sok` runs on macOS and Linux. Its platform key is `<os>-<arch>` with `arm64` or `x64` ([installation](installation.md)). On Linux the configuration directory is the application identifier under `$XDG_CONFIG_HOME`, or under `~/.config` when that is not set, and the endpoint is a Unix socket as on macOS ([endpoint](endpoint.md)). Linux has no path entry folder, so `sok path install` and `sok path remove` fail there with `path entries are not implemented on linux`. On Windows every operation of the platform interface fails with `<operation> is not implemented on windows`.
+`sok` runs on macOS and Linux. Its platform key is `<os>-<arch>` with `arm64` or `x64` ([installation](installation.md)). On Linux the configuration directory is the application identifier under `$XDG_CONFIG_HOME`, or under `~/.config` when that is not set, and the endpoint is a Unix socket as on macOS ([endpoint](endpoint.md)). Linux has no path entry folder, so `sok path install` and `sok path remove` fail there with `path entries are not implemented on linux`. Windows does not implement private event-log directories or files, or the process ownership lock file. These operations report `event log directory <path> is not implemented on windows`, `event log file <path> is not implemented on windows`, or `process lock file <path> is not implemented on windows` before creating the path. An event-log setup failure is reported on standard error and the command still runs without a record; a process-lock failure rejects the writing command.
 
 The current Linux and Windows platform implementations report that process exit waiting is not implemented; `sok process wait` therefore fails explicitly on those systems. macOS uses the kernel process-exit notification.
 
