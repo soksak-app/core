@@ -125,7 +125,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 
   lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/projects_test.go", "packages/host/wailsv3/src/images_relay_test.go", "packages/host/wailsv3/src/image_detach_test.go", "packages/host/wailsv3/src/start_test.go", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/diagnostics_input_reference_test.go", "packages/host/wailsv3/src/diagnostics_clock_test.go", "packages/host/wailsv3/src/composition_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/webview_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/document_test.go", "packages/host/wailsv3/src/platform/darwin/input_reference_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_start_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/view_call_record_test.go", "packages/host/wailsv3/src/view_error_test.go", "packages/host/wailsv3/src/document_binary_take_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go", "packages/host/wailsv3/src/view_origin_test.go", "packages/host/wailsv3/src/plugin_host_test.go", "packages/host/wailsv3/src/plugin_host_channel_test.go", "packages/host/wailsv3/src/source_origins_test.go", "packages/host/wailsv3/src/plugin_host_sidecar_test.go", "packages/host/wailsv3/src/sidecars_session_retention_test.go", "packages/host/wailsv3/src/plugins_starter_test.go", "packages/host/wailsv3/src/images_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go", "packages/sok/wailsv3/src/diagnostics_test.go", "packages/sok/wailsv3/src/dev_test.go", "packages/sok/wailsv3/src/debug_test.go", "packages/sok/wailsv3/src/migrate_format_test.go", "packages/sok/wailsv3/src/event_log_loss_test.go"]),
-  lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs", "packages/sok/tauriv2/src/event_log_lock_test.rs", "packages/sok/tauriv2/src/debug_test.rs", "packages/sok/tauriv2/src/migrate_format_test.rs", "packages/sok/tauriv2/src/event_log_loss_test.rs"]),
+  lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs", "packages/sok/tauriv2/src/event_log_lock_test.rs", "packages/sok/tauriv2/src/debug_test.rs", "packages/sok/tauriv2/src/migrate_format_test.rs", "packages/sok/tauriv2/src/event_log_loss_test.rs", "packages/sok/tauriv2/src/process_wait_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
   lane("Darwin clipboard", "objective-c", ["native/darwin/src/clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { sharedTests: true }),
@@ -207,7 +207,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/input_inject_test.m", id: "a timed out wait registers no WebKit activity callbacks when its queued block runs late" },
       { file: "native/darwin/tests/input_inject_test.m", id: "timeout before callback registration reports its exact stage" },
       { file: "native/darwin/tests/input_inject_test.m", id: "registered timeout reports only actual unresolved identifiers" },
-      { file: "native/darwin/tests/view_focus_test.m", id: "the test output preserves the native activation error record (%@)" },
+      { file: "native/darwin/tests/view_focus_test.m", id: "the test output preserves captured activation errors from each source (%@)" },
     ],
     expected: "Activation waits identify only unresolved visible webviews, report whether callback registration started, reject late enrollment after timeout, and preserve emitted errors in the owner test output without retaining webviews.",
     levels: ["unit"],
@@ -3305,7 +3305,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F163",
-    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "first run: the starter pack ${failedPack} was not installed: ${error?.message ?? error}" }],
+    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "log(`first run: the starter pack ${failedPack} was not installed: ${errorText(error)}`)" }],
     tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a first run that cannot read the registry starts the window without the pack and states why" }],
     expected: "A first run without a network, or with a registry that cannot be read, starts the window without the starter pack, states why, and installs the pack at the next start.",
     levels: ["unit"],
@@ -5625,6 +5625,522 @@ const FEATURE_LINKS = [
     expected: "The Wails CLI routes event-log directory/file and process-lock creation through its platform interface; Darwin and Linux enforce the Unix private modes, and Windows rejects these operations before creating their paths.",
     levels: ["unit"],
   },
+  {
+    id: "F239-47-10",
+    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata" }],
+    tests: [{ file: "e2e/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" }],
+    expected: "Renderer metadata is accepted only when its geometry and pixel layout belong to the measured frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-61",
+    implementation: [
+      { file: "packages/host/tauriv2/src/platform/platform.rs", symbol: "pub struct ImagePresentation" },
+      { file: "packages/host/tauriv2/src/documents.rs", symbol: "struct ViewAttachment" },
+    ],
+    tests: [{ file: "packages/host/tauriv2/src/images_test.rs", id: "presenting_a_frame_notifies_after_its_identity_is_current" }],
+    expected: "Image presentation and view attachment use named Rust contract types, and frame notification follows current identity registration.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-62",
+    implementation: [
+      { file: "scripts/check-events.mjs", symbol: "export function installedSidecarCatalogs(directory)" },
+      { file: "packages/plugin-api/index.js", symbol: "export function validateSidecar(sidecar)" },
+    ],
+    tests: [
+      { file: "scripts/test/check-events.test.mjs", id: "the catalogs of the installed sidecars are read from the folders that installed.json records" },
+      { file: "scripts/test/audit-run.test.mjs", id: "the events of a sidecar installed in a configuration folder of the run are audited against its catalog" },
+    ],
+    expected: "Installed-sidecar fixtures satisfy the manifest contract so catalog discovery and event auditing reach their intended assertions.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-63",
+    implementation: [{ file: "scripts/check-e2e-host-parity.mjs", symbol: "export function auditE2EHostParity" }],
+    tests: [{ file: "scripts/test/e2e-host-parity.test.mjs", id: "every application E2E suite runs the same scenario through both adapters" }],
+    expected: "Application E2E scenarios are explicitly classified for both host adapters.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-64",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }],
+    tests: [{ file: "packages/workbench/test/surface-view.test.mjs", id: "a page-start view waits for the initial project context and a disposed preview cannot declare composition" }],
+    expected: "A preview view waits for project context and a disposed preview cannot declare its composition.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-65",
+    implementation: [{ file: "e2e/run.mjs", symbol: "export function runE2E(" }],
+    tests: [{ file: "e2e/test/run.test.mjs", id: "run forwards valid run metadata unchanged" }],
+    expected: "The E2E runner resolves its module entrypoint independently of the caller working directory and forwards valid run metadata.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-66",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }],
+    tests: [{ file: "packages/workbench/test/host-chrome.test.mjs", id: "native view placement waits for current-page composition readiness" }],
+    expected: "Native view placement waits for the current page composition before presenting a view.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-67",
+    implementation: [{ file: "packages/workbench/error-text.js", symbol: "export function errorText(error)" }],
+    tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a structured starter failure keeps its code and data in operation, log, and display" }],
+    expected: "Structured starter failures preserve their code and data in operation status, logs, and displayed text.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-68",
+    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "SOKSAK_CANDIDATE_REGISTRY" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check workflow sets every variable that a window check of the run requires" }],
+    expected: "The window-check workflow supplies the candidate registry input required by its runner.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-69",
+    implementation: [{ file: "native/darwin/src/observe.m", symbol: "sp_observe_timer(" }],
+    tests: [{ file: "native/darwin/tests/input_reference_test.m", id: "the wait timer registration and delivery are recorded" }],
+    expected: "The input-reference timeout is registered and its timer delivery is recorded before the handler runs.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-70",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)commitPending {" },
+      { file: "native/darwin/tests/capture_checker_test.m", symbol: "captureAcceptanceMain" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_decoration_test.m", id: "unmark and Enter-equivalent command transactions commit marked text once, retain newline, and finish clean" },
+      { file: "native/darwin/tests/capture_checker_test.m", id: "capture acceptance rejects a positive frame count with a stop error" },
+    ],
+    expected: "Input commits preserve marked text and newline exactly once, and capture acceptance rejects a positive frame count when stop reports an error.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-75",
+    implementation: [{ file: "e2e/capture-frame-identity.test.mjs", symbol: "const targetCard = terminalCards[0];" }],
+    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented terminal image" }],
+    expected: "The opt-in capture identity consumer binds the selected terminal card before creating the captured terminal.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-77",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "fieldSchemaAjv.compile" }],
+    tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "sampler memory records match one strict role-shaped event schema" }],
+    expected: "Sampler memory records match one complete role-specific schema without accepting mixed role fields.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-80",
+    implementation: [{ file: "apps/tauriv2/runtime/index.js", symbol: "view-responsiveness" }],
+    tests: [{ file: "apps/tauriv2/test/runtime.test.mjs", id: "a late view notification without a surface subscriber does not block later events" }],
+    expected: "A late view notification without a subscriber does not block later ordered events.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-83",
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "function checklist(" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a platform-excluded item only with a named unavailable platform and unverified result" }],
+    expected: "A platform-excluded checklist item names the unavailable platform and states that runtime behavior remains unverified.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-84",
+    implementation: [{ file: "packages/workbench/package.json", symbol: '"error-text.js"' }],
+    tests: [{ file: "packages/workbench/test/files-list.test.mjs", id: "every file that the start document and the modules of the page import is listed in package.json files" }],
+    expected: "Every Workbench module imported by the startup document and page is included in the staged package payload.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-86",
+    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "export function auditActivationUnboundNames" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "activation fixture audit rejects unresolved identifiers" }],
+    expected: "Activation fixtures with unresolved identifiers fail the declared compiler-backed audit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-88",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "callbackMachTickString" }],
+    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "the callback artifact preserves stage ticks as decimal strings, absent stages as null, and the actual mach timebase" }],
+    expected: "Callback lifecycle Mach ticks remain exact decimal strings or explicit null values and preserve the actual timebase.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-91",
+    implementation: [{ file: "native/darwin/tests/support/ime_wire_document.h", symbol: "sp_ime_wire_document(" }],
+    tests: [{ file: "native/darwin/tests/ime_wire_document_test.m", id: "current input transaction applies its ordered insert and Backspace command" }],
+    expected: "The IME wire document helper applies current ordered input actions, including Backspace, and reads the transaction preedit state.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-92",
+    implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "export function parseContractCases" }],
+    tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "the case table rejects duplicate ids, invalid ids, and a limited scope without a reason" }],
+    expected: "The host-contract table rejects duplicate or invalid identifiers and limited scopes without a reason.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-94",
+    implementation: [{ file: "native/darwin/src/input_inject.m", symbol: "held->front = [NSWorkspace.sharedWorkspace.frontmostApplication retain]" }],
+    tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "the saved frontmost description survives the callback autorelease pool" }],
+    expected: "The activation callback retains its frontmost application description beyond the callback autorelease pool.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-95",
+    implementation: [{ file: "native/darwin/tests/view_focus_test.m", symbol: "static BOOL waitFor(" }],
+    tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "waitFor dispatches a queued AppKit application event" }],
+    expected: "The view-focus wait dispatches queued AppKit application events while waiting.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-98-1-1",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
+    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "visual results are persisted before cadence failure and both failures are reported" }],
+    expected: "Visual proof persistence requires complete cadence evidence and records measured outcomes before rejection.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-98-1",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
+    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "visual results are persisted before cadence failure and both failures are reported" }],
+    expected: "Complete visual results are persisted before cadence rejection, and simultaneous visual and cadence failures are both reported.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-98-2",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus" }],
+    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "visual indexing projects rows-only screen status without inventing a screen frame" }],
+    expected: "Visual input uses prior rows-only terminal screen status without inventing a screen frame identity.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-98-3",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function semanticRasterColorSpace(name)" }],
+    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "source manifest loads only digest-verified frame-bound rasters" }],
+    expected: "The retained-source consumer maps the emitted CoreGraphics sRGB name to the semantic sRGB label and rejects unsupported names without changing raster bytes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-93",
+    implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "export function auditHostContract" }],
+    tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "the static audit reports each case of a host scope that no test declares" }],
+    expected: "The host-contract audit compares declared cases with owning test markers and retains uncovered declarations as findings.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-102",
+    implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "export function selectRustDeclarations" }],
+    tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "Rust declarations follow compiler-listed tests and reject ambiguous crate leaves" }],
+    expected: "Rust host-contract declarations are selected from compiler-listed tests and ambiguous crate leaves fail explicitly.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-104",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "sp_image_capture_match_sample(" },
+      { file: "native/darwin/src/capture.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
+      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
+    ],
+    tests: [{ file: "native/darwin/tests/capture_metadata_test.m", id: "the real delegate path records callback and image-match raw bounds, absent identity-stage ticks, the timebase, display time and frame marker" }],
+    expected: "The bounded callback record measures raw Mach start and completion ticks around image matching and optional identity decoding.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-106",
+    implementation: [
+      { file: "packages/host/wailsv3/src/documents.go", symbol: "func validateViewMessageEnvelope(" },
+      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn retired_view_error(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/view_origin_test.go", id: "TestRetiredGenerationMalformedInnerEnvelopeKeepsItsChannelError" },
+      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_retired_malformed_envelope_keeps_its_channel_error" },
+    ],
+    expected: "Malformed view-message envelopes retain their channel errors before stale-generation cancellation, while valid stale calls remain canceled.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-107",
+    implementation: [
+      { file: "packages/host/wailsv3/src/plugin_host.go", symbol: "func (s *Surfaces) createPluginHost(" },
+      { file: "packages/host/tauriv2/src/source_origins.rs", symbol: "pub(crate) fn issue_plugin_host(" },
+      { file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) viewFailed(" },
+      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn retire_view_before_replacement(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestPluginHostStartupReportsGenerationExhaustionBeforeCreatingAProvider" },
+      { file: "packages/host/tauriv2/src/source_origins_test.rs", id: "an_exhausted_plugin_host_generation_does_not_start_provider_creation" },
+      { file: "packages/host/wailsv3/src/view_lifecycle_test.go", id: "TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement" },
+      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
+    ],
+    expected: "Provider creation follows successful source-generation allocation, and view-process-ended precedes replacement source registration.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-107-1",
+    implementation: [
+      { file: "packages/host/wailsv3/src/plugin_host.go", symbol: "func (s *Surfaces) createPluginHost(" },
+      { file: "packages/host/tauriv2/src/source_origins.rs", symbol: "pub(crate) fn issue_plugin_host(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestPluginHostStartupReportsGenerationExhaustionBeforeCreatingAProvider" },
+      { file: "packages/host/tauriv2/src/source_origins_test.rs", id: "an_exhausted_plugin_host_generation_does_not_start_provider_creation" },
+    ],
+    expected: "Exhausted plugin-host generation allocation leaves source state unchanged and does not create a provider.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-107-2",
+    implementation: [
+      { file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) viewFailed(" },
+      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn retire_view_before_replacement(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/view_lifecycle_test.go", id: "TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement" },
+      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
+    ],
+    expected: "A failed view retires its old origin and sends view-process-ended before replacement source registration.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-108",
+    implementation: [{ file: "native/darwin/tests/view_focus_test.m", symbol: "static NSString *inputActivityErrorReport(" }],
+    tests: [
+      { file: "native/darwin/tests/view_focus_test.m", id: "the test output preserves captured activation errors from each source" },
+      { file: "native/darwin/tests/view_focus_test.m", id: "the activation fixture registers its app DOM web view" },
+    ],
+    expected: "The activation fixture registers its main webview before creating the surface and reports captured errors from every source.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-109",
+    implementation: [{ file: "scripts/test-discovery.mjs", symbol: "export async function discoverRust" }],
+    tests: [{ file: "scripts/test/test-discovery.test.mjs", id: "a Rust package lists its tests, each test runs by itself, and an ignored test is a skip" }],
+    expected: "Rust test builds and individual tests report their start and elapsed pass, fail, timeout, or skip results through the shared runner.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-110",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "export function auditFeatureLinks" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" }],
+    expected: "Completed capabilities have exact implementation and owner-test links, and their recorded inventory counts match the discovered workspace files.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-114-2",
+    implementation: [{ file: "packages/sok/tauriv2/src/process.rs", symbol: "fn run_wait(" }],
+    tests: [{ file: "packages/sok/tauriv2/tests/process_wait_test.rs", id: "process_wait_rejects_invalid_inputs_before_waiting" }],
+    expected: "The Rust process wait command rejects invalid arguments before waiting.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-127",
+    implementation: [{ file: "packages/host/tauriv2/src/image_detach.rs", symbol: "pub(super) fn detach_acknowledgement_body(" }],
+    tests: [{ file: "packages/host/tauriv2/src/image_detach_test.rs", id: "a_deep_unrelated_member_does_not_hide_a_detach_acknowledgement" }],
+    expected: "Typed acknowledgement parsing ignores deep unrelated members without materializing them.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-131",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "async record(params = {})" }],
+    tests: [{ file: "packages/window-check/test/recording.test.mjs", id: "a stop failure remains visible when the host removes its recording folder" }],
+    expected: "A recording stop failure remains reported when the host removes the recording folder.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-132",
+    implementation: [
+      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn finish_capture_stop(" },
+      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func finishCaptureStop(" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/src/diagnostics_test.rs", id: "a_layout_trace_failure_keeps_the_started_capture_folder" },
+      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "a_stop_failure_keeps_the_folder_returned_by_start" },
+      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestCaptureStopLayoutFailurePreservesStartedFolder" },
+      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestRecordingFinishStopFailurePreservesFolder" },
+    ],
+    expected: "Capture stop and layout failures preserve and report the folder returned by capture start.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-134",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexAcceptedFrameTrace(" }],
+    tests: [
+      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" },
+      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "joins repeated screen messages to every exact accepted native frame tuple" },
+    ],
+    expected: "Visual screen records join only to accepted native frame tuples with exact trace and hash identity.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-136",
+    implementation: [
+      { file: "native/darwin/src/image_capture_match.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
+      { file: "native/darwin/src/capture_frame_identity.m", symbol: "sp_capture_frame_identity_decode(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_capture_match_test.m", id: "the decoder admits eight pending jobs and reports overflow without dropping an accepted frame" },
+      { file: "native/darwin/tests/image_capture_match_test.m", id: "all admitted frames drain in sample order before session state is released, despite later overflow" },
+    ],
+    expected: "The bounded identity decoder accepts eight jobs, reports overflow without dropping admitted frames, and drains accepted work in sample order.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-137",
+    implementation: [{ file: "scripts/check-events.mjs", symbol: "export const catalogOf =" }],
+    tests: [{ file: "scripts/test/check-events.test.mjs", id: "the audit composes every installed plugin manifest event catalog and its plugin layer" }],
+    expected: "The event audit composes each installed plugin manifest catalog with its declared plugin layer.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-139",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "export function composeCatalogs(" }],
+    tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "catalog composition rejects a base catalog without its declared layers" }],
+    expected: "Catalog composition rejects a base catalog when its declared layers are missing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-141",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "async function readObservationBatch(" }],
+    tests: [
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "terminal observation reads status pairs concurrently around the screen sample" },
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "terminal observation reports every failed read in each concurrent phase" },
+    ],
+    expected: "Terminal observation reads each status pair concurrently in phase order and reports every failed read.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-98-4",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function evaluateTagScopedStage(" }],
+    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],
+    expected: "Tag-scoped visual proof evaluates the exact issued target despite unrelated incomplete source state.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-111",
+    implementation: [{ file: "native/darwin/tests/input_reference_test.m", symbol: "static void drain(void)" }],
+    tests: [
+      { file: "native/darwin/tests/input_reference_test.m", id: "text-storage changes complete the pending wait once" },
+      { file: "native/darwin/tests/input_reference_test.m", id: "the wait timer registration and delivery are recorded" },
+    ],
+    expected: "The input-reference owner test pump dispatches queued AppKit events so main-queue document checks and timer observations complete within the existing drain interval.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-112",
+    implementation: [{ file: "packages/sok/tauriv2/src/plugin_catalog.rs", symbol: "pub fn plugin_event_classes(" }],
+    tests: [{ file: "packages/sok/tauriv2/tests/plugin_catalog_test.rs", id: "a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares" }],
+    expected: "The plugin catalog continues to return the class declared for each enabled plugin event after formatting-only changes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-113-1",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "export function validateCatalog(" }],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
+      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
+    ],
+    expected: "Host audit fixtures use catalog schema 3 and Draft 2020-12 field schemas while raw log records retain schema 2.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-114-1",
+    implementation: [
+      { file: "apps/tauriv2/runtime/index.js", symbol: "const dispatchOrderedEvent =" },
+      { file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface(" },
+    ],
+    tests: [
+      { file: "apps/tauriv2/test/runtime.test.mjs", id: "ordered event listener errors are reported without blocking later subscribers or messages" },
+      { file: "apps/tauriv2/test/runtime.test.mjs", id: "ordered listener failures fail explicitly when the page error path is unavailable" },
+      { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "a drawn view fails when its required composition wait is missing" },
+      { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "an undrawn view fails when its required mount lookup is missing" },
+    ],
+    expected: "Required runtime behavior and error-reporting paths fail explicitly instead of being replaced by no-op or discarded-error fallbacks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-121",
+    implementation: [{ file: "packages/host/wailsv3/tests/buffer_bounds_test.go", symbol: "func useRoomyEventLog(" }],
+    tests: [{ file: "packages/host/wailsv3/tests/buffer_bounds_test.go", id: "TestTheRelayRemembersAtMost256ExpiredRequestsAndCountsTheOnesItForgets" }],
+    expected: "The buffer-bound owner fixture closes its event writer before its temporary directory is removed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-122",
+    implementation: [
+      { file: "packages/host/tauriv2/src/arguments.rs", symbol: "pub fn decode<" },
+      { file: "packages/host/tauriv2/src/start.rs", symbol: "pub fn serve(" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/arguments_test.rs", id: "a_view_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value" },
+      { file: "packages/host/tauriv2/tests/arguments_test.rs", id: "a_view_event_keeps_a_null_data_as_its_value" },
+      { file: "packages/host/tauriv2/tests/arguments_test.rs", id: "a_plugin_host_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value" },
+      { file: "packages/host/tauriv2/tests/start_test.rs", id: "start_document_is_served_at_the_core_owner_of_soksak" },
+    ],
+    expected: "Tauri host-contract fixtures provide required request identities while preserving explicit null values and the current application address.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-123",
+    implementation: [{ file: "packages/host/wailsv3/src/recording.go", symbol: "func (r *Recording) begin(" }],
+    tests: [{ file: "packages/host/wailsv3/tests/recording_test.go", id: "TestFinishedRecordingKeepsItsFolderAndReportsFrames" }],
+    expected: "The finished-recording fixture expects the frame-identity option forwarded at capture start and retained at finish.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-124",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func (l *EventLog) rotate(" },
+      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "fn rotate(&mut self, channel: Channel)" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration" },
+      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_log_rotates_at_the_bound_and_keeps_every_generation" },
+    ],
+    expected: "Rotation tests compare the reported byte count with the archived generation that emitted the rotation record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-125",
+    implementation: [{ file: "packages/sok/wailsv3/src/event_log.go", symbol: "func StartEventLog(" }],
+    tests: [
+      { file: "packages/sok/wailsv3/src/event_log_loss_test.go", id: "TestAnUnserializableLineIsReportedAsDropped" },
+      { file: "packages/sok/wailsv3/src/event_log_loss_test.go", id: "TestAnUnwritableLineIsReportedAsDropped" },
+    ],
+    expected: "Go CLI event-log loss tests register a test-owned filesystem platform and restore the prior registration during cleanup.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-118",
+    implementation: [
+      { file: "packages/host/wailsv3/src/projects.go", symbol: "func (h *Host) ProjectShown(" },
+      { file: "packages/host/wailsv3/src/plugins.go", symbol: "func (p *Plugins) SetStarter(" },
+      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn view_failed(" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn closed_image_answer(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/projects_test.go", id: "TestProjectShownRootMismatchDoesNotMutateProjectState" },
+      { file: "packages/host/wailsv3/tests/plugins_test.go", id: "TestPluginsStarterPendingAndCompletedStatesSurviveManagerRecreation" },
+      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
+      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer" },
+    ],
+    expected: "Project and starter tests remain in their existing Go owner files, while view failure-order and retired-image tests remain in existing Rust owner modules with their assertions and host-contract markers preserved.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-119",
+    implementation: [
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) struct ProjectShown" },
+      { file: "packages/host/tauriv2/src/bindings.rs", symbol: "request: Argument<ProjectShown>" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/project_data_order/project_data_order_test.rs", id: "malformed_project_shown_arguments_are_rejected_before_committing_project_state" },
+      { file: "packages/host/tauriv2/tests/project_data_order/project_data_order_test.rs", id: "showing_no_project_clears_committed_state_and_preserves_other_staged_owners" },
+    ],
+    expected: "The registered ProjectShown binding rejects an omitted project member but accepts explicit null and clears the committed project.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
@@ -5649,23 +6165,6 @@ const OWNER_ROOTS = [
   ["native/", "native"],
   ["apps/", "application"],
   ["e2e/", "contract"],
-  {
-    id: "F239-118",
-    implementation: [
-      { file: "packages/host/wailsv3/src/projects.go", symbol: "func (h *Host) ProjectShown(" },
-      { file: "packages/host/wailsv3/src/plugins.go", symbol: "func (p *Plugins) SetStarter(" },
-      { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn view_failed(" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn closed_image_answer(" },
-    ],
-    tests: [
-      { file: "packages/host/wailsv3/src/projects_test.go", id: "TestProjectShownRootMismatchDoesNotMutateProjectState" },
-      { file: "packages/host/wailsv3/tests/plugins_test.go", id: "TestPluginsStarterPendingAndCompletedStatesSurviveManagerRecreation" },
-      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
-      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer" },
-    ],
-    expected: "Project and starter tests remain in their existing Go owner files, while view failure-order and retired-image tests remain in existing Rust owner modules with their assertions and host-contract markers preserved.",
-    levels: ["unit"],
-  },
 ];
 const DECLARATION_FILE = /(^|\/)(package|plugin|sidecar|environment|exposure)\.json$/;
 const PRIVATE_SEGMENT = /(^|\/)(src|tests?|internal|private)(\/|$)/;
@@ -6127,10 +6626,15 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 }
 
 // Aggregate review records (F13, F266, F267), release records, withdrawn items,
-// guidance changes (R4, R6), and fixture-only corrections (F239-47-5) do not
-// add product behavior and need no feature link. Every completed product
-// capability still requires one.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34"]);
+// guidance changes (R4, R6), and fixture-only, structure-only, or reason-only
+// corrections do not add product behavior and need no feature link. F239-113
+// and F239-113-2 update fixtures; F239-114 aggregates children; F239-114-3,
+// F239-115, and F239-140 document existing error handling; F239-116, F239-117,
+// F239-120, F239-126, F239-135, F239-138, F239-142, and F239-71 correct test
+// fixtures, mappings, file structure, compile scope, or records; F239-129 is a
+// behavior-preserving refactor. Every completed product capability still
+// requires exact implementation and owning-test links.
+const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read

@@ -311,10 +311,13 @@
   reason comments (`/tmp/F239-140-census-green.log`). No behavior or census rule
   changed.
 
-- F239-110: Correct stale parity feature-link references, add implementation and
-  owner-test links for completed capabilities, and update the recorded workspace
-  inventory counts. The preserved structure run reported these metadata errors;
-  validation of this correction is pending.
+- F239-110: Replace the stale F239-104 implementation reference, add exact
+  implementation and owner-test links for 10 completed behavior capabilities,
+  and classify 15 fixture, aggregate, reason-only, refactor, mapping, compile-
+  scope, and record-only rows as non-capabilities. Update the current inventory
+  counts to 102 lanes, 710 implementation files, and 1018 test files. The
+  scoped parity check passes; its negative-control owner test still rejects an
+  unlinked capability. Both checks validate structural metadata only.
 
 - F239-103: Preserve tag-scoped identity after source pixel-history eviction by
   joining the existing bounded source and tag artifact ledgers. Parse committed

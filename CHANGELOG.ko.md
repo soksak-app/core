@@ -290,9 +290,12 @@
   reason comment를 추가한 뒤 tracked repository census owner test가 1/1 통과했다
   (`/tmp/F239-140-census-green.log`). 동작과 census rule은 바뀌지 않았다.
 
-- F239-110: 오래된 parity 기능 링크를 고치고 완료 기능의 구현과 소유 테스트를
-  연결하며 기록된 workspace inventory 수를 갱신한다. 보존된 structure 실행에서
-  이 metadata 오류가 확인됐고, 이번 수정의 검증은 아직 실행하지 않았다.
+- F239-110: 오래된 F239-104 구현 참조를 교체하고 완료된 동작 기능 10개의 구현과
+  소유 test를 정확히 연결한다. Fixture, aggregate, reason-only, refactor, mapping,
+  compile-scope, record-only 변경 15개는 non-capability로 분류한다. 현재 inventory
+  수를 lane 102개, 구현 파일 710개, test file 1018개로 갱신한다. 제한된 parity
+  검사가 통과하고 negative-control owner test가 링크 없는 capability를 계속 거부한다.
+  두 검사는 구조 metadata만 확인한다.
 
 - F239-103: Source pixel-history eviction 뒤에도 기존의 제한된 source 및 tag
   artifact ledger를 결합해 tag-scoped identity를 보존한다. Committed 10진
