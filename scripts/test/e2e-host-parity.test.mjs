@@ -9,6 +9,8 @@ test("every application E2E suite runs the same scenario through both adapters",
   assert.deepEqual(result.unitOnly.map(({ file }) => file), [
     "app-contract.test.mjs",
     "composition-measurement.test.mjs",
+    "files-open-failure.test.mjs",
+    "project-close-snapshot.test.mjs",
     "terminal-processes.test.mjs",
   ]);
 });

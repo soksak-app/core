@@ -6,6 +6,14 @@
 
 - F239-66: assertion을 실행하지 못하던 Workbench test fixture 세 개를 수정한다. Chrome test는 test-scoped runtime mock을 사용하고, presentation test는 runtime binding을 export하며 mounted view와 theme을 준비한다. Plugin-host test는 로드된 module graph가 요구하는 plugin API export를 제공한다. 소유 파일 세 개가 31/31 통과하며 production 변경은 없다.
 
+- F239-63: Helper-only E2E module을 명시적으로 분류하고 공통
+  project-window lifecycle을 선택된 각 adapter에서 실행한다.
+  `WebviewWindow #... not found` stderr assertion은 Wails에 한정한다.
+  Red: 통합 Node run은 parity audit에서 세 경로 분류 오류를 찾았다.
+  Green: parity owner test가 1/1 통과하고 `make e2e-check`도 통과한다.
+  추가한 Tauri case body는 host-liveness assertion까지 통과했으나 external
+  foreground 변경 뒤 session이 거부됐다. Audit는 통과했고 테스트 host는
+  종료됐다. 이는 승인된 Tauri runtime evidence가 아니다.
 - F239-74: `Session.until`이 반환한 `host.windows` 값에서 lifecycle window를 선택한다. 이 method는 predicate 결과가 아니라 watch한 status 값을 반환한다. Red: Wails와 Tauri가 project open 전에 undefined window ID를 거부했다. Selector는 반환 목록에서 새 window를 고르고 문자열 ID인지 검증한다. `node --check`, `make e2e-check`, `make docs-check`가 통과했으며 Wails와 Tauri의 cycle 01 runtime 확인은 대기 중이다.
 
 - F239-61: Image presentation 순서, view attachment, project-window

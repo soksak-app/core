@@ -5,6 +5,8 @@ const ROOT = new URL("../e2e/", import.meta.url);
 const UNIT_ONLY = new Map([
   ["app-contract.test.mjs", "endpoint freshness is a client-side unit contract"],
   ["composition-measurement.test.mjs", "pixel and gesture measurement helpers are host-independent"],
+  ["files-open-failure.test.mjs", "tree-node lookup and failure-row helpers consume declared status fixtures without opening an application"],
+  ["project-close-snapshot.test.mjs", "plugin snapshot watermark helpers consume declared status fixtures without opening an application"],
   ["terminal-processes.test.mjs", "process-row parsing is host-independent"],
 ]);
 
