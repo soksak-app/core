@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-3: Supplier 및 alignment assertion 전에 단계별 page 입력/layout 처리 시간 전체를 보고한다. 기존의 실패한 drag는 출력을 생략했으며 모든 판정이 통과한 뒤에도 일부 단계만 노출했다. Syntax 검사가 통과하며 추가 window 승인을 주장하지 않는다.
+
 - F239-166: 기존 callback artifact에 실제 비동기 frame writer의 enqueue, 시작 및 완료 tick을 추가한다. Writer 사실은 serial writer에서 소유하고 queue snapshot을 frame 파일명으로 병합하며 없는 단계는 null로 유지한다. Metadata Red/Green 및 callback lifecycle owner가 통과하고 양 diagnostic host가 빌드된다. 해당 Tauri 기록은 159개 frame과 최대 25.3965 ms 간격을 가지며 writer queue 대기는 0.159 ms 미만, writer 작업은 4.669 ms 미만이다. Drag 지연은 계속 기준을 초과하므로 drag 수정 또는 이전 capture 간격의 원인을 주장하지 않는다.
 
 - F239-165: 가장 최근 수락된 frame을 이미지 대기의 완료 조건으로 유지한다. 제어된 owner는 이전 frame이 완료되고 waiter가 깨어나기 전에 후속 frame을 받는 순서를 검사하며 양 host는 미완료를 유지해야 한다. Settled consumer가 최신 frame 미표시 상태에서 끝날 수 있으므로 진입 시 고정한 sequence를 거부한다. 동시성 owner 두 개, 기존 raster/visibility owner 두 개 및 현재 frame 알림 owner가 통과한다. 최초 실패 기대값은 product Red가 아니며 이 감사는 drag 지연을 해결하지 않는다.

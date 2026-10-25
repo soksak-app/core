@@ -124,6 +124,7 @@ for (const app of Object.values(APPS)) {
     const marks = await terminalMarks(s, { measured: true });
     const offsets = currentEventOffsets(app.configDir);
     const run = await drag(t, s, PLAN, { capture: true });
+    t.diagnostic(`page handling per step (ms): ${JSON.stringify(run.handled)}`);
     await s.flushLog();
     let supplierFrames = [];
     await untilEventLines(app.configDir, offsets, () => {
@@ -140,7 +141,6 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`transaction cadence (ms): ${JSON.stringify(transactionCadence(run.layouts))}`);
     const lag = assertAligned(run, marks, (await s.get("host.window")).refreshRate);
     t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, p90 ${lag.p90.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
-    t.diagnostic(`page handling per step (ms), first 12: ${JSON.stringify(run.handled?.slice(0, 12))}, steps 40-51: ${JSON.stringify(run.handled?.slice(40, 52))}`);
   });
 
   test(`${app.name}: terminal divider drag does not leave a white surface frame`, async (t) => {
