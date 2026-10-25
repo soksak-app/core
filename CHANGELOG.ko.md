@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-155: Project를 로컬에서 소유하기 전에 모든 저장 space의 tab origin을
+  복원한다. Dormant placement는 plane에 layout을 불러오지 않고 inactive-space
+  view를 시작할 수 있다. Activation owner는 수정 전에 origin 누락을 재현하고
+  수정 후 통과하며 관련 project 및 origin owner는 54/54 통과한다. 저장 origin
+  검증이 사용하는 installed-plugin 경계를 project test 대역에 선언한다.
+  재빌드한 양 host는 missing-origin 오류 없이 persistence assertion을 완료하지만
+  runtime acceptance는 F239-157의 별도 retained-mount 오류로 실패한다.
+
 - F239-154: Projects.json을 현재 format-1 envelope로 읽고 placeholder fixture
   수정 시 envelope를 유지한다. 양 host에서 이전 bare-array 읽기 실패를
   재현했고 owner test 네 개가 통과한다. 양 placeholder assertion body도

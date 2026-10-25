@@ -1,6 +1,7 @@
 // The project list is stored in the shared store; the active project and the window ownership are stored in the running window.
 import { issueId } from "./ids.js";
 import { forgetTabsLeft } from "./tab-reports.js";
+import { recordStoredOrigins } from "./stored-layout.js";
 import { beginOperation } from "./operations.js";
 import { beginSettings, selectProject, value, flushSettings } from "./settings.js";
 import { flushEvents } from "./page-log.js";
@@ -396,6 +397,10 @@ async function showProject(id, prepared = null, openedProject = null, stagedOwne
       try { await windows.releaseProject(id); } catch (cleanupError) { failed(cleanupError); }
     }
     throw error;
+  }
+  // Dormant placement can start tabs outside the active layout as soon as this project is locally owned.
+  for (const space of project.spaces) {
+    for (const { text } of recordStoredOrigins(space.layout)) failed(new Error(text));
   }
   owned.add(id);
   activeProjectId = id;

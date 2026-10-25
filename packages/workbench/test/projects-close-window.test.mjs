@@ -63,6 +63,8 @@ globalThis.dispatchEvent = (event) => { reported.push(event.message); return tru
 globalThis.location = new URL("http://soksak.test/index.html");
 globalThis.history = { replaceState: () => {} };
 
+mock.module("../environment.js", { namedExports: { pluginUnits: () => [] } });
+
 const projects = await import("../projects.js");
 const { installOperationSink } = await import("../operations.js");
 installOperationSink((event, fields, cids) => started.push([event, fields, cids]));

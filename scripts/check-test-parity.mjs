@@ -6073,6 +6073,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-155",
+    implementation: [{ file: "packages/workbench/projects.js", symbol: "async function showProject(" }],
+    tests: [{ file: "packages/workbench/test/projects-switch.test.mjs", id: "a reopened project restores inactive-space origins before retained views can start" }],
+    expected: "Locally owned projects register origins for inactive-space tabs before dormant placement starts their views.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-154",
     implementation: [{ file: "e2e/projects-file.mjs", symbol: "export function projectRecords(" }],
     tests: [{ file: "e2e/test/projects-file.test.mjs", id: "project records read the current registry envelope without replacing it" }],

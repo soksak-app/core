@@ -115,6 +115,8 @@ globalThis.history = { replaceState: (state, title, url) => { globalThis.locatio
 const data = await import("../plugin-data.js");
 pluginHostData = data.pluginHostData;
 data.declareProjectData("probe", { label: { schema: { type: "string" }, default: "" } });
+mock.module("../environment.js", { namedExports: { pluginUnits: () => [] } });
+
 const projects = await import("../projects.js");
 
 const plane = { layout: null };

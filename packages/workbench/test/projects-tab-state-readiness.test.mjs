@@ -31,6 +31,8 @@ globalThis.location = new URL("http://soksak.test/index.html");
 globalThis.history = { replaceState: () => {} };
 globalThis.dispatchEvent = () => true;
 
+mock.module("../environment.js", { namedExports: { pluginUnits: () => [] } });
+
 const projects = await import("../projects.js");
 const successfulProjects = await import("../projects.js?tab-state-open-success");
 

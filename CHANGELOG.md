@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-155: Restore tab origins from every stored space before a project
+  becomes locally owned. Dormant placement can start inactive-space views
+  without loading their layout into the plane. The activation owner
+  reproduces the missing origin before the correction and passes afterward;
+  related project and origin owners pass 54/54. Update project test doubles
+  to declare the installed-plugin boundary used by stored origin validation.
+  Both rebuilt hosts complete the persistence assertions without the
+  missing-origin error; runtime acceptance still fails on the separate
+  retained-mount error tracked by F239-157.
+
 - F239-154: Read projects.json through its current format-1 envelope and
   preserve that envelope when modifying placeholder fixtures. Both hosts
   reproduced the obsolete bare-array read failure; four owner tests now

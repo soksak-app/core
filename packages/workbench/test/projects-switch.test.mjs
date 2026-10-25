@@ -82,6 +82,10 @@ globalThis.dispatchEvent = (event) => { reported.push(event.message); return tru
 globalThis.location = new URL("http://soksak.test/index.html");
 globalThis.history = { replaceState: (state, title, url) => { globalThis.location = new URL(url, globalThis.location); } };
 
+mock.module("../environment.js", { namedExports: {
+  pluginUnits: () => [{ id: "retained-probe", surface: { composition: { kind: "view" } } }],
+} });
+
 const projects = await import("../projects.js");
 
 /**
@@ -441,3 +445,22 @@ test("each layout save names its writing path: add space for a new space of the 
   assert.ok(saves.every((path) => typeof path === "string"), "a save names its writing path");
 });
 
+
+
+test("a reopened project restores inactive-space origins before retained views can start", { timeout: 5000 }, async () => {
+  const { tabOrigin } = await import("../tab-reports.js");
+  const project = structuredClone(PROJECT);
+  project.id = "project-retained-origin";
+  project.spaces.push({ id: "space-retained-origin", title: "Hidden", layout: {
+    state: { cards: [{ id: "hidden-card", data: {
+      activeId: "tab-retained-origin", tabs: [{ id: "tab-retained-origin", plugin: "retained-probe",
+        origin: { directory: "/work/retained-source" } }],
+    } }] },
+  } });
+  const snapshot = { common: {}, projects: [project], open: [] };
+  globalThis.location = new URL(`http://soksak.test/index.html?project=${project.id}`);
+  projects.begin(structuredClone(snapshot));
+  await projects.initialise({ ...store, snapshot: async () => structuredClone(snapshot), patch: async () => {} });
+  assert.equal(projects.local().some((p) => p.id === project.id), true);
+  assert.deepEqual(tabOrigin("tab-retained-origin"), { directory: "/work/retained-source" });
+});
