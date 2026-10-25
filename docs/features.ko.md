@@ -11,6 +11,8 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
+- [o] F239-176 — P0, F239-47-6 연결: Stall sampling과 launchd 조회를 비동기 child-process API로 실행해 진단 중에도 application 응답을 계속 읽는다. 현재 spawnSync 호출은 sampling 동안 검사 event loop를 차단한다. Sample 출력, process 실패, page 실패 격리와 process별 시간 제한을 유지한다. Red: native sampling이 Promise를 반환하지 않고 child 종료 후에만 반환한다. Green: 실제 sampling 중 event-loop 응답, host/page sample 동시 시작, 오류 보고 및 page 실패 격리를 포함한 stall-sample 소유 검사 14개가 통과한다.
+
 - [o] F239-175 — P0, F239-47-6 연결: IME 기능 acceptance와 capture cadence 측정을 분리한다. 승인된 전체 gesture, 일치하는 reference document와 측정한 glyph/underline 단계를 요구하고, 간격 측정은 보존하되 33 ms sampling 목표를 기능 실패 조건으로 사용하지 않는다. ScreenCaptureKit은 해당 update 간격을 보장하지 않는다. 증거 누락이나 잘림은 계속 실패한다. Red: 완전한 visual 증거가 34 ms gap 때문에 잘못 거부된다. Green: visual-capture 및 replay 소유 검사 25개가 간격 측정을 보존하고 증거 누락을 계속 거부하며 통과한다. 양쪽 host 후속 검사는 document 10단계에 도달하지만 통과하지 않는다. Wails에서 cursor/presentation snapshot race가 드러나고 Tauri는 recording stop 제한을 넘으므로 F239-47-6을 미완료로 유지한다.
 
 - [o] F239-174 — P0, F239-47-6 연결: 별도 600-frame capture 차단을 제거하고 4096-callback 증거 제한과 pending write 64개는 유지한다. Callback 용량 초과는 오류와 limited=true를 보고해야 한다. 수정 전에 소유 sample writer로 차단을 재현한다. Red: 변경 전 sample writer가 601번째 frame을 거부하고 파일을 만들지 않는다. Green: capture_pressure_test에서 601번째 파일 저장과 callback 용량 거부가 통과하며 capture_frame_test 및 capture_metadata_test도 통과한다. 전체 gesture cadence는 F239-47-6에 남긴다. 양쪽 diagnostic host build도 통과한다.

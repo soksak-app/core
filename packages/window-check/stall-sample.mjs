@@ -1,11 +1,22 @@
 // Keeps the thread stacks of a host that does not answer, at that moment. What the main thread did while a request did
 // not answer within the limit can be seen only then, so the check records every thread of the host process at that
 // moment with sample of macOS. A process of the same user can be sampled without privilege.
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { join } from "node:path";
 
 /** The seconds in which sample watches the host. One short record shows the stack of the blocked main thread. */
 const SECONDS = 2;
+
+// Child operations have their own limit and never block endpoint reads or test deadlines.
+function runProcess(command, args) {
+  return new Promise((resolve) => {
+    execFile(command, args, { encoding: "utf8", timeout: 10000 }, (error, stdout, stderr) => {
+      resolve({ status: error?.code ?? 0, stdout, stderr,
+        error: error && typeof error.code !== "number" ? error : undefined });
+    });
+  });
+}
+
 
 /**
  * The milliseconds that a request may stay pending before the check samples the host and its page processes. A pending
@@ -17,10 +28,10 @@ export const STALL_AFTER = 3000;
 /**
  * Writes the thread stacks of process pid to file and returns file. It fails with the reason when sample fails.
  *
- * run(command, args)  an executor that returns the same result as spawnSync ({status, stderr}). The checks replace it.
+ * run(command, args)  an executor that resolves to a process result ({status, stderr}). The checks replace it.
  */
-export function sampleProcess(pid, file, run = (command, args) => spawnSync(command, args, { encoding: "utf8" })) {
-  const result = run("/usr/bin/sample", [String(pid), String(SECONDS), "-file", file]);
+export async function sampleProcess(pid, file, run = runProcess) {
+  const result = await run("/usr/bin/sample", [String(pid), String(SECONDS), "-file", file]);
   if (result.error) throw new Error(`sample ${pid}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`sample ${pid} exited with ${result.status}: ${String(result.stderr).trim()}`);
   return file;
@@ -32,10 +43,10 @@ export function sampleProcess(pid, file, run = (command, args) => spawnSync(comm
  * a line `<pid> <status> <label>`, with pid 0 for a service that does not run; no other interface lists the services of
  * another process. It fails with the reason when launchctl fails.
  *
- * run(command, args)  an executor that returns the same result as spawnSync ({status, stdout, stderr}). The checks replace it.
+ * run(command, args)  an executor that resolves to a process result ({status, stdout, stderr}). The checks replace it.
  */
-export function launchdServices(host, run = (command, args) => spawnSync(command, args, { encoding: "utf8" })) {
-  const result = run("/bin/launchctl", ["print", `pid/${host}`]);
+export async function launchdServices(host, run = runProcess) {
+  const result = await run("/bin/launchctl", ["print", `pid/${host}`]);
   if (result.error) throw new Error(`launchctl print pid/${host}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`launchctl print pid/${host} exited with ${result.status}: ${String(result.stderr).trim()}`);
   return String(result.stdout).split("\n")
@@ -49,10 +60,10 @@ export function launchdServices(host, run = (command, args) => spawnSync(command
  * this process and not in the host, so it is recorded too. They are the WebContent services of the launchd domain of host
  * (launchdServices). It fails with the reason when launchctl fails.
  *
- * run(command, args)  an executor that returns the same result as spawnSync ({status, stdout, stderr}). The checks replace it.
+ * run(command, args)  an executor that resolves to a process result ({status, stdout, stderr}). The checks replace it.
  */
-export function pageProcesses(host, run = (command, args) => spawnSync(command, args, { encoding: "utf8" })) {
-  return launchdServices(host, run)
+export async function pageProcesses(host, run = runProcess) {
+  return (await launchdServices(host, run))
     .filter(({ label }) => label.startsWith("com.apple.WebKit.WebContent."))
     .map(({ pid }) => pid);
 }
@@ -63,17 +74,17 @@ export function pageProcesses(host, run = (command, args) => spawnSync(command, 
  * process may have ended, so when one process cannot be recorded the others are still recorded. It fails with the
  * reason when the host cannot be recorded. The file names share the host pid and time.
  */
-export function sampleStall({ host, pages, directory, time = Date.now(), sample = sampleProcess }) {
+export async function sampleStall({ host, pages, directory, time = Date.now(), sample = sampleProcess }) {
   const base = join(directory, `stall-${host}-${time}`);
-  const records = [sample(host, `${base}.txt`)];
-  for (const pid of pages) {
-    try {
-      records.push(sample(pid, `${base}-page-${pid}.txt`));
-    } catch (error) {
-      records.push(`page ${pid} not sampled: ${error.message}`);
-    }
+  const results = await Promise.allSettled([host, ...pages].map(async (pid, index) =>
+    sample(pid, index === 0 ? `${base}.txt` : `${base}-page-${pid}.txt`)));
+  if (results[0].status === "rejected") {
+    const errors = results.filter((result) => result.status === "rejected").map((result) => result.reason);
+    if (errors.length === 1) throw errors[0];
+    throw new AggregateError(errors, errors.map((error) => error.message).join("; "));
   }
-  return records;
+  return results.map((result, index) => result.status === "fulfilled" ? result.value
+    : `page ${pages[index - 1]} not sampled: ${result.reason.message}`);
 }
 
 /**

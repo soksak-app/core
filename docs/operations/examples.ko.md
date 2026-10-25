@@ -273,3 +273,5 @@ Terminal mode가 아니면 runner는 main window의 `diagnostics.objects`를 조
 집중 검사 e2e/capture-lifecycle.test.mjs는 비활성 host마다 연속 녹화 세 회를 실행한다. 각 녹화는 선언된 text-size 설정을 바꾸고 presentation을 기다린 뒤 해당 checkpoint에서 종료하며, 반환된 frame 수가 finalized frame 파일 수와 같아야 한다. 재귀 SHA-256 snapshot으로 이후 녹화 뒤에도 이전 recording 디렉터리와 artifact가 바뀌지 않아야 한다. harness는 설정을 복원하고 application 오류를 감사하며 성공한 녹화를 제거한다. 제어된 native callback owner가 지연 전달을 검사하며, 순차 runtime 검사는 지연 callback을 강제하거나 capture cadence를 증명하지 않는다.
 
 Cargo compile 또는 metadata discovery가 실패하면 Rust owner runner는 command 실패 보고 전에 capture한 stdout을 출력한다. JSON compiler diagnostic과 plain metadata 오류를 보존하며, 실패 결과를 유지하고 실패한 discovery에서 test를 시작하지 않는다.
+
+Stall sampling과 launchd process 조회는 각 process에 10초 제한을 둔 비동기 child process를 사용한다. Sample 실행 중에도 검사는 endpoint message를 계속 읽는다. Host와 page sample은 함께 시작하고 page 실패는 각각 보고하며 host 실패는 sample operation을 실패시킨다.

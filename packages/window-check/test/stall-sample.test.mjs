@@ -24,12 +24,12 @@ test("a request that answers in time does not sample", async () => {
   assert.equal(sampled, 0);
 });
 
-test("sampleProcess runs sample on the host process into the given file and reports its failure", () => {
+test("sampleProcess runs sample on the host process into the given file and reports its failure", async () => {
   const calls = [];
-  const path = sampleProcess(4321, "/x/stall.txt", (command, args) => { calls.push([command, ...args]); return { status: 0, stderr: "" }; });
+  const path = await sampleProcess(4321, "/x/stall.txt", (command, args) => { calls.push([command, ...args]); return { status: 0, stderr: "" }; });
   assert.equal(path, "/x/stall.txt");
   assert.deepEqual(calls, [["/usr/bin/sample", "4321", "2", "-file", "/x/stall.txt"]]);
-  assert.throws(() => sampleProcess(4321, "/x/stall.txt", () => ({ status: 1, stderr: "sample cannot examine process 4321\n" })),
+  await assert.rejects(sampleProcess(4321, "/x/stall.txt", () => ({ status: 1, stderr: "sample cannot examine process 4321\n" })),
     /^Error: sample 4321 exited with 1: sample cannot examine process 4321$/);
 });
 
@@ -39,16 +39,16 @@ test("the page processes of a host are the running WebContent services of its la
     "\t\t      11      - \tcom.apple.WebKit.GPU.A\n\t\t      12      - \tcom.apple.WebKit.WebContent.B\n" +
     "\t\t      13      - \tcom.apple.WebKit.WebContent.C\n\t}\n\tendpoints = {\n\t\t   14 com.apple.WebKit.WebContent.D\n\t}\n}\n";
   const calls = [];
-  assert.deepEqual(pageProcesses(10, (command, args) => { calls.push([command, ...args]); return { status: 0, stdout }; }), [12, 13]);
+  assert.deepEqual(await pageProcesses(10, (command, args) => { calls.push([command, ...args]); return { status: 0, stdout }; }), [12, 13]);
   assert.deepEqual(calls, [["/bin/launchctl", "print", "pid/10"]]);
-  assert.throws(() => pageProcesses(10, () => ({ status: 113, stderr: "Could not print domain\n" })),
+  await assert.rejects(pageProcesses(10, () => ({ status: 113, stderr: "Could not print domain\n" })),
     /^Error: launchctl print pid\/10 exited with 113: Could not print domain$/);
 });
 
 test("a page that does not reply records the host and its page processes and names the records", async () => {
   const { sampleStall } = await import("../stall-sample.mjs");
   const sampled = [];
-  const files = sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
+  const files = await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
     sample: (pid, file) => { sampled.push([pid, file]); return file; } });
   assert.deepEqual(sampled, [[10, "/x/logs/stall-10-7.txt"], [12, "/x/logs/stall-10-7-page-12.txt"], [13, "/x/logs/stall-10-7-page-13.txt"]]);
   assert.deepEqual(files, sampled.map(([, file]) => file));
@@ -71,7 +71,7 @@ test("a request that the page did not answer names the stall records or why they
 
 test("a page process that already ended does not cost the records of the host and the other pages", async () => {
   const { sampleStall } = await import("../stall-sample.mjs");
-  const results = sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7, sample: (pid, file) => {
+  const results = await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7, sample: (pid, file) => {
     if (pid === 12) throw new Error("sample 12 exited with 255: process 12 no longer appears to be running");
     return file;
   } });
@@ -107,8 +107,8 @@ test("a request pending past 3 s starts the host and page samples in the same tu
   const { sampleStall } = await import("../stall-sample.mjs");
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const started = [];
-  const sample = async () => sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
-    sample: (pid, file) => { started.push(pid); return file; } }).join(", ");
+  const sample = async () => (await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
+    sample: (pid, file) => { started.push(pid); return file; } })).join(", ");
   const reports = [];
   void within(new Promise(() => {}), 10_000, "wailsv3 status.get host.windows", sample, (text) => reports.push(text));
   t.mock.timers.tick(2999);
@@ -128,4 +128,24 @@ test("a request that answers before 3 s does not start a sample", async (t) => {
   assert.equal(await answer, 5);
   t.mock.timers.tick(10_000);
   assert.equal(sampled, 0);
+});
+
+
+test("native stall sampling keeps the check event loop responsive", { timeout: 10000 }, async (t) => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const directory = await mkdtemp(join(tmpdir(), "soksak-stall-async-"));
+  t.after(() => rm(directory, { recursive: true }));
+  let heartbeat = false;
+  const beat = new Promise((resolve) => setImmediate(() => { heartbeat = true; resolve(); }));
+  const task = sampleProcess(process.pid, join(directory, "sample.txt"));
+  try {
+    assert.equal(typeof task?.then, "function", "sampling must return before the child finishes");
+    await beat;
+    assert.equal(heartbeat, true);
+    assert.equal(await task, join(directory, "sample.txt"));
+  } finally {
+    await task;
+  }
 });

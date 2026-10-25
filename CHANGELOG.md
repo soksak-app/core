@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-176: Run stall sampling and launchd discovery through asynchronous Node child-process APIs with a ten-second limit per process. Keep endpoint reads and test deadlines responsive, start host/page samples together, and preserve every process result. The event-loop reproduction fails before correction; all 14 stall-sample owners pass afterward.
+
 - F239-175: Separate IME functional visual acceptance from capture-gap measurements. Preserve complete-gesture, identity, document, glyph and underline requirements. ScreenCaptureKit does not guarantee its requested update interval, so a sample-gap target alone does not establish an input defect. All 25 visual and replay owner cases pass; integrated acceptance remains open for the recorded snapshot and capture-stop failures.
 
 - F239-174: Remove the separate 600-frame recording cutoff. Keep the existing 4096-callback and 64-pending-write bounds, report callback exhaustion as an explicit error and limited state, and retain every admitted frame. The controlled sample-writer test fails before correction and passes after it, including the 601st frame file and capacity rejection.

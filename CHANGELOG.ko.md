@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-176: Stall sampling과 launchd 조회를 process별 10초 제한의 비동기 Node child-process API로 실행한다. Endpoint read 및 test deadline의 응답을 유지하고 host/page sample을 함께 시작하며 각 process 결과를 보존한다. Event-loop 재현 검사가 수정 전 실패하고 수정 후 stall-sample 소유 검사 14개가 통과한다.
+
 - F239-175: IME 기능 visual acceptance와 capture gap 측정을 분리한다. 전체 gesture, identity, document, glyph 및 underline 요구는 유지한다. ScreenCaptureKit이 요청된 update 간격을 보장하지 않으므로 sample gap 목표만으로 입력 결함을 판정하지 않는다. Visual 및 replay 소유 검사 25개가 통과하며 기록된 snapshot 및 capture stop 실패의 통합 acceptance는 미완료로 유지한다.
 
 - F239-174: 별도 600-frame recording 차단을 제거한다. 기존 4096-callback 및 pending write 64개 제한을 유지하고 callback 용량 초과를 명시적 오류와 limited 상태로 보고하며 수락한 frame을 모두 보존한다. 제어된 sample writer 검사가 수정 전 실패하고 수정 후 601번째 frame 파일 및 용량 거부 검사까지 통과한다.

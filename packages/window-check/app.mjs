@@ -450,8 +450,8 @@ export class Session {
     // When the host does not answer, the check records at that moment the threads of this host and of its page process
     // in the logs of the configuration folder (F69).
     const sample = async () => {
-      const records = sampleStall({
-        host: this.client.endpoint.pid, pages: pageProcesses(this.client.endpoint.pid), directory: join(this.app.configDir, "logs"),
+      const records = await sampleStall({
+        host: this.client.endpoint.pid, pages: await pageProcesses(this.client.endpoint.pid), directory: join(this.app.configDir, "logs"),
       });
       // The host stores the path of its dump as an event so that the dump is found from the log (docs/spec/logging.md#entrances).
       const stored = await announceStall((name, params) => this.client.request(name, params), this.window, records);
