@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-108: view-focus fixture에서 app DOM을 등록하고 모든 출처의 activation
+  오류를 보존한다. 이전 input-inject 전용 filter는 확장한 오류 보고 assertion에서
+  실패했다. 동일 CLI owner가 두 오류를 보존하며 통과했고 기본 비활성화 owner도
+  통과했다. Activation이나 key input은 실행하지 않았다.
+
 - F239-124: Go와 Rust rotation test에서 `log.rotated.bytes`를 가장 최근
   archived generation의 실제 크기와 비교한다. 기존 test는 회전을 유발한 line의
   크기를 가정하고 가장 오래된 archive를 비교했다. 집중 Go 및 Rust rotation test가

@@ -2,6 +2,8 @@
 
 [English](features.md)
 
+- [o] F239-108 — P1, F239-100 및 F212.12-2-1-2 연결: view-focus activation fixture가 host window 등록을 따르고 캡처한 모든 native 오류를 timeout에 보존한다. Surface 생성 전에 app DOM을 `sp_window_set_main_webview`로 등록한다. Activation 실패 reporter는 WebKit과 document view 오류를 포함한 모든 캡처 `native.record.error`의 `where`와 `text`를 보존한다. Red: document-view 오류도 캡처하는 확장 `--activity-error-report-test` assertion이 변경 전 input-inject 전용 filter에서 실패했다(`/tmp/F239-108-activity-error-red.log`). Green: 같은 CLI owner가 두 오류 기록을 출력하며 통과했고(`/tmp/F239-108-activity-error-green.log`), main-view 등록 assertion을 포함한 기본 비활성화 `view_focus_test`도 통과했다(`/tmp/F239-108-view-focus-default-green.log`). 기존 activation timeout은 등록된 activity-state callback 하나가 미완료였다는 사실만 증명하며 fixture 수정은 이를 해결하지 않는다. Activation이나 key input은 실행하지 않았다.
+
 - [o] F239-124 — P1: Go와 Rust event-log rotation test의 byte-count oracle을 바로잡는다. Writer는 다음 line이 설정 bound를 넘기기 전에 rotate하고 `log.rotated.bytes`에 방금 닫은 generation의 정확한 크기를 기록한다. 해당 event의 generation과 일치하는 archived file의 실제 크기를 비교하며 설정 bound와 generation assertion을 유지한다. Red: 보존된 host-contract 실행은 generation 16에 3841 bytes를 기록했지만 test는 triggering line이 최대 150 bytes라고 가정했다. 첫 local 수정도 generation 1을 골라 실패했다. Green: 집중 Go 및 Rust rotation test가 각각 1/1 통과했다.
 
 - [o] F239-113-1 — P1, F239-113 연결: Go와 Rust event-log audit consumer fixture를 현재 catalog schema로 갱신한다. Go host-contract test는 schema 2 catalog를 만들고 `scripts/audit-log.mjs`를 호출하며, audit는 기록된 log를 검사하기 전에 해당 형식을 올바르게 거부한다. Rust fixture도 같은 구형 형식을 선언한다. 두 fixture를 schema 3 및 Draft 2020-12 field schema로 바꾸되 raw event-log line은 schema 2로 유지하고 audit의 schema 2 catalog 거부도 유지한다. Red: 보존된 Go default 및 diagnostics host-contract 실행이 schema-version assertion에서 실패했다. Green: 집중 Go 및 Rust audit test가 각각 1/1 통과했다.

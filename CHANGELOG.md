@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-108: Register the app DOM in the view-focus fixture and preserve
+  captured activation errors from every source. The old input-inject-only
+  filter failed the expanded error-report assertion; the same CLI owner now
+  passes with both error sources, and the default non-activation owner passes.
+  No activation or key input was run.
+
 - F239-124: Compare `log.rotated.bytes` with the actual size of the latest
   archived generation in the Go and Rust rotation tests. The previous tests
   assumed a triggering line size and compared the oldest archive. The focused

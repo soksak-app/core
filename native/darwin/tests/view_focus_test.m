@@ -8,6 +8,7 @@
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "input_inject.h"
 #import "application_log.h"
 #import "support/records.h"
@@ -22,7 +23,8 @@ static NSString *inputActivityErrorReport(NSArray<NSDictionary *> *events) {
     NSMutableArray<NSString *> *lines = [NSMutableArray array];
     for (NSDictionary *event in events) {
         NSDictionary *fields = event[@"fields"];
-        if (![event[@"name"] isEqual:@"native.record.error"] || ![fields[@"where"] isEqual:@"input inject"]
+        if (![event[@"name"] isEqual:@"native.record.error"]
+            || ![fields[@"where"] isKindOfClass:NSString.class]
             || ![fields[@"text"] isKindOfClass:NSString.class]) continue;
         [lines addObject:[NSString stringWithFormat:@"DIAGNOSTIC: %@: %@", fields[@"where"], fields[@"text"]]];
     }
@@ -32,10 +34,13 @@ static NSString *inputActivityErrorReport(NSArray<NSDictionary *> *events) {
 static int activityErrorReportTest(void) {
     NSArray<NSDictionary *> *events = capturedEvents(^{
         sp_log_error("input inject", "webview activity-state registration pending at timeout");
+        sp_log_error("document view", "web content process terminated during activation");
     });
     NSString *report = inputActivityErrorReport(events);
-    BOOL reported = [report isEqualToString:@"DIAGNOSTIC: input inject: webview activity-state registration pending at timeout"];
-    check(reported, [NSString stringWithFormat:@"the test output preserves the native activation error record (%@)", report]);
+    NSString *expected = @"DIAGNOSTIC: input inject: webview activity-state registration pending at timeout\n"
+        "DIAGNOSTIC: document view: web content process terminated during activation";
+    BOOL reported = [report isEqualToString:expected];
+    check(reported, [NSString stringWithFormat:@"the test output preserves captured activation errors from each source (%@)", report]);
     if (report.length > 0) fprintf(stderr, "%s\n", report.UTF8String);
     return failures ? 1 : 0;
 }
@@ -357,6 +362,9 @@ int main(int argc, char **argv) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
     [window orderBack:nil];
+    BOOL mainRegistered = sp_window_set_main_webview(window, main);
+    check(mainRegistered && sp_window_main_webview(window) == main,
+        @"the activation fixture registers its app DOM web view");
     void *surface = sp_surface_create(main);
     webviewSetFrame(surface, 0, 0, 500, 400);
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
