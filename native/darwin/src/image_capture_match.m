@@ -1,4 +1,5 @@
 #import "image_capture_match.h"
+#import "capture_frame_identity.h"
 #import <Foundation/Foundation.h>
 #import <CommonCrypto/CommonDigest.h>
 #include <string.h>
@@ -52,11 +53,24 @@ static NSMutableDictionary<NSString *, NSDictionary *> *artifactIdentityRecords;
 static NSString *artifactDirectory;
 static dispatch_queue_t artifactWriterQueue;
 static NSUInteger artifactComparisons;
+static bool identitySessionActive;
+static NSMutableData *identityCaptureNonce;
+static NSMutableDictionary<NSString *, NSMutableDictionary<NSString *, NSString *> *> *identityIssuedPayloads;
+static NSUInteger identityIssuedCount;
 
 static void recordArtifactDrop(NSString *reason);
 static NSString *artifactName(sp_image_capture_identity identity);
 static NSDictionary *artifactRecord(SPImageCaptureSource *source, NSString *fileName, NSString *digest);
 static void writeArtifact(SPImageCaptureSource *source, NSString *directory, NSString *identityKey);
+
+static void clearIdentitySessionLocked(void) {
+    if (identityCaptureNonce.length) memset(identityCaptureNonce.mutableBytes, 0, identityCaptureNonce.length);
+    [identityCaptureNonce release];
+    identityCaptureNonce = nil;
+    [identityIssuedPayloads removeAllObjects];
+    identityIssuedCount = 0;
+    identitySessionActive = false;
+}
 
 static void initializeHistory(void) {
     static dispatch_once_t once;
@@ -68,6 +82,7 @@ static void initializeHistory(void) {
         artifactCleanupErrors = [NSMutableArray new];
         pendingArtifactSources = [NSMutableDictionary new];
         artifactIdentityRecords = [NSMutableDictionary new];
+        identityIssuedPayloads = [NSMutableDictionary new];
     });
 }
 
@@ -78,6 +93,7 @@ void sp_image_capture_match_begin(const char *capture_directory, dispatch_queue_
     if (artifactWriterQueue) dispatch_release(artifactWriterQueue);
     [artifactDirectory release];
     artifactDirectory = [directory copy];
+    clearIdentitySessionLocked();
     artifactWriterQueue = writer_queue;
     if (artifactWriterQueue) dispatch_retain(artifactWriterQueue);
     [history removeAllObjects];
@@ -103,6 +119,7 @@ void sp_image_capture_match_end(void) {
     initializeHistory();
     [historyLock lock];
     atomic_store(&historyEnabled, false);
+    clearIdentitySessionLocked();
     while (artifactComparisons != 0) [historyLock wait];
     dispatch_queue_t writer_queue = artifactWriterQueue;
     if (writer_queue) dispatch_retain(writer_queue);
@@ -597,4 +614,178 @@ void sp_image_capture_match_result_dispose(sp_image_capture_match_result *result
     free(result->candidates);
     result->candidates = NULL;
     result->candidate_count = 0;
+}
+
+static bool identityFailure(char **error, const char *message) {
+    if (error) *error = strdup(message);
+    return false;
+}
+
+static NSString *identityRegionKey(const uint8_t token[16]) {
+    if (!token) return nil;
+    NSMutableString *key = [NSMutableString stringWithCapacity:32];
+    for (NSUInteger index = 0; index < 16; index++) [key appendFormat:@"%02x", token[index]];
+    return key;
+}
+
+static NSString *identitySourceKey(sp_image_capture_identity identity) {
+    if (!identity.generation || !identity.raster || identity.sequence <= 0) return nil;
+    return [NSString stringWithFormat:@"%llu-%llu-%d", (unsigned long long)identity.generation,
+        (unsigned long long)identity.raster, identity.sequence];
+}
+
+static NSString *identityNonceLocked(const uint8_t token[16]) {
+    uint8_t input[48];
+    memcpy(input, identityCaptureNonce.bytes, 32);
+    memcpy(input + 32, token, 16);
+    uint8_t digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(input, (CC_LONG)sizeof(input), digest);
+    NSMutableString *hex = [NSMutableString stringWithCapacity:32];
+    for (NSUInteger index = 0; index < 16; index++) [hex appendFormat:@"%02x", digest[index]];
+    return [[hex copy] autorelease];
+}
+
+bool sp_image_capture_match_identity_session_begin(char **error) {
+    if (error) *error = NULL;
+    if (!error) return false;
+    initializeHistory();
+    [historyLock lock];
+    if (!atomic_load(&historyEnabled)) {
+        [historyLock unlock];
+        return identityFailure(error, "frame identity session requires active diagnostic matching");
+    }
+    if (identitySessionActive) {
+        [historyLock unlock];
+        return identityFailure(error, "frame identity session is already active");
+    }
+    NSMutableData *nonce = [[NSMutableData alloc] initWithLength:32];
+    if (!nonce) {
+        [historyLock unlock];
+        return identityFailure(error, "frame identity capture nonce allocation failed");
+    }
+    arc4random_buf(nonce.mutableBytes, nonce.length);
+    identityCaptureNonce = nonce;
+    identitySessionActive = true;
+    [historyLock unlock];
+    return true;
+}
+
+bool sp_image_capture_match_identity_region_nonce(const uint8_t region_token[16], NSString **nonce, char **error) {
+    if (nonce) *nonce = nil;
+    if (error) *error = NULL;
+    if (!nonce || !error || !region_token) return identityFailure(error, "frame identity region token or output is invalid");
+    initializeHistory();
+    [historyLock lock];
+    if (!identitySessionActive) {
+        [historyLock unlock];
+        return identityFailure(error, "frame identity session is not active");
+    }
+    *nonce = [identityNonceLocked(region_token) copy];
+    [historyLock unlock];
+    if (!*nonce) return identityFailure(error, "frame identity region nonce allocation failed");
+    return true;
+}
+
+bool sp_image_capture_match_identity_issue(const uint8_t region_token[16], sp_image_capture_identity identity,
+    NSString **payload, char **error) {
+    if (payload) *payload = nil;
+    if (error) *error = NULL;
+    if (!payload || !error || !region_token) return identityFailure(error, "frame identity region token or output is invalid");
+    NSString *sourceKey = identitySourceKey(identity);
+    if (!sourceKey) return identityFailure(error, "frame identity source identity is invalid");
+    initializeHistory();
+    NSString *regionKey = identityRegionKey(region_token);
+    [historyLock lock];
+    if (!identitySessionActive) {
+        [historyLock unlock];
+        return identityFailure(error, "frame identity session is not active");
+    }
+    NSMutableDictionary *issued = identityIssuedPayloads[regionKey];
+    NSString *existing = issued[sourceKey];
+    if (existing) {
+        *payload = [existing copy];
+        [historyLock unlock];
+        if (!*payload) return identityFailure(error, "frame identity payload allocation failed");
+        return true;
+    }
+    if (identityIssuedCount >= kImageCaptureHistoryCountLimit) {
+        [historyLock unlock];
+        return identityFailure(error, "frame identity issued payload limit reached");
+    }
+    NSString *nonce = identityNonceLocked(region_token);
+    SPCaptureFrameIdentity frameIdentity = { identity.generation, identity.raster, (uint64_t)identity.sequence };
+    NSString *created = nil, *payloadError = nil;
+    if (!sp_capture_frame_identity_payload(nonce, frameIdentity, &created, &payloadError)) {
+        const char *message = payloadError.UTF8String ?: "frame identity payload generation failed";
+        bool failed = identityFailure(error, message);
+        [payloadError release];
+        [historyLock unlock];
+        return failed;
+    }
+    NSString *returnedPayload = [created copy];
+    if (!returnedPayload) {
+        [created release];
+        [historyLock unlock];
+        return identityFailure(error, "frame identity payload allocation failed");
+    }
+    if (!issued) {
+        issued = [NSMutableDictionary new];
+        identityIssuedPayloads[regionKey] = issued;
+        [issued release];
+    }
+    issued[sourceKey] = created;
+    identityIssuedCount++;
+    *payload = returnedPayload;
+    [created release];
+    [historyLock unlock];
+    return true;
+}
+
+bool sp_image_capture_match_identity_evict(const uint8_t region_token[16], sp_image_capture_identity identity,
+    char **error) {
+    if (error) *error = NULL;
+    if (!error || !region_token) return identityFailure(error, "frame identity region token or error output is invalid");
+    NSString *sourceKey = identitySourceKey(identity);
+    if (!sourceKey) return identityFailure(error, "frame identity source identity is invalid");
+    initializeHistory();
+    NSString *regionKey = identityRegionKey(region_token);
+    [historyLock lock];
+    if (!identitySessionActive) {
+        [historyLock unlock];
+        return identityFailure(error, "frame identity session is not active");
+    }
+    NSMutableDictionary *issued = identityIssuedPayloads[regionKey];
+    if (issued[sourceKey]) {
+        [issued removeObjectForKey:sourceKey];
+        identityIssuedCount--;
+        if (!issued.count) [identityIssuedPayloads removeObjectForKey:regionKey];
+    }
+    [historyLock unlock];
+    return true;
+}
+
+bool sp_image_capture_match_identity_copy_payloads(const uint8_t region_token[16], NSSet<NSString *> **payloads,
+    char **error) {
+    if (payloads) *payloads = nil;
+    if (error) *error = NULL;
+    if (!payloads || !error || !region_token) return identityFailure(error, "frame identity region token or output is invalid");
+    initializeHistory();
+    NSString *regionKey = identityRegionKey(region_token);
+    [historyLock lock];
+    if (!identitySessionActive) {
+        [historyLock unlock];
+        return identityFailure(error, "frame identity session is not active");
+    }
+    NSDictionary *issued = identityIssuedPayloads[regionKey];
+    *payloads = [[NSSet alloc] initWithArray:issued.allValues ?: @[]];
+    [historyLock unlock];
+    if (!*payloads) return identityFailure(error, "frame identity issued payload copy failed");
+    return true;
+}
+
+void sp_image_capture_match_identity_session_end(void) {
+    initializeHistory();
+    [historyLock lock];
+    clearIdentitySessionLocked();
+    [historyLock unlock];
 }

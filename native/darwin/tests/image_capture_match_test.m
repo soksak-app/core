@@ -9,6 +9,111 @@ static void check(BOOL ok, NSString *label) {
     if (!ok) failures++;
 }
 
+static void frameIdentitySessionChecks(void) {
+    const uint8_t regionA[16] = { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    const uint8_t regionB[16] = { 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    const sp_image_capture_identity identity = { 3, 5, 7 };
+    char *error = NULL;
+    check(sp_image_capture_match_identity_session_begin(&error) && error == NULL,
+        @"an active diagnostic capture starts an identity session");
+    free(error); error = NULL;
+
+    NSString *nonceA = nil, *nonceARepeat = nil, *nonceB = nil;
+    check(sp_image_capture_match_identity_region_nonce(regionA, &nonceA, &error) && error == NULL,
+        @"an issued region token derives its capture-scoped nonce");
+    free(error); error = NULL;
+    check(sp_image_capture_match_identity_region_nonce(regionA, &nonceARepeat, &error) && error == NULL
+        && [nonceA isEqualToString:nonceARepeat], @"the same region token derives a stable nonce within a session");
+    free(error); error = NULL;
+    check(sp_image_capture_match_identity_region_nonce(regionB, &nonceB, &error) && error == NULL
+        && ![nonceA isEqualToString:nonceB], @"distinct regions receive distinct identity nonces");
+    free(error); error = NULL;
+
+    NSString *payloadA = nil, *payloadB = nil;
+    check(sp_image_capture_match_identity_issue(regionA, identity, &payloadA, &error) && error == NULL,
+        @"the matcher issues an identity payload for a region source");
+    free(error); error = NULL;
+    check(sp_image_capture_match_identity_issue(regionB, identity, &payloadB, &error) && error == NULL
+        && ![payloadA isEqualToString:payloadB], @"the same source tuple in another region has a different payload");
+    free(error); error = NULL;
+    NSString *payloadARepeat = nil;
+    check(sp_image_capture_match_identity_issue(regionA, identity, &payloadARepeat, &error) && error == NULL
+        && [payloadA isEqualToString:payloadARepeat], @"reissuing one region source returns the same canonical payload");
+    free(error); error = NULL;
+    [payloadARepeat release];
+    NSSet<NSString *> *issuedA = nil, *issuedB = nil;
+    check(sp_image_capture_match_identity_copy_payloads(regionA, &issuedA, &error) && error == NULL
+        && [issuedA isEqualToSet:[NSSet setWithObject:payloadA]],
+        @"decoder allowlisting contains exactly the issued payload for its region");
+    free(error); error = NULL;
+    check(sp_image_capture_match_identity_copy_payloads(regionB, &issuedB, &error) && error == NULL
+        && [issuedB isEqualToSet:[NSSet setWithObject:payloadB]],
+        @"decoder allowlisting is isolated from another region");
+    free(error); error = NULL;
+
+    check(sp_image_capture_match_identity_evict(regionA, identity, &error) && error == NULL,
+        @"evicting an issued source is an explicit successful operation");
+    free(error); error = NULL;
+    [issuedA release]; issuedA = nil;
+    check(sp_image_capture_match_identity_copy_payloads(regionA, &issuedA, &error) && error == NULL
+        && issuedA.count == 0, @"evicting a retained source removes its payload from the decoder allowlist");
+    free(error); error = NULL;
+    [issuedB release]; issuedB = nil;
+    check(sp_image_capture_match_identity_copy_payloads(regionB, &issuedB, &error) && error == NULL
+        && [issuedB containsObject:payloadB], @"eviction in one region preserves another region's issued payload");
+    free(error); error = NULL;
+
+    bool capacityHeld = true;
+    for (int sequence = 100; sequence < 611; sequence++) {
+        sp_image_capture_identity next = { 3, 5, sequence };
+        NSString *nextPayload = nil;
+        if (!sp_image_capture_match_identity_issue(regionA, next, &nextPayload, &error) || error != NULL) {
+            capacityHeld = false;
+            [nextPayload release]; free(error); error = NULL;
+            break;
+        }
+        [nextPayload release];
+    }
+    check(capacityHeld, @"the issued identity set accepts entries up to the shared 512-identity bound");
+    sp_image_capture_identity overCapacity = { 3, 5, 700 };
+    NSString *overCapacityPayload = nil;
+    check(!sp_image_capture_match_identity_issue(regionA, overCapacity, &overCapacityPayload, &error)
+        && overCapacityPayload == nil && error != NULL && strstr(error, "limit") != NULL,
+        @"issuance above the 512-identity bound fails explicitly");
+    [overCapacityPayload release]; free(error); error = NULL;
+    sp_image_capture_identity releasedCapacity = { 3, 5, 100 };
+    check(sp_image_capture_match_identity_evict(regionA, releasedCapacity, &error) && error == NULL,
+        @"evicting one bounded identity releases its issued slot");
+    free(error); error = NULL;
+    check(sp_image_capture_match_identity_issue(regionA, overCapacity, &overCapacityPayload, &error) && error == NULL,
+        @"issuance resumes after an identity slot is evicted");
+    [overCapacityPayload release]; free(error); error = NULL;
+
+    sp_image_capture_match_identity_session_end();
+    [issuedA release]; issuedA = nil;
+    [issuedB release]; issuedB = nil;
+    [nonceARepeat release]; [nonceB release];
+    [payloadA release]; [payloadB release];
+    error = NULL;
+    check(!sp_image_capture_match_identity_issue(regionA, identity, &payloadA, &error)
+        && payloadA == nil && error != NULL, @"an ended session refuses new identity issuance explicitly");
+    free(error);
+    error = NULL;
+    check(sp_image_capture_match_identity_session_begin(&error) && error == NULL,
+        @"a stopped identity session can be restarted for a new capture");
+    free(error); error = NULL;
+    NSString *restartNonce = nil;
+    check(sp_image_capture_match_identity_region_nonce(regionA, &restartNonce, &error) && error == NULL
+        && ![restartNonce isEqualToString:nonceA], @"a restarted capture receives a fresh region nonce");
+    free(error); error = NULL;
+    [issuedA release]; issuedA = nil;
+    check(sp_image_capture_match_identity_copy_payloads(regionA, &issuedA, &error) && error == NULL
+        && issuedA.count == 0, @"a restarted capture has no payloads issued by its predecessor");
+    free(error); error = NULL;
+    [issuedA release]; [restartNonce release]; [nonceA release];
+    sp_image_capture_match_identity_session_end();
+}
+
 int main(void) { @autoreleasepool {
     fprintf(stderr, "START: native image capture identity matching\n");
     const uint8_t source[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
@@ -135,6 +240,9 @@ int main(void) { @autoreleasepool {
             @"a retention drop prevents a seemingly unique observed candidate from being reported as matched");
         sp_image_capture_match_result_dispose(&result);
     }
+    sp_image_capture_match_end();
+    sp_image_capture_match_begin(NULL, NULL);
+    frameIdentitySessionChecks();
     sp_image_capture_match_end();
     fprintf(stderr, "%s: native image capture identity matching\n", failures ? "FAIL" : "PASS");
     return failures ? 1 : 0;

@@ -71,4 +71,24 @@ sp_image_capture_match_result sp_image_capture_match_sample(const uint8_t *pixel
 const char *sp_image_capture_match_state_name(sp_image_capture_match_state state);
 void sp_image_capture_match_result_dispose(sp_image_capture_match_result *result);
 
+#ifdef __OBJC__
+#import <Foundation/Foundation.h>
+
+// Starts issuance while source matching is active. Success sets error to NULL; failure returns a caller-owned strdup error.
+bool sp_image_capture_match_identity_session_begin(char **error);
+// Returns a caller-owned nonce derived from the session nonce and this stable 16-byte region token; free error with free().
+bool sp_image_capture_match_identity_region_nonce(const uint8_t region_token[16], NSString **nonce, char **error);
+// Adds the canonical source identity payload to this region's issued set. Success returns caller-owned payload; free error with free().
+bool sp_image_capture_match_identity_issue(const uint8_t region_token[16], sp_image_capture_identity identity,
+    NSString **payload, char **error);
+// Removes one issued tuple idempotently. Success sets error to NULL; failure returns a caller-owned strdup error.
+bool sp_image_capture_match_identity_evict(const uint8_t region_token[16], sp_image_capture_identity identity,
+    char **error);
+// Copies the exact issued payloads for this region; a missing region returns an empty set. Caller owns the set and frees error.
+bool sp_image_capture_match_identity_copy_payloads(const uint8_t region_token[16], NSSet<NSString *> **payloads,
+    char **error);
+// Clears the secure capture nonce, region derivations, and every issued payload.
+void sp_image_capture_match_identity_session_end(void);
+#endif
+
 #endif

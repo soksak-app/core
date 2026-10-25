@@ -7,6 +7,11 @@ typedef struct {
     uint64_t sequence;
 } SPCaptureFrameIdentity;
 
+// Creates the canonical nonce and source identity payload without rendering an image. On success, payload is
+// caller-owned and error is NULL. On failure, payload is NULL and error is caller-owned.
+bool sp_capture_frame_identity_payload(NSString *nonce, SPCaptureFrameIdentity identity,
+    NSString **payload, NSString **error);
+
 // Adds a diagnostic QR identity to a copied BGRA raster inside an integer top-left pixel ROI. The nonce must be
 // unique to one capture and region. The caller retains its original bytes and color metadata separately. On success,
 // image, immutable instrumentedBGRA, and payload are owned by the caller; on failure, error is caller-owned.

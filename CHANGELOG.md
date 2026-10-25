@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- F239-47-40-4-1: Add bounded frame-identity session state to the native
+  source matcher. Each session gets a secure 32-byte nonce; each region nonce
+  is derived without a retained region cache from the session nonce and its
+  stable 16-byte token. Canonical issued payloads are region-scoped, idempotent
+  per source tuple and limited to 512; explicit eviction releases a slot, and
+  matcher begin/end clear session state. Red: the exact matcher owner test
+  passed existing raw matching cases but failed session start, nonce, issuance,
+  and allowlist assertions against the unsupported seam. Green: the exact
+  matcher test passes 1/1, including cross-region tuple separation, eviction,
+  capacity, slot reuse, and restart isolation. The canonical payload owner test
+  passes 1/1, including invalid nonce rejection. Source-history eviction and
+  image presentation are not wired to this session yet.
 - F239-47-40-2: Correct the QR helper's ROI, detection, payload, and
   ownership boundaries. Red: the unchanged owner test failed for whole-image
   Vision detection, mutable image backing, symmetric-coordinate assumptions,

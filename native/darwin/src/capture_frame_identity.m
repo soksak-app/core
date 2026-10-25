@@ -30,6 +30,22 @@ static bool validNonce(NSString *nonce) {
     return [nonce rangeOfCharacterFromSet:hex.invertedSet].location == NSNotFound;
 }
 
+bool sp_capture_frame_identity_payload(NSString *nonce, SPCaptureFrameIdentity identity,
+    NSString **payload, NSString **error) {
+    if (payload) *payload = nil;
+    if (error) *error = nil;
+    if (!payload || !error || !validNonce(nonce) || !identity.generation || !identity.raster || !identity.sequence) {
+        if (error) *error = [@"frame identity payload nonce or source identity is invalid" copy];
+        return false;
+    }
+    *payload = [payloadFor(nonce, identity) copy];
+    if (!*payload) {
+        *error = [@"frame identity payload allocation failed" copy];
+        return false;
+    }
+    return true;
+}
+
 static bool validRaster(const uint8_t *bgra, size_t width, size_t height, size_t row_bytes) {
     return bgra && width && height && width <= SIZE_MAX / 4 && row_bytes >= width * 4
         && height <= SIZE_MAX / row_bytes && width <= INT_MAX && height <= INT_MAX;
@@ -77,7 +93,13 @@ bool sp_capture_frame_identity_encode(const uint8_t *bgra, size_t width, size_t 
         return false;
     }
 
-    NSString *issued = payloadFor(nonce, identity);
+    NSString *issuedOwned = nil;
+    NSString *payloadError = nil;
+    if (!sp_capture_frame_identity_payload(nonce, identity, &issuedOwned, &payloadError)) {
+        *error = payloadError;
+        return false;
+    }
+    NSString *issued = [issuedOwned autorelease];
     CIFilter *filter = [CIFilter filterWithName:@"CIQRCodeGenerator"];
     if (!filter) { *error = [@"CoreImage QR generator is unavailable" copy]; return false; }
     [filter setValue:[issued dataUsingEncoding:NSUTF8StringEncoding] forKey:@"inputMessage"];

@@ -4,6 +4,17 @@
 
 ## 미배포
 
+- F239-47-40-4-1: Native source matcher에 bounded frame-identity session state를
+  추가한다. Session마다 secure 32-byte nonce를 만들고, 보관하는 region cache 없이
+  session nonce와 stable 16-byte token으로 region nonce를 파생한다. Canonical issued
+  payload는 region별로 source tuple에 멱등하며 512개로 제한한다. 명시적 eviction은
+  slot을 반환하고 matcher begin/end는 session state를 비운다. Red: exact matcher owner
+  test는 기존 raw matching을 통과했지만 unsupported seam에서 session 시작, nonce,
+  발급 및 allowlist assertion에 실패했다. Green: exact matcher test가 1/1 통과하며
+  region 간 tuple 분리, eviction, 상한, slot 재사용, restart 격리를 확인한다. Canonical
+  payload owner test도 잘못된 nonce 거부를 포함해 1/1 통과한다. Source-history
+  eviction과 image presentation은 아직 session에 연결되지 않았다.
+
 - F239-47-40-2: QR helper의 ROI, 탐지, payload, ownership 경계를 수정한다.
   Red: 변경 전 owner test는 Vision 전체 이미지 탐지, mutable image backing,
   대칭 좌표 가정, 정규 형식이 아닌 부호 및 공백 숫자, uint64 overflow,

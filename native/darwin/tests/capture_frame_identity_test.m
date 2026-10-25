@@ -161,6 +161,18 @@ int main(void) { @autoreleasepool {
         check(didDecode && decoded.generation == expected.generation && decoded.raster == expected.raster
             && decoded.sequence == expected.sequence && unknown_reason == nil,
             "Vision decodes the exact issued nonce and source identity");
+        NSString *builder_payload = nil;
+        NSString *builder_error = nil;
+        BOOL built_payload = sp_capture_frame_identity_payload(@"0123456789abcdef0123456789abcdef", expected,
+            &builder_payload, &builder_error);
+        check(built_payload && [builder_payload isEqualToString:payload] && builder_error == nil,
+            "canonical payload generation matches the payload embedded by image encoding");
+        [builder_payload release]; [builder_error release];
+        builder_payload = nil; builder_error = nil;
+        built_payload = sp_capture_frame_identity_payload(@"invalid", expected, &builder_payload, &builder_error);
+        check(!built_payload && builder_payload == nil && [builder_error containsString:@"nonce"],
+            "invalid nonce payload generation returns an explicit error and no output");
+        [builder_payload release]; [builder_error release];
         [unknown_reason release];
         unknown_reason = nil;
         didDecode = sp_capture_frame_identity_decode(image, roi, [NSSet set], &decoded, &unknown_reason, &error);
