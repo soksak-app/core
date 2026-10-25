@@ -69,6 +69,10 @@
   시간이나 sequence로 unknown identity를 추정하지 않는다. 이 결과는 물리적
   scanout이나 terminal IME acceptance를 입증하지 않는다.
 
+- F239-48-3-13: 추가한 private-file owner test 세 개를 현재 구조 목록에 반영해 lane 101개, 구현 파일 703개, 테스트 파일 1007개로 맞춘다. 번역의 host-audit 기록을 H17 통합 뒤 unmatched 경로가 없는 결과와 맞춘다.
+
+- F239-48-3-13: Wails CLI event-log 및 process-lock private-file 동작을 platform method로 보낸다. Darwin/Linux는 0700 directory와 0600 file 동작을 유지하고 Windows는 경로를 만들기 전에 명시적 unsupported 오류를 보고한다. Consumer test는 4/4, Darwin owner test는 4/4 통과한다. Linux/arm64와 Windows/amd64 test target은 cross-compile했지만 실행하지 않았다. Paired-host structure audit에서 private-files 경로 세 건이 사라지며 H17 반영 뒤 unmatched 경로가 남지 않는다. `make docs-check`가 통과한다. Parity에는 uncovered implementation/test 및 feature-link 오류가 없고 관련 없는 stale examples count 두 건이 남아 있다.
+
 - F239-48-3-14: `ProjectShown` unknown-field test 두 개를 기존 Tauri project-data-order child module로 옮긴다. Assertion은 그대로 유지한다. 정확한 lib test는 각각 1/1 통과하고 paired-host audit에서 기존 source test 경로가 사라져 관련 없는 finding 네 개만 남는다. Parity inventory는 lane 101개, 구현 파일 703개, test 파일 1004개로 통과한다. Host 동작은 바뀌지 않았다.
 
 - F239-48-3-16: Rust view-generation test의 정확한 배치 차이를 H17에 기록한다. 공통 generation 및 reply assertion은 Wails owner test에서 계속 검사하고 Rust test는 `documents.rs`의 private child다. Focused checker는 1/1 통과하며 선언된 경로만 허용하고 미등록 sibling은 거부한다. Host audit에는 private-files OS 경로 세 개만 남는다. Host 동작은 변경하지 않았다.

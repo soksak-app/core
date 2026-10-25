@@ -39,6 +39,14 @@ type Platform interface {
 	// TryLockFile takes an exclusive advisory lock (flock LOCK_EX|LOCK_NB) on the open file without waiting. It reports false when
 	// another open file holds the lock, which is the ownership of the configuration directory (docs/spec/endpoint.md#discovery).
 	TryLockFile(file *os.File) (bool, error)
+	// PrepareLogDirectory creates the missing event-log directories with private access and restricts the final directory to mode 0700.
+	PrepareLogDirectory(path string) error
+	// CreateLogFile creates a new event-log file for appending with private access (mode 0600 on Unix).
+	CreateLogFile(path string) (*os.File, error)
+	// AppendLogFile opens an event-log file for appending, creating it with private access when absent.
+	AppendLogFile(path string) (*os.File, error)
+	// OpenProcessLockFile opens or creates the configuration ownership lock with private access (mode 0600 on Unix).
+	OpenProcessLockFile(path string) (*os.File, error)
 }
 
 var current Platform

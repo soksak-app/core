@@ -89,7 +89,7 @@ func ownConfiguration(configDir string) (func(), error) {
 		return nil, err
 	}
 	for attempt := 0; attempt < lockAttempts; attempt++ {
-		file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+		file, err := system.OpenProcessLockFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
 		}

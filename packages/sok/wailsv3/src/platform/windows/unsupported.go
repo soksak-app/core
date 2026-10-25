@@ -4,6 +4,7 @@ package windows
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -52,6 +53,22 @@ func (windows) LockFile(*os.File) error {
 
 func (windows) TryLockFile(*os.File) (bool, error) {
 	return false, errors.New("file locks are not implemented on windows")
+}
+
+func (windows) PrepareLogDirectory(path string) error {
+	return fmt.Errorf("event log directory %s is not implemented on windows", path)
+}
+
+func (windows) CreateLogFile(path string) (*os.File, error) {
+	return nil, fmt.Errorf("event log file %s is not implemented on windows", path)
+}
+
+func (windows) AppendLogFile(path string) (*os.File, error) {
+	return nil, fmt.Errorf("event log file %s is not implemented on windows", path)
+}
+
+func (windows) OpenProcessLockFile(path string) (*os.File, error) {
+	return nil, fmt.Errorf("process lock file %s is not implemented on windows", path)
 }
 
 func (windows) PathsDir() (string, error) {

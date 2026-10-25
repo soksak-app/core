@@ -5518,6 +5518,34 @@ const FEATURE_LINKS = [
     expected: "The E2E runner requires both nonempty run metadata values before probing the baseline or starting a child, and forwards a valid pair unchanged.",
     levels: ["unit"],
   },
+  {
+    id: "F239-48-3-13",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/platform/platform.go", symbol: "type Platform interface" },
+      { file: "packages/sok/wailsv3/src/platform/darwin/process.go", symbol: "func (darwin) PrepareLogDirectory" },
+      { file: "packages/sok/wailsv3/src/platform/linux/process.go", symbol: "func (linux) PrepareLogDirectory" },
+      { file: "packages/sok/wailsv3/src/platform/windows/unsupported.go", symbol: "func (windows) PrepareLogDirectory" },
+      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func StartEventLog" },
+      { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func ownConfiguration" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestEventLogUsesPrivateFilePlatformOperations" },
+      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestEventLogStartupReportsPrivateFilePlatformFailure" },
+      { file: "packages/sok/wailsv3/tests/ownership_test.go", id: "TestConfigurationOwnershipUsesPrivateProcessLockOperation" },
+      { file: "packages/sok/wailsv3/tests/ownership_test.go", id: "TestConfigurationOwnershipReportsPrivateProcessLockFailure" },
+      { file: "packages/sok/wailsv3/tests/platform/darwin/private_files_test.go", id: "TestPrepareLogDirectoryCreatesAndRestrictsDirectory" },
+      { file: "packages/sok/wailsv3/tests/platform/darwin/private_files_test.go", id: "TestCreateLogFileIsNewAndOwnerOnly" },
+      { file: "packages/sok/wailsv3/tests/platform/darwin/private_files_test.go", id: "TestAppendLogFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/wailsv3/tests/platform/darwin/private_files_test.go", id: "TestOpenProcessLockFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/wailsv3/tests/platform/linux/private_files_test.go", id: "TestPrepareLogDirectoryCreatesAndRestrictsDirectory" },
+      { file: "packages/sok/wailsv3/tests/platform/linux/private_files_test.go", id: "TestCreateLogFileIsNewAndOwnerOnly" },
+      { file: "packages/sok/wailsv3/tests/platform/linux/private_files_test.go", id: "TestAppendLogFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/wailsv3/tests/platform/linux/private_files_test.go", id: "TestOpenProcessLockFileCreatesOwnerOnlyAndPreservesExistingMode" },
+      { file: "packages/sok/wailsv3/tests/platform/windows/private_files_test.go", id: "TestPrivateFileOperationsFailExplicitlyWithoutCreatingFiles" },
+    ],
+    expected: "The Wails CLI routes event-log directory/file and process-lock creation through its platform interface; Darwin and Linux enforce the Unix private modes, and Windows rejects these operations before creating their paths.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
