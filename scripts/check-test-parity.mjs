@@ -6080,6 +6080,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-47-2",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function visibleInputBeforeCursor(" }],
+    tests: [
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "reconstructs committed screen text plus only the current marked buffer" },
+      { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
+    ],
+    expected: "Each Hangul and Backspace input matches its reference document and exact-frame visual state independently of the recording quality result.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-98-4",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function evaluateTagScopedStage(" }],
     tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],

@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-47-2: 양 host에서 reference/terminal document 10개와 정확한 frame의
+  glyph, tag, preedit 측정 10단계가 각각 일치하여 한글과 Backspace 동작을
+  수용한다. 별도 full-recording 및 33 ms quality gate는 F239-47-6에서 열어
+  두며 통합 실행은 여전히 실패 상태다.
+
 - F239-152: 같은 창 reference가 닫히고 terminal focus가 돌아온 뒤 terminal IME
   observer baseline을 갱신한다. Key 입력 전에 presentation된 screen, 일치하는
   status evidence, 안정된 빈 composition, generation/raster가 일치하고 base-screen sequence가 cursor보다 늦지 않으며 render frame이 cursor와 일치하는 overlay와

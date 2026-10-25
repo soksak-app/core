@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-47-2: Accept the Hangul and Backspace behavior from both hosts
+  with ten matching reference/terminal documents and ten exact-frame glyph,
+  tag and preedit measurements each. Keep the separate full-recording and
+  33 ms quality gate open in F239-47-6; the combined runs remain failed.
+
 - F239-152: Refresh the terminal IME observer baseline after the same-window
   reference closes and terminal focus returns. Require a presented screen,
   matching status evidence, stable empty composition, same-generation/raster cursor overlay whose base-screen sequence is no later and whose
