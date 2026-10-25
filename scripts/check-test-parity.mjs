@@ -6136,6 +6136,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-159",
+    implementation: [{ file: "e2e/drag-measurement.mjs", symbol: "export function assertDragFrameCadence(" }],
+    tests: [{ file: "e2e/test/drag-measurement.test.mjs", id: "view drag cadence requires every frame within 33 milliseconds" }],
+    expected: "View drag recording cadence includes every decoded frame and rejects gaps above 33 milliseconds.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-153",
     implementation: [{ file: "e2e/drag-measurement.mjs", symbol: "export function pointerLag(" }],
     tests: [{ file: "e2e/test/drag-measurement.test.mjs", id: "pointer lag rejects only frames before input" }],

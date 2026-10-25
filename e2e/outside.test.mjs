@@ -8,7 +8,7 @@ import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { outside, terminalMarks, whitePixels } from "./outside.mjs";
 import { alignment, alignmentDelta } from "./alignment.mjs";
-import { assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "./drag-measurement.mjs";
+import { assertDragFrameCadence, assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "./drag-measurement.mjs";
 
 // Vertical line 1 is the boundary between the left fixed sidebar and the terminal card. Dragging it moves the left edge of the terminal card.
 const PLAN = { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 };
@@ -29,10 +29,12 @@ function assertAligned(run, marks, refreshRate) {
   let broke = 0;
   const positions = [];
   const samples = [];
+  const times = [];
   let initial = null;
   let delayed = { delta: 0, frame: -1, geometry: null };
   files.forEach((path, index) => {
     const frame = readFrame(path);
+    times.push(frame.time);
     const at = outside(frame, marks);
     if (!at) return;
     const geometry = alignment(frame, at);
@@ -51,6 +53,7 @@ function assertAligned(run, marks, refreshRate) {
     `only ${read} of ${files.length} frames could be measured, so this run checked nothing. ` +
       "The surface or its card was not found in the rest.");
 
+  assertDragFrameCadence(times);
   assertRoundTrips(positions, 2);
 
   const lag = pointerLag(samples, run.ticks, run.boundary);

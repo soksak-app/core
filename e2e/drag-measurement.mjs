@@ -1,5 +1,16 @@
 import assert from "node:assert/strict";
 
+/** Requires complete view-drag frame times, including frames whose geometry cannot be measured. */
+export function assertDragFrameCadence(times) {
+  assert.ok(Array.isArray(times) && times.length >= 2 && times.every((time, index) =>
+    Number.isFinite(time) && (index === 0 || time > times[index - 1])),
+  "view drag frame times are missing, non-finite or not strictly increasing");
+  let longest = 0;
+  for (let index = 1; index < times.length; index++) longest = Math.max(longest, times[index] - times[index - 1]);
+  assert.ok(longest <= 33, `view drag recording gap ${longest.toFixed(3)}ms exceeds 33ms`);
+  return longest;
+}
+
 // Confirms the number of round trips and the return to the start point from real capture coordinates. A frozen screen cannot pass.
 //
 // The page displays only the newest of the layouts that are waiting (docs/spec/native-surfaces.md), so a position held for less than one display

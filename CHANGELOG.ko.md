@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-159: 측정 가능한 geometry를 필터링하기 전에 모든 decode view-drag
+  frame timestamp를 기존 33 ms cadence 요구와 비교한다. 누락, 비유한 시각 및
+  역순 시각을 거부한다. 누락 동작 Red 두 case 이후 owner 일곱 case가 통과한다.
+  공통 harness의 100 ms gate와 별도로 검사하며 runtime drag latency 및 최종
+  geometry는 열어 둔다.
+
 - F212.12-3: 양 host의 drag 정렬 측정 실패를 기록한다. 양 host 모두 기존
   latency 기준을 초과한다. Capture와 trace를 보존하고 누락된 card 이동 및
   recording 측정을 열린 작업으로 유지한다. Latency 원인이나 drag acceptance를

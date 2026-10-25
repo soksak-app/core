@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { pointerLag, transactionCadence } from "../drag-measurement.mjs";
+import * as measurement from "../drag-measurement.mjs";
+const { assertDragFrameCadence, pointerLag, transactionCadence } = measurement;
 
 test("the transaction cadence reports the start intervals and the time to presentation", () => {
   const cadence = transactionCadence([
@@ -36,4 +37,16 @@ test("pointer lag measures finite frames after input", { timeout: 1000 }, () => 
   assert.deepEqual(pointerLag([
     { time: 0, position: 10 }, { time: 11, position: 10 }, { time: 12, position: 20 },
   ], [10], [10, 20]), { lag: 1, time: 11, shown: 0, step: -1, sent: 0, median: 1, p90: 1 });
+});
+
+
+test("view drag cadence requires every frame within 33 milliseconds", { timeout: 1000 }, () => {
+  assert.equal(assertDragFrameCadence([0, 16, 49, 65]), 33);
+  assert.throws(() => assertDragFrameCadence([0, 16, 49.01, 65]), /33.*gap|gap.*33/);
+});
+
+test("view drag cadence rejects missing or invalid frame times", { timeout: 1000 }, () => {
+  for (const times of [[], [0], [0, NaN], [0, Infinity], [0, 0], [1, 0]]) {
+    assert.throws(() => assertDragFrameCadence(times), /frame times/);
+  }
 });

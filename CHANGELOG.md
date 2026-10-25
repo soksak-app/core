@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-159: Check every decoded view-drag frame timestamp against the
+  existing 33 ms cadence requirement before filtering measurable geometry.
+  Reject missing, non-finite or unordered times; seven owner cases pass
+  after two missing-behavior Red cases. The shared 100 ms harness gate
+  remains separate. Runtime drag latency and final geometry remain open.
+
 - F212.12-3: Record the failing two-host drag alignment measurement.
   Both hosts exceed the existing latency limits; preserve captures and
   traces, and retain the missing card-movement and recording measurements
