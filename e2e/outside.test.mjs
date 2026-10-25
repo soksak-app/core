@@ -116,7 +116,7 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native content, cards, and the sidebar rail stay aligned`, async (t) => {
     const s = await open(t, app);
-    const terminal = await fresh(s, { log: { frame: "debug" }, reads: ["sidecar.vt.frame"] });
+    const terminal = await fresh(s, { log: { frame: "debug", io: "info" }, reads: ["sidecar.vt.frame", "sidecar.vt.request"] });
     // The right override of the terminal ties the fixed sidebar and the rail to the terminal card.
     await keepCommonSettings(s);
     await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });

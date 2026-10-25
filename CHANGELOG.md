@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-3: Enable existing io request records in the focused drag fixture alongside frame records. Exact response tuples join 42 Wails and 35 Tauri consumed waits and expose median post-dispatch service intervals of 20.148 ms and 4.840 ms. Both log audits and shutdown checks pass; capture cadence still fails on both hosts. The records localize service-side waiting without proving which actor operation blocks or establishing drag acceptance.
+
 - F239-171-4: Notify outdated removals during shared stop cleanup and owned-session count changes during authoritative retention and surface-ID reuse. Enqueue changed complete values under the state lock and keep UI invalidation outside it. Six controlled missing-notification cases pass after Red, and both existing retain protocol owners pass. Repeated unchanged operations stay silent. This completes the notification units of F239-171 without claiming capture, IME or full-suite acceptance.
 
 - F239-171-3: Notify version-only installed declaration changes and outdated removal when the current persistent connection ends. Serialize declaration replacement with immutable status publication, preserving unchanged and rejected declarations and stale connections. Four controlled Red cases become Green; both existing sidecar-folder replacement owners also pass on macOS arm64. Parity and event checks pass. Stop and retain status changes remain separately tracked.

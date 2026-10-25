@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-3: 집중 drag fixture에서 frame record와 함께 기존 io request record를 활성화한다. 정확한 response tuple로 Wails consumed wait 42개와 Tauri 35개를 연결하며 dispatch 이후 service 내부 interval median 20.148 ms와 4.840 ms를 드러낸다. 양쪽 log audit과 shutdown 검사는 통과하지만 capture cadence는 두 host 모두 실패한다. 이 record는 service 내부 대기를 특정하며 어떤 actor operation이 막히는지나 drag acceptance를 입증하지 않는다.
+
 - F239-171-4: 공통 stop cleanup의 outdated 제거와 authoritative retention 및 surface-ID 재사용의 owned-session count 변경을 알린다. 변경된 전체 값을 state lock 안에서 enqueue하고 UI invalidation은 밖에 둔다. 통제된 notification 누락 case 6개가 Red 이후 통과하며 기존 retain protocol owner도 양쪽에서 통과한다. 변경이 없는 반복 operation은 발행하지 않는다. F239-171의 notification 단위를 완료하며 capture, IME나 full-suite acceptance를 주장하지 않는다.
 
 - F239-171-3: 설치된 declaration의 version-only 변경과 현재 persistent connection 종료의 outdated 제거를 알린다. Declaration 교체와 immutable status 발행을 직렬화하고 동일 및 거절된 declaration과 stale connection을 보존한다. 통제된 Red case 4개가 Green으로 바뀌며 기존 sidecar-folder 교체 owner도 macOS arm64에서 양쪽 모두 통과한다. Parity와 event 검사가 통과한다. Stop과 retain status 변경은 별도 추적한다.
