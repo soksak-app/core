@@ -464,9 +464,9 @@
   findings, removing the view-origin test-path finding. `make parity-check` and
   `make docs-check` pass with 100 lanes, 698 implementation files, and 998
   test files.
-- F212.10-core-5-6-2: Record the stale `status.watch host.window` value after
-  image presentation and track its owning host correction. The corrected hidden-terminal reload
-  case reached reveal on Wails and Tauri, then timed out because each watch
+- F212.10-core-5-6-2: Correct stale `status.watch host.window` updates after
+  successful image presentation. An earlier hidden-terminal reload attempt reached
+  reveal on Wails and Tauri, then timed out because each watch
   value kept the visible terminal region at `presented:null`. During the same
   wait, direct `status.get host.window` returned a presented region at
   generation 7 on Wails and generation 8 on Tauri (raster 1, sequence 2).
@@ -488,30 +488,29 @@
   records now use those counts; the main parity rerun passes.
   The window tests took 22.888 s on Wails and 22.599 s on Tauri. Both runs ended
   host and sidecar processes, removed endpoints, and restored the same frontmost
-  baseline. Two-host runtime acceptance remains open.
-- F212.10-core-5-6-1: Move the sidecar headless-to-image wait after the
-  declared `core.tab.select` reveal and wait for `core.surfaces` to expose
-  `status terminal.session` before reading the retained session. The previous
-  ordering waited for an image while the terminal had no native surface, so
-  the reveal command could never run. The corrected Wails and Tauri runs
-  reached reveal; their later `host.window` watch values stayed visible with
-  `presented:null` even though direct status reads returned presented
-  generations. This watch discrepancy is tracked separately and is not
-  evidence that the image was absent. The `core.surfaces` session exposure
-  assertion was not reached, so runtime acceptance remains open.
-- F212.10-core-5-6: Add a focused hidden-terminal reload window check. It observes
-  the old presented attachment generation, replacement page start, retained
-  session opening headless, the sidecar's same-writer headless-to-image mode
-  transition after reveal, and a newer presented generation after reveal.
-  Memory saver disabled can reattach a hidden view before reveal. F212.10-core-5-5
-  host owner tests establish the exact detach acknowledgement barrier; this
-  window case checks application continuity without claiming to measure that
-  boundary. `node --check`, `make e2e-check`, `make docs-check`, and
-  `make parity-check` pass with the inventory at 100 lanes, 697 implementation
-  files, and 997 test files. The corrected runtime case reaches reveal on both
-  hosts but times out waiting for the presented region through `status.watch`;
-  direct status reads return generations 7 and 8. Runtime acceptance remains
-  open under F212.10-core-5-6-2.
+  baseline. The later two-host hidden-reload case passes under F212.10-core-5-6.
+- F212.10-core-5-6-1: Wait for the terminal surface before reading the
+  retained session. After reveal, the test waits for a visible region with a
+  newer presented generation, then for `core.surfaces` to expose
+  `status terminal.session`, before reading and comparing the session ID. It
+  checks the same-writer headless-to-image event after that read. Wails and Tauri case-specific
+  runs each pass 1/1. The Tauri runner's first global-setup attempt preceded
+  endpoint creation during asynchronous app startup and ran zero cases; a later
+  case-specific run passed. This is setup failure evidence, not a product
+  failure.
+
+- F212.10-core-5-6: Verify hidden-terminal session continuity across reload.
+  The corrected case passes on Wails and Tauri (1/1 each), with unchanged
+  session identity, attachment generation 2→7 / 2→8, and sidecar sequence
+  85→108 / 83→107. Both audits report no errors or missing records; the test
+  reports no failed calls or page error. The exact detach acknowledgement
+  barrier remains covered by F212.10-core-5-5 owner tests; this window case
+  verifies continuity without measuring that barrier. The first Tauri global
+  setup attempt ran before asynchronous app startup created its endpoint and
+  executed zero cases; the later case-specific run passed. Runtime: macOS
+  26.6.2 arm64; Wails and Tauri 0.0.21, Terminal 0.0.21 with VT 0.0.17,
+  Files 0.0.8, Browser/Editor 0.0.7, and HWP 0.0.5.
+
 - F239-48-3-8: Pair both real start-module entries through module hooks.
   Both owner tests pass 2/2. The current host audit drops from 14 to 12
   findings, removing the two app-start paths without an allowance. The
