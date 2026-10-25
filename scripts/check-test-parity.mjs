@@ -2715,6 +2715,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-48-3-15",
+    implementation: [{ file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) replyView(" }],
+    tests: [
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost" },
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyPostRefusalLeavesCallOpenForProcessEnd" },
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyRecordsTheNativePostResultAfterPosting" },
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestStaleViewReplyRecordsDiscardWithoutPosting" },
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyPostRefusalReturnsErrorWithoutPostedRecord" },
+      { file: "packages/host/wailsv3/src/view_call_peer_test.go", id: "TestViewCallAnsweredBeforeTheProcessEndWritesNoPeerLost" },
+      { file: "packages/host/wailsv3/src/view_call_peer_test.go", id: "TestViewProcessEndWritesPeerLostForEachOpenViewCall" },
+    ],
+    expected: "Wails settles a view call only after posting its reply to the same current generation; stale, refused, or unready replies leave the call available for process-ended settlement.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-47-1",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_press_context_push(&context, window, point.x, point.y)" },
