@@ -460,8 +460,8 @@ impl Platform for Windows {
         unsupported::capture_open(window_number, display)
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_start(&self, directory: &str) -> Result<(), String> {
-        unsupported::capture_start(directory)
+    fn capture_start(&self, directory: &str, frame_identity: bool) -> Result<(), String> {
+        unsupported::capture_start(directory, frame_identity)
     }
     #[cfg(feature = "diagnostics")]
     fn capture_wait(&self) -> Result<bool, String> {

@@ -4,6 +4,18 @@
 
 ## 미배포
 
+- F239-47-40-3: 선택형 strict boolean `frameIdentity`를
+  `diagnostics.capture.start`에 추가하고 두 host recording interface를 거쳐 Darwin capture
+  start까지 전달한다. 생략하거나 false이면 일반 capture를 유지하고 null 및
+  boolean이 아닌 값은 거부한다. identity session 연결이 끝날 때까지 true는
+  명시적 미지원 오류를 반환한다. Parser Red는 Wails가 null을 false로 받고
+  Tauri가 true를 무시한 동작이었다. Strict parser test는 각각 3/3, 1/1 통과한다.
+  Recording fake는 true가 양 host platform 경계에 도달함을 각 1/1 확인하고
+  native `capture_test`도 1/1 통과한다. `make -C native/darwin all`로 source
+  library가 빌드된다. Frame identity capture는 F239-47-40-4 전까지 진행 중이다.
+  Wails 외부 recording test package는 `view_call_record_test.go`와
+  `view_error_test.go`가 없는 `Surfaces.RegisterView`를 호출해 compile되지 않았다.
+  이 fixture 문제는 F239-47-40-5에 기록한다.
 - F239-47-40-4-1: Native source matcher에 bounded frame-identity session state를
   추가한다. Session마다 secure 32-byte nonce를 만들고, 보관하는 region cache 없이
   session nonce와 stable 16-byte token으로 region nonce를 파생한다. Canonical issued

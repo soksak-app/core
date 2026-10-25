@@ -9,9 +9,9 @@ static char *fixtureDirectory;
 static int stopCalls, stillCalls;
 static BOOL listingFault, cleanupFault;
 
-static bool startWithDirectory(const char *directory, char **error) {
+static bool startWithDirectory(const char *directory, bool frameIdentity, char **error) {
     if (fixtureDirectory == NULL) fixtureDirectory = strdup(directory);
-    return sp_capture_start(directory, error);
+    return sp_capture_start(directory, frameIdentity, error);
 }
 
 static int stopWithFaults(double after) {

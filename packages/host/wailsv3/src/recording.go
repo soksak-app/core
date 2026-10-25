@@ -29,7 +29,7 @@ type Capture interface {
 	// Open makes the window with the window server number target.Window the recording target.
 	Open(target CaptureTarget) error
 	// Start starts the frame recording in directory.
-	Start(directory string) error
+	Start(directory string, frameIdentity bool) error
 	// Wait returns whether the first frame was recorded.
 	Wait() (bool, error)
 	// Stop ends the recording and returns the number of recorded frames.
@@ -44,7 +44,7 @@ type Recording struct {
 
 // Start creates directory and starts recording target into that folder. It returns after the first frame is recorded.
 // When it fails, the recording stops and the folder is deleted.
-func (r *Recording) Start(capture Capture, target CaptureTarget, directory string) error {
+func (r *Recording) Start(capture Capture, target CaptureTarget, directory string, frameIdentity bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.directory != "" {
@@ -57,7 +57,7 @@ func (r *Recording) Start(capture Capture, target CaptureTarget, directory strin
 	if err := system.PrivateDirectory(directory); err != nil {
 		return err
 	}
-	if err := r.begin(capture, target, directory); err != nil {
+	if err := r.begin(capture, target, directory, frameIdentity); err != nil {
 		if removeErr := os.RemoveAll(directory); removeErr != nil {
 			return fmt.Errorf("%w; remove failed capture directory: %v", err, removeErr)
 		}
@@ -67,12 +67,12 @@ func (r *Recording) Start(capture Capture, target CaptureTarget, directory strin
 	return nil
 }
 
-func (r *Recording) begin(capture Capture, target CaptureTarget, directory string) error {
+func (r *Recording) begin(capture Capture, target CaptureTarget, directory string, frameIdentity bool) error {
 	// The preparation decides the output size from the window size at that time, so the same target is prepared again for each recording.
 	if err := capture.Open(target); err != nil {
 		return err
 	}
-	if err := capture.Start(directory); err != nil {
+	if err := capture.Start(directory, frameIdentity); err != nil {
 		return err
 	}
 	ready, err := capture.Wait()

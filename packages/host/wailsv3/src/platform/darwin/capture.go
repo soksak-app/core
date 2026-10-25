@@ -79,14 +79,14 @@ func (implementation) CaptureOpen(windowNumber int, display bool) error {
 	return captureCallError("open", prepared, nativeError)
 }
 
-func (implementation) CaptureStart(directory string) error {
+func (implementation) CaptureStart(directory string, frameIdentity bool) error {
 	if strings.IndexByte(directory, 0) >= 0 {
 		return errors.New("capture start: directory contains NUL")
 	}
 	where := C.CString(directory)
 	defer C.free(unsafe.Pointer(where))
 	var nativeError *C.char
-	started := bool(C.sp_capture_start(where, &nativeError))
+	started := bool(C.sp_capture_start(where, C.bool(frameIdentity), &nativeError))
 	return captureCallError("start", started, nativeError)
 }
 

@@ -21,7 +21,11 @@ int main(void) { @autoreleasepool {
     check(!sp_capture_open(-1, false, &operationError), @"an invalid window is rejected by the native capture boundary");
     check(operationError != NULL && strlen(operationError) > 0, @"open failure is observable to the caller");
     free(operationError); operationError = NULL;
-    check(!sp_capture_start(directory, &operationError), @"starting without a capture target is rejected");
+    check(!sp_capture_start(directory, true, &operationError), @"frame identity requires the identity-session implementation");
+    check(operationError != NULL && strstr(operationError, "frame identity capture is not implemented") != NULL,
+        @"an unavailable frame-identity request returns an explicit native error");
+    free(operationError); operationError = NULL;
+    check(!sp_capture_start(directory, false, &operationError), @"starting without a capture target is rejected");
     check(operationError != NULL && strlen(operationError) > 0, @"start failure is observable to the caller");
     free(operationError); operationError = NULL;
     check(sp_capture_wait() == 0, @"an invalid window cannot produce a capture frame");
@@ -78,7 +82,7 @@ int main(void) { @autoreleasepool {
     }
     check(sp_capture_open(window.windowNumber, false, &operationError), @"a visible inactive window opens for recording");
     free(operationError); operationError = NULL;
-    bool recordingStarted = sp_capture_start(directory, &operationError);
+    bool recordingStarted = sp_capture_start(directory, false, &operationError);
     check(recordingStarted, [NSString stringWithFormat:@"recording starts on an unchanged inactive window (%@)",
         [NSString stringWithUTF8String:operationError == NULL ? "" : operationError]]);
     free(operationError);

@@ -62,7 +62,7 @@ pub trait Capture {
     /// Sets the window with the window server number target.window as the recording target.
     fn open(&self, target: Target) -> Result<(), String>;
     /// Starts to record frames in directory.
-    fn start(&self, directory: &Path) -> Result<(), String>;
+    fn start(&self, directory: &Path, frame_identity: bool) -> Result<(), String>;
     /// Returns whether the first frame was recorded.
     fn wait(&self) -> Result<bool, String>;
     /// Ends the recording and returns the number of recorded frames.
@@ -98,6 +98,7 @@ impl Recording {
         capture: &dyn Capture,
         target: Target,
         directory: &Path,
+        frame_identity: bool,
         make: &dyn Fn(&Path) -> Result<(), String>,
     ) -> Result<(), String> {
         // default: a lock that a panicking thread poisoned still holds the recording state, which the start reads and
@@ -111,7 +112,7 @@ impl Recording {
             // The preparation decides the output size from the window size at that time, so even the same target is
             // prepared again for every recording.
             capture.open(target)?;
-            capture.start(directory)?;
+            capture.start(directory, frame_identity)?;
             match capture.wait() {
                 Ok(true) => Ok(()),
                 Ok(false) => match capture.stop() {

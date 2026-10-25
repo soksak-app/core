@@ -97,7 +97,7 @@ int main(void) { @autoreleasepool {
             operationError == NULL ? "" : operationError]);
         free(operationError); operationError = NULL;
         if (!opened) break;
-        bool recording = sp_capture_start(directory.fileSystemRepresentation, &operationError);
+        bool recording = sp_capture_start(directory.fileSystemRepresentation, false, &operationError);
         check(recording, [NSString stringWithFormat:@"cycle %d starts recording (%s)", cycle,
             operationError == NULL ? "" : operationError]);
         free(operationError);

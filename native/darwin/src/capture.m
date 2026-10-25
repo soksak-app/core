@@ -1066,12 +1066,15 @@ bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
     return true;
 }
 
-bool sp_capture_start(const char* directory, char **errorOut) {
+bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut) {
     if (errorOut == NULL) {
         sp_log_error("capture start", "an error output is required");
         return false;
     }
     *errorOut = NULL;
+    if (frameIdentity) {
+        return captureOperationFailure(errorOut, @"frame identity capture is not implemented");
+    }
     if (captureStream != nil) return captureOperationFailure(errorOut, @"capture is already running");
     clearCaptureError();
     if (captureFilter == nil) {

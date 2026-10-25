@@ -42,8 +42,9 @@ impl Capture for PlatformCapture {
     fn open(&self, target: Target) -> Result<(), String> {
         self.0.capture_open(target.window, target.display)
     }
-    fn start(&self, directory: &Path) -> Result<(), String> {
-        self.0.capture_start(&directory.to_string_lossy())
+    fn start(&self, directory: &Path, frame_identity: bool) -> Result<(), String> {
+        self.0
+            .capture_start(&directory.to_string_lossy(), frame_identity)
     }
     fn wait(&self) -> Result<bool, String> {
         self.0.capture_wait()
@@ -84,12 +85,9 @@ pub(crate) fn call(
         "diagnostics.fixture" => fixture(host, window, params),
         "diagnostics.drag" => drag(host, window, params),
         "diagnostics.capture.start" => {
-            let display = match params.get("display") {
-                None | Some(Value::Null) => false,
-                Some(Value::Bool(display)) => *display,
-                Some(_) => return Err(Failure::params("display must be a boolean")),
-            };
-            let frames = capture_start(window, display)?;
+            let options = parse_capture_start_options(&params)?;
+            let display = options.display;
+            let frames = capture_start(window, display, options.frame_identity)?;
             let traced = (|| -> Result<(), Failure> {
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.layout_trace_start()).map_err(internal)
@@ -179,6 +177,31 @@ pub(crate) fn call(
             format!("{method} is not a diagnostic method"),
         )),
     }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct CaptureStartOptions {
+    display: bool,
+    frame_identity: bool,
+}
+
+fn parse_capture_start_options(
+    params: &Map<String, Value>,
+) -> Result<CaptureStartOptions, Failure> {
+    let display = match params.get("display") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(display)) => *display,
+        Some(_) => return Err(Failure::params("display must be a boolean")),
+    };
+    let frame_identity = match params.get("frameIdentity") {
+        None => false,
+        Some(Value::Bool(frame_identity)) => *frame_identity,
+        Some(_) => return Err(Failure::params("frameIdentity must be a boolean")),
+    };
+    Ok(CaptureStartOptions {
+        display,
+        frame_identity,
+    })
 }
 
 /// Quits the application as host.quit does and starts it again with the same executable and arguments once this process
@@ -640,7 +663,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     let steps = per * 2 * times;
 
     let frames = if capture {
-        Some(capture_start(window, false)?)
+        Some(capture_start(window, false, false)?)
     } else {
         None
     };
@@ -788,7 +811,7 @@ fn tick(
 
 /// Starts the window record and returns the record directory. When display is set, it records the windows of this
 /// application on the display that holds the window.
-fn capture_start(window: &Window, display: bool) -> Result<PathBuf, Failure> {
+fn capture_start(window: &Window, display: bool, frame_identity: bool) -> Result<PathBuf, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
     let numbers = on_main(window, move || platform.window_numbers(&held)).map_err(internal)?;
@@ -817,6 +840,7 @@ fn capture_start(window: &Window, display: bool) -> Result<PathBuf, Failure> {
                 display,
             },
             &directory,
+            frame_identity,
             &|path| recorder.0.private_directory(path),
         )
         .map_err(internal)?;
@@ -959,3 +983,53 @@ mod lock_test;
 #[cfg(test)]
 #[path = "diagnostics_input_reference_test.rs"]
 mod input_reference_test;
+
+#[cfg(test)]
+mod capture_start_options_test {
+    use super::*;
+
+    #[test]
+    fn capture_start_options_preserve_display_parsing() {
+        for (json, expected) in [
+            (json!({}), false),
+            (json!({"display": false}), false),
+            (json!({"display": true}), true),
+            (json!({"display": null}), false),
+        ] {
+            let params = json.as_object().unwrap().clone();
+            let got = parse_capture_start_options(&params).unwrap();
+            assert_eq!(got.display, expected, "params {params:?}");
+        }
+        for value in [json!("true"), json!(1), json!([]), json!({})] {
+            let mut params = Map::new();
+            params.insert("display".into(), value);
+            assert!(
+                parse_capture_start_options(&params).is_err(),
+                "params {params:?}"
+            );
+        }
+        assert!(
+            !parse_capture_start_options(&Map::new())
+                .unwrap()
+                .frame_identity
+        );
+    }
+
+    #[test]
+    fn capture_start_options_parse_frame_identity_and_reject_non_booleans() {
+        for (value, expected) in [(Value::Bool(false), false), (Value::Bool(true), true)] {
+            let params = Map::from_iter([("frameIdentity".into(), value)]);
+            assert_eq!(
+                parse_capture_start_options(&params).unwrap().frame_identity,
+                expected
+            );
+        }
+        for value in [Value::Null, json!("true"), json!(1), json!([]), json!({})] {
+            let params = Map::from_iter([("frameIdentity".into(), value)]);
+            assert!(
+                parse_capture_start_options(&params).is_err(),
+                "params {params:?}"
+            );
+        }
+    }
+}

@@ -103,7 +103,7 @@ int main(void) { @autoreleasepool {
         bool opened = sp_capture_open(window.windowNumber, false, &operationError);
         check(opened, [NSString stringWithFormat:@"%@: the window opens for recording (%s)", label, operationError ?: ""]);
         free(operationError); operationError = NULL;
-        bool recording = opened && sp_capture_start(directory.fileSystemRepresentation, &operationError);
+        bool recording = opened && sp_capture_start(directory.fileSystemRepresentation, false, &operationError);
         check(recording, [NSString stringWithFormat:@"%@: recording starts (%s)", label, operationError ?: ""]);
         free(operationError);
         if (!recording) return 0;

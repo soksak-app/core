@@ -442,7 +442,7 @@ pub fn capture_open(_window_number: isize, _display: bool) -> Result<(), String>
 }
 
 #[cfg(feature = "diagnostics")]
-pub fn capture_start(_directory: &str) -> Result<(), String> {
+pub fn capture_start(_directory: &str, _frame_identity: bool) -> Result<(), String> {
     missing("window capture")
 }
 

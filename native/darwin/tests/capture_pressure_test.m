@@ -159,7 +159,7 @@ int main(void) { @autoreleasepool {
     captureFilter = prepared; captureConfig = configuration;
     captureStream = (SCStream *)[NSObject new];
     setCaptureError(@"fixture recording failure before start");
-    check(!sp_capture_start(directory.UTF8String, &operationError), @"start rejects an active recording");
+    check(!sp_capture_start(directory.UTF8String, false, &operationError), @"start rejects an active recording");
     check(strstr(sp_capture_error(), "fixture recording failure before start") != NULL,
         @"rejected start preserves the active recording error");
     check(operationError != NULL && strstr(operationError, "already running") != NULL,
@@ -171,7 +171,7 @@ int main(void) { @autoreleasepool {
     [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
     captureFilter = prepared; captureConfig = configuration;
     captureStream = (SCStream *)[NSObject new];
-    check(!sp_capture_start(directory.UTF8String, &operationError), @"start also rejects a healthy active recording");
+    check(!sp_capture_start(directory.UTF8String, false, &operationError), @"start also rejects a healthy active recording");
     check(sp_capture_wait() == 1, @"rejected start preserves healthy recording readiness");
     check(operationError != NULL && strstr(operationError, "already running") != NULL,
         @"the rejected operation returns its own active-recording reason");

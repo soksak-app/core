@@ -215,9 +215,11 @@ type platformCapture struct {
 func (c platformCapture) Open(target CaptureTarget) error {
 	return c.CaptureOpen(target.Window, target.Display)
 }
-func (c platformCapture) Start(directory string) error { return c.CaptureStart(directory) }
-func (c platformCapture) Wait() (bool, error)          { return c.CaptureWait() }
-func (c platformCapture) Stop() (int, error)           { return c.CaptureStop(c.after) }
+func (c platformCapture) Start(directory string, frameIdentity bool) error {
+	return c.CaptureStart(directory, frameIdentity)
+}
+func (c platformCapture) Wait() (bool, error) { return c.CaptureWait() }
+func (c platformCapture) Stop() (int, error)  { return c.CaptureStop(c.after) }
 
 func (c platformCapture) Limited() bool { return c.CaptureLimited() }
 
@@ -275,7 +277,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	// When recording, the time at which the step was sent is recorded on the same clock as the frames. This allows measuring the delay from a step to the screen.
 	var clock func() float64
 	if p.Capture {
-		frames, err = startCapture(h, s, false)
+		frames, err = startCapture(h, s, false, false)
 		if err != nil {
 			return nil, err
 		}
@@ -389,7 +391,7 @@ func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
 
 // startCapture starts the recording of window s in a new folder under the configuration directory and waits for the first frame.
 // With display, it records the windows of this application on the display that holds the window.
-func startCapture(h *Host, s *Surfaces, display bool) (string, error) {
+func startCapture(h *Host, s *Surfaces, display bool, frameIdentity bool) (string, error) {
 	capture, err := recorder()
 	if err != nil {
 		return "", err
@@ -404,7 +406,7 @@ func startCapture(h *Host, s *Surfaces, display bool) (string, error) {
 		return "", errors.New("the window has no window server number")
 	}
 	directory := filepath.Join(h.workspace.directory, "logs", "captures", fmt.Sprintf("%s-%d", s.name, time.Now().UnixNano()))
-	if err := recording.Start(capture, CaptureTarget{Window: numbers[0], Display: display}, directory); err != nil {
+	if err := recording.Start(capture, CaptureTarget{Window: numbers[0], Display: display}, directory, frameIdentity); err != nil {
 		return "", err
 	}
 	return directory, nil
@@ -480,22 +482,45 @@ func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage
 	if err != nil {
 		return nil, err
 	}
-	var p struct {
-		Display bool `json:"display"`
-	}
-	if err := decode(params, &p); err != nil {
+	p, err := parseCaptureStartOptions(params)
+	if err != nil {
 		return nil, err
 	}
 	capture, err := recorder()
 	if err != nil {
 		return nil, err
 	}
-	directory, err := startCapture(h, s, p.Display)
+	directory, err := startCapture(h, s, p.Display, p.FrameIdentity)
 	if err != nil {
 		return nil, err
 	}
 	application.InvokeSync(capture.LayoutTraceStart)
 	return map[string]any{"frames": directory}, nil
+}
+
+type captureStartOptions struct {
+	Display       bool `json:"display"`
+	FrameIdentity bool `json:"frameIdentity"`
+}
+
+func parseCaptureStartOptions(params json.RawMessage) (captureStartOptions, error) {
+	var request struct {
+		Display       bool            `json:"display"`
+		FrameIdentity json.RawMessage `json:"frameIdentity"`
+	}
+	if err := decode(params, &request); err != nil {
+		return captureStartOptions{}, err
+	}
+	options := captureStartOptions{Display: request.Display}
+	if len(request.FrameIdentity) == 0 {
+		return options, nil
+	}
+	var frameIdentity *bool
+	if err := json.Unmarshal(request.FrameIdentity, &frameIdentity); err != nil || frameIdentity == nil {
+		return captureStartOptions{}, rpcError(codeInvalidParams, "frameIdentity must be a boolean")
+	}
+	options.FrameIdentity = *frameIdentity
+	return options, nil
 }
 
 // diagnosticCaptureStop records up to the display time of after, ends the recording, and returns the frame folder and the number of

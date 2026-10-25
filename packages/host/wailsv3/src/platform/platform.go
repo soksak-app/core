@@ -227,7 +227,7 @@ type Capturer interface {
 	// that holds the window.
 	CaptureOpen(windowNumber int, display bool) error
 	// CaptureStart starts the frame recording in directory.
-	CaptureStart(directory string) error
+	CaptureStart(directory string, frameIdentity bool) error
 	// CaptureWait returns whether the first frame was recorded.
 	CaptureWait() (bool, error)
 	// CaptureStop ends the recording and returns the number of recorded frames.

@@ -4,7 +4,11 @@ use std::ffi::{CStr, CString, c_char, c_int};
 
 unsafe extern "C" {
     fn sp_capture_open(window_number: isize, display: bool, error: *mut *mut c_char) -> bool;
-    fn sp_capture_start(directory: *const c_char, error: *mut *mut c_char) -> bool;
+    fn sp_capture_start(
+        directory: *const c_char,
+        frame_identity: bool,
+        error: *mut *mut c_char,
+    ) -> bool;
     fn sp_capture_error() -> *const c_char;
     fn sp_capture_wait() -> c_int;
     fn sp_capture_stop(after: f64) -> c_int;
@@ -92,11 +96,11 @@ pub fn open(window_number: isize, display: bool) -> Result<(), String> {
 }
 
 /// Starts to record frames in directory. A path that contains a NUL character is ignored.
-pub fn start(directory: &str) -> Result<(), String> {
+pub fn start(directory: &str, frame_identity: bool) -> Result<(), String> {
     let where_to = CString::new(directory)
         .map_err(|_| "capture start failed: directory contains NUL".to_owned())?;
     let mut error = std::ptr::null_mut();
-    let started = unsafe { sp_capture_start(where_to.as_ptr(), &mut error) };
+    let started = unsafe { sp_capture_start(where_to.as_ptr(), frame_identity, &mut error) };
     call_result("capture start failed", started, error)
 }
 

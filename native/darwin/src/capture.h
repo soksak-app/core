@@ -10,7 +10,9 @@
 // caller releases with free(). A request during an active recording is rejected and does not change the recording
 // state or error.
 bool sp_capture_open(long windowNumber, bool display, char **error);
-bool sp_capture_start(const char *directory, char **error);
+// Starts a recording in directory. frame_identity is an opt-in diagnostic request and fails explicitly until the
+// capture identity session is installed. false preserves the ordinary recorded-frame path.
+bool sp_capture_start(const char *directory, bool frame_identity, char **error);
 const char *sp_capture_error(void);
 int sp_capture_wait(void);
 // Stops the recording after the screen of the later of the display time after (ms, mach absolute time) and the call

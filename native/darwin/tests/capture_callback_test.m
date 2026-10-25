@@ -24,7 +24,7 @@ static NSError *fault(NSString *message) {
 }
 static BOOL start(NSString *directory) {
     char *error = NULL;
-    BOOL started = sp_capture_start(directory.UTF8String, &error);
+    BOOL started = sp_capture_start(directory.UTF8String, false, &error);
     check(started && error == NULL,
         [NSString stringWithFormat:@"the real stream registers its output before controlled completion (%s)", error]);
     free(error); return started;

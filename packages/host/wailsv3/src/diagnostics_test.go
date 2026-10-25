@@ -3,13 +3,96 @@
 package host
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 )
 
+// contract: diagnostics.capture-start.preserves-display-option-parsing
+func TestCaptureStartOptionsPreserveDisplayParsing(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		json string
+		want bool
+	}{
+		{name: "omitted", json: `{}`, want: false},
+		{name: "false", json: `{"display":false}`, want: false},
+		{name: "true", json: `{"display":true}`, want: true},
+		{name: "null remains false", json: `{"display":null}`, want: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseCaptureStartOptions(json.RawMessage(test.json))
+			if err != nil || got.Display != test.want {
+				t.Fatalf("parseCaptureStartOptions(%s) = %+v, %v; want display %t", test.json, got, err, test.want)
+			}
+		})
+	}
+	for _, value := range []string{`"true"`, `1`, `[]`, `{}`} {
+		if _, err := parseCaptureStartOptions(json.RawMessage(`{"display":` + value + `}`)); err == nil {
+			t.Errorf("display value %s was accepted", value)
+		}
+	}
+}
+
+// contract: diagnostics.capture-start.frame-identity-is-strict-boolean
+func TestCaptureStartFrameIdentityRejectsNull(t *testing.T) {
+	if _, err := parseCaptureStartOptions(json.RawMessage(`{"frameIdentity":null}`)); err == nil {
+		t.Fatal("frameIdentity null was accepted as the default false value")
+	}
+}
+
+// contract: diagnostics.capture-start.parses-frame-identity-option
+func TestCaptureStartOptionsParseFrameIdentity(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		json string
+		want bool
+	}{
+		{name: "omitted", json: `{}`, want: false},
+		{name: "false", json: `{"frameIdentity":false}`, want: false},
+		{name: "true", json: `{"frameIdentity":true}`, want: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseCaptureStartOptions(json.RawMessage(test.json))
+			if err != nil || got.FrameIdentity != test.want {
+				t.Fatalf("parseCaptureStartOptions(%s) = %+v, %v; want frameIdentity %t", test.json, got, err, test.want)
+			}
+		})
+	}
+	for _, value := range []string{`null`, `"true"`, `1`, `[]`, `{}`} {
+		if _, err := parseCaptureStartOptions(json.RawMessage(`{"frameIdentity":` + value + `}`)); err == nil {
+			t.Errorf("frameIdentity value %s was accepted", value)
+		}
+	}
+}
+
 type fakeCaptureStatus struct {
 	limited bool
 	gap     float64
+}
+
+type captureStartProbe struct {
+	frameIdentity bool
+}
+
+func (*captureStartProbe) Open(CaptureTarget) error { return nil }
+func (c *captureStartProbe) Start(_ string, frameIdentity bool) error {
+	c.frameIdentity = frameIdentity
+	return nil
+}
+func (*captureStartProbe) Wait() (bool, error) { return true, nil }
+func (*captureStartProbe) Stop() (int, error)  { return 1, nil }
+
+// contract: diagnostics.capture-start.forwards-frame-identity
+func TestRecordingStartForwardsFrameIdentity(t *testing.T) {
+	fake := &captureStartProbe{}
+	var recording Recording
+	if err := recording.Start(fake, CaptureTarget{Window: 7}, filepath.Join(t.TempDir(), "frames"), true); err != nil {
+		t.Fatal(err)
+	}
+	if !fake.frameIdentity {
+		t.Fatal("recording start did not forward frameIdentity")
+	}
 }
 
 func (c fakeCaptureStatus) Limited() bool       { return c.limited }

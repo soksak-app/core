@@ -36,8 +36,12 @@ impl Capture for Fake {
             Ok(())
         }
     }
-    fn start(&self, _directory: &Path) -> Result<(), String> {
-        self.calls.borrow_mut().push("start".into());
+    fn start(&self, _directory: &Path, frame_identity: bool) -> Result<(), String> {
+        self.calls.borrow_mut().push(if frame_identity {
+            "start frameIdentity".into()
+        } else {
+            "start".into()
+        });
         if self.fail_start {
             Err("start failed".into())
         } else {
@@ -78,7 +82,9 @@ fn a_finished_recording_keeps_its_folder_and_reports_frames() {
     let folder = parent.path().join("frames");
     let recording = Recording::new();
     let fake = Fake::default();
-    recording.start(&fake, WINDOW, &folder, &make).unwrap();
+    recording
+        .start(&fake, WINDOW, &folder, false, &make)
+        .unwrap();
     assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
     let (directory, count) = recording.finish(&fake).unwrap();
     assert_eq!((directory, count), (folder.clone(), 3));
@@ -98,7 +104,9 @@ fn a_failed_open_removes_the_folder() {
         ..Fake::default()
     };
     assert_eq!(
-        recording.start(&fake, WINDOW, &folder, &make).unwrap_err(),
+        recording
+            .start(&fake, WINDOW, &folder, false, &make)
+            .unwrap_err(),
         "open failed"
     );
     assert!(!folder.exists());
@@ -116,7 +124,9 @@ fn a_failed_start_removes_the_folder() {
         ..Fake::default()
     };
     assert_eq!(
-        recording.start(&fake, WINDOW, &folder, &make).unwrap_err(),
+        recording
+            .start(&fake, WINDOW, &folder, false, &make)
+            .unwrap_err(),
         "start failed"
     );
     assert!(!folder.exists());
@@ -133,7 +143,11 @@ fn a_recording_without_a_first_frame_is_stopped_and_removed() {
         no_frame: true,
         ..Fake::default()
     };
-    assert!(recording.start(&fake, WINDOW, &folder, &make).is_err());
+    assert!(
+        recording
+            .start(&fake, WINDOW, &folder, false, &make)
+            .is_err()
+    );
     assert!(!folder.exists());
     assert_eq!(calls(&fake), ["open 7", "start", "wait", "stop"]);
     assert_eq!(recording.running(), None);
@@ -147,13 +161,19 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
     let second = parent.path().join("second");
     let recording = Recording::new();
     let fake = Fake::default();
-    recording.start(&fake, WINDOW, &first, &make).unwrap();
-    let refused = recording.start(&fake, WINDOW, &second, &make).unwrap_err();
+    recording
+        .start(&fake, WINDOW, &first, false, &make)
+        .unwrap();
+    let refused = recording
+        .start(&fake, WINDOW, &second, false, &make)
+        .unwrap_err();
     assert!(refused.contains("is running"), "{refused}");
     assert!(!second.exists());
     recording.abort(&fake).unwrap();
     assert!(!first.exists());
-    recording.start(&fake, WINDOW, &second, &make).unwrap();
+    recording
+        .start(&fake, WINDOW, &second, false, &make)
+        .unwrap();
     // The preparation decides the output size from the window size at that time, so even the same window is prepared
     // again for every recording.
     assert_eq!(
@@ -172,7 +192,9 @@ fn an_abort_reports_a_stop_failure_and_still_removes_the_folder() {
         fail_stop: true,
         ..Fake::default()
     };
-    recording.start(&fake, WINDOW, &folder, &make).unwrap();
+    recording
+        .start(&fake, WINDOW, &folder, false, &make)
+        .unwrap();
     let error = recording.abort(&fake).unwrap_err();
     assert!(error.contains("stop failed"), "{error}");
     assert!(!folder.exists(), "the aborted folder remains");
@@ -186,7 +208,7 @@ fn a_different_target_is_prepared_again() {
     let recording = Recording::new();
     let fake = Fake::default();
     recording
-        .start(&fake, WINDOW, &parent.path().join("window"), &make)
+        .start(&fake, WINDOW, &parent.path().join("window"), false, &make)
         .unwrap();
     recording.finish(&fake).unwrap();
     let display = Target {
@@ -194,7 +216,7 @@ fn a_different_target_is_prepared_again() {
         display: true,
     };
     recording
-        .start(&fake, display, &parent.path().join("display"), &make)
+        .start(&fake, display, &parent.path().join("display"), false, &make)
         .unwrap();
     recording.finish(&fake).unwrap();
     assert_eq!(
@@ -210,6 +232,18 @@ fn a_different_target_is_prepared_again() {
             "stop"
         ]
     );
+}
+
+// contract: diagnostics.capture-start.forwards-frame-identity
+#[test]
+fn recording_start_forwards_frame_identity() {
+    let parent = folder::Folder::new();
+    let recording = Recording::new();
+    let fake = Fake::default();
+    recording
+        .start(&fake, WINDOW, &parent.path().join("frames"), true, &make)
+        .unwrap();
+    assert_eq!(calls(&fake), ["open 7", "start frameIdentity", "wait"]);
 }
 
 // contract: diagnostics.capture-stop.payload-reports-frame-limit
@@ -272,7 +306,7 @@ impl Capture for Panicking {
     fn open(&self, _target: Target) -> Result<(), String> {
         Ok(())
     }
-    fn start(&self, _directory: &Path) -> Result<(), String> {
+    fn start(&self, _directory: &Path, _frame_identity: bool) -> Result<(), String> {
         panic!("capture start panicked")
     }
     fn wait(&self) -> Result<bool, String> {
@@ -291,7 +325,7 @@ fn a_poisoned_recording_state_is_recovered_when_it_ends() {
     let folder = config.path().join("frames");
     let recording = Recording::new();
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = recording.start(&Panicking, WINDOW, &folder, &make);
+        let _ = recording.start(&Panicking, WINDOW, &folder, false, &make);
     }));
     assert!(panicked.is_err());
     recording

@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- F239-47-40-3: Add a strict optional `frameIdentity` boolean to
+  `diagnostics.capture.start` and forward it through both host recording
+  interfaces to Darwin capture start. Missing and false preserve ordinary
+  capture; null and non-booleans are rejected. Until the linked session wiring
+  is complete, true returns an explicit unsupported error. Parser Reds showed
+  Wails accepting null as false and Tauri ignoring true; strict parser tests
+  pass 3/3 and 1/1. Recording fakes verify true reaches each platform boundary
+  (1/1 per host), and native `capture_test` passes 1/1. The source library
+  builds with `make -C native/darwin all`. Frame identity capture remains open
+  for F239-47-40-4. The Wails external recording test package could not compile
+  because `view_call_record_test.go` and `view_error_test.go` call missing
+  `Surfaces.RegisterView`; F239-47-40-5 tracks that fixture issue.
 - F239-47-40-4-1: Add bounded frame-identity session state to the native
   source matcher. Each session gets a secure 32-byte nonce; each region nonce
   is derived without a retained region cache from the session nonce and its

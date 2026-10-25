@@ -1,7 +1,7 @@
 use serde_json::json;
 use tauri::{
     ipc::{CallbackFn, InvokeBody},
-    test::{get_ipc_response, mock_builder, mock_context, noop_assets, INVOKE_KEY},
+    test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets},
     webview::{InvokeRequest, WebviewWindowBuilder},
 };
 

@@ -672,7 +672,7 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// Starts to record frames in directory.
-    fn capture_start(&self, directory: &str) -> Result<(), String>;
+    fn capture_start(&self, directory: &str, frame_identity: bool) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// Waits for the first frame and returns whether it was recorded.
     fn capture_wait(&self) -> Result<bool, String>;

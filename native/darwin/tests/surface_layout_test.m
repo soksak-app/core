@@ -203,7 +203,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
     char *operationError = NULL;
     BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
     BOOL started = NO;
-    if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, &operationError); }
+    if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
     check(started, [NSString stringWithFormat:@"the composition recording starts (%s)", operationError == NULL ? "" : operationError]);
     free(operationError);
     if (started) {
