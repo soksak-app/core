@@ -1449,9 +1449,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
-    // Despite its name, IOSurfaceCopyValue is not CF_RETURNS_RETAINED (see the header).
-    // The returned value is not owned by this code, so it is not released. Releasing it would crash when the real
-    // owner releases it later.
+    // Copy transfers ownership even without an explicit retained annotation in the SDK header.
     CFTypeRef nonceRef = IOSurfaceCopyValue(surface, CFSTR("soksak.frame"));
     BOOL nonceMatches = NO;
     if (nonceRef && CFGetTypeID(nonceRef) == CFDataGetTypeID()) {
@@ -1460,6 +1458,8 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
             nonceMatches = memcmp(nonce, CFDataGetBytePtr(nonceData), 16) == 0;
         }
     }
+
+    if (nonceRef) CFRelease(nonceRef);
 
     if (!nonceMatches) {
         [view reject:@"forbidden"];

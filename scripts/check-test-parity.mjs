@@ -142,6 +142,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   ], [
     "native/darwin/tests/document_view_test.m",
     "native/darwin/tests/image_region_test.m",
+    "native/darwin/tests/image_nonce_ownership_test.m",
     "native/darwin/tests/image_capture_match_test.m",
     "native/darwin/tests/presentation_order_test.m",
     "native/darwin/tests/surface_layout_test.m",
@@ -6133,6 +6134,13 @@ const FEATURE_LINKS = [
     implementation: [{ file: "e2e/projects-file.mjs", symbol: "export function projectRecords(" }],
     tests: [{ file: "e2e/test/projects-file.test.mjs", id: "project records read the current registry envelope without replacing it" }],
     expected: "The projects window consumer reads only the current stored envelope and preserves it when modifying a fixture.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-160",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "if (nonceRef) CFRelease(nonceRef);" }],
+    tests: [{ file: "native/darwin/tests/image_nonce_ownership_test.m", id: "nonce ownership mode" }],
+    expected: "Accepted and refused native image frames release the owned nonce property copy after authentication.",
     levels: ["unit"],
   },
   {

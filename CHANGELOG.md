@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-160: Release the copied IOSurface nonce after authentication.
+  The earlier borrowed-value interpretation leaked one retain for both
+  accepted and refused frames. A native owner reproduces the increasing
+  retain count before correction and passes wrong-nonce, wrong-size and
+  accepted-frame branches afterward. Both macOS arm64 diagnostic hosts
+  rebuild, and the final owner passes without activation or key input.
+  No drag latency or capture cadence acceptance is claimed.
+
 - F239-159: Check every decoded view-drag frame timestamp against the
   existing 33 ms cadence requirement before filtering measurable geometry.
   Reject missing, non-finite or unordered times; seven owner cases pass

@@ -113,7 +113,7 @@ An image supplier receives host `configure` events containing the attachment gen
 
 For each frame, the supplier writes a transfer image and sends `{name, generation, raster, sequence, token, width, height, scale}`. It must not modify or reuse that transfer image until the host replies `consumed` or rejects it. Sequences increase within one generation and raster revision.
 
-The host verifies the caller, declaration, supplier, generation, raster revision, sequence, token authorization, actual image dimensions, expected native dimensions, and scale. It copies valid pixels into host-owned immutable presentation storage, swaps that snapshot into the image layer, and then replies `consumed`. A native presentation layer never points at storage the supplier may overwrite. Invalid or stale frames do not replace the previous valid snapshot.
+The host verifies the caller, declaration, supplier, generation, raster revision, sequence, token authorization, actual image dimensions, expected native dimensions, and scale. Nonce authentication releases its copied IOSurface property after comparison on both accepted and refused paths, following the Core Foundation Copy ownership rule. It copies valid pixels into host-owned immutable presentation storage, swaps that snapshot into the image layer, and then replies `consumed`. A native presentation layer never points at storage the supplier may overwrite. Invalid or stale frames do not replace the previous valid snapshot.
 
 ## Input and stacking
 

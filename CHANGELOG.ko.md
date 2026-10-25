@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-160: 인증 후 복사한 IOSurface nonce를 해제한다. 이전 borrowed-value
+  해석은 수락 및 거부 frame 모두에서 retain 하나를 누수시켰다. Native owner는
+  수정 전 증가하는 retain count를 재현하고 수정 후 잘못된 nonce, 잘못된 크기
+  및 수락 frame 경로가 통과한다. macOS arm64 양 diagnostic host를 재빌드하고
+  최종 owner가 활성화나 key 입력 없이 통과한다. Drag latency 또는 capture
+  cadence acceptance를 주장하지 않는다.
+
 - F239-159: 측정 가능한 geometry를 필터링하기 전에 모든 decode view-drag
   frame timestamp를 기존 33 ms cadence 요구와 비교한다. 누락, 비유한 시각 및
   역순 시각을 거부한다. 누락 동작 Red 두 case 이후 owner 일곱 case가 통과한다.

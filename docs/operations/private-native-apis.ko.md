@@ -10,6 +10,7 @@
 
 | API 또는 키 | 호출 위치와 범위 | 목적 |
 | --- | --- | --- |
+| Public `IOSurfaceCopyValue` 및 `CFRelease` | Native image presenter [`image_region.m`](../../native/darwin/src/image_region.m), 각 transfer nonce 인증 및 color-space property 읽기 | 복사한 property는 Core Foundation Copy rule에 따라 caller가 소유한다. 수락 및 거부 경로 모두 nonce 비교 직후 해제하고 color-space property는 color space 생성 후 해제한다. 명시적 retained annotation이 없다고 Copy 결과가 borrowed가 되지 않는다. |
 | `NSWindowResizeTime` 사용자 기본값 | 두 호스트의 [`window_motion.m`](../../native/darwin/src/window_motion.m), `windowResizeInstant`. 첫 창을 만들기 전에 등록 | 창 프레임과 웹 내용이 따로 표시되므로 창 확대·크기 변경 애니메이션을 화면 갱신 한 번으로 줄임 |
 | `NSWindow.setTitlebarHeight:` | 두 호스트의 [`window_controls.m`](../../native/darwin/src/window_controls.m), `windowSetTitlebarHeight`. 창을 만들 때 40pt 로, 페이지의 시작 문서에 답하기 전에 저장된 프레임 배율의 첫 행 높이로, 표면 준비(`syncSurfaces`)마다 창의 배치 transaction 안에서 페이지 첫 행의 높이로 호출 | 제목줄 높이를 페이지 첫 행의 높이로 정해, AppKit 이 모든 프레임 글자 배율에서 창 단추를 그 행의 가운데에 두게 함 |
 | `NSWindow.colorSpace`, `NSColorSpace.localizedName`, `NSColorSpace.ICCProfileData` | 두 호스트의 [`window_facts.m`](../../native/darwin/src/window_facts.m), `sp_window_color_space_facts`. `diagnostics.native.window-color-space`만 main thread에서 호출 | 진단 요청에서 선택한 창의 backing color space를 한 번 읽는다. 사용할 수 있으면 localized name과 ICC profile data의 SHA-256 fingerprint를 반환하며, 창의 color space를 설정하거나 profile byte를 포함하지 않는다 |
