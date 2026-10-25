@@ -3344,10 +3344,13 @@
       "fields": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
-        "properties": {},
-        "required": []
+        "properties": {
+          "frontmost_pid": { "type": ["integer", "null"] },
+          "frontmost_bundle": { "type": ["string", "null"] }
+        },
+        "required": ["frontmost_pid", "frontmost_bundle"]
       },
-      "description": "The application resigned active."
+      "description": "The application resigned active. The frontmost process snapshot names the app that receives key events at the native deactivation callback, when available; it does not establish why focus changed."
     },
     "native.app.hidden": {
       "layer": "native",

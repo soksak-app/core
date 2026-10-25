@@ -82,9 +82,21 @@ void sp_observe_activity(void) {
         for (NSNotificationName notification in application) {
             NSString *name = application[notification];
             BOOL activation = [notification isEqualToString:NSApplicationDidBecomeActiveNotification];
+            BOOL deactivation = [notification isEqualToString:NSApplicationDidResignActiveNotification];
             sp_observe_notification("activity.app", SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) {
                 // default: before any other application was activated, the activation names the pid 0 and the empty bundle.
-                NSDictionary *fields = activation ? @{@"previous_pid": @(previousPid), @"previous_bundle": previousBundle ?: @""} : @{};
+                NSDictionary *fields;
+                if (activation) {
+                    fields = @{@"previous_pid": @(previousPid), @"previous_bundle": previousBundle ?: @""};
+                } else if (deactivation && sp_event_gate(SP_CLASS_LIFECYCLE, SP_EVENT_INFO)) {
+                    NSRunningApplication *frontmost = NSWorkspace.sharedWorkspace.frontmostApplication;
+                    fields = @{
+                        @"frontmost_pid": frontmost ? @(frontmost.processIdentifier) : NSNull.null,
+                        @"frontmost_bundle": frontmost.bundleIdentifier ?: NSNull.null,
+                    };
+                } else {
+                    fields = @{};
+                }
                 // events: native.app.activated, native.app.deactivated, native.app.hidden, native.app.unhidden
                 emit(SP_CLASS_LIFECYCLE, name, fields);
             });

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-145: Record the frontmost process when the native application deactivates. The activity observer checks the event gate before querying `NSWorkspace.frontmostApplication` and stores nullable PID and bundle fields. Red: `make -C native/darwin repeat TEST=activity_observers_test COUNT=1` failed because `native.app.deactivated` had no fields (`/tmp/F239-145-activity-observers-red-01.log`). Green: the same target passed in 0.498 s (`/tmp/F239-145-activity-observers-green-01.log`). This identifies the key-event recipient only; it does not establish why focus changed or resolve the preserved F143 failure.
+
 - F239-144: Report the rejection stage, pending job and crop-byte counts, incoming crop, artifact pending bytes, and applicable limits in the existing frame-identity capacity error. Keep the eight-job and 64 MiB limits unchanged. The preserved Tauri trace shows two long Vision decodes filling eight pending jobs while total crop bytes remain below 64 MiB.
 
 

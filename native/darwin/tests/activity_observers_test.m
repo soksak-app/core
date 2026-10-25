@@ -27,6 +27,7 @@ int main(void) { @autoreleasepool {
 
     sp_observe_activity();
     sp_observe_activity();  // a second call installs nothing more
+    NSRunningApplication *frontmostAtDeactivation = NSWorkspace.sharedWorkspace.frontmostApplication;
     NSArray<NSDictionary *> *events = capturedEvents(^{
         NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
         [center postNotificationName:NSApplicationDidBecomeActiveNotification object:NSApp];
@@ -43,6 +44,13 @@ int main(void) { @autoreleasepool {
         @"native.window.main", @"native.window.occlusion", @"native.input.source_changed"];
     check([names isEqualToArray:want], [NSString stringWithFormat:@"the events are %@ (want %@)", names, want]);
     for (NSDictionary *event in events) check([event[@"level"] intValue] == 2, [NSString stringWithFormat:@"%@ is at the level info", event[@"name"]]);
+    NSDictionary *deactivated = events.count > 1 ? events[1][@"fields"] : @{};
+    id expectedFrontmostPid = frontmostAtDeactivation ? @(frontmostAtDeactivation.processIdentifier) : NSNull.null;
+    id expectedFrontmostBundle = frontmostAtDeactivation.bundleIdentifier ?: NSNull.null;
+    check([deactivated[@"frontmost_pid"] isEqual:expectedFrontmostPid] &&
+        [deactivated[@"frontmost_bundle"] isEqual:expectedFrontmostBundle],
+        [NSString stringWithFormat:@"deactivation records the event-time frontmost process (%@, want %@ %@)",
+            deactivated, expectedFrontmostPid, expectedFrontmostBundle]);
     NSDictionary *key = events.count > 2 ? events[2][@"fields"] : @{};
     check([key[@"window"] intValue] == (int)window.windowNumber, @"the key event names the window number");
     check([key[@"first_responder"] isEqual:NSStringFromClass([field class])], @"the key event names the class of the first responder");
