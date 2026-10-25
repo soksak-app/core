@@ -57,12 +57,12 @@ test("a view surface carries its start values in the preparation and a surface w
   }
 });
 
-test("the preparation carries the title bar height and the presented chrome is the committed one", async () => {
+test("the preparation carries the title bar height and the presented chrome is the committed one", async (t) => {
   const dom = new JSDOM('<div id="plane"></div>');
   globalThis.document = dom.window.document;
   const calls = [];
   let prepared = 0;
-  mock.module("@soksak/runtime", { namedExports: { host: {
+  t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
     page: (path) => path,
     call: async (name, request) => {

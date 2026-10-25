@@ -29,6 +29,27 @@ mock.module("@soksak/runtime", { namedExports: {
   page: null,
 } });
 mock.module("@soksak/plugin-api", { namedExports: {
+  EXPOSE_KINDS: { status: "status", commands: "command", dom: "dom" },
+  EXPOSURE_ERRORS: {
+    failed: -32000, unknownMethod: -32601, invalidParams: -32602,
+    unknownName: 1001, unregistered: 1002, gone: 1003, unavailable: 1004,
+    timeout: 1005, inactive: 1006, noControl: 1009,
+  },
+  ExposureError: class ExposureError extends Error {
+    constructor(code, message) { super(message); this.code = code; }
+  },
+  METHOD_KINDS: {
+    "status.get": "status", "status.watch": "status", "status.unwatch": "status", "status.next": "status",
+    "command.run": "command", "dom.rect": "dom", "dom.act": "dom",
+  },
+  surfaceDocumentEntry: () => false,
+  declarationKey: (kind, name) => `${kind} ${name}`,
+  declarationMap: () => new Map(),
+  exposureEntries: () => ({ answer: async () => ({ result: null }) }),
+  replyPayload: async (work) => ({ result: await work() }),
+  validateExposes: (_owner, exposes) => exposes,
+  validateExposureFile: (file) => file,
+  createPluginRuntime: () => ({ log: {} }),
   SNAPSHOT_EVENT: "declared-ui.snapshot",
   SNAPSHOT_ACK_EVENT: "declared-ui.snapshot.ack",
   SNAPSHOT_REQUEST_COMMAND: "declared-ui.snapshot.request",

@@ -15,11 +15,16 @@ test("one presentation timeout writes one page error line", async () => {
   // The animation frame of the document. Node does not have one, so it runs at the requested place.
   globalThis.requestAnimationFrame = (run) => run(0);
   const lines = [];
-  mock.module("@soksak/runtime", { namedExports: { host: {
+  mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: (surfaceId) => surfaceId === "tab-1" ? { surfaceId } : null,
+    waitSurfaceCompositionDeclared: async () => {},
+  } });
+  mock.module("@soksak/runtime", { namedExports: { windows: null, host: {
     on: () => {},
     page: (path) => path,
     call: async (name, request) => {
       if (name === "log") { if (clockAnswer(name, request)) return clockAnswer(name, request); for (const record of recordsOf(name, request)) lines.push(shownRecord(record)); return; }
+      if (name === "setTheme") return null;
       if (name === "syncSurfaces") return {
         ticket: 1,
         placements: [{ id: "tab-1", x: 0, y: 0, w: 10, h: 10, visible: true }],
@@ -53,6 +58,7 @@ test("one presentation timeout writes one page error line", async () => {
     waitSurfaceCompositionDeclared: async () => {},
   });
   await connectExposure({ settled: page.drawn, report });
+  await surfaces.theme({ scheme: "light", tokens: {} });
   registry.declare("core", { status: [], dom: [], commands: [{
     name: "core.fixture.split", description: "Splits.", params: { type: "object", properties: {} }, result: { type: "null" },
   }] });

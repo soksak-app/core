@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-66: Correct three Workbench test fixtures that failed at module setup rather than exercising their assertions. The chrome tests use test-scoped runtime mocks; the presentation test exports the runtime binding and prepares its mounted view and theme; the plugin-host test supplies the plugin API exports required by its loaded module graph. The three owning files pass 31/31, with no production changes.
+
 - F239-74: Select the lifecycle window from the `host.windows` value returned by `Session.until`. The method returns the watched status value, not the predicate result. Red: Wails and Tauri rejected the undefined window ID before project open. The selector now filters the returned list and validates its new string ID. `node --check`, `make e2e-check`, and `make docs-check` pass; Wails and Tauri cycle 01 runtime confirmation remains pending.
 
 - F239-61: Resolve the final Rust format and Clippy findings without
