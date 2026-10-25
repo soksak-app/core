@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-47-40-6: Wails `ProjectShown` 및 nested `ShownProject` 인자를 표준 host
+  argument decoder로 디코딩한다. Red: 변경 전 binding test와 새 owner case는
+  직접 JSON decoding이 잘못된 request 형태와 nested field에 비표준 오류를
+  반환해 실패했다. Green: binding test가 1/1, 집중 project owner test가 2/2
+  통과하며 unknown field 무시와 명시적 `project:null` 처리를 확인한다.
 - F239-47-40-5: Wails private view 기록 테스트를 `src`로 옮기고 일치하는
   source generation과 `Documents` view channel을 등록한다. call/reply 및
   `view.error` 기록 assertion은 `ViewMessage`를 통해 유지한다. Red: 두 외부

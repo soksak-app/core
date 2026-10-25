@@ -120,7 +120,7 @@ func TestProjectShownPostsTheCommittedProjectAndNull(t *testing.T) {
 	}
 	surfaces.projects["prj-one"] = folder.Root
 	host.owners["prj-one"] = surfaces
-	request, err := json.Marshal(map[string]any{"project": map[string]string{"id": "prj-one", "root": root, "title": "One"}})
+	request, err := json.Marshal(map[string]any{"unknown": true, "project": map[string]string{"id": "prj-one", "root": root, "title": "One", "unknown": "ignored"}})
 	if err != nil {
 		t.Fatalf("marshal shown project: %v", err)
 	}
@@ -144,6 +144,28 @@ func TestProjectShownPostsTheCommittedProjectAndNull(t *testing.T) {
 	}
 	if len(fake.posted) != 2 || !strings.Contains(fake.posted[1], `"event":"project"`) || !strings.Contains(fake.posted[1], `"data":null`) {
 		t.Fatalf("posted null project %v", fake.posted)
+	}
+}
+
+// contract: project.shown-decodes-standard-arguments
+func TestProjectShownDecodesStandardArguments(t *testing.T) {
+	host, _, _, ctx := projectOpenFixture(t)
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"non-object request", `true`, "argument request must be an object, not a boolean"},
+		{"missing project", `{}`, "argument request.project is missing"},
+		{"malformed nested project", `{"project":{"id":5,"root":"/tmp","title":"One"}}`, "argument request.project.id must be a string, not a number"},
+		{"missing nested title", `{"project":{"id":"prj-one","root":"/tmp"}}`, "argument request.project.title is missing"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if err := host.ProjectShown(ctx, json.RawMessage(c.raw)); err == nil || err.Error() != c.want {
+				t.Fatalf("ProjectShown(%s) error = %v, want %q", c.raw, err, c.want)
+			}
+		})
 	}
 }
 

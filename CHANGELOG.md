@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-47-40-6: Decode Wails `ProjectShown` and nested `ShownProject`
+  arguments with the standard host argument decoder. Red: the unchanged
+  binding test and new owner cases failed because direct JSON decoding
+  returned nonstandard errors for invalid request shapes and nested fields.
+  Green: the binding test passes 1/1 and the focused project owner tests pass
+  2/2, including ignored unknown fields and explicit `project:null` handling.
 - F239-47-40-5: Move the private Wails view record tests into `src` and
   register the matching source generation and `Documents` view channel. Keep
   the call/reply and `view.error` log assertions through `ViewMessage`. Red:
