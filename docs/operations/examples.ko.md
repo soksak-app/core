@@ -80,6 +80,8 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 두 disposable diagnostic host가 이미 실행 중인 상태에서 window check와 같은 run metadata 및 binary/configuration 선언으로 `pnpm -F @soksak/e2e benchmark:view-drag`를 실행한다. 두 host와 검사 process에서 `SOKSAK_PERFORMANCE_TRACE` 및 `SOKSAK_VT_TRACE_DIR`를 설정하지 않는다. Benchmark는 performance trace 비활성화, null terminal renderer metadata 및 기본 error-only log policy를 확인한다. 어느 host도 활성화하지 않고 전체 synthetic drag를 녹화한다. 성능 계약은 capture frame을 측정하므로 diagnostic recording은 켠다.
 
+녹화 drag는 performance 및 renderer trace 설정과 독립적으로 native transaction timestamp를 이미 수집한다. Benchmark는 분석 전에 원본 row를 `layouts.json`에 보존하고 cadence 집계를 `result.json`에 포함한다. `committing` 구간은 DOM presentation부터 transaction commit까지이며 `total`은 native 준비 시작부터 commit까지다. 발생하지 않은 단계는 null로 유지하고 잘못됐거나 역전된 timestamp는 명시적으로 실패한다.
+
 각 host는 기존 cadence 및 refresh-rate 지연 목표를 판정하기 전에 `logs/view-drag-benchmark-*/result.json`을 쓴다. Report는 decoded-frame timestamp 전체, 측정 card 위치, input tick, layout boundary, 미측정 frame index, system load 및 trace mode를 포함한다. Frame 누락, 불완전 이동 및 잘못된 data는 느리지만 유효한 측정과 독립적으로 실패한다. 목표 측정에 실패하면 녹화와 report를 보존하며 기능 geometry 검사의 통과는 benchmark 통과가 아니다.
 
 ## 창 검사

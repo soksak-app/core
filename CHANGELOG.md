@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-3: Report post-DOM commit wait and total native transaction duration, reject invalid stage timestamps and preserve original layout rows before benchmark analysis. Two owner cases fail before correction and all 14 pass afterward. Both-host reports and error audits complete, while unchanged performance targets still fail. Wails shows a 32.829 ms median post-DOM wait; Tauri shows a 26.083 ms median preparation-to-DOM-request interval. These intervals identify different investigation boundaries, not diagnosed product causes.
+
 - F212.14-2: Record the same-source optimized diagnostic VT build and local installation comparison. Both installed hashes match the build; complete 139/132-frame benchmark reports, error audits, baseline restoration and normal shutdown are retained. Latency targets still fail on both hosts. Different cohort loads prevent attributing the observed reduction solely to optimization. Complete the build-profile comparison and keep F212.14 performance acceptance open. Restore both automated profiles to their original declarations and executable hashes after comparison.
 
 - F212.14-1: Add an opt-in drag benchmark that rejects diagnostic tracing, verifies the actual application mode and writes complete measurements before applying unchanged performance targets. Both hosts produce complete 137/141-frame reports with clean error audits and shutdown, then fail cadence and all latency targets. Calculator owners pass 12/12. Complete the runner and retain performance acceptance under F212.14.

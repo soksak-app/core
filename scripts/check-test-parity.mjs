@@ -783,7 +783,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
-      { file: "e2e/benchmark/view-drag.test.mjs", id: "terminal view drag meets performance targets without diagnostic tracing" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "terminal view drag meets performance targets with performance and renderer traces disabled" },
     ],
     expected: "The dedicated benchmark validates untraced application settings, preserves complete measured frames and writes results before enforcing unchanged cadence and latency limits.",
     levels: ["unit", "application"],
@@ -794,10 +794,24 @@ const FEATURE_LINKS = [
       { file: "e2e/benchmark/view-drag.test.mjs", symbol: "const report =" },
     ],
     tests: [
-      { file: "e2e/benchmark/view-drag.test.mjs", id: "terminal view drag meets performance targets without diagnostic tracing" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "terminal view drag meets performance targets with performance and renderer traces disabled" },
     ],
     expected: "A declared candidate build profile produces complete measured drag reports with unchanged targets and explicit performance failure rather than inferred optimization acceptance.",
     levels: ["application"],
+  },
+  {
+    id: "F212.14-3",
+    implementation: [
+      { file: "e2e/drag-measurement.mjs", symbol: "committing: spread(" },
+      { file: "e2e/benchmark/view-drag.test.mjs", symbol: "transactionCadence: transactionCadence(run.layouts)" },
+    ],
+    tests: [
+      { file: "e2e/test/drag-measurement.test.mjs", id: "transaction cadence includes commit waiting and total transaction duration" },
+      { file: "e2e/test/drag-measurement.test.mjs", id: "transaction cadence rejects invalid or reversed stage timestamps" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "terminal view drag meets performance targets with performance and renderer traces disabled" },
+    ],
+    expected: "Native transaction metrics include commit wait and total duration, reject invalid timing and preserve raw rows before unchanged performance judgments.",
+    levels: ["unit", "application"],
   },
   {
     id: "F239-81",

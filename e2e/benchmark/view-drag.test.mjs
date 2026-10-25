@@ -8,10 +8,10 @@ import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
 import { outside, terminalMarks } from "../outside.mjs";
 import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips,
-  measureDragPerformance, pointerLag } from "../drag-measurement.mjs";
+  measureDragPerformance, pointerLag, transactionCadence } from "../drag-measurement.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: terminal view drag meets performance targets without diagnostic tracing`, { timeout: 60000 }, async t => {
+  test(`${app.name}: terminal view drag meets performance targets with performance and renderer traces disabled`, { timeout: 60000 }, async t => {
     assert.equal(process.env.SOKSAK_PERFORMANCE_TRACE, undefined, "the benchmark requires performance tracing to be unset");
     assert.equal(process.env.SOKSAK_VT_TRACE_DIR, undefined, "the benchmark requires renderer tracing to be unset");
     const s = await open(t, app);
@@ -25,6 +25,8 @@ for (const app of Object.values(APPS)) {
     await s.until("core.rail", rail => rail.groups.length === 1, "the terminal override drew no rail");
     const marks = await terminalMarks(s, { measured: true });
     const run = await drag(t, s, { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 }, { capture: true });
+    const directory = mkdtempSync(join(app.configDir, "logs", "view-drag-benchmark-"));
+    writeFileSync(join(directory, "layouts.json"), JSON.stringify({ layouts: run.layouts }, null, 2) + "\n");
     const files = frames(run.frames);
     assert.equal(files.length, run.count, "the benchmark recording omitted a frame file");
     assert.ok(files.length > 30, "the benchmark has too few captured frames");
@@ -46,11 +48,12 @@ for (const app of Object.values(APPS)) {
     const performance = measureDragPerformance(times, lag, refreshRate);
     const report = { host: app.name, performance, mode: { performanceTrace: false, rendererTrace: false,
       logPolicy: {}, recording: true }, load: loadavg(), processors: availableParallelism(),
-      frameCount: files.length, unmeasured, samples, times, ticks: run.ticks, boundary: run.boundary };
-    const directory = mkdtempSync(join(app.configDir, "logs", "view-drag-benchmark-"));
+      frameCount: files.length, unmeasured, samples, times, ticks: run.ticks, boundary: run.boundary,
+      layouts: run.layouts, transactionCadence: transactionCadence(run.layouts) };
     const result = join(directory, "result.json");
     writeFileSync(result, JSON.stringify(report, null, 2) + "\n");
     t.diagnostic(`benchmark report ${result}: ${JSON.stringify(performance)}`);
+    t.diagnostic(`transaction cadence (ms): ${JSON.stringify(report.transactionCadence)}`);
     assertDragPerformance(times, lag, refreshRate);
   });
 }

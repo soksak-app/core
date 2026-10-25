@@ -151,6 +151,21 @@ export function assertHeldStatesShown(samples, ticks, boundary, hold = HOLD) {
  * the time from the request to the display (waiting) (docs/features.md F92). Stages that did not happen are not included.
  */
 export function transactionCadence(layouts) {
+  assert.ok(Array.isArray(layouts), "layout transactions must be an array");
+  for (const [index, layout] of layouts.entries()) {
+    assert.ok(layout && typeof layout === "object" && !Array.isArray(layout),
+      `layout transaction ${index} must be an object`);
+    let previous = null;
+    for (const stage of ["begun", "requested", "presented", "committed"]) {
+      const value = layout[stage];
+      assert.ok(value === null || Number.isFinite(value),
+        `layout transaction ${index} ${stage} must be finite or null`);
+      if (value === null) continue;
+      assert.ok(previous === null || value >= previous,
+        `layout transaction ${index} ${stage} occurs before its prior stage`);
+      previous = value;
+    }
+  }
   const begun = layouts.map((layout) => layout.begun).filter((value) => value !== null).sort((a, b) => a - b);
   const intervals = begun.slice(1).map((value, index) => value - begun[index]);
   const between = (from, to) => layouts.filter((layout) => layout[from] !== null && layout[to] !== null)
@@ -166,6 +181,8 @@ export function transactionCadence(layouts) {
     presenting: spread(between("begun", "presented")),
     drawing: spread(between("begun", "requested")),
     waiting: spread(between("requested", "presented")),
+    committing: spread(between("presented", "committed")),
+    total: spread(between("begun", "committed")),
   };
 }
 
