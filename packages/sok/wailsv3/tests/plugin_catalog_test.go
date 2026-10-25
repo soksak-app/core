@@ -63,8 +63,8 @@ func writeInstalled(t *testing.T, config, plugins string) {
 // contract: log.plugin-catalog.reads-the-enabled-plugins
 func TestThePluginClassesAreTheCatalogsOfTheEnabledInstalledPlugins(t *testing.T) {
 	config := t.TempDir()
-	writePlugin(t, config, "probe", `{"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{}},"plugin.probe.error":{"layer":"plugin","class":"lifecycle","level":"error","fields":{}}}}`)
-	writePlugin(t, config, "fixture", `{"events":{"plugin.fixture.watch":{"layer":"plugin","class":"io","level":"debug","fields":{}}}}`)
+	writePlugin(t, config, "probe", `{"schema":3,"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{"type":"object","properties":{},"required":[]}},"plugin.probe.error":{"layer":"plugin","class":"lifecycle","level":"error","fields":{"type":"object","properties":{},"required":[]}}}}`)
+	writePlugin(t, config, "fixture", `{"schema":3,"events":{"plugin.fixture.watch":{"layer":"plugin","class":"io","level":"debug","fields":{"type":"object","properties":{},"required":[]}}}}`)
 	writeInstalled(t, config, `"probe":{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{}},"fixture":{"version":"1.0.0","path":"plugins/fixture/1.0.0","enabled":false,"sidecars":{}}`)
 	classes, errs := sok.PluginEventClasses(config)
 	if len(errs) != 0 {
@@ -79,15 +79,16 @@ func TestThePluginClassesAreTheCatalogsOfTheEnabledInstalledPlugins(t *testing.T
 // contract: log.plugin-catalog.refuses-a-catalog
 func TestACatalogThatCannotBeUsedIsAnErrorThatNamesItsFileAndTheOtherPluginsKeepTheirClasses(t *testing.T) {
 	config := t.TempDir()
-	writePlugin(t, config, "probe", `{"events":{"plugin.probe.frame":{"class":"frame"}}}`)
-	writePlugin(t, config, "outside", `{"events":{"plugin.probe.frame":{"class":"frame"}}}`)
-	writePlugin(t, config, "classless", `{"events":{"plugin.classless.x":{"class":"often"}}}`)
+	writePlugin(t, config, "probe", `{"schema":3,"events":{"plugin.probe.frame":{"class":"frame"}}}`)
+	writePlugin(t, config, "outside", `{"schema":3,"events":{"plugin.probe.frame":{"class":"frame"}}}`)
+	writePlugin(t, config, "classless", `{"schema":3,"events":{"plugin.classless.x":{"class":"often"}}}`)
 	writePlugin(t, config, "broken", `{"events":`)
 	writePlugin(t, config, "missing", "")
+	writePlugin(t, config, "old", `{"schema":2,"events":{"plugin.old.event":{"class":"call"}}}`)
 	enabled := func(id string) string {
 		return `"` + id + `":{"version":"1.0.0","path":"plugins/` + id + `/1.0.0","enabled":true,"sidecars":{}}`
 	}
-	writeInstalled(t, config, enabled("probe")+","+enabled("outside")+","+enabled("classless")+","+enabled("broken")+","+enabled("missing"))
+	writeInstalled(t, config, enabled("probe")+","+enabled("outside")+","+enabled("classless")+","+enabled("broken")+","+enabled("missing")+","+enabled("old"))
 	classes, errs := sok.PluginEventClasses(config)
 	if !reflect.DeepEqual(classes, map[string]sok.Class{"plugin.probe.frame": sok.ClassFrame}) {
 		t.Fatalf("classes %v", classes)
@@ -97,6 +98,7 @@ func TestACatalogThatCannotBeUsedIsAnErrorThatNamesItsFileAndTheOtherPluginsKeep
 		file("broken") + ": the event catalog of plugin broken is not JSON",
 		file("classless") + ": the event plugin.classless.x has the class often, which is not lifecycle, input, call, io or frame",
 		file("missing") + ": the event catalog of plugin missing does not exist",
+		file("old") + ": event catalog schema is 2; expected 3",
 		file("outside") + ": the event plugin.probe.frame is not an event of plugin outside (plugin.outside.<event>)",
 	}
 	var got []string

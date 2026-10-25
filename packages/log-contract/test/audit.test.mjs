@@ -4,17 +4,23 @@ import test from "node:test";
 
 import { auditLog, auditLogs, composeCatalogs, parseLog } from "../index.js";
 
+const objectFields = (properties = {}, required = Object.keys(properties)) => ({
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  type: "object",
+  properties,
+  required,
+});
 const catalog = {
-  schema: 2,
+  schema: 3,
   events: {
-    "log.open": { layer: "host", class: "lifecycle", level: "info", fields: { schema: "number", pid: "number", role: "string", boot: "string" } },
-    "log.dropped": { layer: "host", class: "lifecycle", level: "warn", fields: { from_seq: "number", to_seq: "number", count: "number" } },
-    "native.input.key_down": { layer: "native", class: "input", level: "info", fields: { keyCode: "number" } },
-    "native.input.text": { layer: "native", class: "input", level: "info", cids: "required", fields: { keyCode: "number" } },
-    "page.terminal.send": { layer: "page", class: "input", level: "info", fields: {} },
-    "sidecar.probe.pty_write": { layer: "sidecar", class: "io", level: "info", fields: { hex: "string" } },
-    "native.record.error": { layer: "native", class: "lifecycle", level: "error", fields: { where: "string", text: "string" } },
-    "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: { source: "string", classes: "object" } },
+    "log.open": { layer: "host", class: "lifecycle", level: "info", fields: objectFields({ schema: { type: "number" }, pid: { type: "number" }, role: { type: "string" }, boot: { type: "string" } }) },
+    "log.dropped": { layer: "host", class: "lifecycle", level: "warn", fields: objectFields({ from_seq: { type: "number" }, to_seq: { type: "number" }, count: { type: "number" } }) },
+    "native.input.key_down": { layer: "native", class: "input", level: "info", fields: objectFields({ keyCode: { type: "number" } }) },
+    "native.input.text": { layer: "native", class: "input", level: "info", cids: "required", fields: objectFields({ keyCode: { type: "number" } }) },
+    "page.terminal.send": { layer: "page", class: "input", level: "info", fields: objectFields() },
+    "sidecar.probe.pty_write": { layer: "sidecar", class: "io", level: "info", fields: objectFields({ hex: { type: "string" } }) },
+    "native.record.error": { layer: "native", class: "lifecycle", level: "error", fields: objectFields({ where: { type: "string" }, text: { type: "string" } }) },
+    "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: objectFields({ source: { type: "string" }, classes: { type: "object" } }) },
   },
   chains: { key: ["native.input.key_down", "page.terminal.send", "sidecar.probe.pty_write"] },
 };
@@ -106,8 +112,8 @@ test("an undeclared event, a missing field and a field of the wrong type are rep
   const findings = auditLog("host-b1.jsonl", text, catalog);
   assert.deepEqual(findings.map((f) => f.line), [2, 3, 4]);
   assert.match(findings[0].message, /event native.input.unknown is not declared/);
-  assert.match(findings[1].message, /field keyCode is required/);
-  assert.match(findings[2].message, /field keyCode must be a number/);
+  assert.match(findings[1].message, /fields do not match the schema of native\.input\.key_down: data must have required property 'keyCode'/);
+  assert.match(findings[2].message, /fields do not match the schema of native\.input\.key_down: data\/keyCode must be number/);
 });
 
 test("an event that the writer stored cut holds its head and the size before the cut, and the audit does not ask for the declared fields", () => {
@@ -166,8 +172,8 @@ test("a chain does not ask for a hop whose class and level the policy in force o
     ...catalog,
     events: {
       ...catalog.events,
-      "page.terminal.send": { layer: "page", class: "input", level: "debug", fields: {} },
-      "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: { source: "string", classes: "object" } },
+      "page.terminal.send": { layer: "page", class: "input", level: "debug", fields: objectFields() },
+      "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: objectFields({ source: { type: "string" }, classes: { type: "object" } }) },
     },
     chains: { key: ["native.input.key_down", "page.terminal.send"] },
   };
@@ -186,7 +192,7 @@ test("a chain does not ask for a hop whose class and level the policy in force o
 test("a process that recorded no policy is judged by the default policy, which stores only error", () => {
   const gated = {
     ...catalog,
-    events: { ...catalog.events, "page.terminal.send": { layer: "page", class: "input", level: "info", fields: {} } },
+    events: { ...catalog.events, "page.terminal.send": { layer: "page", class: "input", level: "info", fields: objectFields() } },
     chains: { key: ["native.input.key_down", "page.terminal.send"] },
   };
   const text = [open, line(2, "native.input.key_down", { keyCode: 2 }, { cids: ["b1.1"] })].join("\n");
@@ -199,8 +205,8 @@ test("a hop declared with several levels is not asked for when the policy in for
     ...catalog,
     events: {
       ...catalog.events,
-      "page.terminal.send": { layer: "page", class: "input", level: ["debug", "warn"], fields: {} },
-      "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: { source: "string", classes: "object" } },
+      "page.terminal.send": { layer: "page", class: "input", level: ["debug", "warn"], fields: objectFields() },
+      "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: objectFields({ source: { type: "string" }, classes: { type: "object" } }) },
     },
     chains: { key: ["native.input.key_down", "page.terminal.send"] },
   };
@@ -227,9 +233,9 @@ test("the policy that a change of diagnostics.log brings is in force from the ch
     ...catalog,
     events: {
       ...catalog.events,
-      "page.settings.change": { layer: "page", class: "input", level: "info", fields: { actor: "string", keys: "string" } },
-      "page.terminal.send": { layer: "page", class: "input", level: "debug", fields: {} },
-      "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: { source: "string", classes: "object" } },
+      "page.settings.change": { layer: "page", class: "input", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
+      "page.terminal.send": { layer: "page", class: "input", level: "debug", fields: objectFields() },
+      "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: objectFields({ source: { type: "string" }, classes: { type: "object" } }) },
     },
     chains: { settings: ["page.settings.change", "page.terminal.send"] },
   };
@@ -267,6 +273,11 @@ test("a file whose first line is not log.open, or whose schema is unknown, is re
   assert.throws(() => parseLog("d.jsonl", earlier), /d\.jsonl: schema 1 is not 2/);
 });
 
+test("a catalog from the earlier catalog grammar is rejected while raw log schema remains 2", () => {
+  assert.throws(() => auditLog("host-b1.jsonl", open, { ...catalog, schema: 2 }), /event catalog schema is 2; expected 3/);
+  assert.deepEqual(auditLog("host-b1.jsonl", open, catalog), []);
+});
+
 test("a line without mono_ns, or with a mono_ns that is not a positive integer, is a finding", () => {
   const withMono = (seq, mono) => JSON.stringify({ ts_us: 1000 + seq, ...(mono === undefined ? {} : { mono_ns: mono }), seq, level: "info", class: "lifecycle", layer: "host", event: "log.dropped", fields: { from_seq: 1, to_seq: 1, count: 1 } });
   const findings = auditLog("host-b1.jsonl", [open, withMono(2), withMono(3, "1"), withMono(4, 1.5), withMono(5, 0), withMono(6, 7)].join("\n"), catalog);
@@ -296,14 +307,69 @@ test("the golden lines and the golden catalog pass the audit", async () => {
   }
 });
 
+test("sampler memory records match one strict role-shaped event schema", async () => {
+  const { readFileSync } = await import("node:fs");
+  const eventCatalog = JSON.parse(readFileSync(new URL("../../../docs/spec/events.json", import.meta.url), "utf8"));
+  const records = [
+    { rss_host_kb: 100, footprint_kb: 110 },
+    { error: "host memory unavailable" },
+    { role: "sidecar", name: "vt", pid: 20, rss_kb: 30, footprint_kb: 40 },
+    { role: "sidecar", name: "vt", pid: 20, error: "process ended" },
+    { role: "page", window: "window-a", pid: 21, rss_kb: 31, footprint_kb: 41 },
+    { role: "page", window: "window-a", error: "window facts unavailable" },
+    { role: "page", window: "window-a", pid: 0, error: "web process has not started" },
+    { role: "document", window: "window-a", surface: "surface-a", pid: 22, rss_kb: 32, footprint_kb: 42 },
+    { role: "document", window: "window-a", surface: "surface-a", pid: 0, error: "web process has not started" },
+  ];
+  const rows = records.map((fields, index) => JSON.stringify({
+    ts_us: 1000 + index,
+    mono_ns: 5_000_000 + index,
+    seq: index + 2,
+    level: "debug",
+    class: "call",
+    layer: "host",
+    event: "host.sampler.memory",
+    fields,
+  }));
+  const header = JSON.stringify({
+    ts_us: 1000,
+    mono_ns: 5_000_001,
+    seq: 1,
+    level: "info",
+    class: "lifecycle",
+    layer: "host",
+    event: "log.open",
+    fields: { schema: 2, pid: 7, role: "host", boot: "b1" },
+  });
+  assert.deepEqual(auditLog("host-b1.debug.jsonl", [header, ...rows].join("\n"), eventCatalog), []);
+
+  const malformed = [
+    { role: "page", pid: 21, rss_kb: 31, footprint_kb: 41 },
+    { role: "document", window: "window-a", pid: 22, error: "missing surface" },
+    { error: "failed", rss_host_kb: 100, footprint_kb: 110 },
+    { role: "document", window: "window-a", surface: "surface-a", pid: 22, rss_kb: 32, footprint_kb: 42, error: "conflicting state" },
+  ];
+  const malformedRows = malformed.map((fields, index) => JSON.stringify({
+    ts_us: 2000 + index,
+    mono_ns: 6_000_000 + index,
+    seq: index + 2,
+    level: "debug",
+    class: "call",
+    layer: "host",
+    event: "host.sampler.memory",
+    fields,
+  }));
+  assert.equal(auditLog("host-b1.debug.jsonl", [header, ...malformedRows].join("\n"), eventCatalog).length, malformed.length);
+});
+
 test("a family name with a placeholder declares every event of the family, and a layer outside the catalog is left to its own catalog", () => {
   const family = {
-    schema: 2,
+    schema: 3,
     layers: ["host", "page"],
     events: {
       "log.open": catalog.events["log.open"],
-      "page.record.<level>": { layer: "page", class: "lifecycle", level: "info", fields: { where: "string", text: "string" } },
-      "page.trace.<event>": { layer: "page", class: "call", level: "debug", fields: {} },
+      "page.record.<level>": { layer: "page", class: "lifecycle", level: "info", fields: objectFields({ where: { type: "string" }, text: { type: "string" } }) },
+      "page.trace.<event>": { layer: "page", class: "call", level: "debug", fields: objectFields() },
     },
   };
   const text = [
@@ -316,17 +382,17 @@ test("a family name with a placeholder declares every event of the family, and a
     line(7, "page.unknown.thing", {}, { layer: "page" }),
   ].join("\n");
   assert.deepEqual(auditLog("host-b1.jsonl", text, family), [
-    { line: 6, message: "field text is required by page.record.error" },
+    { line: 6, message: "fields do not match the schema of page.record.error: data must have required property 'text'" },
     { line: 7, message: "event page.unknown.thing is not declared" },
   ]);
 });
 
 test("an optional field is checked only when present, and a type with | accepts each of its parts", () => {
   const optional = {
-    schema: 2,
+    schema: 3,
     events: {
       "log.open": catalog.events["log.open"],
-      "log.rotated": { layer: "host", class: "lifecycle", level: "info", fields: { bytes: "number", "removed?": "string|null", "note?": "string" } },
+      "log.rotated": { layer: "host", class: "lifecycle", level: "info", fields: objectFields({ bytes: { type: "number" }, removed: { type: ["string", "null"] }, note: { type: "string" } }, ["bytes"]) },
     },
   };
   const text = [
@@ -338,8 +404,8 @@ test("an optional field is checked only when present, and a type with | accepts 
     line(6, "log.rotated", { bytes: 1, note: 3 }, { class: "lifecycle" }),
   ].join("\n");
   assert.deepEqual(auditLog("host-b1.jsonl", text, optional), [
-    { line: 5, message: "field removed must be a string|null, found number" },
-    { line: 6, message: "field note must be a string, found number" },
+    { line: 5, message: "fields do not match the schema of log.rotated: data/removed must be string,null" },
+    { line: 6, message: "fields do not match the schema of log.rotated: data/note must be string" },
   ]);
 });
 
@@ -404,7 +470,7 @@ test("an entrance of calls that the catalog declares with a result has ok, micro
       ...catalog.events,
       "host.binding.call": {
         layer: "host", class: "call", level: ["debug", "warn"], result: true,
-        fields: { name: "string", ok: "boolean", micros: "number", "error?": "string" },
+        fields: objectFields({ name: { type: "string" }, ok: { type: "boolean" }, micros: { type: "number" }, error: { type: "string" } }, ["name", "ok", "micros"]),
       },
     },
   };
@@ -438,9 +504,9 @@ test("the chain of an operation of the page is complete when its call and the ho
     ...catalog,
     events: {
       ...catalog.events,
-      "page.plugin.operation": { layer: "page", class: "call", level: "info", cids: "required", fields: { action: "string", plugin: "string" } },
-      "page.call": { layer: "page", class: "call", level: ["debug", "warn"], fields: { name: "string" } },
-      "host.binding.call": { layer: "host", class: "call", level: ["debug", "warn"], fields: { name: "string" } },
+      "page.plugin.operation": { layer: "page", class: "call", level: "info", cids: "required", fields: objectFields({ action: { type: "string" }, plugin: { type: "string" } }) },
+      "page.call": { layer: "page", class: "call", level: ["debug", "warn"], fields: objectFields({ name: { type: "string" } }) },
+      "host.binding.call": { layer: "host", class: "call", level: ["debug", "warn"], fields: objectFields({ name: { type: "string" } }) },
     },
     chains: { plugin: ["page.plugin.operation", "page.call", "host.binding.call"] },
   };
@@ -503,9 +569,11 @@ test("the lifecycle events of the layer sidecar that a sidecar catalog declares 
   const catalog = await extensionCatalog();
   assert.deepEqual(auditLogs(await extensionLogs("alpha-3-4.jsonl"), catalog), []);
   const text = (await extensionFixture("alpha-3-4.jsonl")).replace(',"reason":"disk full"', "");
-  assert.deepEqual(auditLogs([{ file: "alpha-3-4.jsonl", text }], catalog), [
-    { file: "alpha-3-4.jsonl", line: 5, message: "field reason is required by log.dropped" },
-  ]);
+  const missing = auditLogs([{ file: "alpha-3-4.jsonl", text }], catalog);
+  assert.equal(missing.length, 1);
+  assert.equal(missing[0].file, "alpha-3-4.jsonl");
+  assert.equal(missing[0].line, 5);
+  assert.match(missing[0].message, /fields do not match the schema of log\.dropped: data must have required property 'reason'/);
   const undeclared = (await extensionFixture("alpha-3-4.jsonl")).replaceAll("sidecar.alpha.start", "sidecar.alpha.begin");
   assert.deepEqual(auditLogs([{ file: "alpha-3-4.jsonl", text: undeclared }], catalog).map(({ message }) => message), [
     "event sidecar.alpha.begin is not declared", "event sidecar.alpha.begin is not declared",
@@ -520,5 +588,5 @@ test("a sidecar catalog is refused when it names no sidecar, owns another layer,
   assert.throws(() => compose({ layers: ["sidecar", "host"] }), /sidecar alpha: layers must be \["sidecar"\]/);
   assert.throws(() => compose({ events: { ...alpha.events, "sidecar.beta.write": alpha.events["sidecar.alpha.write"] } }), /sidecar alpha: event sidecar\.beta\.write does not start with sidecar\.alpha\./);
   assert.throws(() => compose({ events: { ...alpha.events, "host.sidecar.request": { ...alpha.events["sidecar.alpha.write"], layer: "host" } } }), /sidecar alpha: event host\.sidecar\.request has the layer host, not sidecar/);
-  assert.throws(() => compose({ events: { ...alpha.events, "log.rotated": { ...alpha.events["log.rotated"], fields: { bytes: "number" } } } }), /sidecar alpha: event log\.rotated differs from the declaration of the base catalog/);
+  assert.throws(() => compose({ events: { ...alpha.events, "log.rotated": { ...alpha.events["log.rotated"], fields: objectFields({ bytes: { type: "number" } }) } } }), /sidecar alpha: event log\.rotated differs from the declaration of the base catalog/);
 });

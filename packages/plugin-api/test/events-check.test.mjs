@@ -9,14 +9,20 @@ import test from 'node:test';
 import * as checker from '../events-check.js';
 
 const CATALOG = 'docs/spec/events.json';
+const fieldSchema = (properties = {}, required = Object.keys(properties)) => ({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  properties,
+  required,
+});
 const catalog = {
-  schema: 1,
+  schema: 3,
   layers: ['host', 'page'],
   events: {
-    'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: { schema: 'number', pid: 'number', role: 'string', boot: 'string' } },
-    'host.window.event': { layer: 'host', class: 'lifecycle', level: 'info', fields: { window: 'string', kind: 'string' } },
-    'page.record.<level>': { layer: 'page', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } },
-    'host.never.emitted': { layer: 'host', class: 'lifecycle', level: 'info', fields: {} },
+    'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: fieldSchema({'schema': { type: 'number' }, 'pid': { type: 'number' }, 'role': { type: 'string' }, 'boot': { type: 'string' }}, ['schema', 'pid', 'role', 'boot']) },
+    'host.window.event': { layer: 'host', class: 'lifecycle', level: 'info', fields: fieldSchema({'window': { type: 'string' }, 'kind': { type: 'string' }}, ['window', 'kind']) },
+    'page.record.<level>': { layer: 'page', class: 'lifecycle', level: ['error', 'info'], fields: fieldSchema({'where': { type: 'string' }, 'text': { type: 'string' }}, ['where', 'text']) },
+    'host.never.emitted': { layer: 'host', class: 'lifecycle', level: 'info', fields: fieldSchema({}, []) },
   },
 };
 
@@ -69,7 +75,7 @@ test('a declared event is found only at an emit site: its name in a comment, a s
 });
 
 test('a family is emitted by a concrete name, by a template name and by a marker', () => {
-  const family = { ...catalog, events: { ...catalog.events, 'host.trace.<event>': { layer: 'host', class: 'call', level: 'debug', fields: {} } } };
+  const family = { ...catalog, events: { ...catalog.events, 'host.trace.<event>': { layer: 'host', class: 'call', level: 'debug', fields: fieldSchema({}, []) } } };
   const sources = new Map([
     ['a.go', 'func f() {\n\tEmitHost(LevelDebug, "host.trace.frame", map[string]any{})\n\tEmitHost(LevelInfo, "host.window.event", map[string]any{"window": w, "kind": k})\n}\n'],
     ['b.js', 'batcher.emit("info", `page.record.${level}`, { where, text });\n'],
@@ -96,7 +102,7 @@ test('a name that a site builds needs a marker `events: <names>` above it, and a
 });
 
 test('the level and the fields of a literal site must match the declaration', () => {
-  const optional = { ...catalog, events: { ...catalog.events, 'page.optional': { layer: 'page', class: 'call', level: ['debug', 'warn'], fields: { name: 'string', 'error?': 'string' } } } };
+  const optional = { ...catalog, events: { ...catalog.events, 'page.optional': { layer: 'page', class: 'call', level: ['debug', 'warn'], fields: fieldSchema({'name': { type: 'string' }, 'error': { type: 'string' }}, ['name']) } } };
   const sources = new Map([
     ['a.go', 'func f() {\n\tEmitHost(LevelError, "host.window.event", map[string]any{"window": w})\n\tEmitHost(LevelInfo, "host.window.event", map[string]any{"window": w, "kind": k, "extra": 1})\n}\n'],
     ['b.rs', 'fn f() {\n    emit_host(\n        Level::Warn,\n        "host.window.event",\n        json!({"window": w, "kind": k}),\n    );\n}\n'],
@@ -113,18 +119,64 @@ test('the level and the fields of a literal site must match the declaration', ()
 });
 
 test('an entry of the catalog with a layer, class, level or field type outside the contract is a finding', () => {
-  const broken = { schema: 1, layers: ['host'], events: {
-    'host.a': { layer: 'host', class: 'lifecycle', level: 'info', fields: { 'x?': 'string|null' } },
-    'host.b': { layer: 'host', class: 'sometimes', level: 'info', fields: {} },
-    'host.c': { layer: 'host', class: 'lifecycle', level: ['info', 'loud'], fields: {} },
-    'page.d': { layer: 'page', class: 'lifecycle', level: 'info', fields: {} },
-    'host.e': { layer: 'host', class: 'lifecycle', level: 'info', fields: { x: 'text' } },
+  const broken = { schema: 3, layers: ['host'], events: {
+    'host.a': { layer: 'host', class: 'lifecycle', level: 'info', fields: fieldSchema({'x': { type: ['string', 'null'] }}, []) },
+    'host.b': { layer: 'host', class: 'sometimes', level: 'info', fields: fieldSchema({}, []) },
+    'host.c': { layer: 'host', class: 'lifecycle', level: ['info', 'loud'], fields: fieldSchema({}, []) },
+    'page.d': { layer: 'page', class: 'lifecycle', level: 'info', fields: fieldSchema({}, []) },
+    'host.e': { layer: 'host', class: 'lifecycle', level: 'info', fields: fieldSchema({'x': { type: 'text' }}, ['x']) },
   } };
   assert.deepEqual(checker.catalogFindings(broken, CATALOG), [
     'docs/spec/events.json: host.b has the class sometimes, which is not one of lifecycle, input, call, io, frame',
     'docs/spec/events.json: host.c has the level loud, which is not one of error, warn, info, debug, trace',
     'docs/spec/events.json: page.d has the layer page, which the catalog does not list',
-    'docs/spec/events.json: host.e has the field x of type text, which is not string, number, boolean, array, object or null',
+    'docs/spec/events.json: host.e has an invalid JSON Schema for fields: schema is invalid: data/properties/x/type must be equal to one of the allowed values, data/properties/x/type must be array, data/properties/x/type must match a schema in anyOf',
+  ]);
+});
+
+test('the catalog checker rejects the previous catalog schema explicitly', () => {
+  assert.deepEqual(checker.catalogFindings({ ...catalog, schema: 2 }, CATALOG), [
+    'docs/spec/events.json: event catalog schema is 2; expected 3',
+  ]);
+});
+
+test('a JSON Schema event declaration must list its required fields explicitly', () => {
+  const malformed = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      'host.window.event': {
+        ...catalog.events['host.window.event'],
+        fields: { ...catalog.events['host.window.event'].fields, required: undefined },
+      },
+    },
+  };
+  delete malformed.events['host.window.event'].fields.required;
+  assert.match(checker.catalogFindings(malformed, CATALOG).join('\n'), /host\.window\.event has a field schema outside the object, properties and oneOf form/);
+});
+
+test('a literal emit must satisfy the required fields of at least one schema branch', () => {
+  const sampler = {
+    ...catalog,
+    events: {
+      'host.sampler.probe': {
+        layer: 'host',
+        class: 'call',
+        level: 'debug',
+        fields: {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          oneOf: [
+            { type: 'object', properties: { rss_host_kb: { type: 'number' } }, required: ['rss_host_kb'] },
+            { type: 'object', properties: { error: { type: 'string' } }, required: ['error'] },
+          ],
+        },
+      },
+    },
+  };
+  assert.deepEqual(sitesOnly(checker.emitFindings(sampler, new Map([
+    ['a.go', 'func f() { EmitHost(LevelDebug, "host.sampler.probe", map[string]any{}) }\n'],
+  ]), CATALOG)), [
+    'a.go:1: host.sampler.probe does not provide the required fields of any declared JSON Schema branch',
   ]);
 });
 
@@ -307,7 +359,7 @@ test('soksak-events is a command of the package, and it fails with the file and 
   writeFileSync(join(repository, 'src', 'a.rs'), 'fn f() {\n    // default: a missing count means zero.\n    let v = x.unwrap_or(0);\n}\n');
   assert.equal(run().status, 0);
   mkdirSync(join(repository, 'docs'));
-  writeFileSync(join(repository, 'docs', 'events.json'), JSON.stringify({ schema: 1, layers: ['host'], events: { 'host.never.emitted': { layer: 'host', class: 'lifecycle', level: 'info', fields: {} } } }));
+  writeFileSync(join(repository, 'docs', 'events.json'), JSON.stringify({ schema: 3, layers: ['host'], events: { 'host.never.emitted': { layer: 'host', class: 'lifecycle', level: 'info', fields: fieldSchema({}, []) } } }));
   result = run('--catalog', 'docs/events.json');
   assert.equal(result.status, 1);
   assert.match(result.stderr, /^docs\/events\.json: host\.never\.emitted is declared and no source emits it$/m);
@@ -322,7 +374,7 @@ test('the record calls of the native library are emit sites of the declared reco
   assert.deepEqual(census({
     'a.m': '- (BOOL)f {\n    sp_log_error("where", "text");\n    return YES;\n}\n- (BOOL)g {\n    return NO;\n}\n',
   }), ['a.m:6 m.error-return']);
-  const records = { ...catalog, events: { 'native.record.<level>': { layer: 'host', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } } } };
+  const records = { ...catalog, events: { 'native.record.<level>': { layer: 'host', class: 'lifecycle', level: ['error', 'info'], fields: fieldSchema({'where': { type: 'string' }, 'text': { type: 'string' }}, ['where', 'text']) } } };
   assert.deepEqual(checker.emitFindings(records, new Map([['a.m', 'void f(void) {\n    sp_log_error("w", "t");\n    sp_log_info("w", "t");\n}\n']]), CATALOG), []);
 });
 
@@ -334,7 +386,7 @@ test('the census exclude removes a vendored file before the catalog check parses
   git('init', '-q');
   mkdirSync(join(repository, 'docs'));
   mkdirSync(join(repository, 'ui', 'vendor'), { recursive: true });
-  writeFileSync(join(repository, 'docs', 'events.json'), JSON.stringify({ schema: 1, layers: ['plugin'], events: {} }));
+  writeFileSync(join(repository, 'docs', 'events.json'), JSON.stringify({ schema: 3, layers: ['plugin'], events: {} }));
   // The vendored file holds a string that does not end, which the lexer of the check rejects.
   writeFileSync(join(repository, 'ui', 'vendor', 'bundle.js'), 'export const a = "never ends;\n');
   writeFileSync(join(repository, 'census.json'), JSON.stringify({ exclude: '^ui/vendor/' }));
@@ -352,9 +404,9 @@ test('the census exclude removes a vendored file before the catalog check parses
 // prefix `plugin.<plugin>.`, so the check resolves it against the one plugin id of the catalog.
 test('runtime.log entrances of plugin events are resolved by the plugin prefix', () => {
   const plugin = {
-    schema: 2,
+    schema: 3,
     layers: ['plugin'],
-    events: { 'plugin.fixture.input.key': { layer: 'plugin', class: 'input', level: 'debug', fields: { key: 'string', 'shift?': 'boolean' } } },
+    events: { 'plugin.fixture.input.key': { layer: 'plugin', class: 'input', level: 'debug', fields: fieldSchema({'key': { type: 'string' }, 'shift': { type: 'boolean' }}, ['key']) } },
   };
   const check = (text) => checker.emitFindings(plugin, new Map([['ui/a.js', text]]), 'events.json');
   assert.deepEqual(check('export function f(runtime, key) {\n  runtime.log.debug("input.key", { key });\n}\n'), []);
@@ -392,13 +444,13 @@ const EMITTERS = {
   },
 };
 const sidecar = {
-  schema: 2,
+  schema: 3,
   layers: ['sidecar'],
   sidecar: 'alpha',
   events: {
-    'sidecar.alpha.write': { layer: 'sidecar', class: 'io', level: 'debug', fields: { sequence: 'number', hex: 'string' } },
-    'sidecar.alpha.start': { layer: 'sidecar', class: 'lifecycle', level: 'info', fields: { pid: 'number' } },
-    'sidecar.alpha.record.<level>': { layer: 'sidecar', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } },
+    'sidecar.alpha.write': { layer: 'sidecar', class: 'io', level: 'debug', fields: fieldSchema({'sequence': { type: 'number' }, 'hex': { type: 'string' }}, ['sequence', 'hex']) },
+    'sidecar.alpha.start': { layer: 'sidecar', class: 'lifecycle', level: 'info', fields: fieldSchema({'pid': { type: 'number' }}, ['pid']) },
+    'sidecar.alpha.record.<level>': { layer: 'sidecar', class: 'lifecycle', level: ['error', 'info'], fields: fieldSchema({'where': { type: 'string' }, 'text': { type: 'string' }}, ['where', 'text']) },
   },
 };
 const RUST = [
@@ -494,8 +546,8 @@ test('the emitter declaration of the repository counts the trace call of the wor
   const declared = checker.parseCensusConfig('census.json', JSON.stringify({ emitters: { js: [
     { call: 'trace', fixed: 'debug', prefix: 'page.trace.', event: 0, fields: 1, bare: true, only: '^packages/workbench/' },
   ] } }));
-  const traced = { schema: 2, layers: ['page'], events: {
-    'page.trace.surface.probe': { layer: 'page', class: 'call', level: 'debug', fields: { plugin: 'string', surface: 'string', ms: 'number' } },
+  const traced = { schema: 3, layers: ['page'], events: {
+    'page.trace.surface.probe': { layer: 'page', class: 'call', level: 'debug', fields: fieldSchema({'plugin': { type: 'string' }, 'surface': { type: 'string' }, 'ms': { type: 'number' }}, ['plugin', 'surface', 'ms']) },
   } };
   const source = (call) => new Map([['packages/workbench/surface-modules.js', `function mount() {\n  ${call};\n}\n`]]);
   assert.deepEqual(checker.emitFindings(traced, source('trace("surface.probe", { plugin, surface, ms })'), CATALOG), [
@@ -512,6 +564,6 @@ test('the emitter declaration of the repository counts the trace call of the wor
     'docs/spec/events.json: page.trace.surface.probe is declared and no source emits it',
   ], 'a method named trace of another object is not the page trace');
   // A family whose entry declares no fields leaves the fields of each of its events to the site (the performance trace of the page).
-  const family = { schema: 2, layers: ['page'], events: { 'page.trace.<event>': { layer: 'page', class: 'call', level: 'debug', fields: {} } } };
+  const family = { schema: 3, layers: ['page'], events: { 'page.trace.<event>': { layer: 'page', class: 'call', level: 'debug', fields: fieldSchema({}, []) } } };
   assert.deepEqual(checker.emitFindings(family, source('trace("surface.registration", { phase, names, extra: 1 })'), CATALOG, declared), []);
 });

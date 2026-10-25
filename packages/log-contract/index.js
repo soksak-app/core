@@ -1,9 +1,14 @@
 // The checker of the event contract (docs/spec/logging.md): it reads a log file of events and audits it against a catalog.
 // A file that cannot be read as events is rejected with an error that names the file and the value found; an event that
 // breaks the contract is a finding with its line.
+import Ajv2020 from "ajv/dist/2020.js";
 
 /** The schema number that this checker reads. */
 export const SCHEMA = 2;
+export const CATALOG_SCHEMA = 3;
+
+const fieldSchemaAjv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
+const catalogFieldValidators = new WeakMap();
 
 const LEVELS = new Set(["error", "warn", "info", "debug", "trace"]);
 const LAYERS = new Set(["native", "host", "page", "plugin", "sidecar", "sok"]);
@@ -53,13 +58,6 @@ export function parseLog(file, text) {
   return entries;
 }
 
-/** The type name of a value as the catalog spells it. */
-function typeOf(value) {
-  if (Array.isArray(value)) return "array";
-  if (value === null) return "null";
-  return typeof value;
-}
-
 /**
  * The declaration of an event name. A catalog name with a placeholder such as `page.record.<level>` declares every event of
  * its family: a placeholder stands for one or more characters of `a-z`, `0-9`, `_` and `.`.
@@ -74,8 +72,41 @@ export function declaration(catalog, name) {
   return undefined;
 }
 
+/** Compiles one current-format catalog and refuses another catalog grammar. */
+export function validateCatalog(catalog, source = "event catalog") {
+  if (catalog?.schema !== CATALOG_SCHEMA) {
+    const found = catalog?.schema === undefined ? "is missing" : `is ${JSON.stringify(catalog.schema)}`;
+    throw new Error(`${source}: event catalog schema ${found}; expected ${CATALOG_SCHEMA}`);
+  }
+  if (catalog.events === null || typeof catalog.events !== "object" || Array.isArray(catalog.events)) {
+    throw new Error(`${source}: event catalog events must be an object`);
+  }
+  const cached = catalogFieldValidators.get(catalog);
+  if (cached !== undefined) return cached;
+  const validators = new Map();
+  for (const [name, event] of Object.entries(catalog.events)) {
+    const schema = event?.fields;
+    const branches = schema?.oneOf ?? [schema];
+    const objectShape = (branch) => branch?.type === "object"
+      && branch.properties !== null && typeof branch.properties === "object" && !Array.isArray(branch.properties)
+      && Array.isArray(branch.required)
+      && branch.required.every((field) => typeof field === "string" && Object.hasOwn(branch.properties, field));
+    if (schema?.$schema !== "https://json-schema.org/draft/2020-12/schema"
+      || !Array.isArray(branches) || branches.length === 0 || !branches.every(objectShape)) {
+      throw new Error(`${source}: event ${name} has an invalid field schema: expected a Draft 2020-12 object schema with properties, required and optional oneOf branches`);
+    }
+    try {
+      validators.set(event, fieldSchemaAjv.compile(event.fields));
+    } catch (error) {
+      throw new Error(`${source}: event ${name} has an invalid field schema: ${error.message}`, { cause: error });
+    }
+  }
+  catalogFieldValidators.set(catalog, validators);
+  return validators;
+}
+
 /** The findings of the structure of one event line in a file of `channel`. */
-function lineFindings(entry, catalog, channel = "other") {
+function lineFindings(entry, catalog, validators, channel = "other") {
   const { line, event } = entry;
   const findings = [];
   // A catalog names the layers it owns; the events of another layer belong to the catalog of another repository.
@@ -122,14 +153,9 @@ function lineFindings(entry, catalog, channel = "other") {
     else if (typeof event.fields?.head !== "string") report("the fields of a truncated event must hold the string head");
     return findings;
   }
-  // A field name that ends with `?` is optional, and a type such as `string|null` accepts each of its parts.
-  for (const [declaredName, type] of Object.entries(declared.fields)) {
-    const optional = declaredName.endsWith("?");
-    const name = optional ? declaredName.slice(0, -1) : declaredName;
-    const value = event.fields?.[name];
-    if (value === undefined) {
-      if (!optional) report(`field ${name} is required by ${event.event}`);
-    } else if (!type.split("|").includes(typeOf(value))) report(`field ${name} must be a ${type}, found ${typeOf(value)}`);
+  const validateFields = validators.get(declared);
+  if (validateFields !== undefined && !validateFields(event.fields)) {
+    report(`fields do not match the schema of ${event.event}: ${fieldSchemaAjv.errorsText(validateFields.errors, { separator: "; " })}`);
   }
   // An entrance of calls that the catalog declares with `result: true` states its result in one form (docs/spec/logging.md#result-form):
   // `ok`, `micros` when present a non-negative integer, and `error` only for a failure, as `<code>: <text>`.
@@ -238,7 +264,7 @@ function checkExtension(catalog, extension) {
   const hops = catalog.chains?.[extension.chain];
   if (hops === undefined) throw new Error(`${where}: the extension names the chain ${extension.chain}, which the catalog does not declare`);
   if (!hops.includes(extension.after)) throw new Error(`${where}: the extension follows ${extension.after}, which is not an event of the chain ${extension.chain}`);
-  if (declaration(catalog, extension.after)?.fields?.name !== "string") throw new Error(`${where}: the extension follows ${extension.after}, which has no field name`);
+  if (declaration(catalog, extension.after)?.fields?.properties?.name?.type !== "string") throw new Error(`${where}: the extension follows ${extension.after}, which has no field name`);
   if (!Array.isArray(extension.events) || extension.events.length === 0) throw new Error(`${where}: the extension of the chain ${extension.chain} lists no events`);
   for (const name of extension.events) {
     if (declaration(catalog, name) === undefined) throw new Error(`${where}: the extension names ${name}, which the catalog does not declare`);
@@ -253,10 +279,12 @@ function checkExtension(catalog, extension) {
  * extensions of all sidecars as `extends` entries `{sidecar, chain, after, events}`.
  */
 export function composeCatalogs(base, ...sidecars) {
+  validateCatalog(base, "base event catalog");
   const events = { ...base.events };
   // default: a catalog without extensions has none to carry over.
   const extensions = [...(base.extends ?? [])];
   for (const catalog of sidecars) {
+    validateCatalog(catalog, `sidecar ${catalog?.sidecar ?? ""} event catalog`);
     if (typeof catalog.sidecar !== "string" || catalog.sidecar === "") throw new Error("sidecar catalog: the member sidecar must name the sidecar");
     const where = `sidecar ${catalog.sidecar}`;
     if (JSON.stringify(catalog.layers) !== '["sidecar"]') throw new Error(`${where}: layers must be ["sidecar"], found ${JSON.stringify(catalog.layers)}`);
@@ -310,9 +338,10 @@ function extensionFindings(entries, catalog) {
  * missing or mistyped fields, gaps of seq that no `log.dropped` explains, and declared chains that stop early.
  */
 export function auditLog(file, text, catalog) {
+  const validators = validateCatalog(catalog, file);
   const entries = parseLog(file, text).map((entry) => ({ ...entry, file }));
   return [
-    ...entries.flatMap((entry) => lineFindings(entry, catalog, channelOf(file))),
+    ...entries.flatMap((entry) => lineFindings(entry, catalog, validators, channelOf(file))),
     ...seqFindings(entries),
     ...chainFindings(entries, catalog),
     ...extensionFindings(entries, catalog),
@@ -349,10 +378,11 @@ export function auditLogs(logs, catalog, declaredError = () => false) {
 
 /** The audit of `auditLogs` for files that are already read: `[{file, process, entries}]` with `file` on each entry. */
 export function auditParsed(parsed, catalog, declaredError = () => false) {
+  const validators = validateCatalog(catalog, "event catalog");
   const findings = [];
   const located = (file, list) => list.forEach(({ line, message }) => findings.push({ file, line, message }));
   for (const { file, entries } of parsed) {
-    located(file, entries.flatMap((entry) => lineFindings(entry, catalog, channelOf(file))));
+    located(file, entries.flatMap((entry) => lineFindings(entry, catalog, validators, channelOf(file))));
     for (const entry of entries) {
       if (entry.event.level === "error" && !declaredError(file, entry)) {
         findings.push({ file, line: entry.line, message: `undeclared error ${errorText(entry.event)}` });

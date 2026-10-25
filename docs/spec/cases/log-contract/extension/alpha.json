@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "layers": [
     "sidecar"
   ],
@@ -10,10 +10,28 @@
       "class": "lifecycle",
       "level": "info",
       "fields": {
-        "schema": "number",
-        "pid": "number",
-        "role": "string",
-        "boot": "string"
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "number"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "role": {
+            "type": "string"
+          },
+          "boot": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema",
+          "pid",
+          "role",
+          "boot"
+        ]
       }
     },
     "log.dropped": {
@@ -21,11 +39,32 @@
       "class": "lifecycle",
       "level": "warn",
       "fields": {
-        "from_seq": "number",
-        "to_seq": "number",
-        "count": "number",
-        "bytes": "number",
-        "reason": "string"
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "from_seq": {
+            "type": "number"
+          },
+          "to_seq": {
+            "type": "number"
+          },
+          "count": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_seq",
+          "to_seq",
+          "count",
+          "bytes",
+          "reason"
+        ]
       }
     },
     "log.rotated": {
@@ -33,9 +72,27 @@
       "class": "lifecycle",
       "level": "info",
       "fields": {
-        "bytes": "number",
-        "kept": "number",
-        "removed": "string|null"
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "number"
+          },
+          "kept": {
+            "type": "number"
+          },
+          "removed": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "bytes",
+          "kept",
+          "removed"
+        ]
       }
     },
     "sidecar.alpha.start": {
@@ -43,7 +100,16 @@
       "class": "lifecycle",
       "level": "info",
       "fields": {
-        "pid": "number"
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "pid": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "pid"
+        ]
       }
     },
     "sidecar.alpha.write": {
@@ -52,7 +118,16 @@
       "level": "info",
       "cids": "required",
       "fields": {
-        "hex": "string"
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "hex": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hex"
+        ]
       }
     }
   },

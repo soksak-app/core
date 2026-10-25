@@ -26,6 +26,10 @@ test('the page table gives every declared event and family member its catalog cl
 });
 
 test('a family whose placeholder is not at the end and a class outside the contract are refused', () => {
-  assert.throws(() => classTables({ events: { 'page.<x>.end': { class: 'call' } } }), /must end with its placeholder/);
-  assert.throws(() => classTables({ events: { 'page.x': { class: 'noise' } } }), /class "noise"/);
+  assert.throws(() => classTables({ schema: 3, events: { 'page.<x>.end': { class: 'call' } } }), /must end with its placeholder/);
+  assert.throws(() => classTables({ schema: 3, events: { 'page.x': { class: 'noise' } } }), /class "noise"/);
+});
+
+test('the class-table generator rejects an earlier event-catalog schema', () => {
+  assert.throws(() => classTables({ schema: 2, events: {} }), /event catalog schema is 2; expected 3/);
 });

@@ -6,13 +6,19 @@ import test from 'node:test';
 
 import { auditLogDirectories, catalogOf, installedSidecarCatalogs } from '../check-events.mjs';
 
+const fieldSchema = (properties = {}, required = Object.keys(properties)) => ({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  properties,
+  required,
+});
 const catalog = {
-  schema: 2,
+  schema: 3,
   layers: ['host', 'page'],
   events: {
-    'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: { schema: 'number', pid: 'number', role: 'string', boot: 'string' } },
-    'host.window.event': { layer: 'host', class: 'lifecycle', level: 'info', fields: { window: 'string', kind: 'string' } },
-    'page.record.<level>': { layer: 'page', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } },
+    'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: fieldSchema({'schema': { type: 'number' }, 'pid': { type: 'number' }, 'role': { type: 'string' }, 'boot': { type: 'string' }}, ['schema', 'pid', 'role', 'boot']) },
+    'host.window.event': { layer: 'host', class: 'lifecycle', level: 'info', fields: fieldSchema({'window': { type: 'string' }, 'kind': { type: 'string' }}, ['window', 'kind']) },
+    'page.record.<level>': { layer: 'page', class: 'lifecycle', level: ['error', 'info'], fields: fieldSchema({'where': { type: 'string' }, 'text': { type: 'string' }}, ['where', 'text']) },
   },
 };
 
@@ -27,7 +33,7 @@ test('the logs of a configuration folder are audited against the catalog and the
     line(4, 'host.surprise', {}),
   ].join('\n') + '\n');
   assert.deepEqual(auditLogDirectories({ ...catalog, layers: [...catalog.layers, 'sidecar'] }, [root]), [
-    `${join(root, 'logs', 'host-1-2.jsonl')}:3: field kind is required by host.window.event`,
+    `${join(root, 'logs', 'host-1-2.jsonl')}:3: fields do not match the schema of host.window.event: data must have required property 'kind'`,
     `${join(root, 'logs', 'host-1-2.jsonl')}:4: event host.surprise is not declared`,
   ]);
   assert.throws(() => auditLogDirectories(catalog, [join(root, 'missing')]), /missing\/logs: ENOENT/);
@@ -63,11 +69,11 @@ test('the catalog declares the chain of each operation of the page and the first
     assert.equal(real.events[event].cids, 'required', event);
     assert.equal(real.events[event].layer, 'page', event);
   }
-  assert.deepEqual(real.events['page.settings.change'].fields, { scope: 'string', actor: 'string', keys: 'string' });
-  assert.deepEqual(real.events['page.plugin.operation'].fields, { action: 'string', plugin: 'string' });
-  assert.deepEqual(real.events['page.project.operation'].fields, { action: 'string', project: 'string' });
-  assert.deepEqual(real.events['page.window.operation'].fields, { action: 'string' });
-  assert.deepEqual(real.events['page.update.operation'].fields, { action: 'string', version: 'string' });
+  assert.deepEqual(Object.keys(real.events['page.settings.change'].fields.properties), ['scope', 'actor', 'keys']);
+  assert.deepEqual(Object.keys(real.events['page.plugin.operation'].fields.properties), ['action', 'plugin']);
+  assert.deepEqual(Object.keys(real.events['page.project.operation'].fields.properties), ['action', 'project']);
+  assert.deepEqual(Object.keys(real.events['page.window.operation'].fields.properties), ['action']);
+  assert.deepEqual(Object.keys(real.events['page.update.operation'].fields.properties), ['action', 'version']);
 });
 
 const alphaCatalog = JSON.parse(readFileSync(new URL('../../docs/spec/cases/log-contract/extension/alpha.json', import.meta.url), 'utf8'));
@@ -104,10 +110,10 @@ test('an installed sidecar whose record or catalog cannot be read is an error th
 
 test('the events of an installed sidecar are audited against its catalog, and a chain extension finds a request that the sidecar did not follow', (t) => {
   const root = installed(t);
-  const base = { schema: 2, layers: ['host', 'sidecar'], chains: { input: ['host.sidecar.request'] },
+  const base = { schema: 3, layers: ['host', 'sidecar'], chains: { input: ['host.sidecar.request'] },
     events: {
       'log.open': alphaCatalog.events['log.open'],
-      'host.sidecar.request': { layer: 'host', class: 'io', level: 'info', cids: 'required', fields: { name: 'string' } },
+      'host.sidecar.request': { layer: 'host', class: 'io', level: 'info', cids: 'required', fields: fieldSchema({'name': { type: 'string' }}, ['name']) },
     } };
   // Every line states the class that the catalog declares for its event; an undeclared event has none.
   const classOf = (event) => (base.events[event] ?? alphaCatalog.events[event])?.class;
@@ -136,8 +142,8 @@ test('a host stall record at warn that the gate exception stores is not an audit
     ...catalog,
     events: {
       ...catalog.events,
-      'host.stall': { layer: 'host', class: 'lifecycle', level: 'warn', fields: { late_ms: 'number' } },
-      'host.stall.sampled': { layer: 'host', class: 'lifecycle', level: 'warn', fields: { path: 'string', 'error?': 'string' } },
+      'host.stall': { layer: 'host', class: 'lifecycle', level: 'warn', fields: fieldSchema({'late_ms': { type: 'number' }}, ['late_ms']) },
+      'host.stall.sampled': { layer: 'host', class: 'lifecycle', level: 'warn', fields: fieldSchema({'path': { type: 'string' }, 'error': { type: 'string' }}, ['path']) },
     },
   };
   writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [

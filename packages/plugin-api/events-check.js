@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import Ajv2020 from 'ajv/dist/2020.js';
 
 const SOURCE_EXTENSIONS = /\.(go|rs|m|js|mjs|cjs)$/;
 // A source that emits an event is not a test, a fixture, a generated frontend or a script of this repository.
@@ -19,7 +20,8 @@ const NOT_SOURCES = /(^|\/)(tests?|fixtures|node_modules|dist|benches|scripts)\/
 
 const LEVELS = ['error', 'warn', 'info', 'debug', 'trace'];
 const CLASSES = ['lifecycle', 'input', 'call', 'io', 'frame'];
-const TYPES = ['string', 'number', 'boolean', 'array', 'object', 'null'];
+const CATALOG_SCHEMA = 3;
+const fieldSchemaAjv = new Ajv2020({ allErrors: true, strict: true, strictRequired: false });
 const LANGUAGES = { go: 'go', rs: 'rs', m: 'm', js: 'js', mjs: 'js', cjs: 'js' };
 const FORWARDED = 'forwarded';
 // A marker comment lies on the line of an emit whose name is built, or at most this many lines above it.
@@ -378,8 +380,28 @@ export function sitesOf(path, text, emitters = {}) {
 }
 
 /** The findings of the catalog at `catalogPath` itself: each entry has a layer the catalog lists, a class, levels and field types of the contract. */
+/** The properties and fields required in every branch of a JSON Schema declaration. */
+function fieldSchemaMembers(schema) {
+  if (schema?.$schema !== 'https://json-schema.org/draft/2020-12/schema') return null;
+  const branches = schema?.oneOf ?? [schema];
+  if (!Array.isArray(branches) || branches.length === 0) return null;
+  const propertyNames = new Set();
+  let required = null;
+  const requiredByBranch = [];
+  for (const branch of branches) {
+    if (branch?.type !== 'object' || branch.properties === null || typeof branch.properties !== 'object' || Array.isArray(branch.properties)) return null;
+    const requiredBranch = branch.required;
+    if (!Array.isArray(requiredBranch) || requiredBranch.some((field) => typeof field !== 'string' || !Object.hasOwn(branch.properties, field))) return null;
+    Object.keys(branch.properties).forEach((field) => propertyNames.add(field));
+    requiredByBranch.push(requiredBranch);
+    required = required === null ? new Set(requiredBranch) : new Set([...required].filter((field) => requiredBranch.includes(field)));
+  }
+  return { properties: [...propertyNames], required: [...(required ?? [])], requiredByBranch };
+}
+
 export function catalogFindings(catalog, catalogPath) {
   const findings = [];
+  if (catalog.schema !== CATALOG_SCHEMA) findings.push(`${catalogPath}: event catalog schema ${catalog.schema === undefined ? 'is missing' : `is ${JSON.stringify(catalog.schema)}`}; expected ${CATALOG_SCHEMA}`);
   for (const [name, entry] of Object.entries(catalog.events)) {
     const report = (message) => findings.push(`${catalogPath}: ${name} ${message}`);
     if (!catalog.layers.includes(entry.layer)) report(`has the layer ${entry.layer}, which the catalog does not list`);
@@ -388,11 +410,13 @@ export function catalogFindings(catalog, catalogPath) {
     for (const level of [entry.level].flat()) {
       if (!LEVELS.includes(level)) report(`has the level ${level}, which is not one of ${LEVELS.join(', ')}`);
     }
-    for (const [field, type] of Object.entries(entry.fields)) {
-      if (!String(type).split('|').every((part) => TYPES.includes(part))) {
-        report(`has the field ${field.replace(/\?$/, '')} of type ${type}, which is not ${TYPES.slice(0, -1).join(', ')} or ${TYPES.at(-1)}`);
-      }
+    try {
+      fieldSchemaAjv.compile(entry.fields);
+    } catch (error) {
+      report(`has an invalid JSON Schema for fields: ${error.message}`);
+      continue;
     }
+    if (fieldSchemaMembers(entry.fields) === null) report('has a field schema outside the object, properties and oneOf form');
   }
   return findings;
 }
@@ -445,13 +469,21 @@ export function emitFindings(catalog, sources, catalogPath, config = { emitters:
       if (site.class !== null && site.class !== entry.class) {
         report(site.line, `${site.name} is emitted with the class ${site.class} and the catalog declares ${entry.class}`);
       }
-      // A family whose entry declares no fields leaves the fields of each of its events to the site (the performance trace of the page).
-      const fieldsDeclared = !(key.includes('<') && Object.keys(entry.fields).length === 0);
+      const shape = fieldSchemaMembers(entry.fields);
+      // A family whose entry declares no properties leaves the fields of each of its events to the site (the performance trace of the page).
+      const fieldsDeclared = !(key.includes('<') && shape?.properties.length === 0);
       if (site.fields !== null && fieldsDeclared) {
-        const declared = Object.keys(entry.fields).map((field) => field.replace(/\?$/, ''));
+        const declared = shape?.properties ?? [];
         if (!site.fields.open) {
-          for (const field of Object.keys(entry.fields).filter((name) => !name.endsWith('?'))) {
-            if (!site.fields.keys.includes(field)) report(site.line, `${site.name} lacks the field ${field} that the catalog requires`);
+          if (shape?.requiredByBranch.length > 1) {
+            const emitted = new Set(site.fields.keys);
+            if (!shape.requiredByBranch.some((required) => required.every((field) => emitted.has(field)))) {
+              report(site.line, `${site.name} does not provide the required fields of any declared JSON Schema branch`);
+            }
+          } else {
+            for (const field of shape?.required ?? []) {
+              if (!site.fields.keys.includes(field)) report(site.line, `${site.name} lacks the field ${field} that the catalog requires`);
+            }
           }
         }
         for (const field of site.fields.keys.filter((name) => !declared.includes(name))) {

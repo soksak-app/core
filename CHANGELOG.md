@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-77: Validate role-specific `host.sampler.memory` records with strict
+  schema-3 JSON Schema declarations. Keep event-log line schema 2 unchanged.
+  The owner tests cover each documented success and error shape, reject
+  malformed combinations, and preserve real capture errors and interrupted
+  markers. Focused JS, Go and Rust checks and `make events-check` pass.
+  Plugin and sidecar package catalogs still require schema-3 package data and
+  a fresh install before runtime verification.
+
 - F239-80: Preserve no-op delivery when an ordered view notification has no
   remaining surface subscriber. The request/reply producer paths install their
   page listeners before host readiness or view composition can emit calls. The

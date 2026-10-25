@@ -71,12 +71,21 @@ func pluginCatalogClasses(folder, id string) (map[string]Class, error) {
 		return nil, fmt.Errorf("%s: the event catalog of plugin %s cannot be read", path, id)
 	}
 	var catalog struct {
+		Schema json.RawMessage `json:"schema"`
 		Events map[string]struct {
 			Class string `json:"class"`
 		} `json:"events"`
 	}
 	if err := json.Unmarshal(data, &catalog); err != nil {
 		return nil, fmt.Errorf("%s: the event catalog of plugin %s is not JSON", path, id)
+	}
+	var schema int
+	if len(catalog.Schema) == 0 || json.Unmarshal(catalog.Schema, &schema) != nil || schema != 3 {
+		found := "is missing"
+		if len(catalog.Schema) != 0 {
+			found = "is " + string(catalog.Schema)
+		}
+		return nil, fmt.Errorf("%s: event catalog schema %s; expected 3", path, found)
 	}
 	prefix := "plugin." + id + "."
 	names := make([]string, 0, len(catalog.Events))

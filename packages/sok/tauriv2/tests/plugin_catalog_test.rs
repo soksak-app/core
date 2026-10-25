@@ -100,12 +100,12 @@ fn the_plugin_classes_are_the_catalogs_of_the_enabled_installed_plugins() {
     write_plugin(
         dir.path(),
         "probe",
-        r#"{"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{}},"plugin.probe.error":{"layer":"plugin","class":"lifecycle","level":"error","fields":{}}}}"#,
+        r#"{"schema":3,"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{"type":"object","properties":{},"required":[]}},"plugin.probe.error":{"layer":"plugin","class":"lifecycle","level":"error","fields":{"type":"object","properties":{},"required":[]}}}}"#,
     );
     write_plugin(
         dir.path(),
         "fixture",
-        r#"{"events":{"plugin.fixture.watch":{"layer":"plugin","class":"io","level":"debug","fields":{}}}}"#,
+        r#"{"schema":3,"events":{"plugin.fixture.watch":{"layer":"plugin","class":"io","level":"debug","fields":{"type":"object","properties":{},"required":[]}}}}"#,
     );
     write_installed(
         dir.path(),
@@ -130,21 +130,22 @@ fn a_catalog_that_cannot_be_used_is_an_error_that_names_its_file_and_the_other_p
     write_plugin(
         dir.path(),
         "probe",
-        r#"{"events":{"plugin.probe.frame":{"class":"frame"}}}"#,
+        r#"{"schema":3,"events":{"plugin.probe.frame":{"class":"frame"}}}"#,
     );
     write_plugin(
         dir.path(),
         "outside",
-        r#"{"events":{"plugin.probe.frame":{"class":"frame"}}}"#,
+        r#"{"schema":3,"events":{"plugin.probe.frame":{"class":"frame"}}}"#,
     );
     write_plugin(
         dir.path(),
         "classless",
-        r#"{"events":{"plugin.classless.x":{"class":"often"}}}"#,
+        r#"{"schema":3,"events":{"plugin.classless.x":{"class":"often"}}}"#,
     );
     write_plugin(dir.path(), "broken", r#"{"events":"#);
     write_plugin(dir.path(), "missing", "");
-    let ids = ["probe", "outside", "classless", "broken", "missing"];
+    write_plugin(dir.path(), "old", r#"{"schema":2,"events":{"plugin.old.event":{"class":"call"}}}"#);
+    let ids = ["probe", "outside", "classless", "broken", "missing", "old"];
     write_installed(
         dir.path(),
         &ids.iter()
@@ -180,6 +181,7 @@ fn a_catalog_that_cannot_be_used_is_an_error_that_names_its_file_and_the_other_p
                 "{}: the event catalog of plugin missing does not exist",
                 file("missing")
             ),
+            format!("{}: event catalog schema is 2; expected 3", file("old")),
             format!(
                 "{}: the event plugin.probe.frame is not an event of plugin outside (plugin.outside.<event>)",
                 file("outside")
