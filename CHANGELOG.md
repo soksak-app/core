@@ -12,6 +12,8 @@
   Plugin and sidecar package catalogs still require schema-3 package data and
   a fresh install before runtime verification.
 
+- F239-78: Add per-stream ScreenCaptureKit lifecycle events for diagnostic captures. Gated debug events record start requests and completions, the first sample and delegate-stop callbacks; one error event records the first failure before capture wait returns. Each event carries a stable attempt sequence, raw Mach timestamps and timebase, and only timestamped main-thread window facts. The focused `capture_callback_test` passes 1/1. The observed startup delay remains unexplained.
+
 - F239-80: Preserve no-op delivery when an ordered view notification has no
   remaining surface subscriber. The request/reply producer paths install their
   page listeners before host readiness or view composition can emit calls. The

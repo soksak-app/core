@@ -3593,6 +3593,170 @@
       },
       "description": "The first responder of a window changed, seen at its next update."
     },
+    "native.capture.lifecycle": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": [
+        "debug",
+        "error"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "windowNumber": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "requestMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callbackMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "elapsedMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "machTimebaseNumerator": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "machTimebaseDenominator": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "sampleType": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "statusPresent": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "displayTimePresent": {
+            "type": "boolean"
+          },
+          "displayTimeMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorDomain": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "factsObservedMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "visible": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "occluded": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "displayID": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "applicationActive": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "startCompletionSeen": {
+            "type": "boolean"
+          },
+          "firstSampleSeen": {
+            "type": "boolean"
+          },
+          "delegateStopSeen": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session",
+          "phase",
+          "windowNumber",
+          "requestMachTicks",
+          "callbackMachTicks",
+          "elapsedMachTicks",
+          "machTimebaseNumerator",
+          "machTimebaseDenominator",
+          "sampleType",
+          "statusPresent",
+          "status",
+          "displayTimePresent",
+          "displayTimeMachTicks",
+          "errorDomain",
+          "errorCode",
+          "reason",
+          "factsObservedMachTicks",
+          "visible",
+          "occluded",
+          "displayID",
+          "applicationActive",
+          "startCompletionSeen",
+          "firstSampleSeen",
+          "delegateStopSeen"
+        ]
+      },
+      "description": "A bounded ScreenCaptureKit attempt trace. Debug records describe start request, start completion, first sample and delegate stop; the error-level failed record is emitted once per failed attempt and preserves whether start completion or a sample was observed. Time fields are raw Mach ticks, with the captured timebase; display facts are null until a timestamped main-thread observation exists."
+    },
     "native.input.key_down": {
       "layer": "native",
       "class": "input",

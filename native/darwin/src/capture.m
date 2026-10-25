@@ -15,14 +15,16 @@
 #import "image_capture_match.h"
 #import "image_region.h"
 #import "application_log.h"
+#import "event_ring.h"
 #import <ImageIO/ImageIO.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
+#import <objc/runtime.h>
 #include <compression.h>
 #include <zlib.h>
 
 static void setCaptureError(NSString* message);
 static bool hasCaptureError(void);
-static void reportCaptureStreamFailure(SCStream *stream, NSString *message);
+static void reportCaptureStreamFailure(SCStream *stream, NSString *message, NSError *error);
 
 static dispatch_semaphore_t captureFirstFrame;
 // Completion of the stream start request. ScreenCaptureKit can deliver the first frame before the start completes,
@@ -65,6 +67,115 @@ static CVReturn (*captureUnlockBaseAddress)(CVPixelBufferRef, CVPixelBufferLockF
 static void *(*captureGetBaseAddress)(CVPixelBufferRef) = CVPixelBufferGetBaseAddress;
 static void (*captureDisplayLinkAfterWindowLookup)(NSWindow *window);
 
+@class SPCaptureAttempt;
+static char captureAttemptAssociationKey;
+static uint64_t captureAttemptSequence;
+static SPCaptureAttempt* captureAttempt = nil;
+
+@interface SPCaptureAttempt : NSObject
+@property (nonatomic, copy) NSString *session;
+@property (nonatomic) long windowNumber;
+@property (nonatomic) uint64_t requestMachTicks;
+@property (nonatomic) mach_timebase_info_data_t timebase;
+@property (nonatomic) BOOL startCompletionSeen;
+@property (nonatomic) BOOL firstSampleSeen;
+@property (nonatomic) BOOL delegateStopSeen;
+@property (nonatomic) BOOL failed;
+@property (nonatomic) uint64_t factsObservedMachTicks;
+@property (nonatomic, retain) NSNumber *visible;
+@property (nonatomic, retain) NSNumber *occluded;
+@property (nonatomic, retain) NSNumber *displayID;
+@property (nonatomic, retain) NSNumber *applicationActive;
+- (void)emit:(NSString *)phase level:(uint8_t)level callbackMachTicks:(NSNumber *)callbackMachTicks
+    sampleType:(NSNumber *)sampleType statusPresent:(BOOL)statusPresent status:(NSNumber *)status
+    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(id)displayTimeMachTicks
+    error:(NSError *)error reason:(NSString *)reason;
+- (void)recordFirstSampleType:(SCStreamOutputType)type statusPresent:(BOOL)statusPresent status:(SCFrameStatus)status
+    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(uint64_t)displayTimeMachTicks
+    callbackMachTicks:(uint64_t)callbackMachTicks;
+- (void)recordWindowNumber:(long)windowNumber displayID:(NSNumber *)displayID visible:(BOOL)visible
+    occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive callbackMachTicks:(uint64_t)callbackMachTicks;
+- (void)recordFailure:(NSString *)reason error:(NSError *)error;
+@end
+
+@implementation SPCaptureAttempt
+- (void)emit:(NSString *)phase level:(uint8_t)level callbackMachTicks:(NSNumber *)callbackMachTicks
+    sampleType:(NSNumber *)sampleType statusPresent:(BOOL)statusPresent status:(NSNumber *)status
+    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(id)displayTimeMachTicks
+    error:(NSError *)error reason:(NSString *)reason {
+    if (!sp_event_gate(SP_CLASS_LIFECYCLE, level)) return;
+    @synchronized (self) {
+        id null = [NSNull null];
+        NSDictionary *facts = @{
+            @"factsObservedMachTicks": self.factsObservedMachTicks == 0 ? null :
+                [NSString stringWithFormat:@"%llu", (unsigned long long)self.factsObservedMachTicks],
+            @"visible": self.visible ?: null, @"occluded": self.occluded ?: null,
+            @"displayID": self.displayID ?: null, @"applicationActive": self.applicationActive ?: null,
+        };
+        NSDictionary *fields = @{
+            @"session": self.session, @"phase": phase,
+            @"windowNumber": @(self.windowNumber),
+            @"requestMachTicks": self.requestMachTicks == 0 ? null :
+                [NSString stringWithFormat:@"%llu", (unsigned long long)self.requestMachTicks],
+            @"callbackMachTicks": callbackMachTicks ?: null,
+            @"elapsedMachTicks": callbackMachTicks == nil ? null :
+                [NSString stringWithFormat:@"%llu", (unsigned long long)(callbackMachTicks.unsignedLongLongValue - self.requestMachTicks)],
+            @"machTimebaseNumerator": self.timebase.numer ? @(self.timebase.numer) : null,
+            @"machTimebaseDenominator": self.timebase.denom ? @(self.timebase.denom) : null,
+            @"sampleType": sampleType ?: null, @"statusPresent": @(statusPresent),
+            @"status": statusPresent ? (id)status : null,
+            @"displayTimePresent": @(displayTimePresent), @"displayTimeMachTicks": displayTimeMachTicks ?: null,
+            @"errorDomain": error.domain ?: null, @"errorCode": error == nil ? null : @(error.code),
+            @"reason": reason ?: null,
+            @"startCompletionSeen": @(self.startCompletionSeen), @"firstSampleSeen": @(self.firstSampleSeen),
+            @"delegateStopSeen": @(self.delegateStopSeen),
+        };
+        NSMutableDictionary *record = [NSMutableDictionary dictionaryWithDictionary:fields];
+        [record addEntriesFromDictionary:facts];
+        NSError *encodingError = nil;
+        NSData *data = [NSJSONSerialization dataWithJSONObject:record options:0 error:&encodingError];
+        if (data == nil || !sp_event(SP_CLASS_LIFECYCLE, level, "native.capture.lifecycle",
+            data == nil ? "{}" : [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String)) {
+            NSString *message = data == nil ? [NSString stringWithFormat:@"capture lifecycle event encoding failed: %@", encodingError]
+                : @"capture lifecycle event was not stored";
+            sp_log_error("capture lifecycle", message.UTF8String);
+        }
+    }
+}
+- (void)recordFirstSampleType:(SCStreamOutputType)type statusPresent:(BOOL)statusPresent status:(SCFrameStatus)status
+    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(uint64_t)displayTimeMachTicks
+    callbackMachTicks:(uint64_t)callbackMachTicks {
+    @synchronized (self) { if (self.firstSampleSeen) return; self.firstSampleSeen = YES; }
+    [self emit:@"first-sample" level:SP_EVENT_DEBUG callbackMachTicks:@(callbackMachTicks)
+        sampleType:@(type) statusPresent:statusPresent status:statusPresent ? @(status) : nil
+        displayTimePresent:displayTimePresent displayTimeMachTicks:displayTimePresent ?
+            [NSString stringWithFormat:@"%llu", (unsigned long long)displayTimeMachTicks] : nil error:nil reason:nil];
+}
+- (void)recordWindowNumber:(long)windowNumber displayID:(NSNumber *)displayID visible:(BOOL)visible
+    occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive callbackMachTicks:(uint64_t)callbackMachTicks {
+    if (windowNumber != self.windowNumber || !NSThread.isMainThread) return;
+    @synchronized (self) {
+        self.factsObservedMachTicks = callbackMachTicks;
+        self.visible = @(visible); self.occluded = @(occluded);
+        self.displayID = displayID; self.applicationActive = @(applicationActive);
+    }
+}
+- (void)recordFailure:(NSString *)reason error:(NSError *)error {
+    @synchronized (self) { if (self.failed) return; self.failed = YES; }
+    [self emit:@"failed" level:SP_EVENT_ERROR callbackMachTicks:@(mach_absolute_time()) sampleType:nil
+        statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:error reason:reason];
+}
+- (void)dealloc {
+    [_session release]; [_visible release]; [_occluded release]; [_displayID release]; [_applicationActive release];
+    [super dealloc];
+}
+@end
+
+static SPCaptureAttempt *captureAttemptForStream(SCStream *stream) {
+    return stream == nil ? nil : objc_getAssociatedObject(stream, &captureAttemptAssociationKey);
+}
+
+
 // Receives frames and writes them to files. The frames are delivered as messages, so a receiver object is required.
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
 @property (nonatomic, copy) NSString* directory;
@@ -72,6 +183,7 @@ static void (*captureDisplayLinkAfterWindowLookup)(NSWindow *window);
 @property (nonatomic, retain) NSMutableArray<NSDictionary *> *displayLinkObservations;
 @property (nonatomic, retain) CADisplayLink *displayLink;
 @property (nonatomic, retain) NSWindow *displayWindow;
+@property (nonatomic, retain) SPCaptureAttempt *displayAttempt;
 @property (nonatomic, copy) NSString *displayLinkState;
 @property (nonatomic, copy) NSString *displayLinkReason;
 @property (nonatomic) NSUInteger omittedDisplayLinkObservations;
@@ -239,6 +351,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     [_displayLinkObservations release];
     [_displayLink release];
     [_displayWindow release];
+    [_displayAttempt release];
     [_displayLinkState release];
     [_displayLinkReason release];
     [_directory release];
@@ -246,7 +359,10 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
 }
 
 - (void)startDisplayLinkObservationForWindowNumber:(long)windowNumber {
+    SPCaptureAttempt *attempt = nil;
+    @synchronized ([SPCapture class]) { attempt = [captureAttempt retain]; }
     @synchronized (self) {
+        self.displayAttempt = attempt;
         self.displayLinkStopped = NO;
         self.displayLinkInvalidated = NO;
         [self.displayLinkObservations removeAllObjects];
@@ -260,7 +376,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     }
     void (^install)(void) = ^{
         @synchronized (self) {
-            if (self.displayLinkStopped) return;
+            if (self.displayLinkStopped || self.displayAttempt != attempt) return;
         }
         NSWindow *window = nil;
         for (NSWindow *candidate in NSApp.windows) {
@@ -296,8 +412,9 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
             }
             return;
         }
+        if (attempt != nil) objc_setAssociatedObject(link, &captureAttemptAssociationKey, attempt, OBJC_ASSOCIATION_RETAIN);
         @synchronized (self) {
-            if (self.displayLinkStopped) {
+            if (self.displayLinkStopped || self.displayAttempt != attempt) {
                 [link invalidate];
                 return;
             }
@@ -309,6 +426,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     };
     if ([NSThread isMainThread]) install();
     else dispatch_async(dispatch_get_main_queue(), install);
+    [attempt release];
 }
 
 - (void)stopDisplayLinkObservation {
@@ -316,6 +434,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     NSWindow *window = nil;
     @synchronized (self) {
         self.displayLinkStopped = YES;
+        self.displayAttempt = nil;
         link = [self.displayLink retain];
         self.displayLink = nil;
         window = [self.displayWindow retain];
@@ -345,7 +464,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
 - (void)displayLinkDidRefresh:(CADisplayLink *)link {
     NSWindow *window = nil;
     @synchronized (self) {
-        if (self.displayLinkStopped) return;
+        if (self.displayLinkStopped || link != self.displayLink) return;
         window = [self.displayWindow retain];
     }
     uint64_t callbackTime = captureRawClock();
@@ -363,6 +482,10 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         return;
     }
     NSNumber *displayID = window.screen.deviceDescription[@"NSScreenNumber"];
+    SPCaptureAttempt *attempt = objc_getAssociatedObject(link, &captureAttemptAssociationKey);
+    [attempt recordWindowNumber:window.windowNumber displayID:displayID visible:window.isVisible
+        occluded:(window.occlusionState & NSWindowOcclusionStateVisible) == 0
+        applicationActive:NSApp.isActive callbackMachTicks:callbackTime];
     [self recordDisplayLinkTimestamp:link.timestamp targetTimestamp:link.targetTimestamp duration:link.duration
         callbackTime:callbackTime mediaClockTime:mediaClockTime mediaClockAfter:mediaClockAfter
         timebase:timebase windowNumber:window.windowNumber displayID:displayID
@@ -523,6 +646,15 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
                    ofType:(SCStreamOutputType)type {
     uint64_t callbackTime = captureRawClock();
     if (type != SCStreamOutputTypeScreen) return;
+    SPCaptureAttempt *attempt = captureAttemptForStream(stream);
+    if (attempt != nil) {
+        SCFrameStatus sampleStatus = SCFrameStatusComplete;
+        BOOL hasStatus = frameStatus(sample, &sampleStatus);
+        uint64_t shown = 0;
+        BOOL hasDisplayTime = displayTime(sample, &shown);
+        [attempt recordFirstSampleType:type statusPresent:hasStatus status:sampleStatus
+            displayTimePresent:hasDisplayTime displayTimeMachTicks:shown callbackMachTicks:callbackTime];
+    }
     [self write:sample callbackTime:callbackTime];
     // A frame presented after the stop request means that the screen up to that time has been fully delivered, even
     // if it is idle.
@@ -793,9 +925,15 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
 }
 
 - (void)stream:(SCStream*)stream didStopWithError:(NSError*)error {
+    SPCaptureAttempt *attempt = captureAttemptForStream(stream);
+    if (attempt != nil) {
+        @synchronized (attempt) { attempt.delegateStopSeen = YES; }
+        [attempt emit:@"delegate-stop" level:SP_EVENT_DEBUG callbackMachTicks:@(mach_absolute_time())
+            sampleType:nil statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:error reason:nil];
+    }
     if (error != nil) {
         reportCaptureStreamFailure(stream,
-            [NSString stringWithFormat:@"capture stopped with error: %@", error.localizedDescription]);
+            [NSString stringWithFormat:@"capture stopped with error: %@", error.localizedDescription], error);
     } else {
         sp_log_info("capture", [NSString stringWithFormat:@"stopped without a delegate error (stream=%p)", stream].UTF8String);
     }
@@ -861,27 +999,31 @@ static void restoreCaptureIdentityAfterFailure(SCStream *stream) {
 }
 
 static bool recordCaptureError(NSString *message, SCStream *expectedStream, BOOL requireCurrentStream,
-    SPCapture **sinkOut) {
+    SPCapture **sinkOut, NSError *eventError) {
     SCStream *cleanupStream = nil;
+    SPCaptureAttempt *failedAttempt = nil;
     if (sinkOut != NULL) *sinkOut = nil;
     @synchronized([SPCapture class]) {
         if (requireCurrentStream && (expectedStream == nil || captureStream != expectedStream)) return false;
         appendCaptureError(message);
         failIdentitySessionForCaptureError(message);
         cleanupStream = [(expectedStream ?: captureStream) retain];
+        failedAttempt = [(expectedStream == nil ? captureAttempt : captureAttemptForStream(expectedStream)) retain];
         if (sinkOut != NULL) *sinkOut = [captureSink retain];
     }
+    [failedAttempt recordFailure:message error:eventError];
+    [failedAttempt release];
     restoreCaptureIdentityAfterFailure(cleanupStream);
     [cleanupStream release];
     return true;
 }
 
 static void setCaptureError(NSString* message) {
-    recordCaptureError(message, nil, NO, NULL);
+    recordCaptureError(message, nil, NO, NULL, nil);
 }
 
-static bool setCaptureErrorForStream(SCStream *stream, NSString *message, SPCapture **sinkOut) {
-    return recordCaptureError(message, stream, YES, sinkOut);
+static bool setCaptureErrorForStream(SCStream *stream, NSString *message, SPCapture **sinkOut, NSError *error) {
+    return recordCaptureError(message, stream, YES, sinkOut, error);
 }
 
 #ifdef SOKSAK_DIAGNOSTIC
@@ -905,9 +1047,10 @@ void sp_capture_test_report_startup_failure(const char *message) {
 #endif
 
 // Errors of the previous stream are also reported but do not change the result of the current recording.
-static void reportCaptureStreamFailure(SCStream *stream, NSString *message) {
+static void reportCaptureStreamFailure(SCStream *stream, NSString *message, NSError *error) {
     SPCapture *sink = nil;
-    bool current = setCaptureErrorForStream(stream, message, &sink);
+    bool current = setCaptureErrorForStream(stream, message, &sink, error);
+    if (!current) [captureAttemptForStream(stream) recordFailure:message error:error];
     sp_log_error("capture", [NSString stringWithFormat:@"%@ (stream=%p current=%d)", message, stream, current].UTF8String);
     [sink stopDisplayLinkObservation];
     [sink release];
@@ -1087,7 +1230,7 @@ static void followWindowSize(size_t width, size_t height, size_t needWidth, size
         [stream updateConfiguration:config completionHandler:^(NSError *failed) {
             if (failed != nil) {
                 reportCaptureStreamFailure(stream, [NSString stringWithFormat:
-                    @"capture did not follow the window size %zux%zu: %@", needWidth, needHeight, failed.localizedDescription]);
+                    @"capture did not follow the window size %zux%zu: %@", needWidth, needHeight, failed.localizedDescription], failed);
             }
             @synchronized([SPCapture class]) {
                 if (stream == captureStream) captureUpdating = false;
@@ -1188,13 +1331,25 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
     *errorOut = NULL;
     if (captureStream != nil) return captureOperationFailure(errorOut, @"capture is already running");
     clearCaptureError();
+    SPCaptureAttempt *attempt = [[SPCaptureAttempt alloc] init];
+    @synchronized ([SPCapture class]) {
+        captureAttemptSequence++;
+        attempt.session = [NSString stringWithFormat:@"capture-%llu", (unsigned long long)captureAttemptSequence];
+        attempt.windowNumber = captureWindowNumber;
+        [captureAttempt release];
+        captureAttempt = [attempt retain];
+    }
+    mach_timebase_info_data_t attemptTimebase = {};
+    if (captureReadTimebase(&attemptTimebase) == KERN_SUCCESS) attempt.timebase = attemptTimebase;
     if (captureFilter == nil) {
         setCaptureError(@"capture has no prepared window");
         sp_log_error("capture start", "capture has no prepared window");
+        [attempt release];
         return captureOperationFailure(errorOut, @"capture has no prepared window");
     }
     if (directory == NULL) {
         setCaptureError(@"capture directory is null");
+        [attempt release];
         return captureOperationFailure(errorOut, @"capture directory is null");
     }
     captureStartedAt = mach_absolute_time();
@@ -1228,6 +1383,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
     captureSink.directory = [NSString stringWithUTF8String:directory];
     if (captureSink.directory == nil) {
         setCaptureError(@"capture directory is not valid UTF-8");
+        [attempt release];
         return captureOperationFailure(errorOut, @"capture directory is not valid UTF-8");
     }
     sp_image_capture_match_begin(captureSink.directory.fileSystemRepresentation, captureWriter);
@@ -1238,6 +1394,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
             free(identityError);
             sp_image_capture_match_end();
             setCaptureError(reason);
+            [attempt release];
             return captureOperationFailure(errorOut, reason);
         }
     }
@@ -1247,8 +1404,10 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
     if (!stream) {
         sp_image_capture_match_end();
         setCaptureError(@"capture stream allocation failed");
+        [attempt release];
         return captureOperationFailure(errorOut, @"capture stream allocation failed");
     }
+    objc_setAssociatedObject(stream, &captureAttemptAssociationKey, attempt, OBJC_ASSOCIATION_RETAIN);
     @synchronized([SPCapture class]) { captureStream = stream; }
     NSError* error = nil;
     captureQueue = dispatch_queue_create("sp.capture", NULL);
@@ -1263,6 +1422,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         @synchronized([SPCapture class]) { captureStream = nil; }
         [stream release];
         sp_image_capture_match_end();
+        [attempt release];
         return captureOperationFailure(errorOut,
             [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
     }
@@ -1272,14 +1432,23 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
     captureStartDone = dispatch_semaphore_create(0);
     dispatch_semaphore_t startDone = captureStartDone;
     dispatch_retain(startDone);
+    attempt.requestMachTicks = captureRawClock();
+    [attempt emit:@"start-request" level:SP_EVENT_DEBUG callbackMachTicks:nil sampleType:nil
+        statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:nil reason:nil];
     [stream startCaptureWithCompletionHandler:^(NSError* failed) {
+        uint64_t completedAt = captureRawClock();
+        @synchronized (attempt) { attempt.startCompletionSeen = YES; }
+        [attempt emit:@"start-completion" level:SP_EVENT_DEBUG callbackMachTicks:@(completedAt) sampleType:nil
+            statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:failed
+            reason:failed.localizedDescription];
         if (failed != nil) {
             reportCaptureStreamFailure(stream,
-                [NSString stringWithFormat:@"capture did not start: %@", failed.localizedDescription]);
+                [NSString stringWithFormat:@"capture did not start: %@", failed.localizedDescription], failed);
         }
         dispatch_semaphore_signal(startDone);
         dispatch_release(startDone);
     }];
+    [attempt release];
     return true;
 }
 
@@ -1360,7 +1529,7 @@ int sp_capture_stop(double after) {
     [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
         if (failed != nil) {
             reportCaptureStreamFailure(stream,
-                [NSString stringWithFormat:@"capture did not stop: %@", failed.localizedDescription]);
+                [NSString stringWithFormat:@"capture did not stop: %@", failed.localizedDescription], failed);
         }
         dispatch_semaphore_signal(stopped);
         dispatch_release(stopped);

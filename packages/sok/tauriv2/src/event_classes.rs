@@ -127,6 +127,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "native.app.deactivated" => Some(Class::Lifecycle),
         "native.app.hidden" => Some(Class::Lifecycle),
         "native.app.unhidden" => Some(Class::Lifecycle),
+        "native.capture.lifecycle" => Some(Class::Lifecycle),
         "native.document.backforward_cleared" => Some(Class::Lifecycle),
         "native.input.callback" => Some(Class::Input),
         "native.input.key_down" => Some(Class::Input),

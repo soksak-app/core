@@ -10,6 +10,13 @@
   보존한다. 집중 JS, Go, Rust 검사와 `make events-check`가 통과한다. Runtime 검증
   전 plugin/sidecar package catalog를 schema 3 데이터로 배포하고 새로 설치해야 한다.
 
+- F239-78: Diagnostic capture에 stream별 ScreenCaptureKit lifecycle event를 추가한다. 집중 `capture_callback_test`는 1/1 통과한다.
+  Gate된 debug event는 start 요청/완료, 첫 sample, delegate-stop을
+  기록하고 첫 failure는 capture wait가 반환되기 전에 error event 하나로 남긴다.
+  각 event는 안정적인 attempt sequence, raw Mach timestamp와 timebase, timestamp가
+  있는 main-thread window 사실만 포함한다. 관측된 startup 지연의 원인은 아직
+  밝혀지지 않았다.
+
 - F239-80: Ordered view notification에 현재 surface subscriber가 없을 때
   no-op 전달을 유지한다. Request/reply producer는 host readiness 또는 view
   composition이 call을 보낼 수 있기 전에 page listener를 등록한다. Runtime
