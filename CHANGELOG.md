@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-47-40-8: The current inventory includes the captured-frame identity window check: 101 lanes, 703 implementation files, and 1009 test files. Window acceptance remains pending.
+
 - F239-47-40-8: Add a window consumer check for opt-in frame identity.
   The check hides existing terminal images before capture, creates one visible
   terminal, and compares a decoded captured tuple with the current presented

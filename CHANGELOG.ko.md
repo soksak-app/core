@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-47-40-8: 현재 목록에 captured-frame identity window check를 포함해 lane 101개, 구현 파일 703개, 테스트 파일 1009개가 있다. Window acceptance는 아직 실행하지 않았다.
+
 - F239-47-40-8: Opt-in frame identity의 window consumer check를 추가한다.
   Capture 전에 기존 terminal image를 숨기고 visible terminal 하나를 만든 뒤,
   decoded captured tuple을 현재 presented tuple 및 발급 source artifact와 대조한다.
