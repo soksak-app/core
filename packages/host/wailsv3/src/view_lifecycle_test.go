@@ -381,7 +381,7 @@ func TestViewProcessEndClosesTheRegionsOfItsSurface(t *testing.T) {
 	}
 }
 
-// contract: view.source-generation.restart-order
+// contract: view.process-end-precedes-replacement-registration
 func TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement(t *testing.T) {
 	clock := &fakeClock{}
 	s, fake, _ := newLifecycleSurfaces(t, clock)

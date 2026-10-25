@@ -23,12 +23,15 @@ use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
 use crate::presentation_wait::{PresentationWait, presentation_abandoned_payload, views_to_join};
+use crate::source_origins::DeclaredSourceOrigins;
 use crate::surfaces::{Placement, require_region, surface_handle};
 use crate::surfaces::{ViewStart, view_origin_directory};
 use crate::view_lifecycle::{
     ViewLifecycle, is_queue_full, view_process_ended_event, view_stop_reason, view_stopped_event,
 };
-use crate::windows::{emit_window, window_data, with_native_owner};
+use crate::windows::{
+    DeclaredSourceEventStream, WindowData, emit_window, window_data, with_native_owner,
+};
 
 /// The directory inside the configuration directory that holds the persistent site data of document regions. It differs
 /// from the storage of the app document.
@@ -1328,6 +1331,61 @@ pub fn create_view(
     Err(reason)
 }
 
+fn register_view_source(
+    origins: &DeclaredSourceOrigins,
+    views: &ViewChannels,
+    events: &DeclaredSourceEventStream,
+    surface: &str,
+    plugin: &str,
+) -> Result<ViewOrigin, String> {
+    let generation = origins.issue_view(surface)?;
+    let origin = views.register_origin(surface, plugin, generation);
+    if let Err(error) = events.send(
+        "declared-ui-source-registered",
+        crate::source_origins::declared_source_origin_event(plugin, Some(surface), generation),
+    ) {
+        views.forget_if_current(surface, &origin);
+        origins.end_view(surface, generation);
+        return Err(error);
+    }
+    Ok(origin)
+}
+
+fn retire_view_before_replacement(
+    data: &WindowData,
+    surface: &str,
+    plugin: &str,
+    origin: &ViewOrigin,
+    before_process_ended: impl FnOnce(),
+    replace: impl FnOnce(),
+) {
+    data.documents.views().forget_if_current(surface, origin);
+    if data
+        .declared_source_origins
+        .end_view(surface, origin.generation)
+        && let Err(error) = data.declared_source_events.send(
+            "declared-ui-source-ended",
+            crate::source_origins::declared_source_origin_event(
+                plugin,
+                Some(surface),
+                origin.generation,
+            ),
+        )
+    {
+        log_error("view channel", error);
+    }
+    before_process_ended();
+    let mut ended = view_process_ended_event(surface);
+    ended["generation"] = json!(origin.generation);
+    if let Err(error) = data
+        .declared_source_events
+        .send("view-process-ended", ended)
+    {
+        log_error("view channel", error);
+    }
+    replace();
+}
+
 /// Creates the view of a view surface when the surface has none, and places the view over the whole surface. Call it on the
 /// main thread.
 #[allow(clippy::too_many_arguments)]
@@ -1364,24 +1422,14 @@ pub(crate) fn sync_view(
         Ok(handle) => handle,
         Err(_) => {
             data.documents.reserve(&key)?;
-            let generation = data.declared_source_origins.issue_view(surface)?;
-            let origin = data
-                .documents
-                .views()
-                .register_origin(surface, plugin, generation);
-            if let Err(error) = crate::windows::emit_declared_source_event(
-                window,
-                "declared-ui-source-registered",
-                crate::source_origins::declared_source_origin_event(
-                    plugin,
-                    Some(surface),
-                    generation,
-                ),
-            ) {
-                data.documents.views().forget_if_current(surface, &origin);
-                data.declared_source_origins.end_view(surface, generation);
-                return Err(error);
-            }
+            let origin = register_view_source(
+                &data.declared_source_origins,
+                data.documents.views(),
+                &data.declared_source_events,
+                surface,
+                plugin,
+            )?;
+            let generation = origin.generation;
             match attach_view(
                 window,
                 platform,
@@ -1734,81 +1782,74 @@ fn view_failed(
     data.documents.lifecycle().record_end(surface);
     // The open calls are taken before the view is removed, because the removal drops the channel of the view.
     let open_calls = data.documents.views().end_calls(surface);
-    data.documents.views().forget_if_current(surface, origin);
-    if data
-        .declared_source_origins
-        .end_view(surface, origin.generation)
-    {
-        emit_source_ended(window, plugin, surface, origin.generation);
-    }
-    end_presentation_wait(window, surface, "process-ended");
-    // The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
-    let mut ended = view_process_ended_event(surface);
-    ended["generation"] = json!(origin.generation);
-    if let Err(error) =
-        crate::windows::emit_declared_source_event(window, "view-process-ended", ended)
-    {
-        log_error("view channel", error);
-    }
-    if let Err(error) = data.documents.remove(&key) {
-        return log_error("view channel", error);
-    }
-    for (plugin, command) in &open_calls {
-        record_view_call_peer_lost(plugin, command);
-    }
-    log_failure("view channel", platform.close_document(document));
-    // The regions of the view belong to the composition of the ended document, so they close with it, and the view that is created
-    // again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions).
-    let (region_documents, region_images) =
-        remove_view_regions(&data.documents, &data.streams, &data.images, surface);
-    let regions_closed = !region_documents.is_empty() || !region_images.is_empty();
-    for handle in region_documents {
-        log_failure("view channel", platform.close_document(handle));
-    }
-    for handle in region_images {
-        log_failure("view channel", platform.close_image(handle));
-    }
-    if regions_closed {
-        exposure::window_changed(window);
-    }
-    let record = data.documents.lifecycle().spec(surface);
-    if !data.documents.lifecycle().fail(surface, Instant::now()) {
-        log_error("view channel", format!("{surface}: {}", view_stop_reason()));
-        let Some(spec) = record else {
-            return log_error(
-                "view channel",
-                format!(
-                    "{surface}: the view record is missing, so the view-stopped event is not sent"
-                ),
-            );
-        };
-        if let Err(error) = crate::windows::emit_declared_source_event(
-            window,
-            "view-stopped",
-            view_stopped_event(surface, &spec.plugin),
-        ) {
-            log_error("view channel", error);
-        }
-        return;
-    }
-    let Some(spec) = record else {
-        return log_error(
-            "view channel",
-            format!("{surface}: the view record is missing, so the view is not created again"),
-        );
-    };
-    if let Err(error) = sync_view(
-        window,
-        platform,
-        spec.surface_handle,
-        surface,
-        &spec.plugin,
-        &spec.page,
-        spec.visible,
-        spec.start,
-    ) {
-        log_error("view channel", error);
-    }
+    retire_view_before_replacement(
+        &data, surface, plugin, origin,
+        || end_presentation_wait(window, surface, "process-ended"),
+        || {
+            // The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
+            if let Err(error) = data.documents.remove(&key) {
+                return log_error("view channel", error);
+            }
+            for (plugin, command) in &open_calls {
+                record_view_call_peer_lost(plugin, command);
+            }
+            log_failure("view channel", platform.close_document(document));
+            // The regions of the view belong to the composition of the ended document, so they close with it, and the view that is created
+            // again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions).
+            let (region_documents, region_images) =
+                remove_view_regions(&data.documents, &data.streams, &data.images, surface);
+            let regions_closed = !region_documents.is_empty() || !region_images.is_empty();
+            for handle in region_documents {
+                log_failure("view channel", platform.close_document(handle));
+            }
+            for handle in region_images {
+                log_failure("view channel", platform.close_image(handle));
+            }
+            if regions_closed {
+                exposure::window_changed(window);
+            }
+            let record = data.documents.lifecycle().spec(surface);
+            if !data.documents.lifecycle().fail(surface, Instant::now()) {
+                log_error("view channel", format!("{surface}: {}", view_stop_reason()));
+                let Some(spec) = record else {
+                    return log_error(
+                        "view channel",
+                        format!(
+                            "{surface}: the view record is missing, so the view-stopped event is not sent"
+                        ),
+                    );
+                };
+                if let Err(error) = crate::windows::emit_declared_source_event(
+                    window,
+                    "view-stopped",
+                    view_stopped_event(surface, &spec.plugin),
+                ) {
+                    log_error("view channel", error);
+                }
+                return;
+            }
+            let Some(spec) = record else {
+                return log_error(
+                    "view channel",
+                    format!(
+                        "{surface}: the view record is missing, so the view is not created again"
+                    ),
+                );
+            };
+            if let Err(error) = sync_view(
+                window,
+                platform,
+                spec.surface_handle,
+                surface,
+                &spec.plugin,
+                &spec.page,
+                spec.visible,
+                spec.start,
+            ) {
+                log_error("view channel", error);
+            }
+        },
+    );
 }
 
 fn emit_source_ended(window: &Window, plugin: &str, surface: &str, generation: u64) {

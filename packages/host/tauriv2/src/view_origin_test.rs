@@ -1,5 +1,10 @@
-use super::{ViewChannels, ViewIngress, accept_view_message};
+use super::{
+    ViewChannels, ViewIngress, accept_view_message, register_view_source, retire_view_before_replacement,
+};
 use crate::event_record::buffered_fields;
+use crate::windows::{DeclaredSourceEvent, WindowData};
+use std::sync::{Arc, Mutex, PoisonError};
+use tauri::ipc::{Channel, InvokeResponseBody};
 
 // contract: view.origin.retired-callback-is-cancelled
 #[test]
@@ -222,4 +227,113 @@ fn a_retired_malformed_envelope_keeps_its_channel_error() {
                 })
         );
     }
+}
+
+// contract: view.process-end-precedes-replacement-registration
+#[test]
+fn a_view_process_end_retires_its_origin_before_replacement_registration() {
+    let data = WindowData::default();
+    let received = Arc::new(Mutex::new(Vec::<DeclaredSourceEvent>::new()));
+    let destination = received.clone();
+    data.declared_source_events.install(Channel::new(move |body| {
+        let InvokeResponseBody::Json(value) = body else {
+            panic!("declared source event uses a raw channel payload");
+        };
+        let event = serde_json::from_str(&value)
+            .expect("the channel payload is a declared source event");
+        destination
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(event);
+        Ok(())
+    }));
+
+    let old_generation = data
+        .declared_source_origins
+        .issue_view("probe-surface")
+        .unwrap();
+    let old_origin = data
+        .documents
+        .views()
+        .register_origin("probe-surface", "probe", old_generation);
+    let mut replacement_generation = None;
+    retire_view_before_replacement(
+        &data,
+        "probe-surface",
+        "probe",
+        &old_origin,
+        || {
+            let events = received
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
+            assert_eq!(
+                events,
+                vec![DeclaredSourceEvent {
+                    name: "declared-ui-source-ended".into(),
+                    value: serde_json::json!({
+                        "plugin": "probe",
+                        "surface": "probe-surface",
+                        "generation": old_generation
+                    }),
+                }]
+            );
+        },
+        || {
+            assert_eq!(data.declared_source_origins.current_view("probe-surface"), None);
+            assert_eq!(data.documents.views().generation("probe-surface"), None);
+            let replacement = register_view_source(
+                &data.declared_source_origins,
+                data.documents.views(),
+                &data.declared_source_events,
+                "probe-surface",
+                "probe",
+            )
+            .expect("the replacement source is registered");
+            replacement_generation = Some(replacement.generation);
+        },
+    );
+
+    let replacement_generation = replacement_generation.expect("replacement registration ran");
+    let events = received
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    assert_eq!(
+        events,
+        vec![
+            DeclaredSourceEvent {
+                name: "declared-ui-source-ended".into(),
+                value: serde_json::json!({
+                    "plugin": "probe",
+                    "surface": "probe-surface",
+                    "generation": old_generation
+                }),
+            },
+            DeclaredSourceEvent {
+                name: "view-process-ended".into(),
+                value: serde_json::json!({
+                    "surface": "probe-surface",
+                    "generation": old_generation
+                }),
+            },
+            DeclaredSourceEvent {
+                name: "declared-ui-source-registered".into(),
+                value: serde_json::json!({
+                    "plugin": "probe",
+                    "surface": "probe-surface",
+                    "generation": replacement_generation
+                }),
+            },
+        ]
+    );
+    assert!(replacement_generation > old_generation);
+    assert_eq!(
+        data.declared_source_origins.current_view("probe-surface"),
+        Some(replacement_generation)
+    );
+    assert_eq!(
+        data.documents.views().generation("probe-surface"),
+        Some(replacement_generation)
+    );
 }

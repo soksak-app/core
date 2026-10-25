@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-107-2: Production retirement 및 source-registration operation을 통해
+  view replacement event 순서를 검증한다. 기존 순서인 이전 source retire,
+  `view-process-ended` 전달, replacement 등록을 보존한다. Tauri owner test는
+  1/1, Wails 대응 test는 default와 diagnostics build에서 각각 1/1 통과한다.
+  제품 동작은 바뀌지 않았다.
+
 - F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다.
 
 - F239-134: 기존 host performance trace body와 수락된 frame hash record를
