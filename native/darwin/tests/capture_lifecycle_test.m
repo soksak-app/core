@@ -64,7 +64,7 @@ int main(void) {
     method_setImplementation(startMethod, originalStart);
     method_setImplementation(stopMethod, originalStop);
     method_setImplementation(delegateMethod, originalDelegate);
-    BOOL observed = starts == 1 && startReplies == 1 && stops == 1 && stopReplies == 1;
+    BOOL observed = starts == 4 && startReplies == 4 && stops == 4 && stopReplies == 4;
     fprintf(stderr, "%s: real capture lifecycle start=%u/%u stop=%u/%u delegate=%u acceptance=%d (%.1fms)\n",
         result == 0 && observed ? "PASS" : "FAIL", starts, startReplies, stops, stopReplies, delegateStops,
         result, (CACurrentMediaTime() - began) * 1000);

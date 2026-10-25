@@ -6,6 +6,7 @@
 
 - F239-70-1: 제어된 `unmarkText` 및 `insertNewline:` transaction의 input action을 확인한다. Owner Red는 마지막 transaction에 newline command가 있고 앞 transaction이 `ㅏㅏ`를 한 번 commit함을 보였다. 수정된 assertion은 두 action과 빈 error/preedit를 확인하며 `image_region_decoration_test`가 1/1 통과한다.
 - F239-70-2: Capture checker의 injected stop error를 한 번 소비한다. 보존된 native full-suite Red는 지속되는 override가 이후 recording에 영향을 주어 stop-error assertion 세 건이 실패했음을 보였다. Test wrapper는 fault 증거를 유지하면서 injected error를 한 번의 read로 제한하고 `capture_checker_test`가 1/1 통과한다.
+- F239-71: Late-stop fixture에 capture finalization에 필요한 private output directory를 제공한다. `capture_stop_late_test`가 1/1 통과한다. Lifecycle wrapper는 embedded acceptance test가 수행하는 네 번의 recording을 기대하며 start/stop 요청과 reply를 4/4 관측한다. Focused run은 10초 내 첫 frame이 오지 않아 계속 실패했고 stop은 추가 1초 뒤 timeout됐다. 당시 보고된 system load는 205였으며 원인은 분류되지 않았다. 항목은 열린 상태다.
 - F239-64: Workbench test fixture를 source-generation, view-reply identity, placement-result contract에 맞춘다. 보존된 전체 package 실행에서 generation/page field 누락, readiness mock export 누락, 잘못된 duplicate placement, 이전 placement error prefix가 확인됐다. 소유 test 파일 7개가 81/81 통과하며 production validation은 바꾸지 않았다.
 
 - F239-65: E2E runner test entrypoint를 module 위치 기준으로 해석해 호출자의 working directory에 의존하지 않게 한다. Red: `e2e/`에서 실행한 `node --test test/run.test.mjs`가 존재하지 않는 `e2e/e2e/run.mjs`를 불러오려 했다. Green: focused test는 `e2e/`와 repository root 양쪽에서 10/10 통과한다. `node --check e2e/test/run.test.mjs`와 `make docs-check`가 통과한다.

@@ -2,6 +2,8 @@
 // to the diagnostic output instead of being dropped. The fixture holds the stop completion and delivers it late.
 #import "../src/capture.m"
 #import "support/records.h"
+#include <errno.h>
+#include <stdlib.h>
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -19,7 +21,13 @@ static void check(BOOL condition, NSString *message) {
 int main(void) { @autoreleasepool {
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: late stop completion isolation\n");
+    char directoryPath[] = "/tmp/soksak-capture-stop-late-XXXXXX";
+    BOOL directoryCreated = mkdtemp(directoryPath) != NULL;
+    check(directoryCreated, directoryCreated ? @"the late-stop capture directory is created" :
+        [NSString stringWithFormat:@"the late-stop capture directory cannot be created: %s", strerror(errno)]);
+    if (!directoryCreated) return 1;
     captureSink = [[SPCapture alloc] init];
+    captureSink.directory = [NSString stringWithUTF8String:directoryPath];
     static int statuses[6];
     captureSink.statuses = statuses;
     captureWriter = dispatch_queue_create("capture.test.writer", DISPATCH_QUEUE_SERIAL);
@@ -49,6 +57,9 @@ int main(void) { @autoreleasepool {
     check([observed containsString:@"fixture late stop failure"], @"the late stop error is reported instead of discarded");
     [captureStream release]; captureStream = nil;
     [held release];
+    NSError *removeError = nil;
+    check([[NSFileManager defaultManager] removeItemAtPath:captureSink.directory error:&removeError],
+        [NSString stringWithFormat:@"the late-stop capture directory is removed (%@)", removeError]);
     fprintf(stderr, "%s: late stop completion isolation (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;
