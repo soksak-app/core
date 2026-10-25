@@ -3971,9 +3971,12 @@ fn try_handle_image_envelope<O: Owner>(
     body: &RawValue,
     response_sender: &dyn ResponseSender,
 ) -> bool {
-    let is_detach_ack = serde_json::from_str::<Value>(body.get())
-        .ok()
-        .is_some_and(|value| value.pointer("/image/detached").is_some());
+    let is_detach_ack = match image_detach::detach_acknowledgement_body(body) {
+        Ok(Some(_)) => true,
+        // default: a value without the declared object path remains an ordinary sidecar message; its raw body continues
+        // through image classification and page delivery.
+        Ok(None) | Err(_) => false,
+    };
     if is_detach_ack {
         if let Err(error) = owner.image_detach_ack(sidecar_name, surface, body) {
             log_error(&format!("sidecar {sidecar_name}"), error);

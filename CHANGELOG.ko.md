@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F239-127: 선언된 Serde 경로에서 image detach acknowledgement를 읽고
+  선언된 acknowledgement field만 파싱한다. Red: 원래 owner test는 140단계 root
+  member에서 실패했고, 세 위치로 확장한 테스트는 acknowledgement 내부 member에서
+  waiter가 settle되지 않는 문제를 드러냈다. 중간 수정도 이전 envelope 경로를 계속
+  읽어 waiter를 완료하지 못했다. Green: Rust root, `image`, acknowledgement 내부
+  deep-member case가 1/1 통과하고 exact-owner, mismatch, rejection, multi-region
+  test도 각각 1/1 통과한다. Wails counterpart도 세 위치 모두 1/1 통과한다.
+  Request, sidecar, surface, image, generation 검사는 유지한다.
+
 - F239-125: Go CLI event-log loss test에 test-owned filesystem platform을
   등록하고 cleanup에서 이전 registration을 복원한다. Package test는 OS platform을
   등록하는 `cmd/sok`를 통해 실행되지 않는다. 집중 loss test 두 개가 2/2 통과하며
