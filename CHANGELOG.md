@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-79: Use the declared app name for lifecycle artifact paths and compare cleanup roots after canonicalization. `APPS` has no `id` field; the project registry stores the resolved root, while `mkdtempSync` can return a symlinked path. Red: both hosts failed artifact-directory setup on undefined `app.id`, and a later case reported the removed temporary project as missing. The correction uses `app.name` and `realpathSync(projectRoot)`. Runtime confirmation remains pending.
+
 - F239-66: Correct three Workbench test fixtures that failed at module setup rather than exercising their assertions. The chrome tests use test-scoped runtime mocks; the presentation test exports the runtime binding and prepares its mounted view and theme; the plugin-host test supplies the plugin API exports required by its loaded module graph. The three owning files pass 31/31, with no production changes.
 
 - F239-75: Bind the selected terminal card before opt-in identity capture.

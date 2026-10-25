@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-79: Lifecycle artifact 경로에는 선언된 app 이름을 사용하고 canonical root로 cleanup 대상을 비교한다. `APPS`에는 `id` field가 없으며 project registry는 resolved root를 저장하고 `mkdtempSync`는 symbolic link가 포함된 경로를 반환할 수 있다. Red: 두 host 모두 undefined `app.id`로 artifact directory 생성에 실패했고 이후 case는 제거된 임시 project를 찾지 못했다고 보고했다. 수정은 `app.name`과 `realpathSync(projectRoot)`를 사용한다. Runtime 확인은 대기 중이다.
+
 - F239-66: assertion을 실행하지 못하던 Workbench test fixture 세 개를 수정한다. Chrome test는 test-scoped runtime mock을 사용하고, presentation test는 runtime binding을 export하며 mounted view와 theme을 준비한다. Plugin-host test는 로드된 module graph가 요구하는 plugin API export를 제공한다. 소유 파일 세 개가 31/31 통과하며 production 변경은 없다.
 
 - F239-75: Opt-in identity capture 전에 선택한 terminal card를 바인딩한다.

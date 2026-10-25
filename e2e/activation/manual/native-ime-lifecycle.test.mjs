@@ -1,7 +1,7 @@
 // Approval-gated activation checks for the native input client lifecycle.
 // This file is selected explicitly; it is not part of the default window checks.
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -178,6 +178,7 @@ for (const app of Object.values(APPS)) {
         const s = await open(t, app);
         await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
         const projectRoot = mkdtempSync(join(tmpdir(), "soksak-ime-lifecycle-"));
+        const canonicalProjectRoot = realpathSync(projectRoot);
         s.cleanup(() => rmSync(projectRoot, { recursive: true, force: true }));
         const existingWindows = await s.get("host.windows");
         await s.run("core.window.new");
@@ -198,7 +199,7 @@ for (const app of Object.values(APPS)) {
         let opened = null;
         s.cleanup(async () => {
           const projects = await s.get("core.projects");
-          for (const project of projects.filter((item) => item.root === projectRoot)) {
+          for (const project of projects.filter((item) => item.root === canonicalProjectRoot)) {
             await lifecycle.run("core.project.close", { id: project.id });
           }
         });
@@ -221,7 +222,7 @@ for (const app of Object.values(APPS)) {
         const promptText = terminalLineBeforeCursor(baselineScreen, baselineCursor,
           `${app.name} lifecycle baseline`);
         const prompt = { row: baselineCursor.row, col: 0, text: promptText };
-        const artifactDir = join(s.app.configDir, "logs", "ime-lifecycle", app.id, cycleLabel);
+        const artifactDir = join(s.app.configDir, "logs", "ime-lifecycle", app.name, cycleLabel);
         mkdirSync(artifactDir, { recursive: true });
         writeFileSync(join(artifactDir, "baseline.json"), JSON.stringify({
           screen: baselineScreen, compose: baselineCompose, cursor: baselineCursor, prompt,
