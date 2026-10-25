@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-79: Lifecycle fixture 수정 F239-58, F239-74, F239-79의 남은 양 host runtime acceptance를 완료한다. Cycle 01이 전용 window를 선택하고 app name 기반 artifact를 보존하며 AppKit 및 terminal document가 일치하고 host별 project close/reopen 두 회를 완료한다. Canonical cleanup, error 감사, 입력기 및 baseline 복원과 정상 종료가 통과한다. Fixture 수정 세 항목을 완료하며 별도 전체 10-cycle input-client acceptance는 F239-47-33에 미완료로 유지한다.
+
 - F212.7d-1: Dark 및 light mode에서 새 view 생성을 녹화하고 모든 decoded frame의 document 배경 지점 세 곳을 선언된 card token과 비교한다. macOS arm64의 두 host가 전체 녹화, error 감사 및 정상 종료를 통과한다. F212.7d-1과 first-script theme 구현 상위 F212.7d를 완료한다.
 
 - F212.7b-1: Fullscreen card의 양방향 tab 전환을 녹화하고 각 presentation 완료 뒤 선택된 native surface만 양의 크기로 표시되는지 요구한다. Decode한 전체 frame 수 일치와 녹화 overflow 부재를 검증한다. 양 host fullscreen 및 tab 검사, error 감사와 정상 종료가 통과한다. F212.7b-1과 구현이 완료된 상위 F212.7b를 완료하며 초기 checker 속성 오류를 product 근거와 구분해 보존한다.

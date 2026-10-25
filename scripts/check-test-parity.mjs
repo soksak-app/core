@@ -599,6 +599,39 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-58",
+    implementation: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const lifecycle = s.on(" },
+    ],
+    tests: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
+    ],
+    expected: "The lifecycle fixture targets the dedicated window and declared app identity, completes reference input and two project reopen passes, and removes the canonical project registration.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-74",
+    implementation: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const addedWindows =" },
+    ],
+    tests: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
+    ],
+    expected: "The lifecycle fixture targets the dedicated window and declared app identity, completes reference input and two project reopen passes, and removes the canonical project registration.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-79",
+    implementation: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const canonicalProjectRoot =" },
+    ],
+    tests: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
+    ],
+    expected: "The lifecycle fixture targets the dedicated window and declared app identity, completes reference input and two project reopen passes, and removes the canonical project registration.",
+    levels: ["application"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },

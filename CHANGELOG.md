@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-79: Complete the pending two-host runtime acceptance for lifecycle fixture corrections F239-58, F239-74 and F239-79. Cycle 01 selects the dedicated window, preserves app-named artifacts, matches the AppKit and terminal documents and completes two project close/reopen passes per host. Canonical cleanup, error audits, input-source and baseline restoration, and normal shutdown pass. Close these three fixture corrections; keep the separate ten-cycle input-client acceptance open under F239-47-33.
+
 - F212.7d-1: Record new view creation in dark and light modes and compare three document-background points in every decoded frame against the declared card token. Both macOS arm64 hosts pass complete recordings, error audits and normal shutdown. Close F212.7d-1 and the implemented first-script theme parent F212.7d.
 
 - F212.7b-1: Record both directions of fullscreen-card tab switching and require each completed presentation to expose only the selected native surface with positive dimensions. Validate complete decoded frame counts and no recording overflow. Both-host fullscreen and tab checks, error audits and normal shutdown pass. Close F212.7b-1 and its fully implemented parent F212.7b; retain the initial checker-property error separately from product evidence.
