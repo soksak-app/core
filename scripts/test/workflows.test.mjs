@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const WORKFLOWS = join(ROOT, '.github', 'workflows');
 const HOSTED = ['macos-15', 'ubuntu-26.04-arm'];
+// scripts/test-runner.mjs supplies these values to each test process and its owner test checks that contract.
+const RUNNER_ENVIRONMENT = new Set(['SOKSAK_RUN_ID', 'SOKSAK_RUN_FOLDER']);
 
 const read = (path) => readFileSync(join(ROOT, path), 'utf8');
 
@@ -109,6 +111,8 @@ test('the window-check workflow sets every variable that a window check of the r
     const source = read(`e2e/${file}`);
     for (const match of source.matchAll(/assert\.ok\(process\.env\.(\w+)|const \w+ = process\.env\.(\w+);\s*\n\s*assert\.ok\(\w+,/g)) required.add(match[1] ?? match[2]);
   }
-  const missing = [...required].filter((name) => !new RegExp(`\\b${name}=`).test(text));
+  const missing = [...required].filter((name) => !RUNNER_ENVIRONMENT.has(name) && !new RegExp(`\\b${name}=`).test(text));
   assert.deepEqual(missing, [], `window-checks.yml does not set ${missing.join(', ')}`);
+  assert.match(text, /SOKSAK_CANDIDATE_REGISTRY=file:\/\/\$GITHUB_WORKSPACE\/core\/target\/registry\/index\.json/,
+    'the window-check workflow does not pass the candidate registry built by make install-plugins');
 });

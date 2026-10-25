@@ -74,6 +74,7 @@ jobs:
           make e2e-registry-tls
           make install-plugins CONFIG="$SOKSAK_CONFIG_ROOT/soksak-check-wailsv3"
           make install-plugins CONFIG="$SOKSAK_CONFIG_ROOT/soksak-check-tauriv2"
+          echo "SOKSAK_CANDIDATE_REGISTRY=file://$GITHUB_WORKSPACE/core/target/registry/index.json" >> "$GITHUB_ENV"
       # The harness does not start applications (docs/operations/examples.md#window-checks), so this step starts them. The
       # applications write endpoint.json when they serve; no event reports it to the shell, so the step waits for the file
       # for at most 60 seconds and fails with the name of the application that did not serve.
