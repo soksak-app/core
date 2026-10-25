@@ -98,6 +98,12 @@
   Wails counterpart passes all three locations 1/1. Request, sidecar, surface,
   image, and generation validation remains intact.
 
+- F239-93-6: Add the Tauri stdio counterpart for late image cancellation.
+  The controlled child emits its image after stdin EOF; the owner test confirms
+  the closed surface receives no message and the child exits. The focused test
+  passed 1/1 in 0.409 s previously; the current rerun passes 1/1 in 0.737 s.
+  Production behavior is unchanged.
+
 - F239-113: Update the JavaScript event-catalog fixtures to schema 3 and
   Draft 2020-12 field schemas. Keep raw event-log line schema 2 and reject old
   catalog formats. The preserved Node run failed because audit-run used a

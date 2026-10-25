@@ -1041,6 +1041,61 @@ fn persistent_stop_answers_a_discarded_image_before_service_shutdown() {
     );
 }
 
+// contract: sidecars.stop.stdin-eof-cancels-late-image
+#[test]
+fn stdio_stop_cancels_an_image_emitted_after_stdin_eof() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let program = executable_directory.path().join("echo");
+    let emitted = executable_directory.path().join("late-image-emitted");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$$\" > '{}'\nread open\nprintf '%s\\n' '{{\"surface\":\"surface\",\"body\":{{\"event\":\"opened\"}}}}'\nread close\ncat >/dev/null\nprintf '%s\\n' '{{\"surface\":\"surface\",\"body\":{{\"image\":{{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{{\"id\":7,\"kind\":\"iosurface-global\"}},\"width\":10}}}}}}'\nprintf emitted > '{}'\n",
+        executable_directory.path().join("pid").display(),
+        emitted.display(),
+    );
+    std::fs::write(&program, script).unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#,
+    );
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (window, events) = owner("stdio-late-image", "/projects/stdio-late-image");
+    sidecars
+        .send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    assert_eq!(
+        events.recv_timeout(STALL).unwrap().body.get(),
+        r#"{"event":"opened"}"#
+    );
+
+    sidecars
+        .close_owned(&window, &|surface| surface == "surface")
+        .unwrap();
+    sidecars.stop();
+
+    assert!(
+        emitted.exists(),
+        "the child did not emit its transfer image after stdin EOF"
+    );
+    assert!(
+        events.try_recv().is_err(),
+        "the late transfer image was delivered after its surface closed"
+    );
+    let pid = std::fs::read_to_string(executable_directory.path().join("pid")).unwrap();
+    assert!(
+        !Command::new("/bin/kill")
+            .args(["-0", pid.trim()])
+            .status()
+            .unwrap()
+            .success(),
+        "the stdio sidecar child remained alive after stop"
+    );
+}
+
 // contract: sidecars.retain.sends-authoritative-layout, sidecars.retain.reports-service-failure
 #[test]
 fn persistent_retain_sends_only_layout_surfaces() {

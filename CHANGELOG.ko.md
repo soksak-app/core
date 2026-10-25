@@ -85,6 +85,12 @@
   target, 등록 tick, 최신 accepted sample 사실을 기록한다. `capture_callback_test`
   Red assertion이 1/1 통과했다. Rebuilt host 비교는 남아 있다. Capture timing과
   stop 동작은 바뀌지 않았다.
+- F239-93-6: 늦은 image cancellation의 Tauri stdio counterpart를 추가한다.
+  제어된 child가 stdin EOF 뒤 image를 보내며, owner test는 닫힌 surface에
+  message가 전달되지 않고 child가 종료됨을 확인한다. 집중 test는 0.409초에
+  기존 실행은 1/1 통과했고, 이번 집중 실행도 0.737초에 1/1 통과한다.
+  Production 동작은 바뀌지 않았다.
+
 - F239-113: JavaScript event-catalog fixture를 schema 3 및 Draft 2020-12
   field schema로 갱신한다. Raw event-log line schema 2와 구형 catalog 거부는
   유지한다. 보존된 Node 실행은 audit-run의 schema 2 base catalog 때문에 실패했다.

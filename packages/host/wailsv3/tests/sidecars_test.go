@@ -1563,6 +1563,7 @@ func TestAnImageOfAClosedSurfaceIsAnsweredClosed(t *testing.T) {
 	}
 }
 
+// contract: sidecars.stop.stdin-eof-cancels-late-image
 func TestStopCancelsAnImageEmittedAfterStdioSidecarInputCloses(t *testing.T) {
 	written := captureLog(t)
 	script := "#!/bin/sh\necho $$ > DIR/pid\nread open\nread closed\ncat >/dev/null\n" +
@@ -1575,6 +1576,12 @@ func TestStopCancelsAnImageEmittedAfterStdioSidecarInputCloses(t *testing.T) {
 	sidecars.Close("s2")
 	sidecars.Stop()
 	requireEnded(t, processID(t, directory))
+	owner.mu.Lock()
+	delivered := append([]host.SidecarMessage(nil), owner.events...)
+	owner.mu.Unlock()
+	if len(delivered) != 0 {
+		t.Fatalf("messages delivered while stopping after stdin EOF: %+v, want the late image canceled", delivered)
+	}
 	got := written()
 	if strings.Contains(got, "error host sidecar "+echoSidecar+": answer of the image of closed surface s2: sidecars are stopped") {
 		t.Fatalf("stop logged a failed reply for process-owned output: %s", got)
