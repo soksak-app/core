@@ -3,6 +3,11 @@
 [English](CHANGELOG.md)
 
 ## 미배포
+
+- F239-140: Image detach acknowledgement typed parse 변환 여섯 곳의 이유를
+  기록한다. 잘못되거나 누락된 입력은 이름이 있는 protocol 오류가 된다.
+  Handler는 이를 기록하고 식별할 수 없는 waiter는 timeout까지 유지하거나
+  정확히 일치한 waiter를 실패시킨다. Census owner test가 1/1 통과한다.
 - F239-117: E2E subprocess fixture가 각 case override를 적용하기 전에
   상속된 run metadata를 제거한다. 두 nonempty 값을 요구하는 production
   조건은 유지한다. Red: 유효한 외부 metadata 아래 누락·부분 case가 baseline을

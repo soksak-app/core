@@ -3,6 +3,11 @@
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
+
+- F239-140: Explain six typed image detach acknowledgement parse conversions.
+  Each maps malformed or missing input to a named protocol error; the handler
+  logs it and retains an unidentifiable waiter until timeout or fails an exact
+  matched waiter. The census owner test passes 1/1.
 - F239-117: Clear inherited run metadata from E2E subprocess fixtures before
   applying each case's overrides. Preserve the production requirement for both
   nonempty values. Red: with valid outer metadata, missing and partial cases

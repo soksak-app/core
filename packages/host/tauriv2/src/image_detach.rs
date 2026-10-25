@@ -217,16 +217,19 @@ impl<O: Owner> Sidecars<O> {
             })?;
         let request = ack
             .request
+            // default: malformed, missing, and empty request ids share the explicit no-request-id protocol error below.
             .and_then(|value| serde_json::from_str::<String>(value.get()).ok())
             .filter(|request| !request.is_empty())
             .ok_or_else(|| "image detach acknowledgement has no request id".to_string())?;
         let name = ack
             .name
+            // default: malformed, missing, and empty names share the explicit no-image-name protocol error below.
             .and_then(|value| serde_json::from_str::<String>(value.get()).ok())
             .filter(|name| !name.is_empty())
             .ok_or_else(|| format!("image detach acknowledgement {request} has no image name"))?;
         let generation = ack
             .generation
+            // default: malformed, missing, zero, and out-of-range generations share the explicit invalid-generation error below.
             .and_then(|value| serde_json::from_str::<u64>(value.get()).ok())
             .filter(|generation| *generation > 0)
             .ok_or_else(|| {
@@ -259,10 +262,12 @@ impl<O: Owner> Sidecars<O> {
         drop(waiters);
         let result = match ack
             .ok
+            // default: a missing or non-boolean status becomes the explicit no-boolean-result error below.
             .and_then(|value| serde_json::from_str::<bool>(value.get()).ok())
         {
             Some(true) => match ack
                 .result
+                // default: a missing or malformed success result becomes the explicit no-result error below.
                 .and_then(|value| serde_json::from_str::<String>(value.get()).ok())
                 .as_deref()
             {
@@ -276,6 +281,7 @@ impl<O: Owner> Sidecars<O> {
             },
             Some(false) => match ack
                 .error
+                // default: a missing or malformed rejection reason becomes the explicit no-rejection-reason error below.
                 .and_then(|value| serde_json::from_str::<String>(value.get()).ok())
                 .as_deref()
             {
