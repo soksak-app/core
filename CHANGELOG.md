@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-48-3-11: Record the exact Tauri source-channel adapter test paths. The framework injects `Channel<DeclaredSourceEvent>` and has no Wails typed-channel counterpart. Shared ordering and lifecycle behavior remain covered by Wails owner tests; neither host suite proves live framework IPC delivery. The focused assertion passes 1/1, accepts only the two listed paths and rejects an unlisted sibling. The paired-host audit drops from 10 findings to 8; other findings remain. `make docs-check` passes.
+
 - F239-48-3-10: Add Wails process-wait tests for Darwin timeout and ended-PID
   behavior, plus explicit unsupported errors on Linux and Windows. The paired
   host audit no longer reports the three platform test paths or the shared

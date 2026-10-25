@@ -204,6 +204,24 @@ test("host structure audit reads the allowed file differences from the table row
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/src/extra.rs"], pairs, hostsSpec), ["hosts/tauri/src/extra: no counterpart in hosts/wails"]);
 });
 
+test("host structure audit permits only Tauri channel adapter tests in H15", { timeout: 1000 }, async () => {
+  const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
+  const tracked = [
+    "packages/host/wailsv3/src/host.go",
+    "packages/host/tauriv2/src/host.rs",
+    "packages/host/tauriv2/tests/declared_source_stream/bindings_test.rs",
+    "packages/host/tauriv2/tests/declared_source_stream/stream_test.rs",
+  ];
+  const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H15"] }];
+  assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
+  assert.deepEqual(auditHostPairs([
+    ...tracked,
+    "packages/host/tauriv2/tests/declared_source_stream/unlisted_test.rs",
+  ], pairs, hostsSpec), [
+    "packages/host/tauriv2/tests/declared_source_stream/unlisted_test: no counterpart in packages/host/wailsv3",
+  ]);
+});
+
 test("command argument audit rejects a Tauri command argument that the framework decodes", { timeout: 1000 }, () => {
   const source = `
 #[tauri::command]
