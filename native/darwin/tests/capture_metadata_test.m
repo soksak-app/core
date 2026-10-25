@@ -1,7 +1,9 @@
 // Checks through the real write path that the recording path rejects with an explicit error a sample that lacks a required field of a completed frame (state, presentation time, window rectangle, scale, image),
 // and that an idle frame without an image is only counted.
 #import "../src/capture.m"
+#import "support/records.h"
 #import <CommonCrypto/CommonDigest.h>
+#import "event_ring.h"
 #include <sys/stat.h>
 
 static int failures;
@@ -487,7 +489,17 @@ int main(void) { @autoreleasepool {
     uint64_t (*originalClock)(void) = captureRawClock;
     captureRawClock = controlledRawClock;
     SCStream *testStream = (SCStream *)[NSObject new];
+    SCStream *savedCallbackStream = captureStream;
+    BOOL savedCallbackAcceptance = captureAcceptingSamples;
+    @synchronized ([SPCapture class]) {
+        captureStream = testStream;
+        captureAcceptingSamples = YES;
+    }
     [used stream:testStream didOutputSampleBuffer:measured ofType:SCStreamOutputTypeScreen];
+    @synchronized ([SPCapture class]) {
+        captureStream = savedCallbackStream;
+        captureAcceptingSamples = savedCallbackAcceptance;
+    }
     [testStream release];
     captureRawClock = originalClock;
     dispatch_sync(captureWriter, ^{});
@@ -868,7 +880,17 @@ int main(void) { @autoreleasepool {
     CMSampleBufferRef noTimebaseFrame = sample(NO, @{SCStreamFrameInfoStatus: @(SCFrameStatusIdle),
         SCStreamFrameInfoDisplayTime: @987654322});
     testStream = (SCStream *)[NSObject new];
+    savedCallbackStream = captureStream;
+    savedCallbackAcceptance = captureAcceptingSamples;
+    @synchronized ([SPCapture class]) {
+        captureStream = testStream;
+        captureAcceptingSamples = YES;
+    }
     [used stream:testStream didOutputSampleBuffer:noTimebaseFrame ofType:SCStreamOutputTypeScreen];
+    @synchronized ([SPCapture class]) {
+        captureStream = savedCallbackStream;
+        captureAcceptingSamples = savedCallbackAcceptance;
+    }
     [testStream release];
     CFRelease(noTimebaseFrame);
     captureRawClock = originalClock;
@@ -1014,6 +1036,181 @@ int main(void) { @autoreleasepool {
         && [[NSString stringWithUTF8String:sp_capture_error()] containsString:@"callback status trace capacity exceeded"],
         @"trace overflow fails the recording explicitly");
     check(used.callbackStatusTrace.count == 4096, @"the callback trace never exceeds its declared bound");
+
+    beginSequence(&used);
+    SCStream *previousStream = (SCStream *)[NSObject new];
+    SCStream *currentStream = (SCStream *)[NSObject new];
+    SPCaptureAttempt *previousAttempt = [[SPCaptureAttempt alloc] init];
+    previousAttempt.session = @"capture-previous";
+    SPCaptureAttempt *currentAttempt = [[SPCaptureAttempt alloc] init];
+    currentAttempt.session = @"capture-current";
+    objc_setAssociatedObject(previousStream, &captureAttemptAssociationKey, previousAttempt, OBJC_ASSOCIATION_RETAIN);
+    objc_setAssociatedObject(currentStream, &captureAttemptAssociationKey, currentAttempt, OBJC_ASSOCIATION_RETAIN);
+    SCStream *savedStream = captureStream;
+    BOOL savedAcceptingSamples = captureAcceptingSamples;
+    @synchronized([SPCapture class]) {
+        captureStream = currentStream;
+        captureAcceptingSamples = YES;
+    }
+    dispatch_semaphore_t savedCaughtUp = captureCaughtUp;
+    dispatch_semaphore_t fixtureCaughtUp = dispatch_semaphore_create(0);
+    captureCaughtUp = fixtureCaughtUp;
+    dispatch_semaphore_t savedFirstFrame = captureFirstFrame;
+    dispatch_semaphore_t fixtureFirstFrame = dispatch_semaphore_create(0);
+    captureFirstFrame = fixtureFirstFrame;
+    uint64_t savedStopAfter = captureStopAfter;
+    uint64_t savedStartedAt = captureStartedAt;
+    BOOL savedResizing = captureResizing;
+    captureResizing = NO;
+    captureStartedAt = 0;
+    CMSampleBufferRef previousSample = sample(YES, complete(nil));
+    CMSampleBufferRef repeatedPreviousSample = sample(YES, complete(nil));
+    uint64_t previousDisplayTime = 0;
+    BOOL hasPreviousDisplayTime = previousSample != NULL && displayTime(previousSample, &previousDisplayTime);
+    captureStopAfter = previousDisplayTime;
+    int writtenBeforeStale = used.written;
+    int queuedBeforeStale = used.queued;
+    NSUInteger traceBeforeStale = used.callbackStatusTrace.count;
+    __block long staleStopSignal = 0;
+    __block long staleReadySignal = 0;
+    const int8_t captureTracePolicy[SP_CLASS_COUNT] = {SP_EVENT_DEBUG, SP_EVENT_ERROR, SP_EVENT_ERROR,
+        SP_EVENT_ERROR, SP_EVENT_ERROR};
+    const int8_t defaultCapturePolicy[SP_CLASS_COUNT] = {SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR,
+        SP_EVENT_ERROR, SP_EVENT_ERROR};
+    check(sp_event_set_policy(captureTracePolicy), @"the fixture enables lifecycle debug events before capture");
+    NSArray<NSDictionary *> *staleEvents = capturedEvents(^{
+        if (previousSample != NULL)
+            [used stream:previousStream didOutputSampleBuffer:previousSample ofType:SCStreamOutputTypeScreen];
+        if (repeatedPreviousSample != NULL)
+            [used stream:previousStream didOutputSampleBuffer:repeatedPreviousSample ofType:SCStreamOutputTypeScreen];
+        dispatch_sync(captureWriter, ^{});
+        staleStopSignal = dispatch_semaphore_wait(captureCaughtUp, DISPATCH_TIME_NOW);
+        staleReadySignal = dispatch_semaphore_wait(captureFirstFrame, DISPATCH_TIME_NOW);
+    });
+    check(sp_event_set_policy(defaultCapturePolicy), @"the fixture restores the default error-only event policy");
+    NSMutableArray<NSDictionary *> *discardedCallbacks = [NSMutableArray array];
+    for (NSDictionary *event in staleEvents) {
+        NSDictionary *fields = event[@"fields"];
+        if ([event[@"name"] isEqual:@"native.capture.lifecycle"]
+            && [fields[@"phase"] isEqual:@"sample-discarded"])
+            [discardedCallbacks addObject:event];
+    }
+    check(previousSample != NULL && hasPreviousDisplayTime && previousAttempt.firstSampleSeen
+        && !currentAttempt.firstSampleSeen && used.written == writtenBeforeStale
+        && used.queued == queuedBeforeStale && used.callbackStatusTrace.count == traceBeforeStale
+        && captureStopAfter == previousDisplayTime && staleStopSignal != 0 && staleReadySignal != 0
+        && strlen(sp_capture_error()) == 0 && discardedCallbacks.count == 2
+        && [discardedCallbacks[0][@"fields"][@"session"] isEqual:previousAttempt.session]
+        && [discardedCallbacks[1][@"fields"][@"session"] isEqual:previousAttempt.session]
+        && [discardedCallbacks[0][@"fields"][@"reason"] isEqual:@"stream-replaced"]
+        && [discardedCallbacks[1][@"fields"][@"reason"] isEqual:@"stream-replaced"],
+        [NSString stringWithFormat:@"repeated valid late samples record only their old attempt and leave current capture state unchanged (old %p current %p, old attempt %d, current attempt %d, discarded %lu, written %d/%d, queued %d/%d, trace %lu/%lu, stop %llu/%llu, stop signaled %d, ready signaled %d, error %@)",
+            previousStream, currentStream,
+            previousAttempt.firstSampleSeen, currentAttempt.firstSampleSeen,
+            (unsigned long)discardedCallbacks.count,
+            used.written, writtenBeforeStale, used.queued, queuedBeforeStale,
+            (unsigned long)used.callbackStatusTrace.count, (unsigned long)traceBeforeStale,
+            (unsigned long long)captureStopAfter, (unsigned long long)previousDisplayTime,
+            staleStopSignal == 0, staleReadySignal == 0, [NSString stringWithUTF8String:sp_capture_error()]]);
+    if (previousSample != NULL) CFRelease(previousSample);
+    if (repeatedPreviousSample != NULL) CFRelease(repeatedPreviousSample);
+
+    CMSampleBufferRef currentSample = sample(YES, complete(nil));
+    uint64_t currentDisplayTime = 0;
+    BOOL hasCurrentDisplayTime = currentSample != NULL && displayTime(currentSample, &currentDisplayTime);
+    captureStopAfter = currentDisplayTime;
+    long currentStopSignal = -1;
+    long currentReadySignal = -1;
+    if (currentSample != NULL) {
+        [used stream:currentStream didOutputSampleBuffer:currentSample ofType:SCStreamOutputTypeScreen];
+        dispatch_sync(captureWriter, ^{});
+        currentStopSignal = dispatch_semaphore_wait(captureCaughtUp, DISPATCH_TIME_NOW);
+        currentReadySignal = dispatch_semaphore_wait(captureFirstFrame, DISPATCH_TIME_NOW);
+    }
+    check(currentSample != NULL && hasCurrentDisplayTime && currentAttempt.firstSampleSeen
+        && used.written == writtenBeforeStale + 1
+        && used.queued == queuedBeforeStale + 1 && used.callbackStatusTrace.count == traceBeforeStale + 1
+        && captureStopAfter == 0 && currentStopSignal == 0 && currentReadySignal == 0
+        && strlen(sp_capture_error()) == 0,
+        [NSString stringWithFormat:@"the current stream sample still updates its recording and satisfies the stop boundary (current %p, attempt %d, written %d, queued %d, trace %lu, stop %llu, stop signaled %d, ready signaled %d, error %@)",
+            currentStream, currentAttempt.firstSampleSeen, used.written, used.queued, (unsigned long)used.callbackStatusTrace.count,
+            (unsigned long long)captureStopAfter, currentStopSignal == 0, currentReadySignal == 0,
+            [NSString stringWithUTF8String:sp_capture_error()]]);
+    if (currentSample != NULL) CFRelease(currentSample);
+
+    CMSampleBufferRef retiredSample = sample(YES, complete(nil));
+    uint64_t retiredDisplayTime = 0;
+    BOOL hasRetiredDisplayTime = retiredSample != NULL && displayTime(retiredSample, &retiredDisplayTime);
+    captureStopAfter = retiredDisplayTime;
+    int writtenBeforeRetired = used.written;
+    int queuedBeforeRetired = used.queued;
+    NSUInteger traceBeforeRetired = used.callbackStatusTrace.count;
+    closeCaptureSampleIntake(currentStream);
+    check(sp_event_set_policy(captureTracePolicy), @"the fixture enables lifecycle debug events for the retired stream");
+    __block long retiredStopSignal = -1;
+    __block long retiredReadySignal = -1;
+    NSArray<NSDictionary *> *retiredEvents = capturedEvents(^{
+        if (retiredSample != NULL)
+            [used stream:currentStream didOutputSampleBuffer:retiredSample ofType:SCStreamOutputTypeScreen];
+        dispatch_sync(captureWriter, ^{});
+        retiredStopSignal = dispatch_semaphore_wait(captureCaughtUp, DISPATCH_TIME_NOW);
+        retiredReadySignal = dispatch_semaphore_wait(captureFirstFrame, DISPATCH_TIME_NOW);
+    });
+    check(sp_event_set_policy(defaultCapturePolicy), @"the fixture restores the default error-only event policy");
+    NSMutableArray<NSDictionary *> *retiredCallbacks = [NSMutableArray array];
+    for (NSDictionary *event in retiredEvents) {
+        NSDictionary *fields = event[@"fields"];
+        if ([event[@"name"] isEqual:@"native.capture.lifecycle"]
+            && [fields[@"phase"] isEqual:@"sample-discarded"])
+            [retiredCallbacks addObject:event];
+    }
+    check(retiredSample != NULL && hasRetiredDisplayTime && used.written == writtenBeforeRetired
+        && used.queued == queuedBeforeRetired && used.callbackStatusTrace.count == traceBeforeRetired
+        && captureStopAfter == retiredDisplayTime && retiredStopSignal != 0 && retiredReadySignal != 0
+        && strlen(sp_capture_error()) == 0 && retiredCallbacks.count == 1
+        && [retiredCallbacks[0][@"fields"][@"session"] isEqual:currentAttempt.session]
+        && [retiredCallbacks[0][@"fields"][@"reason"] isEqual:@"sample-intake-closed"],
+        [NSString stringWithFormat:@"a callback queued after the sample-intake fence is recorded against the stopped attempt without mutating it (written %d/%d, queued %d/%d, trace %lu/%lu, stop %llu/%llu, stop signaled %d, ready signaled %d, discarded %lu, error %@)",
+            used.written, writtenBeforeRetired, used.queued, queuedBeforeRetired,
+            (unsigned long)used.callbackStatusTrace.count, (unsigned long)traceBeforeRetired,
+            (unsigned long long)captureStopAfter, (unsigned long long)retiredDisplayTime,
+            retiredStopSignal == 0, retiredReadySignal == 0, (unsigned long)retiredCallbacks.count,
+            [NSString stringWithUTF8String:sp_capture_error()]]);
+    if (retiredSample != NULL) CFRelease(retiredSample);
+
+    SCStream *unattributedStream = (SCStream *)[NSObject new];
+    CMSampleBufferRef unattributedSample = sample(YES, complete(nil));
+    int writtenBeforeUnattributed = used.written;
+    int queuedBeforeUnattributed = used.queued;
+    NSString *unattributedRecord = capturedRecords(^{
+        if (unattributedSample != NULL)
+            [used stream:unattributedStream didOutputSampleBuffer:unattributedSample ofType:SCStreamOutputTypeScreen];
+        dispatch_sync(captureWriter, ^{});
+    });
+    check(unattributedSample != NULL && used.written == writtenBeforeUnattributed
+        && used.queued == queuedBeforeUnattributed
+        && [unattributedRecord containsString:@"error native capture sample: discarded callback has no stream attempt context"],
+        @"a discarded callback without an attempt context is reported without changing the recording");
+    if (unattributedSample != NULL) CFRelease(unattributedSample);
+    [unattributedStream release];
+
+    objc_setAssociatedObject(previousStream, &captureAttemptAssociationKey, nil, OBJC_ASSOCIATION_ASSIGN);
+    objc_setAssociatedObject(currentStream, &captureAttemptAssociationKey, nil, OBJC_ASSOCIATION_ASSIGN);
+    [previousAttempt release];
+    [currentAttempt release];
+    @synchronized([SPCapture class]) {
+        captureStream = savedStream;
+        captureAcceptingSamples = savedAcceptingSamples;
+    }
+    captureStopAfter = savedStopAfter;
+    captureStartedAt = savedStartedAt;
+    captureResizing = savedResizing;
+    captureCaughtUp = savedCaughtUp;
+    captureFirstFrame = savedFirstFrame;
+    dispatch_release(fixtureCaughtUp);
+    dispatch_release(fixtureFirstFrame);
+    [previousStream release];
+    [currentStream release];
 
     NSError *removal = nil;
     check([[NSFileManager defaultManager] removeItemAtPath:directory error:&removal],

@@ -35,6 +35,8 @@ static dispatch_semaphore_t captureStartDone;
 static uint64_t captureStopAfter;
 static dispatch_semaphore_t captureCaughtUp;
 static dispatch_queue_t captureQueue;
+static SCStream* captureStream = nil;
+static BOOL captureAcceptingSamples = NO;
 static int captureBefore;
 static long captureWindowNumber;
 // The serial queue that writes frames to disk, and the upper limit of frames that wait to be written.
@@ -224,6 +226,12 @@ static SPCaptureAttempt *captureAttemptForStream(SCStream *stream) {
 - (void)processSample:(CMSampleBufferRef)sample status:(SCFrameStatus)status hasStatus:(BOOL)hasStatus
     displayTime:(uint64_t)shown hasDisplayTime:(BOOL)hasDisplayTime;
 @end
+
+static void closeCaptureSampleIntake(SCStream *stream) {
+    @synchronized ([SPCapture class]) {
+        if (captureStream == stream) captureAcceptingSamples = NO;
+    }
+}
 
 // frameInfo reads the value of key from the information dictionary attached to a frame. It is NULL if the dictionary
 // or the value is missing.
@@ -655,6 +663,28 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         [attempt recordFirstSampleType:type statusPresent:hasStatus status:sampleStatus
             displayTimePresent:hasDisplayTime displayTimeMachTicks:shown callbackMachTicks:callbackTime];
     }
+    // Keep old-attempt diagnostics above, but retired streams cannot reach the shared recording.
+    NSString *discardReason = nil;
+    @synchronized ([SPCapture class]) {
+        if (stream == nil || captureStream != stream) discardReason = @"stream-replaced";
+        else if (!captureAcceptingSamples) discardReason = @"sample-intake-closed";
+    }
+    if (discardReason != nil) {
+        if (attempt != nil) {
+            SCFrameStatus sampleStatus = SCFrameStatusComplete;
+            BOOL hasStatus = frameStatus(sample, &sampleStatus);
+            uint64_t shown = 0;
+            BOOL hasDisplayTime = displayTime(sample, &shown);
+            [attempt emit:@"sample-discarded" level:SP_EVENT_DEBUG callbackMachTicks:@(callbackTime)
+                sampleType:@(type) statusPresent:hasStatus status:@(sampleStatus)
+                displayTimePresent:hasDisplayTime displayTimeMachTicks:hasDisplayTime
+                    ? [NSString stringWithFormat:@"%llu", (unsigned long long)shown] : nil
+                error:nil reason:discardReason];
+        } else {
+            sp_log_error("capture sample", "discarded callback has no stream attempt context");
+        }
+        return;
+    }
     [self write:sample callbackTime:callbackTime];
     // A frame presented after the stop request means that the screen up to that time has been fully delivered, even
     // if it is idle.
@@ -945,7 +975,6 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
 // it is queried only once.
 static SCContentFilter* captureFilter = nil;
 static SCStreamConfiguration* captureConfig = nil;
-static SCStream* captureStream = nil;
 static SPCapture* captureSink = nil;
 static NSString* captureError = nil;
 
@@ -1408,7 +1437,10 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         return captureOperationFailure(errorOut, @"capture stream allocation failed");
     }
     objc_setAssociatedObject(stream, &captureAttemptAssociationKey, attempt, OBJC_ASSOCIATION_RETAIN);
-    @synchronized([SPCapture class]) { captureStream = stream; }
+    @synchronized([SPCapture class]) {
+        captureStream = stream;
+        captureAcceptingSamples = YES;
+    }
     NSError* error = nil;
     captureQueue = dispatch_queue_create("sp.capture", NULL);
     [stream addStreamOutput:captureSink
@@ -1419,7 +1451,10 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         NSString *message = [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription];
         setCaptureError(message);
         sp_log_error("capture start", message.UTF8String);
-        @synchronized([SPCapture class]) { captureStream = nil; }
+        @synchronized([SPCapture class]) {
+            captureAcceptingSamples = NO;
+            captureStream = nil;
+        }
         [stream release];
         sp_image_capture_match_end();
         [attempt release];
@@ -1537,7 +1572,9 @@ int sp_capture_stop(double after) {
     if (dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
         setCaptureError(@"capture stop did not complete within 5000ms");
     }
-    dispatch_sync(captureQueue, ^{});
+    // Close sample intake on the sample queue after earlier callbacks finish. Later callbacks retain their
+    // attempt diagnostics but cannot reach the shared sink while artifacts are finalized.
+    dispatch_sync(captureQueue, ^{ closeCaptureSampleIntake(stream); });
     // Source manifest finalization closes source intake and drains the shared writer queue.
     finalizeCaptureArtifacts(captureSink);
     @synchronized([SPCapture class]) { captureStream = nil; }

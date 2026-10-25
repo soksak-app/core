@@ -4091,3 +4091,11 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   explicit failure event. `make docs-check` and `make events-check` pass. `make census-check` no longer
   reports this registration and still reports 30 findings outside this item. No
   IME input was sent.
+- F239-81: Reject samples from a replaced or retired ScreenCaptureKit stream
+  before they update the shared capture sink, counts, errors or stop boundary.
+  Preserve each callback's originating attempt diagnostics. Close sample intake
+  on its serial queue before artifact finalization. Record each rejected callback
+  as a gated `sample-discarded` lifecycle event on the original attempt; report
+  a discarded callback without attempt context as an error. The metadata, callback,
+  cleanup and late-stop owner tests pass 1/1; both-host runtime verification is
+  pending.

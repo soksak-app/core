@@ -3937,3 +3937,10 @@
   entrance는 main thread 바깥 호출과 잘못된 인자를 명시적인 failure event로
   거부한다. `make docs-check`, `make events-check`가 통과한다. `make census-check`는 이 등록을 더 이상
   보고하지 않지만 이 항목 범위 밖 finding 30개를 계속 보고한다. IME 입력은 보내지 않았다.
+- F239-81: 교체되거나 종료된 ScreenCaptureKit stream의 sample이 shared capture
+  sink, count, error, stop boundary를 변경하지 않게 거부한다. Callback은 원래
+  attempt 진단을 보존한다. Artifact finalization 전에 serial queue에서 sample
+  intake를 닫는다. 거부 callback마다 원래 attempt에 gated `sample-discarded`
+  lifecycle event를 기록하고 attempt context가 없는 callback은 error로 보고한다.
+  Metadata, callback, cleanup, late-stop owner test가 각각 1/1
+  통과했으며 두 host runtime 검증은 남아 있다.

@@ -3608,6 +3608,14 @@
             "type": "string"
           },
           "phase": {
+            "enum": [
+              "start-request",
+              "start-completion",
+              "first-sample",
+              "delegate-stop",
+              "failed",
+              "sample-discarded"
+            ],
             "type": "string"
           },
           "windowNumber": {
@@ -3755,7 +3763,7 @@
           "delegateStopSeen"
         ]
       },
-      "description": "A bounded ScreenCaptureKit attempt trace. Debug records describe start request, start completion, first sample and delegate stop; the error-level failed record is emitted once per failed attempt and preserves whether start completion or a sample was observed. Time fields are raw Mach ticks, with the captured timebase; display facts are null until a timestamped main-thread observation exists."
+      "description": "A bounded ScreenCaptureKit attempt trace. Debug records describe start request, start completion, first sample, delegate stop and each sample discarded because its stream was replaced or intake closed; discarded records retain the originating attempt and contain no sample bytes. The error-level failed record is emitted once per failed attempt and preserves whether start completion or a sample was observed. Time fields are raw Mach ticks, with the captured timebase; display facts are null until a timestamped main-thread observation exists."
     },
     "native.input.key_down": {
       "layer": "native",
