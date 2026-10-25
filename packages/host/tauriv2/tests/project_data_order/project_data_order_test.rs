@@ -1,8 +1,8 @@
 //! Project ownership and page-selected project publication ordering.
 
 use super::*;
-use std::sync::atomic::{AtomicBool, Ordering};
 use serde_json::json;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // contract: projects.open-does-not-publish-before-page-selection
 #[test]

@@ -1385,12 +1385,14 @@ pub(crate) fn sync_view(
             match attach_view(
                 window,
                 platform,
-                surface,
-                surface_handle,
-                plugin,
-                page,
-                start,
-                origin.clone(),
+                ViewAttachment {
+                    surface,
+                    surface_handle,
+                    plugin,
+                    page,
+                    start,
+                    origin: origin.clone(),
+                },
             ) {
                 Ok(handle) => {
                     if !data.documents.set(&key, handle) {
@@ -1427,16 +1429,28 @@ pub(crate) fn sync_view(
 }
 
 /// Creates the view configuration of a plugin page in the data directory and the installed folder of the plugin.
+struct ViewAttachment<'a> {
+    surface: &'a str,
+    surface_handle: Handle,
+    plugin: &'a str,
+    page: &'a str,
+    start: ViewStart,
+    origin: ViewOrigin,
+}
+
 fn attach_view(
     window: &Window,
     platform: &'static dyn platform::Platform,
-    surface: &str,
-    surface_handle: Handle,
-    plugin: &str,
-    page: &str,
-    start: ViewStart,
-    origin: ViewOrigin,
+    attachment: ViewAttachment<'_>,
 ) -> Result<Handle, String> {
+    let ViewAttachment {
+        surface,
+        surface_handle,
+        plugin,
+        page,
+        start,
+        origin,
+    } = attachment;
     let config = crate::config_directory(window.app_handle()).map_err(|e| e.to_string())?;
     let directory = config.join(DOCUMENT_DATA);
     let directory = directory.to_str().ok_or_else(|| {

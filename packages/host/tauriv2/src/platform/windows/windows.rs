@@ -14,8 +14,8 @@ use std::time::Duration;
 
 use super::{
     ClipboardValue, Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame,
-    Handle, Hit, Insets, Key, Listener, PersistentStream, Platform, Pointer, Raster, WindowBuilder,
-    WindowOverlay,
+    Handle, Hit, ImagePresentation, Insets, Key, Listener, PersistentStream, Platform, Pointer,
+    Raster, WindowBuilder, WindowOverlay,
 };
 
 #[path = "identity.rs"]
@@ -319,18 +319,9 @@ impl Platform for Windows {
     fn present_image(
         &self,
         image: Handle,
-        token_id: u32,
-        nonce: [u8; 16],
-        width: f64,
-        height: f64,
-        scale: f64,
-        generation: u64,
-        raster: u64,
-        sequence: i32,
+        presentation: ImagePresentation,
     ) -> Result<bool, String> {
-        unsupported::present_image(
-            image, token_id, nonce, width, height, scale, generation, raster, sequence,
-        )
+        unsupported::present_image(image, presentation)
     }
     fn focus_image(&self, image: Handle) -> Result<(), String> {
         unsupported::focus_image(image)

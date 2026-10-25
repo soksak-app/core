@@ -1476,14 +1476,16 @@ where
                         platform
                             .present_image(
                                 handle,
-                                id,
-                                nonce,
-                                width as f64,
-                                height as f64,
-                                scale,
-                                generation,
-                                raster,
-                                sequence,
+                                platform::ImagePresentation {
+                                    token_id: id,
+                                    nonce,
+                                    width: width as f64,
+                                    height: height as f64,
+                                    scale,
+                                    generation,
+                                    raster,
+                                    sequence,
+                                },
                             )
                             .and_then(|presented| {
                                 presented

@@ -264,6 +264,27 @@ pub struct Raster {
     pub scale: f64,
 }
 
+/// The source identity and geometry of one image-region presentation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ImagePresentation {
+    /// The global IOSurface identifier.
+    pub token_id: u32,
+    /// The 16-byte nonce checked against the IOSurface.
+    pub nonce: [u8; 16],
+    /// The source image width in device pixels.
+    pub width: f64,
+    /// The source image height in device pixels.
+    pub height: f64,
+    /// The scale at which the source image was created.
+    pub scale: f64,
+    /// The source generation.
+    pub generation: u64,
+    /// The source raster identity.
+    pub raster: u64,
+    /// The source frame sequence.
+    pub sequence: i32,
+}
+
 /// Resolves a request of the core root of a view of plugin for url_path (docs/spec/plugin-processes.md, rule 4). It returns
 /// None for a path that is not served.
 pub type CoreRootResolver =
@@ -532,18 +553,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// created. generation, raster and sequence identify the source transfer retained by the native snapshot; they do
     /// not report physical display presentation. It returns true on success, and false when it was not found or the
     /// size does not match. Call it on the main thread.
-    fn present_image(
-        &self,
-        image: Handle,
-        token_id: u32,
-        nonce: [u8; 16],
-        width: f64,
-        height: f64,
-        scale: f64,
-        generation: u64,
-        raster: u64,
-        sequence: i32,
-    ) -> Result<bool, String>;
+    fn present_image(&self, image: Handle, presentation: ImagePresentation)
+    -> Result<bool, String>;
     /// Makes the region the first responder and sends the focus event. Call it on the main thread.
     fn focus_image(&self, image: Handle) -> Result<(), String>;
     /// Stores the caret (text cursor) position. Call it on the main thread.

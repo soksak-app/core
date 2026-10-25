@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-61: Resolve the final Rust format and Clippy findings without
+  changing image presentation order, view attachment, or project-window
+  cleanup. Default and diagnostics Clippy checks for `soksak-host-tauriv2`
+  pass with `-D warnings`; the focused project-window cleanup test passes
+  1/1, and `cargo fmt --all --check` passes. The Windows-target check stopped
+  in `ring` because `aarch64-w64-mingw32-clang` is unavailable, so Windows
+  Rust compilation remains unverified. No app was built or launched.
+
 - F239-70-1: Check the input actions across the controlled `unmarkText` and `insertNewline:` transactions. The owner Red showed that the final transaction carries the newline command while the preceding transaction commits `ㅏㅏ` once. The corrected assertion verifies both actions and empty errors/preedit; `image_region_decoration_test` passes 1/1.
 - F239-70-2: Consume the capture checker’s injected stop error once. The preserved native full-suite Red showed that the persistent override contaminated later recordings and failed three stop-error assertions. The test wrapper now retains fault evidence while limiting the injected error to one read; `capture_checker_test` passes 1/1.
 - F239-71: Give the late-stop fixture a private output directory required by capture finalization. `capture_stop_late_test` passes 1/1. The lifecycle wrapper now expects the four recordings performed by its embedded acceptance test and observes 4/4 start/stop requests and replies. The focused run still fails because no first frame arrived within 10 seconds; stop then timed out after 1 second under reported system load 205. The cause is unclassified and the item remains open.

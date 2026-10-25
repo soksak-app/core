@@ -8,8 +8,9 @@ use tauri::Window;
 use tauri::webview::PlatformWebview;
 
 use super::super::{
-    ClipboardValue, Connection, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, Insets,
-    Key, Listener, PersistentStream, Pointer, Raster, WindowBuilder, WindowOverlay,
+    ClipboardValue, Connection, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
+    ImagePresentation, Insets, Key, Listener, PersistentStream, Pointer, Raster, WindowBuilder,
+    WindowOverlay,
 };
 
 /// Returns an error that contains operation in its name.
@@ -695,17 +696,7 @@ pub fn image_facts(_image: Handle) -> Result<String, String> {
     missing("image facts")
 }
 
-pub fn present_image(
-    _image: Handle,
-    _token_id: u32,
-    _nonce: [u8; 16],
-    _width: f64,
-    _height: f64,
-    _scale: f64,
-    _generation: u64,
-    _raster: u64,
-    _sequence: i32,
-) -> Result<bool, String> {
+pub fn present_image(_image: Handle, _presentation: ImagePresentation) -> Result<bool, String> {
     missing("image presentation")
 }
 

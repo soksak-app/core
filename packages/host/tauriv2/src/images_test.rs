@@ -9,7 +9,7 @@ fn reload_captures_each_image_supplier_before_advancing_generation() {
     for name in ["second", "first"] {
         let key = (surface.to_string(), name.to_string());
         images.reserve(&key, "owner", "fixture-sidecar").unwrap();
-        assert!(images.set(&key, name.len() as usize));
+        assert!(images.set(&key, name.len()));
     }
 
     let targets = images.begin_reload(surface);

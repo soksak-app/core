@@ -18,8 +18,9 @@ use tauri::webview::PlatformWebview;
 use std::time::Duration;
 
 use super::{
-    Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, Insets,
-    Key, Listener, PersistentStream, Platform, Pointer, Raster, WindowBuilder, WindowOverlay,
+    Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
+    ImagePresentation, Insets, Key, Listener, PersistentStream, Platform, Pointer, Raster,
+    WindowBuilder, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -453,18 +454,9 @@ impl Platform for Darwin {
     fn present_image(
         &self,
         image: Handle,
-        token_id: u32,
-        nonce: [u8; 16],
-        width: f64,
-        height: f64,
-        scale: f64,
-        generation: u64,
-        raster: u64,
-        sequence: i32,
+        presentation: ImagePresentation,
     ) -> Result<bool, String> {
-        image::present(
-            image, token_id, &nonce, width, height, scale, generation, raster, sequence,
-        )
+        image::present(image, presentation)
     }
     fn focus_image(&self, image: Handle) -> Result<(), String> {
         image::focus(image);

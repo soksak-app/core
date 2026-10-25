@@ -2,7 +2,7 @@
 
 use std::ffi::{CStr, CString, c_char, c_void};
 
-use super::super::{Handle, Raster};
+use super::super::{Handle, ImagePresentation, Raster};
 
 type ImageEvent = extern "C" fn(*mut c_void, *const c_char);
 
@@ -118,28 +118,18 @@ pub fn facts(image: Handle) -> Result<String, String> {
 
 /// Displays an external IOSurface. It returns true on success, and false when it was not found or the size does not
 /// match.
-pub fn present(
-    image: Handle,
-    token_id: u32,
-    nonce: &[u8; 16],
-    width: f64,
-    height: f64,
-    scale: f64,
-    generation: u64,
-    raster: u64,
-    sequence: i32,
-) -> Result<bool, String> {
+pub fn present(image: Handle, presentation: ImagePresentation) -> Result<bool, String> {
     let accepted = unsafe {
         sp_region_present(
             image as *mut c_void,
-            token_id,
-            nonce.as_ptr(),
-            width,
-            height,
-            scale,
-            generation,
-            raster,
-            sequence,
+            presentation.token_id,
+            presentation.nonce.as_ptr(),
+            presentation.width,
+            presentation.height,
+            presentation.scale,
+            presentation.generation,
+            presentation.raster,
+            presentation.sequence,
         )
     };
     if accepted {

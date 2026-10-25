@@ -1071,20 +1071,19 @@ fn configure_project_window(
 ) -> Result<(), String> {
     if let Some(geometry) =
         geometry.filter(|geometry| geometry.width > 0.0 && geometry.height > 0.0)
+        && let Err(error) = configure(&geometry)
     {
-        if let Err(error) = configure(&geometry) {
-            let cleanup = if created {
-                close_created()
-            } else {
-                restore_existing()
-            };
-            return match cleanup {
-                Ok(()) => Err(error),
-                Err(cleanup_error) => Err(format!(
-                    "{error}; project window cleanup failed: {cleanup_error}"
-                )),
-            };
-        }
+        let cleanup = if created {
+            close_created()
+        } else {
+            restore_existing()
+        };
+        return match cleanup {
+            Ok(()) => Err(error),
+            Err(cleanup_error) => Err(format!(
+                "{error}; project window cleanup failed: {cleanup_error}"
+            )),
+        };
     }
     Ok(())
 }

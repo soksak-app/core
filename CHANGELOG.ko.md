@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-61: Image presentation 순서, view attachment, project-window
+  cleanup을 바꾸지 않고 최종 Rust format 및 Clippy finding을 해결한다.
+  `soksak-host-tauriv2`의 default 및 diagnostics Clippy가 `-D warnings`로
+  통과하고, focused project-window cleanup test는 1/1, `cargo fmt --all
+  --check`도 통과한다. Windows-target 검사는 `ring`에서
+  `aarch64-w64-mingw32-clang`을 찾지 못해 중단되어 Windows Rust compilation은
+  검증되지 않았다. 앱은 빌드하거나 실행하지 않았다.
+
 - F239-70-1: 제어된 `unmarkText` 및 `insertNewline:` transaction의 input action을 확인한다. Owner Red는 마지막 transaction에 newline command가 있고 앞 transaction이 `ㅏㅏ`를 한 번 commit함을 보였다. 수정된 assertion은 두 action과 빈 error/preedit를 확인하며 `image_region_decoration_test`가 1/1 통과한다.
 - F239-70-2: Capture checker의 injected stop error를 한 번 소비한다. 보존된 native full-suite Red는 지속되는 override가 이후 recording에 영향을 주어 stop-error assertion 세 건이 실패했음을 보였다. Test wrapper는 fault 증거를 유지하면서 injected error를 한 번의 read로 제한하고 `capture_checker_test`가 1/1 통과한다.
 - F239-71: Late-stop fixture에 capture finalization에 필요한 private output directory를 제공한다. `capture_stop_late_test`가 1/1 통과한다. Lifecycle wrapper는 embedded acceptance test가 수행하는 네 번의 recording을 기대하며 start/stop 요청과 reply를 4/4 관측한다. Focused run은 10초 내 첫 frame이 오지 않아 계속 실패했고 stop은 추가 1초 뒤 timeout됐다. 당시 보고된 system load는 205였으며 원인은 분류되지 않았다. 항목은 열린 상태다.
