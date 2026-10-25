@@ -84,15 +84,18 @@ static NSUInteger bluePixelCount(NSBitmapImageRep *image) {
     return count;
 }
 
-static NSDictionary *lastInputTransaction(void) {
-    for (NSDictionary *event in events.reverseObjectEnumerator) if ([event[@"type"] isEqual:@"input"]) return event;
-    return nil;
+static NSArray<NSDictionary *> *lastInputTransactions(NSUInteger count) {
+    NSMutableArray<NSDictionary *> *transactions = [NSMutableArray array];
+    for (NSDictionary *event in events.reverseObjectEnumerator) {
+        if (![event[@"type"] isEqual:@"input"]) continue;
+        [transactions addObject:event];
+        if (transactions.count == count) break;
+    }
+    return [[transactions reverseObjectEnumerator] allObjects];
 }
 
-static NSDictionary *lastInsertAction(NSDictionary *transaction) {
-    for (NSDictionary *action in [transaction[@"actions"] reverseObjectEnumerator]) {
-        if ([action[@"type"] isEqual:@"insert"]) return action;
-    }
+static NSDictionary *lastInputTransaction(void) {
+    for (NSDictionary *event in events.reverseObjectEnumerator) if ([event[@"type"] isEqual:@"input"]) return event;
     return nil;
 }
 
@@ -185,8 +188,28 @@ int main(void) { @autoreleasepool {
     NSUInteger clearedBlue = clearedFrame ? bluePixelCount(clearedFrame) : 0;
     check(clearedBlue == 0, [NSString stringWithFormat:
         @"Enter-equivalent input leaves no native underline pixels (measured %lu)", (unsigned long)clearedBlue]);
-    check([[lastInsertAction(lastInputTransaction()) objectForKey:@"text"] isEqual:@"ㅏㅏ"],
-        @"Enter-equivalent input still commits the complete marked text once");
+    NSArray<NSDictionary *> *finalTransactions = lastInputTransactions(2);
+    NSMutableArray<NSString *> *finalInsertTexts = [NSMutableArray array];
+    BOOL finalTransactionsClean = finalTransactions.count == 2;
+    for (NSDictionary *transaction in finalTransactions) {
+        finalTransactionsClean = finalTransactionsClean
+            && [transaction[@"errors"] isKindOfClass:NSArray.class] && [transaction[@"errors"] count] == 0
+            && [transaction[@"preedit"][ @"text"] isEqual:@""];
+        for (NSDictionary *action in transaction[@"actions"]) {
+            if ([action[@"type"] isEqual:@"insert"]) [finalInsertTexts addObject:action[@"text"] ?: @""];
+        }
+    }
+    NSDictionary *newlineAction = finalTransactions.count == 2
+        ? [finalTransactions[1][@"actions"] firstObject] : nil;
+    NSArray *firstActions = finalTransactions.count == 2 ? finalTransactions[0][@"actions"] : nil;
+    NSArray *secondActions = finalTransactions.count == 2 ? finalTransactions[1][@"actions"] : nil;
+    BOOL oneInsertTransaction = firstActions.count == 1
+        && [firstActions[0][@"type"] isEqual:@"insert"];
+    BOOL newlinePreserved = secondActions.count == 1 && [newlineAction[@"type"] isEqual:@"command"]
+        && [newlineAction[@"selector"] isEqual:@"insertNewline:"];
+    check(oneInsertTransaction && finalInsertTexts.count == 1 && [finalInsertTexts.firstObject isEqual:@"ㅏㅏ"]
+        && newlinePreserved && finalTransactionsClean,
+        @"unmark and Enter-equivalent command transactions commit marked text once, retain newline, and finish clean");
 
     sp_region_close(region);
     webviewDetachSurface(surface);

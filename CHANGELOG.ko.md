@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-70-1: 제어된 `unmarkText` 및 `insertNewline:` transaction의 input action을 확인한다. Owner Red는 마지막 transaction에 newline command가 있고 앞 transaction이 `ㅏㅏ`를 한 번 commit함을 보였다. 수정된 assertion은 두 action과 빈 error/preedit를 확인하며 `image_region_decoration_test`가 1/1 통과한다.
 - F239-64: Workbench test fixture를 source-generation, view-reply identity, placement-result contract에 맞춘다. 보존된 전체 package 실행에서 generation/page field 누락, readiness mock export 누락, 잘못된 duplicate placement, 이전 placement error prefix가 확인됐다. 소유 test 파일 7개가 81/81 통과하며 production validation은 바꾸지 않았다.
 
 - F239-65: E2E runner test entrypoint를 module 위치 기준으로 해석해 호출자의 working directory에 의존하지 않게 한다. Red: `e2e/`에서 실행한 `node --test test/run.test.mjs`가 존재하지 않는 `e2e/e2e/run.mjs`를 불러오려 했다. Green: focused test는 `e2e/`와 repository root 양쪽에서 10/10 통과한다. `node --check e2e/test/run.test.mjs`와 `make docs-check`가 통과한다.
