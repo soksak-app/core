@@ -1,6 +1,7 @@
 package host
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -46,13 +47,7 @@ func (c *Sidecars) beginImageDetach(target imageDetachTarget) (string, <-chan im
 	if c.imageDetachRequests == nil {
 		c.imageDetachRequests = map[string]*imageDetachWaiter{}
 	}
-	if c.nextImageDetachRequest == ^uint64(0) {
-		c.mu.Unlock()
-		return "", nil, fmt.Errorf("image detach sidecar %s surface %s image %s generation %d request identifier limit reached",
-			target.Sidecar, target.Surface, target.Name, target.Generation)
-	}
-	c.nextImageDetachRequest++
-	request := fmt.Sprintf("image-detach-%d", c.nextImageDetachRequest)
+	request := "image-detach-" + rand.Text()
 	waiter := &imageDetachWaiter{target: target, owner: target.Owner, result: make(chan imageDetachResult, 1)}
 	c.imageDetachRequests[request] = waiter
 	c.mu.Unlock()

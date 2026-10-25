@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-184: Generate opaque image-detach request identifiers with the standard random-text API so application restarts do not reuse a persistent supplier request ID. The independent-manager collision fails before correction; all eight owning detach tests pass afterward. The rebuilt Wails runtime passes reload and recorded divider-drag alignment with clean error audit, restored frontmost baseline and normal shutdown; close F239-183 and F239-184. Performance acceptance remains separate.
+
 - F239-183: Remove view-end recording from successful reply, event and request delivery. These worker paths incorrectly mutate UI-thread lifecycle state and mark live views ended. Three owning delivery subcases fail before correction; four top-level delivery and actual-termination owners pass afterward. Runtime crash recovery remains unverified.
 
 - F212.14-3: Report post-DOM commit wait and total native transaction duration, reject invalid stage timestamps and preserve original layout rows before benchmark analysis. Two owner cases fail before correction and all 14 pass afterward. Both-host reports and error audits complete, while unchanged performance targets still fail. Wails shows a 32.829 ms median post-DOM wait; Tauri shows a 26.083 ms median preparation-to-DOM-request interval. These intervals identify different investigation boundaries, not diagnosed product causes.

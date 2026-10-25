@@ -342,3 +342,22 @@ func TestImageDetachWaitsForTheMatchingSupplierAcknowledgement(t *testing.T) {
 		t.Fatal("the matching acknowledgement did not settle the image detach")
 	}
 }
+
+// contract: images.reload.captures-old-image-owner
+func TestImageDetachRequestIdentityDoesNotRestartWithTheApplication(t *testing.T) {
+	requests := map[string]bool{}
+	for _, surface := range []string{"surface-before-restart", "surface-after-restart"} {
+		surfaces := sidecarSessionSurfaces(t)
+		c := surfaces.sidecars
+		c.stopped = false
+		c.running["fixture-sidecar"] = &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 1), closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
+		request, _, err := c.beginImageDetach(imageDetachTarget{Owner: surfaces, Sidecar: "fixture-sidecar", Surface: surface, Name: "view", Generation: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if requests[request] {
+			t.Fatalf("application restart reused detach request %q for another surface", request)
+		}
+		requests[request] = true
+	}
+}

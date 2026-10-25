@@ -146,10 +146,9 @@ type SidecarOwner interface {
 
 // Sidecars manages the sidecar processes of one application and the windows that own surfaces.
 type Sidecars struct {
-	mu                     sync.Mutex
-	imageDetachRequests    map[string]*imageDetachWaiter
-	nextImageDetachRequest uint64
-	imageDetachTimeout     time.Duration
+	mu                  sync.Mutex
+	imageDetachRequests map[string]*imageDetachWaiter
+	imageDetachTimeout  time.Duration
 	// requests remembers the requests with correlation identifiers that wait for a reply (sidecar_reply.go).
 	requests requestLedger
 	// declarations protects declared, displayNames, persistent and basenames.

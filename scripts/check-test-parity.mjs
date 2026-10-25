@@ -668,6 +668,30 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F239-183",
+    implementation: [
+      { file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) replyView(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/view_call_peer_test.go", id: "TestSuccessfulViewDeliveryKeepsTheViewAlive" },
+      { file: "packages/host/wailsv3/src/view_lifecycle_test.go", id: "TestAViewEndStoresHostViewKilledWithItsPluginAndSurface" },
+    ],
+    expected: "Successful reply, event and request delivery preserves the live view while actual termination records its end.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-184",
+    implementation: [
+      { file: "packages/host/wailsv3/src/image_detach.go", symbol: "rand.Text()" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/image_detach_test.go", id: "TestImageDetachRequestIdentityDoesNotRestartWithTheApplication" },
+      { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
+    ],
+    expected: "Detach request identity does not restart with the application and reload reaches recorded divider-drag geometry acceptance.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-182",
     implementation: [
       { file: "packages/window-check/frontmost.mjs", symbol: "frontmost after refusal" },
