@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-168: Apply the declared Cargo deployment environment to Rust repeat and standalone test compilation, discovery and execution. Both owning Red cases inherited ambient 10.9 instead of declared 14.4; both pass after using CARGO_ENV. All 12 runner owners pass with target selection, feature propagation, named doctests and per-test limits preserved.
+
 - F239-167: Record the existing sidecar receive trace before native image dispatch in both transports and hosts. Handled images remain native-only and ordinary messages retain page delivery. Both Red cases miss the handled-image receipt; six dispatch and two complete-body relay owners pass afterward. Both diagnostic hosts build. The focused trace joins 65 Wails and 47 Tauri frame identities without unanswered arrivals; the log audit passes, but both recordings still exceed the unchanged 33 ms cadence criterion.
 
 - F212.12-3: Report the complete per-step page input/layout handling durations before supplier and alignment assertions. A failing drag previously omitted this output or exposed only selected steps after every judgment passed. Syntax checks pass; no additional window acceptance is claimed.

@@ -66,6 +66,9 @@ printf 'running 1 test\\ntest %s ... ok\\n\\ntest result: ok. 1 passed; 0 failed
   const cargo = join(directory, 'cargo');
   writeFileSync(cargo, `#!/bin/sh
 printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'args'))}
+if [ -n "$SOKSAK_TEST_DEPLOYMENT_LOG" ]; then
+  printf '%s\\n' "\${MACOSX_DEPLOYMENT_TARGET-unset}" >> "$SOKSAK_TEST_DEPLOYMENT_LOG" || exit 1
+fi
 case "$*" in
   *--doc*--list*) printf 'list:doctests\\n' >> ${JSON.stringify(targetLog)}; printf 'src/lib.rs - doc_example (line 3): test\\n'; exit 0 ;;
   *--doc*) printf 'running 1 test\\ntest result: ok. 1 passed; 0 failed\\n'; exit 0 ;;
@@ -216,3 +219,22 @@ test('make rust-repeat runs each documentation test of the library with its own 
   const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n');
   assert.ok(calls.some((call) => /--doc -- src\/lib\.rs - doc_example \(line 3\)$/.test(call)), JSON.stringify(calls));
 });
+
+for (const target of ['rust-repeat', 'rust-tests-alone']) {
+  test(`make ${target} applies the declared deployment environment to every Cargo call`, { timeout: 60000 }, (t) => {
+    const { directory } = targetCargo(t);
+    const deploymentLog = join(directory, 'deployment-targets');
+    const args = [target, 'PACKAGE=fixture', 'MACOS_MINIMUM=14.4',
+      `PATH=${directory}:${process.env.PATH}`];
+    if (target === 'rust-repeat') args.push('COUNT=1', 'TEST=fixture::library_case', 'TEST_TARGET=lib');
+    const result = spawnSync('make', args, {
+      cwd: root,
+      env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, MACOSX_DEPLOYMENT_TARGET: '10.9', SOKSAK_TEST_DEPLOYMENT_LOG: deploymentLog },
+      encoding: 'utf8', timeout: 60000,
+    });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const targets = readFileSync(deploymentLog, 'utf8').trim().split('\n');
+    assert.ok(targets.length >= 2, `Cargo build and discovery were not observed: ${JSON.stringify(targets)}`);
+    assert.deepEqual([...new Set(targets)], ['14.4'], 'Cargo inherited a deployment target different from the declared build');
+  });
+}
