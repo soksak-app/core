@@ -199,6 +199,7 @@ export const host = (() => {
       reportListenerError("ordered stream", new TypeError(`unknown event ${message.name}`));
       return;
     }
+    // default: view lifecycle notifications may arrive after their surface subscription is removed; required calls are emitted only after their listener readiness gates.
     for (const listener of [...(orderedSubscribers.get(message.name) ?? [])]) {
       try {
         const result = listener(message.value);

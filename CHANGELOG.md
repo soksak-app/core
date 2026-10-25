@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-80: Preserve no-op delivery when an ordered view notification has no
+  remaining surface subscriber. The request/reply producer paths install their
+  page listeners before host readiness or view composition can emit calls. The
+  runtime owner case confirms a late `view-responsiveness` notification does
+  not report a malformed event or block the next subscribed event. The focused
+  case passes 1/1, the fallback listing recognizes the adjacent reason, and
+  `make docs-check` passes. This verifies the existing contract; no lost-call
+  defect was reproduced.
 - F239-79: Use the declared app name for lifecycle artifact paths and compare cleanup roots after canonicalization. `APPS` has no `id` field; the project registry stores the resolved root, while `mkdtempSync` can return a symlinked path. Red: both hosts failed artifact-directory setup on undefined `app.id`, and a later case reported the removed temporary project as missing. The correction uses `app.name` and `realpathSync(projectRoot)`. Runtime confirmation remains pending.
 
 - F239-66: Correct three Workbench test fixtures that failed at module setup rather than exercising their assertions. The chrome tests use test-scoped runtime mocks; the presentation test exports the runtime binding and prepares its mounted view and theme; the plugin-host test supplies the plugin API exports required by its loaded module graph. The three owning files pass 31/31, with no production changes.

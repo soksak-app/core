@@ -153,6 +153,37 @@ test("ordered event listener errors are reported without blocking later subscrib
   }
 });
 
+test("a late view notification without a surface subscriber does not block later events", async () => {
+  const channels = [];
+  const errors = [];
+  const received = [];
+  class Channel {
+    constructor() { channels.push(this); }
+  }
+  globalThis.window = { __TAURI__: {
+    core: { Channel, invoke: async () => null },
+    event: { listen: async () => () => {} },
+    webview: { getCurrentWebview: () => ({ label: "main" }) },
+  } };
+  globalThis.location = { search: "" };
+  globalThis.dispatchEvent = (event) => { errors.push(event); return true; };
+  try {
+    const { host } = await import("../runtime/index.js?test=ordered-empty-subscriber");
+    await host.on("view-call", (value) => received.push(value));
+    assert.doesNotThrow(() => channels[0].onmessage({
+      name: "view-responsiveness", value: { surface: "closed-surface", responsive: false },
+    }));
+    channels[0].onmessage({ name: "view-call", value: { id: "current-call" } });
+    assert.deepEqual(received, [{ id: "current-call" }]);
+    assert.deepEqual(errors, [], "a notification with no remaining surface listener is not a malformed event");
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+    delete globalThis.dispatchEvent;
+  }
+});
+
+
 test("a reloaded main page registers a fresh ordered channel", async () => {
   const calls = [];
   const channels = [];

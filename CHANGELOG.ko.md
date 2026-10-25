@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-80: Ordered view notification에 현재 surface subscriber가 없을 때
+  no-op 전달을 유지한다. Request/reply producer는 host readiness 또는 view
+  composition이 call을 보낼 수 있기 전에 page listener를 등록한다. Runtime
+  owner case는 늦게 도착한 `view-responsiveness` notification이 malformed
+  event를 보고하지 않고 다음 subscribed event를 막지 않음을 확인한다. 해당
+  focused case는 1/1 통과하고 fallback listing은 인접 reason을 인식하며
+  `make docs-check`도 통과한다. 기존 계약을 검증했으며 lost-call defect는
+  재현되지 않았다.
 - F239-79: Lifecycle artifact 경로에는 선언된 app 이름을 사용하고 canonical root로 cleanup 대상을 비교한다. `APPS`에는 `id` field가 없으며 project registry는 resolved root를 저장하고 `mkdtempSync`는 symbolic link가 포함된 경로를 반환할 수 있다. Red: 두 host 모두 undefined `app.id`로 artifact directory 생성에 실패했고 이후 case는 제거된 임시 project를 찾지 못했다고 보고했다. 수정은 `app.name`과 `realpathSync(projectRoot)`를 사용한다. Runtime 확인은 대기 중이다.
 
 - F239-66: assertion을 실행하지 못하던 Workbench test fixture 세 개를 수정한다. Chrome test는 test-scoped runtime mock을 사용하고, presentation test는 runtime binding을 export하며 mounted view와 theme을 준비한다. Plugin-host test는 로드된 module graph가 요구하는 plugin API export를 제공한다. 소유 파일 세 개가 31/31 통과하며 production 변경은 없다.
