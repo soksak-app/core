@@ -953,13 +953,15 @@ func TestCloseReachesOnlyTheSidecarThatHoldsTheSurface(t *testing.T) {
 	}
 }
 
-// contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail, sidecars.protocol.dropped-message-is-recorded
+// contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail, sidecars.protocol.dropped-message-is-recorded, sidecars.image.retired-owner-dispositions
 func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 	written := captureLog(t)
-	sidecars, directory := scriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread closed2\n"+
-		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}' '{\"surface\":\"ghost\",\"body\":\"x\"}'\nexec sleep 600\n")
+	sidecars, directory := scriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread open3\nread closed2\n"+
+		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s2\",\"body\":{\"image\":{\"name\":17}}}' '{\"surface\":\"s1\",\"body\":\"after\"}'\n"+
+		"read barrier\nprintf '{\"surface\":\"s1\",\"body\":{\"barrier\":%s}}\\n' \"$barrier\"\n"+
+		"printf '%s\\n' '{\"surface\":\"ghost\",\"body\":\"x\"}'\nexec sleep 600\n")
 	owner := newFakeOwner("/projects/a")
-	for _, surface := range []string{"s1", "s2"} {
+	for _, surface := range []string{"s1", "s2", "s3"} {
 		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
 		}
@@ -969,6 +971,20 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 	if event := owner.next(t); event.Surface != "s1" || string(event.Body) != `"after"` {
 		t.Fatalf("first event = %+v", event)
 	}
+	// The script reads the next host request only after both closed-surface messages and the live-surface marker were read.
+	// Closing s3 is the barrier: any erroneous response to either earlier message would reach the script first.
+	sidecars.Close("s3")
+	barrierEvent := owner.next(t)
+	var barrier struct {
+		Barrier struct {
+			Surface string `json:"surface"`
+			Closed  bool   `json:"closed"`
+		} `json:"barrier"`
+	}
+	if barrierEvent.Surface != "s1" || json.Unmarshal(barrierEvent.Body, &barrier) != nil ||
+		barrier.Barrier.Surface != "s3" || !barrier.Barrier.Closed {
+		t.Fatalf("barrier event = %+v, want the close request for s3 after both discarded messages", barrierEvent)
+	}
 	failure := owner.failure(t)
 	if failure.Sidecar != echoSidecar || failure.Surface != "s1" || failure.Reason != "unknown surface ghost" {
 		t.Fatalf("failure = %+v", failure)
@@ -976,6 +992,9 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 	requireEnded(t, processID(t, directory))
 	// The discarded message of s2 is recorded with its body.
 	if want := ` warn host sidecar @fixture/sidecar-echo: message for surface s2 dropped: no window owns the surface: "late"`; !strings.Contains(written(), want) {
+		t.Fatalf("the log has no %q:\n%s", want, written())
+	}
+	if want := ` warn host sidecar @fixture/sidecar-echo: message for surface s2 dropped: no window owns the surface: {"image":{"name":17}}`; !strings.Contains(written(), want) {
 		t.Fatalf("the log has no %q:\n%s", want, written())
 	}
 }
@@ -1531,7 +1550,7 @@ func TestSidecarRequestCarriesTheCorrelationIdentifiers(t *testing.T) {
 	}
 }
 
-// contract: sidecars.image.closed-surface-is-answered
+// contract: sidecars.image.closed-surface-is-answered, sidecars.image.retired-owner-dispositions
 func TestAnImageOfAClosedSurfaceIsAnsweredClosed(t *testing.T) {
 	captureLog(t)
 	// The script sends a transfer image of the closed surface s2, reads the answer of the host and returns it as a message of s1.

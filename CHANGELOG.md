@@ -104,6 +104,14 @@
   passed 1/1 in 0.409 s previously; the current rerun passes 1/1 in 0.737 s.
   Production behavior is unchanged.
 
+- F239-93-5: Map current and retired sidecar image-owner dispositions to
+  shared host-contract cases. Add the Wails scripted-protocol handshake that
+  proves retired non-image and malformed-image messages receive no response
+  before the next close request, while retaining the closed answer for a
+  valid retired image. The focused Wails owner test passes 1/1; the moved
+  Tauri combined current/retired test and valid-retired-image test each pass
+  1/1. The declaration audit remains pending.
+
 - F239-113: Update the JavaScript event-catalog fixtures to schema 3 and
   Draft 2020-12 field schemas. Keep raw event-log line schema 2 and reject old
   catalog formats. The preserved Node run failed because audit-run used a

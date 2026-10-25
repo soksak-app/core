@@ -91,6 +91,13 @@
   기존 실행은 1/1 통과했고, 이번 집중 실행도 0.737초에 1/1 통과한다.
   Production 동작은 바뀌지 않았다.
 
+- F239-93-5: Current 및 retired sidecar image-owner disposition을 공유
+  host-contract case에 연결한다. Wails scripted-protocol handshake를 추가해
+  retired non-image 및 malformed-image 메시지가 다음 close 요청 전에 응답 없이
+  처리됨을 증명하고, valid retired image의 closed answer 검사는 유지한다. 집중
+  Wails owner test 1/1과 이동한 Tauri combined current/retired test 및
+  valid-retired-image test가 각각 1/1 통과한다. Declaration audit은 대기 중이다.
+
 - F239-113: JavaScript event-catalog fixture를 schema 3 및 Draft 2020-12
   field schema로 갱신한다. Raw event-log line schema 2와 구형 catalog 거부는
   유지한다. 보존된 Node 실행은 audit-run의 schema 2 base catalog 때문에 실패했다.

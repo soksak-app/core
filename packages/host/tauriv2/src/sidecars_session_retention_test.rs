@@ -113,6 +113,7 @@ impl ResponseSender for Responses {
     }
 }
 
+// contract: sidecars.image.closed-surface-is-answered, sidecars.image.retired-owner-dispositions
 #[test]
 fn an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer() {
     let registered_surfaces = Arc::new(Mutex::new(HashSet::from(["surface-1".to_string()])));
@@ -164,6 +165,7 @@ fn an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer()
     );
 }
 
+// contract: sidecars.image.retired-owner-dispositions
 #[test]
 fn current_and_retired_owner_paths_keep_their_existing_dispositions() {
     let registered_surfaces = Arc::new(Mutex::new(HashSet::from(["surface-1".to_string()])));
