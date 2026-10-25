@@ -3,6 +3,13 @@
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
+- F239-117: Clear inherited run metadata from E2E subprocess fixtures before
+  applying each case's overrides. Preserve the production requirement for both
+  nonempty values. Red: with valid outer metadata, missing and partial cases
+  probed the baseline and started a child (`/tmp/F239-117-red.log`). Green: the
+  same focused owner test passes 4/4 (`/tmp/F239-117-green.log`). Production
+  runner behavior is unchanged.
+
 - F239-138: Restore the boundary between `sp_capture_wait` and `registerCaptureStopBoundary`.
   Red: the unchanged `capture_metadata_test` target failed to compile with a nested
   function definition and an undeclared helper. Green: the same target compiles

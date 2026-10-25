@@ -61,8 +61,11 @@ async function runWithMetadata(metadata) {
   await chmod(osascript, 0o755);
   await writeFile(childTest, `import { writeFileSync } from "node:fs";\nwriteFileSync(process.env.SOKSAK_CHILD_MARKER, JSON.stringify({id: process.env.SOKSAK_RUN_ID ?? null, folder: process.env.SOKSAK_RUN_FOLDER ?? null}));\n`);
   const env = { ...process.env, PATH: `${directory}:${process.env.PATH}`, SOKSAK_BASELINE_PROBE: probe,
-    SOKSAK_CHILD_MARKER: child, ...metadata };
+    SOKSAK_CHILD_MARKER: child };
   delete env.NODE_TEST_CONTEXT;
+  delete env.SOKSAK_RUN_ID;
+  delete env.SOKSAK_RUN_FOLDER;
+  Object.assign(env, metadata);
   const result = spawnSync(process.execPath, [runner, "--test", childTest], { cwd: process.cwd(), env, encoding: "utf8" });
   try {
     return {

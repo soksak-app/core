@@ -3,6 +3,13 @@
 [English](CHANGELOG.md)
 
 ## 미배포
+- F239-117: E2E subprocess fixture가 각 case override를 적용하기 전에
+  상속된 run metadata를 제거한다. 두 nonempty 값을 요구하는 production
+  조건은 유지한다. Red: 유효한 외부 metadata 아래 누락·부분 case가 baseline을
+  조회하고 child를 시작했다(`/tmp/F239-117-red.log`). Green: 같은 focused owner
+  test가 4/4 통과한다(`/tmp/F239-117-green.log`). Production runner 동작은 바뀌지
+  않았다.
+
 - F239-138: `sp_capture_wait` 뒤에서 `registerCaptureStopBoundary`의 file-scope
   경계를 복구한다. Red: 변경 전 `capture_metadata_test` target이 중첩 함수 정의와
   helper 미선언 오류로 compile에 실패했다. Green: 기존 wait 완료 처리를 helper 앞에
