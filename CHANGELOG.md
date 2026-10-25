@@ -548,7 +548,16 @@
 
 - F239-70-1: Check the input actions across the controlled `unmarkText` and `insertNewline:` transactions. The owner Red showed that the final transaction carries the newline command while the preceding transaction commits `ㅏㅏ` once. The corrected assertion verifies both actions and empty errors/preedit; `image_region_decoration_test` passes 1/1.
 - F239-70-2: Consume the capture checker’s injected stop error once. The preserved native full-suite Red showed that the persistent override contaminated later recordings and failed three stop-error assertions. The test wrapper now retains fault evidence while limiting the injected error to one read; `capture_checker_test` passes 1/1.
-- F239-71: Give the late-stop fixture a private output directory required by capture finalization. `capture_stop_late_test` passes 1/1. The lifecycle wrapper now expects the four recordings performed by its embedded acceptance test and observes 4/4 start/stop requests and replies. The focused run still fails because no first frame arrived within 10 seconds; stop then timed out after 1 second under reported system load 205. The cause is unclassified and the item remains open.
+- F239-71: Give the late-stop fixture the private output directory required by
+  capture finalization and assert all four recordings performed by the embedded
+  acceptance case. Red: finalization wrote to a nil path and the lifecycle
+  wrapper rejected counts of 4/4. Green on current F136/F138 capture source:
+  `capture_stop_late_test` passes 1/1 in 6.461 s; `capture_lifecycle_test` passes
+  1/1 in 4.067 s, which requires nested acceptance success and exactly four
+  start, start-reply, stop, and stop-reply callbacks. An earlier focused run
+  timed out waiting for a first frame; its cause remains unclassified. This
+  closes the fixture/count unit only; full-recording cadence and broader IME
+  runtime gates remain open.
 - F239-64: Align Workbench test fixtures with source-generation, view-reply identity, and placement-result contracts. The preserved full package run exposed missing generation/page fields, a missing readiness mock export, malformed duplicate placements, and stale placement error prefixes. The seven owning test files pass 81/81; production validation is unchanged.
 
 - F239-65: Resolve the E2E runner test entrypoint from its module location so the test does not depend on the caller's working directory. Red: running `node --test test/run.test.mjs` from `e2e/` attempted to load the nonexistent `e2e/e2e/run.mjs`. Green: the focused test passes 10/10 from both `e2e/` and repository root; `node --check e2e/test/run.test.mjs` and `make docs-check` pass.
