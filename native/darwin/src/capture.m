@@ -834,23 +834,28 @@ static void failIdentitySessionForCaptureError(NSString *message) {
 }
 
 static void restoreCaptureIdentityAfterFailure(SCStream *stream) {
-    if (stream == nil) return;
     if (NSThread.isMainThread) {
         bool current = false;
+        bool noCurrentStream = false;
         @synchronized([SPCapture class]) {
-            current = captureStream == stream;
+            current = stream != nil && captureStream == stream;
+            noCurrentStream = captureStream == nil;
         }
-        if (current) sp_region_restore_capture_identity();
+        if (current || (noCurrentStream && !sp_image_capture_match_identity_session_active()))
+            sp_region_restore_capture_identity();
     } else {
         // The stream retains this queued cleanup's identity until the main thread checks the current capture.
-        [stream retain];
+        if (stream != nil) [stream retain];
         dispatch_async(dispatch_get_main_queue(), ^{
             bool current = false;
+            bool noCurrentStream = false;
             @synchronized([SPCapture class]) {
-                current = captureStream == stream;
+                current = stream != nil && captureStream == stream;
+                noCurrentStream = captureStream == nil;
             }
-            if (current) sp_region_restore_capture_identity();
-            [stream release];
+            if (current || (noCurrentStream && !sp_image_capture_match_identity_session_active()))
+                sp_region_restore_capture_identity();
+            if (stream != nil) [stream release];
         });
     }
 }
@@ -891,6 +896,11 @@ void sp_capture_test_report_error(const char *message) {
         return;
     }
     setCaptureError(decoded);
+}
+
+void sp_capture_test_report_startup_failure(const char *message) {
+    sp_image_capture_match_end();
+    sp_capture_test_report_error(message);
 }
 #endif
 

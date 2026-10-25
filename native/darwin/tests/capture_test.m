@@ -271,6 +271,67 @@ int main(void) { @autoreleasepool {
                     @"capture B stop restores both latest raw provider byte arrays");
             }
         }
+        sp_image_capture_match_begin(NULL, NULL);
+        char *startupIdentityError = NULL;
+        BOOL startupIdentity = sp_image_capture_match_identity_session_begin(&startupIdentityError);
+        check(startupIdentity && startupIdentityError == NULL,
+            @"a startup-failure fixture begins identity tagging without a stream");
+        free(startupIdentityError);
+        BOOL startupTaggedA = sp_region_present(regionA, IOSurfaceGetID(imageA), nonceA,
+            rasterA[0], rasterA[1], rasterA[2], 81, 10, 1);
+        BOOL startupTaggedB = sp_region_present(regionB, IOSurfaceGetID(imageB), nonceB,
+            rasterB[0], rasterB[1], rasterB[2], 82, 10, 1);
+        check(startupTaggedA && startupTaggedB && regionDiffersFromSurfaceBytes(regionA, imageA, rawA)
+            && regionDiffersFromSurfaceBytes(regionB, imageB, rawB),
+            @"a failed startup leaves both regions tagged before error cleanup");
+        dispatch_semaphore_t startupFailureReported = dispatch_semaphore_create(0);
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            sp_capture_test_report_startup_failure("controlled identity startup failure");
+            dispatch_semaphore_signal(startupFailureReported);
+        });
+        check(dispatch_semaphore_wait(startupFailureReported,
+            dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0,
+            @"a background startup failure ends matcher state and queues cleanup");
+        dispatch_release(startupFailureReported);
+        drainMainQueueThroughSentinel();
+        check(regionMatchesSurfaceBytes(regionA, imageA, rawA)
+            && regionMatchesSurfaceBytes(regionB, imageB, rawB),
+            @"startup failure cleanup restores both raw layers without a current stream");
+
+        sp_image_capture_match_begin(NULL, NULL);
+        startupIdentityError = NULL;
+        startupIdentity = sp_image_capture_match_identity_session_begin(&startupIdentityError);
+        check(startupIdentity && startupIdentityError == NULL,
+            @"a newer pre-stream identity session starts while old startup cleanup is queued");
+        free(startupIdentityError);
+        dispatch_semaphore_t delayedStartupFailure = dispatch_semaphore_create(0);
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            sp_capture_test_report_startup_failure("controlled delayed startup failure");
+            dispatch_semaphore_signal(delayedStartupFailure);
+        });
+        check(dispatch_semaphore_wait(delayedStartupFailure,
+            dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0,
+            @"a second startup failure queues cleanup before a replacement session starts");
+        dispatch_release(delayedStartupFailure);
+        sp_image_capture_match_begin(NULL, NULL);
+        startupIdentityError = NULL;
+        startupIdentity = sp_image_capture_match_identity_session_begin(&startupIdentityError);
+        check(startupIdentity && startupIdentityError == NULL,
+            @"replacement identity session is active before the old cleanup callback runs");
+        free(startupIdentityError);
+        BOOL replacementTaggedA = sp_region_present(regionA, IOSurfaceGetID(imageA), nonceA,
+            rasterA[0], rasterA[1], rasterA[2], 83, 10, 1);
+        BOOL replacementTaggedB = sp_region_present(regionB, IOSurfaceGetID(imageB), nonceB,
+            rasterB[0], rasterB[1], rasterB[2], 84, 10, 1);
+        check(replacementTaggedA && replacementTaggedB,
+            @"the replacement pre-stream identity session tags both regions");
+        drainMainQueueThroughSentinel();
+        check(regionDiffersFromSurfaceBytes(regionA, imageA, rawA)
+            && regionDiffersFromSurfaceBytes(regionB, imageB, rawB),
+            @"old no-stream cleanup preserves tags from a newer active identity session");
+        sp_image_capture_match_identity_session_end();
+        sp_image_capture_match_end();
+        sp_region_restore_capture_identity();
         sp_region_close(regionA); sp_region_close(regionB);
         webviewDetachSurface(surface);
         if (surfaceHost) sp_surface_close(surfaceHost);
