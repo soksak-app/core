@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-47-6: 보존된 visual artifact로 input acceptance 기록을 바로잡는다. 양쪽 check-shell host의 document, glyph 및 underline 10단계 전체가 측정되며 missing source state와 conflict/unjoined frame은 0개다. Owning 및 runtime 증거로 opt-in consumer, decoder 교체 및 reference-checkpoint 단위를 완료한다. 해당 두 실행의 유일한 오류는 cadence gap 33.872625 ms와 43.406708 ms이며 변경 없는 연속 recording 33 ms 실패와 별도 zsh follow-up을 유지한다.
+
 - F239-77: 현재 SDK audit과 설치 catalog의 정확한 일치로 owner catalog migration 기록 일곱 개를 완료한다. 검사는 source 90개와 pending rule 0개, event 116개를 다룬다. Reload/editor, Files 및 소유 census/catalog contract의 로컬 개발 acceptance를 구분해 기록하고 terminal visual 및 capture 요구는 열린 상태로 유지한다. 예전 설치 SDK 기본 명령과 public publication을 통과로 보고하지 않는다.
 
 - F212.12-3: 집중 drag fixture에서 frame record와 함께 기존 io request record를 활성화한다. 정확한 response tuple로 Wails consumed wait 42개와 Tauri 35개를 연결하며 dispatch 이후 service 내부 interval median 20.148 ms와 4.840 ms를 드러낸다. 양쪽 log audit과 shutdown 검사는 통과하지만 capture cadence는 두 host 모두 실패한다. 이 record는 service 내부 대기를 특정하며 어떤 actor operation이 막히는지나 drag acceptance를 입증하지 않는다.

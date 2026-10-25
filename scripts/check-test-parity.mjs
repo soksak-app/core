@@ -197,6 +197,29 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-98",
+    implementation: [
+      { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export async function startImeCapture(" },
+      { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function attachImeFrameIdentities(" },
+    ],
+    tests: [
+      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "IME capture does not start when renderer metadata is absent" },
+      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "display time differs" },
+    ],
+    expected: "IME capture requires renderer metadata and opt-in identity capture, and joins each exact callback display time to its issued source identity.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-146",
+    implementation: [{ file: "native/darwin/src/capture_frame_identity.m", symbol: "ZXing_ReaderOptions_new()" }],
+    tests: [
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "multiple complete codes in the expected ROI are explicitly ambiguous" },
+      { file: "native/darwin/tests/capture_frame_identity_test.m", id: "a compact raster clipped through bottom QR modules cannot identify the source" },
+    ],
+    expected: "The bounded identity decoder preserves exact issued payload identity, rejects clipped codes and reports multiple complete codes as ambiguous.",
+    levels: ["native"],
+  },
+  {
     id: "F239-171",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) closingChanged()" },
