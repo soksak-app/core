@@ -59,7 +59,7 @@
     {
       "id": "rs.lock-result",
       "language": "rs",
-      "pattern": "(?:\\blet\\s+Ok\\s*\\([^;{]*?(?<!\\bself)\\.(?:lock|read|write)\\(\\)|\\bmatch\\s+[^;{]*?(?<!\\bself)\\.(?:lock|read|write)\\(\\)\\s*\\{|(?<!\\bself)\\.(?:lock|read|write)\\(\\)\\s*(?:\\.\\s*(?:map_err|expect|unwrap|ok)\\s*\\(|\\?)|\\.(?:wait|wait_timeout|wait_while|wait_timeout_while)\\([^()]+\\)\\s*(?:\\.\\s*(?:map_err|expect|unwrap|ok)\\s*\\(|\\?))",
+      "pattern": "(?:\\blet\\s+Ok\\s*\\([^;{]*?(?<!\\bself)\\.(?:lock|read|write)\\(\\)|\\bmatch\\s+[^;{]*?(?<!\\bself)\\.(?:lock|read|write)\\(\\)\\s*\\{|(?<!\\bself)\\.(?:lock|read|write)\\(\\)\\s*(?:\\.\\s*(?:map_err|expect|unwrap|ok)\\s*\\(|\\?)|\\.(?:wait|wait_timeout|wait_while|wait_timeout_while)\\s*\\()",
       "requires": "recovery",
       "description": "A poisoned lock is recovered with PoisonError::into_inner; a lock result or a condition wait that is matched, mapped to an error, unwrapped or dropped is a finding. A read, write or lock called on self is a method of the type, not a lock."
     },

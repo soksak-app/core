@@ -704,6 +704,12 @@ export function censusFindings(sources, config, rules = censusRules()) {
     for (const rule of own) {
       for (const match of source.code.matchAll(new RegExp(rule.pattern, 'g'))) {
         if (source.inString[match.index]) continue;
+        if (rule.id === 'rs.lock-result' && /^\.(?:wait|wait_timeout|wait_while|wait_timeout_while)\s*\($/.test(match[0])) {
+          const open = match.index + match[0].lastIndexOf('(');
+          const close = matchClose(source, open);
+          if (source.code.slice(open + 1, close).trim() === '') continue;
+          if (!/^\s*(?:\.\s*(?:map_err|expect|unwrap|ok)\s*\(|\?)/.test(source.code.slice(close + 1))) continue;
+        }
         const line = source.lineAt(match.index);
         // default: a rule that no declaration marks pending is enforced.
         const finding = (message) => findings.push({ file: path, line, rule: rule.id, message: `${path}:${line}: ${message}`, pending: config.pending[rule.id] ?? null });

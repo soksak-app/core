@@ -251,6 +251,43 @@ test('a lock result or a condition wait that is matched, mapped, unwrapped or dr
   ]);
 });
 
+test('condition wait recovery checks include nested calls and closure blocks', () => {
+  const source = [
+    'fn run(guard: Guard) {',
+    '    wake.wait(select(guard)).unwrap();',
+    '    wake.wait_timeout(guard, duration()).map_err(report)?;',
+    '    wake.wait_while(guard, |state| state.ready.is_none()).expect("guard");',
+    '    wake.wait_timeout_while(guard, duration(), |state| { state.ready().is_none() }).ok();',
+    '}',
+  ].join('\n');
+  const findings = checker.censusFindings(new Map([['wait.rs', source]]), noConfig())
+    .filter(({ rule }) => rule === 'rs.lock-result');
+  assert.deepEqual(findings.map(({ line }) => line), [2, 3, 4, 5]);
+});
+
+test('condition wait argument boundaries ignore string and comment brackets', () => {
+  for (const predicate of ['state.has(") [ }")', 'state.has(r#") { ("#)', 'state.ready(/* ) } */).is_none()']) {
+    const source = `fn run(guard: Guard) {\n    wake.wait_while(guard, |state| ${predicate}).unwrap();\n}`;
+    const findings = checker.censusFindings(new Map([['wait.rs', source]]), noConfig())
+      .filter(({ rule }) => rule === 'rs.lock-result');
+    assert.deepEqual(findings.map(({ line }) => line), [2], predicate);
+  }
+});
+
+test('condition wait checks preserve recovered waits and lexical exclusions', () => {
+  const source = [
+    'fn run(guard: Guard) {',
+    '    // default: retain the original guard after poisoned lock recovery.',
+    '    wake.wait_while(guard, |state| state.ready.is_none()).unwrap_or_else(PoisonError::into_inner);',
+    '    child.wait()?;',
+    '    child.wait( /* no arguments */ )?;',
+    '    // wake.wait_while(guard, |state| state.ready.is_none()).unwrap();',
+    '    let example = r#"wake.wait_while(guard, |state| state.ready.is_none()).unwrap()"#;',
+    '}',
+  ].join('\n');
+  assert.deepEqual(checker.censusFindings(new Map([['wait.rs', source]]), noConfig()), []);
+});
+
 test('a reason marker on the line, in the comment above it or inside an empty catch accepts a source', () => {
   assert.deepEqual(census({
     'a.js': [
