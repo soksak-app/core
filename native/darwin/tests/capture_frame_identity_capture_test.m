@@ -367,6 +367,163 @@ int main(void) { @autoreleasepool {
     sp_image_capture_match_end();
     [retentionSink release]; [captureSink release]; captureSink = nil;
 
+    NSString *historyEvictionDirectory = [directory stringByAppendingPathComponent:@"history-eviction"];
+    sp_image_capture_match_begin(historyEvictionDirectory.fileSystemRepresentation, captureWriter);
+    identityError = NULL;
+    BOOL historyEvictionSessionStarted = sp_image_capture_match_identity_session_begin(&identityError);
+    const size_t evictionWidth = 192, evictionHeight = 192, evictionStride = evictionWidth * 4;
+    const size_t evictionByteCount = evictionStride * evictionHeight;
+    NSMutableData *evictionSource = [NSMutableData dataWithLength:evictionByteCount];
+    uint8_t *evictionSourceBytes = evictionSource.mutableBytes;
+    for (size_t pixel = 0; pixel < evictionWidth * evictionHeight; pixel++) {
+        evictionSourceBytes[pixel * 4] = 90;
+        evictionSourceBytes[pixel * 4 + 1] = 110;
+        evictionSourceBytes[pixel * 4 + 2] = 130;
+        evictionSourceBytes[pixel * 4 + 3] = 255;
+    }
+    uint8_t evictionRegionToken[16] = {21, 22, 23, 24};
+    sp_image_capture_identity evictionIdentity = {73, 79, 83};
+    NSString *evictionNonce = nil, *evictionIssued = nil, *evictionEncoded = nil, *evictionEncodeError = nil;
+    uint8_t retiredRegionToken[16] = {25, 26, 27, 28};
+    sp_image_capture_identity retiredIdentity = {73, 79, 89};
+    NSString *retiredNonce = nil, *retiredIssued = nil, *retiredEncoded = nil, *retiredEncodeError = nil;
+    CGColorSpaceRef evictionColorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGImageRef evictionImage = NULL, retiredImage = NULL;
+    NSData *evictionTaggedPixels = nil, *retiredTaggedPixels = nil;
+    BOOL evictionSourceReady = historyEvictionSessionStarted && evictionColorSpace
+        && sp_image_capture_match_retain(evictionIdentity, evictionSourceBytes, evictionWidth, evictionHeight,
+            evictionStride, CGRectMake(0, 0, evictionWidth, evictionHeight), 1, "kCGColorSpaceSRGB")
+        && sp_image_capture_match_identity_region_nonce(evictionRegionToken, &evictionNonce, &identityError)
+        && sp_image_capture_match_identity_issue(evictionRegionToken, evictionIdentity, &evictionIssued, &identityError)
+        && sp_capture_frame_identity_encode(evictionSourceBytes, evictionWidth, evictionHeight, evictionStride,
+            evictionColorSpace, CGRectMake(0, 0, evictionWidth, evictionHeight), evictionNonce,
+            (SPCaptureFrameIdentity){ evictionIdentity.generation, evictionIdentity.raster, evictionIdentity.sequence },
+            &evictionImage, &evictionTaggedPixels, &evictionEncoded, &evictionEncodeError)
+        && [evictionIssued isEqualToString:evictionEncoded]
+        && sp_image_capture_match_identity_record(evictionRegionToken, evictionIdentity,
+            CGRectMake(0, 0, evictionWidth, evictionHeight), evictionTaggedPixels.bytes,
+            evictionWidth, evictionHeight, evictionStride, "kCGColorSpaceSRGB", &identityError);
+    BOOL retiredSourceReady = evictionSourceReady
+        && sp_image_capture_match_retain(retiredIdentity, evictionSourceBytes, evictionWidth, evictionHeight,
+            evictionStride, CGRectMake(evictionWidth, 0, evictionWidth, evictionHeight), 1, "kCGColorSpaceSRGB")
+        && sp_image_capture_match_identity_region_nonce(retiredRegionToken, &retiredNonce, &identityError)
+        && sp_image_capture_match_identity_issue(retiredRegionToken, retiredIdentity, &retiredIssued, &identityError)
+        && sp_capture_frame_identity_encode(evictionSourceBytes, evictionWidth, evictionHeight, evictionStride,
+            evictionColorSpace, CGRectMake(0, 0, evictionWidth, evictionHeight), retiredNonce,
+            (SPCaptureFrameIdentity){ retiredIdentity.generation, retiredIdentity.raster, retiredIdentity.sequence },
+            &retiredImage, &retiredTaggedPixels, &retiredEncoded, &retiredEncodeError)
+        && [retiredIssued isEqualToString:retiredEncoded]
+        && sp_image_capture_match_identity_record(retiredRegionToken, retiredIdentity,
+            CGRectMake(0, 0, evictionWidth, evictionHeight), retiredTaggedPixels.bytes,
+            evictionWidth, evictionHeight, evictionStride, "kCGColorSpaceSRGB", &identityError);
+    BOOL retiredSourceEvicted = retiredSourceReady
+        && sp_image_capture_match_identity_evict(retiredRegionToken, retiredIdentity, &identityError);
+    evictionSourceReady = evictionSourceReady && retiredSourceEvicted;
+    check(evictionSourceReady, [NSString stringWithFormat:@"the artifact-backed tag source is prepared (%s, %@)",
+        identityError ?: "", evictionEncodeError ?: retiredEncodeError ?: @""]);
+    free(identityError); identityError = NULL;
+    if (evictionImage) CGImageRelease(evictionImage);
+    if (retiredImage) CGImageRelease(retiredImage);
+    if (evictionColorSpace) CGColorSpaceRelease(evictionColorSpace);
+    [evictionNonce release]; [evictionIssued release]; [evictionEncoded release]; [evictionEncodeError release];
+    [retiredNonce release]; [retiredIssued release]; [retiredEncoded release]; [retiredEncodeError release];
+    dispatch_sync(captureWriter, ^{});
+    NSMutableData *fillerPixels = [NSMutableData dataWithLength:evictionByteCount];
+    uint8_t *fillerBytes = fillerPixels.mutableBytes;
+    BOOL filledHistory = evictionSourceReady;
+    for (int index = 0; index < 455 && filledHistory; index++) {
+        uint8_t color = (uint8_t)(20 + index % 200);
+        for (size_t pixel = 0; pixel < evictionWidth * evictionHeight; pixel++) {
+            fillerBytes[pixel * 4] = color;
+            fillerBytes[pixel * 4 + 1] = 40;
+            fillerBytes[pixel * 4 + 2] = 60;
+            fillerBytes[pixel * 4 + 3] = 255;
+        }
+        sp_image_capture_identity fillerIdentity = {73, 79, 100 + index};
+        filledHistory = sp_image_capture_match_retain(fillerIdentity, fillerBytes, evictionWidth, evictionHeight,
+            evictionStride, CGRectMake(0, 0, evictionWidth, evictionHeight), 1, "kCGColorSpaceSRGB");
+        if (filledHistory) dispatch_sync(captureWriter, ^{});
+    }
+    check(filledHistory, @"ordinary source snapshots cross the 64 MiB pixel-history eviction boundary");
+    SPCapture *historyEvictionSink = [SPCapture new];
+    historyEvictionSink.directory = historyEvictionDirectory;
+    historyEvictionSink.statuses = statuses;
+    captureSink = [historyEvictionSink retain];
+    clearCaptureError(); captureBefore = 0; captureStartedAt = 0;
+    NSMutableData *historyEvictionPixels = [NSMutableData dataWithLength:evictionStride * 2 * evictionHeight];
+    if (evictionTaggedPixels && retiredTaggedPixels) for (size_t row = 0; row < evictionHeight; row++) {
+            memcpy((uint8_t *)historyEvictionPixels.mutableBytes + row * evictionStride * 2,
+                evictionTaggedPixels.bytes + row * evictionStride, evictionStride);
+            memcpy((uint8_t *)historyEvictionPixels.mutableBytes + row * evictionStride * 2 + evictionStride,
+                retiredTaggedPixels.bytes + row * evictionStride, evictionStride);
+        }
+    CMSampleBufferRef historyEvictedFrame = sampleBGRA(historyEvictionPixels, evictionWidth * 2, evictionHeight,
+        CGRectMake(0, 0, evictionWidth * 2, evictionHeight));
+    if (historyEvictedFrame) {
+        [historyEvictionSink write:historyEvictedFrame callbackTime:mach_absolute_time()];
+        CFRelease(historyEvictedFrame);
+    }
+    sp_image_capture_match_drop();
+    CMSampleBufferRef historyEvictedFrameAfterDrop = sampleBGRA(historyEvictionPixels,
+        evictionWidth * 2, evictionHeight, CGRectMake(0, 0, evictionWidth * 2, evictionHeight));
+    if (historyEvictedFrameAfterDrop) {
+        [historyEvictionSink write:historyEvictedFrameAfterDrop callbackTime:mach_absolute_time()];
+        CFRelease(historyEvictedFrameAfterDrop);
+    }
+    dispatch_sync(captureWriter, ^{});
+    BOOL historyEvictionFinalized = finalizeCaptureArtifacts(historyEvictionSink);
+    NSDictionary *historyEvictionCallback = historyEvictionSink.callbackStatusTrace.firstObject;
+    BOOL rawMatcherStillUnknown = [historyEvictionCallback[@"imageMatch"][@"state"] isEqual:@"unknown-retention"];
+    NSData *historyEvictionDecodedData = [NSData dataWithContentsOfFile:
+        [historyEvictionDirectory stringByAppendingPathComponent:@"frame-identities/decoded-frames.jsonl"]];
+    NSString *historyEvictionDecodedText = historyEvictionDecodedData
+        ? [[NSString alloc] initWithData:historyEvictionDecodedData encoding:NSUTF8StringEncoding] : nil;
+    NSMutableArray<NSDictionary *> *historyEvictionDecodedRows = [NSMutableArray array];
+    for (NSString *line in [historyEvictionDecodedText componentsSeparatedByString:@"\n"]) if (line.length) {
+        NSDictionary *row = [NSJSONSerialization JSONObjectWithData:[line dataUsingEncoding:NSUTF8StringEncoding]
+            options:NSJSONReadingFragmentsAllowed error:nil];
+        if (row) [historyEvictionDecodedRows addObject:row];
+    }
+    NSPredicate *historyEvictionMatched = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *row, NSDictionary *bindings) {
+        (void)bindings;
+        return [row[@"frame"] isEqual:@1] && [row[@"status"] isEqual:@"matched"]
+            && [row[@"identity"][@"generation"] isEqual:@"73"]
+            && [row[@"identity"][@"raster"] isEqual:@"79"]
+            && [row[@"identity"][@"sequence"] isEqual:@83]
+            && [row[@"region"] isEqual:@"15161718000000000000000000000000"];
+    }];
+    NSArray<NSDictionary *> *historyEvictionMatches = [historyEvictionDecodedRows filteredArrayUsingPredicate:historyEvictionMatched];
+    NSPredicate *historyEvictionRetired = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *row, NSDictionary *bindings) {
+        (void)bindings;
+        return [row[@"frame"] isEqual:@1] && [row[@"status"] isEqual:@"unknown"]
+            && [row[@"reason"] isEqual:@"unknown-retention"]
+            && [row[@"region"] isEqual:@"191a1b1c000000000000000000000000"]
+            && [row[@"roi"] isKindOfClass:[NSDictionary class]] && [row[@"roi"][@"x"] isEqual:@192];
+    }];
+    NSArray<NSDictionary *> *historyEvictionRetirements = [historyEvictionDecodedRows filteredArrayUsingPredicate:historyEvictionRetired];
+    NSPredicate *historyEvictionUnlocated = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *row, NSDictionary *bindings) {
+        (void)bindings; return [row[@"status"] isEqual:@"unknown"] && row[@"roi"] == NSNull.null;
+    }];
+    NSArray<NSDictionary *> *historyEvictionUnlocatedRows = [historyEvictionDecodedRows filteredArrayUsingPredicate:historyEvictionUnlocated];
+    NSPredicate *historyEvictionNonEvictionDrop = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *row, NSDictionary *bindings) {
+        (void)bindings; return [row[@"frame"] isEqual:@2] && [row[@"status"] isEqual:@"unknown"]
+            && [row[@"reason"] isEqual:@"unknown-retention"] && row[@"roi"] == NSNull.null;
+    }];
+    NSArray<NSDictionary *> *historyEvictionNonEvictionRows =
+        [historyEvictionDecodedRows filteredArrayUsingPredicate:historyEvictionNonEvictionDrop];
+    NSString *historyEvictionError = [NSString stringWithUTF8String:sp_capture_error()];
+    check(historyEvictionFinalized && rawMatcherStillUnknown && historyEvictionMatches.count == 1
+        && historyEvictionRetirements.count == 1 && historyEvictionUnlocatedRows.count == 1
+        && historyEvictionNonEvictionRows.count == 1,
+        [NSString stringWithFormat:@"bounded provenance admits history-evicted tags, preserves explicit retirement, and keeps non-eviction loss unknown (%@, rawUnknown=%@, matches=%lu, retired=%lu, unlocated=%lu, nonEviction=%lu)",
+            historyEvictionError ?: @"", rawMatcherStillUnknown ? @"YES" : @"NO",
+            (unsigned long)historyEvictionMatches.count, (unsigned long)historyEvictionRetirements.count,
+            (unsigned long)historyEvictionUnlocatedRows.count, (unsigned long)historyEvictionNonEvictionRows.count]);
+    [historyEvictionDecodedText release];
+    [evictionTaggedPixels release]; [retiredTaggedPixels release];
+    sp_image_capture_match_end();
+    [historyEvictionSink release]; [captureSink release]; captureSink = nil;
+
     NSString *failedDirectory = [directory stringByAppendingPathComponent:@"decode-write-failure"];
     sp_image_capture_match_begin(failedDirectory.fileSystemRepresentation, captureWriter);
     identityError = NULL;

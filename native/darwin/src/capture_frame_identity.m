@@ -61,7 +61,9 @@ static bool validROI(CGRect roi, size_t width, size_t height) {
 
 static NSString *unknown(NSString *reason) { return [reason copy]; }
 
-static bool parseCanonicalUInt64(NSString *field, uint64_t *value) {
+bool sp_capture_frame_identity_parse_canonical_uint64(NSString *field, uint64_t *value) {
+    if (value) *value = 0;
+    if (!value || ![field isKindOfClass:[NSString class]]) return false;
     if (!field.length || (field.length > 1 && [field hasPrefix:@"0"])) return false;
     for (NSUInteger index = 0; index < field.length; index++) {
         unichar character = [field characterAtIndex:index];
@@ -233,7 +235,7 @@ bool sp_capture_frame_identity_decode(CGImageRef image, CGRect roi, NSSet<NSStri
         || !validNonce(fields[2])) { *unknown_reason = unknown(@"payload-malformed"); return false; }
     uint64_t values[3] = { 0 };
     for (NSUInteger index = 0; index < 3; index++) {
-        if (!parseCanonicalUInt64(fields[index + 3], &values[index])) {
+        if (!sp_capture_frame_identity_parse_canonical_uint64(fields[index + 3], &values[index])) {
             *unknown_reason = unknown(@"payload-malformed"); return false;
         }
     }

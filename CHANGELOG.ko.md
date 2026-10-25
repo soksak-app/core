@@ -4,6 +4,16 @@
 
 ## 미배포
 
+- F239-103: Source pixel-history eviction 뒤에도 기존의 제한된 source 및 tag
+  artifact ledger를 결합해 tag-scoped identity를 보존한다. Committed 10진
+  문자열 source identity는 canonical UInt64 parser로 읽고 pending record도 같은
+  형식을 사용한다. Explicit-retirement disposition을 보존하며 모든 history
+  drop이 eviction이고 모든 tag pair가 설명될 때만 중복 global retention marker를
+  생략한다. Red: 변경 전 decoder는 history eviction 뒤 artifact-backed identity를
+  잃었다. Green: owning `capture_frame_identity_capture_test` repeat target이
+  non-eviction drop, retirement, geometry, raw matcher 검사를 포함해 1/1,
+  1.605초에 통과한다.
+
 - F239-104: 각 callback-status record에 image matching과 선택적 frame-identity
   decoding의 raw Mach 시작/완료 경계를 기록한다. 실행되지 않은 단계는 명시적
   `null`, tick은 10진 문자열로 저장하고 callback timebase를 유지한다. Red:

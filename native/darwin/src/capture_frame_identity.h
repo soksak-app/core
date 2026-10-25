@@ -7,6 +7,9 @@ typedef struct {
     uint64_t sequence;
 } SPCaptureFrameIdentity;
 
+// Parses a canonical, nonzero decimal uint64 field used by the current identity artifact format.
+bool sp_capture_frame_identity_parse_canonical_uint64(NSString *field, uint64_t *value);
+
 // Creates the canonical nonce and source identity payload without rendering an image. On success, payload is
 // caller-owned and error is NULL. On failure, payload is NULL and error is caller-owned.
 bool sp_capture_frame_identity_payload(NSString *nonce, SPCaptureFrameIdentity identity,

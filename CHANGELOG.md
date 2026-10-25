@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-103: Preserve tag-scoped identity after source pixel-history eviction by
+  joining the existing bounded source and tag artifact ledgers. Parse committed
+  decimal-string source identities with the canonical UInt64 parser and keep
+  pending records in the same format. Preserve explicit-retirement dispositions
+  and omit the redundant global retention marker only when every history drop is
+  an eviction and every tag pair is accounted. Red: the unchanged decoder lost
+  artifact-backed identities after history eviction. Green: the owning
+  `capture_frame_identity_capture_test` repeat target passes 1/1 in 1.605 seconds,
+  including non-eviction-drop, retirement, geometry and raw-matcher controls.
+
 - F239-104: Record raw Mach bounds for image matching and optional frame-identity
   decoding in each callback-status record. Preserve decimal-string ticks, explicit
   nulls for stages that did not run, and the callback timebase. Red: three owner

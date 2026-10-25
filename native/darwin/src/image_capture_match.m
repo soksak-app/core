@@ -5,6 +5,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdio.h>
+#include <limits.h>
 #include <stdatomic.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -62,6 +63,7 @@ static NSCondition *historyLock;
 static NSMutableArray<SPImageCaptureSource *> *history;
 static size_t historyBytes;
 static size_t historyDrops;
+static size_t historyEvictions;
 static atomic_bool historyEnabled;
 static size_t artifactBytes;
 static size_t artifactPendingBytes;
@@ -110,6 +112,12 @@ static void writeIdentityArtifact(SPImageCaptureIdentityArtifact *artifact, NSSt
 static void identityEvictSourceLocked(sp_image_capture_identity identity);
 static bool identityFailure(char **error, const char *message);
 static NSString *identitySourceKey(sp_image_capture_identity identity);
+static NSString *identityArtifactKey(NSString *regionKey, NSString *sourceKey);
+static NSString *identityArtifactPayloadLocked(NSString *regionKey, NSString *sourceKey);
+static NSString *identityRecordSourceKey(NSDictionary *record);
+static NSString *identityNonceLocked(const uint8_t token[16]);
+static bool identityFromArtifactRecord(NSDictionary *record, sp_image_capture_identity *identity);
+static bool validIdentityROI(CGRect roi, size_t width, size_t height);
 
 static void clearIdentitySessionLocked(void) {
     if (identityCaptureNonce.length) memset(identityCaptureNonce.mutableBytes, 0, identityCaptureNonce.length);
@@ -176,6 +184,7 @@ void sp_image_capture_match_begin(const char *capture_directory, dispatch_queue_
     [history removeAllObjects];
     historyBytes = 0;
     historyDrops = 0;
+    historyEvictions = 0;
     artifactBytes = 0;
     artifactPendingBytes = 0;
     artifactCount = 0;
@@ -367,6 +376,7 @@ bool sp_image_capture_match_retain(sp_image_capture_identity identity, const uin
         historyBytes -= oldest.pixels.length;
         [history removeObjectAtIndex:0];
         historyDrops++;
+        historyEvictions++;
     }
     SPImageCaptureSource *source = [SPImageCaptureSource new];
     source.identity = identity;
@@ -774,6 +784,183 @@ static BOOL queueIdentityDecodeRecords(NSArray<NSDictionary *> *records, uint64_
     return YES;
 }
 
+static SPImageCaptureSource *sourceFromArtifactRecord(NSDictionary *record) {
+    NSString *sourceKey = identityRecordSourceKey(record);
+    sp_image_capture_identity identity = {};
+    NSDictionary *bounds = record[@"screenBounds"];
+    if (![bounds isKindOfClass:[NSDictionary class]]) return nil;
+    for (NSString *field in @[@"x", @"y", @"width", @"height"])
+        if (![bounds[field] respondsToSelector:@selector(doubleValue)]) return nil;
+    if (!sourceKey || !identityFromArtifactRecord(record, &identity)
+        || ![record[@"width"] respondsToSelector:@selector(unsignedLongLongValue)]
+        || ![record[@"height"] respondsToSelector:@selector(unsignedLongLongValue)]
+        || ![record[@"stride"] respondsToSelector:@selector(unsignedLongLongValue)]
+        || ![record[@"scale"] respondsToSelector:@selector(doubleValue)]) return nil;
+    SPImageCaptureSource *source = [SPImageCaptureSource new];
+    source.identity = identity;
+    source.width = [record[@"width"] unsignedLongLongValue];
+    source.height = [record[@"height"] unsignedLongLongValue];
+    source.stride = [record[@"stride"] unsignedLongLongValue];
+    source.screenBounds = CGRectMake([bounds[@"x"] doubleValue], [bounds[@"y"] doubleValue],
+        [bounds[@"width"] doubleValue], [bounds[@"height"] doubleValue]);
+    source.scale = [record[@"scale"] doubleValue];
+    id color = record[@"colorSpace"];
+    if ([color isKindOfClass:[NSString class]]) source.colorSpace = color;
+    if (!source.width || !source.height || source.width > SIZE_MAX / 4 || source.stride < source.width * 4
+        || source.height > SIZE_MAX / source.stride || !isfinite(source.scale)) {
+        [source release];
+        return nil;
+    }
+    return source;
+}
+
+static bool sameSourceMetadata(SPImageCaptureSource *left, SPImageCaptureSource *right) {
+    NSString *leftColor = left.colorSpace ?: @"<null>";
+    NSString *rightColor = right.colorSpace ?: @"<null>";
+    return left.identity.generation == right.identity.generation && left.identity.raster == right.identity.raster
+        && left.identity.sequence == right.identity.sequence && left.width == right.width && left.height == right.height
+        && left.stride == right.stride && CGRectEqualToRect(left.screenBounds, right.screenBounds)
+        && left.scale == right.scale && [leftColor isEqualToString:rightColor];
+}
+
+static NSDictionary *identityArtifactRecordFromPending(SPImageCaptureIdentityArtifact *artifact) {
+    CGRect roi = artifact.roi;
+    return @{ @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)artifact.identity.generation],
+        @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)artifact.identity.raster],
+        @"sequence": @(artifact.identity.sequence), @"regionToken": artifact.regionToken ?: @"",
+        @"nonce": artifact.nonce ?: @"", @"payload": artifact.payload ?: @"",
+        @"roi": @{ @"x": @(roi.origin.x), @"y": @(roi.origin.y),
+            @"width": @(roi.size.width), @"height": @(roi.size.height) },
+        @"file": (id)NSNull.null, @"width": @(artifact.width), @"height": @(artifact.height),
+        @"stride": @(artifact.stride), @"pixelFormat": @"BGRA8", @"alpha": @"premultiplied-first",
+        @"colorSpace": artifact.colorSpace ?: (id)NSNull.null,
+        @"byteCount": @(artifact.pixels.length), @"sha256": (id)NSNull.null };
+}
+
+static bool identityRegionTokenBytes(NSString *regionKey, uint8_t token[16]) {
+    if (regionKey.length != 32 || !token) return false;
+    for (NSUInteger index = 0; index < 16; index++) {
+        unichar high = [regionKey characterAtIndex:index * 2];
+        unichar low = [regionKey characterAtIndex:index * 2 + 1];
+        int highValue = high >= '0' && high <= '9' ? high - '0'
+            : high >= 'a' && high <= 'f' ? high - 'a' + 10 : -1;
+        int lowValue = low >= '0' && low <= '9' ? low - '0'
+            : low >= 'a' && low <= 'f' ? low - 'a' + 10 : -1;
+        if (highValue < 0 || lowValue < 0) return false;
+        token[index] = (uint8_t)((highValue << 4) | lowValue);
+    }
+    return true;
+}
+
+static bool identityArtifactROI(NSDictionary *record, size_t width, size_t height, CGRect *roi) {
+    NSDictionary *value = record[@"roi"];
+    if (![value isKindOfClass:[NSDictionary class]]) return false;
+    for (NSString *field in @[@"x", @"y", @"width", @"height"])
+        if (![value[field] respondsToSelector:@selector(doubleValue)]) return false;
+    CGRect parsed = CGRectMake([value[@"x"] doubleValue], [value[@"y"] doubleValue],
+        [value[@"width"] doubleValue], [value[@"height"] doubleValue]);
+    if (!validIdentityROI(parsed, width, height)) return false;
+    *roi = parsed;
+    return true;
+}
+
+static bool identityArtifactRecordValid(NSDictionary *record, NSString *regionKey,
+    sp_image_capture_identity identity, SPImageCaptureSource *source, CGRect *sourceROI) {
+    NSString *recordPayload = record[@"payload"];
+    NSString *recordNonce = record[@"nonce"];
+    if (![record[@"regionToken"] isKindOfClass:[NSString class]]
+        || ![record[@"regionToken"] isEqualToString:regionKey]
+        || ![recordPayload isKindOfClass:[NSString class]] || ![recordNonce isKindOfClass:[NSString class]]
+        || !source || !identityArtifactROI(record, source.width, source.height, sourceROI)
+        || [record[@"width"] unsignedLongLongValue] != source.width
+        || [record[@"height"] unsignedLongLongValue] != source.height
+        || [record[@"stride"] unsignedLongLongValue] != source.stride
+        || ![record[@"pixelFormat"] isKindOfClass:[NSString class]]
+        || ![record[@"pixelFormat"] isEqualToString:@"BGRA8"]
+        || ![record[@"alpha"] isKindOfClass:[NSString class]]
+        || ![record[@"alpha"] isEqualToString:@"premultiplied-first"]
+        || source.height > SIZE_MAX / source.stride
+        || [record[@"byteCount"] unsignedLongLongValue] != source.stride * source.height) return false;
+    id recordColor = record[@"colorSpace"];
+    NSString *color = [recordColor isKindOfClass:[NSString class]] ? recordColor : nil;
+    if (![(source.colorSpace ?: @"<null>") isEqualToString:(color ?: @"<null>")]) return false;
+    uint8_t regionToken[16];
+    if (!identityRegionTokenBytes(regionKey, regionToken)) return false;
+    NSString *expectedNonce = identityNonceLocked(regionToken);
+    if (![recordNonce isEqualToString:expectedNonce]) return false;
+    SPCaptureFrameIdentity payloadIdentity = { identity.generation, identity.raster, (uint64_t)identity.sequence };
+    NSString *expectedPayload = nil, *payloadError = nil;
+    bool payloadValid = sp_capture_frame_identity_payload(expectedNonce, payloadIdentity, &expectedPayload, &payloadError)
+        && [expectedPayload isEqualToString:recordPayload];
+    [expectedPayload release]; [payloadError release];
+    return payloadValid;
+}
+
+static void addIdentityArtifactPairLocked(NSDictionary *record,
+    NSMutableDictionary<NSString *, SPImageCaptureSource *> *sources,
+    NSMutableDictionary<NSString *, NSMutableDictionary *> *groups,
+    CGRect content_rect, CGRect screen_rect, double pixels_per_point, size_t frame_width, size_t frame_height,
+    NSMutableSet<NSString *> *seenPairs, BOOL *coverageComplete) {
+    NSString *sourceKey = identityRecordSourceKey(record);
+    NSString *regionKey = record[@"regionToken"];
+    NSString *payload = record[@"payload"];
+    if (!sourceKey || ![regionKey isKindOfClass:[NSString class]] || ![payload isKindOfClass:[NSString class]]) {
+        *coverageComplete = NO;
+        return;
+    }
+    NSString *pairKey = identityArtifactKey(regionKey, sourceKey);
+    if ([seenPairs containsObject:pairKey]) {
+        *coverageComplete = NO;
+        return;
+    }
+    [seenPairs addObject:pairKey];
+
+    sp_image_capture_identity identity = {};
+    if (!identityFromArtifactRecord(record, &identity)) {
+        *coverageComplete = NO;
+        return;
+    }
+    SPImageCaptureSource *source = sources[sourceKey];
+    CGRect sourceROI = CGRectNull;
+    BOOL hasSourceArtifact = artifactIdentityRecords[sourceKey] != nil || pendingArtifactSources[sourceKey] != nil;
+    BOOL validPair = source && hasSourceArtifact && identityArtifactSignatures[pairKey] != nil
+        && identityArtifactRecordValid(record, regionKey, identity, source, &sourceROI);
+    if (!validPair) *coverageComplete = NO;
+
+    NSString *issuedPayload = identityIssuedPayloads[regionKey][sourceKey];
+    NSString *retiredPayload = identityRetiredPayloads[regionKey][sourceKey];
+    if ((issuedPayload && ![issuedPayload isEqualToString:payload])
+        || (retiredPayload && ![retiredPayload isEqualToString:payload])) {
+        validPair = NO;
+        *coverageComplete = NO;
+    }
+    BOOL retired = retiredPayload != nil;
+    CGRect crop = CGRectNull;
+    BOOL mapped = validPair && fabs(source.scale - pixels_per_point) <= 0.000001
+        && mapSourceCrop(source, content_rect, screen_rect, pixels_per_point,
+            frame_width, frame_height, &crop);
+    CGRect roi = mapped ? CGRectMake(CGRectGetMinX(crop) + CGRectGetMinX(sourceROI),
+        CGRectGetMinY(crop) + CGRectGetMinY(sourceROI), sourceROI.size.width, sourceROI.size.height) : CGRectNull;
+    NSString *roiKey = mapped ? [NSString stringWithFormat:@"%.0f:%.0f:%.0f:%.0f",
+        CGRectGetMinX(roi), CGRectGetMinY(roi), CGRectGetWidth(roi), CGRectGetHeight(roi)] : @"unknown";
+    NSString *groupKey = [NSString stringWithFormat:@"%@:%@", regionKey, roiKey];
+    NSMutableDictionary *group = groups[groupKey];
+    if (!group) {
+        group = [@{ @"region": regionKey, @"roi": [NSValue value:&roi withObjCType:@encode(CGRect)],
+            @"payloads": [NSMutableSet set], @"sourceKeys": [NSMutableSet set],
+            @"eligibleSourceKeys": [NSMutableSet set], @"retiredSourceKeys": [NSMutableSet set],
+            @"mapped": @(mapped) } mutableCopy];
+        groups[groupKey] = group;
+        [group release];
+    } else if ([group[@"mapped"] boolValue] != mapped) {
+        *coverageComplete = NO;
+    }
+    [group[@"sourceKeys"] addObject:sourceKey];
+    if (validPair) [group[@"payloads"] addObject:payload];
+    if (validPair && retired) [group[@"retiredSourceKeys"] addObject:sourceKey];
+    if (validPair && !retired) [group[@"eligibleSourceKeys"] addObject:sourceKey];
+}
+
 bool sp_image_capture_match_identity_decode_frame(CGImageRef image, size_t frame_width, size_t frame_height,
     CGRect content_rect, CGRect screen_rect, double content_scale, double scale_factor,
     uint64_t frame_number, uint64_t display_time, NSArray<NSDictionary *> **records, char **error) {
@@ -795,43 +982,39 @@ bool sp_image_capture_match_identity_decode_frame(CGImageRef image, size_t frame
         return failed;
     }
     BOOL hadHistoryDrops = historyDrops != 0;
+    BOOL onlyHistoryEvictions = hadHistoryDrops && historyDrops == historyEvictions;
+    BOOL coverageComplete = !hadHistoryDrops || onlyHistoryEvictions;
+    if (artifactDrops || artifactWriteFailures || artifactCleanupFailures || identityArtifactDrops
+        || identityArtifactWriteFailures || identityArtifactCleanupFailures || identityDecodedWriteFailures)
+        coverageComplete = NO;
     double pixelsPerPoint = scale_factor / content_scale;
+    NSMutableDictionary<NSString *, SPImageCaptureSource *> *sources = [NSMutableDictionary dictionary];
     for (SPImageCaptureSource *source in history) {
         NSString *sourceKey = identitySourceKey(source.identity);
-        NSMutableSet<NSString *> *regions = [NSMutableSet setWithSet:identityRegionsBySource[sourceKey] ?: [NSSet set]];
-        [regions addObjectsFromArray:identityRetiredRegionsBySource[sourceKey].allObjects ?: @[]];
-        for (NSString *regionKey in regions) {
-            NSString *payload = identityIssuedPayloads[regionKey][sourceKey];
-            NSString *retiredPayload = identityRetiredPayloads[regionKey][sourceKey];
-            if (!payload && !retiredPayload) continue;
-            CGRect crop = CGRectNull;
-            BOOL mapped = source.width >= 192 && source.height >= 192
-                && fabs(source.scale - pixelsPerPoint) <= 0.000001
-                && mapSourceCrop(source, content_rect, screen_rect, pixelsPerPoint,
-                    frame_width, frame_height, &crop);
-            CGRect roi = mapped ? CGRectMake(CGRectGetMinX(crop) + source.width - 192,
-                CGRectGetMinY(crop), 192, 192) : CGRectNull;
-            NSString *roiKey = mapped ? [NSString stringWithFormat:@"%.0f:%.0f:%.0f:%.0f",
-                CGRectGetMinX(roi), CGRectGetMinY(roi), CGRectGetWidth(roi), CGRectGetHeight(roi)] : @"unknown";
-            NSString *key = [NSString stringWithFormat:@"%@:%@", regionKey, roiKey];
-            NSMutableDictionary *group = groups[key];
-            if (!group) {
-                group = [@{ @"region": regionKey, @"roi": [NSValue value:&roi withObjCType:@encode(CGRect)],
-                    @"payloads": [NSMutableSet set], @"sourceKeys": [NSMutableSet set],
-                    @"retiredSourceKeys": [NSMutableSet set],
-                    @"mapped": @(mapped) } mutableCopy];
-                groups[key] = group;
-                [group release];
-            }
-            if (payload) {
-                [group[@"payloads"] addObject:payload];
-            }
-            if (retiredPayload) {
-                [group[@"payloads"] addObject:retiredPayload];
-                [group[@"retiredSourceKeys"] addObject:sourceKey];
-            }
-            [group[@"sourceKeys"] addObject:sourceKey];
-        }
+        if (sourceKey) sources[sourceKey] = source;
+    }
+    for (NSString *sourceKey in pendingArtifactSources) {
+        SPImageCaptureSource *source = pendingArtifactSources[sourceKey];
+        SPImageCaptureSource *existing = sources[sourceKey];
+        if (existing && !sameSourceMetadata(existing, source)) coverageComplete = NO;
+        if (!existing) sources[sourceKey] = source;
+    }
+    for (NSString *sourceKey in artifactIdentityRecords) {
+        SPImageCaptureSource *recorded = sourceFromArtifactRecord(artifactIdentityRecords[sourceKey]);
+        if (!recorded) { coverageComplete = NO; continue; }
+        SPImageCaptureSource *existing = sources[sourceKey];
+        if (existing && !sameSourceMetadata(existing, recorded)) coverageComplete = NO;
+        if (!existing) sources[sourceKey] = recorded;
+        [recorded release];
+    }
+    NSMutableArray<NSDictionary *> *tagArtifacts = [NSMutableArray arrayWithArray:identityArtifactRecords];
+    for (NSString *pairKey in pendingIdentityArtifacts)
+        [tagArtifacts addObject:identityArtifactRecordFromPending(pendingIdentityArtifacts[pairKey])];
+    if (tagArtifacts.count != identityArtifactSignatures.count) coverageComplete = NO;
+    NSMutableSet<NSString *> *seenPairs = [NSMutableSet set];
+    for (NSDictionary *tagArtifact in tagArtifacts) {
+        addIdentityArtifactPairLocked(tagArtifact, sources, groups, content_rect, screen_rect,
+            pixelsPerPoint, frame_width, frame_height, seenPairs, &coverageComplete);
     }
     [historyLock unlock];
 
@@ -840,17 +1023,23 @@ bool sp_image_capture_match_identity_decode_frame(CGImageRef image, size_t frame
         [result addObject:identityDecodeRecord(frame_number, display_time, nil, CGRectNull,
             @"unknown", hadHistoryDrops ? @"unknown-retention" : @"unknown-geometry", (sp_image_capture_identity){0}, NO)];
     } else {
-        NSMutableDictionary<NSString *, NSMutableArray<NSString *> *> *regionsByROI = [NSMutableDictionary dictionary];
-        for (NSString *key in groups) {
-            NSMutableDictionary *group = groups[key];
-            if (![group[@"mapped"] boolValue]) continue;
-            CGRect roi = CGRectNull;
-            [group[@"roi"] getValue:&roi];
-            NSString *roiKey = [NSString stringWithFormat:@"%.0f:%.0f:%.0f:%.0f",
-                CGRectGetMinX(roi), CGRectGetMinY(roi), CGRectGetWidth(roi), CGRectGetHeight(roi)];
-            NSMutableArray *members = regionsByROI[roiKey];
-            if (!members) regionsByROI[roiKey] = members = [NSMutableArray array];
-            [members addObject:key];
+        NSMutableSet<NSString *> *overlappingGroups = [NSMutableSet set];
+        NSArray<NSString *> *groupKeys = groups.allKeys;
+        for (NSUInteger leftIndex = 0; leftIndex < groupKeys.count; leftIndex++) {
+            NSMutableDictionary *leftGroup = groups[groupKeys[leftIndex]];
+            if (![leftGroup[@"mapped"] boolValue]) continue;
+            CGRect leftROI = CGRectNull;
+            [leftGroup[@"roi"] getValue:&leftROI];
+            for (NSUInteger rightIndex = leftIndex + 1; rightIndex < groupKeys.count; rightIndex++) {
+                NSMutableDictionary *rightGroup = groups[groupKeys[rightIndex]];
+                if (![rightGroup[@"mapped"] boolValue]) continue;
+                CGRect rightROI = CGRectNull;
+                [rightGroup[@"roi"] getValue:&rightROI];
+                if (CGRectIntersectsRect(leftROI, rightROI)) {
+                    [overlappingGroups addObject:groupKeys[leftIndex]];
+                    [overlappingGroups addObject:groupKeys[rightIndex]];
+                }
+            }
         }
         for (NSString *key in groups) {
             NSMutableDictionary *group = groups[key];
@@ -862,9 +1051,7 @@ bool sp_image_capture_match_identity_decode_frame(CGImageRef image, size_t frame
                     @"unknown", @"unknown-geometry", (sp_image_capture_identity){0}, NO)];
                 continue;
             }
-            NSString *roiKey = [NSString stringWithFormat:@"%.0f:%.0f:%.0f:%.0f",
-                CGRectGetMinX(roi), CGRectGetMinY(roi), CGRectGetWidth(roi), CGRectGetHeight(roi)];
-            if (regionsByROI[roiKey].count > 1) {
+            if ([overlappingGroups containsObject:key]) {
                 [result addObject:identityDecodeRecord(frame_number, display_time, region, roi,
                     @"unknown", @"duplicate-roi", (sp_image_capture_identity){0}, NO)];
                 continue;
@@ -885,14 +1072,15 @@ bool sp_image_capture_match_identity_decode_frame(CGImageRef image, size_t frame
                 sp_image_capture_identity identity = { decoded.generation, decoded.raster, (int)decoded.sequence };
                 NSString *sourceKey = identitySourceKey(identity);
                 [historyLock lock];
-                BOOL stillIssued = [group[@"sourceKeys"] containsObject:sourceKey]
-                    && identityIssuedPayloads[region][sourceKey] != nil
-                    && [identityRegionsBySource[sourceKey] containsObject:region];
-                BOOL retired = [group[@"sourceKeys"] containsObject:sourceKey]
-                    && identityRetiredPayloads[region][sourceKey] != nil
-                    && [identityRetiredRegionsBySource[sourceKey] containsObject:region];
+                NSString *pairKey = identityArtifactKey(region, sourceKey);
+                BOOL knownSource = [group[@"sourceKeys"] containsObject:sourceKey];
+                BOOL retired = knownSource && ([group[@"retiredSourceKeys"] containsObject:sourceKey]
+                    || identityRetiredPayloads[region][sourceKey] != nil);
+                BOOL eligible = knownSource && !retired
+                    && [group[@"eligibleSourceKeys"] containsObject:sourceKey]
+                    && identityArtifactSignatures[pairKey] != nil;
                 [historyLock unlock];
-                if (stillIssued) [result addObject:identityDecodeRecord(frame_number, display_time, region, roi,
+                if (eligible) [result addObject:identityDecodeRecord(frame_number, display_time, region, roi,
                     @"matched", nil, identity, YES)];
                 else [result addObject:identityDecodeRecord(frame_number, display_time, region, roi,
                     @"unknown", retired ? @"unknown-retention" : @"unissued", (sp_image_capture_identity){0}, NO)];
@@ -903,7 +1091,11 @@ bool sp_image_capture_match_identity_decode_frame(CGImageRef image, size_t frame
             [unknownReason release];
         }
     }
-    if (hadHistoryDrops && groups.count != 0) {
+    BOOL omitRawHistoryMarker = groups.count != 0 && hadHistoryDrops && onlyHistoryEvictions && coverageComplete;
+    if (groups.count != 0 && !coverageComplete && !hadHistoryDrops) {
+        [result addObject:identityDecodeRecord(frame_number, display_time, nil, CGRectNull,
+            @"unknown", @"unknown-geometry", (sp_image_capture_identity){0}, NO)];
+    } else if (groups.count != 0 && hadHistoryDrops && !omitRawHistoryMarker) {
         [result addObject:identityDecodeRecord(frame_number, display_time, nil, CGRectNull,
             @"unknown", @"unknown-retention", (sp_image_capture_identity){0}, NO)];
     }
@@ -1077,6 +1269,11 @@ static void identityRememberRetiredLocked(NSString *regionKey, NSString *sourceK
         NSString *oldRegion = [oldest substringToIndex:separator.location];
         NSString *oldSource = [oldest substringFromIndex:NSMaxRange(separator)];
         if (identityRetiredPayloads[oldRegion][oldSource]) {
+            if (identityArtifactSignatures[identityArtifactKey(oldRegion, oldSource)]) {
+                if (!identitySessionFailure)
+                    identitySessionFailure = [@"frame identity retired artifact disposition capacity was exceeded" copy];
+                atomic_store(&identitySessionEnabled, false);
+            }
             NSMutableDictionary *oldPayloads = identityRetiredPayloads[oldRegion];
             [oldPayloads removeObjectForKey:oldSource];
             if (!oldPayloads.count) [identityRetiredPayloads removeObjectForKey:oldRegion];
@@ -1099,9 +1296,6 @@ static void identityEvictSourceLocked(sp_image_capture_identity identity) {
             if (!issued.count) [identityIssuedPayloads removeObjectForKey:regionKey];
         }
     }
-    NSSet<NSString *> *retiredRegions = [identityRetiredRegionsBySource[sourceKey] copy];
-    for (NSString *regionKey in retiredRegions) identityForgetRetiredLocked(regionKey, sourceKey);
-    [retiredRegions release];
     [regions release];
     [identityRegionsBySource removeObjectForKey:sourceKey];
 }
@@ -1192,7 +1386,6 @@ bool sp_image_capture_match_identity_issue(const uint8_t region_token[16], sp_im
         [historyLock unlock];
         return identityFailure(error, "frame identity issued payload limit reached");
     }
-    identityForgetRetiredLocked(regionKey, sourceKey);
     NSString *nonce = identityNonceLocked(region_token);
     SPCaptureFrameIdentity frameIdentity = { identity.generation, identity.raster, (uint64_t)identity.sequence };
     NSString *created = nil, *payloadError = nil;
@@ -1243,8 +1436,11 @@ bool sp_image_capture_match_identity_evict(const uint8_t region_token[16], sp_im
         return identityFailure(error, "frame identity session is not active");
     }
     NSMutableDictionary *issued = identityIssuedPayloads[regionKey];
+    NSString *payload = issued[sourceKey] ?: identityArtifactPayloadLocked(regionKey, sourceKey);
+    if (payload) {
+        identityRememberRetiredLocked(regionKey, sourceKey, payload);
+    }
     if (issued[sourceKey]) {
-        identityRememberRetiredLocked(regionKey, sourceKey, issued[sourceKey]);
         [issued removeObjectForKey:sourceKey];
         identityIssuedCount--;
         if (!issued.count) [identityIssuedPayloads removeObjectForKey:regionKey];
@@ -1333,6 +1529,39 @@ static NSString *identityArtifactKey(NSString *regionKey, NSString *sourceKey) {
     return [NSString stringWithFormat:@"%@-%@", regionKey, sourceKey];
 }
 
+static bool identityFromArtifactRecord(NSDictionary *record, sp_image_capture_identity *identity) {
+    if (![record isKindOfClass:[NSDictionary class]] || !identity) return false;
+    NSString *generationField = record[@"generation"];
+    NSString *rasterField = record[@"raster"];
+    id sequenceField = record[@"sequence"];
+    uint64_t generation = 0, raster = 0, sequence = 0;
+    if (![generationField isKindOfClass:[NSString class]] || ![rasterField isKindOfClass:[NSString class]]
+        || ![sequenceField isKindOfClass:[NSNumber class]]
+        || !sp_capture_frame_identity_parse_canonical_uint64(generationField, &generation)
+        || !sp_capture_frame_identity_parse_canonical_uint64(rasterField, &raster)
+        || !sp_capture_frame_identity_parse_canonical_uint64([sequenceField stringValue], &sequence)
+        || sequence > INT_MAX) return false;
+    *identity = (sp_image_capture_identity){ generation, raster, (int)sequence };
+    return true;
+}
+
+static NSString *identityRecordSourceKey(NSDictionary *record) {
+    sp_image_capture_identity identity = {};
+    if (!identityFromArtifactRecord(record, &identity)) return nil;
+    return identitySourceKey(identity);
+}
+
+static NSString *identityArtifactPayloadLocked(NSString *regionKey, NSString *sourceKey) {
+    NSString *artifactKey = identityArtifactKey(regionKey, sourceKey);
+    SPImageCaptureIdentityArtifact *pending = pendingIdentityArtifacts[artifactKey];
+    if (pending) return pending.payload;
+    for (NSDictionary *record in identityArtifactRecords) {
+        if ([record[@"regionToken"] isEqualToString:regionKey]
+            && [identityRecordSourceKey(record) isEqualToString:sourceKey]) return record[@"payload"];
+    }
+    return nil;
+}
+
 bool sp_image_capture_match_identity_record(const uint8_t region_token[16], sp_image_capture_identity identity,
     CGRect roi, const uint8_t *tagged_pixels, size_t width, size_t height, size_t stride,
     const char *color_space, char **error) {
@@ -1376,6 +1605,7 @@ bool sp_image_capture_match_identity_record(const uint8_t region_token[16], sp_i
         if (!sameArtifact && !identitySessionFailure)
             identitySessionFailure = [@"frame identity artifact conflicts with a repeated source tuple" copy];
         if (!sameArtifact) atomic_store(&identitySessionEnabled, false);
+        else identityForgetRetiredLocked(regionKey, sourceKey);
         [historyLock unlock];
         if (!sameArtifact) return identityFailure(error, "frame identity artifact conflicts with a repeated source tuple");
         return true;
@@ -1403,6 +1633,7 @@ bool sp_image_capture_match_identity_record(const uint8_t region_token[16], sp_i
             @"colorSpace": colorSpace ?: (id)NSNull.null, @"byteCount": @(byteCount),
             @"sha256": digestHex, @"file": (id)NSNull.null };
         [identityArtifactRecords addObject:record];
+        identityForgetRetiredLocked(regionKey, sourceKey);
         [payload release]; [nonceCopy release];
         [historyLock unlock];
         return true;
@@ -1431,6 +1662,7 @@ bool sp_image_capture_match_identity_record(const uint8_t region_token[16], sp_i
     }
     pendingIdentityArtifacts[key] = artifact;
     artifactPendingBytes += byteCount;
+    identityForgetRetiredLocked(regionKey, sourceKey);
     NSString *directory = [artifactDirectory copy];
     dispatch_queue_t queue = artifactWriterQueue;
     [artifact retain];
