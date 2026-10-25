@@ -26,8 +26,8 @@ async function waitForRows(s, since, predicate, description) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a hidden terminal session detaches and reattaches its image across reload`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { settings: { memorySaver: false }, log: EVERY_LEVEL, reads: READS });
     const fixtureStart = await tailOf(s);
+    await fresh(s, { settings: { memorySaver: false }, log: EVERY_LEVEL, reads: READS });
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     const beforeSession = await s.until("terminal.session", (state) => Boolean(state?.sessionId),
@@ -79,7 +79,18 @@ for (const app of Object.values(APPS)) {
       "the page reload replaced the terminal session", { surface });
     assert.equal(replacementSession.sessionId, beforeSession.sessionId);
 
-    const revealSince = await tailOf(s);
+    rows = await waitForRows(s, since, (items) => {
+      const headlessMode = items.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+        && row.event.fields.mode === "headless");
+      return headlessMode && items.some((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+        && row.event.fields.mode === "image" && row.event.seq > headlessMode.event.seq);
+    }, `the hidden terminal ${surface} did not transition from headless back to image mode`);
+    const headlessMode = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+      && row.event.fields.mode === "headless");
+    const reattachedMode = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+      && row.event.fields.mode === "image" && row.event.seq > headlessMode.event.seq);
+    assert.ok(reattachedMode, "the sidecar did not record image mode after headless mode");
+
     await s.run("core.tab.select", { tab: surface });
     const attached = await s.until("host.window", (host) => host.regions.find((item) => item.surface === surface
       && item.name === "view" && item.visible && item.presented && item.presented.generation !== oldGeneration),
@@ -87,18 +98,6 @@ for (const app of Object.values(APPS)) {
     const newRegion = attached.regions.find((item) => item.surface === surface && item.name === "view");
     assert.ok(newRegion.presented.generation > oldGeneration,
       `terminal ${surface} attachment generation did not increase from ${oldGeneration}: ${JSON.stringify(newRegion.presented)}`);
-    rows = await waitForRows(s, revealSince, (items) => {
-      const selection = items.find((row) => row.event.event === "page.command" && row.event.page === replacementPage
-        && row.event.fields.name === "core.tab.select" && row.event.fields.ok);
-      return selection && items.some((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
-        && row.event.fields.mode === "image" && row.event.mono_ns > selection.event.mono_ns);
-    },
-    `the revealed terminal ${surface} did not return to image mode`);
-    const selection = rows.find((row) => row.event.event === "page.command" && row.event.page === replacementPage
-      && row.event.fields.name === "core.tab.select" && row.event.fields.ok);
-    const image = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
-      && row.event.fields.mode === "image" && row.event.mono_ns > selection.event.mono_ns);
-    assert.ok(image, "the terminal did not attach its image after reveal");
     assert.equal((await s.get("terminal.session", surface)).sessionId, beforeSession.sessionId,
       "revealing the terminal replaced its sidecar session");
 
@@ -110,6 +109,6 @@ for (const app of Object.values(APPS)) {
     const errors = rows.filter(({ event }) => event.level === "error");
     assert.deepEqual(errors, [], `reload and reveal produced host, page, or supplier errors: ${JSON.stringify(errors)}`);
     assert.equal(await s.get("core.page.error"), null, "the reload or reveal displayed a page error");
-    t.diagnostic(`${app.name}: page.start ${JSON.stringify(start.event.fields.time_origin)}, headless ${headless.event.fields.mode}, image ${image.event.fields.mode}, session ${beforeSession.sessionId}`);
+    t.diagnostic(`${app.name}: page.start ${JSON.stringify(start.event.fields.time_origin)}, sidecar seq ${headlessMode.event.seq}->${reattachedMode.event.seq}, attachment generation ${oldGeneration}->${newRegion.presented.generation}, session ${beforeSession.sessionId}`);
   });
 }

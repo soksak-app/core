@@ -6,10 +6,12 @@
 
 - F212.10-core-5-6: Add a focused hidden-terminal reload window check. It observes
   the old presented attachment generation, replacement page start, retained
-  session opening headless, and a newer presented generation with an image-mode
-  event after reveal. F212.10-core-5-5 host owner tests establish the exact
-  detach acknowledgement barrier; this window case checks application
-  continuity without claiming to measure that boundary. `node --check`,
+  session opening headless, the sidecar's same-writer headless-to-image mode
+  transition after reload, and a newer presented generation after reveal.
+  Memory saver disabled can reattach a hidden view before reveal. F212.10-core-5-5
+  host owner tests establish the exact detach acknowledgement barrier; this
+  window case checks application continuity without claiming to measure that
+  boundary. `node --check`,
   `make e2e-check`, and `make docs-check` pass. Two-host runtime acceptance
   remains pending.
 - F239-48-3-8: Pair both real start-module entries through module hooks.
