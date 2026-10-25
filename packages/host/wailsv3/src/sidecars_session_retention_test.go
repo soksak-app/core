@@ -62,3 +62,87 @@ func TestFastCloseAnswerPreservesBothClosingTransitions(t *testing.T) {
 		t.Fatalf("closing transitions = %v, want %v", snapshots, want)
 	}
 }
+
+// outdatedSidecarsFixture holds a connected persistent session without starting a process.
+func outdatedSidecarsFixture(t *testing.T, running, installed string) (*Sidecars, SidecarDeclaration, *sidecar) {
+	t.Helper()
+	declaration := SidecarDeclaration{Name: "fixture-service", Folder: t.TempDir(), Version: installed,
+		Data: []byte(`{"executable":"service","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}`)}
+	c, err := NewSidecars([]SidecarDeclaration{declaration}, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	process := &sidecar{name: declaration.Name, version: &running, persistent: true,
+		surfaces: map[string]bool{"tab-fixture": true}, outbox: make(chan queuedLine, 2)}
+	c.running[process.name] = process
+	c.owners["tab-fixture"] = sidecarSessionSurfaces(t)
+	c.roots["tab-fixture"] = "/fixture/root"
+	return c, declaration, process
+}
+
+// contract: sidecars-transport.hello.reports-a-service-of-another-version
+func TestDeclarationNotifiesEachOutdatedVersionChange(t *testing.T) {
+	for _, item := range []struct {
+		running, installed, next string
+		want                     bool
+	}{
+		{"0.0.7", "0.0.7", "0.0.8", true},
+		{"0.0.6", "0.0.7", "0.0.8", true},
+		{"0.0.6", "0.0.7", "0.0.6", true},
+		{"0.0.6", "0.0.7", "0.0.7", false},
+	} {
+		t.Run(item.running+"-"+item.installed+"-"+item.next, func(t *testing.T) {
+			c, declaration, _ := outdatedSidecarsFixture(t, item.running, item.installed)
+			var snapshots []SidecarStatus
+			c.ClosingChanged = func(value SidecarStatus) { snapshots = append(snapshots, value) }
+			declaration.Version = item.next
+			if err := c.Declare([]SidecarDeclaration{declaration}); err != nil {
+				t.Fatal(err)
+			}
+			wantCount := 0
+			if item.want {
+				wantCount = 1
+			}
+			if len(snapshots) != wantCount {
+				t.Fatalf("version-change notifications = %v, want %d", snapshots, wantCount)
+			}
+			if item.want && !reflect.DeepEqual(snapshots[0], c.Status()) {
+				t.Fatalf("notification = %+v, current status = %+v", snapshots[0], c.Status())
+			}
+		})
+	}
+	c, declaration, _ := outdatedSidecarsFixture(t, "0.0.6", "0.0.7")
+	before := c.Status()
+	calls := 0
+	c.ClosingChanged = func(SidecarStatus) { calls++ }
+	declaration.Data = []byte("{")
+	if err := c.Declare([]SidecarDeclaration{declaration}); err == nil {
+		t.Fatal("invalid declaration was accepted")
+	}
+	if calls != 0 || !reflect.DeepEqual(c.Status(), before) {
+		t.Fatal("rejected declaration changed or announced status")
+	}
+}
+
+// contract: sidecars-transport.hello.reports-a-service-of-another-version
+func TestDisconnectNotifiesOutdatedRemovalWithoutPendingCloses(t *testing.T) {
+	c, _, process := outdatedSidecarsFixture(t, "0.0.6", "0.0.7")
+	var snapshots []SidecarStatus
+	c.ClosingChanged = func(value SidecarStatus) { snapshots = append(snapshots, value) }
+	c.mu.Lock()
+	stale, _, _ := c.persistentConnectionEnded(&sidecar{name: process.name}, false)
+	c.mu.Unlock()
+	if stale || len(snapshots) != 0 {
+		t.Fatal("stale disconnect changed or announced the current connection")
+	}
+	c.mu.Lock()
+	current, _, _ := c.persistentConnectionEnded(process, false)
+	c.mu.Unlock()
+	if !current {
+		t.Fatal("the connected process was not retired")
+	}
+	want := []SidecarStatus{{Closing: []ClosingSurface{}, Outdated: []OutdatedSidecar{}}}
+	if !reflect.DeepEqual(snapshots, want) {
+		t.Fatalf("disconnect notifications = %+v, want %+v", snapshots, want)
+	}
+}

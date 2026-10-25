@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-171-3: Notify version-only installed declaration changes and outdated removal when the current persistent connection ends. Serialize declaration replacement with immutable status publication, preserving unchanged and rejected declarations and stale connections. Four controlled Red cases become Green; both existing sidecar-folder replacement owners also pass on macOS arm64. Parity and event checks pass. Stop and retain status changes remain separately tracked.
+
 - F239-172: Restore nine missing capability mappings to inspected implementation symbols and owning assertions. Update both current inventory records to 1034 test files, retaining 102 tracks and 710 implementation files. The parity audit and three focused audit owners pass without exclusions or criterion changes; this does not establish application behavior.
 
 - F239-171-2: Preserve immutable sidecar status transitions in mutation order on both hosts and read closing and outdated services atomically. Controlled fast-answer and subscriber-independent removal owners pass after Red; mixed detach verifies the complete final state. Correct the terminal retention consumer to await the declared project flush instead of requiring unrelated per-surface close envelopes. Both rebuilt hosts pass actual shell reaping and shared-service identity checks, application log audits and normal shutdown. Separate parity metadata and outdated-only notification findings remain open.

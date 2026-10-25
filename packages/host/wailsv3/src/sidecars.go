@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -407,11 +408,17 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 // the next Send starts the new executable. A persistent service uses the new executable from its next start. An
 // invalid declaration fails without a change.
 func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
+	c.mu.Lock()
+	before := c.statusLocked()
 	changed, err := c.declare(declarations)
 	if err != nil {
+		c.mu.Unlock()
 		return err
 	}
-	c.mu.Lock()
+	declarationChanged := !reflect.DeepEqual(before, c.statusLocked())
+	if declarationChanged {
+		c.closingChanged()
+	}
 	// A sidecar that is starting registers when its start ends, so the start is awaited before the running list is
 	// read.
 	for {
@@ -441,7 +448,7 @@ func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
 		c.closingChanged()
 	}
 	c.mu.Unlock()
-	if forgot {
+	if forgot || declarationChanged {
 		c.closingInvalidated()
 	}
 	c.stopProcesses(processes, false)
@@ -2043,26 +2050,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		delete(process.closeWaiters, request)
 		waiters = append(waiters, waiter)
 	}
-	forgot := false
-	if c.running[process.name] == process {
-		delete(c.running, process.name)
-		c.unannouncedLoss[process.name] = true
-		wasCurrent = true
-		forgot = c.forgetClosing(process.name)
-		if violation != "" {
-			for surface := range process.surfaces {
-				if owner := c.owners[surface]; owner != nil {
-					owned = append(owned, ownedSurface{surface, owner})
-				}
-			}
-		}
-	} else if c.stopped {
-		// This is a connection that the stop removed from the running list. The service finishes the closes that were not answered by itself.
-		forgot = c.forgetClosing(process.name)
-	}
-	if forgot {
-		c.closingChanged()
-	}
+	wasCurrent, forgot, owned := c.persistentConnectionEnded(process, violation != "")
 	c.mu.Unlock()
 	if forgot {
 		c.closingInvalidated()
@@ -2095,6 +2083,35 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		c.failRequests(process.name, "connection lost")
 		c.revivePersistent(process.name, fmt.Sprintf("end: %s, waiting: %d", end, waiting))
 	}
+}
+
+// persistentConnectionEnded retires one connection under c.mu. It exposes the
+// complete state transition independently of socket I/O and reconnection.
+func (c *Sidecars) persistentConnectionEnded(process *sidecar, violated bool) (bool, bool, []ownedSurface) {
+	before := c.statusLocked()
+	wasCurrent := false
+	var owned []ownedSurface
+	if c.running[process.name] == process {
+		delete(c.running, process.name)
+		c.unannouncedLoss[process.name] = true
+		wasCurrent = true
+		c.forgetClosing(process.name)
+		if violated {
+			for surface := range process.surfaces {
+				if owner := c.owners[surface]; owner != nil {
+					owned = append(owned, ownedSurface{surface, owner})
+				}
+			}
+		}
+	} else if c.stopped {
+		// This is a connection that the stop removed from the running list. The service finishes the closes that were not answered by itself.
+		c.forgetClosing(process.name)
+	}
+	changed := !reflect.DeepEqual(before, c.statusLocked())
+	if changed {
+		c.closingChanged()
+	}
+	return wasCurrent, changed, owned
 }
 
 // disconnectFields returns the fields of the host.sidecar.disconnect record of the end of a persistent service connection (docs/spec/events.json).

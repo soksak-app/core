@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-171-3: 설치된 declaration의 version-only 변경과 현재 persistent connection 종료의 outdated 제거를 알린다. Declaration 교체와 immutable status 발행을 직렬화하고 동일 및 거절된 declaration과 stale connection을 보존한다. 통제된 Red case 4개가 Green으로 바뀌며 기존 sidecar-folder 교체 owner도 macOS arm64에서 양쪽 모두 통과한다. Parity와 event 검사가 통과한다. Stop과 retain status 변경은 별도 추적한다.
+
 - F239-172: 누락된 capability mapping 9개를 확인한 구현 기호와 owning assertion에 연결한다. 두 현재 inventory 기록을 test file 1034개로 갱신하며 track 102개와 implementation file 710개를 유지한다. 제외나 기준 변경 없이 parity audit과 집중 audit owner 3개가 통과하며 application 동작을 입증하지 않는다.
 
 - F239-171-2: 양쪽 host에서 immutable sidecar status 전이를 mutation 순서대로 보존하고 closing과 outdated service를 원자적으로 읽는다. 통제된 fast-answer 및 subscriber 독립 제거 owner는 Red 이후 통과하며 mixed detach가 완전한 최종 상태를 검증한다. Terminal retention consumer는 관련 없는 surface별 close envelope 대신 기존 project flush를 기다리도록 수정한다. 다시 build한 양쪽 host에서 실제 shell 회수와 shared-service identity 검사, application log audit, 정상 종료가 통과한다. 별도 parity metadata와 outdated-only notification 항목은 열린 상태다.

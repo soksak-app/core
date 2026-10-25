@@ -405,3 +405,122 @@ fn detach_notification_contains_the_complete_final_status() {
         }]
     );
 }
+
+/// Holds a connected persistent session without starting a process.
+fn outdated_fixture(
+    running: &str,
+    installed: &str,
+) -> (
+    Sidecars<TestOwner>,
+    super::SidecarDeclaration,
+    Arc<std::sync::atomic::AtomicBool>,
+    crate::test_folder::Folder,
+) {
+    let folder = crate::test_folder::Folder::new();
+    let declaration = super::SidecarDeclaration { name: "fixture-service".into(), folder: folder.path().to_path_buf(),
+  data: br#"{"executable":"service","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#.to_vec(), version: installed.into(), dependents: vec![] };
+    let sidecars = Sidecars::new(&[declaration.clone()], folder.path().to_path_buf()).unwrap();
+    let connected = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let (outbox, _receiver) = sync_channel(2);
+    {
+        let mut state = sidecars.core.state.lock().unwrap();
+        state.running.insert(
+            declaration.name.clone(),
+            super::Process {
+                child: None,
+                outbox,
+                writing: Arc::new(AtomicUsize::new(0)),
+                persistent: Some(super::PersistentConnection {
+                    version: Some(running.into()),
+                    close_waiters: Default::default(),
+                    retain_waiters: Default::default(),
+                    shutdown_waiters: Default::default(),
+                    owner_closed: Default::default(),
+                    connected: connected.clone(),
+                    service_pid: 0,
+                }),
+                surfaces: ["tab-fixture".into()].into(),
+                closed_surfaces: Default::default(),
+            },
+        );
+        state
+            .owners
+            .insert("tab-fixture".into(), TestOwner("probe-window".into()));
+        state
+            .roots
+            .insert("tab-fixture".into(), "/fixture/root".into());
+    }
+    (sidecars, declaration, connected, folder)
+}
+
+// contract: sidecars-transport.hello.reports-a-service-of-another-version
+#[test]
+fn declaration_notifies_each_outdated_version_change() {
+    for (running, installed, next, expected) in [
+        ("0.0.7", "0.0.7", "0.0.8", 1),
+        ("0.0.6", "0.0.7", "0.0.8", 1),
+        ("0.0.6", "0.0.7", "0.0.6", 1),
+        ("0.0.6", "0.0.7", "0.0.7", 0),
+    ] {
+        let (sidecars, mut declaration, _, _folder) = outdated_fixture(running, installed);
+        let snapshots = Arc::new(Mutex::new(Vec::new()));
+        let collected = snapshots.clone();
+        sidecars.on_status_changed(move |value| collected.lock().unwrap().push(value));
+        declaration.version = next.into();
+        sidecars.declare(&[declaration]).unwrap();
+        let snapshots = snapshots.lock().unwrap();
+        assert_eq!(
+            snapshots.len(),
+            expected,
+            "version-change notifications {running}/{installed}/{next}: {snapshots:?}"
+        );
+        if expected > 0 {
+            assert_eq!(snapshots[0], sidecars.status());
+        }
+    }
+    let (sidecars, mut declaration, _, _folder) = outdated_fixture("0.0.6", "0.0.7");
+    let before = sidecars.status();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counted = calls.clone();
+    sidecars.on_status_changed(move |_| {
+        counted.fetch_add(1, Ordering::SeqCst);
+    });
+    declaration.data = b"{".to_vec();
+    assert!(sidecars.declare(&[declaration]).is_err());
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(sidecars.status(), before);
+}
+
+// contract: sidecars-transport.hello.reports-a-service-of-another-version
+#[test]
+fn disconnect_notifies_outdated_removal_without_pending_closes() {
+    let (sidecars, _, connected, _folder) = outdated_fixture("0.0.6", "0.0.7");
+    let snapshots = Arc::new(Mutex::new(Vec::new()));
+    let collected = snapshots.clone();
+    sidecars.on_status_changed(move |value| collected.lock().unwrap().push(value));
+    let stale_connection = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let (stale, _, _) = super::persistent_connection_ended(
+        &sidecars.core,
+        &mut sidecars.core.state.lock().unwrap(),
+        "fixture-service",
+        &stale_connection,
+        false,
+    );
+    assert!(!stale);
+    assert!(snapshots.lock().unwrap().is_empty());
+    let (current, _, _) = super::persistent_connection_ended(
+        &sidecars.core,
+        &mut sidecars.core.state.lock().unwrap(),
+        "fixture-service",
+        &connected,
+        false,
+    );
+    assert!(current);
+    assert_eq!(
+        *snapshots.lock().unwrap(),
+        vec![super::SidecarStatus {
+            closing: vec![],
+            outdated: vec![]
+        }]
+    );
+}

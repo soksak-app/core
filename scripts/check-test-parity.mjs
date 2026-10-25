@@ -197,6 +197,21 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-171-3",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) persistentConnectionEnded(" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn persistent_connection_ended<O: Owner>(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDisconnectNotifiesOutdatedRemovalWithoutPendingCloses" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "declaration_notifies_each_outdated_version_change" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "disconnect_notifies_outdated_removal_without_pending_closes" },
+    ],
+    expected: "Version-only declaration changes and current persistent connection loss notify the complete outdated status without pending closes; rejected declarations, unchanged versions and stale connections do not announce changes.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-163",
     implementation: [
       { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn read_surface_placements(" },

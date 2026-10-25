@@ -1176,7 +1176,6 @@ impl<O: Owner> Sidecars<O> {
     /// rules, so the next send starts the new executable. A persistent service uses the new executable from its next
     /// start. An invalid declaration fails without a change.
     pub fn declare(&self, declarations: &[SidecarDeclaration]) -> Result<(), String> {
-        let changed = self.replace_declarations(declarations)?;
         let (processes, closing_changed) = {
             let mut state = self
                 .core
@@ -1185,6 +1184,10 @@ impl<O: Owner> Sidecars<O> {
                 // default: a lock that a panicking thread poisoned still holds the sidecar state, which the declaration
                 // amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
+            let before = status_locked(&self.core, &state);
+            let changed = self.replace_declarations(declarations)?;
+            let declaration_changed = before != status_locked(&self.core, &state);
+            let declaration_notification = closing_notification(&state, declaration_changed);
             // A sidecar that is starting registers when its start ends, so the start is awaited before the running
             // list is read.
             while changed.iter().any(|name| state.starting.contains(name)) {
@@ -1210,7 +1213,8 @@ impl<O: Owner> Sidecars<O> {
                 let process = state.running.remove(name).expect("checked above");
                 processes.push((name.clone(), process));
             }
-            let closing_changed = closing_notification(&state, closing_changed);
+            let closing_changed =
+                closing_notification(&state, closing_changed).or(declaration_notification);
             (processes, closing_changed)
         };
         if let Some(changed) = closing_changed {
@@ -3199,12 +3203,12 @@ impl<O: Owner> Core<O> {
             } else {
                 end
             };
-            let mut was_current = false;
+            let was_current;
             let stopping;
             let waiting;
             let stop;
-            let mut owned = Vec::new();
-            let mut changed = None;
+            let owned;
+            let changed;
             let mut stopped_requests = Vec::new();
             {
                 // default: a lock that a panicking thread poisoned still holds the state of the sidecars, which the disconnect updates in
@@ -3220,38 +3224,13 @@ impl<O: Owner> Core<O> {
                 // service, which the restart limit counts here; the service keeps running
                 // (docs/spec/persistent-services.md#service-transport).
                 stop = violation.is_some() && !stopping && count_failure(&mut state, &sidecar);
-                let is_current = state
-                    .running
-                    .get(&sidecar)
-                    .and_then(|process| process.persistent.as_ref())
-                    .is_some_and(|connection| {
-                        Arc::ptr_eq(&connection.connected, &reader_connected)
-                    });
-                if is_current {
-                    if let Some(process) = state.running.remove(&sidecar)
-                        && violation.is_some()
-                    {
-                        owned = process
-                            .surfaces
-                            .iter()
-                            .filter_map(|surface| {
-                                state
-                                    .owners
-                                    .get(surface)
-                                    .map(|owner| (surface.clone(), owner.clone()))
-                            })
-                            .collect();
-                    }
-                    state.unannounced_loss.insert(sidecar.clone());
-                    let removed = forget_closing(&mut state, &sidecar);
-                    changed = closing_notification(&state, removed);
-                    was_current = true;
-                } else if state.stopped {
-                    // This connection was removed from the running list by stop. A close that was not answered is
-                    // finished by the service itself.
-                    let removed = forget_closing(&mut state, &sidecar);
-                    changed = closing_notification(&state, removed);
-                }
+                (was_current, owned, changed) = persistent_connection_ended(
+                    &reader_core,
+                    &mut state,
+                    &sidecar,
+                    &reader_connected,
+                    violation.is_some(),
+                );
             }
             if let Some(changed) = changed {
                 changed();
@@ -3471,6 +3450,49 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
         }
     }
     notify_connection(core, name, outcome.map(|_| ()));
+}
+
+/// Retires a connection independently of socket I/O while the caller holds the state lock.
+fn persistent_connection_ended<O: Owner>(
+    core: &Core<O>,
+    state: &mut State<O>,
+    sidecar: &str,
+    connected: &Arc<AtomicBool>,
+    violated: bool,
+) -> (bool, Vec<(String, O)>, Option<ClosingChanged>) {
+    let mut was_current = false;
+    let mut owned = Vec::new();
+    let before = status_locked(core, state);
+    let is_current = state
+        .running
+        .get(sidecar)
+        .and_then(|process| process.persistent.as_ref())
+        .is_some_and(|connection| Arc::ptr_eq(&connection.connected, connected));
+    if is_current {
+        if let Some(process) = state.running.remove(sidecar)
+            && violated
+        {
+            owned = process
+                .surfaces
+                .iter()
+                .filter_map(|surface| {
+                    state
+                        .owners
+                        .get(surface)
+                        .map(|owner| (surface.clone(), owner.clone()))
+                })
+                .collect();
+        }
+        state.unannounced_loss.insert(sidecar.to_string());
+        forget_closing(state, sidecar);
+        was_current = true;
+    } else if state.stopped {
+        // This connection was removed from the running list by stop. A close that was not answered is
+        // finished by the service itself.
+        forget_closing(state, sidecar);
+    }
+    let changed = closing_notification(state, before != status_locked(core, state));
+    (was_current, owned, changed)
 }
 
 /// The fields of the host.sidecar.disconnect record of the end of a persistent service connection (docs/spec/events.json).
