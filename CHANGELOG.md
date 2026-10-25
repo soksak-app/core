@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-137: Include every installed plugin manifest catalog in per-configuration event-log audits. Validate the installed manifest, plugin identity, catalog layer and namespace, and report missing or invalid catalog files explicitly. `composeCatalogs` now preserves sidecar validation while adding plugin event declarations and layers. Red: the owner assertion failed because the installed plugin event was absent from `catalogOf` (`actual: undefined`). Green: both installed-plugin owner cases pass in one run, including a disabled installed plugin and invalid manifest/catalog cases; sidecar audit and log-contract composition regressions each pass 3/3. Runtime host catalog loading already included plugin catalogs and was unchanged.
+
 - F239-134: Join retained source rasters to exact accepted terminal screen
   messages using the existing host performance trace body and accepted frame
   hash record. The owning consumer test passes 23/23. Fresh runtime verification

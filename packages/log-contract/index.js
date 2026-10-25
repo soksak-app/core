@@ -272,18 +272,34 @@ function checkExtension(catalog, extension) {
 }
 
 /**
- * Composes the catalog of this repository with the catalogs of sidecars (docs/spec/logging.md#sidecar-catalogs). A sidecar
- * catalog names its sidecar (`sidecar`), owns the layer `sidecar` only, declares `sidecar.<name>.*` events and the `log.*`
- * lifecycle events with the layer `sidecar`, and may extend a chain of the base. A `log.*` event that both declare must have the
- * same class, level, fields and `cids`. The result is the catalog that `auditLogs` takes: the union of the events, and the
- * extensions of all sidecars as `extends` entries `{sidecar, chain, after, events}`.
+ * Composes the base catalog with installed package catalogs (docs/spec/logging.md#sidecar-catalogs). Sidecar catalogs declare
+ * their sidecar name and may extend a base chain. Plugin catalogs are passed as `{ kind: "plugin", id, catalog, source }`
+ * descriptors and declare only `plugin.<id>.*` events. A `log.*` event shared with a sidecar must match the base declaration.
+ * The result is the catalog that `auditLogs` takes: the union of events and layers, and sidecar chain extensions.
  */
-export function composeCatalogs(base, ...sidecars) {
+export function composeCatalogs(base, ...catalogs) {
   validateCatalog(base, "base event catalog");
   const events = { ...base.events };
+  const layers = new Set(base.layers ?? []);
   // default: a catalog without extensions has none to carry over.
   const extensions = [...(base.extends ?? [])];
-  for (const catalog of sidecars) {
+  for (const entry of catalogs) {
+    if (entry?.kind === "plugin") {
+      const { id, catalog, source } = entry;
+      const where = `plugin ${id}`;
+      validateCatalog(catalog, `${source ?? where + " event catalog"}`);
+      if (typeof id !== "string" || id === "") throw new Error(`${source ?? "plugin event catalog"}: the installed plugin id is required`);
+      if (JSON.stringify(catalog.layers) !== '["plugin"]') throw new Error(`${source ?? where}: layers must be ["plugin"], found ${JSON.stringify(catalog.layers)}`);
+      for (const [name, declared] of Object.entries(catalog.events)) {
+        if (declared.layer !== "plugin") throw new Error(`${source ?? where}: event ${name} has the layer ${declared.layer}, not plugin`);
+        if (!name.startsWith(`plugin.${id}.`)) throw new Error(`${source ?? where}: event ${name} is outside plugin.${id}.`);
+        if (events[name] !== undefined) throw new Error(`${source ?? where}: event ${name} is declared twice`);
+        events[name] = declared;
+      }
+      layers.add("plugin");
+      continue;
+    }
+    const catalog = entry;
     validateCatalog(catalog, `sidecar ${catalog?.sidecar ?? ""} event catalog`); // default: a malformed catalog may lack its name before schema validation.
     if (typeof catalog.sidecar !== "string" || catalog.sidecar === "") throw new Error("sidecar catalog: the member sidecar must name the sidecar");
     const where = `sidecar ${catalog.sidecar}`;
@@ -301,8 +317,9 @@ export function composeCatalogs(base, ...sidecars) {
     }
     // default: a sidecar catalog without `extends` extends no chain.
     for (const extension of catalog.extends ?? []) extensions.push({ sidecar: catalog.sidecar, ...extension });
+    layers.add("sidecar");
   }
-  const composed = { ...base, events, extends: extensions };
+  const composed = { ...base, layers: [...layers], events, extends: extensions };
   for (const extension of extensions) checkExtension(composed, extension);
   return composed;
 }

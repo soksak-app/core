@@ -78,6 +78,14 @@ test('the catalog declares the chain of each operation of the page and the first
 
 const alphaCatalog = JSON.parse(readFileSync(new URL('../../docs/spec/cases/log-contract/extension/alpha.json', import.meta.url), 'utf8'));
 const SIDECAR_PATH = 'sidecars/alpha/1.0.0/platform';
+const PLUGIN_PATH = 'plugins/probe/1.0.0';
+const probeCatalog = {
+  schema: 3,
+  layers: ['plugin'],
+  events: {
+    'plugin.probe.frame': { layer: 'plugin', class: 'input', level: 'info', fields: fieldSchema({ kind: { type: 'string' } }) },
+  },
+};
 
 /** A configuration folder that has installed the sidecar `alpha`, whose `sidecar.json` names the catalog `events.json`. */
 function installed(t, { sidecar = { displayName: 'soksak://sidecar/alpha', executable: 'bin/alpha', protocol: 1, events: 'events.json' }, catalog = alphaCatalog, format = 3 } = {}) {
@@ -91,6 +99,41 @@ function installed(t, { sidecar = { displayName: 'soksak://sidecar/alpha', execu
   mkdirSync(join(root, 'logs'));
   return root;
 }
+
+/** A configuration folder with one installed plugin whose manifest declares an event catalog. */
+function installedPlugin(t, { manifest = { id: 'probe', name: 'Probe', description: 'Probe plugin', sections: [], events: 'events.json' }, pluginCatalog = probeCatalog } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'events-'));
+  t.after(() => rmSync(root, { recursive: true }));
+  mkdirSync(join(root, PLUGIN_PATH), { recursive: true });
+  mkdirSync(join(root, 'logs'));
+  writeFileSync(join(root, 'plugins', 'installed.json'), JSON.stringify({
+    format: 3,
+    plugins: { probe: { version: '1.0.0', path: PLUGIN_PATH, enabled: false } },
+    sidecars: {},
+  }));
+  writeFileSync(join(root, PLUGIN_PATH, 'plugin.json'), JSON.stringify(manifest));
+  if (pluginCatalog !== null) writeFileSync(join(root, PLUGIN_PATH, 'events.json'), JSON.stringify(pluginCatalog));
+  writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [
+    JSON.stringify({ ts_us: 1, mono_ns: 1, seq: 1, level: 'info', class: 'lifecycle', layer: 'host', event: 'log.open', fields: { schema: 2, pid: 2, role: 'host', boot: '1-2' } }),
+    JSON.stringify({ ts_us: 2, mono_ns: 2, seq: 2, level: 'info', class: 'input', layer: 'plugin', event: 'plugin.probe.frame', page: '123', fields: { kind: 'frame' } }),
+  ].join('\n') + '\n');
+  return root;
+}
+
+test('the audit composes every installed plugin manifest event catalog and its plugin layer', (t) => {
+  const root = installedPlugin(t);
+  assert.deepEqual(catalogOf(catalog, root).events['plugin.probe.frame'], probeCatalog.events['plugin.probe.frame']);
+  assert.deepEqual(auditLogDirectories(catalog, [root]), []);
+});
+
+test('an installed plugin manifest or event catalog that cannot be read is an error naming its file', (t) => {
+  const invalidManifest = installedPlugin(t, { manifest: { id: 'other', name: 'Probe', description: 'Probe plugin', sections: [], events: 'events.json' } });
+  assert.throws(() => catalogOf(catalog, invalidManifest), /plugin\.json:.*id.*does not match installed plugin probe/);
+  const missingCatalog = installedPlugin(t, { pluginCatalog: null });
+  assert.throws(() => catalogOf(catalog, missingCatalog), /events\.json: event catalog of plugin probe: ENOENT/);
+  const invalidCatalog = installedPlugin(t, { pluginCatalog: { ...probeCatalog, layers: ['sidecar'] } });
+  assert.throws(() => catalogOf(catalog, invalidCatalog), /events\.json:.*layers must be \["plugin"\]/);
+});
 
 test('the catalogs of the installed sidecars are read from the folders that installed.json records, through the member events of sidecar.json', (t) => {
   const root = installed(t);

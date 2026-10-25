@@ -13,7 +13,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { auditLogs, composeCatalogs } from '../packages/log-contract/index.js';
-import { validateSidecar } from '../packages/plugin-api/index.js';
+import { validateManifest, validateSidecar } from '../packages/plugin-api/index.js';
 import { catalogReport, trackedSources } from '../packages/plugin-api/events-check.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -55,8 +55,43 @@ export function installedSidecarCatalogs(directory) {
   return catalogs;
 }
 
-/** The catalog of this repository joined with the catalogs of the sidecars installed in a configuration folder. */
-export const catalogOf = (base, directory) => composeCatalogs(base, ...installedSidecarCatalogs(directory));
+/** The event catalogs of installed plugins that declare `events` in plugin.json. */
+export function installedPluginCatalogs(directory) {
+  const installedFile = join(directory, 'plugins', 'installed.json');
+  let installed;
+  try {
+    installed = JSON.parse(readFileSync(installedFile, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw new Error(`${installedFile}: ${error.message}`, { cause: error });
+  }
+  if (installed?.format !== 3) throw new Error(`${installedFile}: plugins/installed.json: format must be 3, found ${JSON.stringify(installed?.format)}`);
+  const catalogs = [];
+  for (const [id, record] of Object.entries(installed.plugins ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+    if (typeof record?.path !== 'string' || record.path === '') throw new Error(`${installedFile}: installed plugin ${id} has no path`);
+    const manifestFile = join(directory, record.path, 'plugin.json');
+    let manifest;
+    try {
+      manifest = validateManifest(JSON.parse(readFileSync(manifestFile, 'utf8')));
+    } catch (error) {
+      throw new Error(`${manifestFile}: ${error.message}`, { cause: error });
+    }
+    if (manifest.id !== id) throw new Error(`${manifestFile}: plugin id ${manifest.id} does not match installed plugin ${id}`);
+    if (manifest.events === undefined) continue;
+    const catalogFile = join(directory, record.path, manifest.events);
+    let catalog;
+    try {
+      catalog = JSON.parse(readFileSync(catalogFile, 'utf8'));
+    } catch (error) {
+      throw new Error(`${catalogFile}: event catalog of plugin ${id}: ${error.message}`, { cause: error });
+    }
+    catalogs.push({ kind: 'plugin', id, catalog, source: catalogFile });
+  }
+  return catalogs;
+}
+
+/** The catalog of this repository joined with installed plugin and sidecar catalogs in a configuration folder. */
+export const catalogOf = (base, directory) => composeCatalogs(base, ...installedPluginCatalogs(directory), ...installedSidecarCatalogs(directory));
 
 /** The event files of every layer (`<role>-<pid>-<time>`: the host, `sok` and each sidecar), generation and debug file of a configuration folder, in name order. */
 export function eventFiles(directory) {
