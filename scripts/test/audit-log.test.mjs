@@ -22,7 +22,7 @@ test("the audit command refuses an empty log, since its first line is not log.op
   const log = join(dir, "empty.jsonl");
   const catalog = join(dir, "catalog.json");
   writeFileSync(log, "");
-  writeFileSync(catalog, '{"schema":2,"events":{}}');
+  writeFileSync(catalog, '{"schema":3,"events":{}}');
   const result = spawnSync(process.execPath, [COMMAND, log, catalog], { encoding: "utf8" });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /the first line is not log\.open: the file is empty/);

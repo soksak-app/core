@@ -6,21 +6,28 @@ import test from 'node:test';
 
 import { auditRun } from '../audit-run.mjs';
 
+const objectFields = (properties = {}, required = Object.keys(properties)) => ({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  properties,
+  required,
+});
+
 const catalog = {
-  schema: 2,
+  schema: 3,
   layers: ['host', 'sidecar'],
   chains: { input: ['host.sidecar.request'] },
   budget: { lifecycle: { events: 1e12, bytes: 1e15 }, io: { events: 1e12, bytes: 1e15 } },
   events: {
-    'host.sidecar.request': { layer: 'host', class: 'io', level: 'info', cids: 'required', fields: { name: 'string' } },
-    'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: { schema: 'number', pid: 'number', role: 'string', boot: 'string' } },
-    'host.test.start': { layer: 'host', class: 'lifecycle', level: 'info', fields: { name: 'string', run: 'string' } },
-    'host.test.end': { layer: 'host', class: 'lifecycle', level: 'info', fields: { name: 'string', run: 'string', result: 'string' } },
-    'host.window.event': { layer: 'host', class: 'lifecycle', level: 'info', fields: { window: 'string', kind: 'string' } },
-    'host.update.start': { layer: 'host', class: 'lifecycle', level: 'info', fields: {} },
-    'log.policy': { layer: 'host', class: 'lifecycle', level: 'info', fields: { source: 'string', classes: 'object' } },
-    'host.record.<level>': { layer: 'host', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } },
-    'sidecar.record.<level>': { layer: 'sidecar', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } },
+    'host.sidecar.request': { layer: 'host', class: 'io', level: 'info', cids: 'required', fields: objectFields({ name: { type: 'string' } }) },
+    'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: objectFields({ schema: { type: 'number' }, pid: { type: 'number' }, role: { type: 'string' }, boot: { type: 'string' } }) },
+    'host.test.start': { layer: 'host', class: 'lifecycle', level: 'info', fields: objectFields({ name: { type: 'string' }, run: { type: 'string' } }) },
+    'host.test.end': { layer: 'host', class: 'lifecycle', level: 'info', fields: objectFields({ name: { type: 'string' }, run: { type: 'string' }, result: { type: 'string' } }) },
+    'host.window.event': { layer: 'host', class: 'lifecycle', level: 'info', fields: objectFields({ window: { type: 'string' }, kind: { type: 'string' } }) },
+    'host.update.start': { layer: 'host', class: 'lifecycle', level: 'info', fields: objectFields() },
+    'log.policy': { layer: 'host', class: 'lifecycle', level: 'info', fields: objectFields({ source: { type: 'string' }, classes: { type: 'object' } }) },
+    'host.record.<level>': { layer: 'host', class: 'lifecycle', level: ['error', 'info'], fields: objectFields({ where: { type: 'string' }, text: { type: 'string' } }) },
+    'sidecar.record.<level>': { layer: 'sidecar', class: 'lifecycle', level: ['error', 'info'], fields: objectFields({ where: { type: 'string' }, text: { type: 'string' } }) },
   },
 };
 
@@ -187,7 +194,7 @@ test('the logs of every layer under the configuration folders of the marks are a
   });
   const probe = join(config, 'logs', 'probe-3-4.jsonl');
   assert.deepEqual(auditRun(catalog, folder), [
-    `${join(config, 'logs', `host-${BOOT}.jsonl`)}:3: field kind is required by host.window.event`,
+    `${join(config, 'logs', `host-${BOOT}.jsonl`)}:3: fields do not match the schema of host.window.event: data must have required property 'kind'`,
     `${probe}:2: undeclared error probe: inside`,
   ]);
   const [row] = judgment(folder).tests;

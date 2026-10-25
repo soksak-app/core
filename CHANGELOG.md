@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-113: Update the JavaScript event-catalog fixtures to schema 3 and
+  Draft 2020-12 field schemas. Keep raw event-log line schema 2 and reject old
+  catalog formats. The preserved Node run failed because audit-run used a
+  schema-2 base catalog. The focused owner files pass 12/12 and 2/2.
+
 - F239-119: Require the project member in Tauri ProjectShown while
   preserving explicit `null`. The production `Argument<ProjectShown>` decoder
   Red accepted `{}` as `None`; the same MockRuntime owner case now passes 1/1,

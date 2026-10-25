@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F239-113: JavaScript event-catalog fixture를 schema 3 및 Draft 2020-12
+  field schema로 갱신한다. Raw event-log line schema 2와 구형 catalog 거부는
+  유지한다. 보존된 Node 실행은 audit-run의 schema 2 base catalog 때문에 실패했다.
+  집중 owner file은 12/12와 2/2 통과한다.
 - F239-119: 명시적 null 의미는 유지하면서 Tauri ProjectShown의 project
   member를 필수로 요구한다. Production `Argument<ProjectShown>` decoder Red는
   `{}`를 `None`으로 허용했다. 같은 MockRuntime owner case는 이제 1/1 통과하며,
