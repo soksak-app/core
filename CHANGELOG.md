@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-3: Correlate 104 exact supplier image waits with host receipt and answer records using the local diagnostic candidate. Most measured delay precedes the host receipt trace; the internal supplier/transport/host-entry split remains unresolved. Both application log audits pass, while both recordings still exceed the unchanged 33 ms capture bound.
+
 - F239-81: Verify capture stream isolation on both diagnostic hosts with three consecutive inactive recordings each. Finalized frame counts match files, and later recordings leave earlier artifacts byte-identical. All four native callback, metadata, cleanup and late-stop owners pass; both-host error-log audit passes. Capture cadence and drag latency remain separate open items.
 
 - F239-168: Apply the declared Cargo deployment environment to Rust repeat and standalone test compilation, discovery and execution. Both owning Red cases inherited ambient 10.9 instead of declared 14.4; both pass after using CARGO_ENV. All 12 runner owners pass with target selection, feature propagation, named doctests and per-test limits preserved.

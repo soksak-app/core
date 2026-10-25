@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-3: local diagnostic candidate로 정확한 supplier image wait 104개를 host 수신 및 응답 기록과 연결한다. 측정 지연 대부분은 host 수신 trace 전이며 supplier/transport/host 진입 내부 분해는 미해결이다. 두 application log 감사는 통과하지만 두 기록은 변경하지 않은 33 ms capture 기준을 계속 초과한다.
+
 - F239-81: 두 diagnostic host에서 각각 비활성 연속 녹화 세 회로 capture stream 격리를 검증한다. finalized frame 수는 파일 수와 같으며 이후 녹화가 이전 artifact byte를 바꾸지 않는다. native callback, metadata, cleanup, late-stop owner 네 개와 두 host 오류 log 감사가 통과한다. capture cadence와 drag latency는 별도 미완료 항목이다.
 
 - F239-168: Rust 반복 및 단독 test의 compile, discovery, 실행에 선언된 Cargo deployment 환경을 적용한다. 양 소유 Red case는 선언된 14.4 대신 외부 10.9를 상속했으며 CARGO_ENV 적용 후 통과한다. Target 선택, feature 전달, 이름별 doctest 및 test별 제한을 유지하며 runner owner 12개가 모두 통과한다.
