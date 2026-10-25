@@ -140,15 +140,15 @@ const WEBKIT_ROLES = [
  * the same second or share a file. Returns the attributed rows in the order of the hosts and the errors of the hosts whose
  * domain cannot be read.
  *
- * run(command, args)  an executor that returns the same result as spawnSync ({status, stdout, stderr}). The tests replace it.
+ * run(command, args)  an executor that resolves to {status, stdout, stderr}. The tests replace it.
  */
-export function attributeWebKit(hosts, run = (command, args) => spawnSync(command, args, { encoding: "utf8" })) {
+export async function attributeWebKit(hosts, run) {
   const attributed = [];
   const errors = [];
   for (const { configDir, pid } of hosts) {
     let services;
     try {
-      services = launchdServices(pid, run);
+      services = await launchdServices(pid, run);
     } catch (error) {
       errors.push(`webkit services of ${configDir}: ${error.message}`);
       continue;
@@ -308,7 +308,7 @@ async function measureApps({ sok, configDirs, interval }) {
   const table = parseProcessTable(run("ps", ["-axww", "-o", "pid=,command="]));
   const apps = configDirs.map((configDir) => ({ configDir, rows: applicationRows(configDir, sok, table, errors) }));
   const hosts = apps.flatMap(({ configDir, rows }) => rows.filter(({ role }) => role === "host").map(({ pid }) => ({ configDir, pid })));
-  const webkit = attributeWebKit(hosts);
+  const webkit = await attributeWebKit(hosts);
   errors.push(...webkit.errors);
   for (const row of webkit.attributed) {
     const app = apps.find((candidate) => candidate.configDir === row.configDir);

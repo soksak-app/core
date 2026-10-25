@@ -11,6 +11,8 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
+- [o] F239-176-1 — P0, F239-176 연결: Application 사용량 측정 consumer에서 비동기 launchd 조회를 기다린다. 현재 동기 순회는 services가 Promise이므로 실패한다. Host별 귀속과 오류 보고를 유지한다. Red: 기존 귀속 검사 두 개가 services is not iterable로 실패한다. Green: 조회 대기와 host별 오류 귀속을 유지하며 측정 소유 검사 16개가 통과한다.
+
 - [o] F239-177 — P0, F239-47-6 연결: Terminal compose/cursor 상태를 읽은 뒤 선언된 presentation checkpoint를 기다리고 host 표시 상태를 읽는다. 현재 동시 host read는 Backspace 뒤 cursor frame 53과 watermark 52를 함께 보존할 수 있다. Exact-frame visual 증거 요구는 유지한다. Red: 현재 compose/cursor 쌍이 끝나기 전에 host read가 시작되고 해당 쌍이 실패해도 실행된다. Green: presentation read 실패 전달을 포함한 document 소유 검사 44개가 통과한다. 양쪽 host 후속 검사는 이전 watermark assertion 없이 reference와 terminal document 10단계를 모두 완료한다. Diagnostic identity admission이 Wails frame 389와 Tauri frame 619에서 pending job 8개에 도달하므로 통합 visual acceptance는 미완료로 유지하며 양쪽 application은 정상 종료한다.
 
 - [o] F239-176 — P0, F239-47-6 연결: Stall sampling과 launchd 조회를 비동기 child-process API로 실행해 진단 중에도 application 응답을 계속 읽는다. 현재 spawnSync 호출은 sampling 동안 검사 event loop를 차단한다. Sample 출력, process 실패, page 실패 격리와 process별 시간 제한을 유지한다. Red: native sampling이 Promise를 반환하지 않고 child 종료 후에만 반환한다. Green: 실제 sampling 중 event-loop 응답, host/page sample 동시 시작, 오류 보고 및 page 실패 격리를 포함한 stall-sample 소유 검사 14개가 통과한다.

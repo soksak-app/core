@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-176-1: Await asynchronous launchd discovery in application usage attribution and its caller. Preserve each host result and failure instead of iterating a Promise. Two existing attribution cases fail before correction; all 16 measurement owners pass afterward.
+
 - F239-177: Read the current terminal compose/cursor pair before the host presentation state, and await the declared presentation checkpoint before that host read. Preserve all errors within each independent read phase and reject a failed presentation read. Two ordering/error owners fail before correction; all 44 terminal-document owners pass after correction.
 
 - F239-176: Run stall sampling and launchd discovery through asynchronous Node child-process APIs with a ten-second limit per process. Keep endpoint reads and test deadlines responsive, start host/page samples together, and preserve every process result. The event-loop reproduction fails before correction; all 14 stall-sample owners pass afterward.

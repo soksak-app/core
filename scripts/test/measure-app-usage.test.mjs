@@ -133,7 +133,7 @@ function launchdDomain({ gpu, networking, webContent }) {
   ].join("\n");
 }
 
-test("attributes the WebKit services of two hosts that started in the same second by the launchd domain of each host", () => {
+test("attributes the WebKit services of two hosts that started in the same second by the launchd domain of each host", async () => {
   const second = new Date(2026, 9, 18, 6, 52, 13).getTime();
   const domains = new Map([
     [100, launchdDomain({ gpu: 301, networking: 300, webContent: 302 })],
@@ -145,7 +145,7 @@ test("attributes the WebKit services of two hosts that started in the same secon
     const host = Number(args[1].slice("pid/".length));
     return { status: 0, stdout: domains.get(host), stderr: "" };
   };
-  const result = attributeWebKit(
+  const result = await attributeWebKit(
     [
       { configDir: DIR, pid: 100, startedAt: second + 100 },
       { configDir: "/Users/tester/other", pid: 200, startedAt: second + 400 },
@@ -167,9 +167,9 @@ test("attributes the WebKit services of two hosts that started in the same secon
   ]);
 });
 
-test("a host whose launchd domain cannot be read is an error that names the data folder", () => {
+test("a host whose launchd domain cannot be read is an error that names the data folder", async () => {
   const run = () => ({ status: 113, stdout: "", stderr: "Could not find domain for pid: 100" });
-  const result = attributeWebKit([{ configDir: DIR, pid: 100 }], run);
+  const result = await attributeWebKit([{ configDir: DIR, pid: 100 }], run);
   assert.deepEqual(result.attributed, []);
   assert.deepEqual(result.errors, [`webkit services of ${DIR}: launchctl print pid/100 exited with 113: Could not find domain for pid: 100`]);
 });
