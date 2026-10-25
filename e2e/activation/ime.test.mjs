@@ -16,7 +16,8 @@ import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
 import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexFrameStatus,
   MAXIMUM_IME_FRAME_GAP_MS, persistThenRequireVisualProof,
-  attachImeFrameIdentities, planVisualStage, readImeFrameIdentities, readRetainedSources, startImeCapture }
+  attachImeFrameIdentities, planVisualStage, readImeFrameIdentities, readRetainedSources,
+  sealTerminalSequenceEndBoundary, startImeCapture }
   from "./ime-visual-capture.mjs";
 import {
   assertInputTraceDelivery,
@@ -823,6 +824,10 @@ for (const app of Object.values(APPS)) {
     assert.equal(referenceStates.length, 10, "the trace omitted a same-window AppKit reference state");
     assert.equal(manifest.steps.length, 20, "the trace omitted an acknowledged reference or terminal input");
     const terminalSequenceEndBoundary = await machAbsoluteBoundary(s);
+    const sealedStageIntervals = sealTerminalSequenceEndBoundary(terminalSequenceEndBoundary, visualStageInputs,
+      (boundaryRecord) => persist("terminal-sequence-end-boundary.json", boundaryRecord));
+    manifest.terminalSequenceEndBoundary = terminalSequenceEndBoundary;
+    persist("manifest.json", manifest);
     const { displayed } = await s.presented();
     const recording = await capture.stop({ after: displayed + 100 });
     recordingResult = recording;
@@ -942,8 +947,7 @@ for (const app of Object.values(APPS)) {
       }));
       ({ sources, missingStates } = readRetainedSources(capture.frames, frameStatus));
       timedStages = visualStages.map((stage, index) => ({ ...stage,
-        endedMachAbsoluteNs: visualStages[index + 1]?.startedMachAbsoluteNs ??
-          terminalSequenceEndBoundary.machAbsoluteNs }));
+        endedMachAbsoluteNs: sealedStageIntervals[index].endedMachAbsoluteNs }));
       const samplesByStage = capturesByInputStage(frameCallbacks.map(({ callback }) => ({
         name: callback.frame, callback, identityRows: identityRowsByFrame.get(callback.frame),
       })), decoded, timedStages);
@@ -952,6 +956,8 @@ for (const app of Object.values(APPS)) {
         sources,
         stages: [stage],
         criteria: { colorDistance: 32, minimumGlyphPixels: 2, minimumUnderlineCoverage: 0.75 },
+        tagArtifacts: identityCapture.artifactRecords,
+        statusConflicts: frameStatus.conflicts,
       })[0]);
     } catch (error) {
       const cadence = { longestFrameGap, maximumFrameGap: MAXIMUM_IME_FRAME_GAP_MS, frameGaps };
@@ -970,6 +976,7 @@ for (const app of Object.values(APPS)) {
         retainedSourceCount: sources.length,
         missingSourceStates: missingStates,
         sourceStatusRejections: frameStatus?.rejections ?? [],
+        sourceStatusConflicts: [...(frameStatus?.conflicts?.values() ?? [])],
         callbackStatus: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
       });
       if (cadenceFailure) throw new AggregateError([error, new Error(cadenceFailure.error)],
@@ -983,9 +990,12 @@ for (const app of Object.values(APPS)) {
       retainedSourceCount: sources.length,
       missingSourceStates: missingStates,
       sourceStatusRejections: frameStatus.rejections,
+      sourceStatusConflicts: [...frameStatus.conflicts.values()],
       sampleCount: frameCallbacks.length,
       cadence: { longestFrameGap, maximumFrameGap: MAXIMUM_IME_FRAME_GAP_MS, frameGaps },
       imageMatch: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
+      tagScopedVisualMeasurements: visualMeasurements.map(({ key, tagScoped }) => ({ key, ...tagScoped })),
+      terminalSequenceEndBoundary,
       visualMeasurements,
     };
     persistThenRequireVisualProof(visualMeasurements, visualRecord,

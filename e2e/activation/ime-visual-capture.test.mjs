@@ -19,6 +19,7 @@ import {
   readImeFrameIdentities,
   readRetainedSources,
   requireImeRenderer,
+  sealTerminalSequenceEndBoundary,
   startImeCapture,
 } from "./ime-visual-capture.mjs";
 
@@ -87,18 +88,19 @@ function writeIdentityFixture(directory, rows, overrides = {}) {
   const identityDirectory = join(directory, "frame-identities");
   mkdirSync(identityDirectory, { recursive: true });
   const bytes = sourceRaster();
+  const { extraArtifacts = [], ...manifestOverrides } = overrides;
   const artifact = { generation: "1", raster: "2", sequence: 3, regionToken: "region-1", nonce: "nonce",
     payload: "payload", roi: { x: 0, y: 0, width: 4, height: 6 }, file: "identity-1.bgra",
     width: 4, height: 6, stride: 16, pixelFormat: "BGRA8", alpha: "premultiplied-first",
     colorSpace: "kCGColorSpaceSRGB", byteCount: bytes.length,
     sha256: createHash("sha256").update(bytes).digest("hex") };
-  writeFileSync(join(identityDirectory, artifact.file), bytes);
+  for (const item of [artifact, ...extraArtifacts]) writeFileSync(join(identityDirectory, item.file), bytes);
   writeFileSync(join(identityDirectory, "decoded-frames.jsonl"), rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
   writeFileSync(join(identityDirectory, "manifest.json"), JSON.stringify({ format: 1, pixelFormat: "BGRA8",
     limits: { issuedIdentities: 512, pendingArtifactBytes: 67108864 }, artifactBytes: bytes.length,
-    artifacts: [artifact], droppedArtifacts: 0, writeFailures: 0, cleanupFailures: 0, cleanupErrors: [],
+    artifacts: [artifact, ...extraArtifacts], droppedArtifacts: 0, writeFailures: 0, cleanupFailures: 0, cleanupErrors: [],
     cleanupErrorsOmitted: 0, decodedFramesFile: "decoded-frames.jsonl", decodedFrames: 1,
-    decodedRecords: rows.length, decodedWriteFailures: 0, identityFailure: null, ...overrides }));
+    decodedRecords: rows.length, decodedWriteFailures: 0, identityFailure: null, ...manifestOverrides }));
   return join(identityDirectory, "manifest.json");
 }
 
@@ -114,6 +116,20 @@ testWithTimeout("IME visual consumer joins only issued capture identities and re
     const result = readImeFrameIdentities(directory, { frameIdentity: { manifest, status: "complete" } });
     assert.deepEqual(result.byFrame.get(1), [matched, unknown]);
     assert.deepEqual(result.artifacts, ["1/2/3"]);
+    const secondRegionArtifact = { generation: "1", raster: "2", sequence: 3, regionToken: "region-2",
+      nonce: "nonce-2", payload: "payload-2", roi: { x: 0, y: 0, width: 4, height: 6 },
+      file: "identity-2.bgra", width: 4, height: 6, stride: 16, pixelFormat: "BGRA8",
+      alpha: "premultiplied-first", colorSpace: "kCGColorSpaceSRGB", byteCount: 96,
+      sha256: createHash("sha256").update(sourceRaster()).digest("hex") };
+    const secondRegionRow = { ...matched, region: "region-2" };
+    const multiRegionManifest = writeIdentityFixture(directory, [matched, secondRegionRow], {
+      extraArtifacts: [secondRegionArtifact], decodedFrames: 1, decodedRecords: 2, artifactBytes: 192,
+    });
+    const multiRegion = readImeFrameIdentities(directory, {
+      frameIdentity: { manifest: multiRegionManifest, status: "complete" },
+    });
+    assert.equal(multiRegion.artifactRecords.length, 2);
+    assert.deepEqual(multiRegion.byFrame.get(1).map((row) => row.region), ["region-1", "region-2"]);
     const attached = attachImeFrameIdentities([{ callback: { frame: "frame-0001.bgra", displayTime: "1234" } }],
       ["/capture/frame-0001.bgra"], result);
     assert.deepEqual(attached.get("frame-0001.bgra"), [matched, unknown]);
@@ -259,6 +275,11 @@ testWithTimeout("cursor frame state uses prior screen rows and the exact cursor 
   ];
   const states = indexFrameStatus(events, { row: 0, col: 0, text: "$" });
   assert.equal(states.get("1/2/3").semantic.document, "ㅏ");
+  const conflictingState = indexFrameStatus([...events, { name: "terminal.cursor", value: {
+    ...cursor, render: { ...renderFixture, glyphs: [] },
+  } }], { row: 0, col: 0, text: "$" });
+  assert.equal(conflictingState.has("1/2/3"), false);
+  assert.equal(conflictingState.conflicts.get("1/2/3").reason, "conflicting-status-for-frame-tuple");
   const missingScreen = indexFrameStatus([events[0], events[2]], { row: 0, col: 0, text: "$" });
   assert.equal(missingScreen.size, 0);
   assert.deepEqual(missingScreen.rejections, [{ frame: "1/2/3", eventIndex: 1,
@@ -378,6 +399,11 @@ testWithTimeout("stage planning covers the complete Hangul span, preedit underli
   ]);
   assert.deepEqual(stage.glyphs, [{ row: 0, col: 2, grapheme: "ㅏ", marked: true }]);
   assert.equal(stage.semantic.document, "ㅏ");
+  const indexedRender = planVisualStage({ key: "k-1", expectedDocument: "ㅏ",
+    observation: { ...observation, cursor: { ...cursor, render: null } }, frameStatus,
+    prompt: { row: 0, col: 0, text: "$ " } });
+  assert.deepEqual(indexedRender.render, render);
+  assert.equal(indexedRender.observationRender, null);
   assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏㅏ", observation, frameStatus,
     prompt: { row: 0, col: 0, text: "$ " } }), /terminal document differs/);
 });
@@ -467,6 +493,177 @@ testWithTimeout("visual stage evaluator retains exact target identity and measur
   assert.equal(issuedButUnmatchedPixels[0].result, "no-proof");
 });
 
+testWithTimeout("tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete", () => {
+  const frame = { generation: 1, raster: 2, sequence: 3 };
+  const width = 200;
+  const height = 200;
+  const bytes = new Uint8Array(width * height * 4).fill(255);
+  const glyphPixels = sourceRaster();
+  for (let row = 0; row < 6; row++) {
+    bytes.set(glyphPixels.subarray(row * 16, row * 16 + 16), row * width * 4);
+  }
+  const grid = { rows: 33, cols: 50, cellWidth: 4, cellHeight: 6, x: 0, y: 0 };
+  const render = { ...renderFixture, frame,
+    pixel: { ...renderFixture.pixel, width, height, bytesPerRow: width * 4 },
+    grid: { rows: grid.rows, cols: grid.cols, cellWidth: grid.cellWidth, cellHeight: grid.cellHeight,
+      origin: { x: 0, y: 0 } },
+    cursor: { ...renderFixture.cursor, focused: true, visible: false, blinkVisible: false },
+  };
+  const stageSemantic = { ...semantic, geometry: { rows: grid.rows, cols: grid.cols,
+    cellWidth: grid.cellWidth, cellHeight: grid.cellHeight, origin: { x: 0, y: 0 } } };
+  const target = { frame, render, state: { frame, semantic: stageSemantic }, raster: {
+    width, height, bytesPerRow: width * 4, data: bytes, format: "BGRA8", alpha: "premultiplied-first",
+    colorSpace: "sRGB", scale: 1, screenBounds: { x: 10, y: 10, width, height }, grid,
+  } };
+  const incomplete = { frame: { generation: 2, raster: 2, sequence: 4 }, raster: {} };
+  const sampleData = new Uint8Array(220 * 220 * 4).fill(255);
+  for (let row = 0; row < height; row++) {
+    sampleData.set(bytes.subarray(row * width * 4, (row + 1) * width * 4), (row + 10) * 220 * 4 + 10 * 4);
+  }
+  const sample = { name: "frame-0001.bgra", capture: {
+    width: 220, height: 220, bytesPerRow: 220 * 4, data: sampleData,
+    format: "BGRA8", alpha: "premultiplied-first", colorSpace: "sRGB", scaleFactor: 1,
+    screenRect: { x: 0, y: 0, width: 220, height: 220 },
+    contentRect: { x: 0, y: 0, width: 220, height: 220 },
+  }, identityRows: [{ frame: 1, displayTime: "100", region: "region-1",
+    roi: { x: 18, y: 18, width: 192, height: 192 }, status: "matched", reason: null,
+    identity: { generation: "1", raster: "2", sequence: 3 } }] };
+  const stage = { key: "k-1", frame, render, observationRender: render,
+  cursor: { row: 0, col: 1, focused: true,
+    visible: false, blinkVisible: false, shape: "beam", preedit: renderFixture.cursor },
+  semantic: stageSemantic, cells: [{ row: 0, column: 0 }, { row: 0, column: 1 }],
+  glyphs: [{ row: 0, col: 0, grapheme: "A़", marked: true }],
+  expectedTag: { generation: "1", raster: "2", sequence: 3,
+    regionToken: "region-1", nonce: "nonce-1", payload: "issued-1",
+    roi: { x: 8, y: 8, width: 192, height: 192 }, width, height,
+    stride: width * 4, pixelFormat: "BGRA8", alpha: "premultiplied-first",
+    colorSpace: "kCGColorSpaceSRGB", byteCount: width * height * 4 } };
+  const result = evaluateVisualStages({ captures: [sample], sources: [target, incomplete], stages: [stage],
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [{ ...stage.expectedTag }] });
+  assert.equal(result[0].result, "no-proof", "raw all-source evidence must remain incomplete");
+  assert.equal(result[0].reason, "retained-source-frame-state-incomplete");
+  assert.equal(result[0].tagScoped.result, "measured",
+    "an exact issued tag and byte-matched target sample must be evaluated independently");
+  assert.equal(result[0].tagScoped.samples.length, 1);
+  assert.equal(result[0].tagScoped.samples[0].crop.ambiguous, false);
+  assert.equal(result[0].tagScoped.samples[0].glyphs[0].underlined, true);
+  const duplicateFrame = { generation: 2, raster: 2, sequence: 4 };
+  const duplicateSource = { ...target, frame: duplicateFrame,
+    render: { ...render, frame: duplicateFrame },
+    state: { frame: duplicateFrame, semantic: stageSemantic },
+    raster: { ...target.raster, data: new Uint8Array(target.raster.data) } };
+  const ambiguousRaw = evaluateVisualStages({ captures: [sample], sources: [target, duplicateSource],
+    stages: [stage], criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0];
+  assert.equal(ambiguousRaw.result, "measured");
+  assert.equal(ambiguousRaw.candidates[0].ambiguous, true);
+  assert.deepEqual(ambiguousRaw.candidates[0].identities, ["1/2/3", "2/2/4"]);
+  assert.equal(ambiguousRaw.tagScoped.result, "measured");
+  const repeatedSample = { ...sample, name: "frame-0002.bgra", identityRows: sample.identityRows.map((row) =>
+    ({ ...row, frame: 2 })) };
+  const repeatedTuple = evaluateVisualStages({ captures: [sample, repeatedSample], sources: [target, incomplete],
+    stages: [stage], criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped;
+  assert.equal(repeatedTuple.result, "measured");
+  assert.deepEqual(repeatedTuple.samples.map(({ result: sampleResult }) => sampleResult), ["measured", "measured"]);
+  const nullObservedRender = evaluateVisualStages({ captures: [sample], sources: [target, incomplete],
+    stages: [{ ...stage, observationRender: null }],
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped;
+  assert.equal(nullObservedRender.result, "measured");
+
+  const conflictingStride = evaluateVisualStages({ captures: [sample], sources: [target, incomplete],
+    stages: [stage], criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [{ ...stage.expectedTag, stride: width * 4 + 4,
+      byteCount: (width * 4 + 4) * height }] })[0].tagScoped;
+  assert.equal(conflictingStride.result, "no-proof",
+    "same-tuple issued raster metadata must match retained source geometry");
+
+  const unknownTarget = { ...sample, identityRows: [{ frame: 1, displayTime: "100", region: "region-1",
+    roi: { x: 18, y: 18, width: 192, height: 192 }, status: "unknown", reason: "unknown-retention",
+    identity: null }] };
+  assert.equal(evaluateVisualStages({ captures: [unknownTarget], sources: [target, incomplete], stages: [stage],
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped.result, "no-proof");
+
+  const duplicateTarget = { ...sample, identityRows: [...sample.identityRows, { ...sample.identityRows[0] }] };
+  assert.equal(evaluateVisualStages({ captures: [duplicateTarget], sources: [target, incomplete], stages: [stage],
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped.result, "no-proof");
+
+  const conflictingRender = { ...stage, observationRender: { ...render, pixel: { ...render.pixel, width: width - 1 } } };
+  assert.equal(evaluateVisualStages({ captures: [sample], sources: [target, incomplete], stages: [conflictingRender],
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped.result, "no-proof");
+  assert.equal(evaluateVisualStages({ captures: [sample], sources: [target, incomplete], stages: [stage],
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag], statusConflicts: new Map([[
+      "1/2/3", { reason: "conflicting-status-for-frame-tuple" },
+    ]]) })[0].tagScoped.reason, "tag-target-frame-status-conflicts");
+  assert.equal(evaluateVisualStages({ captures: [sample], sources: [{ ...target, render: null }, incomplete],
+    stages: [stage], criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped.reason, "tag-target-source-state-incomplete");
+
+  const overlappingUnknown = { ...sample, identityRows: [...sample.identityRows,
+    { frame: 1, displayTime: "100", region: null, roi: { x: 18, y: 18, width: 192, height: 192 },
+      status: "unknown", reason: "duplicate-roi", identity: null }] };
+  assert.equal(evaluateVisualStages({ captures: [overlappingUnknown], sources: [target, incomplete], stages: [stage],
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped.result, "no-proof");
+
+  const disjointUnknown = { ...sample, identityRows: [...sample.identityRows,
+    { frame: 1, displayTime: "100", region: null, roi: { x: 0, y: 0, width: 2, height: 2 },
+      status: "unknown", reason: "unknown-retention", identity: null }] };
+  assert.equal(evaluateVisualStages({ captures: [disjointUnknown], sources: [target, incomplete], stages: [stage],
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped.result, "measured");
+
+  const globalHistoryDrop = { ...sample, identityRows: [...sample.identityRows,
+    { frame: 1, displayTime: "100", region: null, roi: null, status: "unknown",
+      reason: "unknown-retention", identity: null }] };
+  const droppedHistory = evaluateVisualStages({ captures: [globalHistoryDrop], sources: [target, incomplete],
+    stages: [stage], criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped;
+  assert.equal(droppedHistory.result, "no-proof");
+  assert.equal(droppedHistory.samples[0].reason, "unknown-roi-cannot-be-ruled-out");
+  assert.equal(droppedHistory.samples[0].identityRows.length, 2);
+
+  const wrongROI = { ...sample, identityRows: [{ ...sample.identityRows[0], roi: { x: 17, y: 18, width: 192, height: 192 } }] };
+  assert.equal(evaluateVisualStages({ captures: [wrongROI], sources: [target, incomplete], stages: [stage],
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped.result, "no-proof");
+
+  const changedCapture = { ...sample, capture: { ...sample.capture, data: new Uint8Array(sample.capture.data) } };
+  changedCapture.capture.data[10 * 220 * 4 + 10 * 4] ^= 0xff;
+  assert.equal(evaluateVisualStages({ captures: [changedCapture], sources: [target, incomplete], stages: [stage],
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 },
+    tagArtifacts: [stage.expectedTag] })[0].tagScoped.result, "no-proof");
+});
+
+testWithTimeout("terminal sequence boundary and exact stage ends persist before evaluation can fail", () => {
+  const persisted = [];
+  const stages = [
+    { key: "k-1", clockDomain: "mach-absolute", startedMachAbsoluteNs: "10" },
+    { key: "k-2", clockDomain: "mach-absolute", startedMachAbsoluteNs: "20" },
+  ];
+  const sealed = sealTerminalSequenceEndBoundary({ clockDomain: "mach-absolute", machAbsoluteNs: "30" }, stages,
+    (record) => persisted.push(record));
+  assert.deepEqual(sealed.map(({ endedMachAbsoluteNs }) => endedMachAbsoluteNs), ["20", "30"]);
+  assert.deepEqual(persisted, [{ boundary: { clockDomain: "mach-absolute", machAbsoluteNs: "30" },
+    stages: [
+      { key: "k-1", clockDomain: "mach-absolute", startedMachAbsoluteNs: "10", endedMachAbsoluteNs: "20" },
+      { key: "k-2", clockDomain: "mach-absolute", startedMachAbsoluteNs: "20", endedMachAbsoluteNs: "30" },
+    ] }]);
+  assert.throws(() => {
+    const record = persisted[0];
+    assert.equal(record.boundary.machAbsoluteNs, "30");
+    throw new Error("controlled downstream visual evaluation failure");
+  }, /controlled downstream/);
+  assert.throws(() => sealTerminalSequenceEndBoundary({ clockDomain: "mach-absolute", machAbsoluteNs: "030" },
+    stages, () => assert.fail("invalid boundary must not persist")), /boundary is invalid/);
+});
+
 testWithTimeout("error and no-proof measurements are persisted before the caller assertion fails", () => {
   const written = [];
   const measurements = [
@@ -478,6 +675,14 @@ testWithTimeout("error and no-proof measurements are persisted before the caller
   assert.throws(() => persistThenRequireVisualProof(measurements, { visualMeasurements: measurements, cadence },
     (record) => written.push(record)), /rendered glyph\/underline proof is incomplete/);
   assert.deepEqual(written, [{ visualMeasurements: measurements, cadence }]);
+  const tagScopedOnly = [{ key: "tag-measured", result: "no-proof",
+    reason: "retained-source-frame-state-incomplete", tagScoped: { result: "measured" } }];
+  assert.doesNotThrow(() => persistThenRequireVisualProof(tagScopedOnly,
+    { visualMeasurements: tagScopedOnly, cadence }, () => {}, "Tauri"));
+  const missingTagProof = [{ key: "tag-missing", result: "measured",
+    tagScoped: { result: "no-proof", reason: "unknown-roi-cannot-be-ruled-out" } }];
+  assert.throws(() => persistThenRequireVisualProof(missingTagProof,
+    { visualMeasurements: missingTagProof, cadence }, () => {}, "Tauri"), /proof is incomplete/);
 });
 
 testWithTimeout("visual results are persisted before cadence failure and both failures are reported", () => {

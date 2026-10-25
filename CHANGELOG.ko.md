@@ -109,6 +109,22 @@
   Wails 3/3). 10번째 단계 경계는 추론하지 않았다
   (`/tmp/F239-98-3-offline-first-nine-final.log`).
 
+- F239-98-4: 기존 raw crop 결과와 별도로 opt-in tag-scoped IME raster proof를
+  기록한다. Consumer는 issued identity artifact와 decoded row를 정확한 target
+  tuple 및 projected ROI에 연결한 뒤 기존 full-span 및 guard byte crop과
+  renderer 측정을 요구한다. 사용할 수 있는 ROI가 없는 unknown row는 source
+  history-drop marker를 포함해 no-proof다. 실제 final Mach boundary와 모든
+  stage end는 capture cleanup 및 visual evaluation 전에 저장된다. Owner consumer
+  Red: 같은 tuple과 ROI 안쪽 위치를 유지하면서 stride만 다른 issued artifact가
+  measured proof를 반환했다. Consumer는 issued width, height, stride, pixel
+  format, alpha, semantic color space 및 byte count가 retained raster와
+  일치하도록 요구한다. 선언된 CoreGraphics sRGB 이름만 byte 변경 없이 매핑한다.
+  같은 owner case가 통과하고 visual consumer는 21/21 통과한다. Artifact metadata
+  join 전의 이전 offline first-nine diagnostic에서는 초기 interval 일부가 측정되고
+  이후 interval은 no-proof였으며 raw all-source matching도 incomplete였다. 이 replay는
+  새 metadata join을 검증하지 않는다. Cadence, 마지막 Space interval 또는 runtime
+  acceptance를 주장하지 않는다.
+
 - F239-90: Window owner가 사라진 뒤 도착한 transfer image에 응답한다. Sidecar
   reader가 window 파괴 전에 조회한 owner를 보유할 수 있으므로, 사라진 owner는
   닫힌 window 오류를 기록하는 대신 shared message dispatcher를 통해 기존

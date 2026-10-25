@@ -73,8 +73,8 @@ export function readImeFrameIdentities(directory, stopResult) {
   const artifacts = new Map();
   let artifactBytes = 0;
   for (const artifact of manifest.artifacts) {
-    const key = identityTuple(artifact, "frame identity artifact", false);
-    assert.ok(!artifacts.has(key), `frame identity artifact ${key} is duplicated`);
+    const identity = identityTuple(artifact, "frame identity artifact", false);
+    const key = `${identity}@${String(artifact.regionToken)}`;
     assert.ok(typeof artifact.regionToken === "string" && artifact.regionToken.length > 0,
       `frame identity artifact ${key} region token is missing`);
     assert.ok(typeof artifact.nonce === "string" && artifact.nonce.length > 0 &&
@@ -102,6 +102,7 @@ export function readImeFrameIdentities(directory, stopResult) {
     assert.equal(createHash("sha256").update(bytes).digest("hex"), artifact.sha256,
       `frame identity artifact ${key} digest differs`);
     artifactBytes += bytes.length;
+    assert.ok(!artifacts.has(key), `frame identity artifact ${key} is duplicated`);
     artifacts.set(key, artifact);
   }
   assert.equal(manifest.artifactBytes, artifactBytes, "frame identity artifact byte total differs");
@@ -124,7 +125,7 @@ export function readImeFrameIdentities(directory, stopResult) {
     if (row.status === "matched") {
       const key = identityTuple(row.identity, `decoded frame ${frame}`);
       assert.equal(row.reason, null, `decoded frame ${frame}: matched result has a reason`);
-      const artifact = artifacts.get(key);
+      const artifact = artifacts.get(`${key}@${row.region}`);
       assert.ok(artifact, `decoded frame ${frame}: identity ${key} was not issued in this capture`);
       assert.equal(row.region, artifact.regionToken,
         `decoded frame ${frame}: region does not match the issued identity artifact`);
@@ -140,7 +141,9 @@ export function readImeFrameIdentities(directory, stopResult) {
   }
   assert.equal(byFrame.size, manifest.decodedFrames, "frame identity decoded frame count differs");
   const unknownRecords = rows.filter((row) => row.status === "unknown");
-  return { byFrame, artifacts: [...artifacts.keys()], decodedFrames: manifest.decodedFrames,
+  return { byFrame, artifacts: [...artifacts.values()].map((artifact) =>
+      identityTuple(artifact, "frame identity artifact", false)), artifactRecords: [...artifacts.values()],
+    decodedFrames: manifest.decodedFrames,
     decodedRecords: rows.length, unknownRecords };
 }
 
@@ -377,7 +380,12 @@ export function persistThenRequireVisualProof(measurements, record, persist, lab
   `${label}: capture cadence evidence is invalid`);
   persist(record);
   const failures = [];
-  if (!measurements.every((result) => result.result === "measured")) {
+  const tagScopedMode = measurements.some((result) => Object.hasOwn(result, "tagScoped"));
+  if (tagScopedMode && !measurements.every((result) => result.tagScoped &&
+      typeof result.tagScoped.result === "string")) {
+    failures.push(new Error(`${label}: tag-scoped proof record is missing or malformed`));
+  }
+  if (!measurements.every((result) => (tagScopedMode ? result.tagScoped?.result : result.result) === "measured")) {
     failures.push(new Error(`${label}: rendered glyph/underline proof is incomplete: ${JSON.stringify(measurements)}`));
   }
   if (cadence.longestFrameGap > MAXIMUM_IME_FRAME_GAP_MS) {
@@ -389,9 +397,36 @@ export function persistThenRequireVisualProof(measurements, record, persist, lab
     `${label}: visual proof and capture cadence both failed`);
 }
 
+/** Persists the actual terminal input end boundary before later collection can fail. */
+export function sealTerminalSequenceEndBoundary(boundary, stages, persist) {
+  assert.ok(boundary && typeof boundary === "object" && !Array.isArray(boundary) &&
+    boundary.clockDomain === "mach-absolute" && typeof boundary.machAbsoluteNs === "string" &&
+    /^[1-9][0-9]*$/.test(boundary.machAbsoluteNs) &&
+    BigInt(boundary.machAbsoluteNs) <= 18_446_744_073_709_551_615n,
+  "terminal sequence end boundary is invalid");
+  assert.ok(Array.isArray(stages) && stages.length > 0, "terminal visual stages are required to seal the boundary");
+  assert.equal(typeof persist, "function", "terminal sequence boundary requires a persistence function");
+  const sealedStages = stages.map((stage, index) => {
+    assert.equal(stage.clockDomain, boundary.clockDomain, `${stage.key}: terminal stage clock domain differs`);
+    assert.ok(typeof stage.startedMachAbsoluteNs === "string" && /^[1-9][0-9]*$/.test(stage.startedMachAbsoluteNs),
+      `${stage.key}: terminal stage start boundary is invalid`);
+    const endedMachAbsoluteNs = stages[index + 1]?.startedMachAbsoluteNs ?? boundary.machAbsoluteNs;
+    assert.ok(typeof endedMachAbsoluteNs === "string" && /^[1-9][0-9]*$/.test(endedMachAbsoluteNs) &&
+      BigInt(stage.startedMachAbsoluteNs) < BigInt(endedMachAbsoluteNs),
+    `${stage.key}: terminal stage interval is invalid`);
+    return { key: stage.key, clockDomain: boundary.clockDomain,
+      startedMachAbsoluteNs: stage.startedMachAbsoluteNs, endedMachAbsoluteNs };
+  });
+  const record = { boundary: { clockDomain: boundary.clockDomain, machAbsoluteNs: boundary.machAbsoluteNs },
+    stages: sealedStages };
+  persist(record);
+  return sealedStages;
+}
+
 /** Indexes frame-bound cursor metadata with only the latest earlier screen rows observed on the active status stream. */
 export function indexFrameStatus(events, prompt) {
   const states = new Map();
+  const conflicts = new Map();
   const rejections = [];
   let compose = null;
   let screenStatus = null;
@@ -469,13 +504,33 @@ export function indexFrameStatus(events, prompt) {
         origin: { x: geometry.origin.x, y: geometry.origin.y },
       },
     };
-    states.set(key, { frame: cursor.frame, render: cursor.render, semantic,
+    const indexed = { frame: cursor.frame, render: cursor.render, semantic,
       rows,
       eventIndexes: { screen: screenStatus.index, cursor: index },
-      screenRowsReused: screenStatus.index !== index - 1 });
+      screenRowsReused: screenStatus.index !== index - 1 };
+    const previous = states.get(key);
+    if (previous) {
+      if (!sameIndexedFrameState(previous, indexed)) {
+        conflicts.set(key, { frame: key, eventIndexes: [previous.eventIndexes.cursor, index],
+          reason: "conflicting-status-for-frame-tuple" });
+        states.delete(key);
+      }
+    } else if (!conflicts.has(key)) states.set(key, indexed);
   }
   states.rejections = rejections;
+  states.conflicts = conflicts;
   return states;
+}
+
+function sameIndexedFrameState(left, right) {
+  try {
+    assert.deepEqual(left.rows, right.rows);
+    assert.deepEqual(left.semantic, right.semantic);
+    assert.deepEqual(left.render, right.render);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function displayColumnAfter(row, prefix, label) {
@@ -494,9 +549,8 @@ function displayColumnAfter(row, prefix, label) {
 /** Builds the exact input ROI and glyph list from one screen/cursor/render observation. */
 export function planVisualStage({ key, expectedDocument, observation, frameStatus, prompt }) {
   const { screen, compose, cursor } = observation;
-  const render = cursor.render;
-  assert.ok(cursor.frame && render?.frame, `${key}: frame-bound cursor render metadata is missing`);
-  assert.deepEqual(render.frame, cursor.frame, `${key}: cursor render metadata belongs to another frame`);
+  const observedRender = cursor.render;
+  assert.ok(cursor.frame, `${key}: frame-bound cursor identity is missing`);
   frameKey(cursor.frame, `${key} cursor`);
   frameKey(screen.frame, `${key} base screen`);
   assert.equal(screen.frame.generation, cursor.frame.generation, `${key}: screen and cursor generations differ`);
@@ -515,6 +569,13 @@ export function planVisualStage({ key, expectedDocument, observation, frameStatu
   assert.ok(frameStatus instanceof Map, `${key}: indexed prior screen rows are required`);
   const rowSource = frameStatus.get(frameKey(cursor.frame, `${key} cursor`));
   assert.ok(rowSource, `${key}: no indexed prior screen rows for the cursor overlay frame`);
+  const render = rowSource.render;
+  assert.ok(render?.frame, `${key}: indexed frame-bound renderer metadata is missing`);
+  assert.deepEqual(render.frame, cursor.frame, `${key}: indexed renderer metadata belongs to another cursor frame`);
+  if (observedRender !== null && observedRender !== undefined) {
+    assert.deepEqual(observedRender, render,
+      `${key}: observed renderer metadata differs from the indexed exact-tuple renderer`);
+  }
   assert.deepEqual(screen.rows, rowSource.rows,
     `${key}: screen-read rows differ from the active observer's indexed prior rows`);
   assert.equal(frameKey(rowSource.frame, `${key} indexed rows`), frameKey(cursor.frame, `${key} cursor`),
@@ -579,6 +640,7 @@ export function planVisualStage({ key, expectedDocument, observation, frameStatu
     key,
     frame: cursor.frame,
     render,
+    observationRender: observedRender ?? null,
     cursor,
     cells,
     glyphs: inputGlyphs,
@@ -598,18 +660,198 @@ export function planVisualStage({ key, expectedDocument, observation, frameStatu
 }
 
 /** Evaluates exact captured samples against every retained source and each expected stage. */
-export function evaluateVisualStages({ captures, sources, stages, criteria }) {
+function mappedIdentityROI(artifact, source, capture) {
+  const bounds = source.raster.screenBounds;
+  const scale = source.raster.scale;
+  assert.ok(bounds && [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) &&
+    Number.isFinite(scale) && scale > 0, "tag target source geometry is invalid");
+  assert.equal(bounds.width * scale, source.raster.width, "tag target source width differs from its screen bounds");
+  assert.equal(bounds.height * scale, source.raster.height, "tag target source height differs from its screen bounds");
+  const roi = artifact.roi;
+  assert.ok(roi && [roi.x, roi.y, roi.width, roi.height].every(Number.isFinite) &&
+    roi.x >= 0 && roi.y >= 0 && roi.width > 0 && roi.height > 0 &&
+    roi.x + roi.width <= source.raster.width && roi.y + roi.height <= source.raster.height,
+  "issued tag ROI is outside its source raster");
+  const screen = capture.screenRect;
+  const content = capture.contentRect;
+  const mapped = {
+    x: content.x + (bounds.x - screen.x + roi.x / scale) * capture.scaleFactor,
+    y: content.y + (bounds.y - screen.y + roi.y / scale) * capture.scaleFactor,
+    width: roi.width / scale * capture.scaleFactor,
+    height: roi.height / scale * capture.scaleFactor,
+  };
+  assert.ok(Object.values(mapped).every(Number.isInteger), "issued tag ROI maps to fractional capture pixels");
+  assert.ok(mapped.x >= 0 && mapped.y >= 0 && mapped.x + mapped.width <= capture.width &&
+    mapped.y + mapped.height <= capture.height, "issued tag ROI maps outside the captured frame");
+  return mapped;
+}
+
+function mappedStageCell(cell, source, capture) {
+  const { grid } = source.raster;
+  const { screenBounds: bounds, scale } = source.raster;
+  const screen = capture.screenRect;
+  const content = capture.contentRect;
+  const rect = {
+    x: content.x + (bounds.x - screen.x + (grid.x + cell.column * grid.cellWidth) / scale) * capture.scaleFactor,
+    y: content.y + (bounds.y - screen.y + (grid.y + cell.row * grid.cellHeight) / scale) * capture.scaleFactor,
+    width: grid.cellWidth / scale * capture.scaleFactor,
+    height: grid.cellHeight / scale * capture.scaleFactor,
+  };
+  assert.ok(Object.values(rect).every(Number.isInteger), "target glyph/guard cell maps to fractional capture pixels");
+  return rect;
+}
+
+function rectanglesOverlap(left, right) {
+  return left.x < right.x + right.width && right.x < left.x + left.width &&
+    left.y < right.y + right.height && right.y < left.y + left.height;
+}
+
+function evaluateTagScopedStage({ captures, sources, stage, criteria, tagArtifacts, statusConflicts }) {
+  const targetIdentity = frameKey(stage.frame, `${stage.key} target`);
+  const target = sources.find((source) => frameKey(source.frame, `${stage.key} source`) === targetIdentity);
+  if (!target || !target.state || !target.render || !target.raster.grid) {
+    return { result: "no-proof", reason: "tag-target-source-state-incomplete", samples: [] };
+  }
+  if (statusConflicts?.has(targetIdentity)) {
+    return { result: "no-proof", reason: "tag-target-frame-status-conflicts", samples: [],
+      conflict: statusConflicts.get(targetIdentity) };
+  }
+  if (frameKey(target.state.frame, `${stage.key} target status`) !== targetIdentity ||
+      frameKey(target.render.frame, `${stage.key} target render`) !== targetIdentity) {
+    return { result: "no-proof", reason: "tag-target-frame-identity-differs", samples: [] };
+  }
+  try {
+    assert.deepEqual(target.render, stage.render,
+      `${stage.key}: stage render differs from the indexed exact-tuple render`);
+    if (stage.observationRender !== null && stage.observationRender !== undefined) {
+      assert.deepEqual(stage.observationRender, target.render,
+        `${stage.key}: observed render differs from the indexed exact-tuple render`);
+    }
+    assert.deepEqual(target.state.semantic, stage.semantic,
+      `${stage.key}: observed semantic state differs from the indexed exact-tuple state`);
+  } catch (error) {
+    return { result: "no-proof", reason: "tag-target-indexed-state-differs", samples: [],
+      error: error.message };
+  }
+  const exactArtifacts = tagArtifacts.filter((artifact) =>
+    identityTuple(artifact, `${stage.key} issued tag artifact`, false) === targetIdentity);
+  const samples = [];
+  for (const sample of captures) {
+    const rows = sample.identityRows;
+    try {
+      assert.ok(Array.isArray(rows), `${sample.name}: decoded identity rows are missing`);
+      assert.ok(Array.isArray(stage.cells) && stage.cells.length > 0,
+        `${stage.key}: input span and guard cells are required`);
+      const targetRows = rows.filter((row) => row.status === "matched" &&
+        identityTuple(row.identity, `${sample.name} decoded identity`) === targetIdentity);
+      if (!targetRows.length) {
+        samples.push({ frame: sample.name, result: "no-proof", reason: "tag-target-row-missing",
+          targetRowCount: 0, identityRows: rows });
+        continue;
+      }
+      const historyDropMarkers = rows.filter((row) => row.status === "unknown" && row.reason === "unknown-retention" &&
+        row.region === null && row.roi === null);
+      const unlocatedUnknown = rows.filter((row) => row.status === "unknown" && row.roi === null);
+      if (unlocatedUnknown.length) {
+        samples.push({ frame: sample.name, result: "no-proof", reason: "unknown-roi-cannot-be-ruled-out",
+          identityRows: rows });
+        continue;
+      }
+      const crop = compositionFrameCandidates({ targetFrame: stage.frame, capture: sample.capture,
+        sources: [target], cells: stage.cells, expectedState: stage.semantic });
+      assert.equal(crop.result, "candidate-set", `${sample.name}: target span and guard crop is not byte-equal`);
+      const validAttributions = [];
+      for (const targetRow of targetRows) {
+        const matchingArtifacts = exactArtifacts.filter((candidate) => candidate.regionToken === targetRow.region &&
+          typeof candidate.nonce === "string" && candidate.nonce.length > 0 &&
+          typeof candidate.payload === "string" && candidate.payload.length > 0);
+        if (matchingArtifacts.length !== 1) continue;
+        const candidateArtifact = matchingArtifacts[0];
+        try {
+          assert.equal(candidateArtifact.width, target.raster.width,
+            `${sample.name}: issued identity width differs from retained source`);
+          assert.equal(candidateArtifact.height, target.raster.height,
+            `${sample.name}: issued identity height differs from retained source`);
+          assert.equal(candidateArtifact.stride, target.raster.bytesPerRow,
+            `${sample.name}: issued identity stride differs from retained source`);
+          assert.equal(candidateArtifact.pixelFormat, target.raster.format,
+            `${sample.name}: issued identity pixel format differs from retained source`);
+          assert.equal(candidateArtifact.alpha, target.raster.alpha,
+            `${sample.name}: issued identity alpha mode differs from retained source`);
+          assert.equal(semanticRasterColorSpace(candidateArtifact.colorSpace), target.raster.colorSpace,
+            `${sample.name}: issued identity color space differs from retained source`);
+          assert.equal(candidateArtifact.byteCount, target.raster.data.byteLength,
+            `${sample.name}: issued identity byte count differs from retained source`);
+        } catch (error) {
+          samples.push({ frame: sample.name, result: "no-proof",
+            reason: "tag-artifact-source-raster-metadata-differs", error: error.message,
+            identityRows: rows });
+          continue;
+        }
+        const projectedROI = mappedIdentityROI(candidateArtifact, target, sample.capture);
+        assert.deepEqual(targetRow.roi, projectedROI,
+          `${sample.name}: decoded target ROI differs from the projected issued ROI`);
+        for (const cell of stage.cells) {
+          assert.ok(!rectanglesOverlap(projectedROI, mappedStageCell(cell, target, sample.capture)),
+            `${sample.name}: issued tag ROI overlaps the input span or guard cells`);
+        }
+        const conflicts = rows.filter((row) => row !== targetRow && row.roi &&
+          rectanglesOverlap(row.roi, projectedROI));
+        if (conflicts.length) continue;
+        validAttributions.push({ artifact: candidateArtifact, projectedROI });
+      }
+      if (validAttributions.length !== 1) {
+        samples.push({ frame: sample.name, result: "no-proof", reason: "tag-target-attribution-not-unique",
+          attributionCount: validAttributions.length, identityRows: rows });
+        continue;
+      }
+      const { artifact, projectedROI } = validAttributions[0];
+      const glyphs = stage.glyphs.map((glyph) => ({ ...glyph,
+        ...measureRenderedCell(sample.capture, { ...target.raster, frame: target.frame }, target.render, {
+          frame: target.frame, cursor: stage.cursor, row: glyph.row, col: glyph.col,
+          grapheme: glyph.grapheme, marked: glyph.marked,
+        }, criteria),
+      }));
+      const failedGlyph = glyphs.find((glyph) => glyph.result !== "measured");
+      samples.push({ frame: sample.name, result: failedGlyph ? "failed" : "measured",
+        identity: targetIdentity, regionToken: artifact.regionToken, nonce: artifact.nonce,
+        payload: artifact.payload,
+        issuedArtifact: { file: artifact.file, sha256: artifact.sha256, roi: artifact.roi },
+        decodedRow: targetRows.find((row) => row.region === artifact.regionToken),
+        projectedROI, crop: { result: crop.result, identities: crop.identities,
+          ambiguous: crop.ambiguous }, glyphs,
+        unknownIdentityRows: rows.filter((row) => row.status === "unknown"), historyDropMarkers });
+    } catch (error) {
+      samples.push({ frame: sample.name, result: "no-proof", reason: "tag-sample-validation-failed",
+        error: error.message, identityRows: rows });
+    }
+  }
+  return { result: samples.some((sample) => sample.result === "measured") ? "measured" : "no-proof", samples };
+}
+
+/** Evaluates raw crop evidence and, when supplied, keeps tag-scoped proof separate. */
+export function evaluateVisualStages({ captures, sources, stages, criteria, tagArtifacts, statusConflicts }) {
   assert.ok(Array.isArray(stages) && stages.length > 0, "terminal input stages are required");
   const incomplete = sources.filter((source) => !source.state || !source.raster.grid || !source.render)
     .map((source) => frameKey(source.frame, "source"));
   if (incomplete.length) {
-    return stages.map((stage) => ({ key: stage.key, result: "no-proof",
-      reason: "retained-source-frame-state-incomplete", missingSourceStates: incomplete }));
+    return stages.map((stage) => {
+      const raw = { key: stage.key, result: "no-proof",
+        reason: "retained-source-frame-state-incomplete", missingSourceStates: incomplete };
+      if (!tagArtifacts) return raw;
+      return { ...raw, tagScoped: evaluateTagScopedStage({ captures, sources, stage, criteria,
+        tagArtifacts, statusConflicts }) };
+    });
   }
 
   const sourceByIdentity = new Map(sources.map((source) => [frameKey(source.frame, "source"), source]));
   return stages.map((stage) => {
-    if (!captures.length) return { key: stage.key, result: "no-proof", reason: "no-capture-frame-in-input-interval" };
+    if (!captures.length) {
+      const raw = { key: stage.key, result: "no-proof", reason: "no-capture-frame-in-input-interval" };
+      if (!tagArtifacts) return raw;
+      return { ...raw, tagScoped: evaluateTagScopedStage({ captures, sources, stage, criteria,
+        tagArtifacts, statusConflicts }) };
+    }
     const candidates = [];
     const errors = [];
     for (const sample of captures) {
@@ -641,9 +883,22 @@ export function evaluateVisualStages({ captures, sources, stages, criteria }) {
         errors.push({ capture: sample.name, name: error.name, error: error.message });
       }
     }
-    if (errors.length) return { key: stage.key, result: "error", errors, candidates };
-    if (!candidates.length) return { key: stage.key, result: "no-proof", reason: "no-capture-roi-candidate" };
+    if (errors.length) {
+      const raw = { key: stage.key, result: "error", errors, candidates };
+      if (!tagArtifacts) return raw;
+      return { ...raw, tagScoped: evaluateTagScopedStage({ captures, sources, stage, criteria,
+        tagArtifacts, statusConflicts }) };
+    }
+    if (!candidates.length) {
+      const raw = { key: stage.key, result: "no-proof", reason: "no-capture-roi-candidate" };
+      if (!tagArtifacts) return raw;
+      return { ...raw, tagScoped: evaluateTagScopedStage({ captures, sources, stage, criteria,
+        tagArtifacts, statusConflicts }) };
+    }
     const failed = candidates.find((candidate) => candidate.glyphs.some((glyph) => glyph.result !== "measured"));
-    return { key: stage.key, result: failed ? "failed" : "measured", candidates };
+    const raw = { key: stage.key, result: failed ? "failed" : "measured", candidates };
+    if (!tagArtifacts) return raw;
+    return { ...raw, tagScoped: evaluateTagScopedStage({ captures, sources, stage, criteria,
+      tagArtifacts, statusConflicts }) };
   });
 }

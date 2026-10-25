@@ -120,6 +120,23 @@
   (Tauri 33/28, Wails 3/3); no tenth-stage boundary is inferred
   (`/tmp/F239-98-3-offline-first-nine-final.log`).
 
+- F239-98-4: Add tag-scoped IME raster proof beside the unchanged raw crop
+  result. The consumer joins one issued identity artifact and decoded row to
+  the exact target tuple and projected ROI, then requires the existing full
+  span-and-guard byte crop and renderer measurements. Unknown rows without a
+  usable ROI remain no-proof, including source-history drops. The actual final
+  Mach boundary and all stage ends are persisted before capture cleanup or
+  visual evaluation. Red: an issued artifact with the same tuple and in-bounds
+  ROI but a conflicting stride still produced measured proof. The consumer now
+  requires issued width, height, stride, pixel format, alpha, semantic color
+  space and byte count to match the retained raster; only the declared
+  CoreGraphics sRGB name is mapped, without changing bytes. The same owner case
+  passes and the visual consumer passes 21/21. An earlier offline first-nine
+  diagnostic, before the artifact-metadata join, found measured tag samples in
+  early intervals while later intervals remained no-proof; raw all-source
+  matching remained incomplete. That replay does not validate the new metadata
+  join. No cadence, final Space interval, or runtime acceptance is claimed.
+
 - F239-90: Answer a transfer image after its window owner is retired. The
   sidecar reader can hold an owner resolved before window destruction; the
   retired owner now returns the existing `closed` image response through the
