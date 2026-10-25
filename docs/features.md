@@ -1,5 +1,16 @@
 # Feature status
 
+## Current development acceptance
+
+- **Terminal repeated-vowel input and Backspace** — Implementation O, validation X. Logical input evidence is recorded in F239-47-2 and F239-47-32; the complete visual acceptance in F239-47-6 remains open.
+- **View reload and Editor operations** — Implementation O, validation O. F212.12-4 and the current functional cohort in F212.10-core-5 pass on both hosts. Historical intermittent-trigger closure remains separately tracked.
+- **Files contracts and project closure** — Implementation O, validation O. F239-37 and F239-52 record the current snapshot contract and project-close acceptance.
+- **Capture and frame identity** — Implementation X, validation X. F212.12-3 and F239-47-6 retain their unresolved cadence, alignment and complete-frame requirements.
+- **Plugin-owned census and catalog contracts** — Implementation O, validation O. The seven F239-77 owner units pass the current SDK census and catalog checks: 90 sources, zero pending rules and 116 events. All seven source catalogs match both installed diagnostic configurations.
+
+The source audits use the matching current SDK's public commands. Older installed SDK readers reject schema 3; their default command is not reported as passing. These are local development results. Publication and historical failure-closure tasks retain their own checklist states.
+
+
 - [o] F239-172 — P1: Restore missing capability-to-test links and current inventory counts in the parity audit. Red: the structural audit reports nine absent links for F239-163 through F239-170 and F239-81, plus both operations translations recording 1028 tests instead of discovered 1034. Inspect each implementation symbol and owning assertion, add the nine mappings and this audit unit, and update both current inventory counts without changing discovery or criteria. Green: parity reports 102 tracks, 710 implementation files and 1034 test files with no missing links; the three focused feature-link, completed-capability and count-drift owners pass. This is structural evidence only and does not rerun or establish application behavior.
 
 - [o] F239-171 — P0, linked to F212.12-3: Preserve sidecar status notification and persistent retention contracts. The four owning units remove the Wails UI-registry dependency, preserve immutable ordered close transitions, publish declaration and disconnect changes, and report stop, retain and owner-reuse session counts on both hosts. Each unit records its controlled Red/Green and affected owner checks. The terminal window consumer uses the declared project flush barrier for persistent retain instead of requiring unrelated per-surface closed envelopes; its focused two-host acceptance is recorded in F239-171-2. VT local diagnostic delivery is recorded in S88-2-1. This item claims the stated notification and retention units, not capture latency, IME visual acceptance or a full suite.

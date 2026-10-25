@@ -1,5 +1,16 @@
 # 기능 상태
 
+## 현재 개발 acceptance
+
+- **Terminal 연속 모음 입력과 Backspace** — 구현 O, 검증 X. Logical input 증거는 F239-47-2와 F239-47-32에 기록하며 F239-47-6의 전체 visual acceptance는 열려 있다.
+- **View reload와 Editor operation** — 구현 O, 검증 O. F212.12-4와 F212.10-core-5의 현재 기능 cohort가 양쪽 host에서 통과한다. 과거 intermittent trigger 종료는 별도로 추적한다.
+- **Files contract와 project 종료** — 구현 O, 검증 O. F239-37과 F239-52가 현재 snapshot contract와 project-close acceptance를 기록한다.
+- **Capture와 frame identity** — 구현 X, 검증 X. F212.12-3과 F239-47-6의 cadence, alignment 및 complete-frame 요구는 해결되지 않았다.
+- **Plugin 소유 census 및 catalog contract** — 구현 O, 검증 O. 일곱 F239-77 owner 단위가 현재 SDK census 및 catalog 검사를 source 90개, pending rule 0개, event 116개로 통과한다. Source catalog 일곱 개는 양쪽 설치 diagnostic configuration과 일치한다.
+
+Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
+
+
 - [o] F239-172 — P1: Parity audit의 누락된 capability-to-test 연결과 현재 inventory 수치를 복원한다. Red: 구조 감사가 F239-163부터 F239-170 및 F239-81의 연결 9개 누락과 두 operations 번역본의 test 수 1028 대신 발견된 1034를 보고한다. 각 구현 기호와 owning assertion을 확인해 9개 mapping 및 이 audit 단위를 추가하고 discovery나 기준을 바꾸지 않고 양쪽 현재 inventory 수치를 갱신한다. Green: parity는 누락 연결 없이 102 track, 710 implementation file, 1034 test file을 보고하며 집중 feature-link, completed-capability, count-drift owner 3개가 통과한다. 이는 구조 증거이며 application 동작을 다시 실행하거나 입증하지 않는다.
 
 - [o] F239-171 — P0, F212.12-3 연결: Sidecar status notification과 persistent retention contract를 보존한다. 네 owning 단위가 Wails UI-registry 의존성을 제거하고 immutable close 전이 순서를 보존하며 declaration 및 disconnect 변경을 발행하고 양쪽 host의 stop, retain 및 owner 재사용 session count를 알린다. 각 단위는 통제된 Red/Green과 영향받는 owner 검사를 기록한다. Terminal window consumer는 persistent retain에 관련 없는 surface별 closed envelope 대신 기존 project flush barrier를 사용하며 집중 two-host acceptance는 F239-171-2에 기록한다. VT local diagnostic 전달은 S88-2-1에 기록한다. 이 항목은 명시한 notification 및 retention 단위를 주장하며 capture latency, IME visual acceptance나 full suite를 주장하지 않는다.

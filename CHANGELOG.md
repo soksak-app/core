@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-77: Complete seven owner catalog migration records using current SDK audits and exact installed-catalog matching. The checks cover 90 sources with zero pending rules and 116 events. Record the separate local development acceptance of reload/editor, Files, and owning census/catalog contracts; keep terminal visual and capture requirements open. Older installed SDK defaults and public publication are not reported as passing.
+
 - F212.12-3: Enable existing io request records in the focused drag fixture alongside frame records. Exact response tuples join 42 Wails and 35 Tauri consumed waits and expose median post-dispatch service intervals of 20.148 ms and 4.840 ms. Both log audits and shutdown checks pass; capture cadence still fails on both hosts. The records localize service-side waiting without proving which actor operation blocks or establishing drag acceptance.
 
 - F239-171-4: Notify outdated removals during shared stop cleanup and owned-session count changes during authoritative retention and surface-ID reuse. Enqueue changed complete values under the state lock and keep UI invalidation outside it. Six controlled missing-notification cases pass after Red, and both existing retain protocol owners pass. Repeated unchanged operations stay silent. This completes the notification units of F239-171 without claiming capture, IME or full-suite acceptance.
