@@ -11,6 +11,13 @@
   focused owning route tests pass 2/2, including live-owner and malformed-body
   controls. The preserved shutdown audit was not rerun, so this change does not
   claim a new runtime acceptance.
+- F239-96: Claim the Tauri retired-image route tests in parity metadata. The
+  new Rust test file was absent from the Tauri test lane. The existing lane now
+  owns the test, and the F239-90 feature link names the owner lookup, dispatcher
+  and both route cases. The inventory reports zero uncovered tests and no
+  F239-90 feature-link error; 23 unrelated audit findings remain. `make
+  boundaries` passes all 16 components.
+
 
 - F239-94: Retain the frontmost application description from the activation callback under MRC and release the previous snapshot. Red: a controlled owner callback test observed deallocation when its inner autorelease pool drained; the F84 activation run then crashed in failure reporting after `SP_ACTIVATE_REFUSED`. Green: the same non-activation owner target passes 17 assertions; the targeted activation retry reports refusal without crashing and restores the captured frontmost PID. This does not resolve the activation refusal. `make docs-check` passes.
 

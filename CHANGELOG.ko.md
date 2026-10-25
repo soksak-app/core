@@ -10,6 +10,12 @@
   `closed` image 응답을 보낸다. Live-owner와 malformed-body control을 포함한
   focused owning route test 2개가 통과한다. 보존된 shutdown audit는 재실행하지
   않았으므로 새로운 runtime acceptance를 주장하지 않는다.
+- F239-96: Tauri retired-image route test를 parity metadata에 등록한다. 새 Rust
+  test file이 Tauri test lane에서 누락됐다. 기존 lane이 해당 test를 소유하고
+  F239-90 feature link가 owner lookup, dispatcher 및 두 route case를 가리킨다.
+  Inventory는 미등록 test 0개와 F239-90 feature-link 오류 없음을 보고하며,
+  무관한 finding 23개는 남아 있다. `make boundaries`는 16개 component 모두 통과한다.
+
 
 - F239-94: MRC 환경에서 activation callback의 frontmost application 설명을 retain하고 이전 snapshot을 release한다. Red: 제어된 owner callback test는 inner autorelease pool 종료 때 설명이 해제되는 것을 확인했고, F84 activation run은 `SP_ACTIVATE_REFUSED` 뒤 failure 보고 중 crash했다. Green: 같은 비활성 owner target이 assertion 17개를 통과하며, targeted activation 재시도는 crash 없이 거부 결과를 보고하고 저장한 frontmost PID를 복원한다. Activation 거부 자체는 해결되지 않았다. `make docs-check`가 통과한다.
 
