@@ -818,36 +818,87 @@ static void clearCaptureError(void) {
     }
 }
 
-static void restoreCaptureIdentityAfterFailure(void) {
+static void appendCaptureError(NSString *message) {
+    NSString *combined = captureError == nil ? [message copy]
+        : [[captureError stringByAppendingFormat:@"; %@", message] copy];
+    [captureError release];
+    captureError = combined;
+}
+
+static void failIdentitySessionForCaptureError(NSString *message) {
+    if (!sp_image_capture_match_identity_session_active()) return;
+    char *identityError = NULL;
+    if (!sp_image_capture_match_identity_session_fail(message.UTF8String, &identityError) && identityError != NULL)
+        sp_log_error("frame identity", identityError);
+    free(identityError);
+}
+
+static void restoreCaptureIdentityAfterFailure(SCStream *stream) {
+    if (stream == nil) return;
     if (NSThread.isMainThread) {
-        sp_region_restore_capture_identity();
+        bool current = false;
+        @synchronized([SPCapture class]) {
+            current = captureStream == stream;
+        }
+        if (current) sp_region_restore_capture_identity();
     } else {
-        // Capture and writer failures can occur away from AppKit's thread; do not wait while holding their locks.
-        dispatch_async(dispatch_get_main_queue(), ^{ sp_region_restore_capture_identity(); });
+        // The stream retains this queued cleanup's identity until the main thread checks the current capture.
+        [stream retain];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            bool current = false;
+            @synchronized([SPCapture class]) {
+                current = captureStream == stream;
+            }
+            if (current) sp_region_restore_capture_identity();
+            [stream release];
+        });
     }
 }
 
-static void setCaptureError(NSString* message) {
+static bool recordCaptureError(NSString *message, SCStream *expectedStream, BOOL requireCurrentStream,
+    SPCapture **sinkOut) {
+    SCStream *cleanupStream = nil;
+    if (sinkOut != NULL) *sinkOut = nil;
     @synchronized([SPCapture class]) {
-        NSString *combined = captureError == nil ? [message copy]
-            : [[captureError stringByAppendingFormat:@"; %@", message] copy];
-        [captureError release];
-        captureError = combined;
+        if (requireCurrentStream && (expectedStream == nil || captureStream != expectedStream)) return false;
+        appendCaptureError(message);
+        failIdentitySessionForCaptureError(message);
+        cleanupStream = [(expectedStream ?: captureStream) retain];
+        if (sinkOut != NULL) *sinkOut = [captureSink retain];
     }
-    restoreCaptureIdentityAfterFailure();
+    restoreCaptureIdentityAfterFailure(cleanupStream);
+    [cleanupStream release];
+    return true;
 }
+
+static void setCaptureError(NSString* message) {
+    recordCaptureError(message, nil, NO, NULL);
+}
+
+static bool setCaptureErrorForStream(SCStream *stream, NSString *message, SPCapture **sinkOut) {
+    return recordCaptureError(message, stream, YES, sinkOut);
+}
+
+#ifdef SOKSAK_DIAGNOSTIC
+void sp_capture_test_report_error(const char *message) {
+    if (message == NULL) {
+        sp_log_error("capture", "a failure message is required");
+        return;
+    }
+    NSString *decoded = [NSString stringWithUTF8String:message];
+    if (decoded == nil) {
+        sp_log_error("capture", "the failure message is not valid UTF-8");
+        return;
+    }
+    setCaptureError(decoded);
+}
+#endif
 
 // Errors of the previous stream are also reported but do not change the result of the current recording.
 static void reportCaptureStreamFailure(SCStream *stream, NSString *message) {
     SPCapture *sink = nil;
-    @synchronized([SPCapture class]) {
-        bool current = stream != nil && stream == captureStream;
-        if (current) {
-            setCaptureError(message);
-            sink = [captureSink retain];
-        }
-        sp_log_error("capture", [NSString stringWithFormat:@"%@ (stream=%p current=%d)", message, stream, current].UTF8String);
-    }
+    bool current = setCaptureErrorForStream(stream, message, &sink);
+    sp_log_error("capture", [NSString stringWithFormat:@"%@ (stream=%p current=%d)", message, stream, current].UTF8String);
     [sink stopDisplayLinkObservation];
     [sink release];
 }

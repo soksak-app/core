@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-47-40-4-2-1-1: Fence queued cleanup to the current `SCStream`
+  that reported the current failure and fail its identity session
+  before accepting another tagged presentation. Retaining the stream through
+  the main-thread callback prevents pointer reuse from assigning old cleanup
+  to a later recording. Red: controlled `capture_test` failed three assertions:
+  an errored session remained active, a later frame was tagged, and delayed A
+  cleanup stripped B's tags. Green: the same test and the existing stop and
+  region-failure tests pass 1/1 each. Capture finalization still restores the
+  latest raw snapshots synchronously.
 - F239-47-40-4-2-1: Restore every live image-region layer from its latest raw
   snapshot when identity tagging fails or capture finalization runs. Capture
   errors enqueue main-thread cleanup; finalization waits for restoration after

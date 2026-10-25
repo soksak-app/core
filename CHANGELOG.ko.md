@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-47-40-4-2-1-1: 현재 failure를 보고한 정확한 `SCStream`에 queued capture-error
+  복원을 fence하고 다음 tagged presentation 전에 해당 identity session을 실패 처리한다.
+  Main-thread callback 동안 stream을 retain해 pointer 재사용이 이전 cleanup을 새 녹화에
+  연결하지 않게 한다. Red: 제어된 `capture_test`는 실패 session 활성 유지, 후속 frame tag,
+  지연된 A cleanup의 B tag 삭제 assertion 세 개에서 실패했다. Green: 같은 test와 기존 stop,
+  region-failure test가 각각 1/1 통과한다. Capture finalization은 최신 raw snapshot 복원을
+  계속 동기 완료한다.
 - F239-47-40-4-2-1: Identity tagging 실패 또는 capture finalization 시 모든 live
   image-region layer를 최신 raw snapshot에서 복원한다. Capture error는 main-thread
   cleanup을 enqueue하고 finalization은 capture queue 종료 뒤 복원이 끝날 때까지 기다린다.

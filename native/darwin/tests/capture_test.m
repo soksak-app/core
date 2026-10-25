@@ -3,6 +3,7 @@
 #import <IOSurface/IOSurface.h>
 #import <WebKit/WebKit.h>
 #import "capture.h"
+#import "image_capture_match.h"
 #import "image_region.h"
 #import "webview_geometry.h"
 #import "support/capture_frame.m"
@@ -47,6 +48,15 @@ static BOOL regionMatchesSurfaceBytes(void *handle, IOSurfaceRef surface, NSData
         && memcmp(CFDataGetBytePtr(actual), expected.bytes, expected.length) == 0;
     if (actual) CFRelease(actual);
     return equal;
+}
+
+static BOOL regionDiffersFromSurfaceBytes(void *handle, IOSurfaceRef surface, NSData *expected) {
+    return !regionMatchesSurfaceBytes(handle, surface, expected);
+}
+
+static void drainMainQueueThroughSentinel(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{ CFRunLoopStop(CFRunLoopGetMain()); });
+    CFRunLoopRun();
 }
 
 int main(void) { @autoreleasepool {
@@ -205,6 +215,62 @@ int main(void) { @autoreleasepool {
             [NSData dataWithContentsOfFile:identityManifest] options:0 error:NULL];
         check(identityMetadata != nil && [identityMetadata[@"artifacts"] isKindOfClass:NSArray.class],
             @"opt-in identity capture writes its separate tagged artifact manifest");
+
+        bool failedCaptureStarted = sp_capture_start(directory, true, &operationError);
+        check(failedCaptureStarted, [NSString stringWithFormat:@"a second identity capture starts for delayed-cleanup coverage (%s)",
+            operationError == NULL ? "" : operationError]);
+        free(operationError); operationError = NULL;
+        if (failedCaptureStarted) {
+            check(sp_capture_wait() == 1, @"the second identity capture receives its first frame");
+            BOOL failedA = sp_region_present(regionA, IOSurfaceGetID(imageA), nonceA,
+                rasterA[0], rasterA[1], rasterA[2], 73, 10, 1);
+            BOOL failedB = sp_region_present(regionB, IOSurfaceGetID(imageB), nonceB,
+                rasterB[0], rasterB[1], rasterB[2], 74, 10, 1);
+            check(failedA && failedB, @"capture A tags both static regions before its controlled error");
+            dispatch_semaphore_t errorReported = dispatch_semaphore_create(0);
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+                sp_capture_test_report_error("controlled identity capture failure");
+                dispatch_semaphore_signal(errorReported);
+            });
+            check(dispatch_semaphore_wait(errorReported, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0,
+                @"a background capture failure queues its main-thread cleanup");
+            dispatch_release(errorReported);
+            check(!sp_image_capture_match_identity_session_active(),
+                @"capture A disables identity tagging as soon as its error is recorded");
+            BOOL afterErrorA = sp_region_present(regionA, IOSurfaceGetID(imageA), nonceA,
+                rasterA[0], rasterA[1], rasterA[2], 73, 10, 2);
+            BOOL afterErrorB = sp_region_present(regionB, IOSurfaceGetID(imageB), nonceB,
+                rasterB[0], rasterB[1], rasterB[2], 74, 10, 2);
+            check(afterErrorA && afterErrorB && regionMatchesSurfaceBytes(regionA, imageA, rawA)
+                && regionMatchesSurfaceBytes(regionB, imageB, rawB),
+                @"capture A presents raw frames after failure without retagging");
+            sp_capture_stop(0);
+            check(strstr(sp_capture_error(), "controlled identity capture failure") != NULL,
+                @"capture A finalization preserves the injected failure");
+
+            bool captureBStarted = sp_capture_start(directory, true, &operationError);
+            check(captureBStarted, [NSString stringWithFormat:@"capture B starts after capture A finalizes (%s)",
+                operationError == NULL ? "" : operationError]);
+            free(operationError); operationError = NULL;
+            if (captureBStarted) {
+                check(sp_capture_wait() == 1, @"capture B receives its first frame");
+                BOOL taggedB1 = sp_region_present(regionA, IOSurfaceGetID(imageA), nonceA,
+                    rasterA[0], rasterA[1], rasterA[2], 75, 10, 1);
+                BOOL taggedB2 = sp_region_present(regionB, IOSurfaceGetID(imageB), nonceB,
+                    rasterB[0], rasterB[1], rasterB[2], 76, 10, 1);
+                check(taggedB1 && taggedB2 && regionDiffersFromSurfaceBytes(regionA, imageA, rawA)
+                    && regionDiffersFromSurfaceBytes(regionB, imageB, rawB),
+                    @"capture B tags both layers before delayed capture A cleanup runs");
+                drainMainQueueThroughSentinel();
+                check(regionDiffersFromSurfaceBytes(regionA, imageA, rawA)
+                    && regionDiffersFromSurfaceBytes(regionB, imageB, rawB),
+                    @"delayed cleanup from capture A preserves both capture B tags");
+                sp_capture_stop(0);
+                check(regionMatchesSurfaceBytes(regionA, imageA, rawA)
+                    && regionMatchesSurfaceBytes(regionB, imageB, rawB),
+                    @"capture B stop restores both latest raw provider byte arrays");
+            }
+        }
         sp_region_close(regionA); sp_region_close(regionB);
         webviewDetachSurface(surface);
         if (surfaceHost) sp_surface_close(surfaceHost);

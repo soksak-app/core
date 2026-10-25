@@ -40,3 +40,8 @@ double sp_capture_clock(void);
 // releases the error string with free(). It is independent of recording errors, and the error output pointer is
 // required.
 bool sp_capture_still(long windowNumber, const char *path, char **error);
+
+#ifdef SOKSAK_DIAGNOSTIC
+// Injects a capture failure on the calling thread for lifecycle cleanup tests.
+void sp_capture_test_report_error(const char *message);
+#endif
