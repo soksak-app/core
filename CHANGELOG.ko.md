@@ -41,9 +41,10 @@
   현재 host에 없는 `RegisterView`를 참조하는 기존 `view_call_record_test.go`와
   `view_error_test.go` 때문에 compile할 수 없다. Focused source owner test는 통과한다.
   `make docs-check`는 문서 112개, failure record 422개, record check 1823개로 통과하고
-  `git diff --check`도 통과한다. Isolated worktree에 `acorn`이 없어 `make parity-check`는
-  시작하지 못했다. 현재 inventory와 Wails owner-test 연결을 test file 1000개에 맞춰
-  갱신했으며 main checkout의 parity check를 기다린다.
+  `git diff --check`도 통과한다. Main에서 처음 실행한 `make parity-check`는 새 owner
+  test 파일로 늘어난 구현 파일 수만 예전 기록과 달랐다. 실제 inventory는 lane 101개,
+  구현 파일 701개, test 파일 1000개였고 uncovered implementation/test/feature link는
+  없었다. EN/KO inventory 기록을 이 수치로 맞춘 뒤 main parity 재실행이 통과했다.
   Window test는 Wails 22.888초, Tauri 22.599초 걸렸다. 두 run 모두 host와 sidecar
   process를 종료하고 endpoint를 제거했으며 같은 frontmost baseline을 복원했다.
   macOS 26.6.2 arm64에서 Wails와 Tauri 0.0.21, Terminal 0.0.21, VT 0.0.17,

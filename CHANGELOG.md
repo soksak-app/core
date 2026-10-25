@@ -45,10 +45,11 @@
   `view_call_record_test.go` and `view_error_test.go` refer to `RegisterView`,
   which the current host does not provide; the focused source owner checks pass.
   `make docs-check` passes 112 files, 422 failure records and 1823 record checks;
-  `git diff --check` passes. `make parity-check` could not start in the isolated
-  worktree because `acorn` is not installed there. The current inventory and
-  Wails owner-test mapping are updated for 1000 test files and await the main
-  checkout's parity check.
+  `git diff --check` passes. The first main `make parity-check` found only the
+  stale implementation-file count: the new owner test raised the inventory to
+  101 lanes, 701 implementation files and 1000 test files, with no uncovered
+  implementation, test or feature-link issues. The English and Korean inventory
+  records now use those counts; the main parity rerun passes.
   The window tests took 22.888 s on Wails and 22.599 s on Tauri. Both runs ended
   host and sidecar processes, removed endpoints, and restored the same frontmost
   baseline. Two-host runtime acceptance remains open.
