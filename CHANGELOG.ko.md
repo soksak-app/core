@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F212.10-core-5: Placement 수정 이후 현재 양 host의 editor 및 HWP window
+  결과를 기록한다. 4/4 및 log 감사가 통과하고 editor 열기, 편집, 저장, 의도한
+  저장 오류와 수정 문서 닫기 확인이 통과한다. 과거 exposure 분류와 HWP
+  activation은 열어 두며 원래 trigger나 activation 통과를 추론하지 않는다.
+
 - F239-157: Retained-view 준비, native placement 및 release를 직렬화하여 이전
   placement가 이후 mount를 dispose하지 못하게 한다. 보류된 placement owner는
   수정 전 실패하고 수정 후 통과하며 거부 복구 및 인접 owner가 44/44 통과한다.

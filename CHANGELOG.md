@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F212.10-core-5: Record current two-host editor and HWP window results,
+  4/4 with a passing log audit after the placement corrections. Editor
+  opening, editing, saving, expected save errors and modified-close
+  confirmation pass. Keep historical exposure classification and HWP
+  activation open; no original trigger or activation pass is inferred.
+
 - F239-157: Serialize retained-view preparation, native placement and
   release so an earlier placement cannot dispose a later mount. The held
   placement owner fails before the correction and passes afterward;
