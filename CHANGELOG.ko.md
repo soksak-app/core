@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F212.12-3: 양 host의 drag 정렬 측정 실패를 기록한다. 양 host 모두 기존
+  latency 기준을 초과한다. Capture와 trace를 보존하고 누락된 card 이동 및
+  recording 측정을 열린 작업으로 유지한다. Latency 원인이나 drag acceptance를
+  추론하지 않는다.
+
 - F212.12-4: View generation이 바뀌어도 surface command forwarding을
   유지하고 public 등록을 복원하며 선언 오류를 전달한다. macOS document
   callback이 자신의 document를 닫아도 실행 중인 callback을 반환까지 보존한다.

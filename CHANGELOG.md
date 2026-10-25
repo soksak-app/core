@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F212.12-3: Record the failing two-host drag alignment measurement.
+  Both hosts exceed the existing latency limits; preserve captures and
+  traces, and retain the missing card-movement and recording measurements
+  as open work. No latency cause or drag acceptance is inferred.
+
 - F212.12-4: Preserve surface command forwarding across view generations,
   restore public registrations and propagate declaration errors. Retain
   executing macOS document callbacks until they return when a callback
