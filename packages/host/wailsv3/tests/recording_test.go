@@ -90,7 +90,7 @@ func TestFinishedRecordingKeepsItsFolderAndReportsFrames(t *testing.T) {
 	if err != nil || directory != folder || count != 3 || !frameIdentity || !exists(folder) {
 		t.Fatalf("finish %q %d frameIdentity=%v %v", directory, count, frameIdentity, err)
 	}
-	expectCalls(t, fake, "open 7", "start", "wait", "stop")
+	expectCalls(t, fake, "open 7", "start frameIdentity", "wait", "stop")
 	if _, _, _, err := recording.Finish(fake); err == nil {
 		t.Fatal("a second finish succeeded")
 	}

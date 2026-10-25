@@ -9,6 +9,13 @@
   the start-document fixture. The three argument tests and start-owner test
   pass individually through `make rust-repeat`; null values remain asserted.
 
+- F239-123: Match the recording fixture to its enabled identity option.
+  Align `TestFinishedRecordingKeepsItsFolderAndReportsFrames` with the
+  current capture-start contract by expecting `start frameIdentity` when the
+  recording is started with `frameIdentity: true`. The preserved host-contract
+  run reported the stale expectation; the focused diagnostics owner test passes
+  1/1 in 0.028 s. Production behavior is unchanged.
+
 - F239-121: Close the event-log writer in the Wails buffer-bound test helper
   after a final flush. The writer could outlive its `TempDir`, causing cleanup
   to fail with a nonempty directory. The focused relay-expiry test passes 3/3

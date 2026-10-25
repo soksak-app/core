@@ -9,6 +9,13 @@
   수정한다. 세 argument test와 start-owner test가 `make rust-repeat`에서 각각
   통과하며 null 값 assertion은 유지한다.
 
+- F239-123: 활성 identity option에 recording fixture를 맞춘다.
+  `frameIdentity: true` recording 시작 시 `start frameIdentity`를
+  기대하도록 `TestFinishedRecordingKeepsItsFolderAndReportsFrames`를 현재
+  capture-start 계약에 맞춘다. 보존된 host-contract 실행에서 오래된 기대값이
+  실패했고, diagnostics owner test는 집중 실행에서 0.028초, 1/1 통과한다.
+  Production 동작은 바뀌지 않았다.
+
 - F239-121: Wails buffer-bound test helper가 마지막 flush 후 event-log writer를
   닫도록 한다. Writer가 `TempDir`보다 오래 살아 cleanup이 비어 있지 않은
   디렉터리로 실패할 수 있었다. 집중 relay-expiry test는 `make go-repeat`에서
