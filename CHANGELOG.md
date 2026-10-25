@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-83: The checklist excludes the Windows-only F54 and F239-48-4 runtime
+  checks and remaining Windows/Linux implementation in R2-7 from the current macOS
+  validation scope. Windows runtime is unavailable and no Linux host application
+  is implemented. Existing cross-compilation and completed R2-7-1/2/3 checks retain
+  only their recorded scope. Shared macOS requirements are unchanged; Windows/Linux
+  runtime behavior remains unverified.
+
 - F239-77: Validate role-specific `host.sampler.memory` records with strict
   schema-3 JSON Schema declarations. Keep event-log line schema 2 unchanged.
   The owner tests cover each documented success and error shape, reject

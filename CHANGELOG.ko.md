@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-83: 체크리스트는 Windows 전용 F54와 F239-48-4 runtime 검사, 남은
+  Windows/Linux 구현인 R2-7을 현재 macOS 검증 범위에서 제외한다. Windows runtime
+  환경은 없고 Linux host application은 구현되지 않았다. 기존 cross-compilation과
+  완료된 R2-7-1/2/3 검사는 기록된 범위로 유지한다. 공통 macOS 요구사항은 바뀌지
+  않았으며 Windows/Linux runtime 동작은 검증되지 않았다.
+
 - F239-77: 역할별 `host.sampler.memory` record를 schema 3 JSON Schema로 엄격히
   검증한다. Event-log line schema 2는 유지한다. Owner test는 문서화된 성공 및 오류
   형식을 각각 확인하고 잘못된 조합을 거부하며 실제 capture 오류와 중단 표식을

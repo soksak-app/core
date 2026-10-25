@@ -108,6 +108,22 @@ test("checklist permits an item closed as not reproduced with the record of its 
   assert.equal(result.status, 0, result.stderr);
 });
 
+test("checklist permits a platform-excluded item only with a named unavailable platform and unverified result", { timeout: 3000 }, (t) => {
+  const english = "- [-] F83-1 — Platform excluded: Windows runtime unavailable; startup behavior is unverified.\n";
+  const korean = "- [-] F83-1 — 플랫폼 범위 제외: Windows runtime 환경이 없어 시작 동작은 미검증이다.\n";
+  const accepted = check(t, english, korean);
+  assert.equal(accepted.status, 0, accepted.stderr);
+
+  for (const [name, e, k] of [
+    ["no named platform", "- [-] F83-1 — Platform excluded: runtime unavailable; behavior is unverified.\n", "- [-] F83-1 — 플랫폼 범위 제외: runtime 환경이 없어 동작은 미검증이다.\n"],
+    ["no exclusion reason", "- [-] F83-1 — Platform excluded: Windows behavior is unverified.\n", "- [-] F83-1 — 플랫폼 범위 제외: Windows 동작은 미검증이다.\n"],
+    ["no unverified result", "- [-] F83-1 — Platform excluded: Windows runtime is unavailable.\n", "- [-] F83-1 — 플랫폼 범위 제외: Windows runtime 환경이 없다.\n"],
+  ]) {
+    const rejected = check(t, e, k);
+    assert.notEqual(rejected.status, 0, `${name} was accepted`);
+  }
+});
+
 for (const [name, english, korean] of [
   ["missing record", "- [-] G1 — failed once.\n", "- [-] G1 — 한 번 실패했다. 재현되지 않음: 세 번.\n"],
   ["empty record", "- [-] G1 — failed once. Not reproduced: .\n", "- [-] G1 — 한 번 실패했다. 재현되지 않음: 세 번.\n"],

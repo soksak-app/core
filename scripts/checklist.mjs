@@ -18,12 +18,19 @@ export function checklist(text, file, errors) {
       const missing = [!hasContent(causeValue) && (korean ? "원인" : "cause"), !hasContent(retryValue) && (korean ? "재시도 조건" : "retry condition")].filter(Boolean);
       if (missing.length) errors.push(`${file}:${index + 1}: blocked checklist item ${id ?? "without an identifier"} requires nonempty ${missing.join(" and ")}`);
     }
-    // [-] is an item closed because it was not reproduced. The attempts made before closing are recorded.
+    // [-] records either an evidence-backed non-reproduction or an explicitly scoped Windows/Linux exclusion.
     if (state === "-") {
       const korean = file.endsWith(".ko.md");
       const record = (korean ? /재현되지 않음:\s*(.+)$/u : /Not reproduced:\s*(.+)$/i).exec(label)?.[1]?.trim();
-      if (!record || !/[\p{L}\p{N}]/u.test(record)) {
-        errors.push(`${file}:${index + 1}: not reproduced checklist item ${id ?? "without an identifier"} requires a nonempty ${korean ? "재현되지 않음" : "Not reproduced"} record`);
+      const hasAttemptRecord = record && /[\p{L}\p{N}]/u.test(record);
+      const scopeRecord = (korean ? /플랫폼 범위 제외:\s*(.+)$/u : /Platform excluded:\s*(.+)$/i).exec(label)?.[1]?.trim();
+      const hasScopedPlatformRecord = scopeRecord
+        && /\b(?:Windows|Linux)\b/i.test(scopeRecord)
+        && (korean
+          ? /(?:환경이 없|구현되지 않|사용할 수 없|실행할 수 없)/u.test(scopeRecord) && /(?:미검증|검증되지 않)/u.test(scopeRecord)
+          : /(?:unavailable|not implemented|not available)/i.test(scopeRecord) && /(?:unverified|not verified)/i.test(scopeRecord));
+      if (!hasAttemptRecord && !hasScopedPlatformRecord) {
+        errors.push(`${file}:${index + 1}: closed checklist item ${id ?? "without an identifier"} requires either a nonempty ${korean ? "재현되지 않음" : "Not reproduced"} record or a complete ${korean ? "플랫폼 범위 제외" : "Platform excluded"} record`);
       }
     }
     // An identifier that two lines state is refused whatever its form, with the line of its first statement.
