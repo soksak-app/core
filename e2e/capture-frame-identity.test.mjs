@@ -18,6 +18,7 @@ for (const app of Object.values(APPS)) {
     const grid = await s.get("core.grid");
     const terminalCards = grid.cards.filter((item) => item.tabs.some((tab) => tab.plugin === "terminal"));
     assert.ok(terminalCards.length > 0, "the fixture has no terminal card");
+    const targetCard = terminalCards[0];
     const originalTerminals = terminalCards.flatMap((card) => card.tabs.filter((tab) => tab.plugin === "terminal")
       .map((tab) => tab.id));
     for (const card of terminalCards) await s.run("core.card.add-tab", { card: card.id, plugin: "browser" });
@@ -36,8 +37,8 @@ for (const app of Object.values(APPS)) {
     let preservationError;
     let preserved;
     try {
-      const { tab: surface } = await s.run("core.card.add-tab", { card: card.id, plugin: "terminal" });
-      await s.until("core.grid", (value) => value.cards.some((item) => item.id === card.id && item.active === surface),
+      const { tab: surface } = await s.run("core.card.add-tab", { card: targetCard.id, plugin: "terminal" });
+      await s.until("core.grid", (value) => value.cards.some((item) => item.id === targetCard.id && item.active === surface),
         `new terminal ${surface} did not become the active card tab`);
       const visible = await s.until("core.surfaces", (items) => items.find((item) => item.surface === surface
         && item.plugin === "terminal" && item.visible

@@ -6,6 +6,11 @@
 
 - F239-66: Correct three Workbench test fixtures that failed at module setup rather than exercising their assertions. The chrome tests use test-scoped runtime mocks; the presentation test exports the runtime binding and prepares its mounted view and theme; the plugin-host test supplies the plugin API exports required by its loaded module graph. The three owning files pass 31/31, with no production changes.
 
+- F239-75: Bind the selected terminal card before opt-in identity capture.
+  The consumer previously referenced a loop-local card after that loop ended,
+  raising a ReferenceError before terminal creation. Syntax validation passes;
+  two-host runtime verification remains pending.
+
 - F239-63: Classify helper-only E2E modules explicitly and run the shared
   project-window lifecycle through each selected adapter. Keep the
   `WebviewWindow #... not found` stderr assertion scoped to Wails. Red: the

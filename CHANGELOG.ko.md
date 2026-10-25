@@ -6,6 +6,11 @@
 
 - F239-66: assertion을 실행하지 못하던 Workbench test fixture 세 개를 수정한다. Chrome test는 test-scoped runtime mock을 사용하고, presentation test는 runtime binding을 export하며 mounted view와 theme을 준비한다. Plugin-host test는 로드된 module graph가 요구하는 plugin API export를 제공한다. 소유 파일 세 개가 31/31 통과하며 production 변경은 없다.
 
+- F239-75: Opt-in identity capture 전에 선택한 terminal card를 바인딩한다.
+  Consumer는 loop-local card를 loop가 끝난 뒤 참조해 terminal 생성 전에
+  ReferenceError를 냈다. Syntax 검사는 통과했고 두 host runtime 검증은
+  대기 중이다.
+
 - F239-63: Helper-only E2E module을 명시적으로 분류하고 공통
   project-window lifecycle을 선택된 각 adapter에서 실행한다.
   `WebviewWindow #... not found` stderr assertion은 Wails에 한정한다.
