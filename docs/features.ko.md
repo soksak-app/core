@@ -2,6 +2,8 @@
 
 [English](features.md)
 
+- [o] F239-112 — P1, F239-61 연결: `rustfmt --edition 2024 --config skip_children=true`로 `packages/sok/tauriv2/src/plugin_catalog.rs`와 `packages/sok/tauriv2/tests/plugin_catalog_test.rs`를 포맷한다. 기본 rustfmt 호출은 edition과 style이 달라 workspace format 검사를 만족하지 못했다. Red: 최종 format 검사가 두 파일을 unformatted로 보고했다. Green: 지정한 Rust format 명령 뒤 `make rust-format-check`와 `make go-format-check`가 통과한다(`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`). Semantic change는 없었다.
+
 - [o] F239-141 — P1: 기존 IME, focus, semantic, visual, frame identity 및 33 ms cadence 요구사항을 유지하면서 독립 status 요청을 동시에 읽어 terminal IME observer 부담을 줄인다. Status pair → screen read → status pair 순서, 모든 관측값 및 취합 오류를 보존한다. Phase 순서와 전체 오류 보고를 제어된 Promise로 검사하는 owning Red/Green test를 추가한다. Runtime acceptance는 대기 상태이며 이 observer 변경이 capture-gap 실패를 해결한다고 추론하지 않는다.
 
 - [o] F239-108 — P1, F239-100 및 F212.12-2-1-2 연결: view-focus activation fixture가 host window 등록을 따르고 캡처한 모든 native 오류를 timeout에 보존한다. Surface 생성 전에 app DOM을 `sp_window_set_main_webview`로 등록한다. Activation 실패 reporter는 WebKit과 document view 오류를 포함한 모든 캡처 `native.record.error`의 `where`와 `text`를 보존한다. Red: document-view 오류도 캡처하는 확장 `--activity-error-report-test` assertion이 변경 전 input-inject 전용 filter에서 실패했다(`/tmp/F239-108-activity-error-red.log`). Green: 같은 CLI owner가 두 오류 기록을 출력하며 통과했고(`/tmp/F239-108-activity-error-green.log`), main-view 등록 assertion을 포함한 기본 비활성화 `view_focus_test`도 통과했다(`/tmp/F239-108-view-focus-default-green.log`). 기존 activation timeout은 등록된 activity-state callback 하나가 미완료였다는 사실만 증명하며 fixture 수정은 이를 해결하지 않는다. Activation이나 key input은 실행하지 않았다.

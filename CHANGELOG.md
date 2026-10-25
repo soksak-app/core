@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-112: Format the event catalog source and owner tests:
+  `packages/sok/tauriv2/src/plugin_catalog.rs` and
+  `packages/sok/tauriv2/tests/plugin_catalog_test.rs` with
+  `rustfmt --edition 2024 --config skip_children=true`. Red: the final format
+  check reported both files as unformatted. Green: `make rust-format-check` and
+  `make go-format-check` pass after the required formatting command
+  (`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`).
+  No semantic changes were made.
+
 - F239-141: Run the independent terminal compose/cursor reads, followed by the
   independent verification compose/cursor/window reads, concurrently around
   the existing screen read. The controlled Red showed each batch starting

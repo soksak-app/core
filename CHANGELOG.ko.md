@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F239-112: Event catalog source와 owner test의 format을 맞춘다.
+  `rustfmt --edition 2024 --config skip_children=true`로
+  `packages/sok/tauriv2/src/plugin_catalog.rs`와
+  `packages/sok/tauriv2/tests/plugin_catalog_test.rs`를 포맷한다. Red: 최종
+  format 검사가 두 파일을 unformatted로 보고했다. Green: 지정한 명령 뒤
+  `make rust-format-check`와 `make go-format-check`가 통과한다
+  (`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`).
+  Semantic change는 없었다.
+
 - F239-141: 기존 screen read 앞뒤의 terminal compose/cursor status 읽기와
   검증 compose/cursor/window status 읽기를 각각 동시에 실행한다. Controlled
   Red는 각 batch가 직렬로 시작되고 뒤이은 오류가 누락되는 것을 확인했다.

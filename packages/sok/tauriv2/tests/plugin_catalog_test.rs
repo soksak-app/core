@@ -144,7 +144,11 @@ fn a_catalog_that_cannot_be_used_is_an_error_that_names_its_file_and_the_other_p
     );
     write_plugin(dir.path(), "broken", r#"{"events":"#);
     write_plugin(dir.path(), "missing", "");
-    write_plugin(dir.path(), "old", r#"{"schema":2,"events":{"plugin.old.event":{"class":"call"}}}"#);
+    write_plugin(
+        dir.path(),
+        "old",
+        r#"{"schema":2,"events":{"plugin.old.event":{"class":"call"}}}"#,
+    );
     let ids = ["probe", "outside", "classless", "broken", "missing", "old"];
     write_installed(
         dir.path(),

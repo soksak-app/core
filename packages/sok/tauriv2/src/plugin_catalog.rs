@@ -71,8 +71,13 @@ fn catalog_classes(folder: &Path, id: &str) -> Result<HashMap<String, Class>, St
         )
     })?;
     if catalog.get("schema").and_then(Value::as_u64) != Some(3) {
-        let found = catalog.get("schema").map_or("is missing".to_string(), |schema| format!("is {schema}"));
-        return Err(format!("{}: event catalog schema {found}; expected 3", path.display()));
+        let found = catalog
+            .get("schema")
+            .map_or("is missing".to_string(), |schema| format!("is {schema}"));
+        return Err(format!(
+            "{}: event catalog schema {found}; expected 3",
+            path.display()
+        ));
     }
     let prefix = format!("plugin.{id}.");
     let mut names: Vec<(&String, &Value)> = catalog
