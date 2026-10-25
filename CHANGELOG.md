@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-47-40-8: Add a window consumer check for opt-in frame identity.
+  The check hides existing terminal images before capture, creates one visible
+  terminal, and compares a decoded captured tuple with the current presented
+  tuple and its issued source artifact. It preserves unknown rows and capture
+  artifacts. `node --check`, `make e2e-check`, and `make docs-check` pass; the
+  two-host window acceptance remains pending.
 - F239-47-40-4-2-1-2: Restore live image-region layers when no `SCStream` exists
   after identity startup failure. A queued cleanup restores when its
   stream remains current, or when no stream and no identity session are active;

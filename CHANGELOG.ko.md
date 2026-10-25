@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-47-40-8: Opt-in frame identity의 window consumer check를 추가한다.
+  Capture 전에 기존 terminal image를 숨기고 visible terminal 하나를 만든 뒤,
+  decoded captured tuple을 현재 presented tuple 및 발급 source artifact와 대조한다.
+  Unknown 행과 capture artifact를 보존한다. `node --check`, `make e2e-check`,
+  `make docs-check`가 통과했으며 두 host window acceptance는 남아 있다.
 - F239-47-40-4-2-1-2: 현재 `SCStream`이 없는 identity startup 실패 뒤 live
   image-region layer를 복원한다. Queued cleanup은 stream이 current이거나 stream과
   identity session이 모두 없을 때 복원하고 새 pre-stream session의 tag는 보존한다.
