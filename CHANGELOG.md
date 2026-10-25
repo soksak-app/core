@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-76: Verify the terminal focus helper precondition from preserved
+  Wails and Tauri check-shell traces. Both hosts report an active key window,
+  focused terminal cursor and image region, and the matching native responder
+  before completing all ten document stages. Click-only focus and capture
+  cadence remain separate acceptance items. No additional input was sent.
+
 - F239-47-2: Accept the Hangul and Backspace behavior from both hosts
   with ten matching reference/terminal documents and ten exact-frame glyph,
   tag and preedit measurements each. Keep the separate full-recording and

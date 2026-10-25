@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-76: 보존된 Wails와 Tauri check-shell trace에서 terminal focus helper의
+  선행조건을 검증한다. 양 host는 document 10단계를 완료하기 전에 active key
+  window, focus된 terminal cursor와 image region, 일치하는 native responder를
+  기록한다. Click-only focus와 capture cadence는 별도 acceptance로 유지한다.
+  추가 입력은 보내지 않았다.
+
 - F239-47-2: 양 host에서 reference/terminal document 10개와 정확한 frame의
   glyph, tag, preedit 측정 10단계가 각각 일치하여 한글과 Backspace 동작을
   수용한다. 별도 full-recording 및 33 ms quality gate는 F239-47-6에서 열어
