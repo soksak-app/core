@@ -704,6 +704,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.12-2-1-1",
+    implementation: [
+      { file: "e2e/editor.test.mjs", symbol: "const focusEditorForKeys =" },
+    ],
+    tests: [
+      { file: "e2e/editor.test.mjs", id: "a file opens from the tree in the editor, saves, shows a save error and asks before it closes" },
+    ],
+    expected: "A native click focuses the view and subsequent native input reaches its document and persists through Command-S on both hosts.",
+    levels: ["application"],
+  },
+  {
     id: "F212.12-1",
     implementation: [
       { file: "e2e/view-display.mjs", symbol: "export async function checkViewDisplay(" },

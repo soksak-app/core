@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-2-1-1: Complete both-host application-path confirmation of the native first-mouse correction through the existing Editor case. View click and native input, exact Command-S persistence, reload and modified-tab close pass on macOS arm64. The check declares its intentionally induced read-only save error; run-log audit, shared baseline restoration and normal shutdown pass. No activation acceptance or product source change is included.
+
 - F212.12-1: Complete both-host display acceptance for all four installed view plugins with fixed expected text recognized from recorded pixels. Keep readiness, composition, binder audit, exact finalized frame counts and error/focus/shutdown checks. Use public Vision only in the native check executable and discover its build output automatically. Eleven display owners, three content owners, five build-discovery owners, the native recognition check and eight real content cases pass. Sparse colour sampling remains an observation and cannot override explicit captured-text evidence.
 
 - F212.12-1: Preserve declared composition in loaded plugin metadata instead of reading a boolean surface flag as a declaration. Environment and plugin-row owners reproduce the missing composition; all 25 owners and both rebuilt host metadata checks pass with clean audit, baseline restoration and shutdown. Keep view content readiness inside its recording and close opened tabs on failure; all six display-consumer owners pass. Full view display acceptance remains open for explicit expected-pixel cases.
