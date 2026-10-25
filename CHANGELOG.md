@@ -23,6 +23,17 @@
 
 - F239-95: Pump AppKit events while the view-focus check waits for activation. The previous `waitFor` used `NSRunLoop` without dequeuing and sending queued `NSEvent` instances. Red: the controlled app-defined event was not dispatched inside `waitFor`; the exact owner target failed only that assertion (0.500 s). Green: the same target dispatches the event and passes 18 assertions (1/1, 0.391 s) using AppKit’s event queue. One targeted activation run then reached active application and key window, but returned `SP_ACTIVATE_PENDING` because the visible web view did not complete its activity-state update within the 5-second timeout; the captured frontmost PID 935 was restored. AppKit event pumping is corrected; the activation acceptance remains open at web view activity-state completion.
 
+- F239-85: Register the authoritative surface-placement consumer after the
+  initial project context and startup presentation, then publish the current
+  compositor record. F84 showed that an early startup list could omit a
+  retained terminal, which the host correctly removed before the session
+  reopened with a new identity. The unchanged owner case reproduced registration
+  and publication before controlled context and presentation barriers. A second
+  owner case showed `page.presented()` did not distinguish a failed layout from
+  a completed presentation. The corrected path registers and publishes only
+  after both barriers succeed and leaves the consumer inactive after a reported
+  layout failure. Focused placement, tab-state readiness and layout-failure
+  tests pass 13/13. Same-session reload acceptance on both hosts remains pending.
 
 - F239-89: Keep an image region focused through the release paired with an
   in-region click-through press. The F84 trace reported focus loss on mouseup

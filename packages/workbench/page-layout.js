@@ -94,14 +94,15 @@ export function createPageLayout({
       log(`layout: ${supersededLayouts} waiting layouts were replaced by newer layouts before presentation`);
       supersededLayouts = 0;
     },
-    /** Waits for the presentation of the layout that a project switch loaded (onSwitch of projects.js). */
+    /** Waits for the loaded layout; returns false when the layout queue reports failure. */
     async presented() {
       // If the loaded layout fails, failed of the queue has already shown the failure. It does not wait for the presentation of a layout that is not presented.
-      if (!(await layouts.wait())) return;
+      if (!(await layouts.wait())) return false;
       // `draw()` returns before the onRender commit finishes. While the latest native layout
       // is pending, the project command is not complete.
       await rendered();
       await surfaces.waitPresented();
+      return true;
     },
     /**
      * A project switch clears the plane (onSwitch of projects.js). The draw that clears the plane draws the library screen with show. That

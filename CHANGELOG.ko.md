@@ -22,6 +22,15 @@
 - F239-95: view-focus check가 activation을 기다리는 동안 AppKit event를 pump한다. 기존 `waitFor`는 `NSRunLoop`를 실행하면서 대기 중인 `NSEvent`를 dequeue하고 전달하지 않았다. Red: 제어된 application-defined event가 `waitFor` 안에서 전달되지 않아 정확한 owner target의 해당 assertion만 실패했다 (0.500s). Green: 같은 target이 AppKit event queue로 event를 전달하고 assertion 18개와 함께 1/1 (0.391s) 통과한다. Targeted activation 실행 1회는 application 활성화와 key window에 도달했지만, 보이는 web view가 5초 제한 시간 안에 activity-state update를 완료하지 않아 `SP_ACTIVATE_PENDING`을 반환했다. 저장된 frontmost PID 935는 복원됐다. AppKit event pump는 수정했으며 activation 수용 기준은 web view activity-state 완료 단계에서 계속 열린 상태다.
 
 
+- F239-85: Initial project context와 startup presentation 후 authoritative
+  surface-placement consumer를 등록하고 현재 compositor record를 발행한다. F84에서
+  이른 startup 목록이 보존된 terminal을 누락해 host가 제거한 뒤 session이 다른
+  identity로 다시 열렸다. 변경 전 owner case는 test-controlled context와 presentation
+  barrier 전에 등록·발행하는 일을 재현했다. 두 번째 owner case는 layout 실패 뒤
+  `page.presented()`가 실패와 완료를 구분하지 못함을 확인했다. 수정 후 경로는 두
+  barrier가 성공해야 consumer를 등록·발행하며, 이미 보고된 layout 실패 뒤에는 consumer를
+  활성화하지 않는다. 집중 placement, tab-state readiness, layout-failure test가 13/13
+  통과한다. 두 host의 동일 session reload acceptance는 남아 있다.
 - F239-89: Region 내부 click-through press와 짝이 되는 release까지 image-region
   focus를 유지한다. F84 trace는 page focus command 뒤 mouseup에서 focus loss를
   기록했다. 변경 전 owning activation test에서 같은 실패가 재현됐다. 수정 후 같은

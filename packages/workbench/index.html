@@ -48,7 +48,7 @@ import {
 import { latest, onCommit, onRun, placeCompositorRecord, publish, publishAhead } from "./compositor.js";
 import { authorizeSurface, disposeSurfacesExcept, mountedSurface, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { prepareRetainedSurface, releaseRetainedSurfaceSlots } from "./retained-surface-mounts.js";
-import { memoryPlacement } from "./memory-placement.js";
+import { activateInitialPlacement, memoryPlacement } from "./memory-placement.js";
 import { afterDeclaredSnapshotIngress, prepareDeclaredSnapshotIngress } from "./declared-source.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
@@ -250,7 +250,7 @@ function observeMemory(record, all) {
     all.map((surface) => ({ id: surface.id, plugin: surface.plugin })));
 }
 
-onCommit((record) => {
+function placeCommittedRecord(record) {
   const candidates = [...record.surfaces, ...dormant(record.surfaces)];
   return afterDeclaredSnapshotIngress(async () => {
     const { surfaces: all, retain: ids, unload } = await memoryPlacement(record, candidates, {
@@ -288,7 +288,7 @@ onCommit((record) => {
     for (const surface of record.surfaces) if (placedIds.has(surface.id)) authorizeSurface(surface.id);
     return answer;
   });
-});
+}
 
 /* When the plane is redrawn, it is verified and the surfaces are reported. The plane does not know the two and the two only read the plane,
    so they are connected in this document. */
@@ -703,6 +703,12 @@ try {
   if (latest()) observeMemory(latest(), [...latest().surfaces, ...dormant(latest().surfaces)]);
   memorySaver.start();
   resolveMemoryPlacementReady();
+  await activateInitialPlacement({
+    context: projects.waitForInitialProjectContext(),
+    presented: () => pageLayout.presented(),
+    register: () => onCommit(placeCommittedRecord),
+    publish: () => publish(),
+  });
   await initialising;
   // The apply of a plugin change saves the projects, so the page follows plugin changes only after they are initialised.
   await followPlugins();

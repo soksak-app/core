@@ -85,6 +85,16 @@ test("a layout failure that no command waits for writes one page error line", as
   schedule();
   await settle();
   await settle();
+  assert.equal(await page.presented(), false, "a failed layout was reported as presented");
   assert.deepEqual(lines, [`error page page: surface presentation failed: ${TIMEOUT}`],
     "one layout failure of a gesture must write exactly the line of the layout queue that shows it");
+});
+
+test("a successful presentation reports completion", async () => {
+  const page = createPageLayout({
+    document, showError, setVerify: () => {}, log: () => {}, surfaces: { waitPresented: async () => {} },
+    plane: {}, compositor: {}, textSize: () => 1, rendered: async () => {},
+    waitSurfaceCompositionDeclared: async () => {},
+  });
+  assert.equal(await page.presented(), true);
 });
