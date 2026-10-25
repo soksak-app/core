@@ -1042,5 +1042,5 @@ mod capture_start_options_test {
 }
 
 #[cfg(test)]
-#[path = "diagnostics_capture_stop_test.rs"]
+#[path = "diagnostics_test.rs"]
 mod capture_stop_test;

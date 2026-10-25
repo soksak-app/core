@@ -16,6 +16,11 @@
   소유한다. Tauri와 Wails의 finish-stop/layout-trace owner test가 각각
   1/1 통과한다. Application과 window test는 실행하지 않았다.
 
+- F239-135: Tauri recording diagnostics owner test를 paired
+  `diagnostics_test.rs` 파일명으로 바꾸고 module 및 test inventory 참조를
+  갱신한다. Host-structure 검사가 3/3 pair로 통과하고 같은 Rust owner test가
+  1/1 통과한다. Application 동작은 바뀌지 않는다.
+
 - F239-130: Capture timeout summary에 요청한 absolute stop 시간, 계산한 Mach
   target, 등록 tick, 최신 accepted sample 사실을 기록한다. `capture_callback_test`
   Red assertion이 1/1 통과했다. Rebuilt host 비교는 남아 있다. Capture timing과

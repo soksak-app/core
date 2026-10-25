@@ -16,6 +16,11 @@
   requester-owned. Tauri and Wails finish-stop/layout-trace owner tests pass
   1/1 each. No application or window test was run.
 
+- F239-135: Rename the Tauri recording diagnostics owner test to the paired
+  `diagnostics_test.rs` filename and update its module and test inventory
+  references. The host-structure check passes 3/3 pairs, and the same Rust
+  owner test passes 1/1. Application behavior is unchanged.
+
 - F239-130: Add the requested absolute stop time, computed Mach target,
   registration tick and latest accepted sample facts to capture timeout
   summaries. The `capture_callback_test` Red assertion now passes 1/1; the
