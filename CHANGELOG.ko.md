@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-74: `Session.until`이 반환한 `host.windows` 값에서 lifecycle window를 선택한다. 이 method는 predicate 결과가 아니라 watch한 status 값을 반환한다. Red: Wails와 Tauri가 project open 전에 undefined window ID를 거부했다. Selector는 반환 목록에서 새 window를 고르고 문자열 ID인지 검증한다. `node --check`, `make e2e-check`, `make docs-check`가 통과했으며 Wails와 Tauri의 cycle 01 runtime 확인은 대기 중이다.
+
 - F239-61: Image presentation 순서, view attachment, project-window
   cleanup을 바꾸지 않고 최종 Rust format 및 Clippy finding을 해결한다.
   `soksak-host-tauriv2`의 default 및 diagnostics Clippy가 `-D warnings`로

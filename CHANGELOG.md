@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-74: Select the lifecycle window from the `host.windows` value returned by `Session.until`. The method returns the watched status value, not the predicate result. Red: Wails and Tauri rejected the undefined window ID before project open. The selector now filters the returned list and validates its new string ID. `node --check`, `make e2e-check`, and `make docs-check` pass; Wails and Tauri cycle 01 runtime confirmation remains pending.
+
 - F239-61: Resolve the final Rust format and Clippy findings without
   changing image presentation order, view attachment, or project-window
   cleanup. Default and diagnostics Clippy checks for `soksak-host-tauriv2`

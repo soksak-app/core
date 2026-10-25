@@ -181,12 +181,14 @@ for (const app of Object.values(APPS)) {
         s.cleanup(() => rmSync(projectRoot, { recursive: true, force: true }));
         const existingWindows = await s.get("host.windows");
         await s.run("core.window.new");
-        const addedWindow = await s.until("host.windows", (windows) => {
+        const windows = await s.until("host.windows", (windows) => {
           const added = windows.filter((item) => !existingWindows.some((previous) => previous.window === item.window));
-          return windows.length === existingWindows.length + 1 && added.length === 1 && windows.every((item) => item.ready)
-            ? added[0] : null;
+          return windows.length === existingWindows.length + 1 && added.length === 1 && windows.every((item) => item.ready);
         }, "the lifecycle project window did not open");
-        const lifecycle = s.on(addedWindow.window);
+        const addedWindows = windows.filter((item) => !existingWindows.some((previous) => previous.window === item.window));
+        assert.equal(addedWindows.length, 1, "opening the lifecycle window did not add exactly one window");
+        assert.equal(typeof addedWindows[0].window, "string", "the lifecycle window ID is not a string");
+        const lifecycle = s.on(addedWindows[0].window);
         await lifecycle.until("core.project", (value) => value === null,
           "the lifecycle project window was not unassigned");
         s.cleanup(async () => {
