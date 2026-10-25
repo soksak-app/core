@@ -8,13 +8,17 @@ import test from "node:test";
 import renderFixture from "./fixtures/screen-render.json" with { type: "json" };
 import {
   captureFromCallback,
+  attachImeFrameIdentities,
   capturesByInputStage,
   hostClockBoundary,
   evaluateVisualStages,
   indexFrameStatus,
   planVisualStage,
   persistThenRequireVisualProof,
+  readImeFrameIdentities,
   readRetainedSources,
+  requireImeRenderer,
+  startImeCapture,
 } from "./ime-visual-capture.mjs";
 
 function testWithTimeout(name, body) {
@@ -42,6 +46,95 @@ function capture(data) {
     contentRect: { x: 0, y: 0, width: 4, height: 6 } };
 }
 
+testWithTimeout("IME visual recording requests the declared frame-identity channel", async () => {
+  let params;
+  const recording = { frames: "fixture-frames", stop: async () => ({}) };
+  const started = await startImeCapture({
+    async record(options) { params = options; return recording; },
+  }, { frame: { generation: 1, raster: 2, sequence: 3 },
+    render: { frame: { generation: 1, raster: 2, sequence: 3 }, glyphs: [] } });
+  assert.deepEqual(params, { frameIdentity: true });
+  assert.equal(started.recording, recording);
+});
+
+testWithTimeout("IME capture does not start when renderer metadata is absent", async () => {
+  let called = false;
+  await assert.rejects(startImeCapture({ async record() { called = true; } }, {
+    frame: { generation: 1, raster: 2, sequence: 3 }, render: null,
+  }), (error) => error.code === "IME_RENDER_METADATA_UNAVAILABLE" && /SOKSAK_VT_TRACE_DIR/.test(error.message));
+  assert.equal(called, false);
+});
+
+testWithTimeout("IME capture does not start when renderer metadata is malformed", async () => {
+  let called = false;
+  await assert.rejects(startImeCapture({ async record() { called = true; } }, {
+    frame: { generation: 1, raster: 2, sequence: 3 },
+    render: { frame: { generation: 1, raster: 2, sequence: 3 }, glyphs: null },
+  }), /no glyph list/);
+  assert.equal(called, false);
+});
+
+testWithTimeout("IME visual preflight requires renderer metadata from the same cursor frame", () => {
+  const frame = { generation: 1, raster: 2, sequence: 3 };
+  assert.equal(requireImeRenderer({ frame, render: { frame, glyphs: [] } }).frame, frame);
+  assert.throws(() => requireImeRenderer({ frame, render: null }), /SOKSAK_VT_TRACE_DIR/);
+  assert.throws(() => requireImeRenderer({ frame, render: { frame: { ...frame, sequence: 4 }, glyphs: [] } }),
+    /different cursor frame/);
+});
+
+function writeIdentityFixture(directory, rows, overrides = {}) {
+  const identityDirectory = join(directory, "frame-identities");
+  mkdirSync(identityDirectory, { recursive: true });
+  const bytes = sourceRaster();
+  const artifact = { generation: "1", raster: "2", sequence: 3, regionToken: "region-1", nonce: "nonce",
+    payload: "payload", roi: { x: 0, y: 0, width: 4, height: 6 }, file: "identity-1.bgra",
+    width: 4, height: 6, stride: 16, pixelFormat: "BGRA8", alpha: "premultiplied-first",
+    colorSpace: "sRGB", byteCount: bytes.length,
+    sha256: createHash("sha256").update(bytes).digest("hex") };
+  writeFileSync(join(identityDirectory, artifact.file), bytes);
+  writeFileSync(join(identityDirectory, "decoded-frames.jsonl"), rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
+  writeFileSync(join(identityDirectory, "manifest.json"), JSON.stringify({ format: 1, pixelFormat: "BGRA8",
+    limits: { issuedIdentities: 512, pendingArtifactBytes: 67108864 }, artifactBytes: bytes.length,
+    artifacts: [artifact], droppedArtifacts: 0, writeFailures: 0, cleanupFailures: 0, cleanupErrors: [],
+    cleanupErrorsOmitted: 0, decodedFramesFile: "decoded-frames.jsonl", decodedFrames: 1,
+    decodedRecords: rows.length, decodedWriteFailures: 0, identityFailure: null, ...overrides }));
+  return join(identityDirectory, "manifest.json");
+}
+
+testWithTimeout("IME visual consumer joins only issued capture identities and retains unknown outcomes", () => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-ime-frame-identity-"));
+  try {
+    const matched = { frame: 1, displayTime: "1234", region: "region-1",
+      roi: { x: 0, y: 0, width: 4, height: 6 }, status: "matched",
+      identity: { generation: "1", raster: "2", sequence: 3 }, reason: null };
+    const unknown = { frame: 1, displayTime: "1234", region: null, roi: null, status: "unknown",
+      identity: null, reason: "unknown-retention" };
+    const manifest = writeIdentityFixture(directory, [matched, unknown]);
+    const result = readImeFrameIdentities(directory, { frameIdentity: { manifest, status: "complete" } });
+    assert.deepEqual(result.byFrame.get(1), [matched, unknown]);
+    assert.deepEqual(result.artifacts, ["1/2/3"]);
+    const attached = attachImeFrameIdentities([{ callback: { frame: "frame-0001.bgra", displayTime: "1234" } }],
+      ["/capture/frame-0001.bgra"], result);
+    assert.deepEqual(attached.get("frame-0001.bgra"), [matched, unknown]);
+    assert.throws(() => attachImeFrameIdentities([{ callback: { frame: "frame-0001.bgra", displayTime: "1235" } }],
+      ["/capture/frame-0001.bgra"], result), /display time differs/);
+    assert.throws(() => attachImeFrameIdentities([{ callback: { frame: "frame-0002.bgra", displayTime: "1234" } }],
+      ["/capture/frame-0002.bgra"], result), /no identity decoder record/);
+
+    const unissued = { ...matched, identity: { generation: "1", raster: "2", sequence: 4 } };
+    writeIdentityFixture(directory, [unissued]);
+    assert.throws(() => readImeFrameIdentities(directory, {
+      frameIdentity: { manifest, status: "complete" },
+    }), /was not issued/);
+    writeIdentityFixture(directory, [matched], { droppedArtifacts: 1 });
+    assert.throws(() => readImeFrameIdentities(directory, {
+      frameIdentity: { manifest, status: "complete" },
+    }), /droppedArtifacts is nonzero/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 testWithTimeout("capture callback adapter preserves the declared BGRA frame geometry", () => {
   const decoded = { width: 4, height: 6, stride: 16, scale: 1, data: sourceRaster() };
   const callback = { imageMatch: { captureFrame: { width: 4, height: 6, stride: 16,
@@ -60,7 +153,8 @@ testWithTimeout("capture frames map to one half-open input interval by exact Mac
     imageMatch: { captureFrame: { width: 4, height: 6, stride: 16, pixelFormat: 0x42475241,
       colorSpace: "sRGB", scaleFactor: 1, screenRect: { x: 0, y: 0, width: 4, height: 6 },
       contentRect: { x: 0, y: 0, width: 4, height: 6 } } } };
-  const grouped = capturesByInputStage([{ name: "frame-0001.bgra", callback }], [decoded], [
+  const identityRows = [{ status: "matched", identity: { generation: "1", raster: "2", sequence: 3 } }];
+  const grouped = capturesByInputStage([{ name: "frame-0001.bgra", callback, identityRows }], [decoded], [
     { key: "first", clockDomain: "mach-absolute", startedMachAbsoluteNs: "900000000",
       endedMachAbsoluteNs: "1000000000" },
     { key: "second", clockDomain: "mach-absolute", startedMachAbsoluteNs: "1000000000",
@@ -107,7 +201,8 @@ testWithTimeout("capture stage attribution rejects continuous-time boundaries ev
     imageMatch: { captureFrame: { width: 4, height: 6, stride: 16, pixelFormat: 0x42475241,
       colorSpace: "sRGB", scaleFactor: 1, screenRect: { x: 0, y: 0, width: 4, height: 6 },
       contentRect: { x: 0, y: 0, width: 4, height: 6 } } } };
-  assert.throws(() => capturesByInputStage([{ name: "frame-0001.bgra", callback }], [decoded], [
+  assert.throws(() => capturesByInputStage([{ name: "frame-0001.bgra", callback,
+    identityRows: [{ status: "matched", identity: { generation: "1", raster: "2", sequence: 3 } }] }], [decoded], [
     { key: "wrong-clock", clockDomain: "mach-continuous", startedMachAbsoluteNs: "900000000",
       endedMachAbsoluteNs: "1100000000" },
   ]), /must use the mach-absolute clock domain/);
@@ -311,20 +406,34 @@ testWithTimeout("visual stage evaluator retains exact target identity and measur
   } };
   const cursor = { row: 0, col: 1, focused: true, visible: false, blinkVisible: false,
     shape: "beam", preedit: renderFixture.cursor };
-  const result = evaluateVisualStages({ captures: [{ name: "frame-0001.bgra", capture: capture(data) }],
+  const identityRows = [{ status: "matched", identity: { generation: "1", raster: "2", sequence: 3 } }];
+  const result = evaluateVisualStages({ captures: [{ name: "frame-0001.bgra", capture: capture(data), identityRows }],
     sources: [source], stages: [{ key: "k-1", frame, render, cursor, semantic,
       cells: [{ row: 0, column: 0 }], glyphs: [{ row: 0, col: 0, grapheme: "A़", marked: true }] }],
     criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 } });
   assert.equal(result[0].result, "measured");
   assert.deepEqual(result[0].candidates[0].identities, ["1/2/3"]);
+  assert.deepEqual(result[0].candidates[0].issuedIdentities, ["1/2/3"]);
   assert.equal(result[0].candidates[0].glyphs[0].underlined, true);
-  const malformed = evaluateVisualStages({ captures: [{ name: "frame-0001.bgra", capture: capture(data) }],
+  const malformed = evaluateVisualStages({ captures: [{ name: "frame-0001.bgra", capture: capture(data), identityRows }],
     sources: [source], stages: [{ key: "bad-frame", frame, render: { ...render,
       frame: { ...frame, sequence: frame.sequence + 1 } }, cursor, semantic,
     cells: [{ row: 0, column: 0 }], glyphs: [{ row: 0, col: 0, grapheme: "A़", marked: true }] }],
     criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 } });
   assert.equal(malformed[0].result, "error");
   assert.match(malformed[0].errors[0].error, /different frame/);
+  const unknown = evaluateVisualStages({ captures: [{ name: "frame-0001.bgra", capture: capture(data),
+    identityRows: [{ status: "unknown", identity: null, reason: "unknown-retention" }] }],
+  sources: [source], stages: [{ key: "unknown-identity", frame, render, cursor, semantic,
+    cells: [{ row: 0, column: 0 }], glyphs: [{ row: 0, col: 0, grapheme: "A़", marked: true }] }],
+  criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 } });
+  assert.equal(unknown[0].result, "no-proof");
+  const issuedButUnmatchedPixels = evaluateVisualStages({ captures: [{ name: "frame-0001.bgra", capture: capture(data),
+    identityRows: [{ status: "matched", identity: { generation: "9", raster: "2", sequence: 4 } }] }],
+  sources: [source], stages: [{ key: "identity-without-byte-match", frame, render, cursor, semantic,
+    cells: [{ row: 0, column: 0 }], glyphs: [{ row: 0, col: 0, grapheme: "A़", marked: true }] }],
+  criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 } });
+  assert.equal(issuedButUnmatchedPixels[0].result, "no-proof");
 });
 
 testWithTimeout("error and no-proof measurements are persisted before the caller assertion fails", () => {

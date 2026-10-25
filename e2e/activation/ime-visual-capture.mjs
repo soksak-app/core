@@ -7,6 +7,177 @@ import { terminalComposeMatchesPreedit, visibleInputBeforeCursor } from "./termi
 
 const BGRA_PIXEL_FORMAT = 0x42475241;
 
+export function requireImeRenderer(cursor) {
+  if (cursor?.render == null) {
+    const error = new Error("terminal renderer metadata is unavailable; start the diagnostic host with SOKSAK_VT_TRACE_DIR before input");
+    error.code = "IME_RENDER_METADATA_UNAVAILABLE";
+    throw error;
+  }
+  const identity = frameKey(cursor.frame, "terminal.cursor");
+  assert.equal(frameKey(cursor.render.frame, "terminal.cursor.render"), identity,
+    "terminal renderer metadata belongs to a different cursor frame");
+  assert.ok(Array.isArray(cursor.render.glyphs), "terminal renderer metadata has no glyph list");
+  return cursor.render;
+}
+
+export async function startImeCapture(session, cursor) {
+  assert.equal(typeof session?.record, "function", "IME capture requires the declared window recording interface");
+  const render = requireImeRenderer(cursor);
+  const recording = await session.record({ frameIdentity: true });
+  return { recording, render };
+}
+
+function identityTuple(value, label, exact = true) {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value), `${label}: identity tuple is missing`);
+  if (exact) assert.deepEqual(Object.keys(value).sort(), ["generation", "raster", "sequence"],
+    `${label}: identity tuple fields differ`);
+  for (const field of ["generation", "raster"]) {
+    assert.ok(typeof value[field] === "string" && /^[1-9][0-9]*$/.test(value[field]),
+      `${label}: ${field} must be canonical positive decimal text`);
+    assert.ok(BigInt(value[field]) <= 18_446_744_073_709_551_615n,
+      `${label}: ${field} exceeds uint64`);
+  }
+  assert.ok(Number.isSafeInteger(value.sequence) && value.sequence > 0, `${label}: sequence is invalid`);
+  return `${value.generation}/${value.raster}/${value.sequence}`;
+}
+
+function identityFrameNumber(value, label) {
+  assert.ok(Number.isSafeInteger(value) && value > 0, `${label}: frame number is invalid`);
+  return value;
+}
+
+/** Validates the opt-in decoder output without treating unknown rows as identities. */
+export function readImeFrameIdentities(directory, stopResult) {
+  const result = stopResult?.frameIdentity;
+  assert.ok(result && typeof result === "object" && !Array.isArray(result),
+    "capture stop did not return the requested frame identity result");
+  assert.deepEqual(Object.keys(result).sort(), ["manifest", "status"], "frame identity result fields differ");
+  assert.equal(result.status, "complete", "capture frame identity output is incomplete");
+  const manifestPath = join(directory, "frame-identities", "manifest.json");
+  assert.equal(result.manifest, manifestPath, "frame identity manifest path differs from the recording directory");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  assert.equal(manifest.format, 1, "frame identity manifest format is unsupported");
+  assert.equal(manifest.pixelFormat, "BGRA8", "frame identity source pixel format is unsupported");
+  assert.equal(manifest.decodedFramesFile, "decoded-frames.jsonl", "frame identity decoded file is unsupported");
+  assert.equal(manifest.limits?.issuedIdentities, 512, "frame identity artifact limit differs");
+  assert.equal(manifest.limits?.pendingArtifactBytes, 67_108_864, "frame identity pending-byte limit differs");
+  for (const field of ["droppedArtifacts", "writeFailures", "cleanupFailures", "cleanupErrorsOmitted", "decodedWriteFailures"])
+    assert.equal(manifest[field], 0, `frame identity ${field} is nonzero`);
+  assert.deepEqual(manifest.cleanupErrors, [], "frame identity cleanup reported errors");
+  assert.equal(manifest.identityFailure, null, "frame identity decoder reported a failure");
+  assert.ok(Array.isArray(manifest.artifacts) && manifest.artifacts.length > 0,
+    "frame identity manifest contains no issued source artifacts");
+
+  const artifacts = new Map();
+  let artifactBytes = 0;
+  for (const artifact of manifest.artifacts) {
+    const key = identityTuple(artifact, "frame identity artifact", false);
+    assert.ok(!artifacts.has(key), `frame identity artifact ${key} is duplicated`);
+    assert.ok(typeof artifact.regionToken === "string" && artifact.regionToken.length > 0,
+      `frame identity artifact ${key} region token is missing`);
+    assert.ok(typeof artifact.nonce === "string" && artifact.nonce.length > 0 &&
+      typeof artifact.payload === "string" && artifact.payload.length > 0,
+    `frame identity artifact ${key} issued payload is missing`);
+    assert.ok(artifact.roi && ["x", "y", "width", "height"].every((field) => Number.isFinite(artifact.roi[field])) &&
+      artifact.roi.width > 0 && artifact.roi.height > 0, `frame identity artifact ${key} ROI is invalid`);
+    assert.equal(artifact.pixelFormat, "BGRA8", `frame identity artifact ${key} pixel format differs`);
+    assert.equal(artifact.alpha, "premultiplied-first", `frame identity artifact ${key} alpha mode differs`);
+    assert.ok(Number.isSafeInteger(artifact.width) && artifact.width > 0 &&
+      Number.isSafeInteger(artifact.height) && artifact.height > 0 &&
+      Number.isSafeInteger(artifact.stride) && artifact.stride >= artifact.width * 4 &&
+      Number.isSafeInteger(artifact.byteCount) && artifact.byteCount === artifact.stride * artifact.height,
+    `frame identity artifact ${key} dimensions or stride are invalid`);
+    assert.ok(artifact.colorSpace === null || typeof artifact.colorSpace === "string",
+      `frame identity artifact ${key} color space is invalid`);
+    assert.ok(typeof artifact.file === "string" && artifact.file.length > 0 && !artifact.file.includes("/"),
+      `frame identity artifact ${key} filename is invalid`);
+    assert.ok(Number.isSafeInteger(artifact.byteCount) && artifact.byteCount > 0,
+      `frame identity artifact ${key} byte count is invalid`);
+    assert.ok(typeof artifact.sha256 === "string" && /^[a-f0-9]{64}$/.test(artifact.sha256),
+      `frame identity artifact ${key} digest is invalid`);
+    const bytes = readFileSync(join(directory, "frame-identities", artifact.file));
+    assert.equal(bytes.length, artifact.byteCount, `frame identity artifact ${key} byte count differs`);
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), artifact.sha256,
+      `frame identity artifact ${key} digest differs`);
+    artifactBytes += bytes.length;
+    artifacts.set(key, artifact);
+  }
+  assert.equal(manifest.artifactBytes, artifactBytes, "frame identity artifact byte total differs");
+
+  const decodedPath = join(directory, "frame-identities", manifest.decodedFramesFile);
+  const decodedText = readFileSync(decodedPath, "utf8");
+  assert.notEqual(decodedText.trim(), "", "frame identity decoder output is empty");
+  const rows = decodedText.trimEnd().split("\n").map((line) => JSON.parse(line));
+  assert.equal(rows.length, manifest.decodedRecords, "frame identity decoded record count differs");
+  const byFrame = new Map();
+  for (const row of rows) {
+    const frame = identityFrameNumber(row.frame, "decoded frame identity");
+    assert.ok(typeof row.displayTime === "string" && /^\d+$/.test(row.displayTime),
+      `decoded frame ${frame}: display time is invalid`);
+    assert.ok(row.region === null || (typeof row.region === "string" && row.region.length > 0),
+      `decoded frame ${frame}: region is invalid`);
+    assert.ok(row.roi === null || (row.roi && ["x", "y", "width", "height"].every((field) =>
+      Number.isFinite(row.roi[field])) && row.roi.width > 0 && row.roi.height > 0),
+    `decoded frame ${frame}: ROI is invalid`);
+    if (row.status === "matched") {
+      const key = identityTuple(row.identity, `decoded frame ${frame}`);
+      assert.equal(row.reason, null, `decoded frame ${frame}: matched result has a reason`);
+      const artifact = artifacts.get(key);
+      assert.ok(artifact, `decoded frame ${frame}: identity ${key} was not issued in this capture`);
+      assert.equal(row.region, artifact.regionToken,
+        `decoded frame ${frame}: region does not match the issued identity artifact`);
+    } else {
+      assert.equal(row.status, "unknown", `decoded frame ${frame}: status is invalid`);
+      assert.equal(row.identity, null, `decoded frame ${frame}: unknown result carries an identity`);
+      assert.ok(["no-code", "cropped", "ambiguous", "unissued", "unknown-retention", "unknown-geometry", "duplicate-roi"]
+        .includes(row.reason), `decoded frame ${frame}: unknown reason is invalid`);
+    }
+    const frameRows = byFrame.get(frame) ?? [];
+    frameRows.push(row);
+    byFrame.set(frame, frameRows);
+  }
+  assert.equal(byFrame.size, manifest.decodedFrames, "frame identity decoded frame count differs");
+  const unknownRecords = rows.filter((row) => row.status === "unknown");
+  return { byFrame, artifacts: [...artifacts.keys()], decodedFrames: manifest.decodedFrames,
+    decodedRecords: rows.length, unknownRecords };
+}
+
+export function attachImeFrameIdentities(frameCallbacks, framePaths, identityCapture) {
+  assert.ok(Array.isArray(frameCallbacks) && Array.isArray(framePaths), "capture frame callbacks and files are required");
+  const files = new Map();
+  for (const path of framePaths) {
+    const name = path.split(/[\\/]/).at(-1);
+    const match = /^frame-(\d+)\.bgra$/.exec(name);
+    assert.ok(match, `captured frame filename is invalid: ${name}`);
+    const number = identityFrameNumber(Number(match[1]), `captured frame ${name}`);
+    assert.ok(!files.has(number), `captured frame number ${number} is duplicated`);
+    files.set(number, name);
+  }
+  const callbackNumbers = new Set();
+  const byFile = new Map();
+  for (const { callback } of frameCallbacks) {
+    const name = callback.frame;
+    const match = typeof name === "string" && /^frame-(\d+)\.bgra$/.exec(name);
+    assert.ok(match, `capture callback frame filename is invalid: ${String(name)}`);
+    const number = identityFrameNumber(Number(match[1]), `capture callback ${name}`);
+    assert.equal(files.get(number), name, `capture callback ${name} has no matching frame file`);
+    assert.ok(!callbackNumbers.has(number), `capture callback frame ${number} is duplicated`);
+    callbackNumbers.add(number);
+    const rows = identityCapture.byFrame.get(number);
+    assert.ok(rows?.length, `capture frame ${number} has no identity decoder record`);
+    assert.ok(typeof callback.displayTime === "string" && /^\d+$/.test(callback.displayTime),
+      `capture callback ${name} has no raw display time`);
+    for (const row of rows) assert.equal(row.displayTime, callback.displayTime,
+      `capture frame ${number}: identity display time differs from its callback`);
+    byFile.set(name, rows);
+  }
+  assert.deepEqual([...callbackNumbers].sort((a, b) => a - b), [...files.keys()].sort((a, b) => a - b),
+    "capture callback and frame identity numbers differ from retained frame files");
+  assert.deepEqual([...identityCapture.byFrame.keys()].sort((a, b) => a - b), [...files.keys()].sort((a, b) => a - b),
+    "frame identity decoder and retained frame files differ");
+  return byFile;
+}
+
 function frameKey(frame, label) {
   assert.ok(frame && Number.isSafeInteger(frame.generation) && frame.generation > 0 &&
     Number.isSafeInteger(frame.raster) && frame.raster > 0 &&
@@ -156,7 +327,9 @@ export function capturesByInputStage(frameCallbacks, decodedFrames, stages) {
     assert.ok(BigInt(stage.startedMachAbsoluteNs) < BigInt(stage.endedMachAbsoluteNs),
       `${stage.key}: input stage Mach-absolute boundaries are reversed`);
   }
-  for (const [index, { callback, name }] of frameCallbacks.entries()) {
+  for (const [index, { callback, name, identityRows }] of frameCallbacks.entries()) {
+    assert.ok(Array.isArray(identityRows) && identityRows.length > 0,
+      `${name}: decoded frame identity records are missing`);
     const numerator = callback.machTimebaseNumerator;
     const denominator = callback.machTimebaseDenominator;
     assert.ok(Number.isSafeInteger(numerator) && numerator > 0 &&
@@ -178,6 +351,7 @@ export function capturesByInputStage(frameCallbacks, decodedFrames, stages) {
       name,
       callback,
       decoded,
+      identityRows,
       displayTimeNs: displayNs.toString(),
       capture: captureFromCallback(decoded, callback),
     });
@@ -421,6 +595,11 @@ export function evaluateVisualStages({ captures, sources, stages, criteria }) {
         const result = compositionFrameCandidates({ targetFrame: stage.frame, capture: sample.capture,
           sources, cells: stage.cells, expectedState: stage.semantic });
         if (result.result !== "candidate-set") continue;
+        const candidateIdentities = new Set(result.identities);
+        const issuedMatches = sample.identityRows.filter((row) => row.status === "matched")
+          .map((row) => identityTuple(row.identity, `capture ${sample.name}`))
+          .filter((identity) => candidateIdentities.has(identity));
+        if (!issuedMatches.length) continue;
         const target = sourceByIdentity.get(frameKey(stage.frame, "stage"));
         assert.ok(target, `stage ${stage.key}: exact frame has no retained source raster`);
         const glyphs = stage.glyphs.map((glyph) => ({ ...glyph,
@@ -433,7 +612,8 @@ export function evaluateVisualStages({ captures, sources, stages, criteria }) {
             marked: glyph.marked,
           }, criteria),
         }));
-        candidates.push({ capture: sample.name, identities: result.identities,
+        candidates.push({ capture: sample.name, identities: result.identities, issuedIdentities: issuedMatches,
+          unknownIdentityRows: sample.identityRows.filter((row) => row.status === "unknown"),
           ambiguous: result.ambiguous, glyphs });
       } catch (error) {
         errors.push({ capture: sample.name, name: error.name, error: error.message });

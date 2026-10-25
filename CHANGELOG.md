@@ -4,6 +4,27 @@
 
 ## Unreleased
 
+- F239-98: Connect the IME consumer to opt-in frame identities. The recording
+  requires exact cursor-frame renderer metadata and a glyph list before
+  capture setup, requests `frameIdentity:true`, validates the complete decoder
+  manifest and issued source artifacts, and joins decoded tuples to exact frame
+  files, raw callback display-time strings and existing
+  byte-matched candidates. Unknown
+  decode outcomes remain recorded and cannot prove a stage. Before input, the
+  fixture requires `terminal.cursor.render` with the exact cursor frame and
+  records a clear `SOKSAK_VT_TRACE_DIR` error when renderer metadata is absent.
+  Red: the unchanged recording consumer omitted the opt-in option, started
+  capture without renderer metadata, and accepted an identity row with a
+  different callback display time (`/tmp/F239-98-ime-frame-optin-red-01.log`,
+  `/tmp/F239-98-ime-render-preflight-red-01.log`,
+  `/tmp/F239-98-ime-display-time-join-red-01.log`). Green: the same helper and
+  manifest consumer pass 17/17
+  (`/tmp/F239-98-ime-visual-capture-green-final-04.log`); `make e2e-check`
+  passes. Two-host visual acceptance remains pending; no application or bundle
+  was run.
+
+
+
 - F239-90: Answer a transfer image after its window owner is retired. The
   sidecar reader can hold an owner resolved before window destruction; the
   retired owner now returns the existing `closed` image response through the

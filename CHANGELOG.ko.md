@@ -4,6 +4,25 @@
 
 ## 미배포
 
+- F239-98: IME consumer를 opt-in frame identity에 연결한다.
+  Recording은 capture setup 전에 cursor와 일치하는 renderer metadata 및 glyph list를
+  요구하고 `frameIdentity:true`를 요청하며 완전한 decoder manifest와 발급된
+  source artifact를 검증하며 decoded tuple을 정확한 frame file 및 기존
+  byte-match candidate와 raw callback display-time string에 연결한다. Unknown decode 결과는 계속 기록하고 stage
+  증거로 사용하지 않는다. Input 전에 cursor frame과 정확히 일치하는
+  `terminal.cursor.render`를 요구하고 metadata가 없으면 `SOKSAK_VT_TRACE_DIR`
+  안내 오류를 기록한다. Red: 변경 전 recording consumer가 opt-in 값을 생략해
+  capture를 renderer metadata 없이 시작했으며 다른 callback display time에
+  속한 identity row도 허용했다(`/tmp/F239-98-ime-frame-optin-red-01.log`,
+  `/tmp/F239-98-ime-render-preflight-red-01.log`,
+  `/tmp/F239-98-ime-display-time-join-red-01.log`). Green: helper와 manifest
+  consumer가 17/17 통과하고(`/tmp/F239-98-ime-visual-capture-green-final-04.log`)
+  `make e2e-check`도
+  통과한다. 두 host visual acceptance는 남아 있으며 application 실행과 bundle
+  build는 하지 않았다.
+
+
+
 - F239-90: Window owner가 사라진 뒤 도착한 transfer image에 응답한다. Sidecar
   reader가 window 파괴 전에 조회한 owner를 보유할 수 있으므로, 사라진 owner는
   닫힌 window 오류를 기록하는 대신 shared message dispatcher를 통해 기존

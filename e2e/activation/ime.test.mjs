@@ -15,7 +15,7 @@ import { fresh } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
 import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexFrameStatus, persistThenRequireVisualProof,
-  planVisualStage, readRetainedSources }
+  attachImeFrameIdentities, planVisualStage, readImeFrameIdentities, readRetainedSources, startImeCapture }
   from "./ime-visual-capture.mjs";
 import {
   assertInputTraceDelivery,
@@ -587,7 +587,20 @@ for (const app of Object.values(APPS)) {
       }
     };
 
-    const capture = await s.record();
+    let capture;
+    try {
+      const started = await startImeCapture(s, baselineCursor);
+      capture = started.recording;
+      manifest.visualRenderer = { available: true, frame: baselineCursor.frame };
+      persist("manifest.json", manifest);
+    } catch (error) {
+      if (error.code === "IME_RENDER_METADATA_UNAVAILABLE") {
+        manifest.visualRenderer = { available: false, error: error.message,
+          frame: baselineCursor?.frame ?? null };
+        persist("manifest.json", manifest);
+      }
+      throw error;
+    }
     let recordingResult = null;
     let capturePreserved = false;
     const preservedCaptureDir = join(artifactDir, "capture");
@@ -813,6 +826,23 @@ for (const app of Object.values(APPS)) {
     const recording = await capture.stop({ after: displayed + 100 });
     recordingResult = recording;
     preserveCapture();
+    let identityCapture;
+    try {
+      identityCapture = readImeFrameIdentities(capture.frames, recording);
+      const unknownReasons = identityCapture.unknownRecords.reduce((counts, row) => {
+        counts[row.reason] = (counts[row.reason] ?? 0) + 1;
+        return counts;
+      }, {});
+      manifest.frameIdentity = { decodedFrames: identityCapture.decodedFrames,
+        decodedRecords: identityCapture.decodedRecords, issuedIdentities: identityCapture.artifacts.length,
+        unknownRecords: identityCapture.unknownRecords.length,
+        unknownReasons };
+      persist("manifest.json", manifest);
+    } catch (error) {
+      manifest.frameIdentityFailure = { name: error.name, message: error.message, stack: error.stack };
+      persist("manifest.json", manifest);
+      throw error;
+    }
     let logFlushError = null;
     try {
       await s.flushLog();
@@ -896,6 +926,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(callbackStatus.flatMap((item) => item.frame === null ? [] : [item.frame]),
       framePaths.map((path) => basename(path)),
     `${app.name}: captured frame callbacks and files differ`);
+    const identityRowsByFrame = attachImeFrameIdentities(frameCallbacks, framePaths, identityCapture);
     let frameStatus;
     let sources = [];
     let missingStates = [];
@@ -914,7 +945,7 @@ for (const app of Object.values(APPS)) {
         endedMachAbsoluteNs: visualStages[index + 1]?.startedMachAbsoluteNs ??
           terminalSequenceEndBoundary.machAbsoluteNs }));
       const samplesByStage = capturesByInputStage(frameCallbacks.map(({ callback }) => ({
-        name: callback.frame, callback,
+        name: callback.frame, callback, identityRows: identityRowsByFrame.get(callback.frame),
       })), decoded, timedStages);
       visualMeasurements = timedStages.map((stage) => evaluateVisualStages({
         captures: samplesByStage.get(stage.key),
