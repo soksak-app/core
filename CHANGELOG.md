@@ -143,6 +143,9 @@
   activation consumer reads transaction actions and final preedit. The owner
   test passes 15 assertions. The prior activation failure remains unresolved;
   this change does not claim runtime acceptance.
+- F239-99: Align the English private native API procedure with the receipt-backed
+  pointer call condition. It now documents the phase-specific scoped context and
+  its restoration before asynchronous receipt handling. Source behavior is unchanged.
 - F239-86: Check activation fixtures for unresolved identifiers with the
   declared TypeScript compiler. F84 failed at `applyTerminalInput` because
   `promptPrefix` was block-scoped; visual measurement also referenced

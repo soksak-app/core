@@ -127,6 +127,9 @@
   반환하지 못했다. 현재 형식 전용 reader는 range와 preedit snapshot을
   검증하고 activation consumer는 transaction actions와 최종 preedit을
   읽는다. Owner test가 assertion 15개를 통과한다. 이전 activation 실패는
+- F239-99: Receipt-backed pointer의 call condition을 private native API 영문
+  절차에 반영한다. Phase별 scoped context와 비동기 receipt 처리 전 복원을
+  기록한다. Source 동작은 바뀌지 않았다.
   해결되지 않았으며 이 변경은 runtime acceptance를 주장하지 않는다.
 - F239-86: 선언된 TypeScript compiler로 activation fixture의 unresolved identifier를
   검사한다. F84에서 `applyTerminalInput`이 block scope의 `promptPrefix`를 사용해
