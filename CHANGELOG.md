@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-185: Recognize the existing bounded page/plugin field envelope in the log auditor without treating a truncated body as original fields. The owning fixture reproduces the false missing-body finding; all 39 audit owners pass after correction. Reject malformed envelopes, excessive UTF-8 heads, extra fields and ordinary missing fields. The preserved activation run log audit passes after removing 100 false findings; its independent repeated-vowel test failure remains unchanged.
+
 - F212.12-2-1-1: Complete both-host application-path confirmation of the native first-mouse correction through the existing Editor case. View click and native input, exact Command-S persistence, reload and modified-tab close pass on macOS arm64. The check declares its intentionally induced read-only save error; run-log audit, shared baseline restoration and normal shutdown pass. No activation acceptance or product source change is included.
 
 - F212.12-1: Complete both-host display acceptance for all four installed view plugins with fixed expected text recognized from recorded pixels. Keep readiness, composition, binder audit, exact finalized frame counts and error/focus/shutdown checks. Use public Vision only in the native check executable and discover its build output automatically. Eleven display owners, three content owners, five build-discovery owners, the native recognition check and eight real content cases pass. Sparse colour sampling remains an observation and cannot override explicit captured-text evidence.

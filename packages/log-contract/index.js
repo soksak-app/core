@@ -153,6 +153,15 @@ function lineFindings(entry, catalog, validators, channel = "other") {
     else if (typeof event.fields?.head !== "string") report("the fields of a truncated event must hold the string head");
     return findings;
   }
+  // Document writers use the bounded fields envelope before the host writer's larger event bound.
+  if (PAGE_LAYERS.has(event.layer) && event.fields?.truncated === true && Object.hasOwn(event.fields, "head")) {
+    const fields = event.fields;
+    if (typeof fields.head !== "string" || fields.head.length === 0 || Buffer.byteLength(fields.head, "utf8") > 4096
+      || Object.keys(fields).length !== 2) {
+      report("page field truncation must contain only a nonempty head within 4096 bytes and truncated true");
+    }
+    return findings;
+  }
   const validateFields = validators.get(declared);
   if (validateFields !== undefined && !validateFields(event.fields)) {
     report(`fields do not match the schema of ${event.event}: ${fieldSchemaAjv.errorsText(validateFields.errors, { separator: "; " })}`);

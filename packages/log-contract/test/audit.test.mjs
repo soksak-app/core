@@ -596,3 +596,27 @@ test("a sidecar catalog is refused when it names no sidecar, owns another layer,
   assert.throws(() => compose({ events: { ...alpha.events, "host.sidecar.request": { ...alpha.events["sidecar.alpha.write"], layer: "host" } } }), /sidecar alpha: event host\.sidecar\.request has the layer host, not sidecar/);
   assert.throws(() => compose({ events: { ...alpha.events, "log.rotated": { ...alpha.events["log.rotated"], fields: objectFields({ bytes: { type: "number" } }) } } }), /sidecar alpha: event log\.rotated differs from the declaration of the base catalog/);
 });
+
+test("document field truncation is audited as the declared bounded envelope", { timeout: 5000 }, () => {
+  const declaration = { ...catalog, events: { ...catalog.events,
+    "plugin.probe.payload": { layer: "plugin", class: "io", level: "info", fields: objectFields({ body: { type: "object" } }) },
+  } };
+  const fields = { head: '{"body":', truncated: true };
+  const event = line(3, "plugin.probe.payload", fields, { layer: "plugin", class: "io" });
+  assert.deepEqual(auditLog("host-b1.jsonl", [open, debugOn(2), event].join("\n"), declaration), []);
+});
+
+test("document field truncation cannot hide malformed metadata or ordinary fields", { timeout: 5000 }, () => {
+  const declaration = { ...catalog, events: { ...catalog.events,
+    "plugin.probe.payload": { layer: "plugin", class: "io", level: "info", fields: objectFields({ body: { type: "object" } }) },
+  } };
+  for (const fields of [{ head: 7, truncated: true }, { head: "x".repeat(4097), truncated: true },
+    { head: "", truncated: true }, { head: "x", truncated: true, extra: 1 }, { truncated: true },
+    { head: "x", truncated: false }, {}]) {
+    const event = line(3, "plugin.probe.payload", fields, { layer: "plugin", class: "io" });
+    assert.ok(auditLog("host-b1.jsonl", [open, debugOn(2), event].join("\n"), declaration).length > 0,
+      `invalid fields were accepted: ${JSON.stringify(fields)}`);
+  }
+  const host = line(3, "native.input.key_down", { head: "x", truncated: true });
+  assert.ok(auditLog("host-b1.jsonl", [open, debugOn(2), host].join("\n"), catalog).length > 0);
+});

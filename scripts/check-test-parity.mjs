@@ -680,6 +680,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-185",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "page field truncation must contain" }],
+    tests: [
+      { file: "packages/log-contract/test/audit.test.mjs", id: "document field truncation is audited as the declared bounded envelope" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "document field truncation cannot hide malformed metadata or ordinary fields" },
+    ],
+    expected: "Only the exact bounded document-field truncation envelope replaces the original field schema; missing original fields remain unavailable as evidence.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-184",
     implementation: [
       { file: "packages/host/wailsv3/src/image_detach.go", symbol: "rand.Text()" },

@@ -136,6 +136,8 @@ event가 싣는 모든 buffer와 값에는 상한이 있고, 생산자는 값을
 
 모든 `host.buffer.dropped` event는 `count`가 1이고 거절한 메시지의 크기를 담으므로, 거절이 쏟아지면 event도 쏟아진다. 이는 writer의 큐가 상한으로 막고 다시 센다.
 
+감사기는 document layer에서만 page/plugin whole-field truncation envelope를 인식하며 정확히 `head`와 `truncated: true`, 비어 있지 않은 string head 및 최대 4096 UTF-8 byte를 요구한다. 사용할 수 없는 원래 field를 요구하는 대신 envelope를 검증한다. 이 인식이 누락된 body를 consumer에 제공하거나 입력 및 visual proof를 충족하지는 않는다.
+
 ## 파일
 
 프로세스 실행 하나가 설정 폴더의 `logs/` 아래 파일 둘, main 파일과 debug 파일을 쓴다:
