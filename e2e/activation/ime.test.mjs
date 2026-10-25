@@ -320,8 +320,11 @@ for (const app of Object.values(APPS)) {
   const runRepeatedVowelScenario = async (t, shellFixture) => {
     const s = await open(t, app);
     await fresh(s, { shell: shellFixture, performanceTrace: true,
-      log: { input: "info", call: "debug", frame: "debug" },
-      reads: ["native.input.key_down", "native.input.callback", "host.trace.sidecar.receive", "plugin.terminal.frame"] });
+      log: { input: "info", call: "debug", frame: "debug", lifecycle: "info" },
+      reads: ["native.input.key_down", "native.input.callback", "native.record.info",
+        "host.trace.sidecar.receive", "plugin.terminal.frame"] });
+    await s.flushLog();
+    const frameTraceOffsets = currentEventOffsets(app.configDir);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => /[$%#>]$/.test(line)),
@@ -729,7 +732,6 @@ for (const app of Object.values(APPS)) {
     };
 
     const nativeInputOffsets = currentEventOffsets(app.configDir);
-    const frameTraceOffsets = nativeInputOffsets;
     const terminalSession = await s.get("terminal.session", surface);
     assert.ok(typeof terminalSession.sessionId === "string" && terminalSession.sessionId.length > 0,
       `${app.name}: terminal session identity is missing before frame capture`);
@@ -959,7 +961,7 @@ for (const app of Object.values(APPS)) {
             event.truncated !== undefined;
         }
         if (event.event === "plugin.terminal.frame") return event.fields?.session === terminalSession.sessionId;
-        if (["log.dropped", "log.pruned", "host.buffer.dropped"].includes(event.event)) return true;
+        if (["log.dropped", "log.pruned", "host.buffer.dropped", "native.record.info"].includes(event.event)) return true;
         return ["log.gated", "page.log.gated"].includes(event.event) &&
           ((event.fields?.class === "call" && event.fields?.level === "debug") ||
             (event.fields?.class === "frame" && event.fields?.level === "debug"));
@@ -1003,6 +1005,8 @@ for (const app of Object.values(APPS)) {
         missingSourceStates: missingStates,
         sourceStatusRejections: frameStatus?.rejections ?? [],
         sourceStatusConflicts: [...(frameStatus?.conflicts?.values() ?? [])],
+        noRasterMessages: frameStatus?.noRasterMessages ?? [],
+        unjoinedFrameMessages: frameStatus?.unjoinedMessages ?? [],
         callbackStatus: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
       });
       if (cadenceFailure) throw new AggregateError([error, new Error(cadenceFailure.error)],
@@ -1017,6 +1021,8 @@ for (const app of Object.values(APPS)) {
       missingSourceStates: missingStates,
       sourceStatusRejections: frameStatus.rejections,
       sourceStatusConflicts: [...frameStatus.conflicts.values()],
+      noRasterMessages: frameStatus.noRasterMessages,
+      unjoinedFrameMessages: frameStatus.unjoinedMessages,
       sampleCount: frameCallbacks.length,
       cadence: { longestFrameGap, maximumFrameGap: MAXIMUM_IME_FRAME_GAP_MS, frameGaps },
       imageMatch: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),

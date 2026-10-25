@@ -25,10 +25,22 @@
 
 - F239-137: Include every installed plugin manifest catalog in per-configuration event-log audits. Validate the installed manifest, plugin identity, catalog layer and namespace, and report missing or invalid catalog files explicitly. `composeCatalogs` now preserves sidecar validation while adding plugin event declarations and layers. Red: the owner assertion failed because the installed plugin event was absent from `catalogOf` (`actual: undefined`). Green: both installed-plugin owner cases pass in one run, including a disabled installed plugin and invalid manifest/catalog cases; sidecar audit and log-contract composition regressions each pass 3/3. Runtime host catalog loading already included plugin catalogs and was unchanged. The Wails catalog preflight passed in `/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log` and `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`: the stored-catalog check passed, and all ten reference/terminal steps and capture stop ran without the plugin-catalog error. Both runs still failed the separate F134 frame-message/accepted-marker join and the 33 ms capture-gap check (33.287 ms and 33.800 ms); this is not IME visual acceptance.
 
-- F239-134: Join retained source rasters to exact accepted terminal screen
-  messages using the existing host performance trace body and accepted frame
-  hash record. The owning consumer test passes 23/23. Fresh runtime verification
-  remains pending; no visual acceptance is claimed.
+- F239-134: Join captured rasters only to exact matching host screen bodies and
+  accepted frame markers. Preserve unmatched records outside the retained
+  source set as diagnostics while each required source ID still needs a full
+  exact join. Apply log-loss checks to the host and page producers that carry
+  required records. The unchanged consumer failed on repeated message/native
+  frame identities, out-of-source start/end records and unrelated producer
+  gates. The owning frame-trace and replay-argument tests pass 25/25. Offline
+  replay verifies all ten reference/terminal documents, all 103 retained
+  source joins and glyph proof for all ten stages; the measured 37.2805 ms
+  frame gap still exceeds the unchanged 33 ms acceptance limit, so overall
+  visual acceptance fails. The external cohort inventory lists Tauri executable
+  SHA-256 `9d5ad43b32d6069a74986e986b9eccb8a607fffebc9623da10d5b7ae7ad29190`
+  and terminal 0.0.21 package SHA-256
+  `b1912cf17d4295f958f2f1134d0d3f83e17ce4adaeb9a5dc258b7a0d6ffce5e2`.
+  The capture artifact embeds neither hash, and retained run records do not
+  bind this capture directly to the executable hash.
 
 - F239-133: Reuse a qualifying callback already processed when capture stop
   registers its boundary, including idle callbacks with display times. Keep

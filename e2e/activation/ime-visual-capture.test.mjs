@@ -253,6 +253,15 @@ testWithTimeout("source manifest loads only digest-verified frame-bound rasters"
       cellHeight: 6, x: 0, y: 0 });
     assert.equal(loaded.sources[0].raster.colorSpace, "sRGB");
     assert.deepEqual(readRetainedSources(directory, new Map()).missingStates, ["1/2/3"]);
+    const unjoinedNeededFrame = indexAcceptedFrameTrace([{
+      seq: 30, level: "debug", class: "call", event: "host.trace.sidecar.receive",
+      fields: { sidecar: "@soksak/sidecar-vt-alacritty", surface: "tab-a",
+        body: { event: "screen", segment: "boot-1", sequence: 4,
+          frame: { generation: 1, raster: 2, sequence: 3 } } },
+    }], { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
+    assert.deepEqual(readRetainedSources(directory, unjoinedNeededFrame).missingStates, ["1/2/3"]);
+    assert.deepEqual(unjoinedNeededFrame.unjoinedMessages, [{ session: "session-a", segment: "boot-1", sequence: 4,
+      frame: { generation: 1, raster: 2, sequence: 3 }, producer: "host-screen-body", reason: "no-accepted-frame-marker" }]);
     artifact.colorSpace = "Display P3";
     writeFileSync(join(directory, "sources", "manifest.json"), JSON.stringify({ format: 2,
       pixelFormat: "BGRA8", alpha: "premultiplied-first", droppedSources: 0, writeFailures: 0,
@@ -277,24 +286,121 @@ testWithTimeout("indexes an accepted screen frame from its exact TRACE body and 
       fields: { sidecar: "@soksak/sidecar-vt-alacritty", surface: "tab-a", body } },
     { seq: 12, level: "debug", class: "frame", event: "plugin.terminal.frame",
       fields: { session: "session-a", segment: "boot-1", sequence: 4, rows: 1, cols: 2,
-        hash: "a".repeat(64) } },
+        frame, hash: "a".repeat(64) } },
+    { seq: 13, level: "info", class: "lifecycle", layer: "page", event: "page.log.gated",
+      fields: { class: "call", count: 10, level: "debug" } },
+    { seq: 14, level: "info", class: "lifecycle", layer: "sidecar", event: "log.gated",
+      fields: { class: "frame", count: 5, level: "debug" } },
+    { seq: 15, level: "info", class: "lifecycle", layer: "sok", event: "log.gated",
+      fields: { class: "frame", count: 2, level: "debug" } },
+    { seq: 16, level: "info", class: "lifecycle", layer: "native", event: "native.log.gated",
+      fields: { class: "frame", count: 1, level: "debug" } },
   ];
   const states = indexAcceptedFrameTrace(events, { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
   assert.equal(states.get("1/2/3")?.semantic.document, "ㅏ");
   assert.deepEqual(states.get("1/2/3")?.rows, [[{ ch: "$", width: 1 }, { width: 1 }]]);
   assert.equal(states.get("1/2/3")?.accepted[0].session, "session-a");
   assert.deepEqual(states.rejections, []);
-  assert.throws(() => indexAcceptedFrameTrace(events.slice(0, 1), { row: 0, col: 0, text: "$" },
-    "tab-a", "session-a"), /no accepted frame markers/);
+  const bodyWithoutMarker = indexAcceptedFrameTrace(events.slice(0, 1),
+    { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
+  assert.equal(bodyWithoutMarker.size, 0);
+  assert.deepEqual(bodyWithoutMarker.unjoinedMessages, [{ session: "session-a", segment: "boot-1", sequence: 4,
+    frame, producer: "host-screen-body", reason: "no-accepted-frame-marker" }]);
   assert.throws(() => indexAcceptedFrameTrace([
     { ...events[0], truncated: 1200 }, events[1],
   ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /truncated host screen bodies/);
+  const mismatchedMarker = indexAcceptedFrameTrace([
+    ...events, { ...events[1], seq: 13, fields: { ...events[1].fields,
+      frame: { generation: 1, raster: 2, sequence: 99 } } },
+  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
+  assert.deepEqual(mismatchedMarker.unjoinedMessages, [{ session: "session-a", segment: "boot-1", sequence: 4,
+    frame: { generation: 1, raster: 2, sequence: 99 }, producer: "accepted-frame-marker", reason: "no-host-screen-body" }]);
   assert.throws(() => indexAcceptedFrameTrace([
-    ...events, { ...events[1], seq: 13 },
-  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /counts differ/);
-  assert.throws(() => indexAcceptedFrameTrace([
-    ...events, { seq: 14, event: "log.gated", fields: { class: "call", level: "debug", count: 1 } },
+    ...events, { seq: 14, layer: "host", event: "log.gated",
+      fields: { class: "call", level: "debug", count: 1 } },
   ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /reports log loss/);
+  assert.throws(() => indexAcceptedFrameTrace([
+    ...events, { seq: 15, level: "info", class: "lifecycle", layer: "page", event: "page.log.gated",
+      fields: { class: "frame", count: 1, level: "debug" } },
+  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /reports log loss/);
+  assert.throws(() => indexAcceptedFrameTrace([
+    ...events, { seq: 17, level: "info", class: "lifecycle", layer: "host", event: "log.gated",
+      fields: { class: "frame", count: 1, level: "debug" } },
+  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /reports log loss/);
+  assert.throws(() => indexAcceptedFrameTrace([
+    ...events, { seq: 18, level: "info", class: "lifecycle", layer: "sidecar", event: "log.gated",
+      fields: { class: "frame", count: 1, level: "debug" } },
+    { seq: 19, level: "info", class: "lifecycle", event: "log.gated",
+      fields: { class: "frame", count: 1, level: "debug" } },
+  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /unknown or missing producer layer/);
+  assert.throws(() => indexAcceptedFrameTrace([
+    ...events, { seq: 20, level: "info", class: "lifecycle", layer: "plugin", event: "log.gated",
+      fields: { class: "frame", count: 1, level: "debug" } },
+  ], { row: 0, col: 0, text: "$" }, "tab-a", "session-a"), /producer layer without a writer gate/);
+});
+
+testWithTimeout("joins repeated screen messages to every exact accepted native frame tuple", () => {
+  const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const makeBody = (nativeSequence, frame) => ({ event: "screen", segment: "boot-1", sequence: 12,
+    frame: { generation: 2, raster: 2, sequence: nativeSequence }, rows: 1, cols: 2,
+    cursor: { row: 0, col: 1, focused: true, visible: true, preedit },
+    cells: [{ grapheme: "$", width: 1, fg: "#000000", bg: "#ffffff", attributes: 0 },
+      { grapheme: "", width: 1, fg: "#000000", bg: "#ffffff", attributes: 0 }],
+    render: { ...renderFixture, frame: { generation: 2, raster: 2, sequence: nativeSequence } },
+  });
+  const receive = (seq, body) => ({ seq, level: "debug", class: "call",
+    event: "host.trace.sidecar.receive", fields: { sidecar: "@soksak/sidecar-vt-alacritty",
+      surface: "tab-a", body } });
+  const marker = (seq, frame) => ({ seq, level: "debug", class: "frame", event: "plugin.terminal.frame",
+    fields: { session: "session-a", segment: "boot-1", sequence: 12, rows: 1, cols: 2,
+      frame, hash: "a".repeat(64) } });
+  const frames = [7, 8, 9, 10].map((sequence) => ({ generation: 2, raster: 2, sequence }));
+  const events = [
+    receive(11, makeBody(7)), marker(12, frames[0]), receive(13, makeBody(7)), marker(14, frames[0]),
+    receive(15, makeBody(8)), marker(16, frames[1]),
+    receive(17, makeBody(9)), marker(18, frames[2]), receive(19, makeBody(9)), marker(20, frames[2]),
+    receive(21, makeBody(10)), marker(22, frames[3]), marker(23, frames[3]),
+    receive(24, { ...makeBody(11), sequence: 13, frame: null, render: null }),
+    { seq: 25, level: "debug", class: "frame", event: "plugin.terminal.frame",
+      fields: { session: "session-a", segment: "boot-1", sequence: 13, rows: 1, cols: 2,
+        frame: null, hash: "a".repeat(64) } },
+  ];
+  const states = indexAcceptedFrameTrace(events, { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
+  assert.deepEqual([...states.keys()].sort(), ["2/2/10", "2/2/7", "2/2/8", "2/2/9"]);
+  for (const [index, sequence] of [7, 8, 9, 10].entries()) {
+    const state = states.get(`2/2/${sequence}`);
+    assert.equal(state?.semantic.document, "ㅏ");
+    assert.equal(state?.accepted[0].sequence, 12);
+    assert.equal(state?.accepted[0].frame.sequence, sequence);
+    assert.equal(state?.accepted[0].receiveSeqs.length, sequence === 8 || sequence === 10 ? 1 : 2);
+    assert.equal(state?.accepted[0].markerSeqs.length, sequence === 10 ? 2 : sequence === 8 ? 1 : 2);
+  }
+  assert.deepEqual(states.noRasterMessages, [{ session: "session-a", segment: "boot-1", sequence: 13,
+    reason: "screen-message-has-no-native-frame", receiveSeqs: [24], markerSeqs: [25] }]);
+  assert.deepEqual(states.rejections, []);
+
+  const outsideSourceWindow = [
+    ...events,
+    receive(26, { ...makeBody(1), sequence: 1 }),
+    { seq: 27, level: "debug", class: "frame", event: "plugin.terminal.frame",
+      fields: { session: "session-a", segment: "boot-1", sequence: 115, rows: 1, cols: 2,
+        frame: { generation: 2, raster: 2, sequence: 115 }, hash: "b".repeat(64) } },
+    { seq: 28, level: "debug", class: "frame", event: "plugin.terminal.frame",
+      fields: { session: "session-a", segment: "boot-1", sequence: 116, rows: 1, cols: 2,
+        frame: { generation: 2, raster: 2, sequence: 116 }, hash: "c".repeat(64) } },
+  ];
+  const scoped = indexAcceptedFrameTrace(outsideSourceWindow,
+    { row: 0, col: 0, text: "$" }, "tab-a", "session-a");
+  assert.deepEqual([...scoped.keys()].sort(), ["2/2/10", "2/2/7", "2/2/8", "2/2/9"]);
+  assert.deepEqual(scoped.unjoinedMessages, [
+    { session: "session-a", segment: "boot-1", sequence: 1, frame: { generation: 2, raster: 2, sequence: 1 },
+      producer: "host-screen-body", reason: "no-accepted-frame-marker" },
+    { session: "session-a", segment: "boot-1", sequence: 115, frame: { generation: 2, raster: 2, sequence: 115 },
+      producer: "accepted-frame-marker", reason: "no-host-screen-body" },
+    { session: "session-a", segment: "boot-1", sequence: 116, frame: { generation: 2, raster: 2, sequence: 116 },
+      producer: "accepted-frame-marker", reason: "no-host-screen-body" },
+  ]);
 });
 
 testWithTimeout("retains null preedit and repairs a partial then full record for one frame identity", () => {
@@ -310,7 +416,7 @@ testWithTimeout("retains null preedit and repairs a partial then full record for
     event: "host.trace.sidecar.receive", fields: { sidecar: "@soksak/sidecar-vt-alacritty", surface: "tab-a", body: value } });
   const marker = (seq) => ({ seq, level: "debug", class: "frame", event: "plugin.terminal.frame",
     fields: { session: "session-a", segment: "boot-1", sequence: 4, rows: 1, cols: 2,
-      hash: "b".repeat(64) } });
+      frame, hash: "b".repeat(64) } });
   const partial = { ...body, cursor: { ...body.cursor, preedit: null }, render: null };
   const repaired = indexAcceptedFrameTrace([receive(11, partial), marker(12), receive(13, body), marker(14)],
     { row: 0, col: 0, text: "$" }, "tab-a", "session-a");

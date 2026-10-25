@@ -25,10 +25,21 @@
 
 - F239-137: 설정 폴더 event-log 감사에 설치된 모든 plugin manifest catalog를 포함한다. 설치 manifest, plugin identity, catalog layer와 namespace를 검증하고 없거나 잘못된 catalog 파일을 명시적으로 보고한다. `composeCatalogs`는 기존 sidecar 검증을 유지하면서 plugin event 선언과 layer를 합친다. Red: 설치 plugin event가 `catalogOf`에 없어 owner assertion이 `actual: undefined`로 실패했다. Green: 비활성 설치 plugin과 잘못된 manifest/catalog 경우를 포함한 plugin owner test 두 개가 한 번의 실행에서 통과했고, sidecar audit와 log-contract composition 회귀가 각각 3/3 통과했다. Runtime host catalog loader는 plugin catalog를 이미 읽고 있어 변경하지 않았다. Wails catalog preflight 두 번(`/tmp/soksak-final-development-20261025.7QLhon/async-wails-ime-check-02.log`, `/tmp/soksak-final-development-20261025.7QLhon/accepted-frame-wails-ime.log`)은 stored-catalog 확인을 통과했고 plugin catalog 오류 없이 reference/terminal 단계 10개와 capture stop까지 실행했다. 두 실행은 별도 F134 frame-message/accepted-marker 결합 문제와 33 ms capture-gap 검사(33.287 ms, 33.800 ms)에서 실패했으며 IME visual acceptance 결과는 아니다.
 
-- F239-134: 기존 host performance trace body와 수락된 frame hash record를
-  사용해 보존된 source raster를 정확한 terminal screen message에 연결한다.
-  Owning consumer test는 23/23 통과했다. 새 runtime 검증은 남아 있으며 visual
-  acceptance를 주장하지 않는다.
+- F239-134: 캡처 raster를 정확히 일치하는 host screen body와 수락된 frame
+  marker에만 결합한다. 보존 source 집합 밖의 일치하지 않는 record는 진단으로
+  남기며, 필요한 각 source ID에는 완전하고 정확한 결합을 계속 요구한다.
+  필수 record를 전달하는 host와 page producer에 loss 검사를 적용한다. 변경 전
+  consumer는 반복 message/native frame identity, source 범위 밖 시작/끝 record,
+  관련 없는 producer gate에서 실패했다. Frame-trace와 replay 인자 test는
+  25/25 통과했다. Offline replay에서 reference/terminal 문서 10개, retained source
+  join 103개와 10개 stage의 glyph proof를 확인했지만, 측정한 37.2805 ms frame
+  gap이 기존 33 ms acceptance limit을 넘어서 전체 visual acceptance는 실패한다.
+  외부 cohort inventory에는 Tauri executable SHA-256
+  `9d5ad43b32d6069a74986e986b9eccb8a607fffebc9623da10d5b7ae7ad29190`과 terminal
+  0.0.21 package SHA-256
+  `b1912cf17d4295f958f2f1134d0d3f83e17ce4adaeb9a5dc258b7a0d6ffce5e2`가 있다.
+  Capture artifact에는 두 hash가 없으며 보존된 run record도 이 capture와 executable
+  hash를 직접 결합하지 않는다.
 
 - F239-133: Capture stop이 경계를 등록할 때 sample queue가 이미 처리한
   qualifying callback을 재사용하며 display time이 있는 idle callback도 포함한다.
