@@ -6,6 +6,7 @@ import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
 import { openTabStates } from "../tab-state.js";
+import { seedSourceOrigins } from "../source-origins.js";
 
 // The tab state store of the memory saver is opened by projects.initialise; this file opens it over a fake store.
 const UNLOAD = { format: 2, maxBytes: 64 };
@@ -14,7 +15,8 @@ const store = await openTabStates({
   failed: (error) => { throw error; },
   unloadOf: (plugin) => (plugin === "fixture-unload" ? UNLOAD : false),
 });
-mock.module("../projects.js", { namedExports: { active: () => null, tabStateStore: () => store, tabStatesReady: async () => store } });
+mock.module("../projects.js", { namedExports: { active: () => null, tabStateStore: () => store, tabStatesReady: async () => store,
+  waitForInitialProjectContext: async () => {} } });
 mock.module("../environment.js", { namedExports: { pluginDiagnostics: async () => null } });
 for (const id of ["fixture-unload", "fixture-plain"]) registerPlugin({ id, surface: () => null });
 const { setSurfaceTextSize } = await import("../text-size.js");
@@ -51,7 +53,7 @@ async function harness(t) {
   // Sends one view call and resolves with the reply that the view receives.
   const viewCall = async (command, params) => {
     const id = nextId++;
-    for (const listener of listeners.get("view-call") ?? []) listener({ id, command, params });
+    for (const listener of listeners.get("view-call") ?? []) listener({ id, command, params, generation: 1 });
     for (let turn = 0; turn < 100; turn += 1) {
       const reply = calls.find((call) => call.name === "viewReply" && call.payload.id === id);
       if (reply) return reply.payload;
@@ -59,8 +61,10 @@ async function harness(t) {
     }
     throw new Error(`view call ${command} got no reply`);
   };
-  return { modules, calls, viewCall, slot: document.querySelector("#slot"), close: () => dom.window.close() };
+  return { modules, calls, viewCall, page: String(dom.window.performance.timeOrigin), slot: document.querySelector("#slot"), close: () => dom.window.close() };
 }
+
+const expectedReply = (host, id, result) => ({ id, result, page: host.page, generation: 1 });
 
 const declarations = { status: [], commands: [], dom: [] };
 const viewOf = (surfaceId, pluginId, unload) => ({
@@ -74,13 +78,14 @@ test("a declaring view writes its tab state and reads it back, and refusals name
   const { recordOrigin } = await import("../tab-reports.js");
   const id = "view-state-a";
   recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-unload", UNLOAD));
   await waitSurfaceCompositionDeclared(id);
-  assert.deepEqual(await h.viewCall("tab.state.read"), { id: 1, result: null });
-  assert.deepEqual(await h.viewCall("tab.state.write", { page: 3 }), { id: 2, result: null });
+  assert.deepEqual(await h.viewCall("tab.state.read"), expectedReply(h, 1, null));
+  assert.deepEqual(await h.viewCall("tab.state.write", { page: 3 }), expectedReply(h, 2, null));
   assert.deepEqual(store.entry(id).state, { format: 2, value: { page: 3 } });
-  assert.deepEqual(await h.viewCall("tab.state.read"), { id: 3, result: { page: 3 } });
+  assert.deepEqual(await h.viewCall("tab.state.read"), expectedReply(h, 3, { page: 3 }));
   assert.deepEqual((await h.viewCall("tab.state.write", { text: "x".repeat(100) })).error,
     { code: -32000, message: `tab ${id} state of 111 bytes exceeds 64` });
   assert.deepEqual((await h.viewCall("tab.state.write", undefined)).error,
@@ -98,6 +103,7 @@ test("a view whose plugin does not declare surface.unload has no tab state", { t
   const { recordOrigin } = await import("../tab-reports.js");
   const id = "view-state-plain";
   recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
@@ -113,14 +119,15 @@ test("the tab reports of a view set its title, its modified mark and its error",
   const reports = await import("../tab-reports.js");
   const id = "view-report-a";
   reports.recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
-  assert.deepEqual(await h.viewCall("tab.title", "Notes"), { id: 1, result: null });
+  assert.deepEqual(await h.viewCall("tab.title", "Notes"), expectedReply(h, 1, null));
   assert.equal(reports.tabLabel(id), "Notes");
-  assert.deepEqual(await h.viewCall("tab.modified", true), { id: 2, result: null });
+  assert.deepEqual(await h.viewCall("tab.modified", true), expectedReply(h, 2, null));
   assert.equal(reports.tabModified(id), true);
-  assert.deepEqual(await h.viewCall("tab.error", "disk full"), { id: 3, result: null });
+  assert.deepEqual(await h.viewCall("tab.error", "disk full"), expectedReply(h, 3, null));
   assert.equal(reports.tabError(id), "disk full");
   await disposeSurface(id);
   h.close();
@@ -132,6 +139,7 @@ test("the composition of a view places nothing while a place that leaves the vie
   const reports = await import("../tab-reports.js");
   const id = "view-place-a";
   reports.recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
@@ -152,6 +160,7 @@ test("a view declares its composition only after the host authorizes its surface
   const reports = await import("../tab-reports.js");
   const id = "view-auth-a";
   reports.recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
   const mounted = mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(h.calls.filter((call) => call.name === "compositionDeclare").length, 0, "the view declared before authorization");

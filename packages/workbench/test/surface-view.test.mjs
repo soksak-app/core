@@ -24,6 +24,10 @@ function seedViewSource(plugin, surface, generation = 1) {
   seedSourceOrigins({ floor: generation, pluginHosts: {}, views: { [surface]: generation } });
 }
 
+function pageOf(dom) {
+  return String(dom.window.performance.timeOrigin);
+}
+
 test("a queued view call from a retired source generation does not reach the replacement command layer", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
@@ -69,7 +73,7 @@ test("a queued view call from a retired source generation does not reach the rep
 
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 2, id: 2, command: "runtime.settings.read", params: null });
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(replies, [{ id: 2, result: {}, generation: 2 }], "the current view call did not reply with its source generation");
+    assert.deepEqual(replies, [{ id: 2, result: {}, page: pageOf(dom), generation: 2 }], "the current view call did not reply with its source identity");
   } finally {
     await disposeSurface(surfaceId);
     dom.window.close();
@@ -133,7 +137,7 @@ test("a view mount waits for its actual source registration before serving the f
     assert.equal(viewCommandGenerationOf(surfaceId), 2, "a late old process end removed the replacement command layer");
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 2, id: 2, command: "runtime.settings.read", params: null });
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(replies, [{ id: 2, result: {}, generation: 2 }], "the first current call was not served after actual registration");
+    assert.deepEqual(replies, [{ id: 2, result: {}, page: pageOf(dom), generation: 2 }], "the first current call was not served after actual registration");
   } finally {
     await disposeSurface(surfaceId);
     dom.window.close();
@@ -189,7 +193,7 @@ test("a retained view reads the text scale of its stored owner card", { timeout:
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1,
       id: 1, command: "runtime.textSize.read", params: null });
     for (let turn = 0; replies.length === 0 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(replies, [{ id: 1, result: 1.875, generation: 1 }],
+    assert.deepEqual(replies, [{ id: 1, result: 1.875, page: pageOf(dom), generation: 1 }],
       "a cold retained view did not read frame scale multiplied by its stored owner-card scale");
     frameFactor = 2;
     ownerCard.data.textSize = 1.5;
@@ -197,8 +201,8 @@ test("a retained view reads the text scale of its stored owner card", { timeout:
       id: 2, command: "runtime.textSize.read", params: null });
     for (let turn = 0; replies.length < 2 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(replies, [
-      { id: 1, result: 1.875, generation: 1 },
-      { id: 2, result: 1.875, generation: 1 },
+      { id: 1, result: 1.875, page: pageOf(dom), generation: 1 },
+      { id: 2, result: 1.875, page: pageOf(dom), generation: 1 },
     ], "a mounted retained view changed its cached scale while it remained outside the plane");
     liveScale = 3;
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1,
@@ -209,10 +213,10 @@ test("a retained view reads the text scale of its stored owner card", { timeout:
       id: 4, command: "runtime.textSize.read", params: null });
     for (let turn = 0; replies.length < 4 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(replies, [
-      { id: 1, result: 1.875, generation: 1 },
-      { id: 2, result: 1.875, generation: 1 },
-      { id: 3, result: 3, generation: 1 },
-      { id: 4, result: 3, generation: 1 },
+      { id: 1, result: 1.875, page: pageOf(dom), generation: 1 },
+      { id: 2, result: 1.875, page: pageOf(dom), generation: 1 },
+      { id: 3, result: 3, page: pageOf(dom), generation: 1 },
+      { id: 4, result: 3, page: pageOf(dom), generation: 1 },
     ], "a retained view did not adopt the live plane scale and retain it after leaving the plane");
   } finally {
     releaseRetainedSurfaceSlots({ surfaces: [] }, new Set());
@@ -286,8 +290,8 @@ test("a view declares its composition only after native call listeners are ready
     call({ surface: surfaceId, plugin: pluginId, generation: 1, id: 2, command: "runtime.native.on", params: { name: "exposure-request" } });
     for (let turn = 0; replies.length < 2 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(replies, [
-      { id: 1, result: 1, generation: 1 },
-      { id: 2, result: null, generation: 1 },
+      { id: 1, result: 1, page: pageOf(dom), generation: 1 },
+      { id: 2, result: null, page: pageOf(dom), generation: 1 },
     ]);
   } finally {
     for (const finish of registrations.splice(0)) finish();
@@ -499,7 +503,7 @@ test("a view call writes receipt and reply records with its source generation", 
       fields: { plugin: pluginId, surface: surfaceId, generation: 1, id: 7, command: "runtime.settings.read" } }]);
     assert.deepEqual(emitted.filter(({ event }) => event === "page.view.reply"), [{ level: "debug", event: "page.view.reply",
       fields: { plugin: pluginId, surface: surfaceId, generation: 1, id: 7, outcome: "result" } }]);
-    assert.deepEqual(replies, [{ id: 7, result: {}, generation: 1 }]);
+    assert.deepEqual(replies, [{ id: 7, result: {}, page: pageOf(dom), generation: 1 }]);
   } finally {
     await disposeSurface(surfaceId);
     dom.window.close();
@@ -554,7 +558,7 @@ test("a view subscription to the text size resolves with a result", { timeout: 5
     await replyArrived;
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(emitted.filter(({ event }) => event === "page.view.reply"), [{ level: "debug", event: "page.view.reply",
-      fields: { plugin: pluginId, surface: surfaceId, id: 8, outcome: "result" } }]);
+      fields: { plugin: pluginId, surface: surfaceId, generation: 1, id: 8, outcome: "result" } }]);
     assert.deepEqual(replies.map(({ id, result }) => ({ id, result })), [{ id: 8, result: null }]);
   } finally {
     await disposeSurface(surfaceId);
@@ -976,12 +980,12 @@ test("a view sends only to a sidecar its surface declares and a send to another 
     await mountSurface(document.querySelector("#slot"), surface);
     sendFrom(1, "other-sidecar");
     await settle();
-    assert.deepEqual(replies.at(-1), { id: 1, error: { code: -32000, message: `surface ${surfaceId} cannot send to sidecar other-sidecar` }, generation: 1 },
+    assert.deepEqual(replies.at(-1), { id: 1, error: { code: -32000, message: `surface ${surfaceId} cannot send to sidecar other-sidecar` }, page: pageOf(dom), generation: 1 },
       "a send to an undeclared sidecar was not refused with its reason");
     assert.deepEqual(sent, [], "a send to an undeclared sidecar reached a sidecar");
     sendFrom(2, "fixture-sidecar");
     await settle();
-    assert.deepEqual(replies.at(-1), { id: 2, result: null, generation: 1 }, "a send to the declared sidecar was refused");
+    assert.deepEqual(replies.at(-1), { id: 2, result: null, page: pageOf(dom), generation: 1 }, "a send to the declared sidecar was refused");
     assert.deepEqual(sent, [{ id: "probe", body: { n: 2 }, cids: [] }]);
   } finally {
     await disposeSurface(surfaceId);
@@ -1042,9 +1046,9 @@ test("the region calls of a view run the page operations of its surface", { time
       regions: [{ name: "doc", left: 1, top: 2, right: 3, bottom: 4, visible: true }], overlays: [] } });
     await settle(3);
     assert.deepEqual(replies(), [
-      { id: 1, result: { kind: "view", regions: composition.regions, overlays: [] }, generation: 1, surface: surfaceId },
-      { id: 2, result: { history: false }, generation: 1, surface: surfaceId },
-      { id: 3, result: null, generation: 1, surface: surfaceId },
+      { id: 1, result: { kind: "view", regions: composition.regions, overlays: [] }, page: pageOf(dom), generation: 1, surface: surfaceId },
+      { id: 2, result: { history: false }, page: pageOf(dom), generation: 1, surface: surfaceId },
+      { id: 3, result: null, page: pageOf(dom), generation: 1, surface: surfaceId },
     ]);
     assert.deepEqual(calls.filter(({ name }) => name === "documentAttach"), [
       { name: "documentAttach", payload: { document: "doc", surface: surfaceId } },

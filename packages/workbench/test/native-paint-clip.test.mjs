@@ -88,8 +88,8 @@ test("paint holes retain acknowledged native alignment and visibility", async ()
 
 for (const [index, [value, error]] of [
   [null, /surface placement result is missing surface/],
-  [{ visible: undefined }, /invalid native placement visibility surface/],
-  [{ w: NaN }, /invalid native placement geometry surface/],
+  [{ visible: undefined }, /surface placement result has invalid visibility surface/],
+  [{ w: NaN }, /surface placement result has invalid geometry surface/],
 ].entries()) {
   test(`native paint acknowledgement rejects invalid reply ${index}`, async () => {
     const f = await fixture(`invalid-${index}`);

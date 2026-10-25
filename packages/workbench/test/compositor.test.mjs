@@ -272,7 +272,8 @@ test("placement results reject missing, extra, duplicate, and drawn-deferred sur
     assert.throws(() => compositor.publish(), /surface placement result is missing contract-view/);
     compositor.onCommit(() => ({ placements: [{ id: "unexpected" }], deferred: [] }));
     assert.throws(() => compositor.publish(), /unexpected id unexpected/);
-    compositor.onCommit(() => ({ placements: [{ id: "contract-view" }, { id: "contract-view" }], deferred: [] }));
+    const duplicatePlacement = { id: "contract-view", visible: true, x: 1, y: 2, w: 30, h: 40 };
+    compositor.onCommit(() => ({ placements: [duplicatePlacement, { ...duplicatePlacement }], deferred: [] }));
     assert.throws(() => compositor.publish(), /repeats a placement id/);
   } finally {
     dom.window.close();

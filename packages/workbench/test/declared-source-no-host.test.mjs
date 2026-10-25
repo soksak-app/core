@@ -12,7 +12,7 @@ test("a page without a native bridge starts ingress without a fallback transport
   await startDeclaredSnapshotIngress();
   assert.equal(started, true, "provider startup did not pass the no-host readiness boundary");
 
-  const channel = createDeclaredSource({ plugin: "demo", status: "tree" }).channel({ id: "view-a", surface: "view-a" });
+  const channel = createDeclaredSource({ plugin: "demo", status: "tree" }).channel({ id: "view-a", surface: "view-a", generation: 1 });
   const unsubscribe = await channel.onMessage(() => {});
   assert.equal(typeof unsubscribe, "function", "the no-host channel did not return recipient cleanup");
   unsubscribe();

@@ -124,9 +124,9 @@ test("a window sidebar command runs only through its declared host source", asyn
     },
     receive: () => {},
     close: () => {},
-  });
+  }, 1);
   try {
-    registry.hostRegistered({ plugin: "fixture", kind: "command", name: "fixture.select" });
+    registry.hostRegistered({ plugin: "fixture", kind: "command", name: "fixture.select", generation: 1 });
     button.click();
     await settle();
     assert.deepEqual(received, [{ name: "fixture.select", params: { id: "row-1" } }]);
@@ -136,7 +136,7 @@ test("a window sidebar command runs only through its declared host source", asyn
     assert.deepEqual(received[1], { error: "owner none has not registered command fixture.select" },
       "a missing selected source fell back to the registered host");
   } finally {
-    registry.hostUnregistered("fixture");
+    registry.hostUnregistered("fixture", 1);
     forget();
     windowSidebar.remove();
   }

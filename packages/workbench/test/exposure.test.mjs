@@ -275,9 +275,9 @@ test("surface registrations are checked against the declarations and the surface
 test("a dom request of a plugin host entry is refused as failed while the host page has no exposure-request subscription", async () => {
   const made = coreRegistry(fakeHost(() => ({ result: null })));
   made.configure({ surfacePlugin: () => null, registrationChanged: () => {} });
-  const forget = keepHostCommands("probe", { run: async () => null, receive: () => {}, close: () => {} });
+  const forget = keepHostCommands("probe", { run: async () => null, receive: () => {}, close: () => {} }, 1);
   try {
-    made.hostRegistered({ plugin: "probe", kind: "dom", name: "probe.lines" });
+    made.hostRegistered({ plugin: "probe", kind: "dom", name: "probe.lines", generation: 1 });
     const reply = await made.handle({ method: "dom.rect", params: { name: "probe.lines" } });
     assert.equal(reply.error.code, EXPOSURE_ERRORS.failed);
     assert.equal(reply.error.message, "plugin host probe has no exposure-request subscription");
@@ -348,9 +348,9 @@ test("plugin-host status.get pulls the plugin-local snapshot name", { timeout: 1
     },
     receive: () => {},
     close: () => {},
-  });
+  }, 1);
   try {
-    made.hostRegistered({ plugin: "probe", kind: "status", name: "probe.lines" });
+    made.hostRegistered({ plugin: "probe", kind: "status", name: "probe.lines", generation: 1 });
     assert.deepEqual(
       await made.handle({ method: "status.get", params: { name: "probe.lines" } }),
       { result: { value: ["local tree"], version: 4 } },
@@ -380,14 +380,14 @@ test("a plugin host answers only a request without surface for a name that no su
     },
     receive: () => {},
     close: () => {},
-  });
+  }, 1);
   try {
-    assert.throws(() => made.hostRegistered({ plugin: "other", kind: "command", name: "probe.send" }), /cannot register/);
-    assert.throws(() => made.hostRegistered({ plugin: "probe", kind: "command", name: "probe.missing" }), /undeclared/);
-    made.hostRegistered({ plugin: "probe", kind: "command", name: "probe.send" });
-    made.hostRegistered({ plugin: "probe", kind: "status", name: "probe.lines" });
+    assert.throws(() => made.hostRegistered({ plugin: "other", kind: "command", name: "probe.send", generation: 1 }), /cannot register/);
+    assert.throws(() => made.hostRegistered({ plugin: "probe", kind: "command", name: "probe.missing", generation: 1 }), /undeclared/);
+    made.hostRegistered({ plugin: "probe", kind: "command", name: "probe.send", generation: 1 });
+    made.hostRegistered({ plugin: "probe", kind: "status", name: "probe.lines", generation: 1 });
     assert.equal(changes, 2);
-    assert.equal(made.hostRegistrant("status", "probe.lines"), "plugin:probe");
+    assert.deepEqual(made.hostRegistrant("status", "probe.lines"), { id: "plugin:probe", generation: 1 });
     assert.equal(made.list().status.find((entry) => entry.name === "probe.lines").registered, true);
     assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send", params: { n: 1 } } }), { result: { ran: { n: 1 } } });
     assert.deepEqual(await made.handle({ method: "status.get", params: { name: "probe.lines" } }), { result: { value: ["a"], version: 3 } });
@@ -399,7 +399,7 @@ test("a plugin host answers only a request without surface for a name that no su
     assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send" } }), { result: "from surface" });
     assert.deepEqual(forwarded.map(({ surface }) => surface), ["tab-a"]);
     assert.equal(sent.length, 2, "the host received a request that a surface answers");
-    made.hostUnregistered("probe");
+    made.hostUnregistered("probe", 1);
     assert.equal(made.hostRegistrant("status", "probe.lines"), null);
     assert.equal((await made.handle({ method: "status.get", params: { name: "probe.lines" } })).error.code, EXPOSURE_ERRORS.unregistered);
   } finally {
@@ -783,9 +783,9 @@ test("a plugin host status reply without seq and value is refused instead of rea
     },
     receive: () => {},
     close: () => {},
-  });
+  }, 1);
   try {
-    made.hostRegistered({ plugin: "probe", kind: "status", name: "probe.lines" });
+    made.hostRegistered({ plugin: "probe", kind: "status", name: "probe.lines", generation: 1 });
     for (let index = 0; index < 4; index += 1) {
       const reply = await made.handle({ method: "status.get", params: { name: "probe.lines" } });
       assert.equal(reply.error?.code, EXPOSURE_ERRORS.failed, `reply ${index} was not refused: ${JSON.stringify(reply)}`);
