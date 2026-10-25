@@ -342,6 +342,8 @@ int main(void) { @autoreleasepool {
     [captureSink release]; captureSink = nil;
 
     NSString *retentionDirectory = [directory stringByAppendingPathComponent:@"retention"];
+    check([[NSFileManager defaultManager] createDirectoryAtPath:retentionDirectory
+        withIntermediateDirectories:YES attributes:nil error:nil], @"the retention capture directory exists before sample intake");
     sp_image_capture_match_begin(retentionDirectory.fileSystemRepresentation, captureWriter);
     identityError = NULL;
     BOOL retentionSessionStarted = sp_image_capture_match_identity_session_begin(&identityError);

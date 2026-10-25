@@ -99,11 +99,13 @@ char *sp_image_capture_match_identity_session_error_copy(void);
 bool sp_image_capture_match_identity_record(const uint8_t region_token[16], sp_image_capture_identity identity,
     CGRect roi, const uint8_t *tagged_pixels, size_t width, size_t height, size_t stride,
     const char *color_space, char **error);
-// Decodes each retained issued region ROI mapped into one captured sample. Caller owns records and frees error.
-// The function records the results in the separate decoded-frame artifact on the capture writer queue.
-bool sp_image_capture_match_identity_decode_frame(CGImageRef image, size_t frame_width, size_t frame_height,
-    CGRect content_rect, CGRect screen_rect, double content_scale, double scale_factor,
-    uint64_t frame_number, uint64_t display_time, NSArray<NSDictionary *> **records, char **error);
+// Copies mapped tag ROIs into bounded immutable jobs and returns before Vision decoding. The serial decoder queue
+// preserves frame and region order; overflow fails the identity session explicitly. Caller retains the sample bytes.
+bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t frame_width, size_t frame_height,
+    size_t frame_stride, CGColorSpaceRef color_space, CGRect content_rect, CGRect screen_rect,
+    double content_scale, double scale_factor, uint64_t frame_number, uint64_t display_time, char **error);
+// Performs one real CoreImage encode and Vision decode before ScreenCaptureKit starts accepting samples.
+bool sp_image_capture_match_identity_prepare_decoder(char **error);
 #endif
 
 #endif

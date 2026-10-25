@@ -3,12 +3,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 
 static int failures;
+static atomic_bool identityDecodeGateClaimed;
+static dispatch_semaphore_t identityDecodeGateEntered;
+static dispatch_semaphore_t identityDecodeGateRelease;
 static void check(BOOL ok, NSString *label) {
     fprintf(stderr, "%s: %s\n", ok ? "PASS" : "FAIL", label.UTF8String);
     if (!ok) failures++;
 }
+
+static bool blockFirstIdentityDecode(void) {
+    if (atomic_exchange(&identityDecodeGateClaimed, true)) return true;
+    dispatch_semaphore_signal(identityDecodeGateEntered);
+    dispatch_semaphore_wait(identityDecodeGateRelease, DISPATCH_TIME_FOREVER);
+    return true;
+}
+
+static bool failIdentityDecode(void) { return false; }
 
 static void frameIdentitySessionChecks(void) {
     const uint8_t regionA[16] = { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -18,6 +31,15 @@ static void frameIdentitySessionChecks(void) {
     check(sp_image_capture_match_identity_session_begin(&error) && error == NULL,
         @"an active diagnostic capture starts an identity session");
     free(error); error = NULL;
+    check(sp_image_capture_match_identity_prepare_decoder(&error) && error == NULL,
+        @"capture identity readiness performs a real QR encode and Vision decode before sample intake");
+    free(error); error = NULL;
+    sp_capture_frame_identity_test_set_decode_hook(failIdentityDecode);
+    BOOL readinessRejected = !sp_image_capture_match_identity_prepare_decoder(&error)
+        && error != NULL && strstr(error, "Vision readiness failed") != NULL;
+    check(readinessRejected, @"a failed Vision readiness decode prevents capture startup with an explicit error");
+    free(error); error = NULL;
+    sp_capture_frame_identity_test_set_decode_hook(NULL);
 
     NSString *nonceA = nil, *nonceARepeat = nil, *nonceB = nil;
     check(sp_image_capture_match_identity_region_nonce(regionA, &nonceA, &error) && error == NULL,
@@ -205,6 +227,219 @@ static void frameIdentityArtifactChecks(void) {
         error:&removeError], [NSString stringWithFormat:@"the tagged artifact fixture is removed (%@)", removeError]);
 }
 
+static void frameIdentityCropByteBoundChecks(void) {
+    char directoryTemplate[] = "/tmp/soksak-frame-identity-crop-cap-XXXXXX";
+    char *directory = mkdtemp(directoryTemplate);
+    dispatch_queue_t writer = dispatch_queue_create("test.frame-identity.crop-cap", DISPATCH_QUEUE_SERIAL);
+    const size_t roiSide = 192, sourceStride = roiSide * 4;
+    NSMutableData *sourcePixels = [NSMutableData dataWithLength:sourceStride * roiSide];
+    memset(sourcePixels.mutableBytes, 0x5a, sourcePixels.length);
+    for (size_t offset = 3; offset < sourcePixels.length; offset += 4)
+        ((uint8_t *)sourcePixels.mutableBytes)[offset] = 255;
+    const size_t columns = 22, count = 456;
+    const size_t frameWidth = columns * roiSide, frameHeight = 21 * roiSide, frameStride = frameWidth * 4;
+    NSMutableData *samplePixels = [NSMutableData dataWithLength:frameStride * frameHeight];
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    check(directory != NULL && writer != NULL && colorSpace != NULL,
+        @"the compact crop byte-bound fixture allocates its matcher resources");
+    if (!directory || !writer || !colorSpace) return;
+    sp_image_capture_match_begin(directory, writer);
+    char *error = NULL;
+    BOOL started = sp_image_capture_match_identity_session_begin(&error);
+    check(started && error == NULL, @"the crop byte-bound fixture starts an identity session");
+    free(error); error = NULL;
+    BOOL registered = started;
+    for (size_t index = 0; index < count && registered; index++) {
+        sp_image_capture_identity identity = { 41, 43, (int)index + 1 };
+        uint8_t region[16] = {0};
+        memcpy(region, &index, sizeof(index));
+        size_t column = index % columns, row = index / columns;
+        CGRect bounds = CGRectMake(column * roiSide, row * roiSide, roiSide, roiSide);
+        NSString *nonce = nil, *payload = nil;
+        registered = sp_image_capture_match_retain(identity, sourcePixels.bytes, roiSide, roiSide,
+                sourceStride, bounds, 1, "DeviceRGB")
+            && sp_image_capture_match_identity_region_nonce(region, &nonce, &error)
+            && sp_image_capture_match_identity_issue(region, identity, &payload, &error)
+            && sp_image_capture_match_identity_record(region, identity, CGRectMake(0, 0, roiSide, roiSide),
+                sourcePixels.bytes, roiSide, roiSide, sourceStride, "DeviceRGB", &error);
+        [nonce release]; [payload release]; free(error); error = NULL;
+        if ((index + 1) % 32 == 0) dispatch_sync(writer, ^{});
+    }
+    dispatch_sync(writer, ^{});
+    check(registered, @"456 distinct source regions retain issued artifacts for compact ROI admission");
+    error = NULL;
+    BOOL admitted = registered && sp_image_capture_match_identity_enqueue_frame(samplePixels.bytes,
+        frameWidth, frameHeight, frameStride, colorSpace, CGRectMake(0, 0, frameWidth, frameHeight),
+        CGRectMake(0, 0, frameWidth, frameHeight), 1, 1, 1, 1, &error);
+    check(!admitted && error != NULL && strstr(error, "pending capacity") != NULL,
+        @"compact ROI bytes above the shared 64 MiB pending budget fail explicitly before Vision admission");
+    free(error);
+    sp_image_capture_match_end();
+    CGColorSpaceRelease(colorSpace);
+    dispatch_release(writer);
+    NSError *removeError = nil;
+    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory]
+        error:&removeError], [NSString stringWithFormat:@"the crop byte-bound fixture is removed (%@)", removeError]);
+}
+
+static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
+    char directoryTemplate[] = "/tmp/soksak-frame-identity-queue-XXXXXX";
+    char *directory = mkdtemp(directoryTemplate);
+    dispatch_queue_t writer = dispatch_queue_create("test.frame-identity.queue-artifact", DISPATCH_QUEUE_SERIAL);
+    dispatch_queue_t sampleQueue = dispatch_queue_create("test.frame-identity.sample", DISPATCH_QUEUE_SERIAL);
+    const uint8_t regionToken[16] = { 7, 2, 4, 6, 8 };
+    const size_t width = 256, height = 256, stride = width * 4;
+    NSMutableData *raw = [NSMutableData dataWithLength:stride * height];
+    memset(raw.mutableBytes, 0x5a, raw.length);
+    const sp_image_capture_identity sourceIdentity = { 19, 23, 29 };
+    const CGRect sourceBounds = CGRectMake(0, 0, 128, 128);
+    const CGRect roi = CGRectMake(width - 192, 0, 192, 192);
+    char *error = NULL;
+    check(directory != NULL, @"the callback queue fixture creates its artifact directory");
+    sp_image_capture_match_begin(directory, writer);
+    check(sp_image_capture_match_identity_session_begin(&error) && error == NULL,
+        @"the callback queue fixture starts an identity session");
+    free(error); error = NULL;
+    check(sp_image_capture_match_retain(sourceIdentity, raw.bytes, width, height, stride,
+        sourceBounds, 2, "DeviceRGB"), @"the callback queue fixture retains its raw source");
+    NSString *nonce = nil, *payload = nil, *encodedPayload = nil, *encodeError = nil;
+    check(sp_image_capture_match_identity_region_nonce(regionToken, &nonce, &error) && error == NULL,
+        @"the callback queue fixture issues its region nonce");
+    free(error); error = NULL;
+    check(sp_image_capture_match_identity_issue(regionToken, sourceIdentity, &payload, &error) && error == NULL,
+        @"the callback queue fixture issues its source payload");
+    free(error); error = NULL;
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGImageRef taggedImage = NULL;
+    NSData *taggedPixels = nil;
+    BOOL encoded = sp_capture_frame_identity_encode(raw.bytes, width, height, stride, colorSpace, roi, nonce,
+        (SPCaptureFrameIdentity){ sourceIdentity.generation, sourceIdentity.raster, sourceIdentity.sequence },
+        &taggedImage, &taggedPixels, &encodedPayload, &encodeError);
+    check(encoded && taggedImage != NULL, @"the callback queue fixture builds the real tagged sample image");
+    check(sp_image_capture_match_identity_record(regionToken, sourceIdentity, roi, taggedPixels.bytes,
+        width, height, stride, "DeviceRGB", &error) && error == NULL,
+        @"the callback queue fixture records its tagged source artifact");
+    free(error); error = NULL;
+
+    atomic_store(&identityDecodeGateClaimed, false);
+    identityDecodeGateEntered = dispatch_semaphore_create(0);
+    identityDecodeGateRelease = dispatch_semaphore_create(0);
+    sp_capture_frame_identity_test_set_decode_hook(blockFirstIdentityDecode);
+    __block BOOL firstEnqueued = NO, secondEnqueued = NO;
+    __block char *firstError = NULL, *secondError = NULL;
+    dispatch_semaphore_t firstReturned = dispatch_semaphore_create(0);
+    dispatch_semaphore_t secondReturned = dispatch_semaphore_create(0);
+    dispatch_async(sampleQueue, ^{
+        firstEnqueued = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
+            stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
+            1, 1000, &firstError);
+        dispatch_semaphore_signal(firstReturned);
+    });
+    long gateWait = dispatch_semaphore_wait(identityDecodeGateEntered,
+        dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    check(gateWait == 0, @"the first sample reaches the controlled Vision decode boundary");
+    dispatch_async(sampleQueue, ^{
+        secondEnqueued = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
+            stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
+            2, 2000, &secondError);
+        dispatch_semaphore_signal(secondReturned);
+    });
+    long secondBeforeRelease = dispatch_semaphore_wait(secondReturned, DISPATCH_TIME_NOW);
+    long firstWait = dispatch_semaphore_wait(firstReturned, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    long secondWait = secondBeforeRelease == 0 ? 0 : dispatch_semaphore_wait(secondReturned,
+        dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    check(firstWait == 0 && firstEnqueued && firstError == NULL,
+        @"the blocked first frame was admitted without changing its decode input");
+    check(secondWait == 0 && secondEnqueued && secondError == NULL,
+        @"the later sample callback returns while the earlier Vision decode remains blocked");
+    BOOL acceptedThroughLimit = YES;
+    for (uint64_t frame = 3; frame <= 8; frame++) {
+        char *enqueueError = NULL;
+        BOOL accepted = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
+            stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
+            frame, frame * 1000, &enqueueError);
+        acceptedThroughLimit = acceptedThroughLimit && accepted && enqueueError == NULL;
+        free(enqueueError);
+    }
+    char *overflowError = NULL;
+    BOOL overflowAccepted = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
+        stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
+        9, 9000, &overflowError);
+    check(acceptedThroughLimit && !overflowAccepted && overflowError != NULL
+        && strstr(overflowError, "pending capacity") != NULL,
+        @"the decoder admits eight pending jobs and reports overflow without dropping an accepted frame");
+    free(overflowError);
+    char *sessionOverflow = sp_image_capture_match_identity_session_error_copy();
+    check(sessionOverflow != NULL && strstr(sessionOverflow, "pending capacity") != NULL,
+        @"decoder overflow remains visible as the identity session failure");
+    free(sessionOverflow);
+    dispatch_queue_t sessionEndQueue = dispatch_queue_create("test.frame-identity.session-end", DISPATCH_QUEUE_SERIAL);
+    dispatch_semaphore_t sessionEndStarted = dispatch_semaphore_create(0);
+    dispatch_semaphore_t sessionEndReturned = dispatch_semaphore_create(0);
+    dispatch_async(sessionEndQueue, ^{
+        dispatch_semaphore_signal(sessionEndStarted);
+        sp_image_capture_match_identity_session_end();
+        dispatch_semaphore_signal(sessionEndReturned);
+    });
+    dispatch_semaphore_wait(sessionEndStarted, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    long sessionEndBeforeDecode = dispatch_semaphore_wait(sessionEndReturned, DISPATCH_TIME_NOW);
+    check(sessionEndBeforeDecode != 0,
+        @"ending an identity session waits for its blocked decoder work to finish");
+    dispatch_semaphore_signal(identityDecodeGateRelease);
+    long sessionEndWait = dispatch_semaphore_wait(sessionEndReturned, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    check(sessionEndWait == 0 && !sp_image_capture_match_identity_session_active(),
+        @"session end drains accepted decoder and artifact writes before releasing session state");
+    dispatch_release(sessionEndStarted); dispatch_release(sessionEndReturned); dispatch_release(sessionEndQueue);
+    NSString *decodedPath = [[NSString stringWithUTF8String:directory]
+        stringByAppendingPathComponent:@"frame-identities/decoded-frames.jsonl"];
+    NSString *decodedText = [NSString stringWithContentsOfFile:decodedPath encoding:NSUTF8StringEncoding error:nil];
+    NSArray<NSString *> *decodedLines = [decodedText componentsSeparatedByString:@"\n"];
+    NSMutableArray<NSNumber *> *decodedFrames = [NSMutableArray array];
+    BOOL measuredEveryDecode = YES;
+    for (NSString *line in decodedLines) {
+        if (line.length == 0) continue;
+        NSDictionary *row = [NSJSONSerialization JSONObjectWithData:[line dataUsingEncoding:NSUTF8StringEncoding]
+            options:0 error:nil];
+        if (row[@"frame"]) {
+            [decodedFrames addObject:row[@"frame"]];
+            uint64_t enqueued = [row[@"decodeEnqueuedTime"] longLongValue];
+            uint64_t started = [row[@"decodeStartTime"] longLongValue];
+            uint64_t completed = [row[@"decodeCompleteTime"] longLongValue];
+            measuredEveryDecode = measuredEveryDecode && [row[@"displayTime"] isKindOfClass:NSString.class]
+                && [row[@"decodeEnqueuedTime"] isKindOfClass:NSString.class]
+                && [row[@"decodeStartTime"] isKindOfClass:NSString.class]
+                && [row[@"decodeCompleteTime"] isKindOfClass:NSString.class]
+                && enqueued <= started && started <= completed;
+        }
+    }
+    BOOL orderedFrames = decodedFrames.count == 8;
+    for (NSUInteger index = 0; index < decodedFrames.count && orderedFrames; index++)
+        orderedFrames = [decodedFrames[index] unsignedLongLongValue] == index + 1;
+    check(orderedFrames, @"all admitted frames drain in sample order before session state is released, despite later overflow");
+    check(measuredEveryDecode, @"every Vision result owns ordered enqueue, start, and completion ticks for its display time");
+    check(sp_image_capture_match_identity_session_begin(&error) && error == NULL,
+        @"a new identity session starts only after the previous decoder drained");
+    free(error); error = NULL;
+    char *replacementFailure = sp_image_capture_match_identity_session_error_copy();
+    check(replacementFailure == NULL, @"the drained predecessor cannot carry its failure into a new decoder session");
+    free(replacementFailure);
+    check(sp_image_capture_match_write_manifest(directory),
+        @"the idle replacement session closes cleanly before manifest generation");
+    sp_capture_frame_identity_test_set_decode_hook(NULL);
+    free(firstError); free(secondError);
+    dispatch_release(firstReturned); dispatch_release(secondReturned);
+    dispatch_release(identityDecodeGateEntered);
+    dispatch_release(identityDecodeGateRelease);
+    [nonce release]; [payload release]; [encodedPayload release]; [encodeError release]; [taggedPixels release];
+    if (taggedImage) CGImageRelease(taggedImage);
+    if (colorSpace) CGColorSpaceRelease(colorSpace);
+    sp_image_capture_match_end();
+    dispatch_release(sampleQueue); dispatch_release(writer);
+    NSError *removeError = nil;
+    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory]
+        error:&removeError], [NSString stringWithFormat:@"the callback queue fixture is removed (%@)", removeError]);
+}
+
 static void frameIdentityRetentionEvictionChecks(void) {
     const uint8_t regionToken[16] = { 3, 1, 4, 1, 5, 9 };
     const uint8_t sourcePixel[4] = { 0, 0, 0, 255 };
@@ -381,6 +616,8 @@ int main(void) { @autoreleasepool {
     frameIdentitySessionChecks();
     sp_image_capture_match_end();
     frameIdentityArtifactChecks();
+    frameIdentityCropByteBoundChecks();
+    frameIdentityDecodeDoesNotBlockSampleQueue();
     frameIdentityRetentionEvictionChecks();
     fprintf(stderr, "%s: native image capture identity matching\n", failures ? "FAIL" : "PASS");
     return failures ? 1 : 0;

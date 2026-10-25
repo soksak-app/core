@@ -9,6 +9,16 @@
   the resize guard, existing target and one-second deadline. The owner test
   passes 1/1; runtime acceptance remains pending.
 
+- F239-136: Move Vision frame identity decoding out of the ScreenCaptureKit
+  sample callback. Snapshot issued source and region state and geometry, copy
+  compact ROI bytes into immutable jobs, enforce an eight-job and shared
+  64 MiB pending-byte bound, and drain decoder results before artifact writes
+  and manifest generation. An actual QR encode/decode readiness check must
+  pass before stream startup. The four focused native owner tests pass;
+  callback enqueue and asynchronous decode ticks are recorded separately.
+  Runtime cadence verification remains pending, so the measured frame-gap
+  issue is not claimed resolved.
+
 - F239-128: Align the Files tree with the shared section grid and make the
   declared tree fill its vertical `fill` section. The exact two-host window
   case passes 2/2 with the existing grid tolerance, 12-point text comparison

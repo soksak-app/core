@@ -9,6 +9,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef SOKSAK_DIAGNOSTIC
+static bool (*captureFrameIdentityDecodeTestHook)(void);
+void sp_capture_frame_identity_test_set_decode_hook(bool (*hook)(void)) {
+    captureFrameIdentityDecodeTestHook = hook;
+}
+#endif
+
 static NSString *payloadPrefix(NSString *nonce, SPCaptureFrameIdentity identity) {
     return [NSString stringWithFormat:@"soksak-frame-id:v1:%@:%llu:%llu:%llu", nonce,
         (unsigned long long)identity.generation, (unsigned long long)identity.raster,
@@ -211,6 +218,14 @@ bool sp_capture_frame_identity_decode(CGImageRef image, CGRect roi, NSSet<NSStri
         roi.size.width / CGImageGetWidth(image), roi.size.height / CGImageGetHeight(image));
     request.regionOfInterest = visionROI;
     NSError *visionError = nil;
+#ifdef SOKSAK_DIAGNOSTIC
+    if (captureFrameIdentityDecodeTestHook && !captureFrameIdentityDecodeTestHook()) {
+        [request release];
+        [handler release];
+        *error = [@"Vision QR decode test failure" copy];
+        return false;
+    }
+#endif
     BOOL performed = [handler performRequests:@[ request ] error:&visionError];
     NSArray<VNBarcodeObservation *> *codes = [[request.results copy] autorelease];
     [request release];

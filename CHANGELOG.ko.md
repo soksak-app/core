@@ -9,6 +9,14 @@
   Resize 조건, 기존 target과 1초 deadline은 유지한다. Owner test가 1/1 통과했고
   runtime acceptance는 남아 있다.
 
+- F239-136: Vision frame identity decode를 ScreenCaptureKit sample callback 밖으로
+  옮긴다. Issued source·region 상태와 geometry를 snapshot하고 compact ROI byte를
+  immutable job으로 복사한다. 8-job 및 기존 64 MiB pending-byte 상한을 적용하고
+  artifact write와 manifest 생성 전에 decoder 결과를 drain한다. 실제 QR
+  encode/decode readiness 확인이 stream 시작 전에 성공해야 한다. 집중 native owner
+  test 네 개가 통과했고 callback enqueue tick과 비동기 decode tick을 분리해 기록한다.
+  Runtime cadence 검증은 남아 있으므로 측정된 frame-gap 문제가 해결됐다고 보지 않는다.
+
 - F239-128: Files tree를 공유 section grid에 맞추고 세로 fill section에서
   선언된 tree가 남은 높이를 차지하도록 한다. 기존 grid 허용오차, 12-point 글자
   비교, tree와 section 높이 assertion을 유지한 정확한 두 host window case가

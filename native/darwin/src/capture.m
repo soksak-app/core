@@ -702,6 +702,8 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         @"machTimebaseDenominator": @(timebase.denom),
         @"imageMatchStartTime": [NSNull null],
         @"imageMatchCompleteTime": [NSNull null],
+        @"identityDecodeEnqueueStartTime": [NSNull null],
+        @"identityDecodeEnqueueCompleteTime": [NSNull null],
         @"frameIdentityDecodeStartTime": [NSNull null],
         @"frameIdentityDecodeCompleteTime": [NSNull null],
         @"writeCompleteTime": [NSNull null],
@@ -960,46 +962,26 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         rect, screen, hasScreenRect, contentScale, scaleFactor, CVPixelBufferGetPixelFormatType(buffer), colorName);
     sp_image_capture_match_result_dispose(&match);
     if (sp_image_capture_match_identity_session_active()) {
-        CGImageRef capturedImage = NULL;
-        CFDataRef capturedBytes = CFDataCreate(kCFAllocatorDefault,
-            copy + sizeof(head) + sizeof(info), (CFIndex)(stride * height));
-        CGDataProviderRef provider = capturedBytes ? CGDataProviderCreateWithCFData(capturedBytes) : NULL;
-        CGColorSpaceRef decodeColorSpace = captureColorSpace ? CGColorSpaceRetain(captureColorSpace)
-            : CGColorSpaceCreateDeviceRGB();
-        if (provider && decodeColorSpace && CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_32BGRA) {
-            capturedImage = CGImageCreate(width, height, 8, 32, stride, decodeColorSpace,
-                kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst,
-                provider, NULL, false, kCGRenderingIntentDefault);
-        }
-        if (provider) CGDataProviderRelease(provider);
-        if (decodeColorSpace) CGColorSpaceRelease(decodeColorSpace);
-        if (capturedBytes) CFRelease(capturedBytes);
-        NSArray<NSDictionary *> *identityRecords = nil;
         char *identityError = NULL;
-        BOOL decoded = NO;
-        if (capturedImage) {
-            uint64_t frameIdentityDecodeStartTime = captureRawClock();
-            @try {
-                decoded = sp_image_capture_match_identity_decode_frame(capturedImage,
-                    width, height, rect, hasScreenRect ? screen : CGRectZero, contentScale, scaleFactor,
-                    (uint64_t)number, shown, &identityRecords, &identityError);
-            } @finally {
-                uint64_t frameIdentityDecodeCompleteTime = captureRawClock();
-                callbackRecord[@"frameIdentityDecodeStartTime"] = [NSString stringWithFormat:@"%llu",
-                    (unsigned long long)frameIdentityDecodeStartTime];
-                callbackRecord[@"frameIdentityDecodeCompleteTime"] = [NSString stringWithFormat:@"%llu",
-                    (unsigned long long)frameIdentityDecodeCompleteTime];
-            }
-        }
-        if (capturedImage) CGImageRelease(capturedImage);
-        if (!decoded) {
+        uint64_t enqueueStart = captureRawClock();
+        CGColorSpaceRef identityColorSpace = captureColorSpace ? captureColorSpace : CGColorSpaceCreateDeviceRGB();
+        BOOL enqueued = sp_image_capture_match_identity_enqueue_frame(copy + sizeof(head) + sizeof(info),
+            width, height, stride, identityColorSpace, rect,
+            hasScreenRect ? screen : CGRectZero, contentScale, scaleFactor,
+            (uint64_t)number, shown, &identityError);
+        if (!captureColorSpace && identityColorSpace) CGColorSpaceRelease(identityColorSpace);
+        uint64_t enqueueComplete = captureRawClock();
+        callbackRecord[@"identityDecodeEnqueueStartTime"] = [NSString stringWithFormat:@"%llu",
+            (unsigned long long)enqueueStart];
+        callbackRecord[@"identityDecodeEnqueueCompleteTime"] = [NSString stringWithFormat:@"%llu",
+            (unsigned long long)enqueueComplete];
+        if (!enqueued) {
             NSString *message = [NSString stringWithUTF8String:identityError
-                ?: "captured sample image could not be prepared for frame identity decoding"];
+                ?: "captured sample identity decode could not be queued"];
             free(identityError);
             setCaptureError([NSString stringWithFormat:@"frame identity decode failed: %@", message]);
             sp_log_error("frame identity", message.UTF8String);
         }
-        [identityRecords release];
     }
     if (colorAttachment) CFRelease(colorAttachment);
     self.queued = number;
@@ -1267,20 +1249,19 @@ static bool finalizeCaptureArtifacts(SPCapture *sink) {
         dispatch_sync(dispatch_get_main_queue(), ^{ sp_region_restore_capture_identity(); });
     }
     bool sourceManifestWritten = sp_image_capture_match_write_manifest(sink.directory.fileSystemRepresentation);
-    if (!sourceManifestWritten) {
-        char *identityError = sp_image_capture_match_identity_session_error_copy();
-        NSString *reason = identityError ? [NSString stringWithUTF8String:identityError] : nil;
-        free(identityError);
-        setCaptureError(reason ? [NSString stringWithFormat:@"frame identity capture failed: %@", reason]
-            : @"diagnostic image source artifact manifest or source write failed");
-    }
+    char *identityError = sp_image_capture_match_identity_session_error_copy();
+    NSString *identityReason = identityError ? [NSString stringWithUTF8String:identityError] : nil;
+    free(identityError);
+    if (identityReason) setCaptureError([NSString stringWithFormat:@"frame identity capture failed: %@", identityReason]);
+    else if (!sourceManifestWritten)
+        setCaptureError(@"diagnostic image source artifact manifest or source write failed");
     bool callbackStatusWritten = writeCaptureCallbackStatusTrace(sink);
     if (!callbackStatusWritten && !hasCaptureError()) {
         setCaptureError(@"capture callback status trace failed without a reason");
     }
     bool displayLinkWritten = writeCaptureDisplayLinkTrace(sink);
     sp_image_capture_match_end();
-    return sourceManifestWritten && callbackStatusWritten && displayLinkWritten;
+    return sourceManifestWritten && identityReason == nil && callbackStatusWritten && displayLinkWritten;
 }
 
 const char *sp_capture_error(void) {
@@ -1531,6 +1512,15 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         if (!sp_image_capture_match_identity_session_begin(&identityError)) {
             NSString *reason = [NSString stringWithUTF8String:identityError ?: "identity session could not start"];
             free(identityError);
+            sp_image_capture_match_end();
+            setCaptureError(reason);
+            [attempt release];
+            return captureOperationFailure(errorOut, reason);
+        }
+        if (!sp_image_capture_match_identity_prepare_decoder(&identityError)) {
+            NSString *reason = [NSString stringWithUTF8String:identityError ?: "frame identity Vision readiness failed"];
+            free(identityError);
+            sp_image_capture_match_identity_session_end();
             sp_image_capture_match_end();
             setCaptureError(reason);
             [attempt release];

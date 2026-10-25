@@ -517,6 +517,8 @@ int main(void) { @autoreleasepool {
         && [measuredCallback[@"writeStartTime"] isEqual:@"200"]
         && [measuredCallback[@"imageMatchStartTime"] isEqual:@"210"]
         && [measuredCallback[@"imageMatchCompleteTime"] isEqual:@"230"]
+        && measuredCallback[@"identityDecodeEnqueueStartTime"] == [NSNull null]
+        && measuredCallback[@"identityDecodeEnqueueCompleteTime"] == [NSNull null]
         && measuredCallback[@"frameIdentityDecodeStartTime"] == [NSNull null]
         && measuredCallback[@"frameIdentityDecodeCompleteTime"] == [NSNull null]
         && [measuredCallback[@"writeCompleteTime"] isEqual:@"250"]
@@ -535,6 +537,8 @@ int main(void) { @autoreleasepool {
         && [measuredJSON[@"writeStartTime"] isEqual:@"200"]
         && [measuredJSON[@"imageMatchStartTime"] isEqual:@"210"]
         && [measuredJSON[@"imageMatchCompleteTime"] isEqual:@"230"]
+        && measuredJSON[@"identityDecodeEnqueueStartTime"] == [NSNull null]
+        && measuredJSON[@"identityDecodeEnqueueCompleteTime"] == [NSNull null]
         && measuredJSON[@"frameIdentityDecodeStartTime"] == [NSNull null]
         && measuredJSON[@"frameIdentityDecodeCompleteTime"] == [NSNull null]
         && [measuredJSON[@"writeCompleteTime"] isEqual:@"250"]
@@ -642,29 +646,35 @@ int main(void) { @autoreleasepool {
     captureRawClock = originalClock;
     if (identityFrame) CFRelease(identityFrame);
     dispatch_sync(captureWriter, ^{});
+    BOOL identityTraceFinalized = sp_image_capture_match_write_manifest(identityTimingDirectory.fileSystemRepresentation);
     NSDictionary *identityTimedCallback = used.callbackStatusTrace.lastObject;
     NSString *identityDecodeTracePath = [identityTimingDirectory stringByAppendingPathComponent:
         @"frame-identities/decoded-frames.jsonl"];
     NSString *identityDecodeTrace = [NSString stringWithContentsOfFile:identityDecodeTracePath
         encoding:NSUTF8StringEncoding error:nil];
     NSString *identityTimingFailure = [NSString stringWithFormat:
-        @"sourceReady=%@ clockIndex=%d callback=%@ writeStart=%@ imageMatch=%@..%@ decode=%@..%@ writeComplete=%@ decodedTrace=%@ captureError=%@",
+        @"sourceReady=%@ clockIndex=%d callback=%@ writeStart=%@ imageMatch=%@..%@ enqueue=%@..%@ writeComplete=%@ decodedTrace=%@ captureError=%@",
         identitySourceReady ? @"YES" : @"NO", controlledTimeIndex, identityTimedCallback[@"callbackTime"],
         identityTimedCallback[@"writeStartTime"], identityTimedCallback[@"imageMatchStartTime"],
-        identityTimedCallback[@"imageMatchCompleteTime"], identityTimedCallback[@"frameIdentityDecodeStartTime"],
-        identityTimedCallback[@"frameIdentityDecodeCompleteTime"], identityTimedCallback[@"writeCompleteTime"],
+        identityTimedCallback[@"imageMatchCompleteTime"], identityTimedCallback[@"identityDecodeEnqueueStartTime"],
+        identityTimedCallback[@"identityDecodeEnqueueCompleteTime"], identityTimedCallback[@"writeCompleteTime"],
         identityDecodeTrace ?: @"<missing>", [NSString stringWithUTF8String:sp_capture_error()]];
-    check(identitySourceReady && controlledTimeIndex == 7
+    check(identityTraceFinalized && identitySourceReady && controlledTimeIndex == 7
         && [identityTimedCallback[@"callbackTime"] isEqual:@"300"]
         && [identityTimedCallback[@"writeStartTime"] isEqual:@"310"]
         && [identityTimedCallback[@"imageMatchStartTime"] isEqual:@"320"]
         && [identityTimedCallback[@"imageMatchCompleteTime"] isEqual:@"330"]
-        && [identityTimedCallback[@"frameIdentityDecodeStartTime"] isEqual:@"340"]
-        && [identityTimedCallback[@"frameIdentityDecodeCompleteTime"] isEqual:@"350"]
+        && [identityTimedCallback[@"identityDecodeEnqueueStartTime"] isEqual:@"340"]
+        && [identityTimedCallback[@"identityDecodeEnqueueCompleteTime"] isEqual:@"350"]
+        && identityTimedCallback[@"frameIdentityDecodeStartTime"] == [NSNull null]
+        && identityTimedCallback[@"frameIdentityDecodeCompleteTime"] == [NSNull null]
         && [identityTimedCallback[@"writeCompleteTime"] isEqual:@"360"]
         && [identityDecodeTrace containsString:@"no-code"]
+        && [identityDecodeTrace containsString:@"decodeEnqueuedTime"]
+        && [identityDecodeTrace containsString:@"decodeStartTime"]
+        && [identityDecodeTrace containsString:@"decodeCompleteTime"]
         && [NSString stringWithUTF8String:sp_capture_error()].length == 0,
-        [NSString stringWithFormat:@"the active identity callback records exact match/decode helper bounds and completes its no-code result without errors (%@)",
+        [NSString stringWithFormat:@"the active identity callback records snapshot/enqueue bounds and its asynchronous no-code result without errors (%@)",
             identityTimingFailure]);
     sp_image_capture_match_end();
 
@@ -682,6 +692,19 @@ int main(void) { @autoreleasepool {
         && [displayLinkRecord[@"observations"] isEqual:@[]]
         && [displayLinkRecord[@"omittedObservations"] isEqual:@0],
         @"finalization reports an explicit unavailable display-link trace when no observation was recorded");
+    clearCaptureError();
+    sp_image_capture_match_begin(directory.fileSystemRepresentation, captureWriter);
+    char *failedSessionStartError = NULL;
+    BOOL failedSessionStarted = sp_image_capture_match_identity_session_begin(&failedSessionStartError);
+    free(failedSessionStartError);
+    char *injectedSessionError = NULL;
+    BOOL failureRecorded = failedSessionStarted
+        && sp_image_capture_match_identity_session_fail("controlled asynchronous Vision failure", &injectedSessionError);
+    free(injectedSessionError);
+    BOOL failedFinalization = finalizeCaptureArtifacts(used);
+    check(failureRecorded && !failedFinalization
+        && strstr(sp_capture_error(), "controlled asynchronous Vision failure") != NULL,
+        @"finalization reports an asynchronous identity decoder failure after draining its queues");
     clearCaptureError();
     kern_return_t (*displayLinkOriginalTimebaseReader)(mach_timebase_info_data_t *) = captureReadTimebase;
     captureReadTimebase = failedTimebase;
