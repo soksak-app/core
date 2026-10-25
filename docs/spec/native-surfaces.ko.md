@@ -6,6 +6,8 @@
 
 이 명세는 예제 애플리케이션의 표면 배치를 정의한다. 구현 및 검증 상태는 [기능 상태](../features.ko.md)에 기록한다.
 
+Placement 응답의 준비된 surface frame은 하나의 main-thread turn에서 읽으며 요청 순서와 visibility를 유지한다. Frame 읽기 오류는 부분 목록을 반환하지 않고 응답을 거부한다.
+
 ## 책임
 
 - 배치 라이브러리는 카드 사각형을 계산하고 카드 DOM 요소를 갱신한다.

@@ -996,7 +996,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
 
         // Returns the actual position of each surface. The host fits the rectangles that the page declared to display
         // pixels, so the difference between the two values is reported to the page.
-        let mut placed = Vec::with_capacity(request.surfaces.len());
+        let mut targets = Vec::with_capacity(request.surfaces.len());
         for s in &request.surfaces {
             let Some(handle) = surface_hosts
                 .lock()
@@ -1009,8 +1009,18 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 continue;
             };
             let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
-            placed.push(surface_handle_placement(window, handle, &s.id, visible)?);
+            targets.push((handle, s.id.clone(), visible));
         }
+        let placed = read_surface_placements(targets, |targets| {
+            exposure::on_main(window, move || {
+                targets
+                    .into_iter()
+                    .map(|(handle, id, visible)| {
+                        surface_handle_placement(platform, handle, &id, visible)
+                    })
+                    .collect()
+            })
+        })?;
         // Before it waits for the DOM presentation, it starts the image preparation of the size that was applied.
         Ok(PreparedSurfaces {
             ticket,
@@ -1047,13 +1057,12 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
 
 /// Returns the current position of the surface webview in page coordinates.
 fn surface_handle_placement(
-    window: &Window,
+    platform: &dyn platform::Platform,
     handle: Handle,
     id: &str,
     visible: bool,
 ) -> Result<Placement, String> {
-    let platform = platform::current()?;
-    let [x, y, w, h] = exposure::on_main(window, move || platform.surface_frame(handle))?;
+    let [x, y, w, h] = platform.surface_frame(handle)?;
     crate::performance::surface("placed", id, Some(([x, y, w, h], visible)));
     Ok(Placement {
         id: id.into(),
@@ -1441,3 +1450,18 @@ pub fn close_window_surfaces(
 #[cfg(test)]
 #[path = "surfaces_test.rs"]
 mod tests;
+
+/// Reads the prepared frames through the main-thread dispatcher.
+fn read_surface_placements(
+    targets: Vec<(Handle, String, bool)>,
+    mut read: impl FnMut(Vec<(Handle, String, bool)>) -> Result<Vec<Placement>, String>,
+) -> Result<Vec<Placement>, String> {
+    if targets.is_empty() {
+        return Ok(Vec::new());
+    }
+    read(targets)
+}
+
+#[cfg(test)]
+#[path = "../tests/surfaces/placement_snapshot_test.rs"]
+mod placement_snapshot_test;

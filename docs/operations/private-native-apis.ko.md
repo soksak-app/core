@@ -145,9 +145,9 @@ macOS 26.6.2 (arm64) 측정: 40, 45, 54, 63, 72, 90, 108pt 에서, 빈 compact �
 | `WKPreferences` KVC `developerExtrasEnabled` (`_setDeveloperExtrasEnabled:`) | 내장 개발자 도구. Wry는 개발자 도구가 켜지면 이 키와 macOS 13.3 이상의 공개 `WKWebView.inspectable`을 설정한다. Tauri는 디버그 빌드에서 개발자 도구를 켜며 이 크레이트는 릴리스 `devtools`를 활성화하지 않는다. Wails v3.0.0-beta.27은 macOS 13.3 이상에서 공개 `inspectable`만 설정하고, 이 키는 그보다 이전 macOS에서 `private_mac_apis` 빌드 태그가 있는 빌드에서만 사용한다. 앱은 이 태그를 설정하지 않으므로 Wails 빌드는 Web Inspector를 창 안이 아니라 Safari를 통해 제공한다. | 실제 빌드 플래그, 웹뷰 생성, 검사기 사용 가능 여부를 확인한다. 디버깅 의존성이며 렌더링 수정이 아니다. |
 | `WKWebView._inspector`; `_WKInspector.show`, `close`, `isVisible` | 프레임워크 개발자 도구 명령. Wry는 `show`, `close`, `isVisible`을 사용한다. Wails v3.0.0-beta.27은 `private_mac_apis` 빌드 태그가 있는 빌드에서만 `show`를 호출한다. 앱이 이 선택자들을 직접 호출하지 않는다. | 해당 개발자 도구 명령을 포함한 빌드에서 열기·닫기·상태를 확인한다. |
 | `WKPreferences` KVC `allowsPictureInPictureMediaPlayback` (`_setAllowsPictureInPictureMediaPlayback:`) | Wry 0.57.0이 웹뷰 생성 시 조건 없이 설정한다. 앱이 비공개 미디어 수정을 요청하는 것은 아니다. | 웹뷰 생성과 변경된 프레임워크 구현을 확인한다. 현재 네이티브 검사는 화면 속 화면 동작을 포함하지 않는다. |
-| `NSView._wantsKeyDownForEvent:` | Tao 0.37.1이 콘텐츠 뷰에서 이 선택자를 구현하고 Control-Tab·Control-Escape 수신을 위해 `YES`를 반환한다. 앱이 같은 재정의를 추가하지 않는다. | Tao·AppKit 업데이트 후 네이티브 키보드 전달과 응답자 체계를 확인한다. 현재 네이티브 검사는 이 두 단축키를 별도로 검증하지 않는다. |
+| `NSView._wantsKeyDownForEvent:` | Tao 0.37.2이 콘텐츠 뷰에서 이 선택자를 구현하고 Control-Tab·Control-Escape 수신을 위해 `YES`를 반환한다. 앱이 같은 재정의를 추가하지 않는다. | Tao·AppKit 업데이트 후 네이티브 키보드 전달과 응답자 체계를 확인한다. 현재 네이티브 검사는 이 두 단축키를 별도로 검증하지 않는다. |
 
-호출은 [Wry `wkwebview/mod.rs`](https://github.com/tauri-apps/wry/blob/wry-v0.57.0/src/wkwebview/mod.rs)와, `private_mac_apis` 태그가 있는 빌드에 한해 [Wails `mac_private_api_darwin.go`](https://github.com/wailsapp/wails/blob/v3.0.0-beta.27/v3/pkg/application/mac_private_api_darwin.go)에 있다. 키보드 재정의는 [Tao `macos/view.rs`](https://github.com/tauri-apps/tao/blob/tao-v0.37.1/src/platform_impl/macos/view.rs)에 있다. 환경설정 선언은 [`WKPreferencesPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKPreferencesPrivate.h)에 있다.
+호출은 [Wry `wkwebview/mod.rs`](https://github.com/tauri-apps/wry/blob/wry-v0.57.0/src/wkwebview/mod.rs)와, `private_mac_apis` 태그가 있는 빌드에 한해 [Wails `mac_private_api_darwin.go`](https://github.com/wailsapp/wails/blob/v3.0.0-beta.27/v3/pkg/application/mac_private_api_darwin.go)에 있다. 키보드 재정의는 [Tao `macos/view.rs`](https://github.com/tauri-apps/tao/blob/tao-v0.37.2/src/platform_impl/macos/view.rs)에 있다. 환경설정 선언은 [`WKPreferencesPrivate.h`](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKPreferencesPrivate.h)에 있다.
 
 목록은 활성 경로와 사용 조건을 명시한 앱 경로를 기록하며 의존성 소스의 모든 비공개 API를 나열하지 않는다. 예를 들어 Wry는 현재 macOS에서 공개 전체화면 환경설정을 사용하므로 이전 OS의 `fullScreenEnabled` 분기는 여기서 실행되지 않는다. 지원 OS 범위, 빌드 플래그, 프레임워크 구성이 바뀌면 소스를 다시 점검한다. 공개 속성에 KVC로 접근하는 것 자체는 비공개 API가 아니다.
 
@@ -182,10 +182,12 @@ macOS 26.6.2 (arm64) 측정: 40, 45, 54, 63, 72, 90, 108pt 에서, 빈 compact �
 
 ## 검토 기준
 
-소스·필요성 검토일은 2026-09-08이며 프로젝트 창 통합을 포함한다. 프레임워크 업데이트 검토일은 2026-10-04이다. 환경은 macOS 26.6.2 (25G83), WebKit `21624.5.1.11.3`, SDK 27.0을 보고한다. 의존성은 Wails `v3.0.0-beta.27`, crates.io의 Tauri `2.12.1`과 `tauri-runtime-wry` `2.12.1`, Wry `0.57.0`, Tao `0.37.1`이며 [`go.mod`](../../packages/host/wailsv3/go.mod), [`Cargo.toml`](../../Cargo.toml), [`Cargo.lock`](../../Cargo.lock)에 따라 확정한다.
+소스·필요성 검토일은 2026-09-08이며 프로젝트 창 통합을 포함한다. 프레임워크 업데이트 검토일은 2026-10-04이다. 환경은 macOS 26.6.2 (25G83), WebKit `21624.5.1.11.3`, SDK 27.0을 보고한다. 의존성은 Wails `v3.0.0-beta.27`, crates.io의 Tauri `2.12.1`과 `tauri-runtime-wry` `2.12.1`, Wry `0.57.0`, Tao `0.37.2`이며 [`go.mod`](../../packages/host/wailsv3/go.mod), [`Cargo.toml`](../../Cargo.toml), [`Cargo.lock`](../../Cargo.lock)에 따라 확정한다.
 
 Wails v3.0.0-beta.19는 비공개 WebKit 호출(웹뷰 투명화, `backgroundColor` 키, 창 안 검사기)을 `private_mac_apis` 빌드 태그 뒤로 옮겼다. 태그가 없으면 Wails는 창의 배경색을 공개 `underPageBackgroundColor`로 설정하고, 앱의 메인 웹뷰 구성이 이전과 같이 이를 투명색으로 바꾼다. Tauri 2.12.1은 `macos-private-api` 기능 없이 창의 `transparent` 설정을 Wry에 전달한다. 앱은 투명 창을 설정하지 않으며, Wry 0.57.0은 macOS 웹뷰 생성 경로 중 `window.ipc` 스크립트만 바꿨다. 이제 IPC 처리기가 있는 웹뷰에만 이 스크립트를 넣는다. 앱의 수정은 바뀌지 않았다.
 
 프로젝트 창은 비공개 선택자를 추가하지 않는다. 공개 프레임워크 API로 독립 창을 생성하고 호출한 창을 식별한다. 공개 파일시스템 API로 설정을 저장한다. 기존의 비공개 좌표·표시·포인터·투명도 수정은 명시한 목적에 계속 필요하다. 해당 호스트 상태와 수명은 각 프로젝트 창에서 관리한다. 네이티브 마우스 모니터는 창을 닫을 때 제거한다.
 
 프로젝트 창 통합 후 독립 겹친 입력 검사의 기준 실행과 등록 실행이 통과했으며 라이브러리 변경은 해당 입력 코드를 수정하지 않는다. 다시 빌드한 macOS 호스트의 라이브러리 검증은 예제 검사 39개 통과, 실패 0개, 화면 전환 검사 2개 생략으로 완료했다. 독립 프로젝트 창, 라이브러리 창 재사용, Dock 동작, 동시 중복 열기, 모달 분리, 소수점 렌더링, 네이티브 입력을 포함한다. 앱 종료 시 설정을 저장하고 시작 시 저장된 프로젝트를 라이브러리에 표시한다. [기능 상태](../features.ko.md)에 검증 결과와 플랫폼 제한을 기록한다. 소스 링크는 검토 위치를 제공하며 최신 소스의 선언만으로 설치된 WebKit 빌드가 같은 구현을 포함한다고 판단하지 않는다.
+
+준비된 Tauri surface-frame 읽기는 하나의 framework main-thread callback을 공유한다. Callback은 등록된 native frame을 읽고 placement trace data만 기록하며 presentation commit은 계속 Tao event lock 밖의 native main queue에서 실행한다. 이 일괄 처리는 native 또는 private API를 추가하지 않는다.

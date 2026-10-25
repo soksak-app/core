@@ -6,6 +6,8 @@ The approved single-DOM model is defined by [surface composition](surface-compos
 
 This specification defines surface placement in the example applications. Implementation and validation status are recorded in [features](../features.md).
 
+Prepared surface frames in a placement reply are read in one main-thread turn, preserving request order and visibility. A frame-read error rejects the reply instead of returning a partial list.
+
 ## Ownership
 
 - The layout library computes card rectangles and updates their DOM elements.
