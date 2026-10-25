@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-81: Verify capture stream isolation on both diagnostic hosts with three consecutive inactive recordings each. Finalized frame counts match files, and later recordings leave earlier artifacts byte-identical. All four native callback, metadata, cleanup and late-stop owners pass; both-host error-log audit passes. Capture cadence and drag latency remain separate open items.
+
 - F239-168: Apply the declared Cargo deployment environment to Rust repeat and standalone test compilation, discovery and execution. Both owning Red cases inherited ambient 10.9 instead of declared 14.4; both pass after using CARGO_ENV. All 12 runner owners pass with target selection, feature propagation, named doctests and per-test limits preserved.
 
 - F239-167: Record the existing sidecar receive trace before native image dispatch in both transports and hosts. Handled images remain native-only and ordinary messages retain page delivery. Both Red cases miss the handled-image receipt; six dispatch and two complete-body relay owners pass afterward. Both diagnostic hosts build. The focused trace joins 65 Wails and 47 Tauri frame identities without unanswered arrivals; the log audit passes, but both recordings still exceed the unchanged 33 ms cadence criterion.

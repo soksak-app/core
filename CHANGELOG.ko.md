@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-81: 두 diagnostic host에서 각각 비활성 연속 녹화 세 회로 capture stream 격리를 검증한다. finalized frame 수는 파일 수와 같으며 이후 녹화가 이전 artifact byte를 바꾸지 않는다. native callback, metadata, cleanup, late-stop owner 네 개와 두 host 오류 log 감사가 통과한다. capture cadence와 drag latency는 별도 미완료 항목이다.
+
 - F239-168: Rust 반복 및 단독 test의 compile, discovery, 실행에 선언된 Cargo deployment 환경을 적용한다. 양 소유 Red case는 선언된 14.4 대신 외부 10.9를 상속했으며 CARGO_ENV 적용 후 통과한다. Target 선택, feature 전달, 이름별 doctest 및 test별 제한을 유지하며 runner owner 12개가 모두 통과한다.
 
 - F239-167: 양 transport 및 host에서 native image dispatch 전에 기존 sidecar 수신 trace를 기록한다. 처리된 image는 native 전용으로 유지하고 일반 message는 page로 전달한다. 양 Red case는 처리된 image 수신을 누락하며 수정 후 dispatch owner 여섯 개 및 complete-body relay owner 두 개가 통과한다. 양 diagnostic host가 빌드된다. 해당 trace는 Wails 65개 및 Tauri 47개 frame identity를 미응답 도착 없이 연결하고 log 감사가 통과하지만 양 기록은 변경하지 않은 33 ms cadence 기준을 계속 초과한다.
