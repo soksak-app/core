@@ -604,6 +604,7 @@ for (const app of Object.values(APPS)) {
       throw error;
     }
     let recordingResult = null;
+    let recordingStopAttempted = false;
     let capturePreserved = false;
     const preservedCaptureDir = join(artifactDir, "capture");
     const preserveCapture = () => {
@@ -618,7 +619,11 @@ for (const app of Object.values(APPS)) {
       persist("manifest.json", manifest);
     };
     s.cleanup(async () => {
-      if (!recordingResult) recordingResult = await capture.stop({ after: 0 });
+      if (!recordingResult) {
+        if (recordingStopAttempted) return;
+        recordingStopAttempted = true;
+        recordingResult = await capture.stop({ after: 0 });
+      }
       preserveCapture();
     });
 
@@ -829,6 +834,7 @@ for (const app of Object.values(APPS)) {
     manifest.terminalSequenceEndBoundary = terminalSequenceEndBoundary;
     persist("manifest.json", manifest);
     const { displayed } = await s.presented();
+    recordingStopAttempted = true;
     const recording = await capture.stop({ after: displayed + 100 });
     recordingResult = recording;
     preserveCapture();

@@ -19,6 +19,11 @@
   명시하며 양쪽 host의 공통 동작 검사는 계속 필수다. 집중 mapping test 1/1과
   `node scripts/check-hosts.mjs`의 세 pair 검사가 통과했다.
 
+- F239-131: Host가 failure 반환 전에 recording directory를 제거해도 원래
+  capture-stop 오류를 보존한다. 시작 때 저장한 identity로 실패를 기록하고 IME
+  cleanup의 두 번째 stop 요청을 막는다. Recording owner file은 10/10, IME
+  fixture `node --check`는 통과했으며 application이나 window test는 실행하지 않았다.
+
 - F239-119: 명시적 null 의미는 유지하면서 Tauri ProjectShown의 project
   member를 필수로 요구한다. Production `Argument<ProjectShown>` decoder Red는
   `{}`를 `None`으로 허용했다. 같은 MockRuntime owner case는 이제 1/1 통과하며,

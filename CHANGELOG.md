@@ -31,6 +31,12 @@
   coverage required in both hosts. The focused mapping test passes 1/1, and
   `node scripts/check-hosts.mjs` passes all three pairs.
 
+- F239-131: Preserve the original capture-stop error when the host removes the
+  recording directory before returning failure. Store failed-stop state under
+  the identity captured at start and prevent the IME cleanup from sending a
+  second stop. The recording owner file passes 10/10; the IME fixture passes
+  `node --check`. No application or window test was run.
+
 - F239-119: Require the project member in Tauri ProjectShown while
   preserving explicit `null`. The production `Argument<ProjectShown>` decoder
   Red accepted `{}` as `None`; the same MockRuntime owner case now passes 1/1,

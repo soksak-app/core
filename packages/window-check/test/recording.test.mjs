@@ -10,7 +10,8 @@ import { drag, finishSession, Session } from "../app.mjs";
  * A connection that imitates a host with one recording. stop takes the recording and then fails when stopFails is set.
  * Without a recording, it rejects with `no capture is running` like the host.
  */
-function fakeClient(directory, { stopFails = false, missingCallbackStatus = false, framePath = (path) => path } = {}) {
+function fakeClient(directory, { stopFails = false, removeFramesOnStopFailure = false,
+  missingCallbackStatus = false, framePath = (path) => path } = {}) {
   const requests = [];
   let running = null;
   const captures = join(directory, "logs", "captures");
@@ -32,7 +33,10 @@ function fakeClient(directory, { stopFails = false, missingCallbackStatus = fals
         const frames = framePath(running);
         const storedFrames = running;
         running = null;
-        if (stopFails) throw new Error("layout trace failed");
+        if (stopFails) {
+          if (removeFramesOnStopFailure) rmSync(storedFrames, { recursive: true, force: true });
+          throw new Error("layout trace failed");
+        }
         const callbackStatus = join(frames, "callback-status.jsonl");
         if (!missingCallbackStatus) writeFileSync(join(storedFrames, "callback-status.jsonl"), "{\"sequence\":1,\"status\":0,\"displayTime\":\"123\"}\n");
         return { frames, callbackStatus, count: 2, limited: false, longestGap: 16 };
@@ -65,6 +69,28 @@ test("a recording whose stop fails fails finalization, sends no second stop and 
   await assert.rejects(cleanUp(s), /1 recording failed: .*layout trace failed/);
   assert.equal(stops(client).length, 1, "the cleanup sent another stop after one was sent");
   assert.equal(existsSync(recording.frames), true, "the failed recording folder was not preserved");
+});
+
+test("a stop failure remains visible when the host removes its recording folder", { timeout: 30000 }, async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-record-removed-after-stop-error-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const client = fakeClient(directory, { stopFails: true, removeFramesOnStopFailure: true });
+  const s = newSession(directory, client);
+  const recording = await s.record();
+  const identity = realpathSync(recording.frames);
+  let stopError;
+  try {
+    await recording.stop({ after: 0 });
+  } catch (error) {
+    stopError = error;
+  }
+  await cleanUp(s);
+
+  assert.match(stopError?.message ?? "", /layout trace failed/);
+  assert.equal(s.failedRecordings.get(identity), stopError,
+    "the stop error was not recorded under the identity captured when recording started");
+  assert.equal(stops(client).length, 1, "cleanup retried stop after the host removed the folder");
+  assert.equal(existsSync(recording.frames), false, "the host fixture did not remove the recording folder");
 });
 
 test("a recording that the check did not stop is stopped and removed after finalization", async (t) => {

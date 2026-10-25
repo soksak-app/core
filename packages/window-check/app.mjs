@@ -398,8 +398,9 @@ export class Session {
   /** Registers a capture folder so the session removes it only after the whole check succeeds. */
   trackRecording(frames) {
     if (typeof frames !== "string" || frames === "") throw new Error("trackRecording requires a frame folder");
-    this.recordings.add(realpathSync(frames));
-    return frames;
+    const identity = realpathSync(frames);
+    this.recordings.add(identity);
+    return identity;
   }
 
   /**
@@ -552,12 +553,12 @@ export class Session {
   async record(params = {}) {
     const { frames } = await this.request("diagnostics.capture.start", params);
     let sent = false;
-    this.trackRecording(frames);
+    const identity = this.trackRecording(frames);
     this.cleanup(async () => {
       try {
         if (!sent) await this.request("diagnostics.capture.stop", { after: 0 });
       } catch (error) {
-        this.failedRecordings.set(realpathSync(frames), error);
+        this.failedRecordings.set(identity, error);
         throw error;
       }
     });
@@ -570,7 +571,7 @@ export class Session {
           requireCallbackStatusArtifact(result, frames);
           return result;
         }).catch((error) => {
-          this.failedRecordings.set(realpathSync(frames), error);
+          this.failedRecordings.set(identity, error);
           throw error;
         });
       },
