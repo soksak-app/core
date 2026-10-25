@@ -31,7 +31,7 @@ func permission(t *testing.T, path string) os.FileMode {
 	return info.Mode().Perm()
 }
 
-// contract: cli.private-files.operations-use-owner-only-permissions
+// contract: log.writer.files-are-private
 func TestPrepareLogDirectoryCreatesAndRestrictsDirectory(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Chmod(root, 0o755); err != nil {
@@ -58,7 +58,7 @@ func TestPrepareLogDirectoryCreatesAndRestrictsDirectory(t *testing.T) {
 	}
 }
 
-// contract: cli.private-files.operations-use-owner-only-permissions
+// contract: platform.private.creates-new-owner-only-file
 func TestCreateLogFileIsNewAndOwnerOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sok.jsonl")
 	file, err := selectedPlatform(t).CreateLogFile(path)
@@ -76,7 +76,7 @@ func TestCreateLogFileIsNewAndOwnerOnly(t *testing.T) {
 	}
 }
 
-// contract: cli.private-files.operations-use-owner-only-permissions
+// contract: platform.private.appends-owner-only-file
 func TestAppendLogFileCreatesOwnerOnlyAndPreservesExistingMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sok.stderr")
 	for _, text := range []string{"first\n", "second\n"} {
@@ -115,7 +115,7 @@ func TestAppendLogFileCreatesOwnerOnlyAndPreservesExistingMode(t *testing.T) {
 	}
 }
 
-// contract: cli.private-files.operations-use-owner-only-permissions
+// contract: endpoint.process.lock-mode-0600
 func TestOpenProcessLockFileCreatesOwnerOnlyAndPreservesExistingMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "process.lock")
 	file, err := selectedPlatform(t).OpenProcessLockFile(path)

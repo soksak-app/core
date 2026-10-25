@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-93-3-1: Wails Darwin/Linux private-file mode test 선언 8건을 기존
+  host-contract의 private log directory, 새 파일, append, process-lock mode
+  case에 연결한다. Red: 변경 전 static audit에서 이 test들의 undefined-case
+  선언 8건을 보고했다. Green: 같은 audit에서 이 8건이 더 이상 보고되지 않는다.
+  Working-tree finding 124건은 남아 있으며, 여기에는 동시에 추가된 Tauri 선언
+  1건이 포함된다. Darwin owner test는 통과한다. macOS에서는 Linux test 파일이
+  build constraint에 제외되므로 Linux package test는 실행하지 않았다.
+
 - F239-98: IME consumer를 opt-in frame identity에 연결한다.
   Recording은 capture setup 전에 cursor와 일치하는 renderer metadata 및 glyph list를
   요구하고 `frameIdentity:true`를 요청하며 완전한 decoder manifest와 발급된

@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-93-3-1: Map the eight Wails Darwin/Linux private-file mode test
+  declarations to existing host-contract cases for private log directories,
+  new files, appends and process-lock mode. Red: the unchanged static audit
+  reported eight undefined-case declarations for these tests. Green: the same
+  audit no longer reports any of the eight; 124 other working-tree findings
+  remain, including one concurrently added Tauri declaration. The Darwin owner
+  test passes. The Linux package test was not run on macOS because its build
+  constraints exclude all files.
+
 - F239-98: Connect the IME consumer to opt-in frame identities. The recording
   requires exact cursor-frame renderer metadata and a glyph list before
   capture setup, requests `frameIdentity:true`, validates the complete decoder
