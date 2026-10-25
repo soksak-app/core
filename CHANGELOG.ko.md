@@ -47,8 +47,6 @@
   ReferenceError를 냈다. Syntax 검사는 통과했고 두 host runtime 검증은
   대기 중이다.
 
-- F239-63: Helper-only E2E module을 명시적으로 분류하고 공통
-  project-window lifecycle을 선택된 각 adapter에서 실행한다.
 - F239-76: IME helper에서 host region의 focus를 기다리기 전에 `terminal.focus`를 실행하고 active/key-window 및 cursor-focus 검사를 유지한다. Syntax, E2E source, 문서 검사가 통과한다. Attempt-02는 host마다 이 helper를 두 번 통과했지만 이후 lifecycle artifact 설정에서 undefined `app.id`로 실패해 terminal gesture에 도달하지 못했다. F8-9/F143 전용 runtime 확인은 대기 중이다.
 
   `WebviewWindow #... not found` stderr assertion은 Wails에 한정한다.
@@ -62,6 +60,8 @@
 - F239-61: Image presentation 순서, view attachment, project-window
   cleanup을 바꾸지 않고 최종 Rust format 및 Clippy finding을 해결한다.
   `soksak-host-tauriv2`의 default 및 diagnostics Clippy가 `-D warnings`로
+- F239-63: Helper-only E2E module을 명시적으로 분류하고 공통
+  project-window lifecycle을 선택된 각 adapter에서 실행한다.
   통과하고, focused project-window cleanup test는 1/1, `cargo fmt --all
   --check`도 통과한다. Windows-target 검사는 `ring`에서
   `aarch64-w64-mingw32-clang`을 찾지 못해 중단되어 Windows Rust compilation은

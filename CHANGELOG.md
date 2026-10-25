@@ -46,8 +46,6 @@
   raising a ReferenceError before terminal creation. Syntax validation passes;
   two-host runtime verification remains pending.
 
-- F239-63: Classify helper-only E2E modules explicitly and run the shared
-  project-window lifecycle through each selected adapter. Keep the
 - F239-76: Issue `terminal.focus` before waiting for the host region to report focus in the IME helper, while retaining active/key-window and cursor-focus checks. Syntax, E2E source and documentation checks pass. Attempt-02 reached this helper twice per host and passed its focus preconditions, then failed later during lifecycle artifact setup on undefined `app.id` before the terminal gesture. Dedicated F8-9/F143 runtime confirmation remains pending.
 
   `WebviewWindow #... not found` stderr assertion scoped to Wails. Red: the
@@ -63,6 +61,8 @@
   cleanup. Default and diagnostics Clippy checks for `soksak-host-tauriv2`
   pass with `-D warnings`; the focused project-window cleanup test passes
   1/1, and `cargo fmt --all --check` passes. The Windows-target check stopped
+- F239-63: Classify helper-only E2E modules explicitly and run the shared
+  project-window lifecycle through each selected adapter. Keep the
   in `ring` because `aarch64-w64-mingw32-clang` is unavailable, so Windows
   Rust compilation remains unverified. No app was built or launched.
 
