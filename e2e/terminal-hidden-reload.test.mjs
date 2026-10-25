@@ -76,18 +76,6 @@ for (const app of Object.values(APPS)) {
       && row.event.fields.mode === "headless");
     assert.ok(background && headless, "the replacement page did not open the hidden session headless");
 
-    rows = await waitForRows(s, since, (items) => {
-      const headlessMode = items.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
-        && row.event.fields.mode === "headless");
-      return headlessMode && items.some((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
-        && row.event.fields.mode === "image" && row.event.seq > headlessMode.event.seq);
-    }, `the hidden terminal ${surface} did not transition from headless back to image mode`);
-    const headlessMode = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
-      && row.event.fields.mode === "headless");
-    const reattachedMode = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
-      && row.event.fields.mode === "image" && row.event.seq > headlessMode.event.seq);
-    assert.ok(reattachedMode, "the sidecar did not record image mode after headless mode");
-
     await s.run("core.tab.select", { tab: surface });
     const attached = await s.until("host.window", (host) => host.regions.find((item) => item.surface === surface
       && item.name === "view" && item.visible && item.presented && item.presented.generation !== oldGeneration),
@@ -101,6 +89,18 @@ for (const app of Object.values(APPS)) {
     const replacementSession = await s.until("terminal.session", (state) => state?.sessionId === beforeSession.sessionId,
       "the page reload replaced the terminal session", { surface });
     assert.equal(replacementSession.sessionId, beforeSession.sessionId);
+
+    rows = await waitForRows(s, since, (items) => {
+      const headlessMode = items.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+        && row.event.fields.mode === "headless");
+      return headlessMode && items.some((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+        && row.event.fields.mode === "image" && row.event.seq > headlessMode.event.seq);
+    }, `the revealed terminal ${surface} did not transition from headless back to image mode`);
+    const headlessMode = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+      && row.event.fields.mode === "headless");
+    const reattachedMode = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+      && row.event.fields.mode === "image" && row.event.seq > headlessMode.event.seq);
+    assert.ok(reattachedMode, "the sidecar did not record image mode after headless mode");
 
     await s.flushLog();
     rows = await allRows(s, { channel: "all", since });

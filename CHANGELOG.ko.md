@@ -9,11 +9,15 @@
   제거해 12개에서 11개 finding으로 줄었다. `make parity-check`와 `make docs-check`가
   lane 100개, 구현 파일 698개, test 파일 998개 결과로 통과한다.
 - F212.10-core-5-6-1: reveal된 terminal의 declared status를 기다린 뒤
-  `core.surfaces`에서 선언할 때까지 기다린 뒤 `terminal.session`을 읽는다.
+  `status terminal.session`을 `core.surfaces`에서 확인한 뒤 `terminal.session`을 읽는다.
   Wails와 Tauri runtime 시도에서 hidden background open 직후 status를
   읽자 endpoint error 1002가 반환됐지만, 두 host 모두 background open과
   headless sidecar mode를 이미 기록했다. Product session 실패 증거가 아니라
-  E2E readiness 순서 실패다. Syntax, `make e2e-check`, `make docs-check`가
+  E2E readiness 순서 실패다. 이후 Wails 시도는 reveal 전 image mode를 59.1초
+  기다렸다. `core.surfaces`와 native region에는 Browser surface 두 개만 있었고,
+  VT는 detach, headless mode, absent-surface background open을 기록했다.
+  수정한 case는 reveal 뒤 sidecar headless-to-image mode를 수집한다. Tauri는 같은
+  순서로 재실행하지 않았다. Syntax, `make e2e-check`, `make docs-check`가
   통과하며 runtime 재실행은 대기 중이다.
 - F212.10-core-5-6: hidden terminal reload window check를 추가한다. Replacement
   page start, 유지된 session의 headless open, 숨기기 전 old presented attachment

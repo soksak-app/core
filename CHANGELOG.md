@@ -14,9 +14,14 @@
   Wails and Tauri runtime attempts returned endpoint error 1002 when the check
   read the status immediately after the hidden background open; both had
   already recorded the background open and headless sidecar mode. This was an
-  E2E readiness-order failure, not evidence of a product session failure.
-  Syntax, `make e2e-check`, and `make docs-check` pass; the runtime rerun remains
-  pending.
+  E2E readiness-order failure, not evidence of a product session failure. A
+  later Wails attempt waited 59.1 seconds for image mode before reveal;
+  `core.surfaces` and native regions contained only two Browser surfaces, while
+  VT recorded detach, headless mode, and an absent-surface background open. The
+  case now reveals the terminal before collecting sidecar headless-to-image
+  mode. This is an E2E readiness-order failure; Tauri was not rerun against
+  this ordering. Syntax, `make e2e-check`, and `make docs-check` pass; the
+  runtime rerun remains pending.
 - F212.10-core-5-6: Add a focused hidden-terminal reload window check. It observes
   the old presented attachment generation, replacement page start, retained
   session opening headless, the sidecar's same-writer headless-to-image mode
