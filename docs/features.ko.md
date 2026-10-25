@@ -2,6 +2,8 @@
 
 [English](features.md)
 
+- [o] F239-125 — P1: Go CLI event-log loss test에 test-owned filesystem platform을 등록한다. `StartEventLog`는 `platform.Current()` 구현을 요구하지만 package test는 OS 등록 package를 import하는 `cmd/sok`를 통해 실행되지 않는다. Test 범위에서 `platform.Register`로 fixture를 등록하고 cleanup에서 이전 registration을 복원하며 platform boundary를 넘어 implementation import를 추가하지 않는다. Red: 보존된 host-contract 실행에서 두 test가 event-log 동작 전에 platform 미등록 오류로 실패했다. Green: 집중 loss test 두 개가 2/2 통과했다.
+
 - [o] F239-112 — P1, F239-61 연결: `rustfmt --edition 2024 --config skip_children=true`로 `packages/sok/tauriv2/src/plugin_catalog.rs`와 `packages/sok/tauriv2/tests/plugin_catalog_test.rs`를 포맷한다. 기본 rustfmt 호출은 edition과 style이 달라 workspace format 검사를 만족하지 못했다. Red: 최종 format 검사가 두 파일을 unformatted로 보고했다. Green: 지정한 Rust format 명령 뒤 `make rust-format-check`와 `make go-format-check`가 통과한다(`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`). Semantic change는 없었다.
 
 - [o] F239-141 — P1: 기존 IME, focus, semantic, visual, frame identity 및 33 ms cadence 요구사항을 유지하면서 독립 status 요청을 동시에 읽어 terminal IME observer 부담을 줄인다. Status pair → screen read → status pair 순서, 모든 관측값 및 취합 오류를 보존한다. Phase 순서와 전체 오류 보고를 제어된 Promise로 검사하는 owning Red/Green test를 추가한다. Runtime acceptance는 대기 상태이며 이 observer 변경이 capture-gap 실패를 해결한다고 추론하지 않는다.

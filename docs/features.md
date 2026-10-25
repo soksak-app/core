@@ -2,6 +2,8 @@
 
 [한국어](features.ko.md)
 
+- [o] F239-125 — P1: Register a test-owned filesystem platform for the Go CLI event-log loss tests. `StartEventLog` requires the declared `platform.Current()` implementation, while these package tests do not run through `cmd/sok`, which imports the OS registration packages. Use `platform.Register` for the scoped test fixture and restore the prior registration in cleanup, without adding implementation imports across the platform boundary. Red: the preserved host-contract run failed before event-log behavior with the missing-platform error. Green: both focused loss tests pass (2/2).
+
 - [o] F239-112 — P1, linked to F239-61: Format `packages/sok/tauriv2/src/plugin_catalog.rs` and `packages/sok/tauriv2/tests/plugin_catalog_test.rs` with `rustfmt --edition 2024 --config skip_children=true`. The default rustfmt invocation used the wrong edition and style, so it did not satisfy the workspace format check. Red: the final format check reported these two files as unformatted. Green: the exact Rust formatting command makes both `make rust-format-check` and `make go-format-check` pass (`/tmp/soksak-final-development-20261025.7QLhon/format-recheck-02.log`). No semantic changes were made.
 
 - [o] F239-141 — P1: Reduce terminal IME observer overhead by reading independent status requests concurrently while preserving the status-pair → screen-read → status-pair order, all observations, and aggregated errors. Keep per-key tracing and every existing IME, focus, semantic, visual, frame-identity, and 33 ms cadence requirement unchanged. Add an owning controlled-promise Red/Green test for phase ordering and complete error reporting. Runtime acceptance remains pending; do not infer that this observer change resolves the capture-gap failure.

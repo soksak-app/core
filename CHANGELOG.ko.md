@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-125: Go CLI event-log loss test에 test-owned filesystem platform을
+  등록하고 cleanup에서 이전 registration을 복원한다. Package test는 OS platform을
+  등록하는 `cmd/sok`를 통해 실행되지 않는다. 집중 loss test 두 개가 2/2 통과하며
+  CLI 및 event-log production 동작은 바뀌지 않았다.
+
 - F239-112: Event catalog source와 owner test의 format을 맞춘다.
   `rustfmt --edition 2024 --config skip_children=true`로
   `packages/sok/tauriv2/src/plugin_catalog.rs`와

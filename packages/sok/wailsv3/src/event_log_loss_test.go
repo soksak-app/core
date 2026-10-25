@@ -7,12 +7,42 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
+
+// eventLogFilesystemPlatform supplies only the filesystem operations used by EventLog.
+type eventLogFilesystemPlatform struct {
+	platform.Platform
+}
+
+func (eventLogFilesystemPlatform) PrepareLogDirectory(path string) error {
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o700)
+}
+
+func (eventLogFilesystemPlatform) CreateLogFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+}
+
+func (eventLogFilesystemPlatform) AppendLogFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+}
+
+func useEventLogFilesystemPlatform(t *testing.T) {
+	t.Helper()
+	previous, _ := platform.Current()
+	platform.Register(eventLogFilesystemPlatform{Platform: previous})
+	t.Cleanup(func() { platform.Register(previous) })
+}
 
 // A line that the writer cannot serialize is a loss of the writer: the record names the seq of the gap, its count and its cause
 // in log.dropped after the gap, and the later events are still written.
 // contract: log.writer.unwritable-line-is-dropped
 func TestAnUnserializableLineIsReportedAsDropped(t *testing.T) {
+	useEventLogFilesystemPlatform(t)
 	saved := marshalRecord
 	marshalRecord = func(record eventRecord) ([]byte, error) {
 		if record.Event == "probe.unserializable" {
@@ -72,6 +102,7 @@ func TestAnUnserializableLineIsReportedAsDropped(t *testing.T) {
 // cause, and the later events of the main file are still written.
 // contract: log.writer.unwritable-line-is-dropped
 func TestAnUnwritableLineIsReportedAsDropped(t *testing.T) {
+	useEventLogFilesystemPlatform(t)
 	log, err := StartEventLog(EventLogOptions{
 		Directory: t.TempDir(), Role: "probe", Boot: "boot-b", Layer: "host",
 		Clock:       func() uint64 { return 42 },

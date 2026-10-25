@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-125: Register a test-owned filesystem platform for the Go CLI event-log
+  loss tests and restore the previous registration during cleanup. The package
+  tests do not run through `cmd/sok`, which registers the operating-system
+  platform. Both focused loss tests pass (2/2); CLI and event-log production
+  behavior is unchanged.
+
 - F239-112: Format the event catalog source and owner tests:
   `packages/sok/tauriv2/src/plugin_catalog.rs` and
   `packages/sok/tauriv2/tests/plugin_catalog_test.rs` with
