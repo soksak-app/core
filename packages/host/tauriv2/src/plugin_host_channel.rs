@@ -43,6 +43,7 @@ fn plugin_host_error_text(plugin: &str, reason: &str) -> String {
 /// Recognizes a queue overflow after `plugin_host_error_text` adds the channel identity.
 pub(super) fn plugin_host_queue_full(plugin: &str, reason: &str) -> bool {
     let prefix = format!("plugin {plugin}: ");
+    // default: the host error variant forwards its reason unchanged; view.error messages carry the plugin prefix.
     is_queue_full(reason.strip_prefix(&prefix).unwrap_or(reason))
 }
 

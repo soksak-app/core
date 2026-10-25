@@ -86,6 +86,7 @@ pub(crate) struct DeclaredSourceEventStream(Mutex<Option<Channel<DeclaredSourceE
 
 impl DeclaredSourceEventStream {
     fn lock(&self) -> std::sync::MutexGuard<'_, Option<Channel<DeclaredSourceEvent>>> {
+        // default: the lock holds only the replaceable event sender; the panic hook records the panic.
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
@@ -1103,11 +1104,15 @@ fn project_open_on_main(
 fn register_project_open(data: &WindowData, id: &str, root: &str, new_owner: bool) -> bool {
     data.projects
         .lock()
+        // default: the map stores independent project-root strings, and this insertion does not invoke user code; the
+        // panic hook records a prior panic while the map was held.
         .unwrap_or_else(PoisonError::into_inner)
         .insert(id.to_string(), root.to_string());
     let mut staged = data
         .staged_projects
         .lock()
+        // default: staging is independent set membership; repeating insertion preserves the pending-open contract, and
+        // the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner);
     if new_owner {
         staged.insert(id.to_string());
@@ -1144,10 +1149,12 @@ fn configure_project_window(
 fn release_project_reservation(data: &WindowData, id: &str) {
     data.projects
         .lock()
+        // default: removing an absent reservation is safe and repeated release is idempotent.
         .unwrap_or_else(PoisonError::into_inner)
         .remove(id);
     data.staged_projects
         .lock()
+        // default: removing an absent staged marker is safe and repeated release is idempotent.
         .unwrap_or_else(PoisonError::into_inner)
         .remove(id);
 }
@@ -1163,6 +1170,8 @@ fn commit_project_shown(
         let root = data
             .projects
             .lock()
+            // default: project roots are independent strings and this call only reads the ownership record; the panic
+            // hook records a prior panic while the map was held.
             .unwrap_or_else(PoisonError::into_inner)
             .get(&project.id)
             .cloned()
@@ -1179,19 +1188,26 @@ fn commit_project_shown(
     };
     set_title(&title)?;
     if let Some(project) = project {
+        // default: the shown project and root are plain strings replaced as whole values after title setup succeeds; the
+        // panic hook records a prior panic while either field was held.
         *data.shown.lock().unwrap_or_else(PoisonError::into_inner) = project.id.clone();
+        // default: the shown project and root are plain strings replaced as whole values after title setup succeeds; the
+        // panic hook records a prior panic while either field was held.
         *data.root.lock().unwrap_or_else(PoisonError::into_inner) = project.root.clone();
         data.staged_projects
             .lock()
+            // default: removing the staged marker is idempotent after the project becomes shown.
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&project.id);
     } else {
         data.shown
             .lock()
+            // default: clearing an already-empty shown project is idempotent.
             .unwrap_or_else(PoisonError::into_inner)
             .clear();
         data.root
             .lock()
+            // default: clearing an already-empty project root is idempotent.
             .unwrap_or_else(PoisonError::into_inner)
             .clear();
     }
@@ -1212,6 +1228,8 @@ fn project_shown_on_main(window: &Window, request: ProjectShown) -> Result<(), S
             .state::<Windows>()
             .owners
             .lock()
+            // default: this lookup reads the plain project-owner map; the panic hook records a prior panic while it was
+            // held.
             .unwrap_or_else(PoisonError::into_inner)
             .get(&project.id)
             .cloned();

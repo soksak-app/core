@@ -290,7 +290,9 @@ pub(crate) fn clear_page_compositions(
     compositions: &Mutex<HashMap<String, SurfaceComposition>>,
     plugins: &Mutex<HashMap<String, String>>,
 ) {
+    // default: clearing both declaration maps is idempotent and restores the empty page state after a prior panic.
     let mut current_compositions = compositions.lock().unwrap_or_else(PoisonError::into_inner);
+    // default: clearing both declaration maps is idempotent and restores the empty page state after a prior panic.
     let mut current_plugins = plugins.lock().unwrap_or_else(PoisonError::into_inner);
     current_compositions.clear();
     current_plugins.clear();

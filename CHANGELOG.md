@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-114-2: Resolve the Rust fallback and census findings against their
+  owning contracts. Map PID and timeout parse errors explicitly, use the
+  registered-window Option API where window closure is expected, and state
+  precise reasons for contract-preserving queue classification and poisoned
+  lock recovery. Red: the preserved audits reported Rust findings. Green:
+  fallback tests pass 10/10, census tests pass 3/3, and the process-wait invalid
+  input test passes 1/1.
+
 - F239-140: Explain six typed image detach acknowledgement parse conversions.
   Each maps malformed or missing input to a named protocol error; the handler
   logs it and retains an unidentifiable waiter until timeout or fails an exact

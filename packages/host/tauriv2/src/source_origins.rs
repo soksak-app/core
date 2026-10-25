@@ -50,6 +50,8 @@ pub(crate) fn declared_source_origin_event(
 
 impl DeclaredSourceOrigins {
     fn lock(&self) -> std::sync::MutexGuard<'_, DeclaredSourceOriginsState> {
+        // default: an interrupted issuance may leave a gap in the monotonic floor; ended generations also have no map
+        // entry, so gaps are valid. The panic hook records the panic.
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 

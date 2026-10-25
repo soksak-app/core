@@ -1961,6 +1961,8 @@ impl<O: Owner> Sidecars<O> {
                 .core
                 .state
                 .lock()
+                // default: this reconciliation removes stale entries from the ownership maps; repeating each removal is
+                // safe, and the panic hook records the poison cause.
                 .unwrap_or_else(PoisonError::into_inner);
             let stale: Vec<String> = state
                 .roots

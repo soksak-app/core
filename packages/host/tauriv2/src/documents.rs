@@ -30,7 +30,8 @@ use crate::view_lifecycle::{
     ViewLifecycle, is_queue_full, view_process_ended_event, view_stop_reason, view_stopped_event,
 };
 use crate::windows::{
-    DeclaredSourceEventStream, WindowData, emit_window, window_data, with_native_owner,
+    DeclaredSourceEventStream, WindowData, emit_window, window_data, window_data_if_registered,
+    with_native_owner,
 };
 
 /// The directory inside the configuration directory that holds the persistent site data of document regions. It differs
@@ -1626,7 +1627,7 @@ fn attach_view(
 
 /// Records the navigation state of a view. A failure is written to the application log.
 fn view_state(window: &Window, surface: &str, origin: &ViewOrigin, state: &str) {
-    let Some(data) = window_data(window).ok() else {
+    let Some(data) = window_data_if_registered(window) else {
         record_view_message_cancelled(surface, "window-closed");
         return;
     };

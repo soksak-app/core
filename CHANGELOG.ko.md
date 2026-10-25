@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-114-2: Rust fallback 및 census finding을 소유 계약에 맞춰 해결한다.
+  PID와 timeout parse 오류를 명시적으로 변환하고, window 종료가 정상적인
+  상태 조회에는 등록 전용 Option API를 사용하며, 계약을 지키는 queue 판별과
+  poisoned lock 복구에 정확한 이유를 기록한다. Red: 보존된 audit가 Rust
+  finding을 보고했다. Green: fallback test 10/10, census test 3/3,
+  process-wait invalid input test 1/1 통과.
+
 - F239-140: Image detach acknowledgement typed parse 변환 여섯 곳의 이유를
   기록한다. 잘못되거나 누락된 입력은 이름이 있는 protocol 오류가 된다.
   Handler는 이를 기록하고 식별할 수 없는 waiter는 timeout까지 유지하거나
