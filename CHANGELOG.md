@@ -474,11 +474,13 @@
   requires issued width, height, stride, pixel format, alpha, semantic color
   space and byte count to match the retained raster; only the declared
   CoreGraphics sRGB name is mapped, without changing bytes. The same owner case
-  passes and the visual consumer passes 21/21. An earlier offline first-nine
-  diagnostic, before the artifact-metadata join, found measured tag samples in
-  early intervals while later intervals remained no-proof; raw all-source
-  matching remained incomplete. That replay does not validate the new metadata
-  join. No cadence, final Space interval, or runtime acceptance is claimed.
+  passes and the visual consumer passes 21/21. F239-103 verifies tag identity
+  after raw pixel-history eviction while retaining explicit-retirement and raw
+  `unknown-retention` behavior. The later offline replay recorded in F239-134
+  proves all ten tag glyph stages and 103 exact retained-source joins. Its
+  37.2805 ms maximum frame gap still exceeds the separate 33 ms runtime
+  criterion. Owner controls and offline replay are complete; runtime
+  acceptance remains open under F239-47.
 
 - F239-90: Answer a transfer image after its window owner is retired. The
   sidecar reader can hold an owner resolved before window destruction; the

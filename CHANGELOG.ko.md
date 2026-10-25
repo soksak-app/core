@@ -438,11 +438,12 @@
   measured proof를 반환했다. Consumer는 issued width, height, stride, pixel
   format, alpha, semantic color space 및 byte count가 retained raster와
   일치하도록 요구한다. 선언된 CoreGraphics sRGB 이름만 byte 변경 없이 매핑한다.
-  같은 owner case가 통과하고 visual consumer는 21/21 통과한다. Artifact metadata
-  join 전의 이전 offline first-nine diagnostic에서는 초기 interval 일부가 측정되고
-  이후 interval은 no-proof였으며 raw all-source matching도 incomplete였다. 이 replay는
-  새 metadata join을 검증하지 않는다. Cadence, 마지막 Space interval 또는 runtime
-  acceptance를 주장하지 않는다.
+  같은 owner case가 통과하고 visual consumer는 21/21 통과한다. F239-103은 raw
+  pixel-history eviction 뒤의 tag identity와 explicit-retirement 및 raw
+  `unknown-retention` 보존을 검증한다. F239-134에 기록된 후속 offline replay는
+  tag glyph 10단계와 retained source 103개를 모두 검증했다. 최대 frame gap
+  37.2805 ms는 별도 33 ms runtime 기준을 초과한다. Owner control과 offline
+  replay는 완료했으며 runtime acceptance는 F239-47에서 계속 추적한다.
 
 - F239-90: Window owner가 사라진 뒤 도착한 transfer image에 응답한다. Sidecar
   reader가 window 파괴 전에 조회한 owner를 보유할 수 있으므로, 사라진 owner는
