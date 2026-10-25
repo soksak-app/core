@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-62: Add the required canonical `displayName` to the installed-sidecar
+  fixtures in `audit-run.test.mjs` and `check-events.test.mjs`. Red: the
+  consolidated Node run failed one and three tests respectively because
+  validation rejected the fixture records before catalog behavior ran. Green:
+  the two owner scripts pass 19/19; the missing-catalog case now reaches its
+  intended error assertion. `make docs-check` passes.
+
 - F239-60: Subscribe to terminal status before reading the pre-key screen and cursor baseline, so a frame advance during those reads remains observable. Persist the baseline frame and setup failures before waiting for matching status events. The owner test reproduces the lost notification and passes after the ordering change; its document suite passes 37/37. No activation run was performed.
 
 - F239-58: Correct the lifecycle selector window target. `fresh(s)` leaves a project open in the original window; with `projectOpening: windows`, the disposable project opens in a new window. The selector now creates an unassigned window and sends project, gesture, close/reopen, and cleanup operations through its session. Eight preserved Wails failures stopped at `core.project` before the gesture. `node --check`, `make e2e-check`, and `make docs-check` pass; two-host runtime acceptance remains pending.

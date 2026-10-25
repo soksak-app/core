@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-62: Installed-sidecar fixture에 필수 canonical `displayName`을
+  추가한다. `audit-run.test.mjs`와 `check-events.test.mjs`의 Red: 통합 Node run은
+  validation이 catalog 동작 전에 fixture record를 거부해 각각 한 개와 세 개
+  test가 실패했다. Green: 두 owner script가 19/19 통과하고 missing-catalog
+  case가 의도한 오류 assertion까지 진행한다. `make docs-check`가 통과한다.
+
 - F239-60: Pre-key screen/cursor baseline을 읽기 전에 terminal status를 구독해 read 중 발생한 frame 전진도 관측한다. Matching status event를 기다리기 전에 baseline frame과 setup 실패를 저장한다. Owner test는 notification 유실을 재현하고 순서 수정 뒤 통과하며 document suite는 37/37 통과한다. Activation은 실행하지 않았다.
 
 - F239-58: Lifecycle selector의 window 대상을 수정한다. `fresh(s)`는 기존 window에 project를 남기며 `projectOpening: windows`에서는 임시 project가 새 window에 열린다. Selector는 unassigned window를 만든 뒤 project, gesture, close/reopen, cleanup operation을 해당 session으로 보낸다. 보존된 Wails 실패 8건은 gesture 전에 `core.project` 대기에서 멈췄다. `node --check`, `make e2e-check`, `make docs-check`가 통과했으며 두 host runtime acceptance는 대기 중이다.
