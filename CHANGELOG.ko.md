@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-167: 양 transport 및 host에서 native image dispatch 전에 기존 sidecar 수신 trace를 기록한다. 처리된 image는 native 전용으로 유지하고 일반 message는 page로 전달한다. 양 Red case는 처리된 image 수신을 누락하며 수정 후 dispatch owner 여섯 개 및 complete-body relay owner 두 개가 통과한다. 양 diagnostic host가 빌드된다. 해당 trace는 Wails 65개 및 Tauri 47개 frame identity를 미응답 도착 없이 연결하고 log 감사가 통과하지만 양 기록은 변경하지 않은 33 ms cadence 기준을 계속 초과한다.
+
 - F212.12-3: Supplier 및 alignment assertion 전에 단계별 page 입력/layout 처리 시간 전체를 보고한다. 기존의 실패한 drag는 출력을 생략했으며 모든 판정이 통과한 뒤에도 일부 단계만 노출했다. Syntax 검사가 통과하며 추가 window 승인을 주장하지 않는다.
 
 - F239-166: 기존 callback artifact에 실제 비동기 frame writer의 enqueue, 시작 및 완료 tick을 추가한다. Writer 사실은 serial writer에서 소유하고 queue snapshot을 frame 파일명으로 병합하며 없는 단계는 null로 유지한다. Metadata Red/Green 및 callback lifecycle owner가 통과하고 양 diagnostic host가 빌드된다. 해당 Tauri 기록은 159개 frame과 최대 25.3965 ms 간격을 가지며 writer queue 대기는 0.159 ms 미만, writer 작업은 4.669 ms 미만이다. Drag 지연은 계속 기준을 초과하므로 drag 수정 또는 이전 capture 간격의 원인을 주장하지 않는다.

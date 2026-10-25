@@ -6,6 +6,10 @@ The performance trace is one of the records of [diagnostics](diagnostics.md): th
 
 The page does not format or relay events while disabled or awaiting enable acknowledgment. An event of the page is the event `page.trace.<event>` of the [event contract](logging.md#writers): the page queues it without waiting and relays the events of one turn to the host in one batch through the host call `log`, and the host stores them in the event log `logs/host-<boot>.jsonl`. Switch requests preserve their order: disabling stops new events immediately and waits until the events that were already accepted are relayed. Switch failures reject the settings operation; relay failures are reported explicitly with the number of events of the batch and do not replace the result of the measured command.
 
+For each received body addressed to an active owner, both transports emit the existing `sidecar.receive` trace before image-envelope handling. A handled image keeps its native-only delivery path; its receipt and consumed/refused `image.frame` response can be joined by surface, image name, generation, raster and sequence. Trace gating and bounded body serialization remain unchanged.
+
+The receive timestamp follows envelope decoding and owner routing. The image response trace precedes outbox delivery. Their interval does not include socket-read waiting, decoding, owner lookup or return transport.
+
 ## Output
 
 Every event of the trace is an event of the [event contract](logging.md): the page stores `page.trace.<event>`, the host `host.trace.<event>` and the sampler `host.sampler.<event>` in the event log `logs/host-<boot>.jsonl`, all of level `debug`, with the name of the event in the event name and not in the fields, and a sidecar stores `sidecar.<name>.<event>` in its own event file under `logs/` ([sidecars](sidecars.md)). One timeline, the [debug view](debug.md), reads the files together. When the switch turns on the host stores the event `host.trace.on`, and before it turns off the event `host.trace.off`. There is no trace file, no marker line and no rotation of its own: the event files rotate by the rules of the contract.

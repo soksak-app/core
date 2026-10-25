@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-167: Record the existing sidecar receive trace before native image dispatch in both transports and hosts. Handled images remain native-only and ordinary messages retain page delivery. Both Red cases miss the handled-image receipt; six dispatch and two complete-body relay owners pass afterward. Both diagnostic hosts build. The focused trace joins 65 Wails and 47 Tauri frame identities without unanswered arrivals; the log audit passes, but both recordings still exceed the unchanged 33 ms cadence criterion.
+
 - F212.12-3: Report the complete per-step page input/layout handling durations before supplier and alignment assertions. A failing drag previously omitted this output or exposed only selected steps after every judgment passed. Syntax checks pass; no additional window acceptance is claimed.
 
 - F239-166: Add actual asynchronous frame-writer enqueue, start and completion ticks to the existing callback artifact. Keep writer facts on the serial writer and merge a queue snapshot by frame filename; absent stages stay null. Metadata Red/Green and callback lifecycle owners pass, and both diagnostic hosts build. The focused Tauri recording has 159 frames and a maximum 25.3965 ms gap; writer queue wait stays below 0.159 ms and writer work below 4.669 ms. Drag latency still exceeds its limits, so no drag fix or cause of earlier capture gaps is claimed.

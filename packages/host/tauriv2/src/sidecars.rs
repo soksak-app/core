@@ -3063,16 +3063,27 @@ impl<O: Owner> Core<O> {
                             tx: tx_clone.clone(),
                             state: Arc::clone(&state),
                         };
-                        if try_handle_image_envelope(
-                            &owner,
-                            &sidecar,
-                            &event.surface,
-                            &event.body,
-                            &response_sender,
+                        if receive_sidecar_message(
+                            || {
+                                trace_message(
+                                    "sidecar.receive",
+                                    &sidecar,
+                                    &event.surface,
+                                    &event.body,
+                                )
+                            },
+                            || {
+                                try_handle_image_envelope(
+                                    &owner,
+                                    &sidecar,
+                                    &event.surface,
+                                    &event.body,
+                                    &response_sender,
+                                )
+                            },
                         ) {
                             continue;
                         }
-                        trace_message("sidecar.receive", &sidecar, &event.surface, &event.body);
                         owner.deliver(Message {
                             sidecar: sidecar.clone(),
                             surface: event.surface,
@@ -3598,16 +3609,20 @@ fn relay<O: Owner>(
             continue;
         };
         // Checks and handles whether it is an image envelope.
-        if try_handle_image_envelope(
-            &owner,
-            sidecar,
-            &event.surface,
-            &event.body,
-            &response_sender,
+        if receive_sidecar_message(
+            || trace_message("sidecar.receive", sidecar, &event.surface, &event.body),
+            || {
+                try_handle_image_envelope(
+                    &owner,
+                    sidecar,
+                    &event.surface,
+                    &event.body,
+                    &response_sender,
+                )
+            },
         ) {
             continue;
         }
-        trace_message("sidecar.receive", sidecar, &event.surface, &event.body);
         owner.deliver(Message {
             sidecar: sidecar.to_string(),
             surface: event.surface,
@@ -4149,3 +4164,9 @@ mod lock_test;
 #[cfg(test)]
 #[path = "sidecars_session_retention_test.rs"]
 mod session_retention_test;
+
+/// Records a received body and returns whether native image dispatch consumes it.
+pub fn receive_sidecar_message(trace: impl FnOnce(), handle_image: impl FnOnce() -> bool) -> bool {
+    trace();
+    handle_image()
+}

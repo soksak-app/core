@@ -1935,10 +1935,12 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 		}
 		if owner != nil {
 			// Checks whether it is an image envelope
-			if c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) {
+			if ReceiveSidecarMessage(
+				func() { c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body) },
+				func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) },
+			) {
 				continue
 			}
-			c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body)
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		} else {
 			c.dropMessage(process, event)
@@ -2133,10 +2135,12 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 		owner := c.owners[event.Surface]
 		c.mu.Unlock()
 		if owner != nil {
-			if c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) {
+			if ReceiveSidecarMessage(
+				func() { c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body) },
+				func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) },
+			) {
 				continue
 			}
-			c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body)
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		} else {
 			c.dropMessage(process, event)
@@ -2513,4 +2517,10 @@ func recordWriteWait(name string, line queuedLine, started, ended uint64) {
 	EmitHost(LevelInfo, "host.sidecar.write_wait", map[string]any{
 		"name": name, "bytes": len(line.bytes), "queued_us": queued / 1000, "write_us": written / 1000,
 	})
+}
+
+// ReceiveSidecarMessage records a received body and returns whether native image dispatch consumes it.
+func ReceiveSidecarMessage(trace func(), handleImage func() bool) bool {
+	trace()
+	return handleImage()
 }

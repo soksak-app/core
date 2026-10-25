@@ -6,6 +6,10 @@
 
 페이지는 비활성 상태나 활성화 응답 대기 중에 이벤트를 구성·중계하지 않는다. 페이지의 이벤트는 [이벤트 계약](logging.ko.md#writer)의 event `page.trace.<event>`다. 페이지는 그것을 기다리지 않고 큐에 넣고, 한 턴의 event를 host 호출 `log` 한 번의 배치로 host에 중계하며, host는 그것을 event log `logs/host-<boot>.jsonl`에 저장한다. 스위치 요청은 순서를 유지한다. 비활성화는 새 이벤트를 즉시 중단하고 이미 수락한 event가 중계될 때까지 기다린 뒤 실행된다. 스위치 실패는 설정 동작을 거부하고, 중계 실패는 측정한 명령의 결과를 바꾸지 않고 배치의 event 수와 함께 명시적으로 보고한다.
 
+활성 owner로 지정된 수신 body마다 양 transport는 image-envelope 처리 전에 기존 `sidecar.receive` trace를 기록한다. 처리된 image는 native 전용 전달 경로를 유지하며 surface, image 이름, generation, raster, sequence로 수신과 consumed/refused `image.frame` 응답을 연결할 수 있다. Trace gate와 제한된 body 직렬화는 유지한다.
+
+수신 timestamp는 envelope decoding 및 owner routing 이후에 기록한다. Image 응답 trace는 outbox 전달 전에 기록한다. 이 구간에는 socket-read 대기, decoding, owner 조회 및 응답 transport가 포함되지 않는다.
+
 ## 출력
 
 trace의 모든 event는 [event 계약](logging.ko.md)의 event다. page는 `page.trace.<event>`, host는 `host.trace.<event>`, 표본 추출은 `host.sampler.<event>`를 event log `logs/host-<boot>.jsonl`에 모두 level `debug`로 저장하고, event 이름은 필드가 아니라 event 이름에 둔다. sidecar는 `sidecar.<name>.<event>`를 `logs/` 아래 자기 event 파일에 저장한다([sidecars](sidecars.ko.md)). [debug 화면](debug.ko.md)의 타임라인 하나가 이 파일들을 함께 읽는다. 스위치가 켜질 때 host는 event `host.trace.on`을, 꺼지기 전에 `host.trace.off`를 저장한다. trace 파일도, 표식 줄도, 자체 회전도 없다. event 파일은 계약의 규칙대로 회전한다.
