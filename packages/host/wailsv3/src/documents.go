@@ -2029,7 +2029,6 @@ func (s *Surfaces) replyView(req ViewReplyRequest) error {
 	}
 	EmitHost(LevelDebug, "host.view.reply.dispatch", fields)
 	s.documents.answerViewCall(req.Surface, req.Generation, req.ID)
-	s.viewRecords().recordEnd(req.Surface)
 	return nil
 }
 
@@ -2070,7 +2069,6 @@ func (s *Surfaces) pushViewEvent(req ViewEventRequest) (bool, error) {
 	if !ready {
 		return false, fmt.Errorf("%s has no ready document", req.Surface)
 	}
-	s.viewRecords().recordEnd(req.Surface)
 	return true, nil
 }
 
@@ -2125,7 +2123,6 @@ func (s *Surfaces) pushViewRequest(req ViewRequestRequest) (any, error) {
 	if !ready {
 		return nil, fmt.Errorf("%s has no ready document", req.Surface)
 	}
-	s.viewRecords().recordEnd(req.Surface)
 	return nil, nil
 }
 

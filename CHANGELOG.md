@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-183: Remove view-end recording from successful reply, event and request delivery. These worker paths incorrectly mutate UI-thread lifecycle state and mark live views ended. Three owning delivery subcases fail before correction; four top-level delivery and actual-termination owners pass afterward. Runtime crash recovery remains unverified.
+
 - F212.14-3: Report post-DOM commit wait and total native transaction duration, reject invalid stage timestamps and preserve original layout rows before benchmark analysis. Two owner cases fail before correction and all 14 pass afterward. Both-host reports and error audits complete, while unchanged performance targets still fail. Wails shows a 32.829 ms median post-DOM wait; Tauri shows a 26.083 ms median preparation-to-DOM-request interval. These intervals identify different investigation boundaries, not diagnosed product causes.
 
 - F212.14-2: Record the same-source optimized diagnostic VT build and local installation comparison. Both installed hashes match the build; complete 139/132-frame benchmark reports, error audits, baseline restoration and normal shutdown are retained. Latency targets still fail on both hosts. Different cohort loads prevent attributing the observed reduction solely to optimization. Complete the build-profile comparison and keep F212.14 performance acceptance open. Restore both automated profiles to their original declarations and executable hashes after comparison.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-183: 성공한 reply, event 및 request 전달의 view 종료 기록을 제거한다. 이 worker 경로는 UI-thread lifecycle 상태를 잘못 변경하고 살아 있는 view를 종료로 표시한다. 수정 전 전달 하위 검사 세 개가 실패하며 수정 후 전달 및 실제 종료 소유 검사 네 개가 통과한다. Runtime crash 복구는 아직 검증 전이다.
+
 - F212.14-3: Post-DOM commit 대기 및 전체 native transaction 시간을 보고하고 잘못된 단계 timestamp를 거부하며 benchmark 분석 전에 원본 layout row를 보존한다. 수정 전 owner case 두 개가 실패하고 수정 후 14개가 모두 통과한다. 양 host report 및 error 감사가 완료되지만 기존 성능 목표는 계속 실패한다. Wails의 post-DOM 대기 중앙값은 32.829 ms, Tauri의 준비부터 DOM 요청까지 중앙값은 26.083 ms다. 이 구간은 다른 조사 경계를 식별하며 product 원인을 규명한 결과는 아니다.
 
 - F212.14-2: 같은 source의 최적화 diagnostic VT build 및 local 설치 비교를 기록한다. 두 설치 hash가 build와 일치하고 전체 139/132-frame benchmark report, error 감사, baseline 복원 및 정상 종료를 보존한다. 두 host 모두 지연 목표에서 계속 실패한다. Cohort load가 달라 관측된 감소를 최적화만의 영향으로 귀속할 수 없다. Build-profile 비교를 완료하고 F212.14 성능 acceptance는 미완료로 유지한다. 비교 뒤 두 자동 profile을 원래 선언과 실행 파일 hash로 복원한다.

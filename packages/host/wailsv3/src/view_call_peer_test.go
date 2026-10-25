@@ -46,3 +46,33 @@ func TestViewCallAnsweredBeforeTheProcessEndWritesNoPeerLost(t *testing.T) {
 		t.Fatalf("host.call.peer-lost after the reply: %v, want none", got)
 	}
 }
+
+// contract: view.call.reply
+func TestSuccessfulViewDeliveryKeepsTheViewAlive(t *testing.T) {
+	for _, kind := range []string{"reply", "event", "request"} {
+		t.Run(kind, func(t *testing.T) {
+			s, _ := newViewChannelSurfaces(t)
+			if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`); err != nil {
+				t.Fatal(err)
+			}
+			lifecycle := s.viewRecords()
+			lifecycle.track("probe-surface", nil, "probe", "ui/page.html", true)
+			generation := viewGeneration(s, "probe-surface")
+			var err error
+			switch kind {
+			case "reply":
+				err = s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: generation, ID: 7, Result: []byte(`null`)})
+			case "event":
+				_, err = s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: generation, Event: "probe.changed", Data: []byte(`null`)})
+			case "request":
+				_, err = s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", Generation: generation, ID: 7, Command: "probe.read"})
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !lifecycle.live["probe-surface"] {
+				t.Fatal("successful message delivery ended the live view")
+			}
+		})
+	}
+}
