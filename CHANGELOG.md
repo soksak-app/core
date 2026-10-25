@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-154: Read projects.json through its current format-1 envelope and
+  preserve that envelope when modifying placeholder fixtures. Both hosts
+  reproduced the obsolete bare-array read failure; four owner tests now
+  pass. Both placeholder assertion bodies pass, but the combined run and
+  log audit fail on origin and sidebar findings tracked by F239-155/-156.
+  No full-project acceptance is claimed.
+
 - F239-153: Reject missing or non-finite drag capture samples and absent
   post-input measurements. Three negative owner cases fail before the fix;
   all five focused tests pass afterward with the positive calculation

@@ -8,6 +8,7 @@ import test from "node:test";
 import { APPS, failure, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { getClosedProjectSnapshot } from "./project-close-snapshot.mjs";
+import { projectRecords } from "./projects-file.mjs";
 import { frontmostApp } from "@soksak/window-check/frontmost.mjs";
 import { readEvents, currentEventOffsets, traceRows } from "@soksak/window-check/event-log.mjs";
 import { openStages, systemState } from "./open-report.mjs";
@@ -296,7 +297,7 @@ for (const app of Object.values(APPS)) {
       "the window did not move");
     await child.close();
     await s.windows(1, "native close did not complete");
-    const saved = read(join(config, "projects.json")).find((p) => p.id === second.id);
+    const saved = projectRecords(read(join(config, "projects.json")), "projects.json").find((p) => p.id === second.id);
     assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).title, "Saved space");
     assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).layout.windowSidebars.right.width, 213);
     // The saved position and size must have the same unit as the window coordinates that the host reports. If a position is saved
@@ -424,7 +425,7 @@ for (const app of Object.values(APPS)) {
 
     // A layout saved in another environment: the first tab of the shell card belongs to the plugin gone, which is not in this environment.
     const records = read(join(config, "projects.json"));
-    const record = records.find((p) => p.id === saved.id);
+    const record = projectRecords(records, "projects.json").find((p) => p.id === saved.id);
     const shell = record.spaces.find((x) => x.id === record.activeSpaceId).layout.state.cards.find((c) => c.id === "terminal");
     shell.data.tabs[0].plugin = "gone";
     write(join(config, "projects.json"), records);
@@ -445,7 +446,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(await s.get("core.page.error"), null, "opening the layout reported an error");
     // Saving does not change that tab.
     await s.run("core.projects.flush");
-    const after = read(join(config, "projects.json")).find((p) => p.id === saved.id);
+    const after = projectRecords(read(join(config, "projects.json")), "projects.json").find((p) => p.id === saved.id);
     const kept = after.spaces.find((x) => x.id === after.activeSpaceId).layout.state.cards.find((c) => c.id === "terminal");
     assert.equal(kept.data.tabs[0].plugin, "gone", "saving changed the tab of the plugin that is not loaded");
     assert.ok(stored.length > 0);

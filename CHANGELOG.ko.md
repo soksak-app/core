@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-154: Projects.json을 현재 format-1 envelope로 읽고 placeholder fixture
+  수정 시 envelope를 유지한다. 양 host에서 이전 bare-array 읽기 실패를
+  재현했고 owner test 네 개가 통과한다. 양 placeholder assertion body도
+  통과하지만 통합 실행과 log 감사는 F239-155/-156의 origin 및 sidebar 문제로
+  실패한다. 전체 project acceptance는 주장하지 않는다.
+
 - F239-153: 누락되거나 유한하지 않은 drag capture sample과 입력 이후 측정
   부재를 거부한다. 수정 전 negative owner 세 case가 실패하고 수정 후에는
   positive 계산을 유지하면서 focused test 다섯 개가 통과한다. 누락된

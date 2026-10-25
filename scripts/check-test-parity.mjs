@@ -6073,6 +6073,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-154",
+    implementation: [{ file: "e2e/projects-file.mjs", symbol: "export function projectRecords(" }],
+    tests: [{ file: "e2e/test/projects-file.test.mjs", id: "project records read the current registry envelope without replacing it" }],
+    expected: "The projects window consumer reads only the current stored envelope and preserves it when modifying a fixture.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-153",
     implementation: [{ file: "e2e/drag-measurement.mjs", symbol: "export function pointerLag(" }],
     tests: [{ file: "e2e/test/drag-measurement.test.mjs", id: "pointer lag rejects only frames before input" }],
