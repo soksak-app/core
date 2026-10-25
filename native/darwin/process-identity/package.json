@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "prepare": "make",
-    "test": "make test"
+    "test": "node --test tests/package.test.mjs"
   },
   "os": [
     "darwin"

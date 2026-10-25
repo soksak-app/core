@@ -12,6 +12,8 @@
 
 완료 항목과 해당 범위의 증거는 이후 기록에서도 과거 상태로 보존한다.
 
+- [o] F239-57 — P0: Darwin process identity 패키지의 native test 두 개를 workspace Node test runner에서 발견 가능하게 유지한다. 기존 `test` script가 runner가 test 시작 전에 거부하는 `make test`를 사용했다. 발견되는 Node entrypoint 하나가 기존 process-identity와 package-relocation Make target을 각각 위임 실행하며, 각 target은 native runner를 통해 test별 진행 표시, 개별 제한 시간, 출력, 실패 상태를 유지한다. Red: 실제 package discovery owner test가 `make test`는 지원되는 Node test script가 아니라는 이유로 실패했다. Green: 같은 owner test가 1/1, package Node entrypoint가 2/2 통과하고 각 native target도 1/1 통과한다. Workspace runner가 package entrypoint를 발견하고 실행한다. 현재 목록은 lane 102개, 구현 파일 704개, 테스트 파일 1010개이며 미연결 구현 및 테스트 파일이 없다.
+
 - [o] F239-47-40-3 — P1, F239-47-40 연결: `diagnostics.capture.start`의 명시적 선택형 `frameIdentity` boolean을 양 host recording interface에서 Darwin capture로 전달한다. 생략 및 false는 identity capture를 끄고 boolean이 아닌 값은 거부한다. Red: Wails parser는 null을 false로 받았고 Tauri parser는 true를 무시했다. Green: strict parser test는 각각 3/3, 1/1 통과하고 recording fake는 true가 양쪽 platform 경계에 전달됨을 확인한다. Native boundary는 F239-47-40-4에서 opt-in identity 경로와 stop artifact 응답을 구현했다.
 
 - [o] F239-55 — P0: E2E 실행기가 frontmost application을 조회하거나 child를 시작하기 전에 감사 가능한 run metadata를 요구한다. 비어 있지 않은 `SOKSAK_RUN_ID`와 `SOKSAK_RUN_FOLDER`를 함께 전달해야 하며, 누락되거나 한쪽만 있는 metadata는 두 동작 전에 실패한다. 전달된 두 값은 child에 그대로 보존하고 기존 baseline 검증을 유지한다. Red: 변경 전 `node --test e2e/test/run.test.mjs`에서 두 값이 모두 없거나 ID만 있거나 폴더만 있어도 baseline을 조회하고 child를 시작함을 확인했다(`/tmp/F239-55-run-metadata-red.log`). Green: 같은 process-boundary case와 exported runner의 호출 순서 및 유효한 값 전달 검사가 10/10 통과한다. `node --check e2e/run.mjs`, `node --check e2e/test/run.test.mjs`, `make e2e-check`, `make docs-check`가 통과한다. 이 단위는 application을 실행하지 않는다.

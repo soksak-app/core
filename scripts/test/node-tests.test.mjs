@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { discoverNodeTests, parseTestScript } from "../node-tests.mjs";
@@ -54,6 +55,13 @@ test("a package whose test script names no file, or whose script cannot be read,
   assert.throws(() => discoverNodeTests({ root, packages: ["a"] }), /a: the test script names no test file in test\//);
   put(root, "b/package.json", JSON.stringify({ name: "b", scripts: { test: "make test" } }));
   assert.throws(() => discoverNodeTests({ root, packages: ["b"] }), /b: the test script "make test" is not node --test/);
+});
+
+test("the native process identity package exposes its owning tests through Node discovery", { timeout: 120_000 }, () => {
+  const root = fileURLToPath(new URL("../..", import.meta.url));
+  const { tests, before } = discoverNodeTests({ root, packages: ["native/darwin/process-identity"] });
+  assert.deepEqual(tests.map((item) => item.name), ["native/darwin/process-identity/tests/package.test.mjs"]);
+  assert.deepEqual(before, []);
 });
 
 test("the discovered files run through the runner, each in the folder of its package", async () => {

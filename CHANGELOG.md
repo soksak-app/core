@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-57: Expose the Darwin process identity package's native tests through a `node --test` package entrypoint. The two Node tests delegate to separate Make targets; existing Objective-C and relocation assertions remain in their native owners. Red: the workspace discovery owner test rejected the package's `make test` script before tests started. Green: the owner test passes 1/1, the package entrypoint passes 2/2 with each native target passing 1/1, and the workspace runner discovers and runs the package entrypoint. The parity inventory now reports 102 lanes, 704 implementation files, and 1010 test files with no uncovered files.
+
 - F239-47-40-8: The current inventory includes the captured-frame identity window check: 101 lanes, 703 implementation files, and 1009 test files. Window acceptance remains pending.
 
 - F239-47-40-8: Add a window consumer check for opt-in frame identity.

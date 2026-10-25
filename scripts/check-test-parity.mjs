@@ -173,6 +173,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin quit request", "objective-c", ["native/darwin/src/quit_request.m"], ["native/darwin/tests/quit_request_test.m"], { sharedTests: true }),
   lane("Darwin memory pressure", "objective-c", ["native/darwin/src/memory_pressure.m"], ["native/darwin/tests/memory_pressure_test.m", "native/darwin/tests/document_backforward_test.m"], { sharedTests: true }),
   lane("Darwin process identity", "objective-c", ["native/darwin/process-identity/src/process_identity.m"], ["native/darwin/process-identity/tests/**/*.m", "native/darwin/process-identity/tests/**/*.sh"], { testExtensions: new Set([".m", ".sh"]) }),
+  lane("Darwin process identity Node test entrypoint", "js-ts", ["native/darwin/process-identity/tests/package.test.mjs"], ["native/darwin/process-identity/tests/package.test.mjs"]),
   lane("Darwin webview navigation", "objective-c", ["native/darwin/src/webview_navigation.m"], ["native/darwin/tests/webview_navigation_test.m"], { sharedTests: true }),
   lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_lifecycle_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m", "native/darwin/tests/capture_callback_test.m"], { sharedTests: true }),
   lane("Darwin capture frame identity", "objective-c", ["native/darwin/src/capture_frame_identity.m"], ["native/darwin/tests/capture_frame_identity_test.m"], { sharedTests: true }),
@@ -5517,6 +5518,17 @@ const FEATURE_LINKS = [
     ],
     expected: "The E2E runner requires both nonempty run metadata values before probing the baseline or starting a child, and forwards a valid pair unchanged.",
     levels: ["unit"],
+  },
+  {
+    id: "F239-57",
+    implementation: [{ file: "native/darwin/process-identity/tests/package.test.mjs", symbol: "function runNativeTarget" }],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "the native process identity package exposes its owning tests through Node discovery" },
+      { file: "native/darwin/process-identity/tests/package.test.mjs", id: "the native process identity test target passes" },
+      { file: "native/darwin/process-identity/tests/package.test.mjs", id: "the native package relocation test target passes" },
+    ],
+    expected: "The workspace discovers a Node test entrypoint that delegates each native process identity test to its existing owner target and preserves each target's result.",
+    levels: ["unit", "native"],
   },
   {
     id: "F239-48-3-13",

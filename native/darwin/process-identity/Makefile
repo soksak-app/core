@@ -8,7 +8,7 @@ MINIMUM := -mmacosx-version-min=14.4
 CFLAGS := -fmodules -Wall -Werror -O2 $(MINIMUM)
 FRAMEWORKS := -framework ApplicationServices -framework CoreServices
 
-.PHONY: all test clean
+.PHONY: all test test-process-identity test-package-relocation clean
 all: $(LIBRARY) $(LIBDIR)/pkgconfig/soksak-process-identity.pc
 
 $(BUILD):
@@ -40,8 +40,12 @@ $(LIBDIR)/pkgconfig/soksak-process-identity.pc: Makefile | $(LIBDIR)/pkgconfig
 	  'Libs: -L$${libdir} -lsoksak-process-identity $(FRAMEWORKS)' > $@.next
 	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi
 
-test: $(TEST) all
+test: test-process-identity test-package-relocation
+
+test-process-identity: $(TEST) all
 	@NATIVE_TEST_ONLY=process_identity node ../../../scripts/native-tests.mjs $(CURDIR)/build process_identity_test
+
+test-package-relocation: all
 	@NATIVE_TEST_ONLY=package_relocation node ../../../scripts/native-tests.mjs $(CURDIR)/tests package_relocation_test.sh
 
 $(TEST): tests/process_identity_test.m src/process_identity.m include/soksak_process_identity.h src/private/launch_services.h src/private/process_identity_internal.h | $(BUILD)
