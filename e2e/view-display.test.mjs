@@ -6,6 +6,7 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
 import { fresh } from "./fixture.mjs";
+import { viewContentCases } from "./view-content.mjs";
 import { checkViewDisplay } from "./view-display.mjs";
 
 /**
@@ -32,7 +33,7 @@ for (const app of Object.values(APPS)) {
     // preparation restores the setting when the check ends (keepCommonSettings).
     const offsets = currentEventOffsets(s.app.configDir);
     await untilViewReady(s, offsets, () => fresh(s, { log: { call: "debug" }, reads: ["page.view.call", "page.view.reply"] }));
-    await checkViewDisplay(s, t);
+    await checkViewDisplay(s, t, undefined, await viewContentCases(s, message => t.diagnostic(message)));
   });
 }
 

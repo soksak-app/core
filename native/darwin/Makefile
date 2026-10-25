@@ -100,7 +100,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: all test test-capture-frame-identity test-capture-stop-intake test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all capture-text-path test test-capture-frame-identity test-capture-stop-intake test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -155,6 +155,13 @@ $(PROCESS_IDENTITY_LIBRARY):
 
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
 	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+
+# Vision reads captured pixels only in this check executable, outside application rendering.
+$(BUILD)/capture_text_test: tests/capture_text_test.m tests/support/no_activation.m | $(BUILD)
+	@clang $(CFLAGS) $< tests/support/no_activation.m -framework Foundation -framework AppKit -framework Vision -framework CoreText -o $@
+
+capture-text-path: $(BUILD)/capture_text_test
+	@printf '%s\n' '$(abspath $(BUILD)/capture_text_test)'
 
 # A measurement tool is not a test. It prints numbers, asserts nothing, and is not part of the test target.
 $(BUILD)/%_benchmark: tests/%_benchmark.m tests/support/temporary_folder.m tests/support/temporary_folder.h $(LIBRARY) $(wildcard src/*.h src/private/*.h)
@@ -313,6 +320,7 @@ NATIVE_TESTS = observe_test \
   capture_frame_identity_capture_test \
   capture_resize_test \
   capture_frame_test \
+  capture_text_test \
   dock_menu_test \
   appearance_test \
   notifications_test \

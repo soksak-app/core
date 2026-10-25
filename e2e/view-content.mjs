@@ -1,0 +1,102 @@
+// Reads plugin content from decoded recording pixels through the declared check executable.
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { FIXTURE } from "./hwp-support.mjs";
+
+const run = promisify(execFile);
+
+/** Copies one applied view's exact opaque BGRA crop without resizing or changing channels. */
+export function cropViewPixels(frame, rect) {
+  assert.ok(frame.data instanceof Uint8Array && frame.data.length === frame.stride * frame.height,
+    "capture pixel storage does not match its declared stride and height");
+  const ratio = frame.scale * frame.contentScale;
+  assert.ok([ratio, rect.x, rect.y, rect.w, rect.h, frame.content.x, frame.content.y].every(Number.isFinite)
+    && ratio > 0 && rect.w > 0 && rect.h > 0, "invalid captured view geometry");
+  const x = Math.floor(frame.content.x * frame.scale + rect.x * ratio);
+  const y = Math.floor(frame.content.y * frame.scale + rect.y * ratio);
+  const width = Math.ceil(frame.content.x * frame.scale + (rect.x + rect.w) * ratio) - x;
+  const height = Math.ceil(frame.content.y * frame.scale + (rect.y + rect.h) * ratio) - y;
+  assert.ok(x >= 0 && y >= 0 && x + width <= frame.width && y + height <= frame.height,
+    "the applied view crop lies outside its recorded frame");
+  assert.ok(width * height * 4 <= 64 * 1024 * 1024, "the view crop exceeds the 64 MiB recognition limit");
+  const data = Buffer.alloc(width * height * 4);
+  for (let row = 0; row < height; row++) {
+    data.set(frame.data.subarray((y + row) * frame.stride + x * 4,
+      (y + row) * frame.stride + (x + width) * 4), row * width * 4);
+  }
+  return { width, height, data };
+}
+
+const normalized = text => text.normalize("NFC").replace(/\s/gu, "");
+
+/** Recognizes the final complete frame; readiness alone cannot satisfy the pixel assertion. */
+function pixels(command, expected, language, diagnostic) {
+  return async ({ captured, rect, directory }) => {
+    const crop = cropViewPixels(captured.at(-1), rect);
+    const file = join(directory, "view-content.bgra.bin");
+    writeFileSync(file, crop.data);
+    const { stdout } = await run(command, ["--bgra", file, String(crop.width), String(crop.height),
+      String(crop.width * 4), language], { timeout: 10000, maxBuffer: 1024 * 1024 });
+    const result = JSON.parse(stdout);
+    assert.ok(Array.isArray(result.lines) && result.lines.every(line => typeof line === "string"),
+      "capture text recognition returned invalid lines");
+    writeFileSync(join(directory, "view-content.json"), JSON.stringify({ expected, language, ...result }, null, 2) + "\n");
+    assert.ok(normalized(result.lines.join(" ")).includes(normalized(expected)),
+      `captured view does not contain ${JSON.stringify(expected)}: ${JSON.stringify(result.lines)}`);
+    diagnostic(`captured content ${JSON.stringify(expected)} in decoded frame ${captured.length}`);
+  };
+}
+
+/** Declared per-plugin readiness and fixed captured-content expectations for the installed fixture. */
+export async function viewContentCases(s, diagnostic) {
+  const command = process.env.SOKSAK_CAPTURE_TEXT;
+  assert.ok(typeof command === "string" && command.length > 0,
+    "SOKSAK_CAPTURE_TEXT must name the built capture_text_test executable");
+  const { root } = await s.get("core.project");
+  const folder = `view-content-${process.pid}`;
+  mkdirSync(join(root, folder));
+  s.cleanup(() => rmSync(join(root, folder), { recursive: true, force: true }));
+  const editorPath = `${folder}/content.txt`;
+  const hwpPath = `${folder}/content.hwp`;
+  const editorText = "SOKSAK EDITOR CONTENT";
+  const terminalText = "SOKSAK TERMINAL CONTENT";
+  writeFileSync(join(root, editorPath), editorText + "\n");
+  copyFileSync(FIXTURE, join(root, hwpPath));
+  const status = async (tab, name, predicate) => {
+    await s.until("core.surfaces", all => all.some(item => item.surface === tab
+      && item.exposes.includes(`status ${name}`)), `${tab} did not register ${name}`);
+    return s.until(name, predicate, `${tab} did not reach ${name} readiness`, { surface: tab });
+  };
+  const area = async (tab, name) => {
+    const rect = await s.rect(name, undefined, tab);
+    assert.ok(rect.width > 0 && rect.height > 0, `${tab}: ${name} has no visible area`);
+  };
+  return new Map([
+    ["browser", { ready: async (_, { tab }) => {
+      const location = await status(tab, "browser.location", value => !value.loading && value.error === null);
+      assert.equal(location.url, "", "the initial browser must show its empty state");
+      await area(tab, "browser.empty");
+      return pixels(command, "주소를 입력하세요", "ko-KR", diagnostic);
+    } }],
+    ["editor", { params: { path: editorPath }, ready: async (_, { tab }) => {
+      await status(tab, "editor.document", value => value.path === editorPath && value.length === editorText.length + 1);
+      await area(tab, "editor.content");
+      return pixels(command, editorText, "en-US", diagnostic);
+    } }],
+    ["hwp", { params: { path: hwpPath }, ready: async (_, { tab }) => {
+      await status(tab, "hwp.document", value => value.path === hwpPath && value.phase === "ready" && value.pages === 1);
+      await area(tab, "hwp.studio");
+      return pixels(command, "속삭한글문서확인", "ko-KR", diagnostic);
+    } }],
+    ["terminal", { ready: async (_, { tab }) => {
+      await status(tab, "terminal.session", value => value.sessionId && value.cols > 0 && value.rows > 0);
+      await s.run("terminal.input", { bytes: `printf '${terminalText}\\n'\r` }, tab);
+      await status(tab, "terminal.screen", rows => rows.map(row => row.map(cell => cell.ch ?? " ").join("")).join("\n").includes(terminalText));
+      await area(tab, "terminal.view");
+      return pixels(command, terminalText, "en-US", diagnostic);
+    } }],
+  ]);
+}

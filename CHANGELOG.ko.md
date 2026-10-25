@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-1: 녹화 pixel에서 인식한 고정 예상 text로 설치된 view plugin 네 개의 양 host display acceptance를 완료한다. Readiness, composition, binder audit, 정확한 확정 frame count 및 오류/포커스/종료 검사를 유지한다. 공개 Vision은 native 검사 executable에서만 사용하고 build output을 자동 발견한다. Display owner 열한 개, content owner 세 개, build-discovery owner 다섯 개, native recognition 검사 및 실제 content 사례 여덟 개가 통과한다. Sparse colour sampling은 관측값으로 유지하며 명시적인 capture text 근거보다 우선하지 않는다.
+
 - F212.12-1: Boolean surface flag를 선언처럼 읽는 대신 loaded plugin metadata에 선언 composition을 보존한다. Environment 및 plugin-row owner가 composition 누락을 재현하고 수정 후 owner 25개와 재빌드한 양 host metadata 검사가 오류 감사, baseline 복원 및 종료와 함께 통과한다. View content readiness를 녹화 중 검사하고 실패 시 연 tab을 닫으며 display-consumer owner 여섯 개가 모두 통과한다. 명시적인 expected-pixel case가 남아 전체 view display acceptance는 열어 둔다.
 
 - F212.14-4: 연속 layout을 포함한 모든 준비 응답 전에 Wails raster configuration을 시작한다. Post-DOM refresh, exact-raster 대기 및 cancellation 오류를 유지한다. 수정 전 누락 작업 assertion 두 개가 실패하며 수정 후 owner 다섯 개와 녹화 geometry 사례 세 개가 통과하고 감사, baseline 복원 및 종료도 통과한다. 완전한 trace 없는 benchmark는 여전히 모든 성능 목표를 실패하므로 F212.14를 열어 둔다.

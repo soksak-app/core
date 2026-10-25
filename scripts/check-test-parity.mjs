@@ -704,6 +704,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.12-1",
+    implementation: [
+      { file: "e2e/view-display.mjs", symbol: "export async function checkViewDisplay(" },
+      { file: "e2e/view-content.mjs", symbol: "export async function viewContentCases(" },
+    ],
+    tests: [
+      { file: "e2e/test/view-display.test.mjs", id: "view display rejects a readiness-only case without captured-pixel verification" },
+      { file: "e2e/test/view-content.test.mjs", id: "view pixel crops include the capture content origin and scale once" },
+      { file: "native/darwin/tests/capture_text_test.m", id: "SOKSAK CONTENT CHECK" },
+      { file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" },
+    ],
+    expected: "Every installed view reaches declared readiness and its expected recorded text, with exact finalized frame counts and empty binder audits.",
+    levels: ["unit", "native", "application"],
+  },
+  {
     id: "F212.12-1-15",
     implementation: [
       { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "PluginHostReply" },

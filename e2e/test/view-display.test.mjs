@@ -54,7 +54,7 @@ function fixture({ blank = false, offset = 0, terminalOnly = false } = {}) {
       return value;
     },
     async presented() { return { displayed: 150 }; },
-    async record() { return { frames: "fixture-recording", stop: async () => ({ limited: false, longestGap: 16 }) }; },
+    async record() { return { frames: "fixture-recording", stop: async () => ({ count: 2, limited: false, longestGap: 16 }) }; },
   };
   return { s, opened, readRecording: () => [frame, { ...frame, time: 216 }] };
 }
@@ -85,11 +85,12 @@ test("view content readiness is verified before the recording stops", { timeout:
   let stopped = false;
   f.s.record = async () => ({ frames: "fixture-recording", stop: async () => {
     stopped = true;
-    return { limited: false, longestGap: 16 };
+    return { count: 2, limited: false, longestGap: 16 };
   } });
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", async () => {
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => {
     assert.equal(stopped, false, "recording ended before content readiness");
-  }]]));
+    return async () => {};
+  } }]]));
   assert.equal(stopped, true);
 });
 
@@ -107,4 +108,51 @@ test("a failed view readiness check closes the opened tab", { timeout: 5000 }, a
   await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map()), /forced surface readiness failure/);
   assert.deepEqual((await f.s.get("core.surfaces")).map(item => item.surface), ["probe-original"],
     "failed view preparation left its opened tab in the next check");
+});
+
+test("view display rejects a readiness-only case without captured-pixel verification", { timeout: 5000 }, async (t) => {
+  const f = fixture({ terminalOnly: true });
+  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording,
+    new Map([["terminal", { ready: async () => undefined }]])), /captured.pixel/);
+});
+
+test("view display executes the case against its decoded capture", { timeout: 5000 }, async (t) => {
+  const f = fixture({ terminalOnly: true });
+  let measured = false;
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => async ({ captured }) => {
+    assert.equal(captured.length, 2);
+    measured = true;
+  } }]]));
+  assert.equal(measured, true, "the expected-pixel case was never executed");
+});
+
+test("view display rejects missing finalized frame files", { timeout: 5000 }, async (t) => {
+  const f = fixture({ terminalOnly: true });
+  f.s.record = async () => ({ frames: "fixture-recording", stop: async () => ({ count: 3, limited: false, longestGap: 16 }) });
+  await assert.rejects(checkViewDisplay(f.s, t, f.readRecording), /frame.*count|missing.*frame/);
+});
+
+test("view display audits controls after its declared content readiness", { timeout: 5000 }, async (t) => {
+  const f = fixture({ terminalOnly: true });
+  const get = f.s.get;
+  let ready = false;
+  f.s.get = async (...args) => {
+    const value = await get(...args);
+    if (args[0] === "core.surface.document" && !ready) return { ...value, unbound: [{ tag: "button" }] };
+    return value;
+  };
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => {
+    ready = true;
+    return async () => {};
+  } }]]));
+});
+
+test("an explicit pixel verifier covers content between sparse colour samples", { timeout: 5000 }, async (t) => {
+  const f = fixture({ terminalOnly: true, blank: true });
+  const captured = f.readRecording();
+  const at = (41 * captured[0].stride + 21 * 4);
+  captured[0].data.fill(0, at, at + 3);
+  await acceptViewDisplay(f.s, t, () => captured, new Map([["terminal", { ready: async () => async ({ captured: frames }) => {
+    assert.deepEqual([...frames.at(-1).data.subarray(at, at + 3)], [0, 0, 0]);
+  } }]]));
 });
