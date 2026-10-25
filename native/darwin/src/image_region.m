@@ -15,6 +15,7 @@
 #import "image_capture_match.h"
 #import "image_region.h"
 #import "input_press_context.h"
+#import "webview_input.h"
 #import "observe.h"
 #import "webview_geometry.h"
 
@@ -195,6 +196,8 @@ static NSString *keypadKeyName(unsigned short keyCode) {
 // region operation is
 // on the main thread.
 static NSHashTable *spLiveRegions = nil;
+static id spPressOriginMonitor = nil;
+static NSUInteger spOpenRegionCount = 0;
 
 void sp_region_restore_capture_identity(void) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
@@ -207,8 +210,8 @@ void sp_region_restore_capture_identity(void) {
     }
 }
 
-// Is the point of a press event inside a live image region of the same window? Returns that region (including the
-// region itself, nil if none). Only the point of a mouse press is considered.
+// Is the original point of a mouse press inside a live image region of the same window? Returns that region (including
+// the region itself, nil if none). A paired drag or release is classified by its press origin.
 static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     double x = 0, y = 0;
     NSPoint windowPoint;
@@ -221,11 +224,20 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
             case NSEventTypeLeftMouseDown:
             case NSEventTypeRightMouseDown:
             case NSEventTypeOtherMouseDown:
+                windowPoint = event.locationInWindow;
+                break;
+            case NSEventTypeLeftMouseDragged:
+            case NSEventTypeRightMouseDragged:
+            case NSEventTypeOtherMouseDragged:
+            case NSEventTypeLeftMouseUp:
+            case NSEventTypeRightMouseUp:
+            case NSEventTypeOtherMouseUp:
+                if (!sp_input_press_origin_point(view.window, (int)event.buttonNumber, &x, &y, NULL)) return nil;
+                windowPoint = NSMakePoint(x, y);
                 break;
             default:
                 return nil;
         }
-        windowPoint = event.locationInWindow;
     }
     NSPoint point = [view convertPoint:windowPoint fromView:nil];
     if (NSPointInRect(point, view.bounds)) return view;
@@ -235,6 +247,47 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         if (NSPointInRect(inOther, other.bounds)) return other;
     }
     return nil;
+}
+
+static SPImageRegion *spRegionAtWindowPoint(NSWindow *window, NSPoint windowPoint) {
+    for (SPImageRegion *region in spLiveRegions) {
+        if (!region.closed && region.window == window && NSPointInRect([region convertPoint:windowPoint fromView:nil], region.bounds)) {
+            return region;
+        }
+    }
+    return nil;
+}
+
+static void spEnsurePressOriginMonitor(void) {
+    if (spPressOriginMonitor) return;
+    NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown
+        | NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp | NSEventMaskOtherMouseUp;
+    spPressOriginMonitor = sp_observe_local_monitor("image_region.press_origin", SP_OBSERVE_COUNT, mask,
+        ^NSEvent *(NSEvent *event) {
+            NSWindow *window = event.window;
+            if (!window) return event;
+            int button = (int)event.buttonNumber;
+            if (event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown
+                || event.type == NSEventTypeOtherMouseDown) {
+                sp_input_press_origin_set(window, button, event.locationInWindow.x, event.locationInWindow.y);
+            } else {
+                double x = 0, y = 0;
+                uint64_t token = 0;
+                if (!sp_input_press_origin_point(window, button, &x, &y, &token)) return event;
+                SPImageRegion *region = spRegionAtWindowPoint(window, NSMakePoint(x, y));
+                if (region && region.webSurface) {
+                    webviewInputReceiveThenDrain((WKWebView *)region.webSurface, @"pointerup", 1.0, ^(BOOL received) {
+                        if (!received) sp_log_error("image region", "the paired pointer release was not received before press-origin cleanup");
+                        sp_input_press_origin_clear(window, button, token);
+                    });
+                } else {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        sp_input_press_origin_clear(window, button, token);
+                    });
+                }
+            }
+            return event;
+        });
 }
 
 @implementation SPImageRegion
@@ -1331,6 +1384,8 @@ void *sp_region_create(void *surfaceHandle, const char *name, sp_region_event ev
 
     NSView *nativePlane = surfaceNativePlane(surface);
     if (!nativePlane) { [view release]; return NULL; }
+    spEnsurePressOriginMonitor();
+    spOpenRegionCount++;
     NSClipView *clipView = [[SPImageClipView alloc] initWithFrame:NSZeroRect];
     clipView.drawsBackground = NO;
     [clipView addSubview:view];
@@ -1670,6 +1725,11 @@ void sp_region_close(void *handle) {
     [view removeFromSuperview];
     [clipView removeFromSuperview];     // Does not leave an empty clip view on the surface.
     [view release];                     // The +1 that the handle held.
+    if (spOpenRegionCount) spOpenRegionCount--;
+    if (!spOpenRegionCount && spPressOriginMonitor) {
+        [NSEvent removeMonitor:spPressOriginMonitor];
+        spPressOriginMonitor = nil;
+    }
 }
 
 const char *sp_region_facts(void *handle) {

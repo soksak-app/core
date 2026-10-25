@@ -4,6 +4,17 @@
 
 ## 미배포
 
+- F239-89: Region 내부 click-through press와 짝이 되는 release까지 image-region
+  focus를 유지한다. F84 trace는 page focus command 뒤 mouseup에서 focus loss를
+  기록했다. 변경 전 owning activation test에서 같은 실패가 재현됐다. 수정 후 같은
+  test는 page/exported command 경로, region 밖 release, 다른 region, 명시적
+  document focus 및 direct pointer input을 포함해 197개 assertion을 통과한다.
+  Press-origin state를 정리하기 전에 WebKit pending mouse 처리를 완료한다. Fixture는
+  전역 `sp_log_error` 호출 수를 세지 않아 성공 receipt 경로만 검증한다. Log에 baseline
+  process identity가 없어 이전 app 복원도 입증하지 않는다. 이는 제어된 AppKit event
+  검사이며 live HID acceptance가 아니다.
+
+
 - F239-91: macOS IME document helper가 현재 순서가 있는 native input
   transaction을 읽도록 한다. 기존 helper는 image region의 transaction
   envelope를 거부해 순서가 있는 insert와 Backspace action의 document를

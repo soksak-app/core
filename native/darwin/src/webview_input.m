@@ -167,6 +167,17 @@ void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout
     });
 }
 
+void webviewInputReceiveThenDrain(WKWebView *view, NSString *type, NSTimeInterval timeout, void (^done)(BOOL received)) {
+    NSCAssert(NSThread.isMainThread, @"Webview input receipts require the main thread");
+    webviewInputReceive(view, type, timeout, ^(BOOL received) {
+        if (!hasPendingMouseDrain(view)) {
+            done(NO);
+            return;
+        }
+        [view _doAfterProcessingAllPendingMouseEvents:^{ done(received); }];
+    });
+}
+
 void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeout,
     BOOL (^send)(void), void (^done)(BOOL received)) {
     NSCAssert(NSThread.isMainThread, @"Webview input receipts require the main thread");

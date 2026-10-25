@@ -67,6 +67,20 @@ static NSMutableArray *collectedEvents = nil;
 static NSMutableArray *eventsA16 = nil;
 static NSMutableArray *eventsB16 = nil;
 
+@interface PointerFocusMessageHandler : NSObject <WKScriptMessageHandler>
+@property void *region;
+@property NSUInteger count;
+@end
+
+@implementation PointerFocusMessageHandler
+- (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message {
+    (void)userContentController;
+    (void)message;
+    self.count++;
+    sp_region_focus(self.region);
+}
+@end
+
 static void testEvent(void *context, const char *json) {
     if (context == (void *)1) {
         if (!eventsA16) eventsA16 = [NSMutableArray new];
@@ -1605,6 +1619,8 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSView *regionView15 = (NSView *)region15;
         NSRect frame15 = [regionView15 convertRect:regionView15.bounds toView:nil];
         NSPoint inside15 = NSMakePoint(NSMidX(frame15), NSMidY(frame15));
+        NSPoint outside15 = NSMinX(frame15) - 40 > 0 ? NSMakePoint(NSMinX(frame15) - 40, NSMidY(frame15))
+            : NSMakePoint(NSMaxX(frame15) + 40, NSMidY(frame15));
         NSEvent *down15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:inside15
             modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil eventNumber:1 clickCount:1 pressure:1];
@@ -1631,10 +1647,147 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(window.firstResponder == (NSResponder *)region15,
             @"press focus: the pass-through press does not leave the page webview holding the terminal responder");
 
-        // A press outside the region is a real focus move, so it is reported as is. This is a control against over-suppression.
+        // The page's focus command runs after it receives the physical pointer event. Keep that command between the
+        // AppKit press and release so the assertion covers the complete click-through gesture, not only press setup.
+        sp_region_focus(region15);
         [collectedEvents removeAllObjects];
-        NSPoint outside15 = NSMinX(frame15) - 40 > 0 ? NSMakePoint(NSMinX(frame15) - 40, NSMidY(frame15))
-            : NSMakePoint(NSMaxX(frame15) + 40, NSMidY(frame15));
+        NSEvent *downRoundTrip15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:inside15
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:15 clickCount:1 pressure:1];
+        NSEvent *upRoundTrip15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:inside15
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:15 clickCount:1 pressure:0];
+        WKUserContentController *focusController15 = surface.configuration.userContentController;
+        PointerFocusMessageHandler *focusHandler15 = [[[PointerFocusMessageHandler alloc] init] autorelease];
+        focusHandler15.region = region15;
+        [focusController15 addScriptMessageHandler:focusHandler15 name:@"f89Focus"];
+        __block BOOL focusListenerReady15 = NO;
+        [surface evaluateJavaScript:@"window.__f89Focus = () => webkit.messageHandlers.f89Focus.postMessage('focus'); document.addEventListener('pointerdown', window.__f89Focus, true)"
+            completionHandler:^(id result, NSError *error) {
+                (void)result;
+                check(error == nil, [NSString stringWithFormat:@"press focus: the page installs its focus command listener (%@)", error]);
+                focusListenerReady15 = YES;
+            }];
+        NSDate *listenerDeadline15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while (!focusListenerReady15 && listenerDeadline15.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        check(focusListenerReady15, @"press focus: the page focus command listener is ready");
+        [NSApp postEvent:downRoundTrip15 atStart:NO];
+        NSDate *commandDeadline15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while (focusHandler15.count == 0 && commandDeadline15.timeIntervalSinceNow > 0) {
+            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
+                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (pending) [NSApp sendEvent:pending];
+        }
+        check(focusHandler15.count == 1,
+            [NSString stringWithFormat:@"press focus: the same-region pointerdown runs the page focus command once (got %lu)",
+                (unsigned long)focusHandler15.count]);
+        double trackedX15 = 0, trackedY15 = 0;
+        BOOL trackedOrigin15 = sp_input_press_origin_point(window, 0, &trackedX15, &trackedY15, NULL);
+        check(trackedOrigin15 && trackedX15 == inside15.x && trackedY15 == inside15.y,
+            [NSString stringWithFormat:@"press focus: AppKit tracks the physical down origin before the focus command (tracked %@ at %.2f,%.2f expected %@)",
+                trackedOrigin15 ? @"yes" : @"no", trackedX15, trackedY15, NSStringFromPoint(inside15)]);
+        [NSApp postEvent:upRoundTrip15 atStart:NO];
+        NSDate *drainRoundTrip15 = [NSDate dateWithTimeIntervalSinceNow:0.3];
+        while ([drainRoundTrip15 timeIntervalSinceNow] > 0) {
+            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
+                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (pending) [NSApp sendEvent:pending];
+        }
+        BOOL reportedRoundTripLoss15 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
+                && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) {
+                reportedRoundTripLoss15 = YES;
+            }
+        }
+        check(!reportedRoundTripLoss15,
+            [NSString stringWithFormat:@"press focus: same-region AppKit release after the page focus command does not report focus loss (events %@)",
+                collectedEvents]);
+        check(window.firstResponder == (NSResponder *)region15,
+            [NSString stringWithFormat:@"press focus: same-region AppKit release keeps the region first responder (got %@)",
+                NSStringFromClass(window.firstResponder.class)]);
+        __block BOOL focusListenerRemoved15 = NO;
+        [surface evaluateJavaScript:@"document.removeEventListener('pointerdown', window.__f89Focus, true); delete window.__f89Focus"
+            completionHandler:^(id result, NSError *error) {
+                (void)result;
+                check(error == nil, [NSString stringWithFormat:@"press focus: the page removes its test focus listener (%@)", error]);
+                focusListenerRemoved15 = YES;
+            }];
+        NSDate *removeListenerDeadline15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while (!focusListenerRemoved15 && removeListenerDeadline15.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        check(focusListenerRemoved15, @"press focus: the page test listener is removed before the API-only control");
+        [focusController15 removeScriptMessageHandlerForName:@"f89Focus"];
+
+        // Exercise the exported focus command between actual AppKit down/up dispatch without a page listener.
+        [collectedEvents removeAllObjects];
+        NSEvent *downCommand15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:inside15
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:17 clickCount:1 pressure:1];
+        NSEvent *upCommand15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:inside15
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:17 clickCount:1 pressure:0];
+        [NSApp sendEvent:downCommand15];
+        sp_region_focus(region15);
+        [NSApp sendEvent:upCommand15];
+        NSDate *drainCommand15 = [NSDate dateWithTimeIntervalSinceNow:0.3];
+        while (drainCommand15.timeIntervalSinceNow > 0) {
+            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
+                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (pending) [NSApp sendEvent:pending];
+        }
+        BOOL reportedCommandLoss15 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) reportedCommandLoss15 = YES;
+        }
+        check(!reportedCommandLoss15 && window.firstResponder == (NSResponder *)region15,
+            [NSString stringWithFormat:@"press focus: the exported focus command and physical release preserve the region (events %@)",
+                collectedEvents]);
+
+        // The release belongs to its press even when the pointer has moved outside the region.
+        [collectedEvents removeAllObjects];
+        NSEvent *downOutsideRelease15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:inside15
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:16 clickCount:1 pressure:1];
+        NSEvent *upOutsideRelease15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:outside15
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil eventNumber:16 clickCount:1 pressure:0];
+        [NSApp sendEvent:downOutsideRelease15];
+        sp_region_focus(region15);
+        [NSApp sendEvent:upOutsideRelease15];
+        NSDate *drainOutsideRelease15 = [NSDate dateWithTimeIntervalSinceNow:0.3];
+        while ([drainOutsideRelease15 timeIntervalSinceNow] > 0) {
+            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
+                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (pending) [NSApp sendEvent:pending];
+        }
+        BOOL reportedOutsideReleaseLoss15 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
+                && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) {
+                reportedOutsideReleaseLoss15 = YES;
+            }
+        }
+        check(!reportedOutsideReleaseLoss15 && window.firstResponder == (NSResponder *)region15,
+            [NSString stringWithFormat:@"press focus: AppKit release outside the region retains its press-origin focus (events %@, responder %@)",
+                collectedEvents, NSStringFromClass(window.firstResponder.class)]);
+
+        // An explicit document focus request after the click still transfers keyboard focus away from the region.
+        [collectedEvents removeAllObjects];
+        [window makeFirstResponder:surface];
+        BOOL reportedDocumentFocusLoss15 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) reportedDocumentFocusLoss15 = YES;
+        }
+        check(reportedDocumentFocusLoss15 && window.firstResponder == surface,
+            @"press focus: an explicit document focus request after release is not suppressed by the old press");
+
+        // A press outside the region is a real focus move, so it is reported as is. This is a control against over-suppression.
+        sp_region_focus(region15);
+        [collectedEvents removeAllObjects];
         NSEvent *downOut15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:outside15
             modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil eventNumber:2 clickCount:1 pressure:1];
@@ -1698,10 +1851,13 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSView *regionViewB16 = (NSView *)regionB16;
         NSRect frameB16 = [regionViewB16 convertRect:regionViewB16.bounds toView:nil];
         NSPoint insideB16 = NSMakePoint(NSMidX(frameB16), NSMidY(frameB16));
+        NSView *regionViewA16 = (NSView *)regionA16;
+        NSRect frameA16 = [regionViewA16 convertRect:regionViewA16.bounds toView:nil];
+        NSPoint insideA16 = NSMakePoint(NSMidX(frameA16), NSMidY(frameA16));
         NSEvent *downB16 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:insideB16
             modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil eventNumber:3 clickCount:1 pressure:1];
-        NSEvent *upB16 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:insideB16
+        NSEvent *upB16 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:insideA16
             modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil eventNumber:3 clickCount:1 pressure:0];
         [NSApp postEvent:downB16 atStart:NO];
@@ -1733,8 +1889,8 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSString *who = window.firstResponder == (NSResponder *)regionA16 ? @"A"
             : (window.firstResponder == (NSResponder *)regionB16 ? @"B" : @"other");
         check(window.firstResponder == (NSResponder *)regionB16,
-            [NSString stringWithFormat:@"press focus A->B: the responder moves to the pressed region B, not the page webview (responder %@ at point %@)",
-                who, NSStringFromPoint(insideB16)]);
+            [NSString stringWithFormat:@"press focus A->B: release over region A keeps the press-origin region B as responder, not the page webview (responder %@ at press %@ release %@)",
+                who, NSStringFromPoint(insideB16), NSStringFromPoint(insideA16)]);
         check(reportedB16Gain,
             [NSString stringWithFormat:@"press focus A->B: region B reports its focus gain (events %@)", collectedEvents]);
         sp_region_close(regionA16);
@@ -1771,8 +1927,9 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSArray *inputRecords17 = capturedEvents(^{
             check(sp_input_pointer(window, x17, y17, 1, 0, 0, 0) == SP_INPUT_DELIVERED,
                 @"direct pointer focus: the press reaches the hit view");
+            sp_region_focus(region17);
             check(sp_input_pointer(window, x17, y17, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
-                @"direct pointer focus: the release reaches the pressed view");
+                @"direct pointer focus: the paired release reaches the pressed view after the focus command");
             dispatch_async(dispatch_get_main_queue(), ^{ nextMainTurn17 = YES; });
             NSDate *deadline17 = [NSDate dateWithTimeIntervalSinceNow:1.0];
             while (!nextMainTurn17 && deadline17.timeIntervalSinceNow > 0) {
@@ -1803,6 +1960,28 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(window.firstResponder == (NSResponder *)region17,
             [NSString stringWithFormat:@"direct pointer focus: the region remains first responder after the click (got %@)",
                 NSStringFromClass(window.firstResponder.class)]);
+
+        [collectedEvents removeAllObjects];
+        nextMainTurn17 = NO;
+        NSArray *outsideReleaseRecords17 = capturedEvents(^{
+            check(sp_input_pointer(window, x17, y17, 1, 0, 0, 0) == SP_INPUT_DELIVERED,
+                @"direct pointer focus: a second press starts inside the region");
+            sp_region_focus(region17);
+            check(sp_input_pointer(window, x17 + 100, y17, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+                @"direct pointer focus: a release outside uses the original press target");
+            dispatch_async(dispatch_get_main_queue(), ^{ nextMainTurn17 = YES; });
+            NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
+            while (!nextMainTurn17 && deadline.timeIntervalSinceNow > 0) {
+                [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+            }
+        });
+        BOOL reportedOutsideReleaseLoss17 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) reportedOutsideReleaseLoss17 = YES;
+        }
+        check(!reportedOutsideReleaseLoss17 && window.firstResponder == (NSResponder *)region17,
+            [NSString stringWithFormat:@"direct pointer focus: release coordinates outside do not replace the press origin (events %@ records %@)",
+                collectedEvents, outsideReleaseRecords17]);
         sp_region_close(region17);
     }
 

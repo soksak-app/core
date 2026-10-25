@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- F239-89: Keep an image region focused through the release paired with an
+  in-region click-through press. The F84 trace reported focus loss on mouseup
+  after the page focus command. The unchanged owning activation test reproduced
+  the loss. The same test passes 197 assertions for page-command and exported-
+  command paths, outside release, another region, explicit document focus, and
+  direct pointer input. WebKit pending mouse processing completes before the
+  press-origin state is retired. The fixture does not count global
+  `sp_log_error` calls, so it verifies the successful receipt path only. Its log
+  omits baseline process identity and does not establish prior-app restoration.
+  This is controlled AppKit event coverage, not live HID acceptance.
+
+
 - F239-91: Read current ordered native input transactions in the macOS IME
   document helper. The old helper rejected the image region's transaction
   envelope and returned no document for ordered insert and Backspace actions.

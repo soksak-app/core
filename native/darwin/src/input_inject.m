@@ -23,6 +23,8 @@
 #import "private/webkit.h"
 
 static _Thread_local sp_input_press_context *currentPressContext = NULL;
+static char pressOriginsKey;
+static uint64_t nextPressOriginToken = 1;
 
 void sp_input_press_context_push(sp_input_press_context *context, void *window, double x, double y) {
     NSCAssert(NSThread.isMainThread, @"synthetic press contexts belong to the main thread");
@@ -49,6 +51,41 @@ bool sp_input_press_context_point(void *window, double *x, double *y) {
         return true;
     }
     return false;
+}
+
+uint64_t sp_input_press_origin_set(void *handle, int button, double x, double y) {
+    NSCAssert(NSThread.isMainThread, @"mouse press origins belong to the main thread");
+    NSWindow *window = (__bridge NSWindow *)handle;
+    if (!window) return 0;
+    NSMutableDictionary *origins = objc_getAssociatedObject(window, &pressOriginsKey);
+    if (!origins) {
+        origins = [NSMutableDictionary dictionary];
+        objc_setAssociatedObject(window, &pressOriginsKey, origins, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    uint64_t token = nextPressOriginToken++;
+    if (token == 0) token = nextPressOriginToken++;
+    origins[@(button)] = @{ @"token": @(token), @"x": @(x), @"y": @(y) };
+    return token;
+}
+
+bool sp_input_press_origin_point(void *handle, int button, double *x, double *y, uint64_t *token) {
+    NSCAssert(NSThread.isMainThread, @"mouse press origins belong to the main thread");
+    NSWindow *window = (__bridge NSWindow *)handle;
+    NSDictionary *origins = window ? objc_getAssociatedObject(window, &pressOriginsKey) : nil;
+    NSDictionary *origin = origins[@(button)];
+    if (!origin) return false;
+    if (x) *x = [origin[@"x"] doubleValue];
+    if (y) *y = [origin[@"y"] doubleValue];
+    if (token) *token = [origin[@"token"] unsignedLongLongValue];
+    return true;
+}
+
+void sp_input_press_origin_clear(void *handle, int button, uint64_t token) {
+    NSCAssert(NSThread.isMainThread, @"mouse press origins belong to the main thread");
+    NSWindow *window = (__bridge NSWindow *)handle;
+    NSMutableDictionary *origins = window ? objc_getAssociatedObject(window, &pressOriginsKey) : nil;
+    NSDictionary *origin = origins[@(button)];
+    if (origin && [origin[@"token"] unsignedLongLongValue] == token) [origins removeObjectForKey:@(button)];
 }
 
 // Converts coordinates relative to the top-left of the content area into window coordinates. Follows the coordinate system direction of the content view.
@@ -151,6 +188,10 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
     if (!hit) { held->why = phase == 2 || phase == 3 ? "no open press for the drag or release" : "no view at the point"; return SP_INPUT_REJECTED; }
     if (hit.window != window) {
         objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        uint64_t token = 0;
+        if (sp_input_press_origin_point(window, button, NULL, NULL, &token)) {
+            sp_input_press_origin_clear(window, button, token);
+        }
         held->why = "the target view left the window";
         return SP_INPUT_REJECTED;
     }
@@ -171,6 +212,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             // A delivered release ends an open press. A rejected release leaves the press open, so the next press reports that fact.
             if (objc_getAssociatedObject(window, pressedViewKey(button))) { held->why = "a press of this button is still open"; return SP_INPUT_PRESS_OPEN; }
             objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            sp_input_press_origin_set(window, button, point.x, point.y);
             // -[NSApplication sendEvent:] is not used because it fails to deliver a synthetic first click to an inactive
             // window. The explicit context lets click-through native regions classify the synchronous responder change
             // without changing NSApp.currentEvent.
@@ -187,14 +229,29 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             }
             return SP_INPUT_DELIVERED;
         case 2:
-            if (right) [hit rightMouseDragged:mouseEvent(window, NSEventTypeRightMouseDragged, point, 0, 1)];
-            else [hit mouseDragged:mouseEvent(window, NSEventTypeLeftMouseDragged, point, 0, 1)];
+        case 3: {
+            double originX = point.x, originY = point.y;
+            uint64_t originToken = 0;
+            bool hasOrigin = sp_input_press_origin_point(window, button, &originX, &originY, &originToken);
+            sp_input_press_context context = {0};
+            if (hasOrigin) sp_input_press_context_push(&context, window, originX, originY);
+            @try {
+                if (phase == 2) {
+                    if (right) [hit rightMouseDragged:mouseEvent(window, NSEventTypeRightMouseDragged, point, 0, 1)];
+                    else [hit mouseDragged:mouseEvent(window, NSEventTypeLeftMouseDragged, point, 0, 1)];
+                } else {
+                    if (right) [hit rightMouseUp:mouseEvent(window, NSEventTypeRightMouseUp, point, 1, 0)];
+                    else [hit mouseUp:mouseEvent(window, NSEventTypeLeftMouseUp, point, 1, 0)];
+                }
+            } @finally {
+                if (hasOrigin) sp_input_press_context_pop(&context);
+                if (phase == 3) {
+                    objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                    if (hasOrigin) sp_input_press_origin_clear(window, button, originToken);
+                }
+            }
             return SP_INPUT_DELIVERED;
-        case 3:
-            if (right) [hit rightMouseUp:mouseEvent(window, NSEventTypeRightMouseUp, point, 1, 0)];
-            else [hit mouseUp:mouseEvent(window, NSEventTypeLeftMouseUp, point, 1, 0)];
-            objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            return SP_INPUT_DELIVERED;
+        }
         default:
             held->why = "unknown phase";
             return SP_INPUT_REJECTED;
