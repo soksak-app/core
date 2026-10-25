@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-48-3-10: Add Wails process-wait tests for Darwin timeout and ended-PID
+  behavior, plus explicit unsupported errors on Linux and Windows. The paired
+  host audit no longer reports the three platform test paths or the shared
+  process-wait test helper. Darwin tests pass 2/2; Linux and Windows targets
+  cross-compile but were not executed. No platform implementation changed.
+
 - F239-47-40-6: Decode Wails `ProjectShown` and nested `ShownProject`
   arguments with the standard host argument decoder. Red: the unchanged
   binding test and new owner cases failed because direct JSON decoding

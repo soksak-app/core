@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-48-3-10: Darwin의 timeout 및 종료된 PID 동작과 Linux/Windows의 명시적
+  unsupported 오류를 확인하는 Wails process-wait test를 추가한다. Paired-host
+  감사에서 세 OS별 test 경로와 공통 process-wait helper finding이 사라졌다.
+  Darwin test는 2/2 통과했고 Linux/Windows target은 cross-compile했지만 실행하지
+  않았다. Platform 구현은 변경하지 않았다.
+
 - F239-47-40-6: Wails `ProjectShown` 및 nested `ShownProject` 인자를 표준 host
   argument decoder로 디코딩한다. Red: 변경 전 binding test와 새 owner case는
   직접 JSON decoding이 잘못된 request 형태와 nested field에 비표준 오류를
