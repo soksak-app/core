@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-180: Reuse coherent terminal observations and the event-backed document wait in the lifecycle check, preserving intermediate reads until the complete AppKit result arrives. Give each execution a fresh artifact directory and decode every preserved frame against the finalized count. The original cycle 05 fails without trailing Space; all 46 observation owners and the corrected two-host cycle pass with clean error audits and normal shutdown. Keep the separate reference-input and baseline-activation failures open.
+
 - F239-47-36: Complete fixed zsh ZLE repeated-vowel and Backspace acceptance on both macOS arm64 hosts. All ten AppKit/terminal documents and glyph/underline stages pass with complete 189/242-frame captures, clean error audits, restored input source and baseline, and normal shutdown. Retain cadence as a separate measurement under F239-175; no personal shell configuration is covered.
 
 - F239-79: Complete the pending two-host runtime acceptance for lifecycle fixture corrections F239-58, F239-74 and F239-79. Cycle 01 selects the dedicated window, preserves app-named artifacts, matches the AppKit and terminal documents and completes two project close/reopen passes per host. Canonical cleanup, error audits, input-source and baseline restoration, and normal shutdown pass. Close these three fixture corrections; keep the separate ten-cycle input-client acceptance open under F239-47-33.

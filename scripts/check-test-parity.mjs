@@ -643,6 +643,17 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F239-180",
+    implementation: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const completed = await waitForTerminalStage(" },
+    ],
+    tests: [
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
+    ],
+    expected: "Lifecycle completion waits for a coherent complete reference document and preserves isolated observations and complete decoded capture artifacts.",
+    levels: ["application"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },

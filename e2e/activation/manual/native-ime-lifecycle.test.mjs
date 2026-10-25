@@ -7,10 +7,13 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
+import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../../fixture.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil } from "../../terminal-screen.mjs";
 import { assertInputTraceDelivery, inputTraceTransactions, terminalInputReceiptMatches,
-  terminalLineBeforeCursor, visibleInputBeforeCursor } from "../terminal-ime-document.mjs";
+  terminalLineBeforeCursor, visibleInputBeforeCursor, readTerminalObservationSnapshot,
+  terminalComposeMatchesPreedit, terminalObserverStatusesMatch, startTerminalStatusObserver,
+  waitForTerminalStage, waitForStateEvent } from "../terminal-ime-document.mjs";
 
 const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
@@ -82,6 +85,9 @@ async function preserveGestureCapture(s, artifactDir, label) {
   let preserved = false;
   const persist = () => {
     if (preserved || !result) return;
+    const recordedFrames = frames(capture.frames);
+    assert.equal(recordedFrames.length, result.count, `${label}: capture frame files are missing`);
+    for (const file of recordedFrames) readFrame(file);
     const destination = join(artifactDir, label);
     cpSync(capture.frames, destination, { recursive: true });
     writeFileSync(join(artifactDir, `${label}.json`), JSON.stringify({
@@ -222,23 +228,50 @@ for (const app of Object.values(APPS)) {
         const promptText = terminalLineBeforeCursor(baselineScreen, baselineCursor,
           `${app.name} lifecycle baseline`);
         const prompt = { row: baselineCursor.row, col: 0, text: promptText };
-        const artifactDir = join(s.app.configDir, "logs", "ime-lifecycle", app.name, cycleLabel);
-        mkdirSync(artifactDir, { recursive: true });
+        const artifactRoot = join(s.app.configDir, "logs", "ime-lifecycle", app.name);
+        mkdirSync(artifactRoot, { recursive: true });
+        const artifactDir = mkdtempSync(join(artifactRoot, `${cycleLabel}-`));
+        t.diagnostic(`lifecycle observations: ${artifactDir}`);
         writeFileSync(join(artifactDir, "baseline.json"), JSON.stringify({
           screen: baselineScreen, compose: baselineCompose, cursor: baselineCursor, prompt,
         }, null, 2));
+        const statusWaiters = new Set();
+        const observer = await startTerminalStatusObserver(lifecycle, surface, () => {
+          for (const notify of statusWaiters) notify();
+        });
+        s.cleanup(() => observer.stop());
         const stopCapture = await preserveGestureCapture(lifecycle, artifactDir, "approved-eight-vowels-backspace-space");
         assert.equal((await lifecycle.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
         const stopTrace = await startInputTrace(lifecycle, surface);
         for (const key of Array(8).fill("k").concat("Backspace", "Space")) await lifecycle.press(key);
-        await lifecycle.until("terminal.compose", (compose) => compose.text === "",
-          `cycle ${cycleLabel}: Space did not finish composition`, { surface });
-        const completedScreen = await presentedScreen(lifecycle, surface);
-        const completedCompose = await lifecycle.get("terminal.compose", surface);
-        const completedCursor = await lifecycle.get("terminal.cursor", surface);
-        const actualDocument = visibleInputBeforeCursor(completedScreen, completedCursor, prompt,
-          completedCompose.text, `${app.name} cycle ${cycleLabel} completed document`);
         const expectedDocument = `${"ㅏ".repeat(7)} `;
+        let attempt = 0;
+        const completed = await waitForTerminalStage(observer.events, async () => {
+          const snapshot = await readTerminalObservationSnapshot({
+            readCompose: () => lifecycle.get("terminal.compose", surface),
+            readCursor: () => lifecycle.get("terminal.cursor", surface),
+            readScreen: () => presentedScreen(lifecycle, surface),
+            readHost: async () => { await lifecycle.presented(); return lifecycle.get("host.window"); },
+          });
+          const { currentCompose: compose, currentCursor: cursor, screen, host } = snapshot;
+          const region = host.regions.find(item => item.surface === surface && item.name === "view");
+          const coherent = terminalComposeMatchesPreedit(compose, cursor) &&
+            terminalObserverStatusesMatch(observer.events,
+              { compose: baselineCompose, cursor: baselineCursor, screen: baselineScreen },
+              { compose, cursor, screen }, false) &&
+            region?.presented?.generation === screen.frame.generation &&
+            region.presented.raster === screen.frame.raster && region.presented.sequence >= screen.frame.sequence;
+          const document = coherent ? visibleInputBeforeCursor(screen, cursor, prompt, compose.text,
+            `${app.name} cycle ${cycleLabel} completed document`) : null;
+          const observed = { coherent: Boolean(coherent), document, snapshot };
+          writeFileSync(join(artifactDir, `completed-observation-${++attempt}.json`), JSON.stringify(observed, null, 2));
+          return observed;
+        }, (offset, timeout) => waitForStateEvent(observer.events, offset, notify => {
+          statusWaiters.add(notify);
+          return () => statusWaiters.delete(notify);
+        }, `cycle ${cycleLabel}: completed document`, timeout), expectedDocument, `cycle ${cycleLabel}: Space`);
+        const { screen: completedScreen, currentCompose: completedCompose, currentCursor: completedCursor } = completed.snapshot;
+        const actualDocument = completed.document;
         writeFileSync(join(artifactDir, "completed-document.json"), JSON.stringify({
           expectedDocument, actualDocument, screen: completedScreen,
           compose: completedCompose, cursor: completedCursor,
@@ -256,6 +289,7 @@ for (const app of Object.values(APPS)) {
         }
         assert.ok(insertedText(entries).includes(" "),
           `cycle ${cycleLabel}: the trace did not record the committed Space`);
+        await observer.stop();
         await stopCapture();
 
         let currentSurface = surface;

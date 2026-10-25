@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-180: Lifecycle 검사에서 coherent terminal observation과 event 기반 document 대기를 재사용하고 완전한 AppKit 결과가 도착할 때까지 중간 읽기를 보존한다. 실행마다 새 artifact directory를 사용하며 보존 frame 전체를 finalized count와 대조해 decode한다. 최초 cycle 05는 끝의 Space 없이 실패했고 수정 후 observation owner 46개 및 양 host cycle이 오류 없는 감사와 정상 종료를 포함해 통과한다. 별도 reference 입력 및 baseline 활성화 실패는 미완료로 유지한다.
+
 - F239-47-36: macOS arm64 두 host에서 고정 zsh ZLE의 연속 모음 및 Backspace acceptance를 완료한다. AppKit/terminal document 열 단계와 glyph/underline 검증이 전체 189/242-frame capture, 오류 없는 감사, 입력기 및 baseline 복원과 정상 종료를 포함해 통과한다. F239-175에 따라 cadence는 별도 측정으로 유지하며 개인 shell 구성은 포함하지 않는다.
 
 - F239-79: Lifecycle fixture 수정 F239-58, F239-74, F239-79의 남은 양 host runtime acceptance를 완료한다. Cycle 01이 전용 window를 선택하고 app name 기반 artifact를 보존하며 AppKit 및 terminal document가 일치하고 host별 project close/reopen 두 회를 완료한다. Canonical cleanup, error 감사, 입력기 및 baseline 복원과 정상 종료가 통과한다. Fixture 수정 세 항목을 완료하며 별도 전체 10-cycle input-client acceptance는 F239-47-33에 미완료로 유지한다.
