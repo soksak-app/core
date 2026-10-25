@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F239-47-40-4-2-1: Identity tagging 실패 또는 capture finalization 시 모든 live
+  image-region layer를 최신 raw snapshot에서 복원한다. Capture error는 main-thread
+  cleanup을 enqueue하고 finalization은 capture queue 종료 뒤 복원이 끝날 때까지 기다린다.
+  Red: `image_region_test`는 tag 실패 뒤 두 static layer를 tagged 상태로 남겼고,
+  `capture_test`는 후속 producer frame 없는 stop 뒤 두 layer를 tagged 상태로 남겼다.
+  Green: `image_region_test`, `capture_test`, `capture_cleanup_test`가 각각 1/1 통과한다.
+  Test는 정확한 provider byte, 반복 cleanup, 변경되지 않은 geometry, visibility, focus와
+  region lifetime을 확인한다. `make docs-check`가 통과한다. Raw snapshot, 일반 image state,
+  matcher 동작은 그대로 유지한다.
 - F239-47-40-3: 선택형 strict boolean `frameIdentity`를
   `diagnostics.capture.start`에 추가하고 두 host recording interface를 거쳐 Darwin capture
   start까지 전달한다. 생략하거나 false이면 일반 capture를 유지하고 null 및

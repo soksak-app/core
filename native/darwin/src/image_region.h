@@ -60,3 +60,7 @@ const char *sp_region_facts(void *region);
 
 // Removes and releases the region. event is not called afterward.
 void sp_region_close(void *region);
+
+// Restores every live image-region layer to its latest immutable raw snapshot after diagnostic identity capture.
+// Called on the main thread; repeated calls are harmless.
+void sp_region_restore_capture_identity(void);

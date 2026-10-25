@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-47-40-4-2-1: Restore every live image-region layer from its latest raw
+  snapshot when identity tagging fails or capture finalization runs. Capture
+  errors enqueue main-thread cleanup; finalization waits for restoration after
+  capture queues drain. Red: `image_region_test` left two static layers tagged
+  after a tag failure, and `capture_test` left both tagged after stop without a
+  later producer frame. Green: `image_region_test`, `capture_test`, and
+  `capture_cleanup_test` pass 1/1 each; the tests verify exact provider bytes,
+  repeated cleanup, and unchanged geometry, visibility, focus, and region
+  lifetime. `make docs-check` passes. Raw snapshots, ordinary image state, and
+  matcher behavior remain unchanged.
 - F239-47-40-3: Add a strict optional `frameIdentity` boolean to
   `diagnostics.capture.start` and forward it through both host recording
   interfaces to Darwin capture start. Missing and false preserve ordinary

@@ -48,6 +48,19 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
+static BOOL imageBytesEqual(CGImageRef first, CGImageRef second) {
+    if (!first || !second) return NO;
+    CGDataProviderRef firstProvider = CGImageGetDataProvider(first);
+    CGDataProviderRef secondProvider = CGImageGetDataProvider(second);
+    CFDataRef firstBytes = firstProvider ? CGDataProviderCopyData(firstProvider) : NULL;
+    CFDataRef secondBytes = secondProvider ? CGDataProviderCopyData(secondProvider) : NULL;
+    BOOL equal = firstBytes && secondBytes && CFDataGetLength(firstBytes) == CFDataGetLength(secondBytes)
+        && memcmp(CFDataGetBytePtr(firstBytes), CFDataGetBytePtr(secondBytes), CFDataGetLength(firstBytes)) == 0;
+    if (firstBytes) CFRelease(firstBytes);
+    if (secondBytes) CFRelease(secondBytes);
+    return equal;
+}
+
 // Collects events in JSON form
 static NSMutableArray *collectedEvents = nil;
 // Separate collectors used to tell apart the focus change between two regions (A->B check of V5-114).
@@ -360,9 +373,66 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(sp_image_capture_match_identity_session_begin(&identityError) && identityError == NULL,
             @"TEST 1A: the undersized-raster fixture starts an identity session");
         free(identityError); identityError = NULL;
+        sp_image_capture_match_identity_session_end();
+        void *cleanupRegionA = sp_region_create(surface, "identity-cleanup-a", testEvent, NULL);
+        void *cleanupRegionB = sp_region_create(surface, "identity-cleanup-b", testEvent, NULL);
+        sp_region_place(cleanupRegionA, 0, 0, 0, 0, true);
+        sp_region_place(cleanupRegionB, 0, 0, 0, 0, true);
+        double cleanupRasterA[3] = {0}, cleanupRasterB[3] = {0};
+        check(sp_region_raster(cleanupRegionA, cleanupRasterA) && sp_region_raster(cleanupRegionB, cleanupRasterB)
+            && cleanupRasterA[0] >= 192 && cleanupRasterA[1] >= 192
+            && cleanupRasterB[0] >= 192 && cleanupRasterB[1] >= 192,
+            @"TEST 1A: two cleanup regions have enough raster for identity tags");
+        double cleanupFactsA[6] = {0}, cleanupFactsB[6] = {0};
+        sp_region_frame(cleanupRegionA, cleanupFactsA);
+        sp_region_frame(cleanupRegionB, cleanupFactsB);
+        unsigned char cleanupTokenA[16], cleanupTokenB[16];
+        IOSurfaceRef cleanupSurfaceA = createColoredGlobalSurface((size_t)cleanupRasterA[0],
+            (size_t)cleanupRasterA[1], cleanupTokenA);
+        IOSurfaceRef cleanupSurfaceB = createColoredGlobalSurface((size_t)cleanupRasterB[0],
+            (size_t)cleanupRasterB[1], cleanupTokenB);
+        BOOL cleanupRawA = cleanupSurfaceA && sp_region_present(cleanupRegionA, IOSurfaceGetID(cleanupSurfaceA),
+            cleanupTokenA, cleanupRasterA[0], cleanupRasterA[1], cleanupRasterA[2], 94, 10, 1);
+        BOOL cleanupRawB = cleanupSurfaceB && sp_region_present(cleanupRegionB, IOSurfaceGetID(cleanupSurfaceB),
+            cleanupTokenB, cleanupRasterB[0], cleanupRasterB[1], cleanupRasterB[2], 95, 10, 1);
+        CALayer *cleanupLayerA = (CALayer *)((NSView *)cleanupRegionA).layer.sublayers.firstObject;
+        CALayer *cleanupLayerB = (CALayer *)((NSView *)cleanupRegionB).layer.sublayers.firstObject;
+        CGImageRef cleanupSnapshotA = (CGImageRef)cleanupLayerA.contents;
+        CGImageRef cleanupSnapshotB = (CGImageRef)cleanupLayerB.contents;
+        if (cleanupSnapshotA) CGImageRetain(cleanupSnapshotA);
+        if (cleanupSnapshotB) CGImageRetain(cleanupSnapshotB);
+        check(sp_image_capture_match_identity_session_begin(&identityError) && identityError == NULL,
+            @"TEST 1A: the two-region cleanup fixture restarts identity capture after preserving raw snapshots");
+        free(identityError); identityError = NULL;
+        BOOL cleanupTaggedA = cleanupRawA && sp_region_present(cleanupRegionA, IOSurfaceGetID(cleanupSurfaceA),
+            cleanupTokenA, cleanupRasterA[0], cleanupRasterA[1], cleanupRasterA[2], 94, 10, 2);
+        BOOL cleanupTaggedB = cleanupRawB && sp_region_present(cleanupRegionB, IOSurfaceGetID(cleanupSurfaceB),
+            cleanupTokenB, cleanupRasterB[0], cleanupRasterB[1], cleanupRasterB[2], 95, 10, 2);
+        check(cleanupTaggedA && cleanupTaggedB && cleanupLayerA.contents != (id)cleanupSnapshotA
+            && cleanupLayerB.contents != (id)cleanupSnapshotB,
+            @"TEST 1A: both static regions retain tagged layers before a capture failure");
         BOOL smallPresented = smallSurface && sp_region_present(smallIdentityRegion, IOSurfaceGetID(smallSurface),
             smallToken, smallRaster[0], smallRaster[1], smallRaster[2], 92, 10, 1);
         check(smallPresented, @"TEST 1A: an undersized tag ROI does not block raw image presentation");
+        check(imageBytesEqual((CGImageRef)cleanupLayerA.contents, cleanupSnapshotA)
+            && imageBytesEqual((CGImageRef)cleanupLayerB.contents, cleanupSnapshotB),
+            @"TEST 1A: identity tagging failure immediately restores both static regions without another frame");
+        sp_region_restore_capture_identity();
+        sp_region_restore_capture_identity();
+        check(imageBytesEqual((CGImageRef)cleanupLayerA.contents, cleanupSnapshotA)
+            && imageBytesEqual((CGImageRef)cleanupLayerB.contents, cleanupSnapshotB),
+            @"TEST 1A: repeated identity cleanup preserves both restored raw snapshots");
+        double restoredFactsA[6] = {0}, restoredFactsB[6] = {0};
+        sp_region_frame(cleanupRegionA, restoredFactsA);
+        sp_region_frame(cleanupRegionB, restoredFactsB);
+        check(memcmp(cleanupFactsA, restoredFactsA, sizeof(cleanupFactsA)) == 0
+            && memcmp(cleanupFactsB, restoredFactsB, sizeof(cleanupFactsB)) == 0,
+            @"TEST 1A: identity cleanup preserves each live region's geometry, visibility, and focus");
+        if (cleanupSnapshotA) CGImageRelease(cleanupSnapshotA);
+        if (cleanupSnapshotB) CGImageRelease(cleanupSnapshotB);
+        sp_region_close(cleanupRegionA); sp_region_close(cleanupRegionB);
+        if (cleanupSurfaceA) CFRelease(cleanupSurfaceA);
+        if (cleanupSurfaceB) CFRelease(cleanupSurfaceB);
         check(!sp_image_capture_match_identity_session_active(),
             @"TEST 1A: an untaggable source marks the opt-in identity session failed");
         char *identityFailure = sp_image_capture_match_identity_session_error_copy();

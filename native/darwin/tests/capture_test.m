@@ -1,12 +1,52 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#import <IOSurface/IOSurface.h>
+#import <WebKit/WebKit.h>
 #import "capture.h"
+#import "image_region.h"
+#import "webview_geometry.h"
 #import "support/capture_frame.m"
 
 static int failures;
+static void discardRegionEvent(void *context, const char *json) { (void)context; (void)json; }
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
+}
+
+static IOSurfaceRef identitySurface(size_t width, size_t height, unsigned char nonce[16], NSData **rawBytes) {
+    IOSurfaceRef surface = IOSurfaceCreate((CFDictionaryRef)@{
+        (id)kIOSurfaceWidth: @(width), (id)kIOSurfaceHeight: @(height),
+        (id)kIOSurfaceBytesPerElement: @4, (id)kIOSurfacePixelFormat: @(kCVPixelFormatType_32BGRA),
+    });
+    if (!surface) return NULL;
+    for (NSUInteger index = 0; index < 16; index++) nonce[index] = (unsigned char)(width + height + index + 1);
+    IOSurfaceSetValue(surface, CFSTR("soksak.frame"), [NSData dataWithBytes:nonce length:16]);
+    IOSurfaceLock(surface, 0, NULL);
+    uint8_t *bytes = IOSurfaceGetBaseAddress(surface);
+    size_t stride = IOSurfaceGetBytesPerRow(surface);
+    for (size_t y = 0; y < height; y++) {
+        for (size_t x = 0; x < width; x++) {
+            uint8_t *pixel = bytes + y * stride + x * 4;
+            pixel[0] = (uint8_t)(x + 17); pixel[1] = (uint8_t)(y + 31);
+            pixel[2] = (uint8_t)(x + y + 47); pixel[3] = 255;
+        }
+    }
+    *rawBytes = [NSData dataWithBytes:bytes length:stride * height];
+    IOSurfaceUnlock(surface, 0, NULL);
+    return surface;
+}
+
+static BOOL regionMatchesSurfaceBytes(void *handle, IOSurfaceRef surface, NSData *expected) {
+    CALayer *layer = (CALayer *)((NSView *)handle).layer.sublayers.firstObject;
+    CGImageRef image = (CGImageRef)layer.contents;
+    if (!image || !surface || !expected) return NO;
+    CGDataProviderRef provider = CGImageGetDataProvider(image);
+    CFDataRef actual = provider ? CGDataProviderCopyData(provider) : NULL;
+    BOOL equal = actual && (NSUInteger)CFDataGetLength(actual) == expected.length
+        && memcmp(CFDataGetBytePtr(actual), expected.bytes, expected.length) == 0;
+    if (actual) CFRelease(actual);
+    return equal;
 }
 
 int main(void) { @autoreleasepool {
@@ -121,19 +161,55 @@ int main(void) { @autoreleasepool {
         operationError == NULL ? "" : operationError]);
     free(operationError); operationError = NULL;
     if (identityRecordingStarted) {
+        WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
+        main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        [window.contentView addSubview:main positioned:NSWindowBelow relativeTo:nil];
+        void *surfaceHost = sp_surface_create(main);
+        WKWebView *surface = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
+        surface.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        if (surfaceHost) webviewAttachSurface(surface, main);
+        webviewSetFrame(surface, 0, 0, 200, 100);
+        void *regionA = surfaceHost ? sp_region_create(surface, "capture-identity-a", discardRegionEvent, NULL) : NULL;
+        void *regionB = surfaceHost ? sp_region_create(surface, "capture-identity-b", discardRegionEvent, NULL) : NULL;
+        sp_region_place(regionA, 0, 0, 100, 0, true);
+        sp_region_place(regionB, 100, 0, 0, 0, true);
+        double rasterA[3] = {0}, rasterB[3] = {0};
+        BOOL regionsReady = surfaceHost && sp_region_raster(regionA, rasterA) && sp_region_raster(regionB, rasterB)
+            && rasterA[0] >= 192 && rasterA[1] >= 192 && rasterB[0] >= 192 && rasterB[1] >= 192;
+        check(regionsReady, @"opt-in capture stop fixture creates two image regions that fit the identity code");
+        unsigned char nonceA[16], nonceB[16];
+        NSData *rawA = nil, *rawB = nil;
+        IOSurfaceRef imageA = regionsReady ? identitySurface((size_t)rasterA[0], (size_t)rasterA[1], nonceA, &rawA) : NULL;
+        IOSurfaceRef imageB = regionsReady ? identitySurface((size_t)rasterB[0], (size_t)rasterB[1], nonceB, &rawB) : NULL;
         int firstIdentityFrame = sp_capture_wait();
         check(firstIdentityFrame == 1, [NSString stringWithFormat:@"opt-in recording produces a first frame (%s)",
             sp_capture_error()]);
+        BOOL presentedA = imageA && sp_region_present(regionA, IOSurfaceGetID(imageA), nonceA,
+            rasterA[0], rasterA[1], rasterA[2], 71, 10, 1);
+        BOOL presentedB = imageB && sp_region_present(regionB, IOSurfaceGetID(imageB), nonceB,
+            rasterB[0], rasterB[1], rasterB[2], 72, 10, 1);
+        check(presentedA && presentedB, @"opt-in capture presents tagged images in both static regions");
+        CALayer *layerA = (CALayer *)((NSView *)regionA).layer.sublayers.firstObject;
+        CALayer *layerB = (CALayer *)((NSView *)regionB).layer.sublayers.firstObject;
+        check(layerA.contents != NULL && layerB.contents != NULL,
+            @"opt-in capture has both tagged layers before stop");
         int identityFrames = sp_capture_stop(0);
         check(identityFrames > 0 && strlen(sp_capture_error()) == 0,
             [NSString stringWithFormat:@"opt-in recording finalizes without error (%d, %s)",
                 identityFrames, sp_capture_error()]);
+        check(regionMatchesSurfaceBytes(regionA, imageA, rawA) && regionMatchesSurfaceBytes(regionB, imageB, rawB),
+            @"identity capture stop restores both raw image provider byte arrays without another producer frame");
         NSString *identityManifest = [[NSString stringWithUTF8String:directory]
             stringByAppendingPathComponent:@"frame-identities/manifest.json"];
         NSDictionary *identityMetadata = [NSJSONSerialization JSONObjectWithData:
             [NSData dataWithContentsOfFile:identityManifest] options:0 error:NULL];
         check(identityMetadata != nil && [identityMetadata[@"artifacts"] isKindOfClass:NSArray.class],
             @"opt-in identity capture writes its separate tagged artifact manifest");
+        sp_region_close(regionA); sp_region_close(regionB);
+        webviewDetachSurface(surface);
+        if (surfaceHost) sp_surface_close(surfaceHost);
+        if (imageA) CFRelease(imageA);
+        if (imageB) CFRelease(imageB);
     }
     [window close];
     [window release];

@@ -29,6 +29,7 @@ static void failFrameIdentitySession(NSString *message) {
     }
     free(error);
     sp_log_error("frame identity", message.UTF8String);
+    sp_region_restore_capture_identity();
 }
 
 @class SPImageRegion;
@@ -194,6 +195,17 @@ static NSString *keypadKeyName(unsigned short keyCode) {
 // region operation is
 // on the main thread.
 static NSHashTable *spLiveRegions = nil;
+
+void sp_region_restore_capture_identity(void) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    for (SPImageRegion *region in spLiveRegions) {
+        if (region.closed || region.snapshot == NULL || region.imageLayer.contents == (id)region.snapshot) continue;
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        region.imageLayer.contents = (id)region.snapshot;
+        [CATransaction commit];
+    }
+}
 
 // Is the point of a press event inside a live image region of the same window? Returns that region (including the
 // region itself, nil if none). Only the point of a mouse press is considered.

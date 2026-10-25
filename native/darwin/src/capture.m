@@ -13,6 +13,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "capture.h"
 #import "image_capture_match.h"
+#import "image_region.h"
 #import "application_log.h"
 #import <ImageIO/ImageIO.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
@@ -817,6 +818,15 @@ static void clearCaptureError(void) {
     }
 }
 
+static void restoreCaptureIdentityAfterFailure(void) {
+    if (NSThread.isMainThread) {
+        sp_region_restore_capture_identity();
+    } else {
+        // Capture and writer failures can occur away from AppKit's thread; do not wait while holding their locks.
+        dispatch_async(dispatch_get_main_queue(), ^{ sp_region_restore_capture_identity(); });
+    }
+}
+
 static void setCaptureError(NSString* message) {
     @synchronized([SPCapture class]) {
         NSString *combined = captureError == nil ? [message copy]
@@ -824,6 +834,7 @@ static void setCaptureError(NSString* message) {
         [captureError release];
         captureError = combined;
     }
+    restoreCaptureIdentityAfterFailure();
 }
 
 // Errors of the previous stream are also reported but do not change the result of the current recording.
@@ -912,6 +923,12 @@ static bool writeCaptureDisplayLinkTrace(SPCapture *sink) {
 // verify finalization with controlled callback records without creating a live ScreenCaptureKit stream.
 static bool finalizeCaptureArtifacts(SPCapture *sink) {
     [sink stopDisplayLinkObservation];
+    if (NSThread.isMainThread) {
+        sp_region_restore_capture_identity();
+    } else {
+        // Finalization runs after capture and artifact queues have drained, without holding matcher history state.
+        dispatch_sync(dispatch_get_main_queue(), ^{ sp_region_restore_capture_identity(); });
+    }
     bool sourceManifestWritten = sp_image_capture_match_write_manifest(sink.directory.fileSystemRepresentation);
     if (!sourceManifestWritten) {
         char *identityError = sp_image_capture_match_identity_session_error_copy();
