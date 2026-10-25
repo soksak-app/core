@@ -197,6 +197,129 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-163",
+    implementation: [
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn read_surface_placements(" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/surfaces/placement_snapshot_test.rs", id: "prepared_frames_share_one_main_thread_turn" },
+      { file: "packages/host/tauriv2/tests/surfaces/placement_snapshot_test.rs", id: "frame_read_failure_rejects_the_placement_reply" },
+    ],
+    expected: "Prepared placement reads share one main-thread turn and preserve read errors.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-164",
+    implementation: [
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub(crate) fn present_on_ui(" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/images/presentation_queue_test.rs", id: "image_commit_runs_after_the_framework_event_releases_its_lock" },
+      { file: "packages/host/tauriv2/tests/images/presentation_queue_test.rs", id: "image_enqueue_failure_reaches_the_frame_handler" },
+      { file: "packages/host/tauriv2/tests/images/presentation_queue_test.rs", id: "native_image_failure_reaches_the_frame_handler" },
+    ],
+    expected: "Image commits leave the framework event lock and preserve enqueue and native presentation failures.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-165",
+    implementation: [
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn current_presented(" },
+      { file: "packages/host/wailsv3/src/images.go", symbol: "waitCurrentObserved" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/images/wait_boundary_test.rs", id: "a_pending_newer_frame_is_required_after_the_wait_begins" },
+      { file: "packages/host/wailsv3/src/images_test.go", id: "TestPendingNewerFrameIsRequiredAfterTheWaitBegins" },
+    ],
+    expected: "Both image waiters require a newer accepted frame to present before completing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-166",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "uint64_t writerStarted = mach_absolute_time();" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "the frame artifact preserves actual enqueue and asynchronous writer bounds as ordered raw ticks" },
+    ],
+    expected: "Capture metadata records actual ordered asynchronous writer intervals separately from synchronous callback intervals.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-167",
+    implementation: [
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "pub fn receive_sidecar_message(" },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func ReceiveSidecarMessage(" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/sidecars_receive_trace_test.rs", id: "a_handled_image_records_its_receipt_once" },
+      { file: "packages/host/tauriv2/tests/sidecars_receive_trace_test.rs", id: "receipt_precedes_native_dispatch" },
+      { file: "packages/host/wailsv3/tests/sidecars_receive_trace_test.go", id: "TestHandledImageRecordsItsReceiptOnce" },
+      { file: "packages/host/wailsv3/tests/sidecars_receive_trace_test.go", id: "TestReceiptPrecedesNativeDispatch" },
+    ],
+    expected: "Both host transports record image receipt before native handling without losing ordinary page delivery.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-168",
+    implementation: [
+      { file: "Makefile", symbol: "@$(CARGO_ENV) node scripts/rust-tests.mjs" },
+    ],
+    tests: [
+      { file: "scripts/test/rust-repeat.test.mjs", id: "make ${target} applies the declared deployment environment to every Cargo call" },
+    ],
+    expected: "Rust owning targets apply the declared deployment environment to every Cargo call.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-169",
+    implementation: [
+      { file: "scripts/rust-tests.mjs", symbol: "process.stderr.write(error.stdout)" },
+    ],
+    tests: [
+      { file: "scripts/test/rust-repeat.test.mjs", id: "Rust owner CLI reports captured Cargo ${stage} failure output" },
+    ],
+    expected: "Rust owner discovery preserves compiler and metadata failure stdout and starts no test after failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-170",
+    implementation: [
+      { file: "packages/plugin-api/events-check.js", symbol: "if (rule.id === 'rs.lock-result'" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/events-check.test.mjs", id: "condition wait recovery checks include nested calls and closure blocks" },
+      { file: "packages/plugin-api/test/events-check.test.mjs", id: "condition wait argument boundaries ignore string and comment brackets" },
+      { file: "packages/plugin-api/test/events-check.test.mjs", id: "condition wait checks preserve recovered waits and lexical exclusions" },
+    ],
+    expected: "The census finds unsafe condition wait results with balanced nested arguments and preserves valid recovery and lexical exclusions.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-81",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_callback_test.m", id: "late start and delegate callbacks retain the old stream's session identity" },
+      { file: "e2e/capture-lifecycle.test.mjs", id: "consecutive captures preserve finalized recordings" },
+    ],
+    expected: "Retired stream callbacks retain their original identity while consecutive recordings keep independent counts and finalized artifact bytes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-172",
+    implementation: [
+      { file: "scripts/check-test-parity.mjs", symbol: "const FEATURE_LINKS = [" },
+    ],
+    tests: [
+      { file: "scripts/test/test-parity.test.mjs", id: "completed capability entries all have feature evidence links" },
+      { file: "scripts/test/test-parity.test.mjs", id: "recorded parity counts cannot drift from the current inventory" },
+    ],
+    expected: "Completed capabilities retain links to their actual implementation and owning tests, and documentation records the discovered inventory counts.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-171-2",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) closingChanged()" },
