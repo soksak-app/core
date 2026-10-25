@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-47-40-5: Move the private Wails view record tests into `src` and
+  register the matching source generation and `Documents` view channel. Keep
+  the call/reply and `view.error` log assertions through `ViewMessage`. Red:
+  the external diagnostics package failed to compile because both tests called
+  missing `Surfaces.RegisterView`. Green: the relocated owner tests pass 2/2;
+  the external diagnostics smoke test `TestAnApplicationEventIsRecordedAsAnEvent`
+  compiles and passes 1/1. Host
+  public-call parity is unchanged, and `make host-parity-check` passes.
+
 - F239-47-40-2: Correct the QR helper's ROI, detection, payload, and
   ownership boundaries. Red: the unchanged owner test failed for whole-image
   Vision detection, mutable image backing, symmetric-coordinate assumptions,

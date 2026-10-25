@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F239-47-40-5: Wails private view 기록 테스트를 `src`로 옮기고 일치하는
+  source generation과 `Documents` view channel을 등록한다. call/reply 및
+  `view.error` 기록 assertion은 `ViewMessage`를 통해 유지한다. Red: 두 외부
+  diagnostics test가 없는 `Surfaces.RegisterView`를 호출해 package compile이
+  실패했다. Green: 이동한 owner test가 2/2 통과하고 외부 diagnostics smoke
+  test `TestAnApplicationEventIsRecordedAsAnEvent`도 compile되어 1/1 통과한다.
+  Host public-call parity는 바뀌지 않았으며
+  `make host-parity-check`가 통과한다.
+
 - F239-47-40-2: QR helper의 ROI, 탐지, payload, ownership 경계를 수정한다.
   Red: 변경 전 owner test는 Vision 전체 이미지 탐지, mutable image backing,
   대칭 좌표 가정, 정규 형식이 아닌 부호 및 공백 숫자, uint64 overflow,
