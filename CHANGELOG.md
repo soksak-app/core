@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.16: Complete local process-label acceptance from the owning corrections, sidecar startup evidence and current non-activating native label check. Preserve the two existing publication gates and their IDs under F212.15. Host environment delivery removal is complete; public delivery and Activity Monitor-specific rendering are not claimed.
+
 - F239-187: Release the temporary native view-channel JSON string through its autorelease pool after synchronous callback delivery. The owning lifetime regression fails before correction and passes afterward with exact decoded-message equality and existing channel behavior. Preserve the explicit encoding-error envelope; no main-thread scheduling, pixel presentation or drag performance change is claimed.
 
 - F212.17-2: Keep modal recovery tests from replacing the process-global event writer. A deterministic regression first loses an unrelated lifecycle record; reading buffered modal errors without attaching or detaching a writer preserves it after correction. The modal and original lifecycle owners pass. Preserve state, mode and no-error assertions without changing production logging or claiming a full-suite repeat.

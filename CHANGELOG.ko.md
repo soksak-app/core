@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.16: 소유 수정, sidecar startup 근거와 현재 비활성화 native label 검사로 로컬 process-label acceptance를 완료한다. 기존 publication gate 두 개와 ID를 F212.15 아래 유지한다. Host environment 전달 제거는 완료했으며 공개 전달이나 Activity Monitor 전용 표시를 주장하지 않는다.
+
 - F239-187: 동기 callback 전달 뒤 임시 native view-channel JSON string을 autorelease pool로 해제한다. 소유 수명 회귀 검사는 수정 전 실패하고 수정 후 정확한 decoded-message 동등성과 기존 channel 동작을 유지하며 통과한다. 명시적 encoding-error envelope를 유지하며 main-thread scheduling, pixel presentation이나 drag 성능 변경을 주장하지 않는다.
 
 - F212.17-2: modal 복원 검사가 process-global event writer를 교체하지 않게 한다. 결정적 회귀 검사는 먼저 관련 없는 lifecycle record를 잃으며 writer를 연결하거나 해제하지 않고 buffered modal 오류를 읽으면 수정 후 해당 record를 유지한다. modal과 원래 lifecycle 소유 검사가 통과한다. 제품 logging을 바꾸거나 전체 모음 반복을 주장하지 않고 state, mode와 no-error assertion을 유지한다.
