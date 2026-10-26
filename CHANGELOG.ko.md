@@ -4,6 +4,19 @@
 
 ## 미배포
 
+- F239-204: Native input-source 선택과 readiness를 하나의 operation으로
+  처리한다. Native owner는 global source를 바꾸기 전에 observer를 등록하고,
+  선택 성공·source-change notification·같은 active key-view context의 adoption을
+  요구하며 exactly-once callback 전에 observer와 timeout을 정리한다. No-op은
+  global 및 active-context source가 일치해야 한다. Active text client가 없는
+  restoration은 global 선택 뒤 완료한다. Wails와 Tauri는 분리된 select/wait 호출을
+  atomic native operation으로 대체한다. Red: 변경 전 native owner test는 조기 readiness와
+  선택/adoption 순서 assertion 두 개에서 실패했다. 이후 fault-injection Red는 caller의
+  autorelease pool이 끝난 뒤 pending selection이 유지되지 않음을 보였다. Green: observer와
+  timeout의 강한 참조가 완료까지 operation을 유지하도록 한 뒤 `input_source_test` 1/1
+  통과. 승인된 F8-9 activation sequence는 양 macOS arm64 host에서 AppKit
+  reference와 terminal text 일치, 순서 있는 commit, 깨끗한 audit 및 복원으로 통과한다.
+
 - F212.14-5-32: Motion 검사가 memory 측정 중 editor의 responsive-toolbar 경계를 바꾸지 않도록 reclaim 및 재개방 전에 초기 선언 HWP card width를 복원한다. 기존 collector는 복원 owner에 실패하고 수정 후 통과한다. Wails와 Tauri는 natural document text, initial-only history, cache retention 없음 및 기존 90%/10s 기준으로 집중 reclaim 세 회를 통과한다. 기존 reclaim evaluator를 본문과 기준 변경 없이 export하여 재사용한다.
 
 - F239-205: Native document-view key equivalent를 application menu가 먼저 처리하도록 하고, 일치하지 않는 key는 기존 WebKit responder에 전달한다. 실제 responder owner는 수정 전 Command-zero에 실패하고 수정 후 한 번의 matching action과 unmatched/non-Command fallthrough를 포함한 assertion 여덟 개를 통과한다. 양 host application acceptance는 미완료다.

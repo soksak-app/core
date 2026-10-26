@@ -546,12 +546,8 @@ impl Platform for Windows {
         unsupported::input_source()
     }
     #[cfg(feature = "diagnostics")]
-    fn select_input_source(&self, identifier: &str) -> Result<(), String> {
-        unsupported::select_input_source(identifier)
-    }
-    #[cfg(feature = "diagnostics")]
-    fn await_input_source(&self, _identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
-        adopted(unsupported::select_input_source(""))
+    fn select_input_source(&self, identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
+        adopted(unsupported::select_input_source(identifier))
     }
 
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {

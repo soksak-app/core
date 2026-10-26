@@ -651,35 +651,29 @@ fn input_source(window: &Window, params: Map<String, Value>) -> Result<Value, Fa
         Some(_) => return Err(Failure::params("select must be a non-empty string")),
     };
     let platform = platform::current().map_err(internal)?;
-    // The text input context of the key view takes a selected source later than the system; the reply waits until it holds it,
-    // so a key that the caller sends after the reply reaches the selected source.
-    let (adopted, held) = std::sync::mpsc::channel();
-    let waits = select.is_some();
-    let current = on_main(window, move || {
-        if let Some(identifier) = &select {
-            platform.select_input_source(identifier)?;
-            platform.await_input_source(
-                identifier,
+    if let Some(identifier) = select {
+        // The selection callback runs on the main thread after the active text context adopts the source.
+        let (adopted, held) = std::sync::mpsc::channel();
+        on_main(window, move || {
+            platform.select_input_source(
+                &identifier,
                 Box::new(move |result| {
                     if let Err(unsent) = adopted.send(result) {
                         log_error(
                             "input source",
-                            format!("the wait answered after its reply ended: {:?}", unsent.0),
+                            format!("selection completed after its reply ended: {:?}", unsent.0),
                         );
                     }
                 }),
             );
-        }
-        platform.input_source()
-    })
-    .map_err(internal)?;
-    if waits {
+            Ok(())
+        })
+        .map_err(internal)?;
         held.recv()
-            .map_err(|_| {
-                internal("the wait for the input source ended without an answer".to_string())
-            })?
+            .map_err(|_| internal("input source selection ended without an answer".to_string()))?
             .map_err(internal)?;
     }
+    let current = on_main(window, move || platform.input_source()).map_err(internal)?;
     Ok(json!({"current": current}))
 }
 

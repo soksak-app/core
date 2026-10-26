@@ -5,16 +5,24 @@ package darwin
 // Reads and selects the keyboard input source. The implementation is input_source.m of native/darwin. It is included only in diagnostic builds.
 
 /*
-#cgo CFLAGS: -x objective-c -fmodules
+#cgo CFLAGS: -x objective-c -fmodules -fblocks
 #cgo pkg-config: soksak-darwin
+#include <stdint.h>
 #include <stdlib.h>
 #include "input_source.h"
+
+extern void nativeInputSourceAdopted(uintptr_t callback, char *failure);
+
+static void inputSourceSelectAndAwait(const char *identifier, uintptr_t callback) {
+    sp_input_source_select_and_await(identifier, ^(const char *error) {
+        nativeInputSourceAdopted(callback, (char *)error);
+    });
+}
 */
 import "C"
 
 import (
 	"errors"
-	"fmt"
 	"runtime/cgo"
 	"strings"
 	"unsafe"
@@ -30,28 +38,18 @@ func (implementation) InputSource() (string, error) {
 	return C.GoString(pointer), nil
 }
 
-// SelectInputSource selects identifier among the enabled input sources. Call it on the main thread.
-func (implementation) SelectInputSource(identifier string) error {
-	if strings.IndexByte(identifier, 0) >= 0 {
-		return errors.New("input source identifier contains NUL")
+// SelectInputSource selects identifier and waits for active key-view context adoption. Call it on the main thread.
+func (implementation) SelectInputSource(identifier string, adopted func(error)) {
+	if adopted == nil {
+		panic("input source selection requires an adoption callback")
 	}
-	wanted := C.CString(identifier)
-	defer C.free(unsafe.Pointer(wanted))
-	if !bool(C.sp_input_source_select(wanted)) {
-		return fmt.Errorf("input source %s is not enabled or could not be selected", identifier)
-	}
-	return nil
-}
-
-// AwaitInputSource calls adopted once the text input context of the key view holds identifier. Call it on the main thread.
-func (implementation) AwaitInputSource(identifier string, adopted func(error)) {
 	if strings.IndexByte(identifier, 0) >= 0 {
 		adopted(errors.New("input source identifier contains NUL"))
 		return
 	}
 	wanted := C.CString(identifier)
 	defer C.free(unsafe.Pointer(wanted))
-	awaitInputSource(wanted, cgo.NewHandle(adopted))
+	C.inputSourceSelectAndAwait(wanted, C.uintptr_t(cgo.NewHandle(adopted)))
 }
 
 //export nativeInputSourceAdopted

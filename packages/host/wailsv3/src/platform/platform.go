@@ -94,15 +94,13 @@ type InputReference interface {
 }
 
 // InputSources are the keyboard input source operations. Only the platform implementation of a diagnostic build (tag diagnostics) provides them, and
-// diagnostic code uses them by checking the value of Current() against this interface. Call both operations on the main thread.
+// diagnostic code uses them by checking the value of Current() against this interface. Selection and key-view adoption are one main-thread operation.
 type InputSources interface {
 	// InputSource returns the identifier of the currently selected keyboard input source.
 	InputSource() (string, error)
-	// SelectInputSource selects identifier among the enabled input sources.
-	SelectInputSource(identifier string) error
-	// AwaitInputSource calls adopted once the text input context of the key view holds identifier, with an error when it does
-	// not within 2 seconds. Call it on the main thread; adopted runs on the main thread.
-	AwaitInputSource(identifier string, adopted func(error))
+	// SelectInputSource selects identifier and calls adopted after the active key-view context has adopted it, or reports an error within 2 seconds.
+	// With no active text client, it completes after global selection. Call it on the main thread; adopted runs on the main thread.
+	SelectInputSource(identifier string, adopted func(error))
 }
 
 // WindowObjects is the number of live objects, among the objects that the common library attached to windows and web views, whose lifetime shows the release of the window and the web view.

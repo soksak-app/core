@@ -98,15 +98,9 @@ static NSDictionary *independentSourceProbe(NSString *executable, NSString **fai
 
 static BOOL selectAndAwaitInputSource(NSString *source, NSDate *deadline) {
     NSString *before = currentSourceID();
-    BOOL selected = sp_input_source_select(source.UTF8String);
-    if (focusedSourceTrace) {
-        fprintf(stdout, "SOURCE_EVENT: select requested=%s before=%s status=%s\n", source.UTF8String,
-            before.UTF8String ?: "unknown", selected ? "noErr" : "error");
-    }
-    if (!selected) return NO;
     __block BOOL answered = NO;
     __block NSString *reason = nil;
-    sp_input_source_await(source.UTF8String, ^(const char *error) {
+    sp_input_source_select_and_await(source.UTF8String, ^(const char *error) {
         answered = YES;
         reason = error ? [NSString stringWithUTF8String:error] : nil;
     });
@@ -114,9 +108,9 @@ static BOOL selectAndAwaitInputSource(NSString *source, NSDate *deadline) {
     NSString *after = currentSourceID();
     BOOL matches = [after isEqualToString:source];
     if (focusedSourceTrace) {
-        fprintf(stdout, "SOURCE_EVENT: adoption requested=%s notification=%s sourceAfter=%s result=%s\n",
-            source.UTF8String, observed ? "received" : (reason.UTF8String ?: "timeout"), after.UTF8String ?: "unknown",
-            observed && matches ? "matched" : "mismatch");
+        fprintf(stdout, "SOURCE_EVENT: adoption requested=%s before=%s result=%s detail=%s sourceAfter=%s\n",
+            source.UTF8String, before.UTF8String ?: "unknown", observed && matches ? "matched" : "error",
+            reason.UTF8String ?: "none", after.UTF8String ?: "unknown");
     }
     return observed && matches;
 }
@@ -345,7 +339,8 @@ static void typeKey(NSWindow *window, NSString *key, NSUInteger (^answered)(void
 }
 
 static void selectSource(NSString *source, NSTextInputContext *context) {
-    check(sp_input_source_select(source.UTF8String), [NSString stringWithFormat:@"%@ is selected", source]);
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:2];
+    check(selectAndAwaitInputSource(source, deadline), [NSString stringWithFormat:@"%@ is selected and adopted", source]);
     pump(^BOOL { return [context.selectedKeyboardInputSource isEqual:source]; });
 }
 
@@ -656,7 +651,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
             return 1;
         }
     } else {
-        if (!sp_input_source_select(KOREAN_2SET.UTF8String)) {
+        if (!selectAndAwaitInputSource(KOREAN_2SET, traceDeadline)) {
             fprintf(stderr, "FAIL: the %s input source is not enabled\n", KOREAN_2SET.UTF8String);
             return 1;
         }
@@ -728,7 +723,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
             }
             fflush(stdout);
         } else {
-            check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
+            check(selectAndAwaitInputSource(previousSource, cleanupDeadline), @"the previous input source is restored");
             check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
                 @"the previous input source is active before cleanup ends");
             closeTraceWindow(window, region, mainSurface);
@@ -928,7 +923,8 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
         [NSString stringWithFormat:@"image region: Escape during a composition commits it once and is reported after it (committed '%@', events %@)",
             committed, events]);
 
-    check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
+    check(selectAndAwaitInputSource(previousSource, [NSDate dateWithTimeIntervalSinceNow:2]),
+        @"the previous input source is restored");
     sp_region_close(region);
     [window close];
     [window release];

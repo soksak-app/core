@@ -4,6 +4,21 @@
 
 ## Unreleased
 
+- F239-204: Make native input-source selection and readiness one operation.
+  The native owner registers its observer before changing the global source,
+  requires successful selection, a source-change notification and adoption by
+  the same active key-view context, and retires its observer and timeout before
+  the exactly-once callback. A no-op requires global and active-context source
+  agreement; restoration without an active text client completes after global
+  selection. Wails and Tauri replace the split select/wait calls with the atomic
+  native operation. Red: the unchanged owner test failed two assertions for
+  early readiness and selection/adoption ordering. A later fault-injection Red
+  showed a pending selection did not survive its caller's autorelease-pool drain.
+  Green: `input_source_test` passes 1/1 after strong observer and timeout
+  ownership keeps the operation alive through completion. The approved F8-9
+  activation sequence passes on both macOS arm64 hosts with matching AppKit
+  reference and terminal text, ordered commits, clean audits and restoration.
+
 - F212.14-5-32: Restore the initial declared HWP card width before reclaim and reopening so motion checks do not cross the editor's responsive-toolbar boundary during memory measurements. The unchanged collector fails the restoration owner; the corrected owner passes. Wails and Tauri pass the focused three-run reclaim case with natural document text, initial-only histories, no cache retention and the existing 90%/10s limits. Export and reuse the existing reclaim evaluator without changing its body or thresholds.
 
 - F239-205: Give the application menu the first opportunity to handle native document-view key equivalents, then preserve WebKit responder handling for unmatched keys. The actual responder owner fails Command-zero before correction and passes all eight assertions afterward, including exactly one matching action and unmatched/non-Command fallthrough. Two-host application acceptance remains pending.

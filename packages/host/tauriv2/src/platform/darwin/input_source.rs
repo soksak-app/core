@@ -5,8 +5,10 @@ use std::ffi::{CStr, CString, c_char, c_void};
 
 unsafe extern "C" {
     fn sp_input_source_current() -> *mut c_char;
-    fn sp_input_source_select(identifier: *const c_char) -> bool;
-    fn sp_input_source_await(identifier: *const c_char, adopted: &Block<dyn Fn(*const c_char)>);
+    fn sp_input_source_select_and_await(
+        identifier: *const c_char,
+        adopted: &Block<dyn Fn(*const c_char)>,
+    );
     fn free(pointer: *mut c_void);
 }
 
@@ -23,21 +25,8 @@ pub fn current() -> Result<String, String> {
     Ok(identifier)
 }
 
-/// Selects identifier among the enabled input sources. Call it on the main thread.
-pub fn select(identifier: &str) -> Result<(), String> {
-    let wanted =
-        CString::new(identifier).map_err(|_| "input source identifier contains NUL".to_owned())?;
-    if unsafe { sp_input_source_select(wanted.as_ptr()) } {
-        Ok(())
-    } else {
-        Err(format!(
-            "input source {identifier} is not enabled or could not be selected"
-        ))
-    }
-}
-
-/// Calls adopted once the text input context of the key view holds identifier. Call it on the main thread.
-pub fn await_adopted(identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
+/// Selects identifier and calls adopted after active key-view context adoption. Call it on the main thread.
+pub fn select(identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
     let Ok(wanted) = CString::new(identifier) else {
         adopted(Err("input source identifier contains NUL".into()));
         return;
@@ -51,5 +40,5 @@ pub fn await_adopted(identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>)
                 .into_owned()));
         }
     });
-    unsafe { sp_input_source_await(wanted.as_ptr(), &block) };
+    unsafe { sp_input_source_select_and_await(wanted.as_ptr(), &block) };
 }

@@ -702,12 +702,8 @@ impl Platform for Darwin {
         input_source::current()
     }
     #[cfg(feature = "diagnostics")]
-    fn select_input_source(&self, identifier: &str) -> Result<(), String> {
-        input_source::select(identifier)
-    }
-    #[cfg(feature = "diagnostics")]
-    fn await_input_source(&self, identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
-        input_source::await_adopted(identifier, adopted)
+    fn select_input_source(&self, identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
+        input_source::select(identifier, adopted)
     }
 
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
