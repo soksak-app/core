@@ -748,6 +748,56 @@
       },
       "description": "The presentation wait of a view ended without its presentation: surface names the view and reason is the end, one of process-ended, hidden or unresponsive (docs/spec/native-surfaces.md#view-surfaces)."
     },
+    "host.trace.view.presentation-join": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "phase": {
+            "enum": ["requested", "result", "presented", "abandoned"]
+          },
+          "surface": {
+            "type": "string",
+            "minLength": 1
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ticket": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "joined": {
+            "type": "boolean"
+          },
+          "reason": {
+            "enum": ["process-ended", "hidden", "unresponsive"]
+          }
+        },
+        "required": [
+          "phase",
+          "surface",
+          "generation",
+          "ticket"
+        ],
+        "allOf": [
+          {
+            "if": {"properties": {"phase": {"const": "result"}}, "required": ["phase"]},
+            "then": {"required": ["joined"]}
+          },
+          {
+            "if": {"properties": {"phase": {"const": "abandoned"}}, "required": ["phase"]},
+            "then": {"required": ["reason"]}
+          }
+        ],
+        "additionalProperties": false
+      },
+      "description": "The host records the request and result of joining a changed root view to a layout ticket, the view's native presentation callback, and a wait that ended without presentation. The ticket and generation identify the exact wait. A presented phase records callback observation, not layout commit; it can follow an abandoned phase when a late callback arrives."
+    },
     "host.trace.view.callback-cancelled": {
       "layer": "host",
       "class": "call",

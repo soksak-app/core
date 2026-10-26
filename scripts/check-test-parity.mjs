@@ -762,6 +762,19 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F239-207",
+    implementation: [
+      { file: "packages/host/wailsv3/src/presentation_wait.go", symbol: "func tracePresentationJoin(" },
+      { file: "packages/host/tauriv2/src/presentation_wait.rs", symbol: "pub(crate) fn trace_presentation_join(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/view_join_test.go", id: "TestPresentationJoinTraceKeepsExactIdentityAcrossCallbackAndAbandonment" },
+      { file: "packages/host/tauriv2/src/view_join_test.rs", id: "held_and_late_native_callbacks_keep_their_exact_join_identity" },
+    ],
+    expected: "Root join phases preserve exact layout and view identity, including synchronous and late native callbacks, without claiming pixel presentation.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-208",
     implementation: [{ file: "scripts/checklist.mjs", symbol: "function unavailableEvidenceErrors(" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a fully specified unavailable-evidence record in both translations" }],

@@ -1,16 +1,169 @@
 //! The view join of the presentation wait (docs/spec/plugin-processes.md, rule 6).
 
-use super::{PresentationWait, ViewPlacement};
+use super::{PresentationWait, ViewPlacement, trace_presentation_join};
+use crate::event_record::buffered_fields;
 use std::sync::Arc;
 
 const SURFACE: &str = "probe-surface";
 const GENERATION: u64 = 4;
+const JOIN_TICKET: u64 = 11;
 
 fn placement(x: f64) -> ViewPlacement {
     ViewPlacement {
         frame: [x, 20.0, 300.0, 200.0],
         visible: true,
     }
+}
+
+struct PerformanceTraceGuard;
+
+impl Drop for PerformanceTraceGuard {
+    fn drop(&mut self) {
+        if let Err(error) = crate::performance::command(serde_json::json!({"action": "off"})) {
+            eprintln!("turning off the performance trace after the test failed: {error}");
+        }
+    }
+}
+
+// contract: view.presentation-wait.join-trace
+#[test]
+fn presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end() {
+    const TRACE: &str = "host.trace.view.presentation-join";
+    crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
+    let _trace_guard = PerformanceTraceGuard;
+    let wait = PresentationWait::default();
+    let before = buffered_fields(TRACE).len();
+    assert!(wait.begin(SURFACE, GENERATION, JOIN_TICKET));
+    assert_eq!(
+        buffered_fields(TRACE)[before..],
+        [serde_json::json!({
+            "phase": "requested",
+            "surface": SURFACE,
+            "generation": GENERATION,
+            "ticket": JOIN_TICKET
+        })]
+    );
+
+    assert_eq!(
+        wait.end(SURFACE, GENERATION, JOIN_TICKET, "hidden"),
+        Ok(true)
+    );
+    assert_eq!(
+        buffered_fields(TRACE)[before + 1..],
+        [serde_json::json!({
+            "phase": "abandoned",
+            "surface": SURFACE,
+            "generation": GENERATION,
+            "ticket": JOIN_TICKET,
+            "reason": "hidden"
+        })]
+    );
+}
+
+// contract: view.presentation-wait.join-trace
+#[test]
+fn held_and_late_native_callbacks_keep_their_exact_join_identity() {
+    const TRACE: &str = "host.trace.view.presentation-join";
+    crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
+    let _trace_guard = PerformanceTraceGuard;
+    let wait = Arc::new(PresentationWait::default());
+    let before = buffered_fields(TRACE).len();
+    let mut callbacks: Vec<Box<dyn FnOnce()>> = Vec::new();
+
+    assert!(wait.begin(SURFACE, GENERATION, JOIN_TICKET));
+    trace_presentation_join("result", SURFACE, GENERATION, JOIN_TICKET, Some(true), None);
+    let callback_wait = Arc::clone(&wait);
+    callbacks.push(Box::new(move || {
+        trace_presentation_join("presented", SURFACE, GENERATION, JOIN_TICKET, None, None);
+        assert_eq!(
+            callback_wait.end(SURFACE, GENERATION, JOIN_TICKET, "presented"),
+            Ok(false)
+        );
+    }));
+    assert_eq!(
+        buffered_fields(TRACE).len(),
+        before + 2,
+        "a held callback must not be recorded early"
+    );
+    callbacks.remove(0)();
+
+    let late_ticket = JOIN_TICKET + 1;
+    assert!(wait.begin(SURFACE, GENERATION, late_ticket));
+    trace_presentation_join("result", SURFACE, GENERATION, late_ticket, Some(true), None);
+    assert_eq!(
+        wait.end(SURFACE, GENERATION, late_ticket, "hidden"),
+        Ok(true)
+    );
+    let late_wait = Arc::clone(&wait);
+    callbacks.push(Box::new(move || {
+        trace_presentation_join("presented", SURFACE, GENERATION, late_ticket, None, None);
+        assert_eq!(
+            late_wait.end(SURFACE, GENERATION, late_ticket, "presented"),
+            Ok(false)
+        );
+    }));
+    callbacks.remove(0)();
+
+    let records = buffered_fields(TRACE);
+    let got = &records[before..];
+    let phases: Vec<_> = got
+        .iter()
+        .map(|fields| fields["phase"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        phases,
+        [
+            "requested",
+            "result",
+            "presented",
+            "requested",
+            "result",
+            "abandoned",
+            "presented"
+        ]
+    );
+    for fields in got {
+        assert_eq!(fields["surface"], SURFACE);
+        assert_eq!(fields["generation"], GENERATION);
+    }
+    assert_eq!(got[0]["ticket"], JOIN_TICKET);
+    assert_eq!(got[1]["joined"], true);
+    assert_eq!(got[2]["ticket"], JOIN_TICKET);
+    assert_eq!(got[3]["ticket"], late_ticket);
+    assert_eq!(got[4]["joined"], true);
+    assert_eq!(got[5]["ticket"], late_ticket);
+    assert_eq!(got[5]["reason"], "hidden");
+    assert_eq!(got[6]["ticket"], late_ticket);
+}
+
+// contract: view.presentation-wait.join-trace
+#[test]
+fn synchronous_native_callback_precedes_the_join_result() {
+    const TRACE: &str = "host.trace.view.presentation-join";
+    crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
+    let _trace_guard = PerformanceTraceGuard;
+    let wait = PresentationWait::default();
+    let before = buffered_fields(TRACE).len();
+    assert!(wait.begin(SURFACE, GENERATION, JOIN_TICKET));
+    trace_presentation_join("presented", SURFACE, GENERATION, JOIN_TICKET, None, None);
+    assert_eq!(
+        wait.end(SURFACE, GENERATION, JOIN_TICKET, "presented"),
+        Ok(false)
+    );
+    trace_presentation_join("result", SURFACE, GENERATION, JOIN_TICKET, Some(true), None);
+
+    let records = buffered_fields(TRACE);
+    let phases: Vec<_> = records[before..]
+        .iter()
+        .map(|fields| fields["phase"].as_str().unwrap())
+        .collect();
+    assert_eq!(phases, ["requested", "presented", "result"]);
+    for fields in &records[before..] {
+        assert_eq!(fields["surface"], SURFACE);
+        assert_eq!(fields["generation"], GENERATION);
+        assert_eq!(fields["ticket"], JOIN_TICKET);
+    }
+    assert_eq!(records[before + 2]["joined"], true);
 }
 
 // contract: view.presentation-wait.joins

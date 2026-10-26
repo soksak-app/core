@@ -22,7 +22,9 @@ use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
-use crate::presentation_wait::{PresentationWait, ViewPlacement, presentation_abandoned_payload};
+use crate::presentation_wait::{
+    PresentationWait, ViewPlacement, presentation_abandoned_payload, trace_presentation_join,
+};
 use crate::source_origins::DeclaredSourceOrigins;
 use crate::surfaces::{Placement, require_region, surface_handle};
 use crate::surfaces::{ViewStart, view_origin_directory};
@@ -3128,6 +3130,14 @@ pub(crate) fn join_shown_views(
         let presented_window = window.clone();
         let presented_surface = surface.to_string();
         let presented: Box<dyn FnOnce() + Send> = Box::new(move || {
+            trace_presentation_join(
+                "presented",
+                &presented_surface,
+                generation,
+                ticket,
+                None,
+                None,
+            );
             let ended = platform::current().and_then(|platform| {
                 platform.enqueue_ui(Box::new(move || {
                     end_ticket_presentation_wait(
@@ -3146,6 +3156,14 @@ pub(crate) fn join_shown_views(
         let joined = with_native_owner(window, move |owner| {
             platform.join_view(owner, ticket, view, presented)
         });
+        trace_presentation_join(
+            "result",
+            surface,
+            generation,
+            ticket,
+            Some(matches!(&joined, Ok(Some(_)))),
+            None,
+        );
         match joined {
             Ok(Some(abandon)) => {
                 data.documents

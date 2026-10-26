@@ -6,6 +6,42 @@ use std::sync::{Mutex, MutexGuard};
 
 use crate::platform::ViewAbandon;
 
+/// Writes one phase of the root-view join trace only while the performance trace is enabled.
+pub(crate) fn trace_presentation_join(
+    phase: &'static str,
+    surface: &str,
+    generation: u64,
+    ticket: u64,
+    joined: Option<bool>,
+    reason: Option<&str>,
+) {
+    if !crate::performance::enabled()
+        || !crate::log_policy::gate_event(
+            crate::log_policy::Class::Call,
+            crate::event_log::Level::Debug,
+        )
+    {
+        return;
+    }
+    let mut fields = serde_json::json!({
+        "phase": phase,
+        "surface": surface,
+        "generation": generation,
+        "ticket": ticket
+    });
+    if let Some(joined) = joined {
+        fields["joined"] = serde_json::json!(joined);
+    }
+    if let Some(reason) = reason {
+        fields["reason"] = serde_json::json!(reason);
+    }
+    crate::event_record::emit_host(
+        crate::event_log::Level::Debug,
+        "host.trace.view.presentation-join",
+        fields,
+    );
+}
+
 /// The reasons that end a wait. `presented` is the presentation of the view; the others end the wait without it.
 const ENDS: [&str; 4] = ["presented", "process-ended", "hidden", "unresponsive"];
 
@@ -91,6 +127,8 @@ impl PresentationWait {
             return false;
         }
         state.waits.insert(key, None);
+        drop(state);
+        trace_presentation_join("requested", surface, generation, ticket, None, None);
         true
     }
 
@@ -161,6 +199,7 @@ impl PresentationWait {
         if reason == "presented" {
             return Ok(false);
         }
+        trace_presentation_join("abandoned", surface, generation, ticket, None, Some(reason));
         crate::event_record::emit_host(
             crate::event_log::Level::Debug,
             "host.trace.view.presentation-abandoned",

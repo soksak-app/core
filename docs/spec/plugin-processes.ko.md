@@ -106,6 +106,7 @@ Native region bounds alignment는 명시적으로 시작한 `diagnostics.documen
    - 계속되는 gesture(구분선이나 card 끌기) 동안 view의 native frame은 매 frame card와 같은 commit에서 새 기하로 놓는다. 변경된 root view의 presentation을 기다려 다음 native frame이 오래된 root-view pixel을 드러내지 않게 한다. 변경되거나 새로 표시되거나 재생성된 root view에만 wait를 적용해 변경 없는 placement의 barrier를 피한다. 이 수정은 통과값을 변경하지 않으며 전체 gesture는 기존 geometry와 frame 간격 기준을 충족해야 한다.
    - 끌기 gesture 전체의 녹화에서 frame 간격과 기하 오차를 얻고, 통과값 (viii)로 판정한다.
    - 기다림은 다음 가운데 먼저 오는 것으로 끝난다: 해당 ticket과 generation의 view presentation 완료, 해당 layout ticket 취소, view 프로세스 종료, view가 보이지 않게 됨(`hidden` 조상, 선택되지 않은 탭, 닫힌 표면. workbench가 표면마다 이미 알리는 상태를 읽는다), `host.trace.view.unresponsive` 응답 없음 알림. Ticket 취소는 해당 ticket의 pending placement state를 제거하고 native ticket 취소 전에 join을 포기한다. 마지막 join이 활성 transaction을 먼저 해제하면 완료된 ticket의 취소가 다음 queued ticket에 영향을 주지 않는다. 활성 native 취소는 owner와 ticket이 일치할 때만 transaction을 해제하고 대기 중인 request를 제거하며 적용된 기하를 되돌리지는 않는다. Window teardown은 owner-wide 취소로 해당 owner의 모든 queued request를 제거한다. 취소된 request는 오류를 반환하며 성공한 presentation으로 기록하지 않는다. 그 밖에 presentation 전에 끝나면 native join을 포기하고 해당 view 없이 layout을 계속 진행하며 `host.trace.view.presentation-abandoned {surface, reason}`을 쓰고 `losses.abandoned`를 센다. 취소되거나 대체된 ticket의 늦은 callback은 새 wait를 끝내지 못한다. host가 wait를 소유하고 각 종료를 관찰하므로 event도 host가 쓴다. timer는 쓰지 않는다.
+   - performance trace가 켜져 있으면 `host.trace.view.presentation-join {phase, surface, generation, ticket}`가 root join 요청, 결과, native callback 및 presentation 없이 끝난 상태를 기록한다. `result`에는 `joined`, `abandoned`에는 `reason`도 포함한다. 요청은 native join 호출 전에, 결과는 호출이 반환된 뒤, callback event는 UI dispatch 전에 callback을 받은 시점에 쓴다. 따라서 동기 callback은 result event보다 먼저 기록될 수 있다. `presented`는 native callback 실행을 뜻하며 layout commit을 뜻하지 않는다. 포기 후 받은 callback도 같은 identity로 기록하지만 종료된 wait를 되살리거나 완료하지 않는다.
    - 통과값 (v)는 실행 중 기한이 아니다. 각 view의 측정이 적용하는 판정값이다.
    - [native surfaces](native-surfaces.ko.md)가 창 transaction의 presentation wait를 적는다.
 7. **입력.**
@@ -155,6 +156,7 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 | `host.trace.view.process-ready` | call | debug | `{plugin, surface}` |
 | `host.trace.view.callback-cancelled` | call | debug | `{surface, reason}`; reason은 `retired-origin` 또는 `window-closed` |
 | `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`. 카운터 `losses.abandoned`. host가 wait를 소유하므로 host가 쓴다 |
+| `host.trace.view.presentation-join` | call | debug | `{phase, surface, generation, ticket}`. `phase`는 `requested`, `result`, `presented`, `abandoned` 중 하나다. `result`에는 `joined`, `abandoned`에는 `reason`이 추가된다. abandonment 뒤 callback이 올 수 있으며 `presented`는 layout commit을 뜻하지 않는다 |
 | `page.input.shortcut.failed` | input | error | `{plugin, command}` |
 | `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |
 | `host.plugin-host.restart-limit` | lifecycle | error | `{plugin}` |

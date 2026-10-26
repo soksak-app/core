@@ -6,6 +6,18 @@ import (
 	"unsafe"
 )
 
+const presentationJoinTrace = "host.trace.view.presentation-join"
+
+type synchronousPresentationPlatform struct{ *lifecyclePlatform }
+
+func (p synchronousPresentationPlatform) JoinView(window unsafe.Pointer, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
+	abandon, joined, err := p.lifecyclePlatform.JoinView(window, ticket, view, presented)
+	if err == nil && joined {
+		presented()
+	}
+	return abandon, joined, err
+}
+
 // contract: view.presentation-wait.changed-root-joins-each-geometry
 func TestUnsettledChangedRootPlacementJoinsItsPresentation(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
@@ -398,5 +410,91 @@ func TestEachEndWithoutPresentationAbandonsTheViewJoin(t *testing.T) {
 				t.Fatalf("the %s notice carries %v, want its surface and reason", reason, abandoned[0])
 			}
 		})
+	}
+}
+
+// contract: view.presentation-wait.join-trace
+func TestPresentationJoinTraceKeepsExactIdentityAcrossCallbackAndAbandonment(t *testing.T) {
+	isolateTraceRecords(t)
+	wasOn := performanceOn.Swap(true)
+	t.Cleanup(func() { performanceOn.Store(wasOn) })
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Visible: true}
+	channel, ok := s.documents.view(placement.ID)
+	if !ok {
+		t.Fatal("the view channel is missing")
+	}
+	generation := channel.generation
+
+	if err := s.joinShownViews(window, 70, []Placement{placement}); err != nil {
+		t.Fatalf("join view: %v", err)
+	}
+	if len(fake.joins) != 1 {
+		t.Fatalf("native joins = %d, want 1", len(fake.joins))
+	}
+	fake.joins[0].presented()
+
+	placement.Rect.W = 321
+	if err := s.joinShownViews(window, 71, []Placement{placement}); err != nil {
+		t.Fatalf("join changed view: %v", err)
+	}
+	if len(fake.joins) != 2 {
+		t.Fatalf("native joins after changed placement = %d, want 2", len(fake.joins))
+	}
+	s.endPresentationWaitFor(placement.ID, 71, generation, "hidden")
+	// The platform callback is deliberately delivered after abandonment. It is trace evidence, not a live wait completion.
+	fake.joins[1].presented()
+
+	got := bufferedTraces(t, presentationJoinTrace)
+	wantPhases := []string{"requested", "result", "presented", "requested", "result", "abandoned", "presented"}
+	if len(got) != len(wantPhases) {
+		t.Fatalf("presentation-join records = %#v, want phases %v for surface %s generation %d", got, wantPhases, placement.ID, generation)
+	}
+	for index, phase := range wantPhases {
+		if got[index]["phase"] != phase || got[index]["surface"] != placement.ID || got[index]["generation"] != float64(generation) {
+			t.Fatalf("presentation-join record %d = %#v, want phase %s for surface %s generation %d", index, got[index], phase, placement.ID, generation)
+		}
+		wantTicket := float64(70)
+		if index >= 3 {
+			wantTicket = 71
+		}
+		if got[index]["ticket"] != wantTicket {
+			t.Fatalf("presentation-join record %d ticket = %#v, want %v", index, got[index]["ticket"], wantTicket)
+		}
+	}
+	if got[1]["joined"] != true || got[4]["joined"] != true || got[5]["reason"] != "hidden" {
+		t.Fatalf("join results or abandonment fields are incorrect: %#v", got)
+	}
+}
+
+// contract: view.presentation-wait.join-trace
+func TestSynchronousPresentationJoinCallbackPrecedesNativeJoinResult(t *testing.T) {
+	isolateTraceRecords(t)
+	wasOn := performanceOn.Swap(true)
+	t.Cleanup(func() { performanceOn.Store(wasOn) })
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	system = synchronousPresentationPlatform{fake}
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Visible: true}
+	channel, ok := s.documents.view(placement.ID)
+	if !ok {
+		t.Fatal("the view channel is missing")
+	}
+	if err := s.joinShownViews(window, 72, []Placement{placement}); err != nil {
+		t.Fatalf("join view: %v", err)
+	}
+	got := bufferedTraces(t, presentationJoinTrace)
+	wantPhases := []string{"requested", "presented", "result"}
+	if len(got) != len(wantPhases) {
+		t.Fatalf("synchronous presentation-join records = %#v, want phases %v", got, wantPhases)
+	}
+	for index, phase := range wantPhases {
+		if got[index]["phase"] != phase || got[index]["surface"] != placement.ID || got[index]["generation"] != float64(channel.generation) || got[index]["ticket"] != float64(72) {
+			t.Fatalf("synchronous presentation-join record %d = %#v, want phase %s and exact join identity", index, got[index], phase)
+		}
+	}
+	if got[2]["joined"] != true {
+		t.Fatalf("native join result = %#v, want joined true", got[2])
 	}
 }

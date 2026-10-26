@@ -136,6 +136,7 @@ func (w *presentationWait) endFor(surface string, ticket, generation uint64, rea
 	if !waiting {
 		return false, nil
 	}
+	tracePresentationJoin("abandoned", surface, join.generation, join.ticket, false, reason)
 	EmitHost(LevelDebug, "host.trace.view.presentation-abandoned", map[string]any{"surface": surface, "reason": reason})
 	if join.abandon != nil {
 		if err := join.abandon(); err != nil {
@@ -143,6 +144,26 @@ func (w *presentationWait) endFor(surface string, ticket, generation uint64, rea
 		}
 	}
 	return true, nil
+}
+
+// tracePresentationJoin records one root-view join phase only while the performance trace and its event gate are enabled.
+func tracePresentationJoin(phase, surface string, generation, ticket uint64, joined bool, reason string) {
+	if !PerformanceEnabled() || !GateEvent(ClassCall, LevelDebug) {
+		return
+	}
+	fields := map[string]any{
+		"phase":      phase,
+		"surface":    surface,
+		"generation": generation,
+		"ticket":     ticket,
+	}
+	if phase == "result" {
+		fields["joined"] = joined
+	}
+	if phase == "abandoned" {
+		fields["reason"] = reason
+	}
+	EmitHost(LevelDebug, "host.trace.view.presentation-join", fields)
 }
 
 // cancelTicket abandons joins of an aborted native layout. It does not write a presentation-abandoned event because that ticket did not commit.
@@ -245,11 +266,14 @@ func (s *Surfaces) joinViewForPresentation(window unsafe.Pointer, ticket uint64,
 		return 0, false, nil
 	}
 	surface, generation := placement.ID, channel.generation
+	tracePresentationJoin("requested", surface, generation, ticket, false, "")
 	abandon, joined, err := system.JoinView(window, ticket, view, func() {
+		tracePresentationJoin("presented", surface, generation, ticket, false, "")
 		if err := system.EnqueueUI(func() { s.endPresentationWaitFor(surface, ticket, generation, "presented") }); err != nil {
 			LogError("view channel", err)
 		}
 	})
+	tracePresentationJoin("result", surface, generation, ticket, err == nil && joined, "")
 	if err != nil {
 		return generation, false, fmt.Errorf("joining view %s to the layout transaction: %w", surface, err)
 	}
