@@ -150,15 +150,22 @@ export function physicalFootprintBytes(pid) {
   return parsePhysicalFootprint(output, pid);
 }
 
-/** Parses exactly one OS footprint result row and rejects missing, duplicate, or unsafe values. */
-export function parsePhysicalFootprint(output, pid = "view process") {
+/** Parses the single macOS WebKit byte-footprint header for the requested PID. */
+export function parsePhysicalFootprint(output, pid) {
+  assert.ok(Number.isSafeInteger(pid) && pid > 0, `invalid view process PID ${JSON.stringify(pid)}`);
   assert.ok(typeof output === "string", `physical footprint output for ${pid} must be text`);
-  const matches = [...output.matchAll(/^Footprint: (\d+) B\s*$/gmu)];
-  assert.equal(matches.length, 1,
-    `physical footprint of ${pid} must contain exactly one Footprint row, found ${matches.length}: ${output.trim()}`);
-  const bytes = Number(matches[0][1]);
+  const rows = output.split(/\r?\n/u).filter((line) => line.includes("Footprint:"));
+  assert.equal(rows.length, 1,
+    `physical footprint of ${pid} must contain exactly one Footprint row, found ${rows.length}: ${output.trim()}`);
+  const match = /^\s*com\.apple\.WebKit\.WebContent \[(\d+)\]: 64-bit\s+Footprint: (\d+) B \((\d+) bytes per page\)\s*$/u.exec(rows[0]);
+  assert.ok(match, `physical footprint of ${pid} has an invalid macOS WebKit Footprint row: ${rows[0]}`);
+  assert.equal(Number(match[1]), pid, `physical footprint PID ${match[1]} does not match requested PID ${pid}`);
+  const bytes = Number(match[2]);
+  const pageBytes = Number(match[3]);
   assert.ok(Number.isSafeInteger(bytes) && bytes > 0,
-    `view process ${pid} returned invalid footprint ${matches[0][1]}`);
+    `view process ${pid} returned invalid footprint ${match[2]}`);
+  assert.ok(Number.isSafeInteger(pageBytes) && pageBytes > 0,
+    `view process ${pid} returned invalid page size ${match[3]}`);
   return bytes;
 }
 

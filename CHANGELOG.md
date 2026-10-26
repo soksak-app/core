@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-4: Parse the actual macOS WebKit byte-footprint header and validate its PID, units and page size. The preserved real-output fixture fails before correction; the parser and all ten owning cases pass afterward. Reject missing, duplicate and invalid rows without another metric or former-format fallback.
+
 - F212.14-5-3: Exclude unstarted native documents from live process sharing and byte samples while retaining their observed zero-process/history state. Read Browser history from the public diagnostic reply. The process and history regressions fail before correction and all 25 affected owning cases pass afterward.
 
 - F212.14-5-2: Wait on the declared readiness-status exposure before reading a newly created view. Reuse one event-driven wrapper for initial opens and scratch views. The unchanged deferred-registration case fails before correction; the 31 affected owning cases pass afterward. Application measurement confirmation remains pending.

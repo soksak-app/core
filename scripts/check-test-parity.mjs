@@ -6928,6 +6928,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-5-4",
+    implementation: [{ file: "e2e/view-process-footprint.mjs", symbol: "export function parsePhysicalFootprint(" }],
+    tests: [{ file: "e2e/test/view-process-footprint.test.mjs", id: "physical footprint parser requires one safe positive byte row" }],
+    expected: "The actual OS byte-footprint header yields one positive value for the requested process.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.14-5-2",
     implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function waitForViewReadiness(" }],
     tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "opening a view records before creation and proves pixels from a finalized frame" }],

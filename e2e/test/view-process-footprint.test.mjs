@@ -129,11 +129,22 @@ test("process group measurement retains exact PIDs and physical bytes", async ()
 });
 
 test("physical footprint parser requires one safe positive byte row", () => {
-  assert.equal(parsePhysicalFootprint("PID: 401\nFootprint: 123456 B\n"), 123456);
-  assert.throws(() => parsePhysicalFootprint("no footprint row"), /exactly one Footprint row, found 0/);
-  assert.throws(() => parsePhysicalFootprint("Footprint: 1 B\nFootprint: 2 B"), /exactly one Footprint row, found 2/);
-  assert.throws(() => parsePhysicalFootprint("Footprint: 0 B"), /invalid footprint/);
-  assert.throws(() => parsePhysicalFootprint("Footprint: 9007199254740992 B"), /invalid footprint/);
+  const actual = [
+    "======================================================================",
+    "  com.apple.WebKit.WebContent [49534]: 64-bit    Footprint: 36422400 B (16384 bytes per page)",
+    "======================================================================",
+    "",
+    "        Dirty         Clean   Reclaimable    Regions    Category",
+    "          ---           ---           ---        ---    ---",
+    "  27623424 B           0 B    11173888 B          5    WebKit malloc",
+  ].join("\n");
+  assert.equal(parsePhysicalFootprint(actual, 49534), 36422400);
+  assert.throws(() => parsePhysicalFootprint("no footprint row", 49534), /exactly one Footprint row, found 0/);
+  assert.throws(() => parsePhysicalFootprint(`${actual}\n${actual}`, 49534), /exactly one Footprint row, found 2/);
+  assert.throws(() => parsePhysicalFootprint(actual, 401), /PID 49534 does not match requested PID 401/);
+  assert.throws(() => parsePhysicalFootprint(actual.replace("36422400 B", "0 B"), 49534), /invalid footprint/);
+  assert.throws(() => parsePhysicalFootprint(actual.replace("36422400 B", "9007199254740992 B"), 49534), /invalid footprint/);
+  assert.throws(() => parsePhysicalFootprint(actual.replace("36422400 B", "36422400 KB"), 49534), /invalid macOS WebKit Footprint row/);
 });
 
 test("reclaim evidence keeps ended PIDs as zero and proves one-entry histories", () => {
