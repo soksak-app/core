@@ -7029,6 +7029,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-47",
+    implementation: [
+      { file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "function assertTerminalStageCoherent(" },
+      { file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function assertInputTraceDelivery(" },
+    ],
+    tests: [{ file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" }],
+    expected: "Four native vowel keys match the same-window AppKit documents at coherent terminal frames and commit four vowels plus Space exactly once.",
+    levels: ["application"],
+  },
+  {
     id: "F239-47-2",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function visibleInputBeforeCursor(" }],
     tests: [
