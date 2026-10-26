@@ -50,6 +50,8 @@ Every plugin view meets (i), (ii), (iii), (iii-b), (v) and (viii), and the resta
 
 Criterion (iii) applies only when the opened view is assigned to a process that was already running immediately before its start request. The measurement records the pre-request process snapshot and the assigned view process. An open assigned to a new process reports (iii) as not applicable, not passed, and is measured under (iii-b); the measurement never forces process reuse. Recorded pixels establish displayed alignment under (viii)(a); the owning layout transaction tests separately establish the association between card and native placement. A captured frame does not establish a causal commit identifier.
 
+Viewport geometry may use an explicitly started diagnostic viewport marker in the actual native document. The overlay has a transparent background, a unique opaque border, fixed viewport positioning and no pointer handling; it changes no existing layout node or document size. Measurement first verifies unit visual-viewport scale, zero viewport offset and no reserved scrollbar gutter or transformed fixed-position containing block. Captured border pixels establish all four viewport edges against the independently declared slot and unchanged 2 pt limit; reported host or DOM rectangles never replace those pixels. Stop, disposal and failed startup remove the overlay. This evidence is labeled marker-assisted viewport geometry and does not establish natural-content extent, source-frame identity or normal-paint cadence. A document-element border is insufficient because that element can grow with content; foreground segmentation is insufficient when unrelated card controls share its pixel predicate.
+
 ## Rules
 
 1. Plugin code does not run on the workbench page.

@@ -188,6 +188,12 @@
       "allowed": []
     },
     {
+      "term": "viewport marker",
+      "definition": "An explicitly started diagnostic fixed overlay with a transparent background and a unique opaque border whose captured pixels identify the visual viewport edges without changing document layout or input.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "presentation caret",
       "definition": "A provider-defined runtime grid coordinate used to place an input caret in a raster presentation overlay; it is distinct from the engine cursor and is not part of the generic screen hash or replay inputs.",
       "rejected": [],

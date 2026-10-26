@@ -1,6 +1,7 @@
 import { pixel } from "@soksak/window-check/frame.mjs";
 
-const DEFAULT_TOLERANCE = 4;
+export const VIEW_GEOMETRY_COLOR_TOLERANCE = 4;
+const DEFAULT_TOLERANCE = VIEW_GEOMETRY_COLOR_TOLERANCE;
 
 function requireColor(value, name) {
   if (!Array.isArray(value) || value.length !== 3 ||

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { drag } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
-import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "../../view-frame-geometry.mjs";
+import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry,
+  VIEW_GEOMETRY_COLOR_TOLERANCE } from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture,
   monotonicTimeMs, requireViewContentFrameCoverage, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
@@ -22,52 +23,6 @@ export function hwpDocumentHistoryEvidence(value) {
   assert.equal(value.historyEntries, 1, "HWP root document history must contain exactly its initial entry");
   assert.equal(value.regionHistoryEntries, 1, "HWP studio document history must contain exactly its initial entry");
   return { historyEntries: value.historyEntries, regionHistoryEntries: value.regionHistoryEntries };
-}
-
-/** Samples an opaque HWP row to anchor its card scan; the row is not a viewport boundary. */
-export function hwpGeometryPalette(frame, rect, theme) {
-  assert.ok(frame?.data instanceof Uint8Array && frame.data.length === frame.stride * frame.height,
-    "HWP geometry palette requires a complete decoded frame");
-  assert.ok(rect && [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
-    && rect.width > 0 && rect.height > 0, "HWP geometry palette requires a visible studio rectangle");
-  assert.ok(theme && typeof theme === "object", "HWP geometry palette requires the active core theme");
-  const ratio = frame.scale * frame.contentScale;
-  assert.ok(Number.isFinite(ratio) && ratio > 0 && frame.content
-    && Number.isFinite(frame.content.x) && Number.isFinite(frame.content.y), "HWP geometry palette has invalid capture scale");
-  const left = Math.floor(frame.content.x * frame.scale + rect.x * ratio);
-  const top = Math.floor(frame.content.y * frame.scale + (rect.y + 0.5) * ratio);
-  const right = Math.ceil(frame.content.x * frame.scale + (rect.x + rect.width) * ratio);
-  assert.ok(left >= 0 && top >= 0 && right <= frame.width && right > left,
-    "HWP studio top-row sample lies outside the decoded frame");
-
-  const colors = new Map();
-  let sampled = 0;
-  for (let x = left; x < right; x++) {
-    const offset = top * frame.stride + x * 4;
-    if (frame.data[offset + 3] !== 255) continue;
-    const color = [frame.data[offset + 2], frame.data[offset + 1], frame.data[offset]];
-    const key = color.join(",");
-    colors.set(key, (colors.get(key) ?? 0) + 1);
-    sampled++;
-  }
-  assert.ok(sampled > 0, "HWP studio top row contains no opaque pixels");
-  const [contentKey, dominantCount] = [...colors.entries()].sort((a, b) => b[1] - a[1])[0];
-  assert.ok(dominantCount / sampled >= 0.35,
-    `HWP studio top row has no dominant opaque fill: ${dominantCount}/${sampled} pixels`);
-  const parse = (name, token) => {
-    assert.ok(typeof token === "string" && /^#[0-9a-f]{6}$/iu.test(token), `core theme ${name} is not an RGB hex token`);
-    return [1, 3, 5].map((index) => Number.parseInt(token.slice(index, index + 2), 16));
-  };
-  const contentColor = contentKey.split(",").map(Number);
-  const cardColor = parse("card", theme.card);
-  const planeColor = parse("background", theme.bg);
-  const borderColors = [theme.edge, theme.focus].filter((value) => value !== undefined)
-    .map((value, index) => parse(`border ${index}`, value));
-  assert.ok(borderColors.length > 0, "core theme has no declared card border or focus color");
-  assert.equal([cardColor, planeColor, ...borderColors].some((color) =>
-    color.every((channel, index) => Math.abs(channel - contentColor[index]) <= 4)), false,
-  `HWP studio fill ${JSON.stringify(contentColor)} conflicts with the active card, plane, or border colors`);
-  return { contentColor, cardColor, planeColor, borderColors, sampleCount: sampled, dominantCount };
 }
 
 /** Compares screenshot-measured HWP studio bounds with the current declared document-region slot. */
@@ -114,13 +69,12 @@ export async function hwpViewDescriptor(s, diagnostic = () => {}) {
     },
     readDocument: read,
     startContentTrace: async (session, surface) => {
-      const value = await session.run("hwp.diagnostics.frames.start", {}, surface);
-      assert.equal(value.enabled, true, `HWP view ${surface} content-frame observer did not start`);
-      return value;
+      return session.run("hwp.diagnostics.frames.start", {}, surface);
     },
     stopContentTrace: async (session, surface) => {
       const value = await session.run("hwp.diagnostics.frames.stop", {}, surface);
       assert.equal(value.enabled, false, `HWP view ${surface} content-frame observer did not stop`);
+      assert.equal(value.studioViewport, null, `HWP view ${surface} diagnostic viewport marker remained after stop`);
       return value;
     },
   });
@@ -148,12 +102,94 @@ function captureFrames(result, label) {
   return files.map(readFrame);
 }
 
-function geometryPalette(frame, studio, theme) {
-  return hwpGeometryPalette(frame, studio.frame, theme);
+function hwpThemeGeometry(theme, contentColor) {
+  const parse = (name, token) => {
+    assert.ok(typeof token === "string" && /^#[0-9a-f]{6}$/iu.test(token), `core theme ${name} is not an RGB hex token`);
+    return [1, 3, 5].map((index) => Number.parseInt(token.slice(index, index + 2), 16));
+  };
+  const borderColors = [theme.edge, theme.focus].filter((value) => value !== undefined)
+    .map((value, index) => parse(`border ${index}`, value));
+  assert.ok(borderColors.length > 0, "core theme has no declared card border or focus color");
+  return { contentColor, cardColor: parse("card", theme.card), planeColor: parse("background", theme.bg), borderColors };
+}
+
+function validateHwpStudioViewport(value) {
+  assert.ok(value && typeof value === "object", "HWP marker reply is missing studio viewport metadata");
+  assert.deepEqual(value.markerColor, [255, 0, 255], "HWP marker color differs from its declared unique RGB token");
+  assert.equal(value.borderWidth, 2, "HWP marker border must be exactly 2 CSS pixels");
+  for (const field of ["innerWidth", "innerHeight", "clientWidth", "clientHeight"]) {
+    assert.ok(Number.isFinite(value[field]) && value[field] > 0, `HWP marker reply has invalid ${field}`);
+  }
+  assert.deepEqual(value.rect, { left: 0, top: 0, right: value.innerWidth, bottom: value.innerHeight },
+    "HWP marker does not cover the declared studio viewport");
+  assert.equal(value.clientWidth, value.innerWidth, "HWP studio viewport has a horizontal scrollbar gutter");
+  assert.equal(value.clientHeight, value.innerHeight, "HWP studio viewport has a vertical scrollbar gutter");
+  assert.deepEqual(value.visualViewport, { width: value.innerWidth, height: value.innerHeight,
+    offsetLeft: 0, offsetTop: 0, scale: 1 }, "HWP visual viewport is zoomed, offset, or smaller than its layout viewport");
+  assert.deepEqual(value.fixedContainingBlock, { transform: "none", perspective: "none", filter: "none",
+    contain: "none", willChange: "auto", containerType: "normal" },
+  "HWP fixed marker has a transformed or contained ancestor");
+  return value;
+}
+
+/** Measures one diagnostic HWP viewport border from captured pixels; it does not infer natural content bounds. */
+export function measureHwpViewportMarkerFrame(frame, viewportReply, { targetRect, themeGeometry } = {}) {
+  const viewport = validateHwpStudioViewport(viewportReply);
+  assert.ok(targetRect && [targetRect.x, targetRect.y, targetRect.width, targetRect.height]
+    .every(Number.isFinite) && targetRect.width > 0 && targetRect.height > 0,
+  "HWP marker measurement requires the visible target card rectangle");
+  assert.ok(themeGeometry && typeof themeGeometry === "object", "HWP marker measurement requires the active card palette");
+  const captureRatio = frame?.scale * frame?.contentScale;
+  assert.ok(Number.isFinite(captureRatio) && captureRatio > 0,
+    `HWP marker measurement has an invalid capture ratio ${captureRatio}`);
+  const borderPixels = viewport.borderWidth * captureRatio;
+  assert.ok(Number.isSafeInteger(borderPixels), "HWP viewport marker border is not an integral capture-pixel width");
+
+  const cardGeometry = measureViewFrameGeometry(frame,
+    { ...themeGeometry, contentColor: viewport.markerColor, targetRect,
+      colorTolerance: VIEW_GEOMETRY_COLOR_TOLERANCE });
+  const card = cardGeometry.cardRectPx;
+  const bounds = cardGeometry.nativeRectPx;
+  const width = bounds.right - bounds.left, height = bounds.bottom - bounds.top;
+  assert.ok(Number.isSafeInteger(width) && width > borderPixels * 2
+    && Number.isSafeInteger(height) && height > borderPixels * 2,
+  "HWP target card has no complete viewport marker with positive interior area");
+  const isMarker = (x, y) => {
+    const offset = y * frame.stride + x * 4;
+    return frame.data[offset + 3] === 255
+      && [2, 1, 0].every((channel, index) => Math.abs(frame.data[offset + channel] - viewport.markerColor[index])
+        <= VIEW_GEOMETRY_COLOR_TOLERANCE);
+  };
+  for (let y = card.top; y < card.bottom; y++) for (let x = card.left; x < card.right; x++) {
+    if (!isMarker(x, y)) continue;
+    const inBounds = x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom;
+    const onBorder = inBounds && (x < bounds.left + borderPixels || x >= bounds.right - borderPixels
+      || y < bounds.top + borderPixels || y >= bounds.bottom - borderPixels);
+    assert.ok(onBorder, "extra marker pixels in the selected card");
+  }
+  for (let y = bounds.top; y < bounds.bottom; y++) for (let x = bounds.left; x < bounds.right; x++) {
+    const actual = isMarker(x, y);
+    const expected = x < bounds.left + borderPixels || x >= bounds.right - borderPixels
+      || y < bounds.top + borderPixels || y >= bounds.bottom - borderPixels;
+    assert.equal(actual, expected, "HWP viewport marker does not contain a complete 2-pixel border on all four edges");
+  }
+  const nativeRectPx = { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
+  const originX = frame.content.x * frame.scale, originY = frame.content.y * frame.scale;
+  const nativeRectPt = {
+    left: (bounds.left - originX) / captureRatio,
+    top: (bounds.top - originY) / captureRatio,
+    right: (bounds.right - originX) / captureRatio,
+    bottom: (bounds.bottom - originY) / captureRatio,
+  };
+  return { ...cardGeometry, nativeRectPx, nativeRectPt,
+    geometryEvidence: "marker-assisted viewport geometry",
+    viewportMarker: { color: [...viewport.markerColor], borderWidthCssPx: viewport.borderWidth, captureRatio } };
 }
 
 export async function layoutObservation(t, s, descriptor, surface, card, theme) {
-  const traced = await withViewContentTrace(t, s, descriptor, surface, async () => {
+  const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
+    assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
+    const viewport = validateHwpStudioViewport(startReply.studioViewport);
     const recording = await s.record();
     const grid = await s.get("core.grid");
     const pane = grid.cards.find((item) => item.id === card);
@@ -164,9 +200,9 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme) 
     const { displayed } = await s.presented();
     const result = await recording.stop({ after: displayed });
     return { displayed, beforeChangeTimeMs, result, captured: captureFrames(result, "layout"),
-      paletteRect: studioBefore.frame, nativeDocumentBefore: studioBefore.frame };
+      nativeDocumentBefore: studioBefore.frame, viewport };
   });
-  const { beforeChangeTimeMs, captured, result, paletteRect, nativeDocumentBefore } = traced.action;
+  const { beforeChangeTimeMs, captured, result, nativeDocumentBefore } = traced.action;
   const host = await s.get("host.window");
   const root = documentRow(host, surface, "");
   const studio = documentRow(host, surface, "studio");
@@ -179,10 +215,12 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme) 
   const region = await s.rect("hwp.studio", undefined, surface);
   const slotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
-  const themeGeometry = geometryPalette(captured[0], { frame: paletteRect }, theme);
   const targetRect = { x: studio.frame.x, y: studio.frame.y,
     width: studio.frame.width, height: studio.frame.height };
-  const measured = captured.map((frame) => measureViewFrameGeometry(frame, { ...themeGeometry, targetRect }));
+  const viewport = traced.action.viewport;
+  const themeGeometry = hwpThemeGeometry(theme, viewport.markerColor);
+  const measured = captured.map((frame) => measureHwpViewportMarkerFrame(frame, viewport,
+    { targetRect, themeGeometry }));
   let transition;
   try {
     transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
@@ -239,8 +277,10 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme) 
     sourceFrame: source,
     slotInsetsPt,
     initialGeometry: { frameIndex, timeMs: captured[frameIndex].time, cardRectPt: geometry.cardRectPt,
-      nativeRectPt: geometry.nativeRectPt, slotInsetsPt, errorPt: initialGeometryErrorPt },
-    pixelPalette: themeGeometry,
+      nativeRectPt: geometry.nativeRectPt, slotInsetsPt, errorPt: initialGeometryErrorPt,
+      geometryEvidence: geometry.geometryEvidence, viewportMarker: geometry.viewportMarker },
+    markerGeometry: { color: [...viewport.markerColor], borderWidthCssPx: viewport.borderWidth,
+      geometryEvidence: "marker-assisted viewport geometry" },
     events: traced.events,
     captureDirectory: result.frames,
   };
@@ -253,9 +293,13 @@ async function dragObservation(t, s, descriptor, surface, card, theme) {
   const region = await s.rect("hwp.studio", undefined, surface);
   const slotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
-  const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
-    drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }));
-  const run = traced.action;
+  const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
+    assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
+    const viewport = validateHwpStudioViewport(startReply.studioViewport);
+    return { viewport,
+      run: await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }) };
+  });
+  const run = traced.action.run;
   const captured = captureFrames(run, "drag");
   assert.ok(captured.length > 2, "HWP drag recording contains too few frames");
   const firstGestureFrameIndex = captured.findIndex((frame) => frame.time >= run.ticks[0]);
@@ -266,14 +310,17 @@ async function dragObservation(t, s, descriptor, surface, card, theme) {
   const studio = documentRow(host, surface, "studio");
   const targetRect = { x: studio.frame.x, y: studio.frame.y,
     width: studio.frame.width, height: studio.frame.height };
-  const palette = geometryPalette(captured[firstGestureFrameIndex], studio, theme);
+  const viewport = traced.action.viewport;
+  const themeGeometry = hwpThemeGeometry(theme, viewport.markerColor);
   const geometryFrames = [];
   const geometryByFrame = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = measureViewFrameGeometry(captured[frameIndex], { ...palette, targetRect });
+    const measured = measureHwpViewportMarkerFrame(captured[frameIndex], viewport, { targetRect, themeGeometry });
+    const slotErrorPt = assertHwpFrameMatchesSlot(measured, slotInsetsPt);
     geometryByFrame.set(frameIndex, measured);
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
-      cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
+      cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt,
+      errorPt: slotErrorPt, geometryEvidence: measured.geometryEvidence, viewportMarker: measured.viewportMarker });
   }
   const contentFrames = [];
   const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
@@ -282,7 +329,7 @@ async function dragObservation(t, s, descriptor, surface, card, theme) {
   for (const source of mapped) {
     if (source.frameIndex === null) continue;
     const geometry = geometryByFrame.get(source.frameIndex)
-      ?? measureViewFrameGeometry(captured[source.frameIndex], { ...palette, targetRect });
+      ?? measureHwpViewportMarkerFrame(captured[source.frameIndex], viewport, { targetRect, themeGeometry });
     const nativeWidth = geometry.cardRectPt.right - geometry.cardRectPt.left
       - rootSlotInsetsPt.left - rootSlotInsetsPt.right;
     const nativeHeight = geometry.cardRectPt.bottom - geometry.cardRectPt.top
@@ -336,6 +383,6 @@ export async function collectHwpViewMeasurements(t, s) {
     newProcess: { processStarts: start.processStarts, firstDisplays: start.firstDisplays },
     layoutDisplay: [layout],
     drag,
-    _evidence: { ...evidence, initialGeometry: layout.initialGeometry, pixelPalette: layout.pixelPalette },
+    _evidence: { ...evidence, initialGeometry: layout.initialGeometry, markerGeometry: layout.markerGeometry },
   };
 }

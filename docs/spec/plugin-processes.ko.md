@@ -50,6 +50,8 @@ Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름
 
 기준 (iii)은 열린 view가 시작 요청 직전에 이미 실행 중인 process에 배정된 경우에만 적용한다. 측정은 요청 전 process snapshot과 배정된 view process를 기록한다. 새 process에 배정된 열기는 (iii)을 통과가 아닌 해당 없음으로 보고하고 (iii-b)로 측정하며 process 재사용을 강제하지 않는다. 녹화한 pixel은 (viii)(a)의 표시 정렬을 입증하고 소유 layout transaction 검사는 card와 native 배치의 연결을 별도로 입증한다. 캡처 frame은 인과적 commit identifier를 입증하지 않는다.
 
+Viewport geometry는 실제 native document에서 명시적으로 시작한 diagnostic viewport marker를 사용할 수 있다. Overlay는 투명 배경, 고유한 불투명 border, viewport 기준 fixed 배치와 pointer 처리 없음을 유지하며 기존 layout node나 document 크기를 바꾸지 않는다. 측정은 먼저 visual viewport scale 1, viewport offset 0, 예약된 scrollbar gutter 없음과 변형된 fixed-position containing block 없음을 검증한다. 캡처한 border pixel로 네 viewport 경계를 독립적으로 선언된 slot 및 기존 2 pt 기준과 비교하며 보고된 host·DOM rectangle로 해당 pixel을 대체하지 않는다. 중지·dispose·시작 실패 시 overlay를 제거한다. 이 근거는 marker-assisted viewport geometry로 표시하며 자연 content 범위, source-frame identity나 정상 paint cadence를 입증하지 않는다. Document element는 content와 함께 커질 수 있어 그 border만으로는 부족하고, 관련 없는 card control이 같은 pixel predicate에 포함되면 foreground segmentation도 부족하다.
+
 ## 규칙
 
 1. workbench 페이지에서는 plugin 코드를 실행하지 않는다.

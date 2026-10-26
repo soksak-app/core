@@ -138,10 +138,11 @@ test("generic content trace starts before an action and returns only scoped sour
   const s = { app: { configDir: root }, async flushLog() {} };
   const descriptor = {
     plugin: "fixture",
-    async startContentTrace(session, surface) { calls.push(["start", session, surface]); },
+    async startContentTrace(session, surface) { calls.push(["start", session, surface]); return { marker: { color: [255, 0, 255] } }; },
     async stopContentTrace(session, surface) { calls.push(["stop", session, surface]); return { sequence: 1 }; },
   };
-  const result = await withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
+  const result = await withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async (start) => {
+    assert.deepEqual(start, { marker: { color: [255, 0, 255] } });
     calls.push(["action"]);
     appendFileSync(join(logs, "host-1-1.jsonl"), `${JSON.stringify({ level: "debug", event:
       "plugin.fixture.view.content_frame", ts_us: 2_000_000, mono_ns: 3_000_000, seq: 1,
@@ -151,9 +152,50 @@ test("generic content trace starts before an action and returns only scoped sour
   });
   assert.deepEqual(calls.map(([name]) => name), ["start", "action", "stop"]);
   assert.deepEqual(result.action, { gestureEndedAtMs: 2 });
+  assert.deepEqual(result.start, { marker: { color: [255, 0, 255] } });
   assert.deepEqual(result.contentFrames.map(({ sequence, width, height }) => ({ sequence, width, height })),
     [{ sequence: 1, width: 300, height: 200 }]);
   assert.deepEqual(result.stop, { sequence: 1 });
+});
+
+test("content trace stops its diagnostic marker when the recorded action fails", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "view-content-trace-failure-"));
+  const logs = join(root, "logs");
+  mkdirSync(logs);
+  writeFileSync(join(logs, "host-1-1.jsonl"), "");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const calls = [];
+  const s = { app: { configDir: root }, async flushLog() {} };
+  const descriptor = {
+    plugin: "fixture",
+    async startContentTrace() { calls.push("start"); return { marker: "active" }; },
+    async stopContentTrace() { calls.push("stop"); return { marker: null }; },
+  };
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
+    calls.push("action");
+    throw new Error("controlled action failure");
+  }), /controlled action failure/);
+  assert.deepEqual(calls, ["start", "action", "stop"]);
+});
+
+test("content trace stops after a successful start returns invalid marker evidence", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "view-content-trace-invalid-start-"));
+  const logs = join(root, "logs");
+  mkdirSync(logs);
+  writeFileSync(join(logs, "host-1-1.jsonl"), "");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const calls = [];
+  const s = { app: { configDir: root }, async flushLog() {} };
+  const descriptor = {
+    plugin: "fixture",
+    async startContentTrace() { calls.push("start"); return { marker: null }; },
+    async stopContentTrace() { calls.push("stop"); return { marker: null }; },
+  };
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async (start) => {
+    calls.push("action");
+    assert.ok(start.marker, "marker reply is invalid");
+  }), /marker reply is invalid/);
+  assert.deepEqual(calls, ["start", "action", "stop"]);
 });
 
 test("shared readiness wrapper waits for the declared status exposure before reading it", { timeout: 5000 }, async () => {

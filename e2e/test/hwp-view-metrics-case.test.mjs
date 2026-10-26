@@ -5,13 +5,69 @@ import { join } from "node:path";
 import { crc32 } from "node:zlib";
 import test from "node:test";
 
-import { assertHwpFrameMatchesSlot, hwpDocumentHistoryEvidence, hwpFirstContentFrame, hwpGeometryPalette,
+import * as hwpCase from "../benchmark/cases/hwp.mjs";
+import { assertHwpFrameMatchesSlot, hwpDocumentHistoryEvidence, hwpFirstContentFrame,
   hwpViewDescriptor, layoutObservation }
   from "../benchmark/cases/hwp.mjs";
 import { processStartSamples } from "../view-metrics-collection.mjs";
 import { viewProcessPids } from "../view-process-footprint.mjs";
 
 const geometryColors = { content: [30, 30, 30], card: [25, 27, 36], plane: [16, 17, 23], border: [43, 46, 61] };
+const viewportMarker = [255, 0, 255];
+
+function viewportMarkerFrame({ scale = 1, missing = null, secondMarker = false, overdraw = false,
+  markerWidthCss = 60, cardRight = 110, markerShift = 0 } = {}) {
+  const width = 240 * scale, height = 160 * scale, stride = width * 4;
+  const data = new Uint8Array(stride * height);
+  const paint = (x, y, color) => {
+    const offset = y * stride + x * 4;
+    data[offset] = color[2]; data[offset + 1] = color[1]; data[offset + 2] = color[0]; data[offset + 3] = 255;
+  };
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) paint(x, y, geometryColors.plane);
+  const secondCardLeft = cardRight + 20;
+  for (const [left, top, right, bottom] of [[10, 10, cardRight, 150], [secondCardLeft, 10, 230, 150]]) {
+    for (let y = top * scale; y < bottom * scale; y++) for (let x = left * scale; x < right * scale; x++) {
+      const edge = x < (left + 1) * scale || x >= (right - 1) * scale
+        || y < (top + 1) * scale || y >= (bottom - 1) * scale;
+      paint(x, y, edge ? geometryColors.border : geometryColors.card);
+    }
+  }
+  for (const left of [20, secondCardLeft + 10]) for (let y = 45 * scale; y < 120 * scale; y++) {
+    for (let x = left * scale; x < (left + 80) * scale; x++) paint(x, y, geometryColors.content);
+  }
+  const drawMarker = (left, top, right, bottom, missingSide = null) => {
+    const thickness = 2 * scale;
+    const renderedMarker = [viewportMarker[0], viewportMarker[1] + markerShift, viewportMarker[2] - markerShift];
+    for (let y = top * scale; y < bottom * scale; y++) for (let x = left * scale; x < right * scale; x++) {
+      const edge = x < left * scale + thickness || x >= right * scale - thickness
+        || y < top * scale + thickness || y >= bottom * scale - thickness;
+      if (!edge) continue;
+      const onMissing = missingSide === "left" && x < left * scale + thickness
+          && y >= top * scale + thickness && y < bottom * scale - thickness
+        || missingSide === "right" && x >= right * scale - thickness
+          && y >= top * scale + thickness && y < bottom * scale - thickness
+        || missingSide === "top" && y < top * scale + thickness
+          && x >= left * scale + thickness && x < right * scale - thickness
+        || missingSide === "bottom" && y >= bottom * scale - thickness
+          && x >= left * scale + thickness && x < right * scale - thickness;
+      if (!onMissing) paint(x, y, renderedMarker);
+    }
+  };
+  drawMarker(30, 35, 30 + markerWidthCss, 130, missing);
+  if (secondMarker) drawMarker(secondCardLeft + 20, 35, secondCardLeft + 80, 130);
+  if (overdraw) paint(45 * scale, 80 * scale,
+    [viewportMarker[0], viewportMarker[1] + markerShift, viewportMarker[2] - markerShift]);
+  return { width, height, stride, data, scale, contentScale: 1, content: { x: 0, y: 0 }, time: 100 };
+}
+
+function viewportMarkerDeclaration() {
+  return { markerColor: viewportMarker, borderWidth: 2,
+    rect: { left: 0, top: 0, right: 60, bottom: 95 }, innerWidth: 60, innerHeight: 95,
+    clientWidth: 60, clientHeight: 95,
+    visualViewport: { width: 60, height: 95, offsetLeft: 0, offsetTop: 0, scale: 1 },
+    fixedContainingBlock: { transform: "none", perspective: "none", filter: "none", contain: "none",
+      willChange: "auto", containerType: "normal" } };
+}
 
 function writeLayoutFrame(directory, index, time, cardRight) {
   const width = 100, height = 80, stride = width * 4;
@@ -28,7 +84,10 @@ function writeLayoutFrame(directory, index, time, cardRight) {
     const edge = x === 10 || x === cardRight - 1 || y === 8 || y === 71;
     paint(x, y, edge ? geometryColors.border : geometryColors.card);
   }
-  for (let y = 22; y < 64; y++) for (let x = 14; x < 86; x++) paint(x, y, geometryColors.content);
+  for (let y = 11; y < 18; y++) for (let x = 14; x < 86; x++) paint(x, y, geometryColors.content);
+  for (let y = 20; y < 62; y++) for (let x = 14; x < 86; x++) {
+    if (x < 16 || x >= 84 || y < 22 || y >= 60) paint(x, y, viewportMarker);
+  }
   let remaining = pixels.length - 15;
   const encoded = [Buffer.from([0xf0])];
   while (remaining >= 255) { encoded.push(Buffer.from([255])); remaining -= 255; }
@@ -38,7 +97,7 @@ function writeLayoutFrame(directory, index, time, cardRight) {
   header.writeUInt32LE(width, 0);
   header.writeUInt32LE(height, 4);
   header.writeUInt32LE(stride, 8);
-  [0, 0, width, height, 1, 2, time].forEach((value, field) => header.writeDoubleLE(value, 12 + field * 8));
+  [0, 0, width, height, 1, 1, time].forEach((value, field) => header.writeDoubleLE(value, 12 + field * 8));
   header.write("LZ4B", 68, "ascii");
   header.writeUInt32LE(block.length, 72);
   header.writeUInt32LE(crc32(pixels), 76);
@@ -83,9 +142,19 @@ function layoutFailureSession(root, captureDirectory) {
     },
     async flushLog() {},
   };
-  const descriptor = { plugin: "hwp", async startContentTrace() {}, async stopContentTrace() { return {}; } };
+  const descriptor = { plugin: "hwp",
+    async startContentTrace() { return { enabled: true, studioViewport: viewportMarkerDeclarationForLayout() }; },
+    async stopContentTrace() { return { enabled: false, studioViewport: null }; } };
   const theme = { card: "#191b24", bg: "#101117", edge: "#2b2e3d", focus: "#ff0000" };
   return { session, descriptor, theme, grid, surfaces, host };
+}
+
+function viewportMarkerDeclarationForLayout() {
+  return { markerColor: viewportMarker, borderWidth: 2, rect: { left: 0, top: 0, right: 72, bottom: 42 },
+    innerWidth: 72, innerHeight: 42, clientWidth: 72, clientHeight: 42,
+    visualViewport: { width: 72, height: 42, offsetLeft: 0, offsetTop: 0, scale: 1 },
+    fixedContainingBlock: { transform: "none", perspective: "none", filter: "none", contain: "none",
+      willChange: "auto", containerType: "normal" } };
 }
 
 test("HWP unmatched layout geometry reports captured native document frames", { timeout: 5000 }, async (t) => {
@@ -178,41 +247,6 @@ test("HWP first-content sample requires OCR-confirmed decoded pixels in capture 
   });
 });
 
-test("HWP card-anchor color comes from dominant opaque pixels in the studio top row", { timeout: 1000 }, () => {
-  const width = 40, height = 30, stride = width * 4;
-  const data = new Uint8Array(stride * height);
-  const color = [241, 242, 243];
-  for (let pixel = 0; pixel < width * height; pixel++) {
-    const at = pixel * 4;
-    data[at] = color[2]; data[at + 1] = color[1]; data[at + 2] = color[0]; data[at + 3] = 255;
-  }
-  const frame = { width, height, stride, data, scale: 1, contentScale: 1,
-    content: { x: 0, y: 0 }, time: 100 };
-  assert.deepEqual(hwpGeometryPalette(frame, { x: 0, y: 0, width, height }, {
-    card: "#191b24", bg: "#101117", edge: "#2b2e3d", focus: "#ffb36b",
-  }).contentColor, color);
-});
-
-test("HWP card-anchor sampling uses the top row rather than page pixels", { timeout: 1000 }, () => {
-  const width = 40, height = 30, stride = width * 4;
-  const data = new Uint8Array(stride * height);
-  const paper = [255, 255, 255];
-  const studio = [52, 58, 67];
-  for (let index = 0; index < width * height; index++) {
-    const at = index * 4;
-    data[at] = paper[2]; data[at + 1] = paper[1]; data[at + 2] = paper[0]; data[at + 3] = 255;
-  }
-  for (let x = 0; x < width; x++) {
-    const at = x * 4;
-    data[at] = studio[2]; data[at + 1] = studio[1]; data[at + 2] = studio[0]; data[at + 3] = 255;
-  }
-  const frame = { width, height, stride, data, scale: 1, contentScale: 1,
-    content: { x: 0, y: 0 }, time: 100 };
-  assert.deepEqual(hwpGeometryPalette(frame, { x: 0, y: 0, width, height }, {
-    card: "#191b24", bg: "#101117", edge: "#2b2e3d", focus: "#ffb36b",
-  }).contentColor, studio);
-});
-
 test("HWP geometry compares measured studio edges with the declared slot insets", () => {
   const geometry = {
     cardRectPt: { left: 0, top: 0, right: 100, bottom: 80 },
@@ -221,4 +255,42 @@ test("HWP geometry compares measured studio edges with the declared slot insets"
   assert.equal(assertHwpFrameMatchesSlot(geometry, { left: 8, top: 6, right: 8, bottom: 6 }), 0);
   assert.throws(() => assertHwpFrameMatchesSlot({ ...geometry,
     nativeRectPt: { ...geometry.nativeRectPt, right: 88 } }, { left: 8, top: 6, right: 8, bottom: 6 }), /differs from its declared slot/);
+});
+
+test("HWP marker measurement requires a complete four-edge border", { timeout: 5000 }, () => {
+  assert.equal(typeof hwpCase.measureHwpViewportMarkerFrame, "function",
+    "HWP marker-assisted viewport geometry consumer is required");
+  const themeGeometry = { contentColor: geometryColors.content, cardColor: geometryColors.card,
+    planeColor: geometryColors.plane, borderColors: [geometryColors.border] };
+  const targetRect = { x: 30, y: 35, width: 60, height: 95 };
+  const measure = (frame) => hwpCase.measureHwpViewportMarkerFrame(frame,
+    viewportMarkerDeclaration(), { targetRect, themeGeometry });
+  const slotInsetsPt = { left: 20, top: 25, right: 20, bottom: 20 };
+  const oneToOne = measure(viewportMarkerFrame());
+  assert.deepEqual(oneToOne.nativeRectPt, { left: 30, top: 35, right: 90, bottom: 130 });
+  assert.equal(assertHwpFrameMatchesSlot(oneToOne, slotInsetsPt), 0);
+  assert.deepEqual(measure(viewportMarkerFrame({ markerShift: 1 })).nativeRectPt, oneToOne.nativeRectPt,
+    "the shared four-channel tolerance must apply to every marker pixel predicate");
+  assert.throws(() => measure(viewportMarkerFrame({ markerShift: 5 })), /no opaque content-color pixels/,
+    "marker matching must stop at the shared four-channel tolerance");
+  for (const edge of ["left", "top", "right", "bottom"]) {
+    assert.throws(() => measure(viewportMarkerFrame({ missing: edge })), /complete 2-pixel border/,
+      `${edge} border omission must fail`);
+  }
+  assert.deepEqual(measure(viewportMarkerFrame({ secondMarker: true })).nativeRectPt,
+    { left: 30, top: 35, right: 90, bottom: 130 }, "a marker in another card must not replace the target card marker");
+  assert.throws(() => measure(viewportMarkerFrame({ overdraw: true })), /extra marker pixels in the selected card/);
+  const invalidViewport = viewportMarkerDeclaration();
+  invalidViewport.visualViewport.scale = 1.5;
+  assert.throws(() => hwpCase.measureHwpViewportMarkerFrame(viewportMarkerFrame(), invalidViewport,
+    { targetRect, themeGeometry }), /visual viewport is zoomed/);
+  const twoToOne = measure(viewportMarkerFrame({ scale: 2 }));
+  assert.deepEqual(twoToOne.nativeRectPt, { left: 30, top: 35, right: 90, bottom: 130 },
+    "two capture pixels per CSS pixel must preserve the measured slot");
+  assert.equal(assertHwpFrameMatchesSlot(twoToOne, slotInsetsPt), 0);
+  const resizedSlot = measure(viewportMarkerFrame({ markerWidthCss: 80, cardRight: 130 }));
+  assert.deepEqual(resizedSlot.cardRectPt, { left: 10, top: 10, right: 130, bottom: 150 });
+  assert.deepEqual(resizedSlot.nativeRectPt, { left: 30, top: 35, right: 110, bottom: 130 },
+    "the overlay bounds must follow a resized viewport after the initial diagnostic reply");
+  assert.equal(assertHwpFrameMatchesSlot(resizedSlot, slotInsetsPt), 0);
 });

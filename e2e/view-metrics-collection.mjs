@@ -150,11 +150,11 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
   assert.equal(typeof descriptor.stopContentTrace, "function", "content trace stop callback is required");
   assert.equal(typeof action, "function", "content trace action is required");
   const offsets = currentEventOffsets(s.app.configDir);
-  await descriptor.startContentTrace(s, surface);
+  const start = await descriptor.startContentTrace(s, surface);
   let actionResult;
   let actionError;
   try {
-    actionResult = await action();
+    actionResult = await action(start);
   } catch (error) {
     actionError = error;
   }
@@ -184,7 +184,7 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
   if (stopError) throw stopError;
   if (eventError) throw eventError;
   const contentFrames = viewContentFrameEvents(events, descriptor.plugin, surface);
-  return { action: actionResult, stop: stopResult, events, contentFrames };
+  return { action: actionResult, start, stop: stopResult, events, contentFrames };
 }
 
 /** Reads the shared monotonic host clock in the same domain as recorded frame display times. */
