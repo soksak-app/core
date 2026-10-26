@@ -6928,6 +6928,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-194",
+    implementation: [{ file: "packages/workbench/environment.js", symbol: "diagnosticModules = Promise.all(" }],
+    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "diagnostic drag retains opt-in frame identity artifacts" }],
+    expected: "Installed diagnostic modules load at startup without application errors on both hosts.",
+    levels: ["application"],
+  },
+  {
     id: "F239-193",
     implementation: [{ file: "packages/workbench/stage.mjs", symbol: "pageImportsForBuild({ diagnostics })" }],
     tests: [{ file: "packages/workbench/test/stage.test.mjs", id: "a staged frontend with --diagnostics has the page diagnostic methods" }],

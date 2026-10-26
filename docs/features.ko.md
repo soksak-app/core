@@ -21,6 +21,8 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
+- [o] F239-194 — P0, F239-193 및 F212.10-hwp-2 연결: Browser-compatible HWP module graph를 설치하고 diagnostic startup을 검증한다. HWP browser module graph가 `node:assert/strict`를 import하여 양쪽 host startup이 실패했다. HWP H23.3은 소유 graph Red/Green으로 해당 의존성을 제거하며 H23.4는 별도 consumer Red/Green으로 필수 view clock을 전달한다. Candidate installer가 양쪽 host의 diagnostic package를 교체하고 설치 파일 92개 모두를 archive와 비교한다. macOS 26.6.2 arm64에서 양쪽 host가 애플리케이션 오류 없이 시작하고 추적된 diagnostic drag identity 사례가 2/2 통과하며 공통 log audit과 정상 종료도 통과한다. View 네 개의 측정은 별도 F212.14-5 소유의 status-read 순서 오류로 계속 실패한다. Release나 publication을 주장하지 않는다.
+
 - [o] F239-193 — P0, F212.14-5 연결: 두 document realm에서 diagnostic view-frame helper를 해결한다. Workbench는 설치된 diagnostic module을 main page에서 import하지만 helper는 native view에서만 mapping하여 최적화 diagnostic build의 plugin mount가 실패했다. Red: 실제 diagnostic staged-page import-map assertion에서 helper mapping이 없었다. Green: API 사례, diagnostic·release staging 사례와 기존 view-map 사례인 소유 검사 총 4개가 통과한다. Diagnostic staging은 main page에 mapping을 추가하며 비진단 staging은 PAGE_IMPORTS를 유지하고 helper module을 제외한다. 중단한 애플리케이션 측정은 실패 근거이며 통과한 성능 acceptance가 아니고 해당 acceptance는 F212.14가 유지한다.
 
 - [o] F239-192 — P1, F212.10-core-5 연결: 활성 project의 registry 제거 후 library 정리를 project activation과 직렬화한다. 제거 경로가 기존 transition lane을 우회하여 제거된 project를 정리하는 중에 대체 project가 load될 수 있다. Red: 소유 project-switch 회귀 검사가 보류한 정리 완료 전에 load를 관측한다. Green: 기존 lane으로 제거를 처리한 후 같은 회귀 검사 1개와 project-switch 소유 검사 15개가 통과한다. 이 순서 결함은 과거 exposure 실패의 원인을 입증하지 않는다.
