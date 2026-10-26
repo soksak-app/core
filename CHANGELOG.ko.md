@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-199: Readiness와 contextual-event의 정확한 feature 연결을 복원한다. Package 설치와 과거 source 감사를 runtime capability와 구분하며 연결 없는 제품 capability는 계속 오류다. 기록 오류 다섯 개를 재현한 뒤 inventory 소유 검사와 구조 parity 감사가 통과한다.
+
 - F212.14-5-12: Geometry 오류에 frame, target, palette, corner radius, 후보 경계와 실패 RGBA 좌표를 보존한다. 소유 진단 누락 검사가 수정 전 실패하고 수정 후 geometry 검사 20개 모두 통과한다. 측정 acceptance는 유지한다.
 
 - F212.14-5-13: Browser와 공통 폭 planner를 사용해 측정 Terminal card의 내부 오른쪽 divider를 선택한다. 고정 divider는 scratch view를 변경하지 않는다. 관련 소유 검사 27개가 모두 통과하며 앱 source-frame acceptance는 별도로 남는다.

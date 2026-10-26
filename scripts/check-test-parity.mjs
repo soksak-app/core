@@ -6937,8 +6937,15 @@ const FEATURE_LINKS = [
   {
     id: "F212.14-5-2",
     implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function waitForViewReadiness(" }],
-    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "opening a view records before creation and proves pixels from a finalized frame" }],
+    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "shared readiness wrapper waits for the declared status exposure before reading it" }],
     expected: "View readiness reads begin only after the declared exposure notification.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-197",
+    implementation: [{ file: "packages/plugin-api/events-check.js", symbol: "contextFields: ['surface']" }],
+    tests: [{ file: "packages/plugin-api/test/events-check.test.mjs", id: "plugin runtime contextual fields satisfy catalog requirements only at runtime.log entrances" }],
+    expected: "The event checker supplies the runtime-owned surface field only for runtime.log entrances, while generic producers still need to provide it.",
     levels: ["unit"],
   },
   {
@@ -7791,7 +7798,10 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // fixtures, mappings, file structure, compile scope, or records; F239-129 is a
 // behavior-preserving refactor. Every completed product capability still
 // requires exact implementation and owning-test links.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71"]);
+// F239-195 and F239-198 record candidate installation, F239-47-30-4 classifies
+// historical source evidence, and F239-199 corrects inventory records. None
+// adds runtime behavior.
+const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read

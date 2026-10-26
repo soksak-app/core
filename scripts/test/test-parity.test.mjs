@@ -146,7 +146,7 @@ test("completed capability entries all have feature evidence links", { timeout: 
 
 test("completed audit aggregates and fixture corrections are exempt while unlinked product capabilities need feature links", { timeout: 1000 }, () => {
   assert.deepEqual(
-    auditCompletedFeatureLinks([], "- [o] F13 — aggregate\n- [o] F266 — audit\n- [o] F267 — audit\n- [o] F239-47-5 — fixture correction\n- [o] F239-47-34 — documentation correction\n- [o] X1 — capability\n"),
+    auditCompletedFeatureLinks([], "- [o] F13 — aggregate\n- [o] F266 — audit\n- [o] F267 — audit\n- [o] F239-47-5 — fixture correction\n- [o] F239-47-34 — documentation correction\n- [o] F239-195 — candidate package installation\n- [o] F239-198 — candidate package installation\n- [o] F239-47-30-4 — historical source audit\n- [o] F239-199 — inventory metadata\n- [o] X1 — capability\n"),
     ["X1: completed capability has no feature link"],
   );
 });

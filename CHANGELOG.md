@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-199: Restore exact readiness and contextual-event feature links. Classify package installations and historical source audits separately from runtime capabilities; unlinked product capabilities remain errors. The owning inventory checks and structural parity audit pass after reproducing five record errors.
+
 - F212.14-5-12: Preserve frame, target, palette, corner radius, candidate bounds and failing RGBA coordinates in geometry errors. The owning missing-diagnostic regression fails before correction and all 20 geometry cases pass afterward. Measurement acceptance remains unchanged.
 
 - F212.14-5-13: Select the measured Terminal card’s interior right divider through the shared Browser width planner. The fixed divider leaves the scratch view unchanged. All 27 affected owner cases pass; application source-frame acceptance remains separate.
