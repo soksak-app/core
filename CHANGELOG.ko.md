@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F240: 미해결 작업을 닫지 않고 현재 구현을 acceptance 대기와 과거 원인 감사에서 구분한다. 누락된 view별 측정 모음을 F212.14-5에 기록하고 완료한 F212.14-3 timing 보고를 유지한다. Open register는 49행이며 세 행은 진행 중이고 46행은 대기한다.
+
 - F212.14: 완료한 VT screen 소유권/body-copy 수정을 기록하고 최적화한 diagnostic binary를 로컬 성능 acceptance profile로 정한다. 모든 debug-profile 목표 미달과 그대로인 목표를 유지한다. Compile profile은 diagnostic 지원과 독립적이며 공개 release, 인과적 지연 개선이나 두 profile의 통과를 주장하지 않는다.
 
 - F239-191: 기존 순차 runner로 native activation 사례를 실행해 test별 결과, 경과 시간과 timeout을 적용한다. image_region_test를 prerequisite로 선언하고 모든 아홉 사례와 인자를 유지한다. 비활성화 target fixture는 수정 전 실패하고 수정 후 native 앱을 실행하지 않고 통과한다.

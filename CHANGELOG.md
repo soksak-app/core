@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F240: Distinguish current implementation from waiting acceptance and historical audits without closing unresolved work. Record the missing per-view measurement matrix under F212.14-5 and preserve the completed F212.14-3 timing report. The open register includes 49 rows, of which three are active and 46 are waiting.
+
 - F212.14: Record completed VT screen ownership/body-copy corrections and define optimized diagnostic binaries as the local performance acceptance profile. Keep all debug-profile misses and unchanged targets. The compilation profile is independent of diagnostic support; no public release, causal latency improvement or both-profile pass is claimed.
 
 - F239-191: Run native activation cases through the existing sequential runner with per-test results, elapsed times and timeouts. Declare image_region_test as a prerequisite and preserve all nine cases and arguments. The non-activating target fixture fails before correction and passes afterward without running any native application.
