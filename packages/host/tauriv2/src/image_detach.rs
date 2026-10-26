@@ -211,8 +211,8 @@ impl<O: Owner> Sidecars<O> {
         let detached = detach_acknowledgement_body(body)
             .map_err(|error| format!("invalid image detach acknowledgement: {error}"))?
             .ok_or_else(|| "image detach acknowledgement has no object payload".to_string())?;
-        let ack: DetachAcknowledgementFields<'_> = serde_json::from_str(detached.get())
-            .map_err(|error| {
+        let ack: DetachAcknowledgementFields<'_> =
+            serde_json::from_str(detached.get()).map_err(|error| {
                 format!("image detach acknowledgement has no object payload: {error}")
             })?;
         let request = ack

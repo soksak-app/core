@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-203: Restore edition 2024 Rust formatting in the eight Tauri host files with formatting differences. Format only those files with `skip_children=true`; the gate passes afterward and behavior is unchanged.
+
 - F212.14-5-30: Add a diagnostic cyan 2-point border to the actual native document view and measure captured bounds against the declared slot, without treating it as CSS paint or source-frame evidence. The native owner fails before implementation with `not implemented` and passes 1/1 afterward. A later background-interaction regression fails because marker stop loses background-owned layer backing; the same native owner passes 1/1 after correction. Wails passes 6/6, five Tauri endpoint/diagnostic owners pass 1/1 each, and the latest HWP consumer owner passes 16/16. Application acceptance remains under F212.14-5-5.
 
 - F212.14-5-29: Select one-shot layout source frames from the resize request boundary and exact projected viewport size through a shared helper used by Browser, Editor, HWP and Terminal. The tracked regression fails when the old Editor, HWP and Terminal predicate uses a later placement readback as its time boundary. The corrected owner test passes and reports the request, target and every post-request candidate when no frame matches. Geometry, cadence and display deadlines are unchanged; application acceptance remains under F212.14-5-5.

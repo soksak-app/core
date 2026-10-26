@@ -631,7 +631,14 @@ mod tests {
     fn a_poisoned_modal_record_is_recovered_when_it_is_read() {
         let lifecycle = crate::view_lifecycle::ViewLifecycle::default();
         let surface = "modal-recovery-unrelated-view";
-        lifecycle.track(surface, 7, "probe", "ui/page.html", true, Default::default());
+        lifecycle.track(
+            surface,
+            7,
+            "probe",
+            "ui/page.html",
+            true,
+            Default::default(),
+        );
         lifecycle.record_end(surface);
         let overlay = Overlay::default();
         // default: the test poisons the lock afterwards, so the read recovers the poisoned state; the panic hook

@@ -1,5 +1,6 @@
 use super::{
-    ViewChannels, ViewIngress, accept_view_message, register_view_source, retire_view_before_replacement,
+    ViewChannels, ViewIngress, accept_view_message, register_view_source,
+    retire_view_before_replacement,
 };
 use crate::event_record::buffered_fields;
 use crate::windows::{DeclaredSourceEvent, WindowData};
@@ -86,22 +87,34 @@ mod view_decode {
             .unwrap();
         assert!(matches!(forwarded, ViewDispatch::Reply(_)));
         let canceled = channels
-            .dispatch("surface", r#"{"message":{"id":2,"command":null,"cancel":true}}"#)
+            .dispatch(
+                "surface",
+                r#"{"message":{"id":2,"command":null,"cancel":true}}"#,
+            )
             .unwrap();
         assert!(matches!(canceled, ViewDispatch::Call(value) if value["cancel"] == true));
         let ready = channels.dispatch("surface", r#"{"message":{"command":null,"cancel":null,"event":"view.ready","plugin":"probe","document":"doc-1"}}"#);
         assert_eq!(ready, Ok(ViewDispatch::Ready(Ok(true))));
         let invalid = channels
-            .dispatch("surface", r#"{"message":{"reply":null,"command":"probe.run","id":2}}"#)
+            .dispatch(
+                "surface",
+                r#"{"message":{"reply":null,"command":"probe.run","id":2}}"#,
+            )
             .unwrap_err();
-        assert!(invalid.contains("view reply has no integer id"), "{invalid}");
+        assert!(
+            invalid.contains("view reply has no integer id"),
+            "{invalid}"
+        );
         let invalid = channels.dispatch("surface", "not JSON").unwrap_err();
         assert!(invalid.contains("view message is not JSON"), "{invalid}");
         let overflow = channels.dispatch(
             "surface",
             r#"{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}"#,
         );
-        assert_eq!(overflow, Ok(ViewDispatch::Ready(Err("queue full for probe".to_string()))));
+        assert_eq!(
+            overflow,
+            Ok(ViewDispatch::Ready(Err("queue full for probe".to_string())))
+        );
     }
 
     #[test]
@@ -115,24 +128,42 @@ mod view_decode {
         let payload = channels
             .call_received(
                 "surface",
-                super::super::ViewReceived { message: Some(message), error: None },
+                super::super::ViewReceived {
+                    message: Some(message),
+                    error: None,
+                },
             )
             .expect("valid call")
             .expect("forwarded call");
-        assert_eq!(payload["params"]["items"][0]["text"], "kept parameter allocation");
         assert_eq!(
-            payload["params"]["items"][0]["text"].as_str().unwrap().as_ptr() as usize,
+            payload["params"]["items"][0]["text"],
+            "kept parameter allocation"
+        );
+        assert_eq!(
+            payload["params"]["items"][0]["text"]
+                .as_str()
+                .unwrap()
+                .as_ptr() as usize,
             pointer,
             "forwarding must transfer the decoded params tree without copying it"
         );
         assert_eq!(payload["cids"], json!(["cause-1"]));
-        assert_eq!(channels.end_calls("surface"), vec![("probe".to_string(), "probe.run".to_string())]);
+        assert_eq!(
+            channels.end_calls("surface"),
+            vec![("probe".to_string(), "probe.run".to_string())]
+        );
         for message in [
             json!({"id": 8, "command": "probe.run"}),
             json!({"id": 9, "command": "probe.run", "params": null}),
         ] {
             let payload = channels
-                .call_received("surface", super::super::ViewReceived { message: Some(message), error: None })
+                .call_received(
+                    "surface",
+                    super::super::ViewReceived {
+                        message: Some(message),
+                        error: None,
+                    },
+                )
                 .expect("valid default params")
                 .expect("forwarded default params");
             assert_eq!(payload["params"], serde_json::Value::Null);
@@ -336,27 +367,28 @@ fn a_view_process_end_retires_its_origin_before_replacement_registration() {
     let data = WindowData::default();
     let received = Arc::new(Mutex::new(Vec::<DeclaredSourceEvent>::new()));
     let destination = received.clone();
-    data.declared_source_events.install(Channel::new(move |body| {
-        let InvokeResponseBody::Json(value) = body else {
-            panic!("declared source event uses a raw channel payload");
-        };
-        let event = serde_json::from_str(&value)
-            .expect("the channel payload is a declared source event");
-        destination
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(event);
-        Ok(())
-    }));
+    data.declared_source_events
+        .install(Channel::new(move |body| {
+            let InvokeResponseBody::Json(value) = body else {
+                panic!("declared source event uses a raw channel payload");
+            };
+            let event = serde_json::from_str(&value)
+                .expect("the channel payload is a declared source event");
+            destination
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(event);
+            Ok(())
+        }));
 
     let old_generation = data
         .declared_source_origins
         .issue_view("probe-surface")
         .unwrap();
-    let old_origin = data
-        .documents
-        .views()
-        .register_origin("probe-surface", "probe", old_generation);
+    let old_origin =
+        data.documents
+            .views()
+            .register_origin("probe-surface", "probe", old_generation);
     let mut replacement_generation = None;
     retire_view_before_replacement(
         &data,
@@ -381,7 +413,10 @@ fn a_view_process_end_retires_its_origin_before_replacement_registration() {
             );
         },
         || {
-            assert_eq!(data.declared_source_origins.current_view("probe-surface"), None);
+            assert_eq!(
+                data.declared_source_origins.current_view("probe-surface"),
+                None
+            );
             assert_eq!(data.documents.views().generation("probe-surface"), None);
             let replacement = register_view_source(
                 &data.declared_source_origins,

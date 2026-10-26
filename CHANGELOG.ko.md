@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-203: Format gate가 지적한 Tauri host 파일 여덟 개를 edition 2024 서식으로 복원한다. `skip_children=true`로 해당 파일만 정리했고 이후 gate가 통과하며 동작은 바뀌지 않는다.
+
 - F212.14-5-30: 실제 native document view에 diagnostic cyan 2-point border를 추가하고 capture bounds를 선언된 slot과 비교한다. 이는 CSS paint나 source-frame 근거를 대신하지 않는다. Native owner는 구현 전 `not implemented`로 실패하고 이후 1/1 통과한다. 후속 background interaction 회귀는 marker stop이 background 소유 layer backing을 보존하지 못해 실패하며, 수정 후 같은 native owner가 1/1 통과한다. Wails는 6/6, Tauri endpoint/diagnostic owner 다섯 개는 각각 1/1, 최신 HWP consumer owner는 16/16 통과한다. Application acceptance는 F212.14-5-5에 남는다.
 
 - F212.14-5-29: Browser, Editor, HWP, Terminal이 공유하는 helper로 resize 요청 시각 이후이며 투영된 viewport 크기와 정확히 일치하는 one-shot layout source frame을 선택한다. 기존 Editor, HWP, Terminal predicate가 이후 placement readback을 시간 경계로 사용하면 소유 회귀 검사가 실패한다. 수정 후 검사는 통과하며 일치하는 frame이 없을 때 요청, target, 모든 post-request 후보를 보고한다. Geometry, cadence, display deadline은 유지하며 application acceptance는 F212.14-5-5에 남는다.

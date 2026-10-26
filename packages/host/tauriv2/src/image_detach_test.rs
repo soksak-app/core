@@ -186,15 +186,20 @@ fn a_deep_unrelated_member_does_not_hide_a_detach_acknowledgement() {
         let body = RawValue::from_string(raw_body)
             .expect("the fixture is valid JSON with an unrelated deep member");
 
-        assert!(try_handle_image_envelope(
-            &fixture.owner,
-            "fixture-sidecar",
-            "surface-a",
-            &body,
-            &NoopResponseSender,
-        ), "deep unrelated member location {index} must not hide the acknowledgement");
+        assert!(
+            try_handle_image_envelope(
+                &fixture.owner,
+                "fixture-sidecar",
+                "surface-a",
+                &body,
+                &NoopResponseSender,
+            ),
+            "deep unrelated member location {index} must not hide the acknowledgement"
+        );
         assert_eq!(
-            response.try_recv().expect("the acknowledgement settles synchronously"),
+            response
+                .try_recv()
+                .expect("the acknowledgement settles synchronously"),
             Ok(()),
             "deep unrelated member location {index} must settle its exact waiter"
         );

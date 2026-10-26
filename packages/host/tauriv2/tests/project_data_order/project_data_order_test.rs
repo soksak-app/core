@@ -2,8 +2,8 @@
 
 use super::*;
 use serde_json::json;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     State,
     ipc::{CallbackFn, InvokeBody},
@@ -16,7 +16,12 @@ fn project_shown_decoder_fixture(
     data: State<'_, Arc<WindowData>>,
     request: crate::arguments::Argument<ProjectShown>,
 ) -> Result<(), String> {
-    commit_project_shown(data.inner().as_ref(), request.0.project.as_ref(), |_| Ok(()), || Ok(()))
+    commit_project_shown(
+        data.inner().as_ref(),
+        request.0.project.as_ref(),
+        |_| Ok(()),
+        || Ok(()),
+    )
 }
 
 // contract: host-calls.decode.messages
@@ -82,7 +87,12 @@ fn malformed_project_shown_arguments_are_rejected_before_committing_project_stat
                 .map(String::as_str),
             Some("/projects/next")
         );
-        assert!(data.staged_projects.lock().unwrap().contains("project-next"));
+        assert!(
+            data.staged_projects
+                .lock()
+                .unwrap()
+                .contains("project-next")
+        );
     }
 
     let response = get_ipc_response(

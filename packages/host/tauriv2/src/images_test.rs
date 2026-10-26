@@ -75,9 +75,9 @@ mod presentation_queue {
         let worker = std::thread::spawn(move || {
             present_on_ui(
                 Box::new(move || {
-                    let _guard = commit_lock
-                        .try_lock()
-                        .map_err(|error| format!("redraw re-entered framework event lock: {error}"))?;
+                    let _guard = commit_lock.try_lock().map_err(|error| {
+                        format!("redraw re-entered framework event lock: {error}")
+                    })?;
                     Ok(())
                 }),
                 |work| enqueue.send(work).map_err(|error| error.to_string()),
@@ -89,7 +89,11 @@ mod presentation_queue {
             callback();
         }
         let result = worker.join().expect("join image presentation worker");
-        assert_eq!(result, Ok(()), "image commit must run outside the framework event lock");
+        assert_eq!(
+            result,
+            Ok(()),
+            "image commit must run outside the framework event lock"
+        );
     }
 
     #[test]
@@ -102,10 +106,13 @@ mod presentation_queue {
 
     #[test]
     fn native_image_failure_reaches_the_frame_handler() {
-        let result = present_on_ui(Box::new(|| Err("native presentation refused".into())), |work| {
-            work();
-            Ok(())
-        });
+        let result = present_on_ui(
+            Box::new(|| Err("native presentation refused".into())),
+            |work| {
+                work();
+                Ok(())
+            },
+        );
         assert_eq!(result, Err("native presentation refused".into()));
     }
 }
@@ -118,18 +125,32 @@ mod wait_boundary {
     fn a_pending_newer_frame_is_required_after_the_wait_begins() {
         let images = Images::default();
         let key = ("surface".into(), "view".into());
-        images.reserve(&key, "owner", "sidecar").expect("reserve image");
+        images
+            .reserve(&key, "owner", "sidecar")
+            .expect("reserve image");
         assert!(images.set(&key, 100));
-        let config = images.configure_raster(&key, 800, 600, 2.0, true).expect("configure raster").expect("new raster");
-        images.lock().states.get_mut(&key).expect("image state").last_sequence = 1;
+        let config = images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .expect("configure raster")
+            .expect("new raster");
+        images
+            .lock()
+            .states
+            .get_mut(&key)
+            .expect("image state")
+            .last_sequence = 1;
         let began = Instant::now();
         let timeout = Duration::from_millis(500);
         let waiter = images.clone();
         let (started, waiting) = mpsc::sync_channel(1);
         let worker = std::thread::spawn(move || {
-            waiter.wait_current_observed(timeout, || started.send(()).expect("signal initialized wait"))
+            waiter.wait_current_observed(timeout, || {
+                started.send(()).expect("signal initialized wait")
+            })
         });
-        waiting.recv_timeout(Duration::from_secs(2)).expect("wait begins");
+        waiting
+            .recv_timeout(Duration::from_secs(2))
+            .expect("wait begins");
         let arrival_elapsed = {
             let mut inner = images.lock();
             let state = inner.states.get_mut(&key).expect("image state");
@@ -140,10 +161,24 @@ mod wait_boundary {
             began.elapsed()
         };
         let result = worker.join().expect("join image wait");
-        assert!(arrival_elapsed < timeout, "controlled arrival missed the active wait deadline: {arrival_elapsed:?}");
-        assert_eq!(result, Err("presentationTimeout".into()), "the newer accepted frame remains pending after the earlier frame completed");
-        assert!(!images.current_presented(), "instantaneous status still reports the pending newer frame");
-        assert_eq!(images.wait_current(Duration::ZERO), Err("presentationTimeout".into()), "a new wait must require the already accepted second frame");
+        assert!(
+            arrival_elapsed < timeout,
+            "controlled arrival missed the active wait deadline: {arrival_elapsed:?}"
+        );
+        assert_eq!(
+            result,
+            Err("presentationTimeout".into()),
+            "the newer accepted frame remains pending after the earlier frame completed"
+        );
+        assert!(
+            !images.current_presented(),
+            "instantaneous status still reports the pending newer frame"
+        );
+        assert_eq!(
+            images.wait_current(Duration::ZERO),
+            Err("presentationTimeout".into()),
+            "a new wait must require the already accepted second frame"
+        );
     }
 }
 

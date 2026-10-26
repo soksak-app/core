@@ -1057,9 +1057,8 @@ fn stdio_stop_cancels_an_image_emitted_after_stdin_eof() {
     );
     std::fs::write(&program, script).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let fixture = files(
-        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#,
-    );
+    let fixture =
+        files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
