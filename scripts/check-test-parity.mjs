@@ -198,6 +198,33 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F239-216",
+  "implementation": [
+    {
+      "file": "e2e/fixtures/memory-saver/unload-probe/ui/bridge-report.js",
+      "symbol": "export function createBridgeReporter("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/unload-probe-bridge-report.test.mjs",
+      "id": "a failed view error report reaches the injected global error hook"
+    },
+    {
+      "file": "e2e/test/unload-probe-bridge-report.test.mjs",
+      "id": "ordinary call counts and close or coalescing reports stay out of the application error path"
+    },
+    {
+      "file": "e2e/test/unload-probe-bridge-report.test.mjs",
+      "id": "unexpected transport loss reaches the injected global error hook"
+    }
+  ],
+  "expected": "Actual bridge errors reach the browser error hook while normal notifications remain console records.",
+  "levels": [
+    "unit"
+  ]
+},
+  {
   "id": "F239-218",
   "implementation": [
     {

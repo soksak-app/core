@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-216: Unload-probe fixture bridge 오류를 주입된 browser error hook으로 보고하고 일반 metric·예상 close/coalescing 알림을 console record로 보존한다. No-op reporter에서 소유 사례 세 개가 실패하고 수정 후 통과한다. Test는 packaged UI 밖에 두며 core runtime 동작은 그대로다.
+
 - F239-218: E2E 설치용 fixture payload를 E2E test owner 아래에 둔다. 해당 package manifest는 독립 core workspace module이 아니라 packaging 입력이다. 변경 전 감사가 정당한 fixture 읽기를 거부하고, 수정 후 소유 사례와 경계 사례 열아홉 개가 통과하며 독립 core 구현 경로는 계속 보호한다. Namespace 검사는 그대로다.
 
 - F239-217: Core sampler·adapter 소유 fixture에서 가상 plugin identity를 사용한다. Process mapping·오류 assertion을 유지하면서 plugin 저장소 참조를 제거한다. 경계 감사가 원래 literal을 거부하며 수정 후 관련 소유 사례 여섯 개와 경계 감사가 통과한다. Production 동작은 그대로다.

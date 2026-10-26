@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-216: Report unload-probe fixture bridge errors through the injected browser error hook and retain normal metrics and expected close/coalescing notifications as console records. Three owning cases fail against the no-op reporter and pass after correction. Keep the test outside the packaged UI; core runtime behavior is unchanged.
+
 - F239-218: Keep E2E installable fixture payloads under the E2E test owner. Their package manifests are packaging inputs, not independent core workspace modules. The unchanged audit rejects legitimate fixture reads; the owning case and nineteen boundary cases pass after correction while independent core implementation paths remain protected. Namespace checks are unchanged.
 
 - F239-217: Use synthetic plugin identities in the core sampler and adapter owner fixtures. Preserve process mapping and error assertions while removing references to plugin repositories. The boundary audit rejects the original literals; all six affected owner cases and the boundary audit pass after correction. Production behavior is unchanged.
