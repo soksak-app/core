@@ -25,6 +25,10 @@ test("browser metrics descriptor waits for the initial empty state and its visib
       calls.push({ name, index, surface });
       return { width: 480, height: 280 };
     },
+    async run(name, params, surface) {
+      calls.push({ name, params, surface });
+      return { historyEntries: 1, regionHistoryEntries: 0 };
+    },
   };
   assert.equal(browserViewDescriptor.plugin, "browser");
   assert.equal(browserViewDescriptor.expectedContent, "주소를 입력하세요");
@@ -32,13 +36,33 @@ test("browser metrics descriptor waits for the initial empty state and its visib
   assert.equal(browserViewDescriptor.readinessStatus, "browser.location");
   assert.deepEqual(await browserViewDescriptor.readiness(s, "browser-1"), {
     historyEntries: 1,
+    regionHistoryEntries: 0,
     location: { url: "", loading: false, error: null, canGoBack: false, canGoForward: false },
   });
   assert.deepEqual(calls, [
     { name: "browser.location", message: "browser view browser-1 did not reach its initial empty state",
       options: { surface: "browser-1" } },
     { name: "browser.empty", index: undefined, surface: "browser-1" },
+    { name: "browser.view.measure", params: { action: "read" }, surface: "browser-1" },
   ]);
+});
+
+test("browser readiness rejects actual view history beyond the initial entry", { timeout: 5000 }, async () => {
+  const s = {
+    async until(_name, predicate) {
+      const location = { url: "", loading: false, error: null, canGoBack: false, canGoForward: false };
+      assert.ok(predicate(location));
+      return location;
+    },
+    async rect() { return { width: 480, height: 280 }; },
+    async run(name, params, surface) {
+      assert.equal(name, "browser.view.measure");
+      assert.deepEqual(params, { action: "read" });
+      assert.equal(surface, "browser-3");
+      return { historyEntries: 2, regionHistoryEntries: 0 };
+    },
+  };
+  await assert.rejects(browserViewDescriptor.readiness(s, "browser-3"), /actual browser view history/);
 });
 
 test("browser metrics readiness rejects a missing empty-state area", { timeout: 5000 }, async () => {

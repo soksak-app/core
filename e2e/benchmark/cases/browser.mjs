@@ -25,7 +25,10 @@ export const browserViewDescriptor = Object.freeze({
     assert.equal(location.canGoForward, false, `browser view ${surface} has forward session history`);
     const rect = await s.rect("browser.empty", undefined, surface);
     assert.ok(rect.width > 0 && rect.height > 0, `browser view ${surface} has no visible empty-state content region`);
-    return { historyEntries: 1, location };
+    const document = await s.run("browser.view.measure", { action: "read" }, surface);
+    assert.equal(document?.historyEntries, 1,
+      `browser view ${surface} actual browser view history is not its initial entry`);
+    return { historyEntries: document.historyEntries, regionHistoryEntries: document.regionHistoryEntries, location };
   },
   readDocument: async (s, surface) => s.run("browser.view.measure", { action: "read" }, surface),
   startContentTrace: async (s, surface) => s.run("browser.view.measure", { action: "start" }, surface),

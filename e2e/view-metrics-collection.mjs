@@ -4,7 +4,8 @@ import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { firstContentFrame } from "./view-first-content.mjs";
 import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, processGroupReclaimEvidence,
-  viewProcessGroup, viewProcessPids, viewProcessSurfaces, viewRootProcessPids } from "./view-process-footprint.mjs";
+  viewDocumentHistoryInventory, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
+  viewRootProcessPids } from "./view-process-footprint.mjs";
 
 const PROCESS_REQUEST = "host.trace.view.process-request";
 const PROCESS_READY = "host.trace.view.process-ready";
@@ -351,13 +352,12 @@ export async function collectViewReclaimMeasurements(t, s, descriptor, views, ev
       assert.equal(document?.historyEntries, 1, `view ${surface} root history no longer contains only its initial document`);
       assert.ok(Number.isInteger(document?.regionHistoryEntries) && document.regionHistoryEntries >= 0,
         `view ${surface} has invalid content-region history evidence`);
-      const attached = host.documents.filter((row) => row.surface === surface && row.document !== "");
-      assert.equal(attached.length, document.regionHistoryEntries,
-        `view ${surface} has ${attached.length} attached documents but reports ${document.regionHistoryEntries} region history entries`);
-      assert.ok(attached.length <= 1,
-        `view ${surface} has ${attached.length} document histories but the reader exposes one region history count`);
+      const inventory = viewDocumentHistoryInventory(host, surface, document.regionHistoryEntries);
+      assert.ok(inventory.documents.length <= 1,
+        `view ${surface} has ${inventory.documents.length} started document histories but the reader exposes one region history count`);
       closedViews.push({ surface, rootHistoryEntries: document.historyEntries,
-        documents: attached.map((row) => ({ document: row.document, historyEntries: document.regionHistoryEntries })) });
+        documents: inventory.documents.map((row) => ({ document: row.document, historyEntries: document.regionHistoryEntries })),
+        unstartedDocuments: inventory.unstartedDocuments });
     }
     return closeViewGroup(t, s, { surfaces, beforeProcesses, closedViews });
   };

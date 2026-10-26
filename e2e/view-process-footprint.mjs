@@ -57,23 +57,16 @@ export function viewProcessGroup(host, surfaces) {
   requireSurfaces(surfaces);
   const selectedSurfaces = new Set(surfaces);
   const selectedPids = new Set(viewRootProcessPids(host, surfaces));
-  const requireStartedSurface = (surface) => {
-    for (const row of documents) {
-      if (row.surface === surface) assert.ok(row.process > 0,
-        `host.window document ${surface}/${row.document} has invalid process PID ${JSON.stringify(row.process)}`);
-    }
-  };
-  for (const surface of selectedSurfaces) requireStartedSurface(surface);
   let changed = true;
   while (changed) {
     changed = false;
     for (const row of documents) {
-      if (selectedPids.has(row.process) && !selectedSurfaces.has(row.surface)) {
-        requireStartedSurface(row.surface);
+      if (row.process > 0 && selectedPids.has(row.process) && !selectedSurfaces.has(row.surface)) {
+        viewRootProcessPids(host, [row.surface]);
         selectedSurfaces.add(row.surface);
         changed = true;
       }
-      if (selectedSurfaces.has(row.surface) && !selectedPids.has(row.process)) {
+      if (selectedSurfaces.has(row.surface) && row.process > 0 && !selectedPids.has(row.process)) {
         selectedPids.add(row.process);
         changed = true;
       }
@@ -81,6 +74,7 @@ export function viewProcessGroup(host, surfaces) {
   }
   const groupSurfaces = [...selectedSurfaces].sort();
   const groupDocuments = requireDocumentRows(documents, groupSurfaces)
+    .filter(({ process }) => process > 0)
     .map(({ surface, document, process }) => ({ surface, document, process }))
     .sort((left, right) => left.surface.localeCompare(right.surface) || left.document.localeCompare(right.document));
   const pids = [...selectedPids].sort((left, right) => left - right);
@@ -113,6 +107,23 @@ export function viewProcessSurfaces(host, pids) {
 export function viewProcessDocuments(host, pids) {
   const surfaces = viewProcessSurfaces(host, pids);
   return viewProcessGroup(host, surfaces).documents;
+}
+
+/** Splits live child documents from reserved, not-yet-started child rows for one view. */
+export function viewDocumentHistoryInventory(host, surface, regionHistoryEntries) {
+  requireSurfaces([surface]);
+  assert.ok(Number.isSafeInteger(regionHistoryEntries) && regionHistoryEntries >= 0,
+    `view ${surface} has invalid region history count ${JSON.stringify(regionHistoryEntries)}`);
+  const rows = requireHostDocuments(host).filter((row) => row.surface === surface && row.document !== "");
+  const documents = viewProcessGroup(host, [surface]).documents
+    .filter((row) => row.surface === surface && row.document !== "");
+  const unstartedDocuments = rows.filter((row) => row.process === 0)
+    .map(({ document, process }) => ({ document, process, historyEntries: regionHistoryEntries }));
+  assert.ok(unstartedDocuments.length === 0 || regionHistoryEntries === 0,
+    `view ${surface} has an unstarted child document and nonzero region history ${regionHistoryEntries}`);
+  assert.equal(documents.length, regionHistoryEntries,
+    `view ${surface} has ${documents.length} started documents but reports ${regionHistoryEntries} region history entries`);
+  return { documents, unstartedDocuments };
 }
 
 /** Measures each exact process identity with the operating system's physical-footprint tool. */

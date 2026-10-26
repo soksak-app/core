@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { allViewRootProcessPids, measureProcessGroup, parsePhysicalFootprint, processGroupReclaimEvidence,
-  viewProcessDocuments, viewProcessPids, viewProcessSurfaces, viewRootProcessPids } from "../view-process-footprint.mjs";
+  viewDocumentHistoryInventory, viewProcessDocuments, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
+  viewRootProcessPids }
+  from "../view-process-footprint.mjs";
 
 test("view process inventory uses only requested empty-document view rows", () => {
   const host = { documents: [
@@ -30,10 +32,10 @@ test("view process inventory rejects absent, duplicate, and invalid view rows", 
   assert.throws(() => viewProcessPids({ documents: [
     { surface: "view-a", document: "", process: 0 },
   ] }, ["view-a"]), /invalid process PID/);
-  assert.throws(() => viewProcessPids({ documents: [
+  assert.deepEqual(viewProcessPids({ documents: [
     { surface: "view-a", document: "", process: 401 },
     { surface: "view-a", document: "page", process: 0 },
-  ] }, ["view-a"]), /invalid process PID/);
+  ] }, ["view-a"]), [401]);
 });
 
 test("all view PID snapshots are unique, exact, and reject invalid rows", () => {
@@ -68,6 +70,33 @@ test("view footprint includes root and every native document process for each se
   ] };
   assert.deepEqual(viewRootProcessPids(host, ["view-a"]), [401]);
   assert.deepEqual(viewProcessPids(host, ["view-a"]), [401, 501]);
+});
+
+test("an unstarted child document has no PID footprint or document-history row", async () => {
+  const host = { documents: [
+    { surface: "browser-empty", document: "", process: 401 },
+    { surface: "browser-empty", document: "page", process: 0 },
+    { surface: "unrelated-not-started", document: "page", process: 0 },
+    { surface: "other", document: "", process: 402 },
+  ] };
+  const group = viewProcessGroup(host, ["browser-empty"]);
+  assert.deepEqual(group.surfaces, ["browser-empty"]);
+  assert.deepEqual(group.pids, [401]);
+  assert.deepEqual(group.documents, [
+    { surface: "browser-empty", document: "", process: 401 },
+  ]);
+  assert.deepEqual(viewProcessDocuments(host, [401]), group.documents);
+  assert.deepEqual(viewDocumentHistoryInventory(host, "browser-empty", 0), {
+    documents: [], unstartedDocuments: [{ document: "page", process: 0, historyEntries: 0 }],
+  });
+  assert.throws(() => viewProcessGroup(host, ["unrelated-not-started"]), /no view root process/);
+  const sampled = [];
+  const measured = await measureProcessGroup(viewProcessPids(host, ["browser-empty"]), async (pid) => {
+    sampled.push(pid);
+    return 4_000_000;
+  });
+  assert.deepEqual(sampled, [401]);
+  assert.deepEqual(measured, [{ pid: 401, footprintBytes: 4_000_000 }]);
 });
 
 test("footprint and close inventories expand process sharing transitively through native child documents", () => {

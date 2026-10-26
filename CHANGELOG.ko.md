@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-3: 미시작 native document를 실제 process 공유와 byte 측정에서 제외하고 관측한 process/history 0 상태는 유지한다. Browser history를 공개 진단 응답에서 읽는다. 수정 전 process·history 회귀 검사가 실패하고 수정 후 영향받는 소유 검사 25개가 통과한다.
+
 - F212.14-5-2: 새 view를 읽기 전에 선언한 readiness-status 노출을 기다린다. 초기 open과 scratch view에 공통 event-driven wrapper를 재사용한다. 수정 전 지연 등록 사례가 실패하며 수정 후 영향받는 소유 검사 31개가 통과한다. 애플리케이션 측정 확인은 대기 중이다.
 
 - F212.14-5-1: 양쪽 최적화 diagnostic host에서 선택적 diagnostic drag identity를 검증한다. 두 애플리케이션 사례가 애플리케이션 오류 없이 artifact 완료, byte 수와 SHA-256 assertion을 통과한다. View별 성능이나 실제 pixel의 정확한 일치를 입증하지 않는다.

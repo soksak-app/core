@@ -6928,6 +6928,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-5-2",
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function waitForViewReadiness(" }],
+    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "opening a view records before creation and proves pixels from a finalized frame" }],
+    expected: "View readiness reads begin only after the declared exposure notification.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-3",
+    implementation: [{ file: "e2e/view-process-footprint.mjs", symbol: "export function viewDocumentHistoryInventory(" }],
+    tests: [{ file: "e2e/test/view-process-footprint.test.mjs", id: "an unstarted child document has no PID footprint or document-history row" }],
+    expected: "Unstarted documents remain evidence without becoming measured or shared processes.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.14-5-1",
     implementation: [{ file: "packages/window-check/app.mjs", symbol: "frameIdentity: stopped.frameIdentity" }],
     tests: [

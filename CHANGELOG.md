@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-3: Exclude unstarted native documents from live process sharing and byte samples while retaining their observed zero-process/history state. Read Browser history from the public diagnostic reply. The process and history regressions fail before correction and all 25 affected owning cases pass afterward.
+
 - F212.14-5-2: Wait on the declared readiness-status exposure before reading a newly created view. Reuse one event-driven wrapper for initial opens and scratch views. The unchanged deferred-registration case fails before correction; the 31 affected owning cases pass afterward. Application measurement confirmation remains pending.
 
 - F212.14-5-1: Verify opt-in diagnostic drag identity on both optimized diagnostic hosts. Both application cases pass their artifact finalization, byte-count and SHA-256 assertions with no application errors. This does not establish per-view performance or exact physical pixel matching.
