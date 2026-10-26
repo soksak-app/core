@@ -41,10 +41,12 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`before Command+0: menu item=${JSON.stringify(resetItem)}`);
     await s.until("core.text", value => value.scope.kind === "card" && value.scope.card === card.id,
       "the view did not select its owning text-size scope");
-    const original = (await s.get("browser.address.text", browser.surface)).value;
     await s.run("core.text.larger");
     await s.until("core.text", value => value.cards[card.id] > 1, "text-size preparation did not apply");
+    const beforeInputSource = (await s.get("browser.address.text", browser.surface)).value;
     await s.selectInputSource("com.apple.keylayout.ABC");
+    const original = (await s.get("browser.address.text", browser.surface)).value;
+    t.diagnostic(`address before input-source selection=${JSON.stringify(beforeInputSource)}; shortcut baseline after selection=${JSON.stringify(original)}`);
     await s.press("0", { modifiers: ["command"] });
     await s.until("core.text", value => value.cards[card.id] === 1,
       "the view key equivalent did not reset its owning card text size");

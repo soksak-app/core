@@ -6957,6 +6957,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.12-2-4",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "- (BOOL)performKeyEquivalent:(NSEvent *)event" }],
+    tests: [{ file: "e2e/activation/view-shortcut.test.mjs", id: "Command-zero in a focused view runs the native text-size menu command" }],
+    expected: "A native menu shortcut from the focused view resets its owning card text size without inserting address text.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F239-205",
     implementation: [{ file: "native/darwin/src/document_view.m", symbol: "- (BOOL)performKeyEquivalent:(NSEvent *)event" }],
     tests: [{ file: "native/darwin/tests/document_menu_key_equivalent_test.m", id: "the document view handles Command+0 through the application menu" }],
