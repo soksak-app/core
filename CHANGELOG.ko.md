@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-21: OSC 11과 layout 및 drag pixel detection에 하나의 어둡고 구별되는 Terminal 측정 background를 사용한다. 회색 background는 둥근 focus-corner pixel에 일치해 올바른 경계를 확장했다. 재현 owner는 수정 전에 실패하고 수정 후 Terminal consumer case 일곱 개가 모두 통과하며 공통 detection과 각각의 기존 tolerance는 유지한다.
+
 - F212.14-5-20: Reclaim이 sample하고 닫을 때까지 HWP warm motion view를 live 초기 group에 유지한다. Process-sharing, footprint 및 history 검사를 완화하지 않고 이른 close를 제거한다. Consumer 회귀 검사는 수정 전에 실패하고 수정 후 HWP owner case 12개가 모두 통과하며 앞선 실패의 session cleanup 등록은 유지한다.
 
 - F239-202: 기존 private Rust case 10개를 대응 owner test module에 두고 중복 path module 네 개를 제거한다. 구조 규칙을 확장하거나 platform 예외를 추가하지 않고 정확한 inventory link를 갱신한다. Host 구조 audit는 기존 경로에서 실패하며 이동한 모든 case와 정리된 host 구조가 통과한다.

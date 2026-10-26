@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-21: Use one distinctive dark Terminal measurement background for OSC 11 and layout and drag pixel detection. The gray background matched rounded focus-corner pixels and expanded otherwise correct bounds. The reproducing owner fails before correction and all seven Terminal consumer cases pass afterward; shared detection and each existing tolerance remain unchanged.
+
 - F212.14-5-20: Keep the HWP warm motion view in the live initial group until reclaim samples and closes it. Remove the premature close without relaxing process-sharing, footprint or history checks. The consumer regression fails before correction; all 12 HWP owner cases pass afterward, and earlier-failure session cleanup remains registered.
 
 - F239-202: Keep the 10 existing private Rust cases in their paired owner test modules and remove four redundant path modules. Update exact inventory links without widening structural rules or adding a platform exception. The host structure audit fails on the old paths; all moved cases and the reconciled host structure pass.

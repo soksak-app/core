@@ -10,10 +10,11 @@ import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTim
   rootNativePlacementForSource,
   waitForViewReadiness, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
-import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
+import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
+  VIEW_GEOMETRY_COLOR_TOLERANCE }
   from "../../view-frame-geometry.mjs";
 import { outside, terminalMarks } from "../../outside.mjs";
-import { readScreenUntil, setMeasuredBackground } from "../../terminal-screen.mjs";
+import { readScreenUntil } from "../../terminal-screen.mjs";
 import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips, measureDragPerformance,
   pointerLag, transactionCadence } from "../../drag-measurement.mjs";
 
@@ -114,8 +115,25 @@ export function terminalSourceContentFrame(source, frameIndex, displayFrame, nat
   };
 }
 
-const TERMINAL_GEOMETRY = Object.freeze({ contentColor: [30, 30, 30], cardColor: [25, 27, 36],
+// Keep measured content outside the color tolerance of the card's antialiased focus outline.
+export const TERMINAL_GEOMETRY_BACKGROUND = Object.freeze([0, 80, 180]);
+
+const TERMINAL_GEOMETRY = Object.freeze({ contentColor: TERMINAL_GEOMETRY_BACKGROUND, cardColor: [25, 27, 36],
   planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]], colorTolerance: 3 });
+
+/** Applies the terminal measurement color through OSC 11 and waits for its output marker in the rendered screen. */
+export async function setTerminalGeometryBackground(session, surface) {
+  const hex = TERMINAL_GEOMETRY_BACKGROUND.map((value) => value.toString(16).padStart(2, "0")).join("/");
+  const marker = `TERMINAL-GEOMETRY-${surface}`;
+  await session.run("terminal.input", { bytes: `printf '\\033]11;rgb:${hex}\\007${marker}\\n'\r` }, surface);
+  await readScreenUntil(session, surface, (lines) => lines.some((line) => line.startsWith(marker)),
+    `${surface} did not finish the terminal geometry background change`);
+}
+
+/** Measures terminal content geometry with the exact palette used by its layout and drag collectors. */
+export function measureTerminalLayoutFrame(frame, { cornerRadiusPt, targetRect } = {}) {
+  return measureViewFrameGeometry(frame, { ...TERMINAL_GEOMETRY, cornerRadiusPt, targetRect });
+}
 
 function terminalDocument(host, surface) {
   const row = host.documents.find((document) => document.surface === surface && document.document === "");
@@ -171,8 +189,7 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
   const slotInsetsPt = await terminalSlotInsets(s, card, surface);
   const targetRect = { x: root.frame.x, y: root.frame.y,
     width: root.frame.width, height: root.frame.height };
-  const measured = decoded.map((frame) => measureViewFrameGeometry(frame,
-    { ...TERMINAL_GEOMETRY, cornerRadiusPt, targetRect }));
+  const measured = decoded.map((frame) => measureTerminalLayoutFrame(frame, { cornerRadiusPt, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
   const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= source.timeMs);
   assert.ok(candidates.length > 0, "terminal layout has no declared-slot pixel match after its source resize event");
@@ -234,8 +251,7 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
     width: root.frame.width, height: root.frame.height };
   const geometryFrames = [];
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = measureViewFrameGeometry(captured[frameIndex],
-      { ...TERMINAL_GEOMETRY, cornerRadiusPt, targetRect });
+    const measured = measureTerminalLayoutFrame(captured[frameIndex], { cornerRadiusPt, targetRect });
     geometryFrames.push(terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt));
   }
 
@@ -286,7 +302,7 @@ export async function collectTerminalViewMeasurements(t, s, descriptor, configDi
   });
   const readinessEvidence = await waitForViewReadiness(s, surface, descriptor);
   assert.equal(readinessEvidence.historyEntries, 1, `terminal view ${surface} did not begin at initial history`);
-  await setMeasuredBackground(s, surface);
+  await setTerminalGeometryBackground(s, surface);
   mkdirSync(join(configDir, "logs"), { recursive: true });
   const directory = mkdtempSync(join(configDir, "logs", "terminal-view-layout-"));
   const layout = await terminalLayoutObservation(t, s, descriptor, surface, card, directory, cornerRadiusPt);
@@ -326,7 +342,11 @@ export async function collectTerminalDrag(t, s, terminal, configDir) {
   await keepCommonSettings(s);
   await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
   await s.until("core.rail", (rail) => rail.groups.length === 1, "the terminal override drew no rail");
-  const marks = await terminalMarks(s, { measured: true });
+  const marks = { ...await terminalMarks(s), colour: TERMINAL_GEOMETRY_BACKGROUND };
+  await readScreenUntil(s, terminal.surface, (lines) => lines.some((line) => line.includes("$")),
+    `${terminal.surface} did not show a shell prompt before the geometry measurement`);
+  await setTerminalGeometryBackground(s, terminal.surface);
+  await s.presented();
   const grid = await s.get("core.grid");
   const card = grid.cards.find((item) => item.active);
   assert.ok(card?.id, "terminal drag benchmark has no active card");
@@ -351,14 +371,8 @@ export async function collectTerminalDrag(t, s, terminal, configDir) {
     const frame = readFrame(file);
     times.push(frame.time);
     try {
-      const geometry = measureViewFrameGeometry(frame, {
-        contentColor: [30, 30, 30],
-        cardColor: [25, 27, 36],
-        planeColor: [16, 17, 23],
-        borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]],
-        cornerRadiusPt,
-        targetRect,
-      });
+      const geometry = measureViewFrameGeometry(frame, { ...TERMINAL_GEOMETRY,
+        colorTolerance: VIEW_GEOMETRY_COLOR_TOLERANCE, cornerRadiusPt, targetRect });
       geometryFrames.push(terminalDragGeometryFrame(frameIndex, geometry, slotInsetsPt));
     } catch (error) {
       geometryUnmeasured.push({ frameIndex, error: error.message });
