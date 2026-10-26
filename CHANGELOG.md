@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.9a-2: Add the built plugin-host RAF and footprint benchmark without a cadence threshold or production telemetry. Preserve registry entries, page-clock identity, zero-callback results and cleanup evidence. Actual errors use the browser error hook while normal notifications remain console records. Thirteen owning checks pass after tracked Reds, and the actual fixture package builds. Application measurements remain outstanding.
+
 - F239-216: Report unload-probe fixture bridge errors through the injected browser error hook and retain normal metrics and expected close/coalescing notifications as console records. Three owning cases fail against the no-op reporter and pass after correction. Keep the test outside the packaged UI; core runtime behavior is unchanged.
 
 - F239-218: Keep E2E installable fixture payloads under the E2E test owner. Their package manifests are packaging inputs, not independent core workspace modules. The unchanged audit rejects legitimate fixture reads; the owning case and nineteen boundary cases pass after correction while independent core implementation paths remain protected. Namespace checks are unchanged.

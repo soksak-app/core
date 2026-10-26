@@ -1,0 +1,11 @@
+{
+  "name": "@soksak-check/plugin-host-raf-probe",
+  "version": "0.0.21",
+  "private": true,
+  "type": "module",
+  "description": "Window-check fixture that reports plugin-host animation-frame counts on request.",
+  "license": "MIT",
+  "repository": "git+https://github.com/soksak-app/core.git",
+  "engines": { "soksak": "*" },
+  "files": ["plugin.json", "ui"]
+}

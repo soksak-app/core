@@ -248,6 +248,53 @@ const FEATURE_LINKS = [
   ]
 },
   {
+  "id": "F212.9a-2",
+  "implementation": [
+    {
+      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
+      "symbol": "export function reducePluginHostRafMeasurement("
+    },
+    {
+      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
+      "symbol": "export async function cleanupPluginHostFixture("
+    },
+    {
+      "file": "e2e/fixtures/plugin-host-throttle/raf-probe/ui/bridge-report.js",
+      "symbol": "export function createRafProbeBridgeOptions("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/plugin-host-throttle.test.mjs",
+      "id": "plugin-host RAF measurement records a valid zero-callback result without a rate threshold"
+    },
+    {
+      "file": "e2e/test/plugin-host-throttle.test.mjs",
+      "id": "plugin-host RAF measurement reports window-facts errors before missing plugin rows"
+    },
+    {
+      "file": "e2e/test/plugin-host-throttle.test.mjs",
+      "id": "plugin-host cleanup retains its directory when failed removal leaves the fixture installed"
+    },
+    {
+      "file": "e2e/test/plugin-host-throttle-fixture.test.mjs",
+      "id": "plugin-host RAF fixture manifest uses the public plugin exposure contract"
+    },
+    {
+      "file": "e2e/test/plugin-host-throttle-fixture.test.mjs",
+      "id": "plugin-host RAF reporter ignores open-call metrics and sends real errors to the browser hook"
+    },
+    {
+      "file": "e2e/test/plugin-host-throttle.test.mjs",
+      "id": "plugin-host RAF measurement rejects samples from different page origins"
+    }
+  ],
+  "expected": "The fixture collector preserves RAF measurements, process identity, explicit errors and cleanup evidence without claiming application benchmark values.",
+  "levels": [
+    "unit"
+  ]
+},
+  {
   "id": "F239-211",
   "implementation": [
     {

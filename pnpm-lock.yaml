@@ -57,6 +57,9 @@ importers:
       '@soksak/client':
         specifier: workspace:*
         version: link:../packages/client
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../packages/plugin-api
       '@soksak/window-check':
         specifier: workspace:*
         version: link:../packages/window-check

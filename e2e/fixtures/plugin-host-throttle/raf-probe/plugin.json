@@ -1,0 +1,47 @@
+{
+  "id": "probehostraf",
+  "name": "Plugin host RAF probe",
+  "description": "Window-check fixture that reports animation-frame counts from a built plugin host.",
+  "sections": [
+    {
+      "id": "probehostraf.frames",
+      "name": "Frame measurement",
+      "status": "probehostraf.sample"
+    }
+  ],
+  "host": {
+    "page": "ui/host.html"
+  },
+  "exposes": {
+    "status": [
+      {
+        "name": "probehostraf.sample",
+        "description": "The latest requested animation-frame count and page-clock timestamp.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "frames": { "type": "integer" },
+            "performanceNow": { "type": "number" },
+            "timeOrigin": { "type": "number" }
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "probehostraf.read",
+        "description": "Returns and publishes the current animation-frame count on request.",
+        "params": { "type": "object" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "frames": { "type": "integer" },
+            "performanceNow": { "type": "number" },
+            "timeOrigin": { "type": "number" }
+          }
+        }
+      }
+    ],
+    "dom": []
+  }
+}
