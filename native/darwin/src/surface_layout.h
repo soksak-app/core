@@ -3,6 +3,8 @@
 #include <stdint.h>
 
 bool surfaceLayoutCommit(void *owner, uint64_t ticket);
+// Returns whether owner has the active layout preparation. Call on the UI thread.
+bool surfaceLayoutIsPreparing(void *owner);
 // Lets the app DOM web view update rendering at the refresh interval of the display instead of being limited to about 60 fps.
 // Returns false when WebKit does not have that feature.
 bool surfaceLayoutRenderAtDisplayRate(void *webview);

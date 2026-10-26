@@ -934,9 +934,10 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 handle
             };
             exposure::on_main(window, move || {
-                // In the preparation step the DOM may not be presented yet. The surface always stays hidden until the
-                // same ticket is settled in present.
-                platform.set_surface_hidden_handle(handle, true)?;
+                // Visible surfaces keep their current visibility until present applies the transaction; invisible surfaces hide now.
+                prepare_surface_visibility(visible, |hidden| {
+                    platform.set_surface_hidden_handle(handle, hidden)
+                })?;
                 platform.set_surface_alpha_handle(handle, solid)?;
                 if visible {
                     platform.place_surface(handle, ax, ay, aw, ah)?;
@@ -1083,6 +1084,17 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         return Err(error);
     }
     Ok(prepared)
+}
+
+fn prepare_surface_visibility(
+    requested_visible: bool,
+    set_hidden: impl FnOnce(bool) -> Result<(), String>,
+) -> Result<(), String> {
+    if requested_visible {
+        Ok(())
+    } else {
+        set_hidden(true)
+    }
 }
 
 /// Returns the current position of the surface webview in page coordinates.

@@ -16,6 +16,7 @@
 #import "private/webkit.h"
 #import "webview_input.h"
 #import "webview_geometry.h"
+#import "surface_layout.h"
 
 static int failures = 0;
 
@@ -364,6 +365,9 @@ static void checkHitTesting(WKWebView *main) {
     webviewSetSurfaceOverlays(plain, overlay, 1);
     check([plain hitTest:superviewPoint(plain, NSMakePoint(100, 80))] == nil,
         @"a point under the visible overlay of a surface without a web view is not a native hit");
+    NSView *initiallyHidden = (NSView *)sp_surface_create(main);
+    check(initiallyHidden.hidden, @"a new surface starts hidden");
+    sp_surface_close(initiallyHidden);
     // The same kind of surface at a non-zero origin: a point outside its overlay is the native view of its plane.
     NSView *moved = (NSView *)sp_surface_create(main);
     moved.hidden = NO;
@@ -373,6 +377,39 @@ static void checkHitTesting(WKWebView *main) {
     check([moved hitTest:superviewPoint(moved, NSMakePoint(5, 5))] == movedNative,
         [NSString stringWithFormat:@"a point outside the overlay of a surface at a non-zero origin is its native view (frame %@)",
             NSStringFromRect(moved.frame)]);
+    moved.hidden = YES;
+    check([moved hitTest:superviewPoint(moved, NSMakePoint(5, 5))] == nil,
+        @"an explicitly hidden surface immediately stops receiving native hits");
+    moved.hidden = NO;
+    NSWindow *otherWindow = [[[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 120, 100)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
+    otherWindow.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 120, 100)] autorelease];
+    WKWebView *otherMain = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 120, 100)] autorelease];
+    [otherWindow.contentView addSubview:otherMain];
+    NSView *otherSurface = (NSView *)sp_surface_create(otherMain);
+    otherSurface.hidden = NO;
+    webviewSetFrame(otherSurface, 0, 0, 100, 100);
+    NSView *otherNative = addNativeView(otherSurface);
+    __block BOOL layoutReady = NO;
+    surfaceLayoutBegin(main.window, 77001, ^(int allowed) { layoutReady = allowed != 0; });
+    check(layoutReady, @"the visible surface layout transaction starts synchronously");
+    check(surfaceLayoutIsPreparing(main.window), @"the active window reports its layout preparation");
+    check(!surfaceLayoutIsPreparing(otherWindow), @"a different window does not report the active preparation");
+    check(!moved.hidden, @"layout preparation does not hide the visible surface");
+    check([moved hitTest:superviewPoint(moved, NSMakePoint(5, 5))] == nil,
+        @"native surface hit testing falls through while its window layout is preparing");
+    NSPoint movedPointInWindow = [moved convertPoint:NSMakePoint(5, 5) toView:nil];
+    NSPoint movedPointInContent = [main.window.contentView convertPoint:movedPointInWindow fromView:nil];
+    NSView *fallback = [main.window.contentView hitTest:movedPointInContent];
+    while (fallback && ![fallback isKindOfClass:WKWebView.class]) fallback = fallback.superview;
+    check(fallback == main, @"input under a preparing surface falls through to the app DOM");
+    check([otherSurface hitTest:superviewPoint(otherSurface, NSMakePoint(5, 5))] == otherNative,
+        @"another window keeps native hit testing while this window is preparing");
+    check(surfaceLayoutCommit(main.window, 77001), @"the visible surface layout transaction commits");
+    check(!surfaceLayoutIsPreparing(main.window), @"the window no longer reports preparation after commit");
+    check([moved hitTest:superviewPoint(moved, NSMakePoint(5, 5))] == movedNative,
+        @"native surface hit testing resumes after its window layout commits");
+    sp_surface_close(otherSurface);
     // A view surface whose web view does not cover the point: the point under the overlay is not a native hit.
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 200, 150)] autorelease];
     [main.window.contentView addSubview:view positioned:NSWindowAbove relativeTo:main];

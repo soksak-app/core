@@ -8,7 +8,7 @@ use std::time::Duration;
 use super::{
     Running, SurfaceComposition, cancel_layout_after_setup_error, clear_page_compositions,
     close_registered_surface, complete_layout_presentation, create_registered_surface,
-    mark_first_commit, pressed_surface, removed_surfaces,
+    mark_first_commit, prepare_surface_visibility, pressed_surface, removed_surfaces,
 };
 
 // contract: surface-layout.setup-failure-cancels-open-transaction
@@ -31,6 +31,44 @@ fn webview_presentation_registration_failure_cancels_open_layout() {
     assert_eq!(
         error,
         "webview callback setup failed; cancelling layout: layout cancellation enqueue failed"
+    );
+}
+
+// contract: surface-layout.prepare-visible-surfaces
+#[test]
+fn prepare_preserves_requested_visible_state_and_hides_requested_invisible_surfaces() {
+    for initially_hidden in [false, true] {
+        let mut hidden = initially_hidden;
+        let mut calls = Vec::new();
+        prepare_surface_visibility(true, |value| {
+            calls.push(value);
+            hidden = value;
+            Ok(())
+        })
+        .expect("visible prepare succeeds");
+        assert_eq!(
+            hidden, initially_hidden,
+            "visible prepare changed the prior hidden state"
+        );
+        assert!(
+            calls.is_empty(),
+            "visible prepare called the native visibility setter"
+        );
+    }
+
+    let mut hidden = false;
+    let mut calls = Vec::new();
+    prepare_surface_visibility(false, |value| {
+        calls.push(value);
+        hidden = value;
+        Ok(())
+    })
+    .expect("invisible prepare succeeds");
+    assert!(hidden, "an invisible prepare left the surface shown");
+    assert_eq!(
+        calls,
+        vec![true],
+        "an invisible prepare did not hide immediately"
     );
 }
 

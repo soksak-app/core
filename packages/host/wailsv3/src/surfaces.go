@@ -619,6 +619,13 @@ func max1(v float64) float64 {
 	return v
 }
 
+// prepareSurfaceVisibility hides only a surface whose requested placement is invisible. A visible surface keeps its native hidden state.
+func prepareSurfaceVisibility(requestedVisible bool, setHidden func(bool)) {
+	if !requestedVisible {
+		setHidden(true)
+	}
+}
+
 // ValidateRect rejects geometry that must not be passed to a native view.
 func ValidateRect(name string, x, y, width, height float64) error {
 	if math.IsNaN(x) || math.IsNaN(y) || math.IsNaN(width) || math.IsNaN(height) ||
@@ -1134,9 +1141,8 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible, start); err != nil {
 			return nil, nil, err
 		}
-		// The native view is kept hidden until PresentSurfaces confirms that the corresponding application DOM frame
-		// was displayed.
-		item.view.SetHidden(true)
+		// Newly created native surfaces start hidden; existing visible surfaces remain visible through preparation.
+		prepareSurfaceVisibility(item.visible, item.view.SetHidden)
 		system.SetSurfaceAlphaHandle(item.view.NativeView(), alphaFor(item.decl.Dim))
 		if item.visible {
 			item.view.SetBounds(item.aligned.X, item.aligned.Y, item.aligned.W, item.aligned.H)

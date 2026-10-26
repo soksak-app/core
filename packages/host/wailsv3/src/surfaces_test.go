@@ -245,6 +245,29 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	}
 }
 
+// contract: surface-layout.prepare-preserves-visible-state
+func TestPrepareSurfaceVisibilityPreservesVisibleAndHidesInvisible(t *testing.T) {
+	cases := []struct {
+		name             string
+		requestedVisible bool
+		initialHidden    bool
+		wantHidden       bool
+	}{
+		{name: "existing visible", requestedVisible: true, initialHidden: false, wantHidden: false},
+		{name: "new visible", requestedVisible: true, initialHidden: true, wantHidden: true},
+		{name: "requested invisible", requestedVisible: false, initialHidden: false, wantHidden: true},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			hidden := test.initialHidden
+			prepareSurfaceVisibility(test.requestedVisible, func(next bool) { hidden = next })
+			if hidden != test.wantHidden {
+				t.Fatalf("prepared surface hidden state is %t; want %t", hidden, test.wantHidden)
+			}
+		})
+	}
+}
+
 // contract: view.composition.page-and-regions
 func TestViewCompositionDeclaresPageWithOptionalRegions(t *testing.T) {
 	if err := validateComposition("probe", SurfaceComposition{Kind: "view", Page: "ui/page.html"}); err != nil {

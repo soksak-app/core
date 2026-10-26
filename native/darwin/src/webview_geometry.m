@@ -3,6 +3,7 @@
 #import <objc/runtime.h>
 #import "application_log.h"
 #import "webview_geometry.h"
+#import "surface_layout.h"
 #import "window_objects.h"
 #import "private/webkit.h"
 
@@ -288,6 +289,7 @@ static void notifyScale(NSView *view) {
     // AppKit passes the point in the superview coordinates, and the overlay rectangles are in the local coordinates of the surface.
     NSPoint point = [self convertPoint:superviewPoint fromView:self.superview];
     if (self.hidden || self.alphaValue <= 0 || !NSPointInRect(point, self.bounds)) return nil;
+    if (surfaceLayoutIsPreparing(self.window)) return nil;
     for (NSValue *rectValue in [[self visibleOverlayRects] reverseObjectEnumerator]) {
         NSRect rect = rectValue.rectValue;
         if (!NSPointInRect(point, rect)) continue;

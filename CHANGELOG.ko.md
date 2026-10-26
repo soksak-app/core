@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-22: Layout preparation 동안 기존 visible surface를 유지하고 요청상 invisible인 surface는 즉시 숨긴다. 새 surface와 기존 hidden surface는 여전히 presentation을 기다린다. 해당 window가 active transaction을 소유하는 동안 native surface hit는 app DOM으로 전달하며 keyboard focus는 바꾸지 않는다. 대응 host visibility owner, native hit owner 및 controlled commit 전후 composition 녹화가 통과하며 application cadence는 F212.14-5-5에 남는다.
+
 - F212.14-5-21: OSC 11과 layout 및 drag pixel detection에 하나의 어둡고 구별되는 Terminal 측정 background를 사용한다. 회색 background는 둥근 focus-corner pixel에 일치해 올바른 경계를 확장했다. 재현 owner는 수정 전에 실패하고 수정 후 Terminal consumer case 일곱 개가 모두 통과하며 공통 detection과 각각의 기존 tolerance는 유지한다.
 
 - F212.14-5-20: Reclaim이 sample하고 닫을 때까지 HWP warm motion view를 live 초기 group에 유지한다. Process-sharing, footprint 및 history 검사를 완화하지 않고 이른 close를 제거한다. Consumer 회귀 검사는 수정 전에 실패하고 수정 후 HWP owner case 12개가 모두 통과하며 앞선 실패의 session cleanup 등록은 유지한다.

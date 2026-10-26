@@ -158,6 +158,11 @@ bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
     return true;
 }
 
+bool surfaceLayoutIsPreparing(void *owner) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    return owner != NULL && activeOwner == owner;
+}
+
 void surfaceLayoutCancel(void *owner) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
     for (SPLayoutRequest *request in [[waiting copy] autorelease]) {

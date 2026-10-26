@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-22: Preserve existing visible surfaces during layout preparation and hide requested-invisible surfaces immediately. New and previously hidden surfaces still wait for presentation. Native surface hits fall through to the app DOM while their window owns an active transaction, without changing keyboard focus. Paired host visibility owners, the native hit owner and the controlled before/after-commit composition recording pass; application cadence remains under F212.14-5-5.
+
 - F212.14-5-21: Use one distinctive dark Terminal measurement background for OSC 11 and layout and drag pixel detection. The gray background matched rounded focus-corner pixels and expanded otherwise correct bounds. The reproducing owner fails before correction and all seven Terminal consumer cases pass afterward; shared detection and each existing tolerance remain unchanged.
 
 - F212.14-5-20: Keep the HWP warm motion view in the live initial group until reclaim samples and closes it. Remove the premature close without relaxing process-sharing, footprint or history checks. The consumer regression fails before correction; all 12 HWP owner cases pass afterward, and earlier-failure session cleanup remains registered.
