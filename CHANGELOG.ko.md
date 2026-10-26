@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-2-2, F212.12-2-2-3: 보존한 소유 Red/Green과 통과한 양 host click/native-input 근거로 로컬 terminal focus/input acceptance를 완료한다. Terminal P66-1의 공개 미배포를 유지하고 오래된 core 하드코딩 pin 대신 실제 호환 public-registry 선택을 검증하는 F212.15-1을 등록한다. Cadence 진단 subtree는 종료하거나 기준을 바꾸지 않고 F212.14 아래로 옮긴다. 상위 view-input activation 작업은 열어 둔다.
+
 - F212.14: VT screen-envelope allocation 수정과 남은 성능 실패를 기록한다. Cell별 body 복사를 제거한 뒤 소유 회귀 검사가 통과하고 trace 없는 양 benchmark report가 모든 측정 frame, 정상 오류 감사 및 복원된 설치를 포함한다. 변경하지 않은 실패 latency/cadence 목표를 유지하며 allocation 결과로 전체 성능 개선을 추론하지 않는다.
 
 - F212.14: 성능 목표를 통과 처리하지 않고 로컬 VT image-answer queue 측정을 기록한다. 일치하는 응답 160건 모두 timing이 있으며 trace geometry와 log 감사가 양 host에서 통과하고 baseline 설치와 frontmost 상태를 복원한다. 전체/queue 간격을 구분하고 구체적인 queue 작업으로의 원인 귀속은 미해결로 유지한다.

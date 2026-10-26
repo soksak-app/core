@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-2-2, F212.12-2-2-3: Complete local terminal focus/input acceptance from the retained owning Red/Green and passing two-host click/native-input evidence. Keep terminal P66-1 publicly unreleased and register F212.15-1 for actual compatible public-registry selection instead of an obsolete hardcoded core pin. Move the unchanged cadence diagnostic subtree under F212.14 without closing it or changing its criterion. The broader view-input activation work remains open.
+
 - F212.14: Record the VT screen-envelope allocation correction and its remaining performance failure. The owning regression passes after removing a per-cell body copy, and both untraced benchmark reports contain every measured frame with clean error audits and restored installations. Preserve the unchanged failed latency/cadence targets; do not attribute a total performance improvement to the allocation result.
 
 - F212.14: Record the local VT image-answer queue measurements without accepting the performance targets. All 160 matching answers have timing; traced geometry and log audits pass on both hosts, whose baseline installations and frontmost state are restored. Preserve separate total/queue durations and keep attribution to specific queued work unresolved.
