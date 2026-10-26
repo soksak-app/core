@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-47-30-4: Classify the historical size assertions using retained native runner output and fixture source. Metadata-file indexing mislabeled earlier frames, and the one-frame run selected the frame awaited before resize. Neither assertion establishes stale post-resize pixels. Preserve current complete post-resize acceptance under F240; no capture correction or current runtime pass is claimed.
+
 - F212.14-5-10: Measure card boundaries through plane-colored slot gutters and declared rounded corners. Require independent perpendicular ownership for endpoint separator strokes and reject internal gaps or neighboring-card spans. All four view consumers provide the effective radius from public settings. The boundary regressions fail before correction; all 46 affected owners and preserved two-host frame replays pass afterward. Application measurements remain separate.
 
 - F212.14-5-9: Derive the Browser width-drag boundary from the measured scratch card and verify it is an interior grid line. The fixed line leaves that card unchanged and produces no source resize frames. The owning selection regression fails before correction and all eight Browser consumer cases pass afterward. Application measurements remain separate.

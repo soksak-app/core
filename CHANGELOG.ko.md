@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-47-30-4: 보존된 native runner 출력과 fixture source로 과거 크기 assertion을 분류한다. Metadata 파일 index 선택이 이전 frame을 잘못 표시했고 frame 하나를 반환한 실행은 resize 전에 기다린 frame을 선택했다. 두 assertion 모두 resize 이후의 오래된 pixel을 입증하지 않는다. 현재 complete post-resize acceptance는 F240에 유지하며 capture 수정이나 현재 runtime 통과를 주장하지 않는다.
+
 - F212.14-5-10: Plane 색상의 slot 여백과 선언된 둥근 모서리를 통해 card 경계를 측정한다. 끝점 separator stroke의 독립된 수직 연결을 확인하고 내부 구멍·이웃 card를 걸친 경계를 거부한다. 네 view consumer 모두 공개 설정의 실제 radius를 전달한다. 경계 회귀 검사는 수정 전 실패하며 수정 후 해당 소유 검사 46개와 보존된 양쪽 host frame 재생이 통과한다. 실제 앱 측정은 별도로 유지한다.
 
 - F212.14-5-9: 측정 Browser scratch card에서 폭 drag 경계를 구하고 내부 grid line인지 확인한다. 기존 고정 line은 해당 card를 바꾸지 않아 source resize frame이 없다. 소유 경계 선택 회귀 검사가 수정 전 실패하고 수정 후 Browser consumer 사례 여덟 개 모두 통과한다. 실제 앱 측정은 별도로 유지한다.
