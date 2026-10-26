@@ -238,6 +238,40 @@ test("shared readiness wrapper waits for the declared status exposure before rea
   assert.deepEqual(calls, ["until:core.surfaces", "readiness"]);
 });
 
+test("anchor OCR rejects missing or unsupported host menu languages", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "view-anchor-language-"));
+  const logDirectory = join(root, "logs");
+  mkdirSync(logDirectory);
+  writeFileSync(join(logDirectory, "host-1-1.jsonl"), "");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  for (const language of [undefined, "ja"]) {
+    const recordingDirectory = join(root, `recording-${language ?? "missing"}`);
+    mkdirSync(recordingDirectory);
+    const session = {
+      app: { configDir: root },
+      async record() {
+        return { stop: async () => ({ frames: recordingDirectory, count: 0, limited: false }) };
+      },
+      async get(name) {
+        if (name === "core.grid") return { cards: [{ id: "card-1", active: "anchor", tabs: [
+          { id: "anchor", plugin: "other-fixture" },
+        ] }] };
+        if (name === "host.window") return { documents: [{ surface: "anchor", document: "", visible: true,
+          process: 3100, frame: { x: 0, y: 0, width: 20, height: 10 } }] };
+        if (name === "host.menu") return language === undefined ? {} : { language };
+        assert.fail(`unexpected status ${name}`);
+      },
+      async presented() { return { displayed: 1 }; },
+    };
+    await assert.rejects(openRecordedView({ diagnostic() {} }, session, {
+      card: "card-1", plugin: "fixture", readinessStatus: "fixture.ready", readiness: async () => {},
+      expectedContent: "fixture", language: "en-US",
+    }), (error) => error.message.includes("host.menu reported an unsupported language for anchor OCR")
+      && error.message.includes(language ?? "undefined"));
+  }
+});
+
 test("one recording proves the physical anchor boundary before target content", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "view-metrics-session-"));
   const logDirectory = join(root, "logs");
@@ -261,6 +295,7 @@ test("one recording proves the physical anchor boundary before target content", 
   const readinessStarted = new Promise((resolve) => { signalReadiness = resolve; });
   let readinessCalls = 0;
   const recognizedTimes = [];
+  const recognizedLanguages = [];
   const s = {
     app: { configDir: root },
     async record() {
@@ -321,6 +356,7 @@ test("one recording proves the physical anchor boundary before target content", 
         { id: "old-target", plugin: "fixture" }, { id: "anchor", plugin: "other-fixture" },
       ] }] };
       if (name === "core.surfaces") return viewOpen ? [{ surface: "view-1" }] : [];
+      if (name === "host.menu") return { language: "ko" };
       assert.equal(name, "host.window");
       return { documents: [
         { surface: "anchor", document: "", visible: true, process: 3100,
@@ -343,8 +379,8 @@ test("one recording proves the physical anchor boundary before target content", 
     expectedContent: "SOKSAK FIXTURE", language: "en-US",
     recognizeFrame: async (decoded, rect, language) => {
       assert.deepEqual(rect, { x: 0, y: 0, w: 1, h: 1 });
-      assert.equal(language, "en-US");
       recognizedTimes.push(decoded.time);
+      recognizedLanguages.push(language);
       return { lines: [decoded.time === 7.1 ? "different anchor" : "SOKSAK FIXTURE"] };
     },
   });
@@ -370,6 +406,8 @@ test("one recording proves the physical anchor boundary before target content", 
     "the continuous recording stopped before the target view presentation");
   assert.deepEqual(recognizedTimes, [0.5, 5.5, 6.1, 7.1, 10],
     "the scanner skipped old target frames, missed the actual anchor transition, or scanned target before its boundary");
+  assert.deepEqual(recognizedLanguages, ["ko-KR", "ko-KR", "ko-KR", "ko-KR", "en-US"],
+    "anchor OCR did not use the host menu language while target OCR retained its declared language");
   assert.equal(result.surface, "view-1");
   assert.equal(result.openedPid, 3141);
   assert.ok(result.anchor.contentFrame.timeMs >= result.anchor.displayed,

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-11: 기존 anchor 인식에는 실제 host UI 언어를 사용하고 target OCR 언어는 유지한다. 소유 언어 전달 assertion이 수정 전 실패하며 수정 후 해당 소유 검사 21개 모두 통과한다. 녹화한 frame을 보존하고 host 언어 누락·미지원 값을 명시적으로 거부한다.
+
 - F212.14-5-8: HWP viewport marker pixel을 완전한 perimeter·overdraw 검사, 독립적으로 선언한 slot과 기존 네 변 기준으로 측정한다. Trace 시작 근거를 기존 action cleanup 경계로 전달하고 이전 toolbar 색상 추론을 제거한다. Consumer 부재·metadata·cleanup·resize·색상 판정 회귀를 재현한 뒤 해당 소유 검사 35개 모두 통과하며 독립 검토에 남은 core 이의가 없다. 실제 앱 acceptance는 별도로 유지한다.
 
 - F239-195: 양쪽 host에 수정한 HWP studio bridge가 전달됐음을 검증한다. 설치 파일 93개 모두 candidate와 일치하고 editor가 문서를 로드하며 렌더링된 studio 픽셀을 보존한다. Module 누락을 재현한 package graph 검사가 수정 후 통과한다. Viewport 측정과 성능 acceptance는 별도로 유지한다.

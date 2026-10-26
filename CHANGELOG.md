@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-11: Use the effective host UI language to recognize the existing anchor and keep the target OCR language unchanged. The owning language-dispatch assertion fails before correction and all 21 affected owners pass afterward. Preserve recorded frames and reject absent or unsupported host languages explicitly.
+
 - F212.14-5-8: Measure HWP viewport-marker pixels with complete perimeter and overdraw checks, independently declared slots and unchanged four-edge limits. Pass trace-start evidence through the existing action cleanup boundary and remove obsolete toolbar-color inference. All 35 affected owners pass after the tracked missing-consumer, metadata, cleanup, resize and color-predicate regressions; independent review has no remaining core objection. Actual application acceptance remains separate.
 
 - F239-195: Verify corrected HWP studio-bridge delivery on both hosts. All 93 installed files match the candidate, the editor loads documents and rendered studio pixels are retained. Package graph validation passes after reproducing the missing module. Viewport measurement and performance acceptance remain separate.

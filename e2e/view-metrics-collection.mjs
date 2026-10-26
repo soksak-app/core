@@ -9,6 +9,7 @@ import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, pr
 
 const PROCESS_REQUEST = "host.trace.view.process-request";
 const PROCESS_READY = "host.trace.view.process-ready";
+const HOST_OCR_LANGUAGES = Object.freeze({ ko: "ko-KR", en: "en-US" });
 
 /** Chooses a card that already has a visible-content anchor from another plugin. */
 export function viewCardWithDifferentPluginTab(grid, plugin, preferred) {
@@ -227,7 +228,11 @@ async function presentDifferentPluginAnchor(s, { card, plugin }) {
   const row = host.documents.find((document) => document.surface === anchor.id && document.document === "");
   assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
     `different-plugin anchor ${anchor.id} has no visible native view frame`);
+  const menu = await s.get("host.menu");
+  const language = HOST_OCR_LANGUAGES[menu?.language];
+  assert.ok(language, `host.menu reported an unsupported language for anchor OCR: ${JSON.stringify(menu?.language)}`);
   return { tab: anchor.id, displayed,
+    language,
     rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height } };
 }
 
@@ -276,7 +281,7 @@ export async function openRecordedView(t, s, { card, plugin, params, readiness, 
     assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
       `${plugin} view ${tab} has no visible native view frame`);
     const anchorContentFrame = await firstDifferentContentFrame({ captured: decoded, rect: anchor.rect,
-      expected: expectedContent, language, directory: capture.frames, recognizeFrame });
+      expected: expectedContent, language: anchor.language, directory: capture.frames, recognizeFrame });
     const result = await firstContentFrame({ captured: decoded,
       rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height },
       expected: expectedContent, language, directory: capture.frames, recognizeFrame,
