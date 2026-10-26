@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-27: Plugin root view 생성 시 기존 display-rate WebKit preference를 적용한다. App DOM은 display rate를 사용하지만 새 root configuration은 120Hz 화면에서도 near-60fps 기본값을 유지했다. 실제 factory owner는 수정 전에 실패하고 수정 후 root preference 0 및 변경되지 않은 document-region preference 1로 통과한다. Background plugin host는 기존 policy를 유지하며 지원 기능이 없으면 명시적 생성 오류를 반환한다.
+
 - F212.14-5-25: Host placement마다 core surface declaration을 한 번 projection하고 모든 view start 값이 같은 snapshot을 공유한다. 직접 single-view 구성도 한 번만 읽는다. Placement 사이에 snapshot을 보존하지 않고 origin 검증, plugin declaration 및 요청 구조를 유지한다. 변경 전 두 view owner는 snapshot을 여섯 번 읽어 실패하며 수정 후 placement owner 및 start-value/origin owner 두 개가 통과한다. Application cadence acceptance는 남는다.
 
 - F212.14-5-24: 독립적인 DOM 및 raster 대기 전에 변경된 root-view presentation을 등록하고, 같은 ticket을 commit하기 전에 교체된 generation을 다시 join한다. 미참여 generation을 cache하지 않고 변경되지 않은 root 및 lifecycle stop state를 유지한다. Host 순서, 교체, 취소 및 lifecycle owner가 통과하며 native capture는 first-show pixel이 commit 전까지 게시되지 않고 focus가 올바름을 입증한다. Application cadence acceptance는 별도로 남는다.

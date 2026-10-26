@@ -8,6 +8,7 @@
 #import "support/view_import_map.h"
 #import "document_view.h"
 #import "webview_geometry.h"
+#import "surface_layout.h"
 
 static int failures = 0;
 
@@ -107,6 +108,9 @@ int main(void) { @autoreleasepool {
 
         void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", "", changed, NULL);
         check(view != NULL, @"a view is created with the folder and the plugin of its page");
+        check(surfaceLayoutPrefersNear60FPS(view) == 0,
+            [NSString stringWithFormat:@"a plugin root view renders at the display refresh rate (preference %d)",
+                surfaceLayoutPrefersNear60FPS(view)]);
         sp_document_place(view, 0, 0, 0, 0, true);
         NSDictionary *steps = runPage(view);
         check([steps[@"granted"] isEqual:@"42"],
@@ -131,6 +135,9 @@ int main(void) { @autoreleasepool {
         check([steps[@"granted"] isEqual:@"fail"] && [steps[@"served"] isEqual:@"fail"],
             [NSString stringWithFormat:@"a region cannot import or fetch a granted core path: %@", steps]);
         check(resolverCalls.count == 0, [NSString stringWithFormat:@"a region does not call the core root resolver: %@", resolverCalls]);
+        check(surfaceLayoutPrefersNear60FPS(region) == 1,
+            [NSString stringWithFormat:@"a document region keeps its existing rendering preference (%d)",
+                surfaceLayoutPrefersNear60FPS(region)]);
         sp_document_close(region);
     }
     sp_core_root_set_resolver(NULL, NULL);

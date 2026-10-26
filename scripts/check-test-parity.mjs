@@ -6936,6 +6936,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-5-27",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "surfaceLayoutRenderAtDisplayRate(view)" }],
+    tests: [{ file: "native/darwin/tests/document_core_root_test.m", id: "a plugin root view renders at the display refresh rate (preference %d)" }],
+    expected: "Plugin root creation disables near-60fps rendering without changing document-region policy.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.14-5-25",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function surfacePlacementsForHost(" }],
     tests: [{ file: "packages/workbench/test/view-start-handoff.test.mjs", id: "core.file.open parameters reach the host placement request" }],

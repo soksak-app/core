@@ -16,6 +16,7 @@
 #import "event_ring.h"
 #import "observe.h"
 #import "private/webkit.h"
+#import "surface_layout.h"
 #import "webview_geometry.h"
 #import "webview_input.h"
 
@@ -1254,6 +1255,11 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     if (isView && !channelSource) return NULL;
     SPDocumentView *view = pluginView(directory, folder, plugin, channelSource, isView, changed, context);
     if (!view) return NULL;
+    if (isView && !surfaceLayoutRenderAtDisplayRate(view)) {
+        setDocumentFailure(@"the plugin root view cannot render at the display rate");
+        [view release];
+        return NULL;
+    }
     view.webSurface = surface;
     view.appearance = surface.effectiveAppearance;
     if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) {
