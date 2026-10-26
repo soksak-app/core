@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { Session } from "../app.mjs";
 
 const app = new URL("../app.mjs", import.meta.url).href;
 
@@ -37,6 +38,80 @@ test("a cleanup failure is reported when the check body already failed", { timeo
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /probe body failed/);
   assert.match(result.stdout, /# cleanup failed: Error: probe press stayed open/);
+});
+
+test("an input-source selection in a session tree restores the first source after baseline cleanup", { timeout: 10000 }, async () => {
+  const cleanupEvents = [];
+  let current = "com.apple.keylayout.ABC";
+  let sourceReads = 0;
+  let cleaning = false;
+  const client = {
+    endpoint: { pid: process.pid },
+    async request(method, params) {
+      assert.equal(method, "diagnostics.input.source");
+      if (params.select) {
+        current = params.select;
+        if (cleaning) cleanupEvents.push(`restore:${params.select}`);
+        return { current };
+      }
+      sourceReads++;
+      return { current };
+    },
+  };
+  const session = new Session({ name: "input-source", configDir: "/unused" }, client);
+  session.cleanups.push(async () => {
+    cleaning = true;
+    cleanupEvents.push("baseline");
+  });
+
+  await session.selectInputSource("com.apple.inputmethod.Korean.2SetKorean");
+  await session.on("child").selectInputSource("com.apple.keylayout.ABC");
+  cleaning = true;
+  for (const clean of session.cleanups.reverse()) await clean();
+
+  assert.deepEqual(cleanupEvents, ["baseline", "restore:com.apple.keylayout.ABC"]);
+  assert.equal(sourceReads, 1, "the session tree captures the original source once");
+  assert.equal(current, "com.apple.keylayout.ABC");
+});
+
+test("a child-first input-source restore uses the root window after the child closes", { timeout: 10000 }, async () => {
+  const cleanupEvents = [];
+  const closed = new Set();
+  let current = "com.apple.keylayout.ABC";
+  const sourceWindows = [];
+  const client = {
+    endpoint: { pid: process.pid },
+    async request(method, params) {
+      if (method === "command.run" && params.name === "host.window.close") {
+        closed.add(params.window);
+        return null;
+      }
+      if (method !== "diagnostics.input.source") throw new Error(`unexpected request ${method}`);
+      if (closed.has(params.window)) throw new Error(`window ${params.window} is closed`);
+      sourceWindows.push(params.window);
+      if (params.select) {
+        current = params.select;
+        if (cleanupEvents.length) cleanupEvents.push(`restore:${params.window}:${params.select}`);
+        return { current };
+      }
+      return { current };
+    },
+  };
+  const root = new Session({ name: "input-source", configDir: "/unused" }, client);
+  root.cleanups.push(async () => cleanupEvents.push("baseline"));
+  const child = root.on("child");
+
+  await child.selectInputSource("com.apple.inputmethod.Korean.2SetKorean");
+  await child.close();
+  const cleanupErrors = [];
+  for (const clean of root.cleanups.reverse()) {
+    try { await clean(); } catch (error) { cleanupErrors.push(error); }
+  }
+
+  assert.deepEqual(cleanupErrors, []);
+  assert.deepEqual(cleanupEvents, ["baseline", "restore:main:com.apple.keylayout.ABC"]);
+  assert.deepEqual(sourceWindows, ["child", "child", "main"]);
+  assert.equal(current, "com.apple.keylayout.ABC");
 });
 
 // A check that passes its body still fails on an error event that the application stored in its event log during the check.

@@ -196,9 +196,8 @@ export async function open(t, app) {
     throw error;
   }
   const session = new Session(app, client);
-  // A check can write the pasteboard of the user. This cleanup saves every item format and verifies the restored
-  // pasteboard after all other cleanups have finished. Cleanups run in reverse order of registration, so this one is
-  // last.
+  // Check-specific cleanups and released presses run before pasteboard and frontmost-baseline restoration. Input-source
+  // restoration is inserted at the start of this list and runs after the baseline restoration.
   const pasteboard = readPasteboard();
   // A full-screen transition or a new project window activates the application. Cleanup restores the single session
   // baseline before another check runs; the synthetic drag requires an inactive application.
@@ -345,6 +344,7 @@ export class Session {
     this.cleanups = [];
     this.recordings = new Set();
     this.failedRecordings = new Map();
+    this.inputSourceRestore = { original: null, capture: null, requester: this };
     // The location of the application log that the check starts reading and the format of the errors that the check
     // declares it causes. finishSession uses them.
     this.expectedErrors = [];
@@ -434,6 +434,7 @@ export class Session {
   on(window) {
     const other = new Session(this.app, this.client);
     other.cleanups = this.cleanups;
+    other.inputSourceRestore = this.inputSourceRestore;
     other.recordings = this.recordings;
     other.failedRecordings = this.failedRecordings;
     other.expectedErrors = this.expectedErrors;
@@ -685,8 +686,16 @@ export class Session {
    * Selecting an input source does not activate a window.
    */
   async selectInputSource(id) {
-    const original = (await this.request("diagnostics.input.source")).current;
-    this.cleanup(() => this.request("diagnostics.input.source", { select: original }));
+    const inputSourceRestore = this.inputSourceRestore;
+    if (!inputSourceRestore.capture) {
+      inputSourceRestore.capture = this.request("diagnostics.input.source").then(({ current }) => {
+        inputSourceRestore.original = current;
+        this.cleanups.unshift(() => inputSourceRestore.requester.request("diagnostics.input.source", {
+          select: inputSourceRestore.original,
+        }));
+      });
+    }
+    await inputSourceRestore.capture;
     const selected = await this.request("diagnostics.input.source", { select: id });
     if (selected.current !== id) throw new Error(`${this.app.name}: input source ${id} was not selected (current ${selected.current})`);
   }

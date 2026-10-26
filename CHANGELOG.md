@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-214: Restore the first original input source once per session tree after baseline cleanup. Use the root requester even when the first selection occurs in a child that closes before cleanup. Two owner cases reproduce ordering and closed-child failures before their corrections and pass afterward; independent review and documentation checks pass. Native context policy is unchanged.
+
 - F212.1-4: Add the tracked main-page footprint benchmark for one and two windows. Match exact process identities, deduplicate shared PIDs, preserve load and sampler context, reject errors and process replacement, and restore the baseline window set. Nine owning checks pass after runtime Reds and independent review. Application measurement results are not inferred from these owner tests.
 
 - F212.9a-1: Include registered plugin-host WebContent processes in both host memory samplers. Match registered handles, retain per-owner process identity and footprint, and report missing or unstarted processes explicitly. Go and Rust adapter and sampler owner checks pass after reproducing the omitted row. Application measurements remain outstanding.

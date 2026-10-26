@@ -198,6 +198,29 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F239-214",
+  "implementation": [
+    {
+      "file": "packages/window-check/app.mjs",
+      "symbol": "async selectInputSource(id) {"
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/window-check/test/session-cleanup.test.mjs",
+      "id": "an input-source selection in a session tree restores the first source after baseline cleanup"
+    },
+    {
+      "file": "packages/window-check/test/session-cleanup.test.mjs",
+      "id": "a child-first input-source restore uses the root window after the child closes"
+    }
+  ],
+  "expected": "Session trees capture and restore the first original input source once through the root requester after baseline cleanup.",
+  "levels": [
+    "unit"
+  ]
+},
+  {
   "id": "F212.1-4",
   "implementation": [
     {

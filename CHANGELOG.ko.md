@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-214: Session tree마다 최초의 원래 input source를 baseline cleanup 뒤에 한 번 복원한다. 최초 선택이 cleanup 전에 닫히는 자식에서 발생해도 root requester를 사용한다. 두 소유 사례가 수정 전 순서·닫힌 자식 오류를 재현하고 수정 후 통과하며 독립 리뷰와 문서 검사도 통과한다. Native context 정책은 그대로다.
+
 - F212.1-4: 한 창·두 창의 main-page footprint benchmark를 추가한다. 정확한 process identity를 대조하고 공유 PID를 중복 합산하지 않으며 load와 sampler 참고값을 보존한다. 오류와 process 교체를 거부하고 baseline 창 집합을 복원한다. Runtime Red와 독립 리뷰 후 소유 검사 아홉 개가 통과한다. 소유 검사로 앱 측정 결과를 추론하지 않는다.
 
 - F212.9a-1: 등록된 plugin-host WebContent process를 양 host memory sampler에 포함한다. 등록된 handle을 대조하고 소유자별 process identity와 footprint를 유지하며 누락되거나 시작 전인 process는 명시적으로 보고한다. 누락 행을 재현한 뒤 Go/Rust adapter와 sampler 소유 검사가 통과한다. 앱 측정은 아직 남아 있다.
