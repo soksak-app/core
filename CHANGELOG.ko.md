@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-2-1-2, F212.12-2, F212.12: Fixture main document 초기화 뒤 native view-focus activation 수용을 완료한다. 최종 activation 검사는 press/key 수신, first-responder 소유권 및 frontmost 복원을 0.463초에 통과한다. 보존된 입력, native-menu, 표시, drag와 restart 수용을 결합해 연결된 기능 parent를 닫으며 성능과 과거 감사는 별도로 남는다.
+
 - F239-206: Native view-focus fixture에서 activation 전에 등록된 main document를 로드하고 준비를 기다린다. Navigation 오류를 명시하고 기존 activity-state 대기와 timeout을 유지한다. 소유 readiness assertion은 수정 전에 실패하며 최종 기본 view-focus 검사는 1/1 통과한다. Activation 수용은 별도로 남긴다.
 
 - F239-47-32, F239-47-33: 현재 양 host의 Latin-prefix Korean 및 OS resyllabification 결과와 보존한 repeated-vowel visual 및 host별 열 개의 개별 수용 lifecycle 조건을 결합하여 marked-buffer acceptance를 완료한다. 과거 실패 측정은 보존하고 F239-175의 현재 기능/cadence 분리를 적용한다. 새 sequence 검사는 AppKit/terminal 일치, 순서대로 한 번의 commit, error audit, input-source 및 baseline 복원과 정상 종료를 통과한다.

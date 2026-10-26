@@ -762,6 +762,20 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F239-206",
+    implementation: [{ file: "native/darwin/tests/view_focus_test.m", symbol: "@implementation MainPageReadiness" }],
+    tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "the registered app DOM web view finishes its main page before activation" }],
+    expected: "The registered main document finishes navigation before native focus activation, with explicit failure reporting.",
+    levels: ["native"],
+  },
+  {
+    id: "F212.12-2-1-2",
+    implementation: [{ file: "native/darwin/tests/view_focus_test.m", symbol: "@implementation MainPageReadiness" }],
+    tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "the page of the view receives the key x" }],
+    expected: "The initialized registered main document and plugin view complete activation, receive native press and key input, preserve first-responder ownership and restore the prior frontmost app.",
+    levels: ["native"],
+  },
+  {
     id: "F212.12-2-1-1",
     implementation: [
       { file: "e2e/editor.test.mjs", symbol: "const focusEditorForKeys =" },
