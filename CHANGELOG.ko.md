@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-188: generation을 지정한 theme 전달이 성공한 뒤 살아 있는 Wails view를 유지한다. postViewGeneration에 남은 잘못된 lifecycle 종료 호출을 제거한다. 소유 ready-delivery 회귀 검사는 수정 전 실패하고 수정 후 거짓 종료 record 없이 통과하며 실제 종료 소유 검사도 통과한다. 오래된 generation 취소와 전달 오류 동작을 유지한다.
+
 - F212.16: 소유 수정, sidecar startup 근거와 현재 비활성화 native label 검사로 로컬 process-label acceptance를 완료한다. 기존 publication gate 두 개와 ID를 F212.15 아래 유지한다. Host environment 전달 제거는 완료했으며 공개 전달이나 Activity Monitor 전용 표시를 주장하지 않는다.
 
 - F239-187: 동기 callback 전달 뒤 임시 native view-channel JSON string을 autorelease pool로 해제한다. 소유 수명 회귀 검사는 수정 전 실패하고 수정 후 정확한 decoded-message 동등성과 기존 channel 동작을 유지하며 통과한다. 명시적 encoding-error envelope를 유지하며 main-thread scheduling, pixel presentation이나 drag 성능 변경을 주장하지 않는다.

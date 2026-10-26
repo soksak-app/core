@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-188: Preserve the live Wails view after a successful generation-qualified theme delivery. Remove the remaining invalid lifecycle end call from postViewGeneration. The owning ready-delivery regression fails before correction and passes afterward with no false end record; actual end owners still pass. Keep stale-generation cancellation and delivery-error behavior unchanged.
+
 - F212.16: Complete local process-label acceptance from the owning corrections, sidecar startup evidence and current non-activating native label check. Preserve the two existing publication gates and their IDs under F212.15. Host environment delivery removal is complete; public delivery and Activity Monitor-specific rendering are not claimed.
 
 - F239-187: Release the temporary native view-channel JSON string through its autorelease pool after synchronous callback delivery. The owning lifetime regression fails before correction and passes afterward with exact decoded-message equality and existing channel behavior. Preserve the explicit encoding-error envelope; no main-thread scheduling, pixel presentation or drag performance change is claimed.

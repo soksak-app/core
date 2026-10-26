@@ -6927,6 +6927,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-188",
+    implementation: [{ file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) postViewGeneration(" }],
+    tests: [{ file: "packages/host/wailsv3/src/view_lifecycle_test.go", id: "TestReadyViewDeliveryDoesNotEndTheView" }],
+    expected: "Successful generation-qualified delivery leaves the view live and writes no false end record.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-187",
     implementation: [{ file: "native/darwin/src/document_view.m", symbol: "NSString *sp_document_view_message_json(id body)" }],
     tests: [{ file: "native/darwin/tests/view_channel_test.m", id: "view message encoding releases its temporary JSON string" }],

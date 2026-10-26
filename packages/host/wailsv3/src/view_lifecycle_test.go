@@ -74,6 +74,7 @@ type lifecyclePlatform struct {
 	// closedImages holds the image regions that were closed, in order.
 	closedImages []unsafe.Pointer
 	ended        map[unsafe.Pointer]func()
+	posted       []string
 	// joins holds the native joins of the views, in the order of their joins.
 	joins []*viewJoin
 }
@@ -133,6 +134,7 @@ func (p *lifecyclePlatform) AddDocumentScript(document unsafe.Pointer, source st
 
 // PostDocument accepts the message, so a ready message of the view can post the theme to it.
 func (p *lifecyclePlatform) PostDocument(document unsafe.Pointer, value string) bool {
+	p.posted = append(p.posted, value)
 	return true
 }
 
@@ -189,6 +191,41 @@ func TestViewProcessEndClosesTheViewAndCreatesItAgain(t *testing.T) {
 	}
 	if _, err := s.documents.Get(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err != nil {
 		t.Fatalf("the view created again is not recorded: %v", err)
+	}
+}
+
+// contract: host.view.killed.is-written-on-every-end
+func TestReadyViewDeliveryDoesNotEndTheView(t *testing.T) {
+	isolateTraceRecords(t)
+	clock := &fakeClock{}
+	s, fake, _ := newLifecycleSurfaces(t, clock)
+	channel, ok := s.documents.view("probe-surface")
+	if !ok {
+		t.Fatal("the created view has no channel")
+	}
+
+	s.viewReceived(
+		"probe-surface",
+		fake.created[0],
+		"probe",
+		channel.generation,
+		`{"message":{"event":"view.ready","plugin":"probe","document":"ui/page.html"}}`,
+	)
+	if len(fake.posted) != 1 {
+		t.Fatalf("messages posted to the ready view: %d, want the initial theme", len(fake.posted))
+	}
+	var posted map[string]any
+	if err := json.Unmarshal([]byte(fake.posted[0]), &posted); err != nil {
+		t.Fatalf("posted message %q is not JSON: %v", fake.posted[0], err)
+	}
+	if posted["event"] != "theme" {
+		t.Fatalf("posted event %v, want theme", posted["event"])
+	}
+	if !s.viewRecords().live["probe-surface"] {
+		t.Error("successful theme delivery ended the view")
+	}
+	if got := bufferedTraces(t, "host.view.killed"); len(got) != 0 {
+		t.Fatalf("host.view.killed records after successful delivery: %v, want none", got)
 	}
 }
 

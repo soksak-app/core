@@ -1799,7 +1799,6 @@ func (s *Surfaces) postViewGeneration(surface string, generation uint64, message
 	if !ready {
 		return fmt.Errorf("%s has no ready document", surface)
 	}
-	s.viewRecords().recordEnd(surface)
 	return nil
 }
 
