@@ -34,7 +34,8 @@ const MARKER_REACH = 5;
  * limits an entrance to the files it is local to. `name` is the event of an entrance that stores one event and gives no name argument
  * (`event` is then the position of its first argument). `levelGroup` is the group of the pattern that holds the level of an entrance
  * that names it in the call, and `relative` marks an entrance whose event name lacks the prefix `plugin.<plugin>.`. `prefix` is
- * the text that the entrance adds before the name of its call (the performance trace adds `page.trace.`).
+ * the text that the entrance adds before the name of its call (the performance trace adds `page.trace.`); `contextFields` are
+ * fields that the plugin runtime adds after the producer supplies its object.
  */
 const ENTRANCES = {
   go: [
@@ -57,8 +58,8 @@ const ENTRANCES = {
     { re: /(?:\bemitEvent|\bbatcher(?:\?)?\.emit|\bbatcher(?:\?)?\.emitAndWait|\.emitAndWait)\s*\(/g, level: 0, event: 1, fields: 2 },
     // The entrance of a plugin (docs/spec/plugins.md#logging): the level is the member (`runtime.log.info(`) or a computed key
     // (`runtime.log[level](`), and the event name has no `plugin.<plugin>.` prefix, which the runtime adds.
-    { re: /\bruntime\.log\.(error|warn|info|debug|trace)\s*\(/g, levelGroup: 1, relative: true, event: 0, fields: 1 },
-    { re: /\bruntime\.log\[[^\]]+\]\s*\(/g, relative: true, event: 0, fields: 1 },
+    { re: /\bruntime\.log\.(error|warn|info|debug|trace)\s*\(/g, levelGroup: 1, relative: true, event: 0, fields: 1, contextFields: ['surface'] },
+    { re: /\bruntime\.log\[[^\]]+\]\s*\(/g, relative: true, event: 0, fields: 1, contextFields: ['surface'] },
   ],
   m: [
     { re: /\bsp_event\s*\(/g, class: 0, level: 1, event: 2, fields: 3 },
@@ -350,6 +351,7 @@ export function sitesOf(path, text, emitters = {}) {
         levels: entrance.fixed ? [entrance.fixed] : entrance.levelGroup ? [match[entrance.levelGroup]] : levelsOf(source, args[entrance.level]),
         class: entrance.class === undefined ? null : classOf(source, args[entrance.class]),
         fields: fieldsOf(source, args[entrance.fields]),
+        contextFields: entrance.contextFields ?? [],
       });
     }
   }
@@ -476,13 +478,15 @@ export function emitFindings(catalog, sources, catalogPath, config = { emitters:
         const declared = shape?.properties ?? []; // default: an invalid shape declares no usable fields; catalogFindings reports the schema error.
         if (!site.fields.open) {
           if (shape?.requiredByBranch.length > 1) {
-            const emitted = new Set(site.fields.keys);
+            const emitted = new Set([...site.fields.keys, ...site.contextFields]);
             if (!shape.requiredByBranch.some((required) => required.every((field) => emitted.has(field)))) {
               report(site.line, `${site.name} does not provide the required fields of any declared JSON Schema branch`);
             }
           } else {
             for (const field of shape?.required ?? []) { // default: an invalid shape declares no usable required fields; catalogFindings reports the schema error.
-              if (!site.fields.keys.includes(field)) report(site.line, `${site.name} lacks the field ${field} that the catalog requires`);
+              if (!site.fields.keys.includes(field) && !site.contextFields.includes(field)) {
+                report(site.line, `${site.name} lacks the field ${field} that the catalog requires`);
+              }
             }
           }
         }

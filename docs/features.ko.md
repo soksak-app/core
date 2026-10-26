@@ -22,6 +22,8 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
+- [o] F239-197 — P0, F212.14-5 연결: Source event checker에서 runtime.log context가 제공하는 surface 필드를 인식한다. Red: 소유 catalog fixture가 유효한 runtime.log producer의 필수 surface 누락을 보고한다. Green: literal·computed runtime.log entrance는 context 필드로 통과하고 generic producer는 계속 실패한다. 실제 context 값은 runtime payload validation이 검증한다. 해당 Editor source-SDK 검사는 통과한다.
+
 - [ ] F239-195 — P0, F239-194 및 HWP H23.5 연결: Editor page가 참조하는 studio bridge가 포함된 HWP candidate를 설치하고 editor startup을 검증한다. 양쪽 host는 ui/studio-host.js가 plugin package에 없어 실패한다. 소유 HWP의 실제 packed-page graph 검사가 누락을 재현하고 수정 후 통과한다. 수정한 candidate 설치와 해당 앱 확인은 개발 수정이 끝난 뒤 수행한다.
 
 - [o] F239-194 — P0, F239-193 및 F212.10-hwp-2 연결: Browser-compatible HWP module graph를 설치하고 diagnostic startup을 검증한다. HWP browser module graph가 `node:assert/strict`를 import하여 양쪽 host startup이 실패했다. HWP H23.3은 소유 graph Red/Green으로 해당 의존성을 제거하며 H23.4는 별도 consumer Red/Green으로 필수 view clock을 전달한다. Candidate installer가 양쪽 host의 diagnostic package를 교체하고 설치 파일 92개 모두를 archive와 비교한다. macOS 26.6.2 arm64에서 양쪽 host가 애플리케이션 오류 없이 시작하고 추적된 diagnostic drag identity 사례가 2/2 통과하며 공통 log audit과 정상 종료도 통과한다. View 네 개의 측정은 별도 F212.14-5 소유의 status-read 순서 오류로 계속 실패한다. Release나 publication을 주장하지 않는다.

@@ -468,6 +468,28 @@ test('runtime.log entrances of plugin events are resolved by the plugin prefix',
   assert.deepEqual(checker.censusFindings(new Map([['ui/a.js', 'export function f(runtime) {\n  try { g(); } catch (error) { runtime.log.error("input.key", {}); }\n}\n']]), config, rules), []);
 });
 
+test('plugin runtime contextual fields satisfy catalog requirements only at runtime.log entrances', () => {
+  const plugin = {
+    schema: 3,
+    layers: ['plugin'],
+    events: {
+      'plugin.fixture.view.content_frame': {
+        layer: 'plugin', class: 'frame', level: 'trace',
+        fields: fieldSchema({ sequence: { type: 'integer' }, surface: { type: 'string' } }, ['sequence', 'surface']),
+      },
+    },
+  };
+  const source = (call) => new Map([['ui/diagnostics.js', `function record(runtime, sequence) {\n  ${call}\n}\n`]]);
+  assert.deepEqual(checker.emitFindings(plugin,
+    source('runtime.log.trace("view.content_frame", { sequence })'), 'events.json'), []);
+  assert.deepEqual(checker.emitFindings(plugin,
+    source('runtime.log[level]("view.content_frame", { sequence })'), 'events.json'), []);
+  assert.deepEqual(checker.emitFindings(plugin,
+    source('emitEvent("trace", "plugin.fixture.view.content_frame", { sequence })'), 'events.json'), [
+    'ui/diagnostics.js:2: plugin.fixture.view.content_frame lacks the field surface that the catalog requires',
+  ], 'a generic event producer does not own the runtime surface field');
+});
+
 // A Rust sidecar writes events through methods of its own writer. The declaration file of the repository (`emitters`, by language)
 // names each method with the positions of its arguments, so the check finds the sites without naming a repository.
 const EMITTERS = {

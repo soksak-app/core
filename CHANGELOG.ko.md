@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-197: runtime.log entrance의 필수 event 필드 검사에 runtime이 제공하는 surface context를 포함한다. Generic producer의 명시적 필수 필드 검사와 runtime payload validation은 유지한다. 소유 회귀 검사는 수정 전 실패하고 수정 후 통과하며 해당 Editor source-SDK 검사도 통과한다.
+
 - F212.14-5-4: macOS WebKit의 실제 byte-footprint header를 읽고 PID·단위·page 크기를 검증한다. 보존한 실제 출력 fixture가 수정 전 실패하고 수정 후 parser 및 소유 검사 10개 모두 통과한다. 다른 metric이나 이전 형식 fallback 없이 누락·중복·잘못된 행을 거부한다.
 
 - F212.14-5-3: 미시작 native document를 실제 process 공유와 byte 측정에서 제외하고 관측한 process/history 0 상태는 유지한다. Browser history를 공개 진단 응답에서 읽는다. 수정 전 process·history 회귀 검사가 실패하고 수정 후 영향받는 소유 검사 25개가 통과한다.
