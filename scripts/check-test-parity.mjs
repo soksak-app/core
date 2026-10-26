@@ -6943,6 +6943,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-5-28",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "if (!surfaceLayoutRenderAtDisplayRate(view))" }],
+    tests: [{ file: "native/darwin/tests/document_core_root_test.m", id: "a document region renders at the display refresh rate (preference %d)" }],
+    expected: "Attached document regions use the display-rate policy while background plugin-host creation remains independent.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.14-5-27",
     implementation: [{ file: "native/darwin/src/document_view.m", symbol: "surfaceLayoutRenderAtDisplayRate(view)" }],
     tests: [{ file: "native/darwin/tests/document_core_root_test.m", id: "a plugin root view renders at the display refresh rate (preference %d)" }],

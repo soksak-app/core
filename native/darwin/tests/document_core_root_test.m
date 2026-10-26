@@ -135,8 +135,8 @@ int main(void) { @autoreleasepool {
         check([steps[@"granted"] isEqual:@"fail"] && [steps[@"served"] isEqual:@"fail"],
             [NSString stringWithFormat:@"a region cannot import or fetch a granted core path: %@", steps]);
         check(resolverCalls.count == 0, [NSString stringWithFormat:@"a region does not call the core root resolver: %@", resolverCalls]);
-        check(surfaceLayoutPrefersNear60FPS(region) == 1,
-            [NSString stringWithFormat:@"a document region keeps its existing rendering preference (%d)",
+        check(surfaceLayoutPrefersNear60FPS(region) == 0,
+            [NSString stringWithFormat:@"a document region renders at the display refresh rate (preference %d)",
                 surfaceLayoutPrefersNear60FPS(region)]);
         sp_document_close(region);
     }

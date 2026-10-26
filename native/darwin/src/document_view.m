@@ -1255,8 +1255,8 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     if (isView && !channelSource) return NULL;
     SPDocumentView *view = pluginView(directory, folder, plugin, channelSource, isView, changed, context);
     if (!view) return NULL;
-    if (isView && !surfaceLayoutRenderAtDisplayRate(view)) {
-        setDocumentFailure(@"the plugin root view cannot render at the display rate");
+    if (!surfaceLayoutRenderAtDisplayRate(view)) {
+        setDocumentFailure(@"the document webview cannot render at the display rate");
         [view release];
         return NULL;
     }

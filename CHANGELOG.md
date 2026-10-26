@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-28: Render attached document regions at the display refresh rate, matching plugin roots and the app DOM. Use the existing WebKit preference without coupling region presentation waits to the root transaction. The actual region factory owner fails at preference 1 before correction and passes with root and region both 0; background plugin hosts retain their default. Captured geometry acceptance remains separate.
+
 - F212.14-5-27: Apply the existing display-rate WebKit preference when creating a plugin root view. Fresh root configurations retained the near-60fps default on a 120Hz display even though the app DOM used the display rate. The actual factory owner fails before correction and passes afterward with root preference 0 and unchanged document-region preference 1. Background plugin hosts retain their existing policy; unavailable support returns an explicit creation error.
 
 - F212.14-5-26: Select a Browser layout source frame after the resize request by exact match with the final visible native viewport projection. The placement trace records a later frame readback after the native setter; using that timestamp as a source-time lower bound rejected a matching frame. The preserved consumer regression fails before correction and the Browser owner file passes afterward; geometry and display-deadline criteria remain unchanged.
