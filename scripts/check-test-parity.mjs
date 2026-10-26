@@ -6920,6 +6920,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.17-2",
+    implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: 'let errors: Vec<_> = buffered_fields("host.record.error")' }],
+    tests: [{ file: "packages/host/tauriv2/src/modals.rs", id: "a_poisoned_modal_record_is_recovered_when_it_is_read" }],
+    expected: "Modal recovery preserves unrelated lifecycle records without replacing the shared event writer.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-186",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: 'payload["params"] = message' }],
     tests: [{ file: "packages/host/tauriv2/tests/documents/view_decode_test.rs", id: "a_view_call_transfers_the_owned_params_tree_without_copying_it" }],

@@ -623,18 +623,16 @@ pub(crate) fn update(window: &Window, request: UpdateRequest) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::{Modal, Overlay, OverlayContent};
-    use crate::event_log;
-    use crate::event_record::use_host_event_log;
-    use std::sync::Arc;
+    use crate::event_record::buffered_fields;
     use std::sync::PoisonError;
-    use std::time::Duration;
 
     // contract: modal.state.poisoned-lock-is-recovered, host.locks.poisoned-state-is-recovered
     #[test]
     fn a_poisoned_modal_record_is_recovered_when_it_is_read() {
-        let config = crate::test_folder::Folder::new();
-        let writer = Arc::new(event_log::start_host(config.path()).unwrap());
-        use_host_event_log(Some(Arc::clone(&writer)));
+        let lifecycle = crate::view_lifecycle::ViewLifecycle::default();
+        let surface = "modal-recovery-unrelated-view";
+        lifecycle.track(surface, 7, "probe", "ui/page.html", true, Default::default());
+        lifecycle.record_end(surface);
         let overlay = Overlay::default();
         // default: the test poisons the lock afterwards, so the read recovers the poisoned state; the panic hook
         // records the panic.
@@ -667,14 +665,22 @@ mod tests {
             overlay.dialog(),
             "the mode of the open modal was lost while the modal record lock was poisoned"
         );
-        writer.flush(Duration::from_secs(5)).unwrap();
-        use_host_event_log(None);
-        let text = std::fs::read_to_string(writer.path()).unwrap();
-        let errors = text
-            .lines()
-            .filter(|line| line.contains("host.record.error") && line.contains("modal state"))
-            .count();
-        assert_eq!(errors, 0, "log {text}");
+        let errors: Vec<_> = buffered_fields("host.record.error")
+            .into_iter()
+            .filter(|fields| fields.to_string().contains("modal state"))
+            .collect();
+        assert!(errors.is_empty(), "modal state errors: {errors:?}");
+        let unrelated: Vec<_> = buffered_fields("host.view.killed")
+            .into_iter()
+            .filter(|fields| fields["surface"] == surface)
+            .collect();
+        assert_eq!(
+            unrelated,
+            vec![serde_json::json!({
+                "plugin": "probe", "surface": surface, "unsent": true,
+            })],
+            "modal recovery must preserve unrelated lifecycle records"
+        );
     }
 }
 

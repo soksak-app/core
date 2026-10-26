@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.17-2: Keep modal recovery tests from replacing the process-global event writer. A deterministic regression first loses an unrelated lifecycle record; reading buffered modal errors without attaching or detaching a writer preserves it after correction. The modal and original lifecycle owners pass. Preserve state, mode and no-error assertions without changing production logging or claiming a full-suite repeat.
+
 - F212.14: Record the current rebuilt-host benchmark under the observed 2560 x 1440, scale-1, 60 Hz display mode. Both hosts report the matching refresh rate and measure every captured frame, but exceed all unchanged cadence and latency targets. Preserve the earlier 120 Hz cohorts separately; no controlled display or implementation improvement is claimed. Log audits, host/service termination and installation/frontmost restoration pass.
 
 - F239-186: Transfer the decoded Tauri view-call params into the relay envelope instead of cloning and reserializing their Value tree. The ownership regression fails before correction and passes afterward; seven existing call/decode owners pass. Keep validation, cancellation, cids, default null params and open-call tracking unchanged. Current diagnostic host samples identify the copied path without establishing end-to-end latency improvement; performance targets remain open.
