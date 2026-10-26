@@ -11,10 +11,10 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 16개와 waiting 37개인 53개이며 임시 bypass 다섯 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 16개와 waiting 36개인 52개이며 임시 bypass 다섯 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
 - **입력/menu acceptance와 연결된 parent: 9** — F239-47-32/-33; F212.12-2, F212.12-2-4, F212.12-2-1-2, F212.12-2-2/-3; F238-b/-3
-- **보고된 실패와 과거 종료 감사: 23** — F239-47-30/-4; F212.1-2-2; F212.10-hwp-2, F212.10-core-3/-5; F212.12-2-2-4-8; F212.17-2; F239-32; F266.1부터 F266.13; F239-78
+- **보고된 실패와 과거 종료 감사: 22** — F239-47-30/-4; F212.1-2-2; F212.10-hwp-2, F212.10-core-3/-5; F212.12-2-2-4-8; F212.17-2; F239-32; F266.1부터 F266.3 및 F266.5부터 F266.13; F239-78
 - **성능 측정: 4** — F212.1, F212.7a, F212.9a, F212.14
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15; F212.16/-14/-15; F238-c-11/-11-1; F239-29/-29-1
 - **집계 요구사항과 미완료 작업 register: 8** — F160, F160.29, F161, F212, F212.10, F212.12, F212.12-1-10, F240
@@ -2880,7 +2880,7 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
   - [ ] F266.1 — P1, F69에 연결: host/page stall 종료 반복 조건을 검증한다. 원래 `host.windows` 실패는 load average 217의 전체 실행에서 발생했고 이후 전체 실행 5회는 load 4–18 및 94–110이었다. load 218에서 다시 발생한 Wails 건에는 host와 WebContent sample이 기록됐지만, 해당 기록을 추가한 뒤 비슷한 load에서 전체 실행 3회가 있었는지는 명시되지 않았다. owning 전체 window suite를 3회 실행하고 그중 한 번은 원래 실패와 비슷한 load에서 실행하며 재발 시 host/page sample과 timeout 단계를 보존한다.
   - [ ] F266.2 — P1, F77에 연결: Tauri zsh redraw 실패의 종료 반복 조건을 검증한다. 실패는 load average가 최대 218이었던 전체 실행에서 발생했고 이후 전체 실행 5회의 load는 94–110까지였다. owning 전체 window suite를 3회 실행하고 그중 한 번은 원래 실패와 비슷한 load에서 실행하며 재발 시 terminal 화면 행과 resize/presentation 기록을 보존한다.
   - [ ] F266.3 — P1, F78에 연결: Tauri files bookmark 실패의 종료 반복 조건을 검증한다. 실패는 load average가 최대 218이었던 전체 실행에서 발생했고 이후 전체 실행 5회의 load는 94–110까지였다. owning 전체 window suite를 3회 실행하고 그중 한 번은 원래 실패와 비슷한 load에서 실행하며 재발 시 마지막 `files.bookmarks` 값과 native click/command 기록을 보존한다.
-  - [ ] F266.4 — P1, F134에 연결: owning Rust host suite에서 간헐적 reply-flush 실패를 검증한다. 기록에는 test binary 동시 실행 240회가 있지만 전체 host suite 실행은 없고 원래 CI 실패 load도 없다. 원래 CI load가 보존됐는지 확인하고, 가능하면 그와 비슷한 load를 포함해 diagnostics host suite 전체 실행 3회를 기록하며 재발 시 child reply 파일과 stop timeout 근거를 보존한다.
+  - [o] F266.4 — P1, F134 연결: 소유 fixture에서 reply-flush 발견을 감사한다. 현재 첫 scenario는 child를 해제한 뒤 reply file을 관측하기 전에 종료하므로 stop 뒤에 scheduling된 child는 write queue가 drain됐어도 관측을 잃을 수 있다. 수정 전에 제어된 fixture 경계로 지연된 receipt를 재현하고 drain scenario에서는 cleanup 전에 receipt 응답을 요구하며 별도의 stop-flush scenario를 유지한다. 영향받는 소유 사례만 검증한다. 원래 CI 부하와 전체 suite 세 번의 비재현은 여전히 미입증이며 인과관계가 있는 fixture 수정으로 이를 추론하지 않는다. 감사 완료: 변경 전 stop-before-receipt 경계를 그대로 추출한 코드가 제어된 pending-child-copy assertion에 실패한다(Red). 수정한 drain fixture는 child receipt Message와 전체 reply/close file을 관측한 뒤 종료하며 변경하지 않은 stop-flush scenario를 포함해 현재 flush owner 네 개가 모두 통과한다(Green). 입증한 fixture 관측 소실 경로를 제거하지만 정확한 과거 CI 원인이나 부하를 확정하지 않는다. 전체 suite 세 번의 실행을 주장하지 않고 해당 fixture 경로의 비재현 gate를 수정 근거로 대체하며 F134는 그대로 둔다.
   - [ ] F266.5 — P0, F252-2-1에 연결: owning Go package suite에서 native-cause 실패를 검증한다. 기록에는 focused test 반복 31회가 있지만 `platform/darwin` package 전체 suite 실행은 없고 load 약 77에서 난 실패의 메시지가 보존되지 않았다. package 전체 suite를 3회 실행하고 그중 한 번은 비슷한 load에서 실행하며 재발 시 test 출력과 native cause를 보존한다.
   - [ ] F266.6 — P1, F142에 연결: terminal fullscreen-fit finding을 owning window suite에서 검증한다. 기록은 focused check 연속 3회를 보고하지만 owning suite 전체 3회는 아니며 원래 실패 load도 없다. window suite 전체 3회를 기록하고 원래 load를 복구할 수 있으면 그 조건의 실행을 포함하며 재발 시 rows, columns, region geometry와 종료 presentation을 보존한다.
   - [ ] F266.7 — P1, F147에 연결: browser color-scheme finding을 owning window suite에서 검증한다. 기록은 visible/hidden focused check 3회를 보고하지만 owning suite 전체 3회는 아니며 원래 실패 load도 없다. window suite 전체 3회를 기록하고 원래 load를 복구할 수 있으면 그 조건의 실행을 포함하며 재발 시 각 document의 `prefers-color-scheme` 값과 presentation을 보존한다.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F266.4: Cleanup이 읽지 않은 output을 가진 child를 종료하기 전에 drain fixture의 child receipt를 관측한다. 제어된 pending-copy 회귀 검사가 stop-before-receipt에서 실패하며 bounded sidecar receipt event로 모든 필수 reply와 close를 확인한 뒤 종료한다. 변경하지 않은 shutdown-flush 사례를 포함해 flush owner 네 개가 모두 통과한다. 과거 CI 원인/부하의 한계와 이전 종료 기록을 유지하며 추가 전체 suite acceptance를 주장하지 않는다.
+
 - F266.14: 이후의 결정적 fixture 수정으로 blocked-writer 종료 감사를 완료한다. 원래 full-crate 실행 부하 25–34가 약 40의 비재현을 입증하지 못한다는 한계를 유지한다. 수정된 fixture는 큰 write의 진행을 확인한 뒤 queue를 채우며 현재 four-MiB owner는 정확한 refusal 두 개로 1/1 통과한다. 이전 종료 기록은 그대로 두고 추가 전체 suite나 과거 부하 검증을 주장하지 않는다.
 
 - F240: 남은 체크리스트 행을 현재 기능 cohort 다섯 개와 구분해 집계한다. 미완료 54행 전체를 입력/menu acceptance, 보고된 실패와 과거 감사, 성능, package 설치/publication 및 집계 요구사항으로 설명한다. Parent 행의 포함을 명시하고 모든 개별 상태를 유지하며 기능 acceptance로 publication이나 과거 종료를 추론하지 않는다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F266.4: Observe the drain fixture child receipts before cleanup can terminate its unread output. A controlled pending-copy regression fails with stop-before-receipt; bounded sidecar receipt events now confirm all required replies and closes before stopping. All four flush owners pass, including the unchanged shutdown-flush case. Preserve the historical CI cause/load limitation and the earlier closed record; no additional full-suite acceptance is claimed.
+
 - F266.14: Complete the blocked-writer closure audit through the later deterministic fixture correction. Preserve the limitation that the original full-crate runs at load 25–34 do not prove non-recurrence at about 40. The corrected fixture waits for the in-progress large write before filling its queue; the current four-MiB owner passes 1/1 with exactly two refusals. Keep the earlier closed record unchanged and claim no additional full-suite or historical load coverage.
 
 - F240: Reconcile the remaining checklist rows with the five current functional cohorts. Account for all 54 open rows across input/menu acceptance, reported failures and historical audits, performance, package installation/publication, and aggregate requirements. Include parent rows explicitly and preserve every individual state; functional acceptance does not imply publication or historical closure.

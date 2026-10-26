@@ -736,6 +736,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F266.4",
+    implementation: [
+      { file: "packages/host/tauriv2/tests/flush_test.rs", symbol: "fn finish_drain_scenario(" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/flush_test.rs", id: "the_drain_fixture_receives_pending_child_output_before_cleanup" },
+      { file: "packages/host/tauriv2/tests/flush_test.rs", id: "every_pending_reply_is_flushed_after_the_queue_drains" },
+      { file: "packages/host/tauriv2/tests/flush_test.rs", id: "order_is_correct_when_stop_flushes_buffered_messages" },
+    ],
+    expected: "The drain fixture observes pending child output before cleanup, while the separate shutdown scenario still verifies stop flushing.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.12-2-3",
     implementation: [
       { file: "e2e/view-input.test.mjs", symbol: "const clickAddress =" },

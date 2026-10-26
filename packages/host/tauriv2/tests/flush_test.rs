@@ -133,6 +133,40 @@ fn a_buffered_close_is_recorded() {
     }
 }
 
+// The drain scenario observes receipt and then ends its child; the separate stop scenario tests shutdown flushing.
+fn finish_drain_scenario(
+    stop: impl FnOnce(),
+    receive: impl FnOnce() -> Result<String, String>,
+) -> Result<String, String> {
+    let result = receive();
+    stop();
+    result
+}
+
+#[test]
+fn the_drain_fixture_receives_pending_child_output_before_cleanup() {
+    let child_running = std::cell::Cell::new(true);
+    let received = finish_drain_scenario(
+        || child_running.set(false),
+        || {
+            // Fault injection: the child is scheduled to copy its pending reply only at receipt observation.
+            if child_running.get() {
+                Ok("pending reply".to_string())
+            } else {
+                Err(
+                    "cleanup terminated the child before its pending reply was observed"
+                        .to_string(),
+                )
+            }
+        },
+    );
+    assert_eq!(received, Ok("pending reply".to_string()));
+    assert!(
+        !child_running.get(),
+        "the fixture must end its child after receipt"
+    );
+}
+
 /// The scenario of the queue that fills, the replies and closes that wait for it, and the drain.
 fn every_pending_reply_scenario() {
     let directory = folder::Folder::new();
@@ -150,7 +184,7 @@ fn every_pending_reply_scenario() {
 
     let received = directory.path().join("received");
     let script = format!(
-        "#!/bin/sh\nread _ < {}\nexec cat > {}\n",
+        "#!/bin/sh\nread _ < {}\nwhile IFS= read -r line; do\n  printf '%s\\n' \"$line\" >> {}\n  printf '%s\\n' '{{\"surface\":\"s1\",\"body\":\"received\"}}'\ndone\n",
         fifo_str,
         received.display()
     );
@@ -164,7 +198,7 @@ fn every_pending_reply_scenario() {
     )
     .unwrap();
 
-    let (owner, _events) = owner("a", "/p");
+    let (owner, events) = owner("a", "/p");
 
     // First register the surface.
     for s in &["s1", "s2", "s3"] {
@@ -230,12 +264,56 @@ fn every_pending_reply_scenario() {
         .open(&fifo_path)
         .unwrap();
     let mut fifo_file = fifo_file;
-    let _ = fifo_file.write_all(b"go\n");
+    fifo_file
+        .write_all(b"go\n")
+        .expect("release the drain fixture");
     drop(fifo_file);
 
-    sidecars.stop();
-
-    let data = std::fs::read_to_string(received).unwrap();
+    let data = finish_drain_scenario(
+        || sidecars.stop(),
+        || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            let mut missing = vec![
+                r#""name":"a""#,
+                r#""name":"b""#,
+                r#""name":"c""#,
+                r#""sequence":4"#,
+                r#""surface":"s2","root":"/p","closed":true"#,
+                r#""surface":"s3","root":"/p","closed":true"#,
+            ];
+            loop {
+                let message = events
+                    .recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
+                    .map_err(|error| {
+                        format!(
+                            "the drain fixture did not acknowledge every reply and close: {error}"
+                        )
+                    })?;
+                let body: Value = serde_json::from_str(message.body.get())
+                    .map_err(|error| format!("invalid drain fixture receipt: {error}"))?;
+                if body.get("event").and_then(Value::as_str) == Some("connection") {
+                    // Connection notices precede the fixture's receipts; a failed connection is an error.
+                    if body.get("connected").and_then(Value::as_bool) != Some(true) {
+                        return Err(format!("the drain fixture connection failed: {body}"));
+                    }
+                    continue;
+                }
+                if message.surface != "s1" || body != Value::String("received".to_string()) {
+                    return Err(format!(
+                        "unexpected drain fixture receipt for {}: {body}",
+                        message.surface
+                    ));
+                }
+                let data = std::fs::read_to_string(&received)
+                    .map_err(|error| format!("read acknowledged drain fixture output: {error}"))?;
+                missing.retain(|value| !data.contains(value));
+                if missing.is_empty() {
+                    return Ok(data);
+                }
+            }
+        },
+    )
+    .unwrap();
 
     // Verify that all three responses were sent.
     for want in &[r#""name":"a""#, r#""name":"b""#, r#""name":"c""#] {
