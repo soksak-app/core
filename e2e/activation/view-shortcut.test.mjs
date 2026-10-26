@@ -8,7 +8,10 @@ import { fresh } from "../fixture.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: Command-zero in a focused view runs the native text-size menu command`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    await fresh(s, {
+      log: { input: "info", lifecycle: "info", call: "debug" },
+      reads: ["native.input.key_down", "native.record.info", "native.window.first_responder", "page.command"],
+    });
     await keepCommonSettings(s);
     const browser = (await s.get("core.surfaces")).find(item => item.plugin === "browser" && item.visible);
     assert.ok(browser, "the fixture has no visible browser view");
@@ -27,6 +30,15 @@ for (const app of Object.values(APPS)) {
       "the native address press did not focus its view");
     await s.until("browser.address.text", value => value.focused,
       "the address control did not report focus", { surface: browser.surface });
+    const menu = await s.get("host.menu");
+    const resetItem = menu.menus.flatMap(item => item.items).find(item => item.key === "cmd+0");
+    assert.ok(resetItem, `the active menu has no Command+0 item: ${JSON.stringify(menu)}`);
+    const beforeShortcut = await s.get("host.window");
+    assert.equal(beforeShortcut.active, true, "the shortcut window is not active");
+    assert.equal(beforeShortcut.key, true, "the shortcut window is not key");
+    assert.equal(beforeShortcut.responder?.surface, browser.surface, "the browser view is not the first-responder owner");
+    t.diagnostic(`before Command+0: window=${JSON.stringify(beforeShortcut)}`);
+    t.diagnostic(`before Command+0: menu item=${JSON.stringify(resetItem)}`);
     await s.until("core.text", value => value.scope.kind === "card" && value.scope.card === card.id,
       "the view did not select its owning text-size scope");
     const original = (await s.get("browser.address.text", browser.surface)).value;

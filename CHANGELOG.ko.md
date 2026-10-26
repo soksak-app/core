@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-205: Native document-view key equivalent를 application menu가 먼저 처리하도록 하고, 일치하지 않는 key는 기존 WebKit responder에 전달한다. 실제 responder owner는 수정 전 Command-zero에 실패하고 수정 후 한 번의 matching action과 unmatched/non-Command fallthrough를 포함한 assertion 여덟 개를 통과한다. 양 host application acceptance는 미완료다.
+
 - F212.14-5-31: HWP first-content capture를 root presentation 뒤에도 기존 host baseline과 300 ms 동안 유지한다. Root presentation은 독립 document의 paint를 입증하지 않는다. 가장 이른 recorded content timestamp와 모든 first-display 기준을 유지한다. 기존 collector는 지연된 content owner의 capture를 자르며 수정 후 capture/validation owner 2/2와 descriptor 전달 1/1이 통과한다. Application acceptance는 별도로 남는다.
 
 - F239-203: Format gate가 지적한 Tauri host 파일 여덟 개를 edition 2024 서식으로 복원한다. `skip_children=true`로 해당 파일만 정리했고 이후 gate가 통과하며 동작은 바뀌지 않는다.

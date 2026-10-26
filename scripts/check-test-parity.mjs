@@ -6950,6 +6950,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-205",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "- (BOOL)performKeyEquivalent:(NSEvent *)event" }],
+    tests: [{ file: "native/darwin/tests/document_menu_key_equivalent_test.m", id: "the document view handles Command+0 through the application menu" }],
+    expected: "Native document responders give the application menu priority and retain unmatched key fallthrough.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.14-5-31",
     implementation: [
       { file: "e2e/view-metrics-collection.mjs", symbol: "export async function openRecordedView(" },

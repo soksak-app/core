@@ -678,6 +678,12 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
 
 @implementation SPDocumentView
 
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    NSMenu *mainMenu = NSApp.mainMenu;
+    if (mainMenu && [mainMenu performKeyEquivalent:event]) return YES;
+    return [super performKeyEquivalent:event];
+}
+
 #ifdef SOKSAK_DIAGNOSTIC
 - (void)restoreViewportMarker {
     if (!self.viewportMarkerEnabled) return;

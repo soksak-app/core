@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-205: Give the application menu the first opportunity to handle native document-view key equivalents, then preserve WebKit responder handling for unmatched keys. The actual responder owner fails Command-zero before correction and passes all eight assertions afterward, including exactly one matching action and unmatched/non-Command fallthrough. Two-host application acceptance remains pending.
+
 - F212.14-5-31: Keep HWP first-content capture running after root presentation for the existing host baseline plus 300 ms. Root presentation does not prove independent document paint. Preserve the earliest recorded content timestamp and every first-display criterion; the unchanged collector truncates the delayed-content owner, and the corrected capture/validation owners pass 2/2 with descriptor forwarding 1/1. Application acceptance remains separate.
 
 - F239-203: Restore edition 2024 Rust formatting in the eight Tauri host files with formatting differences. Format only those files with `skip_children=true`; the gate passes afterward and behavior is unchanged.
