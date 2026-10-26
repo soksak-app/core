@@ -6957,6 +6957,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-5-32",
+    implementation: [{ file: "e2e/benchmark/cases/hwp.mjs", symbol: "export async function collectHwpReclaimAfterMotion(" }],
+    tests: [{ file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP reclaim captures the opened group before reclaim closes the warm motion view" }],
+    expected: "HWP reclaim restores the initial declared card width before closing and reopening its measured group.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.14-5-31",
     implementation: [
       { file: "e2e/view-metrics-collection.mjs", symbol: "export async function openRecordedView(" },

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-32: Restore the initial declared HWP card width before reclaim and reopening so motion checks do not cross the editor's responsive-toolbar boundary during memory measurements. The unchanged collector fails the restoration owner; the corrected owner passes. Wails and Tauri pass the focused three-run reclaim case with natural document text, initial-only histories, no cache retention and the existing 90%/10s limits. Export and reuse the existing reclaim evaluator without changing its body or thresholds.
+
 - F239-205: Give the application menu the first opportunity to handle native document-view key equivalents, then preserve WebKit responder handling for unmatched keys. The actual responder owner fails Command-zero before correction and passes all eight assertions afterward, including exactly one matching action and unmatched/non-Command fallthrough. Two-host application acceptance remains pending.
 
 - F212.14-5-31: Keep HWP first-content capture running after root presentation for the existing host baseline plus 300 ms. Root presentation does not prove independent document paint. Preserve the earliest recorded content timestamp and every first-display criterion; the unchanged collector truncates the delayed-content owner, and the corrected capture/validation owners pass 2/2 with descriptor forwarding 1/1. Application acceptance remains separate.

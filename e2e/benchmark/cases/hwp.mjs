@@ -121,6 +121,20 @@ export async function collectHwpReclaimAfterMotion(t, s, descriptor, start, evid
   const surface = start.warmDisplay.surface;
   assert.ok(start.opened.some((view) => view.surface === surface),
     `HWP motion view ${surface} is missing from the opening set passed to reclaim`);
+  assert.ok(typeof start.card === "string" && start.card.length > 0,
+    "HWP reclaim requires its original measurement card");
+  assert.ok(Number.isFinite(start.initialCardWidth) && start.initialCardWidth > 0,
+    `HWP reclaim has invalid initial card width ${JSON.stringify(start.initialCardWidth)}`);
+  const grid = await s.get("core.grid");
+  const card = grid?.cards?.find((item) => item.id === start.card);
+  assert.ok(Number.isFinite(card?.w) && card.w > 0,
+    `HWP reclaim card ${start.card} has no current positive width`);
+  if (card.w !== start.initialCardWidth) {
+    await s.run("core.grid.size", { card: start.card, axis: "x", size: start.initialCardWidth });
+    const { displayed } = await s.presented();
+    assert.ok(Number.isFinite(displayed) && displayed >= 0,
+      `HWP reclaim card width restoration has invalid presentation time ${JSON.stringify(displayed)}`);
+  }
   return collect(t, s, descriptor, start.opened, evidence);
 }
 
@@ -470,6 +484,11 @@ export async function collectHwpViewMeasurements(t, s, { baselineMs } = {}) {
   }
   const descriptor = await hwpViewDescriptor(s, (message) => t.diagnostic(message), baselineMs + 300);
   const start = await collectViewStartAndMemory(t, s, descriptor, { viewCount: 3 });
+  const openingGrid = await s.get("core.grid");
+  const openingCard = openingGrid?.cards?.find((item) => item.id === start.card);
+  assert.ok(Number.isFinite(openingCard?.w) && openingCard.w > 0,
+    `HWP measurement card ${start.card} has no initial positive width`);
+  start.initialCardWidth = openingCard.w;
   const surface = start.warmDisplay.surface;
   const settings = (await s.get("core.settings")).values;
   const cornerRadiusPt = effectiveCardCornerRadiusPt(settings);

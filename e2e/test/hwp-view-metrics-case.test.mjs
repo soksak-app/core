@@ -327,14 +327,31 @@ test("HWP reclaim evidence reads exact root and studio histories from the diagno
 test("HWP reclaim captures the opened group before reclaim closes the warm motion view", { timeout: 5000 }, async () => {
   const opened = ["hwp-a", "hwp-b", "hwp-c", "hwp-d", "hwp-e", "hwp-warm"];
   const live = new Set(opened);
+  const sequence = [];
+  let currentWidth = 785.5;
   let groupAtReclaim;
   const session = {
+    async get(name) {
+      assert.equal(name, "core.grid");
+      return { cards: [{ id: "card-a", w: currentWidth }] };
+    },
     async run(command, args) {
-      assert.fail(`the HWP case closed ${args?.tab ?? command} before reclaim owned the initial group`);
+      assert.equal(command, "core.grid.size");
+      assert.deepEqual(args, { card: "card-a", axis: "x", size: 760 });
+      sequence.push("restore-width");
+      currentWidth = args.size;
+    },
+    async presented() {
+      sequence.push("presented");
+      return { displayed: 25 };
     },
   };
-  const start = { warmDisplay: { surface: "hwp-warm" }, opened: opened.map((surface) => ({ surface })) };
+  const start = { card: "card-a", initialCardWidth: 760,
+    warmDisplay: { surface: "hwp-warm" }, opened: opened.map((surface) => ({ surface })) };
   await hwpCase.collectHwpReclaimAfterMotion({}, session, {}, start, {}, async (_t, _s, _descriptor, views) => {
+    assert.equal(currentWidth, 760, "HWP reclaim ran after layout/drag without restoring the initial card width");
+    assert.deepEqual(sequence, ["restore-width", "presented"],
+      "HWP reclaim closed views before the initial card width was presented");
     groupAtReclaim = [...live].sort();
     assert.deepEqual(views.map(({ surface }) => surface).sort(), [...opened].sort());
     for (const { surface } of views) live.delete(surface);

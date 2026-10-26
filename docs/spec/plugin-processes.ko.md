@@ -52,7 +52,7 @@ Root document 크기는 CSS viewport 차원이며 native placement frame은 소�
 
 두 Editor 측정은 일반 Editor view 하나와 hidden Editor instance만 담은 diagnostic view 하나의 전체 process-group physical footprint 절대값을 사용한다. Hidden reference는 일반·warm Editor view를 모두 닫은 뒤 시작한다. 선언된 시작 모드는 일반 Editor 생성을 건너뛰어야 하며 readiness가 지정 문서, 줄 수와 initial-only history를 보고한다. 기록에 process identity와 sharing member를 포함하며 살아 있는 무관한 surface와 공유하는 reference는 비격리 상태로 거부한다. WebKit/runtime 메모리와 보존된 engine allocation을 포함한다. Before/after process 차이는 hidden Editor footprint가 아니며 유효한 감소를 component 비용으로 바꾸지 않는다. 50 MB 규칙은 계속 일반 view footprint를 사용한다.
 
-HWP first-content recording은 첫 root presentation부터 기존 host DOM mount baseline과 300 ms가 지난 시점까지 계속한다. Root presentation은 독립 document의 표시 pixel을 보장하지 않는다. 이 observation window는 capture 범위만 제공하며 acceptance는 가장 이른 captured content timestamp를 사용하고 new process의 별도 five-start median 보정을 유지한다.
+HWP first-content recording은 첫 root presentation부터 기존 host DOM mount baseline과 300 ms가 지난 시점까지 계속한다. Root presentation은 독립 document의 표시 pixel을 보장하지 않는다. 이 observation window는 capture 범위만 제공하며 acceptance는 가장 이른 captured content timestamp를 사용하고 new process의 별도 five-start median 보정을 유지한다. HWP reclaim 및 reopen 측정은 layout과 drag 검사 후 초기 선언 card width를 복원하여 responsive editor chrome이 비교 viewport를 바꾸지 않도록 한다.
 
 기준 (iii)은 열린 view가 시작 요청 직전에 이미 실행 중인 process에 배정된 경우에만 적용한다. 측정은 요청 전 process snapshot과 배정된 view process를 기록한다. 새 process에 배정된 열기는 (iii)을 통과가 아닌 해당 없음으로 보고하고 (iii-b)로 측정하며 process 재사용을 강제하지 않는다. 녹화한 pixel은 (viii)(a)의 표시 정렬을 입증하고 소유 layout transaction 검사는 card와 native 배치의 연결을 별도로 입증한다. 캡처 frame은 인과적 commit identifier를 입증하지 않는다.
 

@@ -155,7 +155,7 @@ function evaluateTotal(value) {
   return { viewCount, oneViewBytes: oneView.totalBytes, allViewsBytes: allViews.totalBytes, limitBytes, passed: true };
 }
 
-function evaluateReclaim(value) {
+export function evaluateReclaim(value) {
   const runs = arrayAt(value, "reclaim", { length: 3 });
   return runs.map((run, index) => {
     const path = `reclaim[${index}]`;
