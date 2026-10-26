@@ -38,29 +38,49 @@ export function observeViewDocumentFrames({ document, log, ResizeObserver, reque
     if (!Array.isArray(entries) || !entries.some((entry) => entry?.target === root)) {
       throw new Error("view frame ResizeObserver did not report documentElement");
     }
-    // ResizeObserver runs once per rendering update; its scheduled frame runs before the next observation round.
-    if (pendingFrame !== null) throw new Error("view frame ResizeObserver delivered before its next animation frame");
     const resizeAtMs = now();
     if (!Number.isFinite(resizeAtMs) || resizeAtMs < 0) {
       throw new Error("view frame ResizeObserver has no finite source timestamp");
     }
-    pendingFrame = requestAnimationFrame((frameTimeMs) => {
-      pendingFrame = null;
-      if (stopped) return;
-      if (!Number.isFinite(frameTimeMs) || frameTimeMs < 0) {
-        throw new Error("view frame animation callback has no finite timestamp");
+    if (pendingFrame !== null) {
+      if (resizeAtMs < pendingFrame.resizeAtMs) {
+        throw new Error("view frame ResizeObserver timestamp moved backwards");
       }
-      if (frameTimeMs < resizeAtMs) throw new Error("view frame animation timestamp precedes ResizeObserver time");
-      const rect = root.getBoundingClientRect();
-      if (!Number.isFinite(rect.width) || rect.width < 0 || !Number.isFinite(rect.height) || rect.height < 0) {
-        throw new Error("view frame documentElement has invalid dimensions");
+      if (!Number.isSafeInteger(pendingFrame.resizeCount + 1)) {
+        throw new Error("view frame ResizeObserver delivery count exceeded the safe integer range");
       }
-      log.trace("view.content_frame", {
-        sequence: sequence++, width: rect.width, height: rect.height,
-        documentTimeOriginMs: timeOriginMs, resizeAtMs, frameTimeMs,
+      pendingFrame.resizeAtMs = resizeAtMs;
+      pendingFrame.resizeCount += 1;
+      return;
+    }
+    const frame = { id: null, firstResizeAtMs: resizeAtMs, resizeAtMs, resizeCount: 1 };
+    pendingFrame = frame;
+    try {
+      frame.id = requestAnimationFrame((frameTimeMs) => {
+        if (pendingFrame === frame) pendingFrame = null;
+        if (stopped) return;
+        if (!Number.isFinite(frameTimeMs) || frameTimeMs < 0) {
+          throw new Error("view frame animation callback has no finite timestamp");
+        }
+        if (frameTimeMs < frame.resizeAtMs) throw new Error("view frame animation timestamp precedes ResizeObserver time");
+        const rect = root.getBoundingClientRect();
+        if (!Number.isFinite(rect.width) || rect.width < 0 || !Number.isFinite(rect.height) || rect.height < 0) {
+          throw new Error("view frame documentElement has invalid dimensions");
+        }
+        log.trace("view.content_frame", {
+          sequence: sequence++, width: rect.width, height: rect.height,
+          documentTimeOriginMs: timeOriginMs, firstResizeAtMs: frame.firstResizeAtMs,
+          resizeAtMs: frame.resizeAtMs, resizeCount: frame.resizeCount, frameTimeMs,
+        });
       });
-    });
-    if (!Number.isInteger(pendingFrame)) throw new Error("requestAnimationFrame returned an invalid frame identifier");
+    } catch (error) {
+      if (pendingFrame === frame) pendingFrame = null;
+      throw error;
+    }
+    if (!Number.isInteger(frame.id)) {
+      if (pendingFrame === frame) pendingFrame = null;
+      throw new Error("requestAnimationFrame returned an invalid frame identifier");
+    }
   });
   pendingObserveFrame = requestAnimationFrame(() => {
     pendingObserveFrame = null;
@@ -77,7 +97,7 @@ export function observeViewDocumentFrames({ document, log, ResizeObserver, reque
       pendingObserveFrame = null;
     }
     if (pendingFrame !== null) {
-      cancelAnimationFrame(pendingFrame);
+      cancelAnimationFrame(pendingFrame.id);
       pendingFrame = null;
     }
   };

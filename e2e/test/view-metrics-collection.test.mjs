@@ -102,12 +102,31 @@ test("the exported lifecycle collector forwards the selected card ID to its firs
   assert.equal(recordCalls, 1, "the selected card ID did not reach openRecordedView before recording");
 });
 
+test("view content-frame events preserve coalesced resize provenance", { timeout: 5000 }, () => {
+  const row = { event: "plugin.fixture.view.content_frame", ts_us: 2_000_000,
+    mono_ns: 3_000_000, surface: "view-1", fields: { sequence: 0, documentTimeOriginMs: 1999,
+      firstResizeAtMs: 0.1, resizeAtMs: 0.2, resizeCount: 2, frameTimeMs: 0.5, width: 300, height: 200 } };
+  const [frame] = viewContentFrameEvents([row], "fixture", "view-1");
+  assert.deepEqual({ firstResizeAtMs: frame.firstResizeAtMs, resizeAtMs: frame.resizeAtMs,
+    resizeCount: frame.resizeCount }, { firstResizeAtMs: 0.1, resizeAtMs: 0.2, resizeCount: 2 });
+  for (const fields of [
+    { ...row.fields, firstResizeAtMs: undefined },
+    { ...row.fields, firstResizeAtMs: 0.3 },
+    { ...row.fields, resizeCount: 0 },
+    { ...row.fields, resizeCount: 1.5 },
+    { ...row.fields, resizeCount: 1 },
+  ]) {
+    assert.throws(() => viewContentFrameEvents([{ ...row, fields }], "fixture", "view-1"),
+      /firstResizeAtMs|resizeCount/);
+  }
+});
+
 test("generic view content-frame events correlate page frames with the host clocks", { timeout: 5000 }, () => {
   const row = { event: "plugin.fixture.view.content_frame", ts_us: 2_000_000,
     mono_ns: 3_000_000, surface: "view-1", fields: { sequence: 4, documentTimeOriginMs: 1999,
-      resizeAtMs: 0.2, frameTimeMs: 0.5, width: 300, height: 200 } };
+      firstResizeAtMs: 0.2, resizeAtMs: 0.2, resizeCount: 1, frameTimeMs: 0.5, width: 300, height: 200 } };
   assert.deepEqual(viewContentFrameEvents([row], "fixture", "view-1"), [{
-    sequence: 4, width: 300, height: 200, resizeAtMs: 0.2, frameTimeMs: 0.5,
+    sequence: 4, width: 300, height: 200, firstResizeAtMs: 0.2, resizeAtMs: 0.2, resizeCount: 1, frameTimeMs: 0.5,
     sourceTimeMs: 1999.5, timeMs: 2.5, hostArrivalTimeMs: 3, wallCorrelationMs: 0.5,
     source: { documentTimeOriginMs: 1999, ts_us: 2_000_000, mono_ns: 3_000_000 },
   }]);
@@ -118,7 +137,7 @@ test("generic view content-frame events correlate page frames with the host cloc
 test("generic view content-frame events accept the SDK's initial zero sequence", { timeout: 5000 }, () => {
   const rows = [0, 1].map((sequence, index) => ({ event: "plugin.fixture.view.content_frame",
     ts_us: 2_000_000 + index, mono_ns: 3_000_000 + index, surface: "view-1",
-    fields: { sequence, documentTimeOriginMs: 1999, resizeAtMs: 0.2 + index,
+    fields: { sequence, documentTimeOriginMs: 1999, firstResizeAtMs: 0.2 + index, resizeAtMs: 0.2 + index, resizeCount: 1,
       frameTimeMs: 0.5 + index, width: 300, height: 200 } }));
   assert.deepEqual(viewContentFrameEvents(rows, "fixture", "view-1").map(({ sequence }) => sequence), [0, 1]);
 });
@@ -127,7 +146,7 @@ test("view cadence uses source frame times instead of variable host IPC arrival 
   const rows = [1, 2].map((sequence, index) => ({ event: "plugin.fixture.view.content_frame",
     ts_us: 2_100_000 + index * 100_000, mono_ns: 1_100_000_000 + index * 100_000_000,
     surface: "view-1", fields: { sequence, documentTimeOriginMs: 1999,
-      resizeAtMs: 1 + index * 16, frameTimeMs: 1 + index * 16, width: 300, height: 200 } }));
+      firstResizeAtMs: 1 + index * 16, resizeAtMs: 1 + index * 16, resizeCount: 1, frameTimeMs: 1 + index * 16, width: 300, height: 200 } }));
   const frames = viewContentFrameEvents(rows, "fixture", "view-1");
   assert.equal(frames[1].timeMs - frames[0].timeMs, 16);
   assert.equal(frames[1].hostArrivalTimeMs - frames[0].hostArrivalTimeMs, 100);
@@ -211,7 +230,7 @@ test("generic content trace starts before an action and returns only scoped sour
     calls.push(["action"]);
     appendFileSync(join(logs, "host-1-1.jsonl"), `${JSON.stringify({ level: "debug", event:
       "plugin.fixture.view.content_frame", ts_us: 2_000_000, mono_ns: 3_000_000, seq: 1,
-      surface: "view-1", fields: { sequence: 1, documentTimeOriginMs: 1999, resizeAtMs: 0.2,
+      surface: "view-1", fields: { sequence: 1, documentTimeOriginMs: 1999, firstResizeAtMs: 0.2, resizeAtMs: 0.2, resizeCount: 1,
         frameTimeMs: 0.5, width: 300, height: 200 } })}\n`);
     return { gestureEndedAtMs: 2 };
   });

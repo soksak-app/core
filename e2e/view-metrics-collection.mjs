@@ -85,7 +85,8 @@ export function viewContentFrameEvents(events, plugin, surface) {
   const selected = events.filter((event) => event?.event === name && (event.surface ?? event.fields?.surface) === surface);
   let priorSequence = -1;
   return selected.map((event) => {
-    const { sequence, documentTimeOriginMs, resizeAtMs, frameTimeMs, width, height } = event.fields ?? {};
+    const { sequence, documentTimeOriginMs, firstResizeAtMs, resizeAtMs, resizeCount,
+      frameTimeMs, width, height } = event.fields ?? {};
     assert.ok(Number.isSafeInteger(sequence) && sequence >= 0 && sequence > priorSequence,
       `${name} sequence must increase for ${surface}`);
     priorSequence = sequence;
@@ -94,6 +95,11 @@ export function viewContentFrameEvents(events, plugin, surface) {
     assert.ok(Number.isFinite(documentTimeOriginMs) && documentTimeOriginMs > 0,
       `${name} has invalid documentTimeOriginMs`);
     assert.ok(Number.isFinite(resizeAtMs) && resizeAtMs >= 0, `${name} has invalid resizeAtMs`);
+    assert.ok(Number.isFinite(firstResizeAtMs) && firstResizeAtMs >= 0 && firstResizeAtMs <= resizeAtMs,
+      `${name} firstResizeAtMs must be at or before resizeAtMs`);
+    assert.ok(Number.isSafeInteger(resizeCount) && resizeCount >= 1, `${name} has invalid resizeCount`);
+    assert.ok(resizeCount !== 1 || firstResizeAtMs === resizeAtMs,
+      `${name} firstResizeAtMs must equal resizeAtMs for resizeCount 1`);
     assert.ok(Number.isFinite(frameTimeMs) && frameTimeMs >= resizeAtMs,
       `${name} frameTimeMs must be at or after resizeAtMs`);
     assert.ok(Number.isFinite(width) && width > 0, `${name} has invalid width`);
@@ -104,7 +110,7 @@ export function viewContentFrameEvents(events, plugin, surface) {
     const hostArrivalTimeMs = event.mono_ns / 1_000_000;
     const mappedTimeMs = hostArrivalTimeMs - wallCorrelationMs;
     return {
-      sequence, width, height, resizeAtMs, frameTimeMs,
+      sequence, width, height, firstResizeAtMs, resizeAtMs, resizeCount, frameTimeMs,
       sourceTimeMs,
       timeMs: mappedTimeMs,
       hostArrivalTimeMs,

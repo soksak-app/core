@@ -139,7 +139,7 @@ function layoutFailureSession(root, captureDirectory) {
         fields: { phase: "placed", surface: "view-a", x: 0, y: 0, w: 50, h: 40, visible: true } };
       const content = { level: "debug", seq: 2, event: "plugin.hwp.view.content_frame",
         ts_us: 10100, mono_ns: 10100000, surface: "view-a", fields: { sequence: 1,
-          documentTimeOriginMs: 10, resizeAtMs: 0.1, frameTimeMs: 0.1, width: 50, height: 40 } };
+          documentTimeOriginMs: 10, firstResizeAtMs: 0.1, resizeAtMs: 0.1, resizeCount: 1, frameTimeMs: 0.1, width: 50, height: 40 } };
       appendFileSync(join(logs, "host-1-1.jsonl"), `${JSON.stringify(placement)}\n${JSON.stringify(content)}\n`);
     },
     async presented() { return { displayed: 15 }; },
@@ -202,7 +202,7 @@ function layoutDeadlineSession(root, captureDirectory, lastFrameTimeMs) {
         fields: { phase: "placed", surface: "view-a", x: 10, y: 8, w: 85, h: 64, visible: true } };
       const content = { level: "debug", seq: 2, event: "plugin.hwp.view.content_frame",
         ts_us: 10100, mono_ns: 10100000, surface: "view-a", fields: { sequence: 1,
-          documentTimeOriginMs: 10, resizeAtMs: 0.1, frameTimeMs: 0.1, width: 85, height: 64 } };
+          documentTimeOriginMs: 10, firstResizeAtMs: 0.1, resizeAtMs: 0.1, resizeCount: 1, frameTimeMs: 0.1, width: 85, height: 64 } };
       appendFileSync(join(logs, "host-1-1.jsonl"), `${JSON.stringify(placement)}\n${JSON.stringify(content)}\n`);
     },
     async presented() { return { displayed: 15 }; },

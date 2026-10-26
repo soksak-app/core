@@ -96,6 +96,8 @@ export function terminalSourceContentFrame(source, frameIndex, displayFrame, nat
     "terminal source content dimensions are invalid");
   assert.ok(nativePlacement && nativePlacement.surface && nativePlacement.framePt
     && nativePlacement.webKitViewport, "terminal source frame has no actual native placement projection");
+  assert.ok(Number.isFinite(source?.source?.documentTimeOriginMs) && source.source.documentTimeOriginMs > 0,
+    "terminal source frame has no document clock origin");
   return {
     sourceSequence: source.sequence,
     frameIndex,
@@ -105,9 +107,11 @@ export function terminalSourceContentFrame(source, frameIndex, displayFrame, nat
     nativePlacement,
     source: {
       sequence: source.sequence,
+      firstResizeAtMs: source.firstResizeAtMs,
       resizeAtMs: source.resizeAtMs,
+      resizeCount: source.resizeCount,
       frameTimeMs: source.frameTimeMs,
-      documentTimeOriginMs: source.documentTimeOriginMs,
+      documentTimeOriginMs: source.source.documentTimeOriginMs,
       ts_us: source.source?.ts_us,
       mono_ns: source.source?.mono_ns,
     },

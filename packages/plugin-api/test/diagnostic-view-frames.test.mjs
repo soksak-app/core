@@ -73,9 +73,34 @@ test("the diagnostic observer logs document size only after the next animation f
   f.callbacks.delete(frameId);
   callback(16.5);
   assert.deepEqual(f.calls, [{ event: "view.content_frame", fields: {
-    sequence: 0, width: 420, height: 315, documentTimeOriginMs: 1200, resizeAtMs: 10.25, frameTimeMs: 16.5,
+    sequence: 0, width: 420, height: 315, documentTimeOriginMs: 1200,
+    firstResizeAtMs: 10.25, resizeAtMs: 10.25, resizeCount: 1, frameTimeMs: 16.5,
   } }]);
   assert.equal(f.callbacks.size, 0, "the next-frame callback is one-shot");
+  stop();
+});
+
+test("a repeated resize before a pending animation frame is represented by that frame", { timeout: 5000 }, () => {
+  const f = fixture();
+  const stop = start(f);
+  activate(f);
+  f.setNow(10.25);
+  f.observer()([{ target: f.document.documentElement }]);
+  assert.equal(f.callbacks.size, 1, "the first root resize schedules one animation frame");
+
+  f.root.rect = { width: 440, height: 330 };
+  f.setNow(20.5);
+  assert.doesNotThrow(() => f.observer()([{ target: f.document.documentElement }]),
+    "another ResizeObserver delivery while the frame is pending must not escape as a page error");
+  assert.equal(f.callbacks.size, 1, "coalesced resize delivery must not schedule a duplicate animation frame");
+
+  const [frameId, callback] = [...f.callbacks.entries()][0];
+  f.callbacks.delete(frameId);
+  callback(26.5);
+  assert.deepEqual(f.calls, [{ event: "view.content_frame", fields: {
+    sequence: 0, width: 440, height: 330, documentTimeOriginMs: 1200,
+    firstResizeAtMs: 10.25, resizeAtMs: 20.5, resizeCount: 2, frameTimeMs: 26.5,
+  } }]);
   stop();
 });
 
