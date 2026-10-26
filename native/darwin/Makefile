@@ -224,6 +224,9 @@ $(BUILD)/capture_resize_test: src/capture.m
 $(BUILD)/capture_presentation_test: tests/capture_presentation_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
 
+$(BUILD)/image_region_capture_presentation_test: tests/image_region_capture_presentation_test.m tests/support/no_activation.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h tests/support/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+
 $(BUILD)/image_capture_match_test: tests/image_capture_match_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
@@ -315,6 +318,7 @@ NATIVE_TESTS = observe_test \
   capture_storage_test \
   capture_metadata_test \
   capture_presentation_test \
+  image_region_capture_presentation_test \
   image_capture_match_test \
   capture_frame_identity_test \
   capture_frame_identity_capture_test \
@@ -337,6 +341,9 @@ test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 
 test-capture-frame-identity: $(BUILD)/capture_frame_identity_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_frame_identity_test
+
+test-image-region-p86-reproduction: $(BUILD)/image_region_capture_presentation_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) image_region_capture_presentation_test,--p86-2x
 
 test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_stop_intake_test

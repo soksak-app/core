@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-47-30: Add an owning image-region capture comparator through the existing capture pipeline. Verify opaque IOSurface and layer CGImage provider bytes, preserve color profiles, and compare the actual-scale capture exactly. The current 1× run matches; the explicit historical 2× reproduction rejects incompatible capture geometry. No production color correction or historical cause is established.
+
 - F239-192: Serialize registry-removal clearing through the existing project transition lane so a replacement project cannot load before the clear finishes. The owning regression fails before correction and all 15 project-switch tests pass afterward. This does not identify the historical exposure failure cause.
 
 - F212.14-5: Add shared recorded-pixel, complete-process-group and source-frame measurement collection with four installed-view consumers. Preserve raw measurements before threshold evaluation, retain failure artifacts, compare all four edges against independently declared composition slots, and keep source cadence separate from captured-frame geometry. Owning tests cover initial source sequence zero, many-to-one source/capture mapping, source rather than arrival clocks, and the first captured layout change. Application performance acceptance remains pending.

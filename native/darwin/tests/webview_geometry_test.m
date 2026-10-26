@@ -8,6 +8,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
+#import "support/scaled_window.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "input_inject.h"
@@ -53,30 +54,6 @@ static id evaluate(WKWebView *view, NSString *script) {
     }];
     until(^BOOL { return done; });
     return [result autorelease];
-}
-
-@interface NSWindow (SPWindowResolution)
-- (void)_setWindowResolution:(CGFloat)resolution;
-@end
-
-// The check window. The scale changes only to values that the check sets.
-@interface SPScaledWindow : NSWindow
-@end
-@implementation SPScaledWindow
-- (void)_adjustWindowResolution {}
-@end
-
-static void notifyBackingChange(NSView *view) {
-    [view viewDidChangeBackingProperties];
-    for (NSView *child in view.subviews) notifyBackingChange(child);
-}
-
-static void setScale(SPScaledWindow *window, CGFloat scale) {
-    CGFloat old = window.backingScaleFactor;
-    [window _setWindowResolution:scale];
-    [NSNotificationCenter.defaultCenter postNotificationName:NSWindowDidChangeBackingPropertiesNotification
-        object:window userInfo:@{NSBackingPropertyOldScaleFactorKey: @(old)}];
-    notifyBackingChange(window.contentView);
 }
 
 @interface SPLoaded : NSObject <WKNavigationDelegate>
@@ -433,7 +410,7 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
     testWindow = window;
-    setScale(window, 1);
+    SPSetScaledWindowResolution(window, 1);
     WKWebView *main = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
     [window.contentView addSubview:main];
@@ -461,7 +438,7 @@ int main(void) { @autoreleasepool {
         "</body></html>");
 
     // At 2x, a half-point height lies on a device pixel boundary. At 1x, it is fitted to the inner device pixel.
-    setScale(window, 2);
+    SPSetScaledWindowResolution(window, 2);
     webviewSetFrame(surface, 40, 30, 300, 200.5);
     verify(window, surface, 2, 200.5, @"at 2x");
     // The document region is a subview of the surface. Its size without the margins is 300-10-30 × 200.5-20-40. The
@@ -492,12 +469,12 @@ int main(void) { @autoreleasepool {
     webviewSetSurfaceOverlays(surface, NULL, 0);
     check(plane.layer.mask == nil, @"native pixels are shown again when no overlay is visible");
 
-    setScale(window, 1);
+    SPSetScaledWindowResolution(window, 1);
     webviewSetFrame(surface, 40, 30, 300, 200.5);
     verify(window, surface, 1, 200.5, @"after changing to 1x");
     verifyRegion(region, 1, 260, 140.5, @"after changing to 1x");
 
-    setScale(window, 2);
+    SPSetScaledWindowResolution(window, 2);
     webviewSetFrame(surface, 40, 30, 300, 200.5);
     verify(window, surface, 2, 200.5, @"after changing back to 2x");
     verifyRegion(region, 2, 260, 140.5, @"after changing back to 2x");

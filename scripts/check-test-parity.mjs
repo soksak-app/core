@@ -142,6 +142,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   ], [
     "native/darwin/tests/document_view_test.m",
     "native/darwin/tests/image_region_test.m",
+    "native/darwin/tests/image_region_capture_presentation_test.m",
     "native/darwin/tests/image_nonce_ownership_test.m",
     "native/darwin/tests/image_capture_match_test.m",
     "native/darwin/tests/presentation_order_test.m",
