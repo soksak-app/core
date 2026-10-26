@@ -47,4 +47,6 @@ OS 입력기는 활성 애플리케이션의 키 창만 처리하므로 입력�
 
 IME 기능 acceptance는 승인된 전체 입력 gesture, 동일 window의 일치하는 AppKit reference document, 일관된 terminal 상태 및 각 입력 단계의 녹화된 glyph와 underline 증거를 요구한다. Capture cadence는 별도 성능 측정으로 기록한다. ScreenCaptureKit API가 요청한 update 간격을 보장하지 않으므로 고정 sample-gap 목표는 기능 acceptance 기준이 아니다. 잘린 recording, frame 누락, decode하지 못한 identity, 필요한 단계 증거 누락 및 잘못된 입력은 계속 실패한다.
 
+기존 terminal-focus activation consumer는 click, 정확한 native input 및 AppKit document와 완전한 callback-to-frame 대응을 검증한다. Raw callback timing과 cadence 초과를 관측값으로 유지한다. 이 consumer는 glyph나 underline pixel을 측정하지 않으며 전체 IME visual-proof consumer를 대체하지 않는다.
+
 Baseline 활성화 거부는 후속 관측에서 baseline이 전면이어도 검사 실패로 유지한다. 실패 기록은 요청 전 frontmost process, 거부 후 관측한 process 및 원래 활성화 오류를 포함한다. 거부 후 관측도 실패하면 두 오류를 모두 보존한다.

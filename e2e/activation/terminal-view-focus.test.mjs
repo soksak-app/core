@@ -5,10 +5,11 @@ import { basename, join } from "node:path";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { captureCadence, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
+import { assertInputTraceDelivery } from "./terminal-ime-document.mjs";
 
 const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
@@ -540,9 +541,8 @@ async function recordGesture(s, t, name, action) {
       }, {});
     t.diagnostic(`${name} callback trace: ${JSON.stringify({ callbacks: callbackStatus.length, statusCounts, noFrameCounts,
       over33ms: missedBound, overBoundTiming })}`);
-    const measuredLongestGap = Math.max(...gaps.map(({ milliseconds }) => milliseconds));
-    assert.ok(result.longestGap <= 33, `${name}: frame gap ${result.longestGap}ms exceeds 33ms`);
-    assert.ok(measuredLongestGap <= 33, `${name}: decoded frame gap ${measuredLongestGap}ms exceeds 33ms`);
+    const cadence = captureCadence(result.longestGap, decoded.map(({ time }) => time));
+    t.diagnostic(`${name} capture cadence measurement: ${JSON.stringify(cadence)}`);
     t.diagnostic(`${name}: ${JSON.stringify({ frames: result.count, longestGap: result.longestGap })}`);
   } catch (error) {
     captureValidationError = error;
@@ -773,10 +773,11 @@ for (const app of Object.values(APPS)) {
           imeTracing = false;
           const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
           const sessionError = (await s.get("terminal.session", surface)).error;
-          const nativeInserts = trace.entries.filter((entry) => entry.kind === "native-insert")
-            .map((entry) => entry.text).join("");
-          const ptyInserts = trace.entries.filter((entry) => entry.kind === "terminal-input" &&
-            entry.input.type === "insert").map((entry) => entry.input.text).join("");
+          const transactions = assertInputTraceDelivery(trace.entries);
+          const nativeInserts = transactions.native.flatMap(transaction => transaction.actions)
+            .filter(action => action.type === "insert").map(action => action.text).join("");
+          const ptyInserts = transactions.terminal.flatMap(transaction => transaction.actions)
+            .filter(action => action.type === "insert").map(action => action.text).join("");
           const stageInput = terminalStages.map(({ rows, cursor, compose }) =>
             visibleInputBeforeCursor({ lines: rows }, cursor, prompt, compose.text));
           return { terminalStages, stageInput, committedLines, afterSpace, committedCompose,

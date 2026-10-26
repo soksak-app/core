@@ -680,6 +680,28 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.12-2-2-4",
+    implementation: [{ file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "async function recordGesture(" }],
+    tests: [
+      { file: "packages/window-check/test/frame.test.mjs", id: "complete capture cadence over 33 ms remains a measurement" },
+      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "a terminal click accepts the same native keys as its AppKit reference" },
+      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" },
+    ],
+    expected: "The approved input path and complete callback artifacts pass functional acceptance while cadence remains a separate measurement.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F212.12-2-2-4-1",
+    implementation: [{ file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "async function recordGesture(" }],
+    tests: [
+      { file: "packages/window-check/test/frame.test.mjs", id: "complete capture cadence over 33 ms remains a measurement" },
+      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "a terminal click accepts the same native keys as its AppKit reference" },
+      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" },
+    ],
+    expected: "The approved input path and complete callback artifacts pass functional acceptance while cadence remains a separate measurement.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-185",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "page field truncation must contain" }],
     tests: [

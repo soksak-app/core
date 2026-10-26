@@ -47,4 +47,6 @@ Native geometry and pixel checks include complete gestures at the requested capt
 
 IME functional acceptance requires the complete approved input gesture, matching same-window AppKit reference documents, coherent terminal states, and recorded glyph and underline proof for every input stage. Capture cadence is recorded as a separate performance measurement. A fixed ScreenCaptureKit sample-gap target is not a functional acceptance criterion because the API does not guarantee its requested update interval. Truncated recordings, missing frames, undecoded identities, missing required stage proof, and incorrect input remain failures.
 
+The older terminal-focus activation consumer verifies the click, exact native input and AppKit documents, and complete callback-to-frame correspondence. It retains raw callback timing and cadence exceedances as observations. This consumer does not measure glyph or underline pixels and does not replace the full IME visual-proof consumer.
+
 A refused baseline activation remains a failed check even if a later observation finds the baseline frontmost. The failure records the frontmost process before the request, the observed process after refusal, and the original activation error. If the post-refusal observation also fails, the failure preserves both errors.

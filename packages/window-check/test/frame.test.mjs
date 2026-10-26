@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32 } from "node:zlib";
-import { frames, readFrame } from "../frame.mjs";
+import { captureCadence, frames, readFrame } from "../frame.mjs";
 
 function fixture(block = Buffer.concat([Buffer.from([0xf0, 17]), Buffer.from(Array.from({ length: 32 }, (_, i) => i))])) {
   const header = Buffer.alloc(80);
@@ -57,4 +57,14 @@ test("frames are listed in frame number order after the number passes four digit
   writeFileSync(join(directory, "frame-10002.bgra.partial"), "");
   assert.deepEqual(frames(directory).map((path) => path.split("/").at(-1)),
     ["frame-9998.bgra", "frame-9999.bgra", "frame-10000.bgra", "frame-10001.bgra"]);
+});
+
+test("complete capture cadence over 33 ms remains a measurement", { timeout: 5000 }, () => {
+  assert.deepEqual(captureCadence(34, [100, 134, 167]), { reported: 34, measured: 34, gaps: [34, 33] });
+});
+
+test("capture cadence rejects missing or invalid timing evidence", { timeout: 5000 }, () => {
+  for (const [reported, times] of [[NaN, [1, 2]], [-1, [1, 2]], [1, [1]], [1, [2, 1]], [1, [1, Infinity]]]) {
+    assert.throws(() => captureCadence(reported, times), /capture.*(time|gap|interval|frame)/);
+  }
 });

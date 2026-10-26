@@ -56,3 +56,14 @@ export function pixel(frame, x, y) {
   const i = y * frame.stride + x * 4;
   return [frame.data[i + 2], frame.data[i + 1], frame.data[i]];
 }
+
+/** Measures reported and decoded capture intervals independently of functional proof. */
+export function captureCadence(reported, times) {
+  if (!Number.isFinite(reported) || reported < 0) throw new Error("capture reported frame gap is invalid");
+  if (!Array.isArray(times) || times.length < 2 || !times.every(time => Number.isFinite(time) && time >= 0)) {
+    throw new Error("capture requires at least two valid frame times");
+  }
+  const gaps = times.slice(1).map((time, index) => time - times[index]);
+  if (gaps.some(gap => gap < 0)) throw new Error("capture frame times are not ordered");
+  return { reported, measured: Math.max(...gaps), gaps };
+}

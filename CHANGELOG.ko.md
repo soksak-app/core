@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-2-2-4, F212.12-2-2-4-1: 승인된 양 host focus/native 문자 입력 및 callback-artifact acceptance를 완료한다. Obsolete insert record 대신 현재의 엄격한 input-transaction 검증을 재사용한다. Frame owner 16개 통과와 명시적인 잘못된 timing 거부를 유지하며 기존 기능/cadence 분리를 적용한다. Echo 및 모음 네 회/Space 사례가 전체 녹화 여덟 개의 decode frame 967개, 정확한 callback/file 대응, 수정된 로그 감사, 입력기/baseline 복원 및 정상 종료와 함께 통과한다. Source별 cadence 조사와 성능 acceptance는 열어 두며 glyph/underline 근거를 대체하지 않는다.
+
 - F239-185: 잘린 body를 원래 field로 취급하지 않고 로그 감사기가 기존 bounded page/plugin field envelope를 인식하도록 한다. 소유 fixture가 잘못된 body 누락 finding을 재현하고 수정 후 audit owner 39개가 모두 통과한다. 잘못된 envelope, 초과 UTF-8 head, 추가 field 및 일반 field 누락을 거부한다. 잘못된 finding 100개를 제거한 뒤 보존된 activation 실행의 로그 감사가 통과하며 독립적인 연속 모음 검사 실패는 그대로 유지한다.
 
 - F212.12-2-1-1: 기존 Editor 사례로 native first-mouse 수정의 양 host application-path 확인을 완료한다. macOS arm64에서 view click과 native input, 정확한 Command-S 저장, reload 및 수정된 tab 종료가 통과한다. 검사가 의도적으로 유발한 read-only save 오류를 선언하며 run-log 감사, 공통 baseline 복원 및 정상 종료가 통과한다. Activation acceptance나 제품 source 변경은 포함하지 않는다.
