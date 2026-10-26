@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-200: E2E assertion의 정적인 expected build-command 인자를 source 읽기와 구분한다. 실제 import·파일 읽기, 동적 기대값과 가려진 assertion에는 source boundary 규칙을 유지한다. 소유 오탐 회귀 검사는 수정 전 실패하고 수정 후 해당 policy 두 개와 window-source 감사가 통과한다.
+
 - F212.14-5-14: 양쪽 host의 연속 layout에서 raster 준비와 native commit 전에 앱 DOM presentation을 요구한다. 선택적 presentation 우회 flag를 제거하고 Tauri callback 등록 실패 시 layout을 취소하며 등록·취소 오류를 모두 보존한다. 순서 회귀 검사 두 개와 등록 실패 취소 검사는 수정 전 실패하고 수정 후 관련 host·workbench 소유 검사 열 개 모두 통과한다. 양쪽 최적화 diagnostic host 빌드와 관련 구조 검사가 통과하며 앱 측정은 별도로 남는다.
 
 - F239-199: Readiness와 contextual-event의 정확한 feature 연결을 복원한다. Package 설치와 과거 source 감사를 runtime capability와 구분하며 연결 없는 제품 capability는 계속 오류다. 기록 오류 다섯 개를 재현한 뒤 inventory 소유 검사와 구조 parity 감사가 통과한다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-200: Recognize static expected build-command arguments in E2E assertions without treating them as source reads. Keep actual imports, file reads, dynamic expected values and shadowed assertions subject to the source boundary rule. The owning false-positive regression fails before correction, then both focused policies and the window-source audit pass.
+
 - F212.14-5-14: Require app DOM presentation before raster readiness and native commit for continuous layouts in both hosts. Remove the optional presentation bypass flag and cancel Tauri layouts when callback registration fails while preserving both setup and cancellation errors. The two ordering regressions and setup-cancellation regression fail before correction; all ten affected host and workbench owner cases pass afterward. Both optimized diagnostic hosts build, and the affected structural checks pass. Application measurements remain separate.
 
 - F239-199: Restore exact readiness and contextual-event feature links. Classify package installations and historical source audits separately from runtime capabilities; unlinked product capabilities remain errors. The owning inventory checks and structural parity audit pass after reproducing five record errors.

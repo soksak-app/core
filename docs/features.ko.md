@@ -21,6 +21,8 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
+- [o] F239-200 — P0: Window-check 감사에서 정적인 expected build-command 인자와 source 접근을 구분한다. E2E 검사가 import한 node:assert 동등 비교 method에 전달하는 정적 기대값만 허용한다. 실제 import·읽기, expected 인자 내부의 호출·계산값과 가려진 assertion binding은 계속 거부한다. Red: 소유 fake build-command assertion이 source 접근으로 거부된다. Green: 해당 source-policy 소유 검사 두 개와 전체 window-source 감사가 통과한다.
+
 - [o] F239-199 — P0: 현재 readiness 소유 검사와 contextual-event 구현·검사 연결을 복원한다. 제품 근거 요구를 낮추지 않고 candidate 설치와 과거 source 감사를 비-capability 기록으로 분류한다. Red: 구조 inventory가 이전 검사 이름 하나와 완료 분류 누락 네 개를 보고한다. Green: inventory 소유 검사 39개와 최종 분류 소유 검사 2/2 및 구조 parity 감사가 통과한다. 이 검사들은 앱 동작을 실행하지 않는다.
 
 - [o] F239-198 — P0, F239-197, Editor E32/E33 및 Terminal P92-terminal 연결: 수정한 published event schema의 diagnostic candidate를 설치한다. 소유 strict-payload 회귀 검사가 schema 수정 전 실패하고 수정 후 통과한다. macOS 26.6.2 arm64에서 공개 installer가 양쪽 host configuration에 Editor 0.0.7과 Terminal 0.0.21을 선택하고 Editor 29개·Terminal 16개 파일 모두 candidate package와 바이트 단위로 일치한다. 기존 package는 보존한다. 애플리케이션 실행·성능 acceptance·publication은 주장하지 않는다.

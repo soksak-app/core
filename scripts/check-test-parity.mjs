@@ -6956,6 +6956,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-200",
+    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "function expectedPathLiteralRanges(" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit distinguishes expected path literals from source access" }],
+    expected: "Static imported assertion expectations are data; actual component source reads remain rejected.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-197",
     implementation: [{ file: "packages/plugin-api/events-check.js", symbol: "contextFields: ['surface']" }],
     tests: [{ file: "packages/plugin-api/test/events-check.test.mjs", id: "plugin runtime contextual fields satisfy catalog requirements only at runtime.log entrances" }],

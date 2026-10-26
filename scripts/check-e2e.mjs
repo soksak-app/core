@@ -36,7 +36,7 @@ const RULES = [
   // so a server or process remains and the check process does not end. The cleanup of a session runs every step even when one fails.
   { what: "t.after for cleanup; register it with session.cleanup", pattern: /\bt\.after\s*\(/, sessionCleanup: true },
   // A window check does not read source paths of other components and receives values through declared status entries.
-  { what: "a source path of another repository component", pattern: /(["'`/]|\.\.\/)(packages|plugins|sidecars|native|apps)\// },
+  { what: "a source path of another repository component", pattern: /(["'`/]|\.\.\/)(packages|plugins|sidecars|native|apps)\//, sourcePath: true },
 ];
 
 // The checks of e2e/activation and e2e/real run only in runs the user approved and may activate the app.
@@ -67,6 +67,87 @@ function visit(node, ancestors, callback) {
 
 function identifier(node) {
   return node?.type === "Identifier" ? node.name : null;
+}
+
+const ASSERT_PATH_METHODS = new Set([
+  "deepEqual", "deepStrictEqual", "strictEqual", "notDeepEqual", "notDeepStrictEqual", "notStrictEqual",
+]);
+
+function staticExpectedValue(node) {
+  if (!node) return false;
+  if (node.type === "Literal") return true;
+  if (node.type === "TemplateLiteral") return node.expressions.length === 0;
+  if (node.type === "ArrayExpression") return node.elements.every(staticExpectedValue);
+  if (node.type === "ObjectExpression") return node.properties.every((property) => property.type === "Property"
+    && !property.computed && !property.method && staticExpectedValue(property.value));
+  return false;
+}
+
+function nodeAssertBindings(source) {
+  const objects = new Set();
+  const functions = new Set();
+  for (const statement of source.body) {
+    if (statement.type !== "ImportDeclaration"
+      || !/^node:assert(?:\/strict)?$/.test(statement.source.value)) continue;
+    for (const specifier of statement.specifiers) {
+      if (specifier.type === "ImportDefaultSpecifier" || specifier.type === "ImportNamespaceSpecifier") {
+        objects.add(specifier.local.name);
+      } else if (specifier.type === "ImportSpecifier") {
+        const imported = identifier(specifier.imported);
+        if (ASSERT_PATH_METHODS.has(imported)) functions.add(specifier.local.name);
+      }
+    }
+  }
+  const candidates = new Set([...objects, ...functions]);
+  const shadowed = new Set();
+  visit(source, [], (node) => {
+    if (!isFunction(node)) return;
+    const local = functionBindings(node);
+    for (const name of candidates) if (local.has(name)) shadowed.add(name);
+  });
+  for (const name of shadowed) {
+    objects.delete(name);
+    functions.delete(name);
+  }
+  return { objects, functions };
+}
+
+function assertionMethod(node, bindings) {
+  if (node.callee.type === "Identifier" && bindings.functions.has(node.callee.name)) return node.callee.name;
+  const callee = node.callee;
+  if (callee.type !== "MemberExpression" || callee.computed
+    || !bindings.objects.has(identifier(callee.object))) return null;
+  const method = identifier(callee.property);
+  return ASSERT_PATH_METHODS.has(method) ? method : null;
+}
+
+function expectedPathLiteralRanges(source, file) {
+  if (!file.startsWith("e2e/") || !file.endsWith(".test.mjs")) return [];
+  const bindings = nodeAssertBindings(source);
+  const ranges = [];
+  const collect = (node) => {
+    if (!node) return;
+    if (node.type === "Literal" && typeof node.value === "string"
+      && RULES.some((rule) => rule.sourcePath && rule.pattern.test(node.value))) {
+      ranges.push({ start: node.start, end: node.end });
+      return;
+    }
+    if (node.type === "TemplateLiteral" && node.expressions.length === 0
+      && RULES.some((rule) => rule.sourcePath && rule.pattern.test(node.quasis[0].value.cooked ?? ""))) {
+      ranges.push({ start: node.start, end: node.end });
+      return;
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach((child) => child?.type && collect(child));
+      else if (value?.type) collect(value);
+    }
+  };
+  visit(source, [], (node) => {
+    if (node.type !== "CallExpression" || !ASSERT_PATH_METHODS.has(assertionMethod(node, bindings))) return;
+    const expected = node.arguments[1];
+    if (staticExpectedValue(expected)) collect(expected);
+  });
+  return ranges;
 }
 
 function bindingNames(pattern, names) {
@@ -243,24 +324,37 @@ export function auditActivationUnboundNames(paths = [...sources(ACTIVATION_ROOT)
 
 export function auditE2ESource(text, file) {
   const errors = [];
-  text.split("\n").forEach((line, index) => {
-    for (const rule of RULES) {
-      if (rule.activationTier && ACTIVATION_DIRS.some((dir) => file.startsWith(dir))) continue;
-      if (rule.inputPacing && file === INPUT_PACING_FILE) continue;
-      if (rule.sessionCleanup && SESSION_CLEANUP_EXEMPT.some((exempt) => file === exempt || file.startsWith(exempt))) continue;
-      if (rule.pattern.test(line)) errors.push(`${file}:${index + 1}: uses ${rule.what}`);
-    }
-  });
   const harnessTest = file.startsWith(join("packages", "window-check", "test") + sep);
+  let source = null;
   if (!harnessTest) {
-    let source;
     try {
       source = parse(text, { ecmaVersion: "latest", sourceType: "module", locations: true });
     } catch (error) {
       const line = Number.isInteger(error.loc?.line) ? error.loc.line : 1;
       errors.push(`${file}:${line}: cannot parse JavaScript source: ${error.message}`);
-      return errors;
     }
+  }
+  const allowedPathRanges = source ? expectedPathLiteralRanges(source, file) : [];
+  let lineStart = 0;
+  text.split("\n").forEach((line, index) => {
+    for (const rule of RULES) {
+      if (rule.activationTier && ACTIVATION_DIRS.some((dir) => file.startsWith(dir))) continue;
+      if (rule.inputPacing && file === INPUT_PACING_FILE) continue;
+      if (rule.sessionCleanup && SESSION_CLEANUP_EXEMPT.some((exempt) => file === exempt || file.startsWith(exempt))) continue;
+      if (rule.sourcePath) {
+        const pattern = new RegExp(rule.pattern.source, "g");
+        const blocked = [...line.matchAll(pattern)].some((match) => {
+          const offset = lineStart + match.index;
+          return !allowedPathRanges.some((range) => range.start <= offset && offset < range.end);
+        });
+        if (blocked) errors.push(`${file}:${index + 1}: uses ${rule.what}`);
+      } else if (rule.pattern.test(line)) {
+        errors.push(`${file}:${index + 1}: uses ${rule.what}`);
+      }
+    }
+    lineStart += line.length + 1;
+  });
+  if (source) {
     visit(source, [], (node, ancestors) => {
       if (node.type !== "CallExpression" || identifier(node.callee) !== "setTimeout") return;
       const callback = node.arguments[0];

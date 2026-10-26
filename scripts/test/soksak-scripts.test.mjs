@@ -408,6 +408,23 @@ test("window-source audit rejects a source path of another repository component"
   assert.deepEqual(auditE2ESource('import { APPS } from "./app.mjs";', "e2e/fixture.test.mjs"), []);
 });
 
+test("window-source audit distinguishes expected path literals from source access", { timeout: 1000 }, () => {
+  const expected = `import assert from "node:assert/strict";
+assert.deepEqual(calls[1], ["make", "-C", "/work/project/native/darwin", "capture-text-path"]);`;
+  assert.deepEqual(auditE2ESource(expected, "e2e/test/fixture.test.mjs"), []);
+
+  for (const source of [
+    'import "../native/darwin/src/private.h";',
+    'readFileSync("/work/project/native/darwin/src/private.h");',
+    'import assert from "node:assert/strict"; assert.deepEqual(actual, readFileSync("/work/project/native/darwin/src/private.h"));',
+    'import assert from "node:assert/strict"; function verify(assert) { assert.deepEqual(actual, ["/work/project/native/darwin/src/private.h"]); }',
+  ]) {
+    const errors = auditE2ESource(source, "e2e/test/fixture.test.mjs");
+    assert.equal(errors.length, 1, `${source}: ${JSON.stringify(errors)}`);
+    assert.match(errors[0], /source path of another repository component/);
+  }
+});
+
 test("window-source audit requires window-check cleanup through the session", { timeout: 1000 }, () => {
   const line = "t.after(() => server.close());";
   assert.deepEqual(auditE2ESource(line, "e2e/fixture.test.mjs"), [
