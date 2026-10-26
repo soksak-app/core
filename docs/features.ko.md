@@ -11,7 +11,7 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 4개와 waiting 45개인 49개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 6개와 waiting 45개인 51개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
 - **입력/menu acceptance와 연결된 parent: 7** — F239-47-32/-33; F212.12-2, F212.12-2-4, F212.12-2-1-2; F238-b/-3
 - **보고된 실패와 과거 종료 감사: 21** — F239-47-30; F212.1-2-2; F212.10-hwp-2, F212.10-core-3/-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3 및 F266.5부터 F266.13; F239-78; F239-190
@@ -22,6 +22,9 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
 - [o] F239-202 — P0: Rust private-module 소유 case를 대응 host test role에 둔다. Host 구조 audit는 view decoding, image queue 및 wait boundary, placement snapshot의 test 경로 네 개를 추가 경로로 보고한다. 기존 대응 owner module에 case를 보존하고 사용하지 않는 path 선언을 제거한다. Host-difference table은 확장하지 않는다. Go placement 구현은 하나의 UI callback 안에서 모든 frame을 읽으며 현재 직접 owner assertion은 그 turn 경계를 별도로 측정하지 않는다. 이 경로 정리는 그러한 behavior 통과를 주장하지 않는다. Red: Host 구조 audit는 대응하지 않는 경로 네 개를 거부한다. Green: 이동한 case 10개가 모두 통과하고 모든 경로가 선언된 대응 role을 가지며 제거한 case나 assertion은 없다.
+
+- [~] F239-204 — P0, F239-47-32 및 F239-47-33 연결: Latin 세 글자를 commit한 뒤 Korean 2-Set으로 전환하면 승인된 F8-9 sequence가 양 macOS host에서 `ddd한글` 대신 `dddㅎㅏㄴ글`을 만든다. Run 23의 같은 window AppKit reference는 통과하고 별도의 F143 resyllabification도 양 host에서 통과한다. 수정 전 native input owner에서 committed-prefix composition 실패를 재현하고 replacement-range 의미, 순서 있는 commit 및 독립 AppKit reference를 유지한다.
+- [~] F239-205 — P0, F212.12-2-4 연결: Focus된 view의 native Command-zero가 Tauri browser card text factor를 1로 초기화하지 않고 1.1로 남긴다. Run 23은 같은 Wails selector를 통과하지만 Tauri는 core.text가 바뀌지 않아 시간 제한으로 실패한다. 수정 전 소유 Tauri menu/key-equivalent dispatch에서 실패를 재현하고 native focus, 소유 card 및 바뀌지 않은 address text를 유지한다.
 
 - [o] F239-203 — P1, V5-10 연결: `cargo fmt --manifest-path packages/host/tauriv2/Cargo.toml -- --check`가 보고한 기존 파일 여덟 개의 Rust 서식을 복원한다: `tests/project_data_order/project_data_order_test.rs`, `src/documents.rs`, `src/image_detach.rs`, `src/image_detach_test.rs`, `src/images_test.rs`, `src/modals.rs`, `src/view_origin_test.rs`, `tests/sidecars_transport_test.rs`. `rustfmt --edition 2024 --config skip_children=true`로 이 파일들만 정리하고 logic과 assertion을 보존한다. Red: 서식 gate가 정확히 이 여덟 파일의 차이를 보고한다. Green: edition 2024와 `skip_children=true`로 해당 파일만 정리한 뒤 같은 `cargo fmt --manifest-path packages/host/tauriv2/Cargo.toml -- --check`가 통과한다. 동작 변경은 없다.
 
