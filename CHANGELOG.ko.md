@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14: VT screen-envelope allocation 수정과 남은 성능 실패를 기록한다. Cell별 body 복사를 제거한 뒤 소유 회귀 검사가 통과하고 trace 없는 양 benchmark report가 모든 측정 frame, 정상 오류 감사 및 복원된 설치를 포함한다. 변경하지 않은 실패 latency/cadence 목표를 유지하며 allocation 결과로 전체 성능 개선을 추론하지 않는다.
+
 - F212.14: 성능 목표를 통과 처리하지 않고 로컬 VT image-answer queue 측정을 기록한다. 일치하는 응답 160건 모두 timing이 있으며 trace geometry와 log 감사가 양 host에서 통과하고 baseline 설치와 frontmost 상태를 복원한다. 전체/queue 간격을 구분하고 구체적인 queue 작업으로의 원인 귀속은 미해결로 유지한다.
 
 - F239-29: 로컬 sidecar 개발의 설치된 native-package consumer acceptance를 완료한다. macOS arm64에서 양 소유 package-interface 검사와 표준 Darwin build가 모두 통과한다. Developer link override는 commit하지 않고 맞지 않는 remote-install fixture를 경로에 독립적인 설치 package 검사로 대체한다. 외부 Git-ref/fresh-install 요구는 F239-29-1과 양 소유 sidecar 체크리스트에 남기며 publication이나 과거 dangling-store 수정을 주장하지 않는다.
