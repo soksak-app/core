@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-1: Verify opt-in diagnostic drag identity on both optimized diagnostic hosts. Both application cases pass their artifact finalization, byte-count and SHA-256 assertions with no application errors. This does not establish per-view performance or exact physical pixel matching.
+
 - F239-194: Validate browser-compatible HWP candidate installation and diagnostic startup on both hosts. Verify all 92 installed files against the corrected archive and pass both diagnostic drag identity cases with an empty application-error audit. Per-view measurements remain open for their separate readiness-order correction.
 
 - F239-193: Map the diagnostic view-frame helper in the staged workbench page as well as native view pages. Installed diagnostic modules are imported in both document realms. The staged-page regression fails before correction; the API, diagnostic and release stage, and view-map owners pass after correction. Non-diagnostic builds retain their original map and omit the helper module.

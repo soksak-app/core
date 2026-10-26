@@ -6928,6 +6928,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-5-1",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "frameIdentity: stopped.frameIdentity" }],
+    tests: [
+      { file: "packages/window-check/test/drag-frame-identity.test.mjs", id: "drag forwards opt-in frame identity and preserves the stop result" },
+      { file: "e2e/capture-frame-identity.test.mjs", id: "diagnostic drag retains opt-in frame identity artifacts" },
+    ],
+    expected: "Diagnostic drag preserves the requested identity artifacts without changing its default request.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-194",
     implementation: [{ file: "packages/workbench/environment.js", symbol: "diagnosticModules = Promise.all(" }],
     tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "diagnostic drag retains opt-in frame identity artifacts" }],

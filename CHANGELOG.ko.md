@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-1: 양쪽 최적화 diagnostic host에서 선택적 diagnostic drag identity를 검증한다. 두 애플리케이션 사례가 애플리케이션 오류 없이 artifact 완료, byte 수와 SHA-256 assertion을 통과한다. View별 성능이나 실제 pixel의 정확한 일치를 입증하지 않는다.
+
 - F239-194: 양쪽 host에서 browser-compatible HWP candidate 설치와 diagnostic startup을 검증한다. 설치 파일 92개 모두를 수정한 archive와 비교하고 애플리케이션 오류 audit이 비어 있는 상태로 양쪽 diagnostic drag identity 사례가 통과한다. View별 측정은 별도 readiness 순서 수정으로 미완료를 유지한다.
 
 - F239-193: Staging한 workbench page와 native view page 모두에서 diagnostic view-frame helper를 mapping한다. 설치된 diagnostic module은 두 document realm에서 import된다. 수정 전 staged-page 회귀 검사가 실패하며 수정 후 API, diagnostic·release stage와 view-map 소유 검사가 통과한다. 비진단 build는 기존 map을 유지하고 helper module을 제외한다.
