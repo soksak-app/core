@@ -12,6 +12,7 @@
 package host
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -195,6 +196,40 @@ type dragPlan struct {
 	Times int     `json:"times"`
 }
 
+type dragCaptureOptions struct {
+	capture       bool
+	frameIdentity bool
+}
+
+func parseDragCaptureOptions(params json.RawMessage) (dragCaptureOptions, error) {
+	var request struct {
+		Capture       json.RawMessage `json:"capture"`
+		FrameIdentity json.RawMessage `json:"frameIdentity"`
+	}
+	if err := decode(params, &request); err != nil {
+		return dragCaptureOptions{}, err
+	}
+	options := dragCaptureOptions{}
+	if len(request.Capture) != 0 && !bytes.Equal(bytes.TrimSpace(request.Capture), []byte("null")) {
+		var capture *bool
+		if err := json.Unmarshal(request.Capture, &capture); err != nil || capture == nil {
+			return dragCaptureOptions{}, rpcError(codeInvalidParams, "capture must be a boolean")
+		}
+		options.capture = *capture
+	}
+	if len(request.FrameIdentity) != 0 {
+		var frameIdentity *bool
+		if err := json.Unmarshal(request.FrameIdentity, &frameIdentity); err != nil || frameIdentity == nil {
+			return dragCaptureOptions{}, rpcError(codeInvalidParams, "frameIdentity must be a boolean")
+		}
+		options.frameIdentity = *frameIdentity
+	}
+	if options.frameIdentity && !options.capture {
+		return dragCaptureOptions{}, rpcError(codeInvalidParams, "frameIdentity requires capture to be true")
+	}
+	return options, nil
+}
+
 // steps is the number of steps of a one-way move. The page counts them in the same way.
 func (p dragPlan) steps() int {
 	if n := int(math.Round(float64(p.MS) / float64(frameStep/time.Millisecond))); n > 1 {
@@ -266,9 +301,12 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	if err != nil {
 		return nil, err
 	}
+	captureOptions, err := parseDragCaptureOptions(params)
+	if err != nil {
+		return nil, err
+	}
 	var p struct {
 		dragPlan
-		Capture bool `json:"capture"`
 	}
 	if err := decode(params, &p); err != nil {
 		return nil, err
@@ -283,8 +321,8 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	var frames string
 	// When recording, the time at which the step was sent is recorded on the same clock as the frames. This allows measuring the delay from a step to the screen.
 	var clock func() float64
-	if p.Capture {
-		frames, err = startCapture(h, s, false, false)
+	if captureOptions.capture {
+		frames, err = startCapture(h, s, false, captureOptions.frameIdentity)
 		if err != nil {
 			return nil, err
 		}
@@ -325,7 +363,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	close(stop)
 	result, err := dragResult(s, reply)
 	var layouts []map[string]any
-	if p.Capture {
+	if captureOptions.capture {
 		if capture, captureErr := recorder(); captureErr == nil {
 			var records [][5]float64
 			var traceErr error
@@ -338,7 +376,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	}
 	if err != nil {
 		// When the requester does not receive the frame folder, the recording stops and the folder is deleted.
-		if p.Capture {
+		if captureOptions.capture {
 			if capture, captureErr := recorder(); captureErr == nil {
 				if abortErr := recording.Abort(capture); abortErr != nil {
 					err = fmt.Errorf("%w; abort capture: %v", err, abortErr)
@@ -349,7 +387,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 		}
 		return nil, err
 	}
-	if p.Capture {
+	if captureOptions.capture {
 		result["frames"] = frames
 		tickMu.Lock()
 		result["ticks"] = append([]float64(nil), sent...)

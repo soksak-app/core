@@ -951,11 +951,17 @@ if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset
  *
  * Fails when the drag does not run at the requested rate (after one retry). A pass of a slow drag is not a pass.
  */
-export async function drag(t, s, plan, { capture = false } = {}) {
-  let result = await dragOnce(s, plan, capture);
+export async function drag(t, s, plan, { capture = false, frameIdentity } = {}) {
+  if (frameIdentity !== undefined && typeof frameIdentity !== "boolean") {
+    throw new TypeError("frameIdentity must be a boolean");
+  }
+  if (frameIdentity === true && capture !== true) {
+    throw new TypeError("frameIdentity requires capture to be true");
+  }
+  let result = await dragOnce(s, plan, capture, frameIdentity === true);
   if (paced(result)) return result;
   t.diagnostic(`the drag took ${result.took}ms for ${result.asked}ms; dragging again`);
-  result = await dragOnce(s, plan, capture);
+  result = await dragOnce(s, plan, capture, frameIdentity === true);
   if (!paced(result)) {
     throw new Error(
       `the drag ran slower than it was asked to, twice (${result.took}ms for ${result.asked}ms). The steps come ` +
@@ -994,7 +1000,7 @@ export function coveredBy(s, window) {
     : "windows that together cover it";
 }
 
-async function dragOnce(s, plan, capture) {
+async function dragOnce(s, plan, capture, frameIdentity) {
   // An active window receives the cursor update of AppKit when the layout changes, and the window passes the real
   // pointer position to the page as a move. A diagnostic drag that is synthesized without a button mixes with that
   // move, so it is measured only in an inactive application.
@@ -1012,7 +1018,11 @@ async function dragOnce(s, plan, capture) {
       "nothing was measured.");
   }
   const ms = Math.max(1, Math.round(plan.ms / 16)) * 16 * 2 * plan.times;
-  const result = await s.request("diagnostics.drag", { ...plan, capture }, { timeout: REQUEST + ms * 4 });
+  const result = await s.request("diagnostics.drag", {
+    ...plan,
+    capture,
+    ...(frameIdentity ? { frameIdentity: true } : {}),
+  }, { timeout: REQUEST + ms * 4 });
   if (!capture) return result;
   s.trackRecording(result.frames);
   // Records until the time when the last screen of the drag is displayed.
@@ -1028,5 +1038,13 @@ async function dragOnce(s, plan, capture) {
     throw new Error(`the recording has a ${stopped.longestGap.toFixed(0)}ms gap between frames; ` +
       `frames longer than ${GAP}ms apart were not recorded, so this run did not measure the whole gesture`);
   }
-  return { ...result, callbackStatus, displayed, count: stopped.count, longestGap: stopped.longestGap, frameDir: stopped.frames };
+  return {
+    ...result,
+    callbackStatus,
+    displayed,
+    count: stopped.count,
+    longestGap: stopped.longestGap,
+    frameDir: stopped.frames,
+    ...(frameIdentity ? { frameIdentity: stopped.frameIdentity } : {}),
+  };
 }

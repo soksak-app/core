@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-1: 두 host의 diagnostic drag에 opt-in frame identity를 전달하고 window-check helper에서 stop artifact를 유지한다. Boolean이 아닌 identity 값과 recording 없는 identity를 거부하며 기본 drag recording을 유지한다. 양 host 옵션 소유 검사와 consumer 소유 검사 세 개가 통과했다. Runtime 측정은 별도다.
+
 - F212.14-5: View 메모리 측정의 SI byte 단위와 process를 공유하는 전체 group을 명시한다. 닫기 전후 같은 process identity의 physical footprint를 비교하고 종료한 process는 0으로 세며 초기 document만 있는 history를 기록한다. 모든 메모리 한도와 회수 요구를 유지한다.
 
 - F240: 미해결 작업을 닫지 않고 현재 구현을 acceptance 대기와 과거 원인 감사에서 구분한다. 누락된 view별 측정 모음을 F212.14-5에 기록하고 완료한 F212.14-3 timing 보고를 유지한다. Open register는 49행이며 세 행은 진행 중이고 46행은 대기한다.

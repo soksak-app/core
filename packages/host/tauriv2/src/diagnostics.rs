@@ -634,20 +634,43 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
 /// Requests the page to drag one boundary back and forth and sends the step times. It answers after the drag ends and
 /// the window has drawn the result. When capture is set, it starts the window record before the drag and returns the
 /// record directory.
-fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<Value, Failure> {
-    if !matches!(params.get("axis").and_then(Value::as_str), Some("x" | "y")) {
-        return Err(Failure::params("axis must be x or y"));
-    }
-    for name in ["line", "dx", "dy", "ms", "times"] {
-        if !params.get(name).is_some_and(Value::is_number) {
-            return Err(Failure::params(format!("{name} must be a number")));
-        }
-    }
+struct DragCaptureOptions {
+    capture: bool,
+    frame_identity: bool,
+}
+
+fn parse_drag_capture_options(
+    params: &mut Map<String, Value>,
+) -> Result<DragCaptureOptions, Failure> {
     let capture = match params.remove("capture") {
         None | Some(Value::Null) => false,
         Some(Value::Bool(capture)) => capture,
         Some(_) => return Err(Failure::params("capture must be a boolean")),
     };
+    let frame_identity = match params.remove("frameIdentity") {
+        None => false,
+        Some(Value::Bool(frame_identity)) => frame_identity,
+        Some(_) => return Err(Failure::params("frameIdentity must be a boolean")),
+    };
+    if frame_identity && !capture {
+        return Err(Failure::params("frameIdentity requires capture to be true"));
+    }
+    Ok(DragCaptureOptions {
+        capture,
+        frame_identity,
+    })
+}
+
+fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<Value, Failure> {
+    if !matches!(params.get("axis").and_then(Value::as_str), Some("x" | "y")) {
+        return Err(Failure::params("axis must be x or y"));
+    }
+    let capture_options = parse_drag_capture_options(&mut params)?;
+    for name in ["line", "dx", "dy", "ms", "times"] {
+        if !params.get(name).is_some_and(Value::is_number) {
+            return Err(Failure::params(format!("{name} must be a number")));
+        }
+    }
     // default: a missing or non-numeric value is set to 0 so that the check right below rejects it as an invalid
     // argument.
     let ms = params["ms"].as_f64().unwrap_or_default();
@@ -662,12 +685,16 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     let per = ((ms / FRAME.as_millis() as f64).round() as u64).max(1);
     let steps = per * 2 * times;
 
-    let frames = if capture {
-        Some(capture_start(window, false, false)?)
+    let frames = if capture_options.capture {
+        Some(capture_start(
+            window,
+            false,
+            capture_options.frame_identity,
+        )?)
     } else {
         None
     };
-    if capture {
+    if capture_options.capture {
         let platform = platform::current().map_err(internal)?;
         on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
     }
@@ -1039,6 +1066,62 @@ mod capture_start_options_test {
             assert!(
                 parse_capture_start_options(&params).is_err(),
                 "params {params:?}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod drag_capture_options_test {
+    use super::*;
+
+    fn parse(value: Value) -> Result<DragCaptureOptions, Failure> {
+        let mut params = value.as_object().unwrap().clone();
+        parse_drag_capture_options(&mut params)
+    }
+
+    // contract: diagnostics.drag.forwards-frame-identity
+    #[test]
+    fn drag_capture_options_keep_identity_off_by_default_and_require_capture_when_enabled() {
+        for (params, expected_capture, expected_identity) in [
+            (json!({}), false, false),
+            (json!({"capture": true}), true, false),
+            (
+                json!({"capture": true, "frameIdentity": false}),
+                true,
+                false,
+            ),
+            (json!({"capture": true, "frameIdentity": true}), true, true),
+        ] {
+            let options = parse(params.clone()).unwrap();
+            assert_eq!(options.capture, expected_capture, "params {params}");
+            assert_eq!(options.frame_identity, expected_identity, "params {params}");
+        }
+        for params in [
+            json!({"frameIdentity": true}),
+            json!({"capture": false, "frameIdentity": true}),
+        ] {
+            let error = match parse(params.clone()) {
+                Ok(_) => panic!("params {params} unexpectedly parsed"),
+                Err(error) => error,
+            };
+            assert_eq!(
+                error.message, "frameIdentity requires capture to be true",
+                "params {params}"
+            );
+        }
+        for params in [
+            json!({"capture": true, "frameIdentity": null}),
+            json!({"capture": true, "frameIdentity": "true"}),
+            json!({"capture": true, "frameIdentity": 1}),
+        ] {
+            let error = match parse(params.clone()) {
+                Ok(_) => panic!("params {params} unexpectedly parsed"),
+                Err(error) => error,
+            };
+            assert_eq!(
+                error.message, "frameIdentity must be a boolean",
+                "params {params}"
             );
         }
     }

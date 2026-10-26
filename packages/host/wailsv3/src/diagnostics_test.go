@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +59,43 @@ func TestCaptureStartOptionsPreserveDisplayParsing(t *testing.T) {
 func TestCaptureStartFrameIdentityRejectsNull(t *testing.T) {
 	if _, err := parseCaptureStartOptions(json.RawMessage(`{"frameIdentity":null}`)); err == nil {
 		t.Fatal("frameIdentity null was accepted as the default false value")
+	}
+}
+
+// contract: diagnostics.drag.forwards-frame-identity
+func TestDiagnosticDragFrameIdentityRequiresCapture(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		params        string
+		wantCapture   bool
+		wantIdentity  bool
+		wantErrorText string
+	}{
+		{name: "default is disabled", params: `{}`},
+		{name: "capture keeps identity disabled", params: `{"capture":true}`, wantCapture: true},
+		{name: "explicit false", params: `{"capture":true,"frameIdentity":false}`, wantCapture: true},
+		{name: "explicit true", params: `{"capture":true,"frameIdentity":true}`, wantCapture: true, wantIdentity: true},
+		{name: "identity requires capture", params: `{"frameIdentity":true}`, wantErrorText: "frameIdentity requires capture to be true"},
+		{name: "identity rejects disabled capture", params: `{"capture":false,"frameIdentity":true}`, wantErrorText: "frameIdentity requires capture to be true"},
+		{name: "identity rejects null", params: `{"capture":true,"frameIdentity":null}`, wantErrorText: "frameIdentity must be a boolean"},
+		{name: "identity rejects string", params: `{"capture":true,"frameIdentity":"true"}`, wantErrorText: "frameIdentity must be a boolean"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseDragCaptureOptions(json.RawMessage(test.params))
+			if test.wantErrorText != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErrorText) {
+					t.Fatalf("parseDragCaptureOptions(%s) error = %v, want %q", test.params, err, test.wantErrorText)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseDragCaptureOptions(%s): %v", test.params, err)
+			}
+			if got.capture != test.wantCapture || got.frameIdentity != test.wantIdentity {
+				t.Fatalf("parseDragCaptureOptions(%s) = %+v, want capture=%t frameIdentity=%t",
+					test.params, got, test.wantCapture, test.wantIdentity)
+			}
+		})
 	}
 }
 
