@@ -6950,6 +6950,26 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-47-32",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "@implementation SPImageRegion" }],
+    tests: [
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "NSNotFound insertion matches the AppKit text-view reference" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F143 gksk resyllabifies to 하나" },
+    ],
+    expected: "The marked buffer preserves replacement and single-commit semantics and passes OS resyllabification.",
+    levels: ["native", "application"],
+  },
+  {
+    id: "F239-47-33",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "@implementation SPImageRegion" }],
+    tests: [
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "close commits the pending text exactly once" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F8-9 ddd and Korean 2-Set sequence commits 한글 once" },
+    ],
+    expected: "The client commits pending input once on close and the approved sequence and lifecycle conditions retain their scoped acceptance evidence.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F239-204",
     implementation: [{ file: "native/darwin/src/input_source.m", symbol: "void sp_input_source_select_and_await(" }],
     tests: [{ file: "native/darwin/tests/input_source_test.m", id: "an active context that reports the new property before its queued notification is not reported ready early" }],

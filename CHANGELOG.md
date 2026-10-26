@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-47-32, F239-47-33: Complete the marked-buffer acceptance with current two-host Latin-prefix Korean and OS resyllabification results, combined with the retained repeated-vowel visual and ten individually accepted lifecycle conditions per host. Preserve historical failed measurements and use the current functional/cadence separation from F239-175. The new sequence checks pass AppKit/terminal agreement, ordered single commits, error audits, input-source and baseline restoration, and normal shutdown.
+
 - F239-204: Make native input-source selection and readiness one operation.
   The native owner registers its observer before changing the global source,
   requires successful selection, a source-change notification and adoption by

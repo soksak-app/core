@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-47-32, F239-47-33: 현재 양 host의 Latin-prefix Korean 및 OS resyllabification 결과와 보존한 repeated-vowel visual 및 host별 열 개의 개별 수용 lifecycle 조건을 결합하여 marked-buffer acceptance를 완료한다. 과거 실패 측정은 보존하고 F239-175의 현재 기능/cadence 분리를 적용한다. 새 sequence 검사는 AppKit/terminal 일치, 순서대로 한 번의 commit, error audit, input-source 및 baseline 복원과 정상 종료를 통과한다.
+
 - F239-204: Native input-source 선택과 readiness를 하나의 operation으로
   처리한다. Native owner는 global source를 바꾸기 전에 observer를 등록하고,
   선택 성공·source-change notification·같은 active key-view context의 adoption을
