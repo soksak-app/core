@@ -284,6 +284,17 @@ impl PluginHosts {
             .copied()
     }
 
+    /// Copies the registered plugin-host handles without retaining the registry lock.
+    pub fn snapshot(&self) -> Vec<(String, Handle)> {
+        self.0
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the plugin-host registry; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .map(|(plugin, handle)| (plugin.clone(), *handle))
+            .collect()
+    }
+
     /// Returns true while a host webview of plugin is being created.
     pub fn contains(&self, plugin: &str) -> bool {
         self.0

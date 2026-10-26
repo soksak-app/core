@@ -187,6 +187,14 @@ pub fn process_remove(pid: u32) {
 pub struct WindowProcesses {
     pub page: u32,
     pub documents: Vec<(String, u32)>,
+    pub plugin_hosts: Vec<PluginHostProcess>,
+}
+
+/// The WebContent process of one plugin host webview of a window.
+#[derive(Debug, Eq, PartialEq)]
+pub struct PluginHostProcess {
+    pub plugin: String,
+    pub process: u32,
 }
 
 /// Reads the processes of a window. The sampler calls it on its own thread, not on the main thread.
@@ -251,6 +259,14 @@ pub fn sample() {
                         process_memory(
                             json!({"role": "document", "window": window, "surface": surface}),
                             pid,
+                        )
+                    });
+                }
+                for plugin_host in processes.plugin_hosts {
+                    observe("sampler", || {
+                        process_memory(
+                            json!({"role": "plugin-host", "window": window, "plugin": plugin_host.plugin}),
+                            plugin_host.process,
                         )
                     });
                 }

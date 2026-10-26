@@ -284,6 +284,9 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 		return host.PerformanceWindowProcesses{Page: page.Process.Pid, Documents: []host.PerformanceDocumentProcess{
 			{Surface: "surface-a", Process: document.Process.Pid},
 			{Surface: "surface-b", Process: 0},
+		}, PluginHosts: []host.PerformancePluginHostProcess{
+			{Plugin: "files", Process: page.Process.Pid},
+			{Plugin: "editor", Process: 0},
 		}}, nil
 	})
 	host.PerformanceWindowAdd("window-b", func() (host.PerformanceWindowProcesses, error) {
@@ -291,7 +294,7 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 	})
 	t.Cleanup(func() { host.PerformanceWindowRemove("window-a"); host.PerformanceWindowRemove("window-b") })
 	host.PerformanceSample()
-	var pageFields, documentFields, notStarted, unreadable map[string]any
+	var pageFields, documentFields, notStarted, pluginHostFields, pluginHostNotStarted, unreadable map[string]any
 	for _, fields := range traceFields(t, config, log, "host.sampler.memory") {
 		switch {
 		case fields["role"] == "page" && fields["window"] == "window-a":
@@ -300,6 +303,10 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 			documentFields = fields
 		case fields["role"] == "document" && fields["surface"] == "surface-b":
 			notStarted = fields
+		case fields["role"] == "plugin-host" && fields["plugin"] == "files":
+			pluginHostFields = fields
+		case fields["role"] == "plugin-host" && fields["plugin"] == "editor":
+			pluginHostNotStarted = fields
 		case fields["role"] == "page" && fields["window"] == "window-b":
 			unreadable = fields
 		}
@@ -324,6 +331,17 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 	}
 	if size, _ := documentFields["footprint_kb"].(float64); size <= 0 {
 		t.Fatalf("the document sample holds no footprint: %v", documentFields)
+	}
+	if pluginHostFields == nil || pluginHostFields["window"] != "window-a" || pluginHostFields["pid"] != float64(page.Process.Pid) {
+		t.Fatalf("no plugin-host sample preserves its window, plugin, and shared pid: %v", pluginHostFields)
+	}
+	if size, _ := pluginHostFields["footprint_kb"].(float64); size <= 0 {
+		t.Fatalf("the plugin-host sample holds no footprint: %v", pluginHostFields)
+	}
+	if pluginHostNotStarted == nil || pluginHostNotStarted["window"] != "window-a" ||
+		pluginHostNotStarted["pid"] != float64(0) || pluginHostNotStarted["rss_kb"] != nil ||
+		pluginHostNotStarted["footprint_kb"] != nil || pluginHostNotStarted["error"] == "" {
+		t.Fatalf("an unstarted plugin host was not recorded explicitly: %v", pluginHostNotStarted)
 	}
 	if text, _ := notStarted["error"].(string); text == "" || notStarted["window"] != "window-a" {
 		t.Fatalf("a web view whose process has not started has no error: %v", notStarted)

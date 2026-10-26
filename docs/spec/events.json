@@ -1543,10 +1543,121 @@
                 }
               ]
             }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "role": {
+                "const": "plugin-host"
+              },
+              "window": {
+                "type": "string"
+              },
+              "plugin": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "number"
+              },
+              "rss_kb": {
+                "type": "number"
+              },
+              "footprint_kb": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "role",
+              "window",
+              "plugin",
+              "pid",
+              "rss_kb",
+              "footprint_kb"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "name"
+                  ]
+                },
+                {
+                  "required": [
+                    "surface"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_host_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "error"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "role": {
+                "const": "plugin-host"
+              },
+              "window": {
+                "type": "string"
+              },
+              "plugin": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "number"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "window",
+              "plugin",
+              "pid",
+              "error"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "name"
+                  ]
+                },
+                {
+                  "required": [
+                    "surface"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_host_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "footprint_kb"
+                  ]
+                }
+              ]
+            }
           }
         ]
       },
-      "description": "The sampler of the host, while the trace is on. The memory event `host.sampler.memory` is one reading every five seconds: role is host (rss_host_kb), a registered process role with name, page (the page web content process of the window `window`) or document (the web content process of the document web view `surface` of the window `window`). Each process reading holds pid, rss_kb and footprint_kb; a reading that cannot obtain a size holds error instead of the sizes, and a window whose facts cannot be read holds role, window and error."
+      "description": "The sampler of the host, while the trace is on. The memory event `host.sampler.memory` is one reading every five seconds: role is host (rss_host_kb), a registered process role with name, page (the page web content process of the window `window`), document (the web content process of the document web view `surface` of the window `window`) or plugin-host (the WebContent process of the plugin host `plugin` in the window `window`). Each process reading holds pid, rss_kb and footprint_kb; a reading that cannot obtain a size holds error instead of the sizes, and a window whose facts cannot be read holds role, window and error. Rows identify owners, not unique processes: repeated PIDs refer to the same physical process and consumers deduplicate by PID when totaling process memory."
     },
     "host.buffer.dropped": {
       "layer": "host",

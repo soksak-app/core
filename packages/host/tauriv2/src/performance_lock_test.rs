@@ -63,6 +63,7 @@ fn the_sampler_and_its_registries_answer_when_their_locks_are_poisoned() {
             Ok(WindowProcesses {
                 page: 0,
                 documents: Vec::new(),
+                plugin_hosts: Vec::new(),
             })
         }),
     );

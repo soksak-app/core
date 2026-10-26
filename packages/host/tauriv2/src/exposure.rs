@@ -1591,28 +1591,74 @@ pub(crate) fn with_view<T: Send + 'static>(
 pub(crate) fn window_processes(
     window: &Window,
 ) -> Result<crate::performance::WindowProcesses, String> {
-    let status = window_status(window).map_err(|failure| failure.message)?;
-    let page = status["pageProcess"]
+    let data = window_data(window)?;
+    let plugin_hosts = data.plugin_hosts.snapshot();
+    let documents = data.documents.names();
+    let platform = platform::current()?;
+    let facts = with_native_owner(window, move |handle| platform.window_facts(handle)).map_err(
+        |failure| match failure {
+            NativeFailure::Closed => "project window is closed".to_string(),
+            NativeFailure::Failed(error) => error,
+        },
+    )?;
+    let page = facts["pageProcess"]
         .as_u64()
-        .ok_or("window status has no pageProcess")?;
-    let documents = status["documents"]
+        .ok_or("window facts have no pageProcess")?;
+    let webviews = facts["webviews"]
         .as_array()
-        .ok_or("window status has no documents")?
-        .iter()
-        .map(|document| {
-            let surface = document["surface"]
-                .as_str()
-                .ok_or("a document of the window status has no surface")?;
-            let process = document["process"]
+        .ok_or("window facts have no webviews")?;
+    let mut document_processes = Vec::new();
+    for view in webviews {
+        let handle = view["view"].as_u64().ok_or("a webview fact has no view")? as platform::Handle;
+        if let Some((surface, _)) = documents.get(&handle) {
+            let process = view["process"]
                 .as_u64()
-                .ok_or("a document of the window status has no process")?;
-            Ok((surface.to_string(), process as u32))
-        })
-        .collect::<Result<Vec<_>, String>>()?;
+                .ok_or("a document webview fact has no process")?;
+            document_processes.push((surface.clone(), process as u32));
+        }
+    }
+    let plugin_host_processes = plugin_host_processes_for_facts(webviews, &plugin_hosts)?;
     Ok(crate::performance::WindowProcesses {
         page: page as u32,
-        documents,
+        documents: document_processes,
+        plugin_hosts: plugin_host_processes,
     })
+}
+
+fn plugin_host_processes_for_facts(
+    webviews: &[Value],
+    registered: &[(String, platform::Handle)],
+) -> Result<Vec<crate::performance::PluginHostProcess>, String> {
+    let mut processes = Vec::with_capacity(registered.len());
+    let mut seen = std::collections::HashSet::with_capacity(registered.len());
+    for view in webviews {
+        let handle = view["view"].as_u64().ok_or("a webview fact has no view")? as platform::Handle;
+        let Some((plugin, _)) = registered
+            .iter()
+            .find(|(_, candidate)| *candidate == handle)
+        else {
+            continue;
+        };
+        if !seen.insert(handle) {
+            return Err(format!(
+                "plugin host {plugin} appears more than once in window facts"
+            ));
+        }
+        let process = view["process"]
+            .as_u64()
+            .ok_or_else(|| format!("plugin host {plugin} has no process in window facts"))?;
+        processes.push(crate::performance::PluginHostProcess {
+            plugin: plugin.clone(),
+            process: process as u32,
+        });
+    }
+    for (plugin, handle) in registered {
+        if !seen.contains(handle) {
+            return Err(format!("plugin host {plugin} is absent from window facts"));
+        }
+    }
+    processes.sort_by(|left, right| left.plugin.cmp(&right.plugin));
+    Ok(processes)
 }
 
 /// Calculates the host.window value of a window. It is called from a thread that is not the main thread.
@@ -2432,3 +2478,7 @@ mod reply_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "exposure_performance_test.rs"]
+mod exposure_performance_test;

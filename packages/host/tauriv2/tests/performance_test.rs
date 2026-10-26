@@ -304,6 +304,16 @@ fn the_sampler_reads_the_processes_of_every_window() {
                         ("surface-a".to_string(), document_pid),
                         ("surface-b".to_string(), 0),
                     ],
+                    plugin_hosts: vec![
+                        performance::PluginHostProcess {
+                            plugin: "files".into(),
+                            process: page_pid,
+                        },
+                        performance::PluginHostProcess {
+                            plugin: "editor".into(),
+                            process: 0,
+                        },
+                    ],
                 })
             }),
         );
@@ -336,6 +346,28 @@ fn the_sampler_reads_the_processes_of_every_window() {
             "{document_record}"
         );
         assert_eq!(document_record["window"], "window-a", "{document_record}");
+        let plugin_host_record = samples
+            .iter()
+            .find(|s| s["role"] == "plugin-host" && s["plugin"] == "files")
+            .expect("a plugin-host sample names files");
+        assert_eq!(
+            plugin_host_record["window"], "window-a",
+            "{plugin_host_record}"
+        );
+        assert_eq!(
+            plugin_host_record["pid"],
+            json!(page_pid),
+            "{plugin_host_record}"
+        );
+        let plugin_host_not_started = samples
+            .iter()
+            .find(|s| s["role"] == "plugin-host" && s["plugin"] == "editor")
+            .expect("an unstarted plugin-host sample names editor");
+        assert_eq!(plugin_host_not_started["window"], "window-a");
+        assert_eq!(plugin_host_not_started["pid"], 0);
+        assert!(plugin_host_not_started.get("rss_kb").is_none());
+        assert!(plugin_host_not_started.get("footprint_kb").is_none());
+        assert!(plugin_host_not_started["error"].as_str().is_some());
         return;
     }
     let config = in_child("the_sampler_reads_the_processes_of_every_window");
@@ -373,6 +405,34 @@ fn the_sampler_reads_the_processes_of_every_window() {
         "the document sample holds no footprint: {}",
         document[0]
     );
+    let plugin_host: Vec<_> = samples
+        .iter()
+        .filter(|s| s["role"] == "plugin-host" && s["plugin"] == "files")
+        .collect();
+    assert_eq!(
+        plugin_host.len(),
+        1,
+        "plugin-host samples of files: {samples:?}"
+    );
+    assert_eq!(plugin_host[0]["window"], "window-a");
+    assert_eq!(plugin_host[0]["pid"], page[0]["pid"]);
+    assert!(
+        plugin_host[0]["footprint_kb"]
+            .as_u64()
+            .is_some_and(|size| size > 0),
+        "the plugin-host sample holds no footprint: {}",
+        plugin_host[0]
+    );
+    let plugin_host_not_started: Vec<_> = samples
+        .iter()
+        .filter(|s| s["role"] == "plugin-host" && s["plugin"] == "editor")
+        .collect();
+    assert_eq!(plugin_host_not_started.len(), 1);
+    assert_eq!(plugin_host_not_started[0]["window"], "window-a");
+    assert_eq!(plugin_host_not_started[0]["pid"], 0);
+    assert!(plugin_host_not_started[0].get("rss_kb").is_none());
+    assert!(plugin_host_not_started[0].get("footprint_kb").is_none());
+    assert!(plugin_host_not_started[0]["error"].as_str().is_some());
     let not_started: Vec<_> = samples
         .iter()
         .filter(|s| s["role"] == "document" && s["surface"] == "surface-b")

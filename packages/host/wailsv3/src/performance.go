@@ -186,6 +186,11 @@ func PerformanceSample() {
 				return processMemory(map[string]any{"role": "document", "window": window, "surface": document.Surface}, document.Process)
 			})
 		}
+		for _, pluginHost := range processes.PluginHosts {
+			PerformanceObserve("sampler", func() map[string]any {
+				return processMemory(map[string]any{"role": "plugin-host", "window": window, "plugin": pluginHost.Plugin}, pluginHost.Process)
+			})
+		}
 	}
 }
 
@@ -222,16 +227,24 @@ func processFootprintKB(pid int) (uint64, error) {
 	return current.ProcessFootprintKB(pid)
 }
 
-// PerformanceWindowProcesses are the processes of one window that the sampler reads: the WebContent process of its page and
-// of each document web view, with the surface of that document. A process is 0 before it starts.
+// PerformanceWindowProcesses are the processes of one window that the sampler reads: the WebContent process of its page,
+// each document web view with its surface, and each registered plugin-host web view with its plugin. A process is 0
+// before it starts.
 type PerformanceWindowProcesses struct {
-	Page      int
-	Documents []PerformanceDocumentProcess
+	Page        int
+	Documents   []PerformanceDocumentProcess
+	PluginHosts []PerformancePluginHostProcess
 }
 
 // PerformanceDocumentProcess is the WebContent process of one document web view of a window.
 type PerformanceDocumentProcess struct {
 	Surface string
+	Process int
+}
+
+// PerformancePluginHostProcess is the WebContent process of one plugin host web view of a window.
+type PerformancePluginHostProcess struct {
+	Plugin  string
 	Process int
 }
 
