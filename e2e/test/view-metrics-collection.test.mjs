@@ -5,11 +5,26 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { closeViewGroup, openRecordedView, processStartSamples, viewContentFrameEvents,
-  mapViewContentFramesToCapture, waitForViewReadiness, withViewContentTrace } from "../view-metrics-collection.mjs";
+import { readFrame } from "@soksak/window-check/frame.mjs";
+import { closeViewGroup, collectViewStartAndMemory, openRecordedView, processStartSamples, viewContentFrameEvents,
+  mapViewContentFramesToCapture, viewCardWithDifferentPluginTab, waitForViewReadiness,
+  withViewContentTrace } from "../view-metrics-collection.mjs";
 
 const event = (name, surface, ts_us, mono_ns) => ({ event: name, ts_us, mono_ns,
   fields: { plugin: "fixture", surface } });
+
+function writeCapturedFrame(directory, index, time) {
+  const pixels = Buffer.from([1, 2, 3, 255]);
+  const frame = Buffer.alloc(80);
+  frame.writeUInt32LE(1, 0);
+  frame.writeUInt32LE(1, 4);
+  frame.writeUInt32LE(4, 8);
+  [0, 0, 1, 1, 1, 1, time].forEach((value, field) => frame.writeDoubleLE(value, 12 + field * 8));
+  frame.write("LZ4B", 68, "ascii");
+  frame.writeUInt32LE(5, 72);
+  frame.writeUInt32LE(crc32(pixels), 76);
+  writeFileSync(join(directory, `frame-${index}.bgra`), Buffer.concat([frame, Buffer.from([0x40]), pixels]));
+}
 
 test("generic view process samples preserve both event clocks and pair the first ready event", { timeout: 5000 }, () => {
   const rows = [event("host.trace.view.process-request", "view-1", 10, 1_000_000),
@@ -23,6 +38,44 @@ test("generic view process samples preserve both event clocks and pair the first
   assert.throws(() => processStartSamples([rows[0], rows[0], rows[1]], ["view-1"], "fixture"), /duplicate process-request/);
   assert.throws(() => processStartSamples([rows[1], event("host.trace.view.process-request", "view-1", 30, 6_000_000)],
     ["view-1"], "fixture"), /precedes process-request/);
+});
+
+test("view anchor selection prefers the requested card and finds another card when needed", { timeout: 5000 }, () => {
+  const grid = { cards: [
+    { id: "target", active: "same", tabs: [{ id: "same", plugin: "fixture" }] },
+    { id: "anchor", active: "other", tabs: [{ id: "other", plugin: "other-fixture" }] },
+    { id: "preferred", active: "target-2", tabs: [
+      { id: "target-2", plugin: "fixture" }, { id: "anchor-2", plugin: "other-fixture" },
+    ] },
+  ] };
+  assert.equal(viewCardWithDifferentPluginTab(grid, "fixture", "preferred"), "preferred");
+  assert.equal(viewCardWithDifferentPluginTab(grid, "fixture", "target"), "anchor");
+  assert.throws(() => viewCardWithDifferentPluginTab({ cards: [{ id: "only", tabs: [
+    { id: "same", plugin: "fixture" },
+  ] }] }, "fixture"), /no card with an open plugin other than fixture/);
+});
+
+test("the exported lifecycle collector forwards the selected card ID to its first recording", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "view-card-forwarding-"));
+  const logDirectory = join(root, "logs");
+  mkdirSync(logDirectory);
+  writeFileSync(join(logDirectory, "host-1-1.jsonl"), "");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const sentinel = new Error("record sentinel reached with the selected card");
+  let recordCalls = 0;
+  const card = { id: "selected-card", active: "anchor", tabs: [
+    { id: "anchor", plugin: "other-fixture" }, { id: "old-target", plugin: "fixture" },
+  ] };
+  const s = {
+    app: { configDir: root },
+    async get(name) { assert.equal(name, "core.grid"); return { cards: [card] }; },
+    async record() { recordCalls++; throw sentinel; },
+  };
+  await assert.rejects(collectViewStartAndMemory(t, s, {
+    plugin: "fixture", readinessStatus: "fixture.ready", readiness: async () => {},
+    expectedContent: "target text", language: "en-US",
+  }), (error) => error === sentinel);
+  assert.equal(recordCalls, 1, "the selected card ID did not reach openRecordedView before recording");
 });
 
 test("generic view content-frame events correlate page frames with the host clocks", { timeout: 5000 }, () => {
@@ -143,7 +196,7 @@ test("shared readiness wrapper waits for the declared status exposure before rea
   assert.deepEqual(calls, ["until:core.surfaces", "readiness"]);
 });
 
-test("opening a view records before creation and proves pixels from a finalized frame", { timeout: 5000 }, async (t) => {
+test("one recording proves the physical anchor boundary before target content", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "view-metrics-session-"));
   const logDirectory = join(root, "logs");
   const recordingDirectory = join(root, "recording");
@@ -152,18 +205,10 @@ test("opening a view records before creation and proves pixels from a finalized 
   writeFileSync(join(logDirectory, "host-1-1.jsonl"), "");
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const pixels = Buffer.from([1, 2, 3, 255]);
-  const frame = Buffer.alloc(80);
-  frame.writeUInt32LE(1, 0);
-  frame.writeUInt32LE(1, 4);
-  frame.writeUInt32LE(4, 8);
-  [0, 0, 1, 1, 1, 1, 10].forEach((value, index) => frame.writeDoubleLE(value, 12 + index * 8));
-  frame.write("LZ4B", 68, "ascii");
-  frame.writeUInt32LE(5, 72);
-  frame.writeUInt32LE(crc32(pixels), 76);
-  writeFileSync(join(recordingDirectory, "frame-0.bgra"), Buffer.concat([frame, Buffer.from([0x40]), pixels]));
-
   const calls = [];
+  let activeTab = "old-target";
+  let recordCount = 0;
+  let presentationCount = 0;
   let viewOpen = true;
   let exposureRegistered = false;
   let releaseExposure;
@@ -173,28 +218,48 @@ test("opening a view records before creation and proves pixels from a finalized 
   let signalReadiness;
   const readinessStarted = new Promise((resolve) => { signalReadiness = resolve; });
   let readinessCalls = 0;
+  const recognizedTimes = [];
   const s = {
-    async get(name) {
-      assert.equal(name, "host.window");
-      return { documents: [{ surface: "view-1", document: "", process: 4101 }] };
-    },
     app: { configDir: root },
-    async record() { calls.push("record"); return { frames: recordingDirectory, stop: async () => {
-      calls.push("stop"); return { frames: recordingDirectory, count: 1, limited: false };
-    } }; },
-    async request(method) { calls.push(method); return { mono_ns: "1000000000" }; },
+    async record() {
+      calls.push("record");
+      recordCount++;
+      writeCapturedFrame(recordingDirectory, 0, 0.5);
+      writeCapturedFrame(recordingDirectory, 1, 5.5);
+      writeCapturedFrame(recordingDirectory, 2, 6.1);
+      writeCapturedFrame(recordingDirectory, 3, 7.1);
+      writeCapturedFrame(recordingDirectory, 4, 10);
+      return { stop: async () => {
+        calls.push("stop");
+        return { frames: recordingDirectory, count: 5, limited: false };
+      } };
+    },
+    async request(method) { calls.push(method); return { mono_ns: "6000000" }; },
     async run(method, params) {
       calls.push(method);
+      if (method === "core.tab.select") {
+        assert.deepEqual(params, { tab: "anchor" });
+        activeTab = "anchor";
+        return null;
+      }
       assert.deepEqual(params, { card: "card-1", plugin: "fixture", params: { path: "file.txt" } });
       appendFileSync(join(logDirectory, "host-1-1.jsonl"), `${JSON.stringify({ level: "debug", event:
-        "host.trace.view.process-request", ts_us: 1000, mono_ns: 1_000_000_000, seq: 1,
+        "host.trace.view.process-request", ts_us: 1000, mono_ns: 6_000_000, seq: 1,
         fields: { plugin: "fixture", surface: "view-1" } })}\n${JSON.stringify({ level: "debug", event:
-        "host.trace.view.process-ready", ts_us: 2000, mono_ns: 2_000_000_000, seq: 2,
+        "host.trace.view.process-ready", ts_us: 2000, mono_ns: 7_000_000, seq: 2,
         fields: { plugin: "fixture", surface: "view-1" } })}\n`);
+      activeTab = "new-target";
       return { tab: "view-1" };
     },
     async until(name, predicate, message, options) {
       calls.push(["until", name, options]);
+      if (name === "core.grid") {
+        const grid = { cards: [{ id: "card-1", active: activeTab, tabs: [
+          { id: "old-target", plugin: "fixture" }, { id: "anchor", plugin: "other-fixture" },
+        ] }] };
+        assert.ok(predicate(grid), message);
+        return grid;
+      }
       if (!exposureRegistered) {
         assert.equal(name, "core.surfaces");
         signalExposureWait();
@@ -208,12 +273,19 @@ test("opening a view records before creation and proves pixels from a finalized 
       assert.ok(predicate(value), message);
       return value;
     },
-    async presented() { return { displayed: 10 }; },
+    async presented() { calls.push("presented"); return { displayed: presentationCount++ === 0 ? 5 : 12 }; },
     async get(name) {
+      if (name === "core.grid") return { cards: [{ id: "card-1", active: activeTab, tabs: [
+        { id: "old-target", plugin: "fixture" }, { id: "anchor", plugin: "other-fixture" },
+      ] }] };
       if (name === "core.surfaces") return viewOpen ? [{ surface: "view-1" }] : [];
       assert.equal(name, "host.window");
-      return { documents: [{ surface: "view-1", document: "", visible: true, process: 3141,
-        frame: { x: 0, y: 0, width: 1, height: 1 } }] };
+      return { documents: [
+        { surface: "anchor", document: "", visible: true, process: 3100,
+          frame: { x: 0, y: 0, width: 1, height: 1 } },
+        { surface: "view-1", document: "", visible: true, process: 3141,
+          frame: { x: 0, y: 0, width: 1, height: 1 } },
+      ] };
     },
     cleanup(fn) { calls.push("cleanup"); this.cleanups ??= []; this.cleanups.push(fn); },
   };
@@ -228,10 +300,10 @@ test("opening a view records before creation and proves pixels from a finalized 
     },
     expectedContent: "SOKSAK FIXTURE", language: "en-US",
     recognizeFrame: async (decoded, rect, language) => {
-      assert.equal(decoded.time, 10);
       assert.deepEqual(rect, { x: 0, y: 0, w: 1, h: 1 });
       assert.equal(language, "en-US");
-      return { lines: ["SOKSAK FIXTURE"] };
+      recognizedTimes.push(decoded.time);
+      return { lines: [decoded.time === 7.1 ? "different anchor" : "SOKSAK FIXTURE"] };
     },
   });
   const openingResult = opening.then((value) => ({ value }), (error) => ({ error }));
@@ -244,10 +316,32 @@ test("opening a view records before creation and proves pixels from a finalized 
   releaseExposure();
   const { value: result, error } = await openingResult;
   if (error) throw error;
-  assert.equal(calls.indexOf("record") < calls.indexOf("core.card.add-tab"), true);
+  assert.ok(calls.indexOf("core.tab.select") >= 0, "the collector did not select a different-plugin anchor");
+  assert.equal(calls.indexOf("core.tab.select") < calls.indexOf("presented"), true,
+    "anchor presentation was checked before selecting the different plugin");
+  assert.equal(calls.indexOf("presented") < calls.indexOf("core.card.add-tab"), true,
+    "the target view request preceded its different-content anchor presentation");
+  assert.equal(calls.indexOf("record"), calls.lastIndexOf("record"), "one view lifecycle started multiple recordings");
+  assert.equal(calls.indexOf("stop") > calls.indexOf("core.card.add-tab"), true,
+    "the continuous recording stopped before the target view request");
+  assert.equal(calls.indexOf("stop") > calls.lastIndexOf("presented"), true,
+    "the continuous recording stopped before the target view presentation");
+  assert.deepEqual(recognizedTimes, [0.5, 5.5, 6.1, 7.1, 10],
+    "the scanner skipped old target frames, missed the actual anchor transition, or scanned target before its boundary");
   assert.equal(result.surface, "view-1");
   assert.equal(result.openedPid, 3141);
-  assert.deepEqual(result.contentFrame, { frameIndex: 0, frameCount: 1, timeMs: 10,
+  assert.ok(result.anchor.contentFrame.timeMs >= result.anchor.displayed,
+    "the different-content pixel boundary preceded the anchor presentation");
+  assert.ok(result.contentFrame.frameIndex > result.anchor.contentFrame.frameIndex,
+    "target content was accepted before the different-content pixel boundary");
+  assert.deepEqual(result.anchor.contentFrame, { frameIndex: 3, frameCount: 5, timeMs: 7.1,
+    proof: { targetAbsent: "SOKSAK FIXTURE", actual: "different anchor", lines: ["different anchor"] } });
+  assert.deepEqual(result.recording.anchorContentFrame, result.anchor.contentFrame,
+    "raw anchor recording evidence omitted the different-content OCR proof");
+  assert.equal(result.recording.files.length, 5);
+  assert.equal(readFrame(result.recording.files[0]).time, 0.5,
+    "the recording discarded the original old-content frame before the UI anchor transition");
+  assert.deepEqual(result.contentFrame, { frameIndex: 4, frameCount: 5, timeMs: 10,
     proof: { expected: "SOKSAK FIXTURE", actual: "SOKSAK FIXTURE", lines: ["SOKSAK FIXTURE"] } });
   assert.equal(s.cleanups.length, 1, "the opened view had no cleanup owner");
   s.run = async (method) => {

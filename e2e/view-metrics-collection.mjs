@@ -2,13 +2,25 @@ import assert from "node:assert/strict";
 
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
-import { firstContentFrame } from "./view-first-content.mjs";
+import { firstContentFrame, firstDifferentContentFrame } from "./view-first-content.mjs";
 import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, processGroupReclaimEvidence,
   viewDocumentHistoryInventory, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
   viewRootProcessPids } from "./view-process-footprint.mjs";
 
 const PROCESS_REQUEST = "host.trace.view.process-request";
 const PROCESS_READY = "host.trace.view.process-ready";
+
+/** Chooses a card that already has a visible-content anchor from another plugin. */
+export function viewCardWithDifferentPluginTab(grid, plugin, preferred) {
+  assert.ok(grid && Array.isArray(grid.cards), "core.grid must expose cards for view anchoring");
+  assert.ok(typeof plugin === "string" && plugin.length > 0, "view anchoring requires a plugin identity");
+  const cardHasAnchor = (card) => card?.tabs?.some((tab) => typeof tab?.id === "string" && tab.id.length > 0
+    && typeof tab.plugin === "string" && tab.plugin !== plugin);
+  const card = grid.cards.find((item) => item.id === preferred && cardHasAnchor(item))
+    ?? grid.cards.find(cardHasAnchor);
+  assert.ok(card?.id, `core.grid has no card with an open plugin other than ${plugin}`);
+  return card.id;
+}
 
 /** Pairs each view's host request with its first ready event, keeping both source clocks. */
 export function processStartSamples(events, surfaces, plugin) {
@@ -196,6 +208,29 @@ export async function waitForViewReadiness(s, surface, descriptor) {
   return descriptor.readiness(s, surface);
 }
 
+/** Selects and presents an existing different-plugin view to establish the capture phase boundary. */
+async function presentDifferentPluginAnchor(s, { card, plugin }) {
+  const grid = await s.get("core.grid");
+  const target = grid?.cards?.find((item) => item.id === card);
+  assert.ok(target, `view card ${card} is absent from core.grid`);
+  const anchor = target.tabs?.find((tab) => typeof tab?.id === "string" && tab.id.length > 0 && tab.plugin !== plugin);
+  assert.ok(anchor?.id, `view card ${card} has no different-plugin tab to separate existing pixels for ${plugin}`);
+  if (target.active !== anchor.id) {
+    await s.run("core.tab.select", { tab: anchor.id });
+    await s.until("core.grid", (value) => value.cards?.some((item) => item.id === card && item.active === anchor.id),
+      `view card ${card} did not activate its different-plugin anchor`);
+  }
+  const { displayed } = await s.presented();
+  assert.ok(Number.isFinite(displayed) && displayed >= 0,
+    `different-plugin anchor ${anchor.id} has invalid presentation time ${JSON.stringify(displayed)}`);
+  const host = await s.get("host.window");
+  const row = host.documents.find((document) => document.surface === anchor.id && document.document === "");
+  assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
+    `different-plugin anchor ${anchor.id} has no visible native view frame`);
+  return { tab: anchor.id, displayed,
+    rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height } };
+}
+
 /** Opens a view under a live recording and proves its first visible content from a decoded capture frame. */
 export async function openRecordedView(t, s, { card, plugin, params, readiness, readinessStatus, expectedContent, language,
   recognizeFrame } = {}) {
@@ -213,6 +248,7 @@ export async function openRecordedView(t, s, { card, plugin, params, readiness, 
   let stopped = false;
   let capture;
   try {
+    const anchor = await presentDifferentPluginAnchor(s, { card, plugin });
     const requestClock = await monotonicTimeMs(s);
     const { tab } = await s.run("core.card.add-tab", { card, plugin, params });
     s.cleanup(async () => {
@@ -232,28 +268,34 @@ export async function openRecordedView(t, s, { card, plugin, params, readiness, 
     assert.equal(paths.length, capture.count, `${plugin} first-content recording omitted captured frames`);
     assert.ok(paths.length > 0, `${plugin} first-content recording contains no frames`);
     const decoded = paths.map(readFrame);
+    const events = readEvents(s.app.configDir, offsets).events;
+    const starts = processStartSamples(events, [tab], plugin);
+    assert.equal(starts.length, 1, `${plugin} view ${tab} has no unique process request event`);
     const host = await s.get("host.window");
     const row = host.documents.find((document) => document.surface === tab && document.document === "");
     assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
       `${plugin} view ${tab} has no visible native view frame`);
+    const anchorContentFrame = await firstDifferentContentFrame({ captured: decoded, rect: anchor.rect,
+      expected: expectedContent, language, directory: capture.frames, recognizeFrame });
     const result = await firstContentFrame({ captured: decoded,
       rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height },
-      expected: expectedContent, language, directory: capture.frames, recognizeFrame });
+      expected: expectedContent, language, directory: capture.frames, recognizeFrame,
+      startFrameIndex: anchorContentFrame.frameIndex + 1 });
     const pids = viewRootProcessPids(host, [tab]);
     assert.equal(pids.length, 1, `${plugin} view ${tab} does not have one process identity`);
     const processGroupPids = viewProcessPids(host, [tab]);
-    const events = readEvents(s.app.configDir, offsets).events;
-    const starts = processStartSamples(events, [tab], plugin);
     return {
       surface: tab,
       requestAtMs: starts[0].requestAtMs,
       processStart: starts[0],
       requestClock,
       readinessEvidence,
+      anchor: { ...anchor, contentFrame: anchorContentFrame },
       openedPid: pids[0],
       processGroupPids,
       contentFrame: result,
-      recording: { directory: capture.frames, frameCount: paths.length, files: paths },
+      recording: { directory: capture.frames, frameCount: paths.length, files: paths,
+        anchorContentFrame },
       events,
     };
   } catch (error) {
@@ -283,13 +325,13 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
   assert.ok(Number.isSafeInteger(viewCount) && viewCount >= 2, "view count must be at least two");
   assert.equal(processStartCount, 5, "the view-process contract requires exactly five start samples");
   const grid = await s.get("core.grid");
-  const card = grid.cards.find((item) => item.active);
-  assert.ok(card?.id, "the view check has no active card for its lifecycle samples");
+  const activeCard = grid.cards.find((item) => item.active);
+  const card = viewCardWithDifferentPluginTab(grid, descriptor.plugin, activeCard?.id);
 
   const opened = [];
   const events = [];
   const open = async () => {
-    const value = await openRecordedView(t, s, { card: card.id, ...descriptor });
+    const value = await openRecordedView(t, s, { card, ...descriptor });
     opened.push(value);
     events.push(...value.events);
     return value;
@@ -327,7 +369,7 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
     processStarts: starts,
     firstDisplays,
     warmDisplay,
-    card: card.id,
+    card,
   };
 }
 
@@ -364,9 +406,9 @@ export async function collectViewReclaimMeasurements(t, s, descriptor, views, ev
   reclaim.push(await closeInitial(views));
   for (let index = 1; index < 3; index++) {
     const grid = await s.get("core.grid");
-    const card = grid.cards.find((item) => item.active);
-    assert.ok(card?.id, "reclaim run has no active card");
-    const view = await openRecordedView(t, s, { card: card.id, ...descriptor });
+    const activeCard = grid.cards.find((item) => item.active);
+    const card = viewCardWithDifferentPluginTab(grid, descriptor.plugin, activeCard?.id);
+    const view = await openRecordedView(t, s, { card, ...descriptor });
     evidence.events.push(...view.events);
     evidence.recordings.push(view.recording);
     const sample = await closeInitial([view]);

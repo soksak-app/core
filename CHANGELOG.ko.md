@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-6: 새 view 측정 전에 recording에서 다른 plugin content를 확인한다. 전체 연속 recording과 원래 clock을 유지하며 timestamp filtering 없이 기존 target 픽셀을 거부한다. 회귀 검사는 수정 전 실패하고 수정 후 해당 소유 검사 18개 모두 통과한다. 애플리케이션 측정은 별도로 유지한다.
+
 - F239-197: runtime.log entrance의 필수 event 필드 검사에 runtime이 제공하는 surface context를 포함한다. Generic producer의 명시적 필수 필드 검사와 runtime payload validation은 유지한다. 소유 회귀 검사는 수정 전 실패하고 수정 후 통과하며 해당 Editor source-SDK 검사도 통과한다.
 
 - F212.14-5-4: macOS WebKit의 실제 byte-footprint header를 읽고 PID·단위·page 크기를 검증한다. 보존한 실제 출력 fixture가 수정 전 실패하고 수정 후 parser 및 소유 검사 10개 모두 통과한다. 다른 metric이나 이전 형식 fallback 없이 누락·중복·잘못된 행을 거부한다.
