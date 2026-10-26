@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-17: Use one distinctive Browser fixture fill in served HTML and pixel measurement. The old gray fill also matched card chrome, expanding measured bounds by 25 pt. The reproducing Browser owner fails before correction and all six cases pass afterward; detector tolerance, component union and pass limits remain unchanged.
+
 - F212.14-5-16: Measure the normal Editor and hidden-only diagnostic Editor
   as separate absolute process groups. The old co-resident before/after
   estimator rejects valid decreases and cannot attribute component cost.

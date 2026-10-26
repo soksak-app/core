@@ -39,10 +39,16 @@ export const browserViewDescriptor = Object.freeze({
   },
 });
 
-const GEOMETRY = Object.freeze({ contentColor: [30, 30, 30], cardColor: [25, 27, 36],
+export const BROWSER_FIXTURE_CONTENT_COLOR = Object.freeze([0, 80, 180]);
+const GEOMETRY = Object.freeze({ contentColor: BROWSER_FIXTURE_CONTENT_COLOR, cardColor: [25, 27, 36],
   planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]], colorTolerance: 3 });
 const CONTENT = "SOKSAK BROWSER CONTENT";
 const GEOMETRY_LIMIT_PT = 2;
+
+/** Measures Browser fixture pixels with the same palette used to serve the page. */
+export function measureBrowserFrameGeometry(frame, { cornerRadiusPt, targetRect } = {}) {
+  return measureViewFrameGeometry(frame, { ...GEOMETRY, cornerRadiusPt, targetRect });
+}
 
 /** Compares captured content with the slot declared by the card and browser document DOM. */
 export function assertBrowserFrameMatchesSlot(geometry, slotInsetsPt) {
@@ -70,7 +76,7 @@ async function serveContentPage(s) {
   const server = createServer((_request, response) => {
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
     response.end(`<!doctype html><meta charset="utf-8"><title>${CONTENT}</title>
-      <style>html,body,#surface{width:100%;height:100%;margin:0}#surface{box-sizing:border-box;overflow:hidden;background:rgb(30,30,30);color:white;font:32px sans-serif}</style>
+      <style>html,body,#surface{width:100%;height:100%;margin:0}#surface{box-sizing:border-box;overflow:hidden;background:rgb(${BROWSER_FIXTURE_CONTENT_COLOR.join(",")});color:white;font:32px sans-serif}</style>
       <div id="surface">${CONTENT}</div>`);
   });
   await new Promise((resolve, reject) => {
@@ -132,7 +138,7 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
     width: page.frame.width, height: page.frame.height };
   const slotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
-  const measured = decoded.map((frame) => measureViewFrameGeometry(frame, { ...GEOMETRY, cornerRadiusPt, targetRect }));
+  const measured = decoded.map((frame) => measureBrowserFrameGeometry(frame, { cornerRadiusPt, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
   const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= source.timeMs);
   assert.ok(candidates.length > 0, "browser layout has no declared-slot pixel match after its source resize event");
@@ -188,7 +194,7 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
   const rootSlotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface });
   const geometryFrames = [];
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = measureViewFrameGeometry(captured[frameIndex], { ...GEOMETRY, cornerRadiusPt, targetRect });
+    const measured = measureBrowserFrameGeometry(captured[frameIndex], { cornerRadiusPt, targetRect });
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
   }

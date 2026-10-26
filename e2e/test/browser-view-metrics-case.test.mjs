@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertBrowserFrameMatchesSlot, browserViewDescriptor } from "../benchmark/cases/browser.mjs";
+import { assertBrowserFrameMatchesSlot, BROWSER_FIXTURE_CONTENT_COLOR, browserViewDescriptor,
+  measureBrowserFrameGeometry } from "../benchmark/cases/browser.mjs";
 
 test("browser pixel geometry matches the independently declared document slot", { timeout: 5000 }, () => {
   const geometry = { cardRectPt: { left: 0, top: 0, right: 100, bottom: 100 },
@@ -10,6 +11,38 @@ test("browser pixel geometry matches the independently declared document slot", 
   assert.equal(assertBrowserFrameMatchesSlot(geometry, slotInsetsPt), 0);
   assert.throws(() => assertBrowserFrameMatchesSlot({ ...geometry,
     nativeRectPt: { ...geometry.nativeRectPt, right: 93 } }, slotInsetsPt), /3 pt/);
+});
+
+test("browser fixture color does not include unrelated chrome pixels in the document bounds", { timeout: 5000 }, () => {
+  const frame = { width: 300, height: 240, stride: 300 * 4, scale: 1, contentScale: 1,
+    content: { x: 0, y: 0, width: 300, height: 240 }, time: 1,
+    data: Buffer.alloc(300 * 240 * 4) };
+  const set = (x, y, color) => {
+    const offset = y * frame.stride + x * 4;
+    frame.data[offset] = color[2];
+    frame.data[offset + 1] = color[1];
+    frame.data[offset + 2] = color[0];
+    frame.data[offset + 3] = 255;
+  };
+  const plane = [16, 17, 23], card = [25, 27, 36], chrome = [32, 28, 30];
+  for (let y = 30; y < 210; y++) {
+    for (let x = 40; x < 260; x++) set(x, y, card);
+  }
+  for (let y = 60; y < 190; y++) {
+    for (let x = 50; x < 250; x++) set(x, y, BROWSER_FIXTURE_CONTENT_COLOR);
+  }
+  for (const [x, y] of [[55, 35], [245, 205]]) set(x, y, chrome);
+  for (let y = 0; y < frame.height; y++) {
+    for (let x = 0; x < frame.width; x++) {
+      if ((x >= 40 && x < 260) && (y >= 30 && y < 210)) continue;
+      set(x, y, plane);
+    }
+  }
+
+  const geometry = measureBrowserFrameGeometry(frame, { cornerRadiusPt: 0,
+    targetRect: { x: 150, y: 120, width: 1, height: 1 } });
+  assert.equal(assertBrowserFrameMatchesSlot(geometry,
+    { left: 10, top: 30, right: 10, bottom: 20 }), 0);
 });
 
 test("browser metrics descriptor waits for the initial empty state and its visible content area", { timeout: 5000 }, async () => {

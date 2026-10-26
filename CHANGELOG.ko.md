@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-17: Served HTML과 pixel 측정에 하나의 구별되는 Browser fixture fill을 사용한다. 기존 회색 fill은 card chrome에도 일치해 측정 경계를 25 pt 확장한다. 재현 Browser 소유 검사는 수정 전에 실패하고 수정 후 여섯 case가 모두 통과하며 detector tolerance, component union 및 통과 한계는 유지한다.
+
 - F212.14-5-16: 일반 Editor와 hidden-only diagnostic Editor를 별도 절대
   process group으로 측정한다. 기존 동시 존재 before/after 추정은 유효한
   감소를 거부하며 component 비용을 귀속할 수 없다. 소유 회귀 검사는 수정
