@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-192: Registry 제거 정리를 기존 project transition lane에서 직렬화하여 정리 완료 전에 대체 project가 load되지 않도록 한다. 수정 전 소유 회귀 검사가 실패하고 수정 후 project-switch 검사 15개가 모두 통과한다. 과거 exposure 실패의 원인을 특정하지 않는다.
+
 - F212.14-5: Diagnostic 전용 공유 view-document observer와 명시적 diagnostic import-map 항목을 추가한다. 명시적 command 뒤 animation frame에서만 관찰을 시작하고 ResizeObserver 다음 frame의 크기와 source clock을 기존 event log에 기록하며 stop에서 대기 중인 작업을 모두 취소한다. Release staging은 observer를 제외하고 기존 import map을 유지한다. Observer, import와 staging 소유 검사가 통과했으며 이 기록은 실제 paint를 입증하지 않는다.
 
 - F212.14-5-1: 두 host의 diagnostic drag에 opt-in frame identity를 전달하고 window-check helper에서 stop artifact를 유지한다. Boolean이 아닌 identity 값과 recording 없는 identity를 거부하며 기본 drag recording을 유지한다. 양 host 옵션 소유 검사와 consumer 소유 검사 세 개가 통과했다. Runtime 측정은 별도다.

@@ -21,6 +21,8 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
+- [o] F239-192 — P1, F212.10-core-5 연결: 활성 project의 registry 제거 후 library 정리를 project activation과 직렬화한다. 제거 경로가 기존 transition lane을 우회하여 제거된 project를 정리하는 중에 대체 project가 load될 수 있다. Red: 소유 project-switch 회귀 검사가 보류한 정리 완료 전에 load를 관측한다. Green: 기존 lane으로 제거를 처리한 후 같은 회귀 검사 1개와 project-switch 소유 검사 15개가 통과한다. 이 순서 결함은 과거 exposure 실패의 원인을 입증하지 않는다.
+
 - [o] F239-191 — P1: 기존 순차 per-test runner로 native activation target을 실행하고 호출하는 모든 executable을 prerequisite로 선언한다. 현재 target은 runner의 결과·경과 시간·timeout 계약 없이 binary를 직접 호출하며 image_region_test를 prerequisite 없이 실행한다. Recipe를 수정하기 전에 비활성화 build/command fixture로 target 계약을 재현한다. 정확한 activation 사례와 순서를 유지하며 compile 준비가 이를 실행하면 안 된다. Red: 비활성화 dry-run fixture는 native runner 명령을 찾지 못하고 직접 executable 호출 아홉 개를 드러낸다. Green: 기존 순차 runner를 한 번 사용하고 누락한 image-region prerequisite를 추가하면 같은 fixture가 14.7ms에 통과한다. Fixture는 이름 아홉 개, 인자와 순서, 필요한 image-region compile과 직접 activation 호출이 없음을 검증한다. 앞선 prerequisite noise fixture는 준비 실패이며 Red가 아니다. 이 항목에서 앱이나 activation 검사를 실행하지 않는다.
 
 - [ ] F239-190 — P1, F239-78 및 F239-189 연결: capture_callback_test의 기존 first-failure summary assertion이 간헐적으로 실패한 원인을 분류한다. 첫 controlled stop-handoff Red 실행에서 새 사례를 실행하기 전에 기존 aggregate assertion도 실패했다. 그대로인 predicate는 이후 Red 두 실행과 Green 두 실행에서 통과한다. 원래 event dump와 보강한 조건별 진단을 보존하며 원인이나 수정은 확인되지 않았다. 깨끗한 handoff Red는 별도 근거로 유지하며 이 관측을 수정 완료나 미재현으로 종료하지 않는다.

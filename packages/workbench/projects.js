@@ -322,7 +322,7 @@ async function readProjects() {
     savedLayout = "";
     await selectProject(null);
     await showData(null);
-    await emptyToLibrary();
+    await inTurn(emptyToLibrary);
   } else if (removed.length && !browsing) listener?.update();
   if (removedProjects) {
     // The tabs of a removed project are in no layout. Whether this window removed the project or only showed it, this window first cleans up the surface modules of those surfaces and ends the sidecar sessions. If a module remains, it reopens the ended session, and when the folder of the removed project does not exist, that opening fails (F44). The host keeps the surface sessions of the remaining modules in retain (docs/spec/persistent-services.md).

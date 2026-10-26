@@ -367,6 +367,41 @@ test("a project removed from the registry by another window ends in the window t
   await projects.flush();
 });
 
+test("an activation received while a removed project is clearing waits for the clear", async () => {
+  const project = (id, tab) => ({ ...structuredClone(PROJECT), id, root: `/work/${id}`, spaces: [
+    { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab }] } }] } } },
+  ], activeSpaceId: `spc-${id}` });
+  const removed = project("prj-clearing-removed", "tab-clearing-removed");
+  const next = project("prj-clearing-next", "tab-clearing-next");
+  let listed = [removed, next];
+  let notify = null;
+  await projects.initialise({ ...store,
+    snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
+    onChange: (fn) => { notify = fn; },
+  });
+  await projects.activate(removed.id);
+
+  plane.events.length = 0;
+  plane.hold();
+  listed = [next];
+  notify();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(plane.events, ["empty started"], "removal did not begin clearing the active project");
+
+  const activation = projects.activate(next.id);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(plane.events, ["empty started"], "activation loaded a project before the prior clear finished");
+  plane.release();
+  await activation;
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(plane.events, ["empty started", "emptied", "load"],
+    "the removed-project clear ran after the replacement project was loaded");
+  assert.equal(projects.active()?.id, next.id);
+  assert.equal(projects.inLibrary(), false);
+  await projects.flush();
+});
+
 // WebKit runs the reaction of a promise that the host reply fulfilled at the next microtask checkpoint, and that checkpoint can come after the ResizeObserver callback of the next
 // rendering update. If the switch to the library happens in that reaction, elements of the work area that the observation round
 // already delivered (the file tree, the terminal screen) become 0x0 and a loop error occurs (F43). The switch must happen in the drawing that clears the plane,
