@@ -6927,6 +6927,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-189",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "static bool requestCaptureStopAfterStart(" }],
+    tests: [{ file: "native/darwin/tests/capture_callback_test.m", id: "a successful late start requests exactly one stop after completion" }],
+    expected: "Capture stop preserves its wait bound and delegates exactly-once cleanup to successful late start completion.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-188",
     implementation: [{ file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) postViewGeneration(" }],
     tests: [{ file: "packages/host/wailsv3/src/view_lifecycle_test.go", id: "TestReadyViewDeliveryDoesNotEndTheView" }],

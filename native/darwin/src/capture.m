@@ -77,9 +77,13 @@ static SPCaptureAttempt* captureAttempt = nil;
 @property (nonatomic) uint64_t requestMachTicks;
 @property (nonatomic) mach_timebase_info_data_t timebase;
 @property (nonatomic) BOOL startCompletionSeen;
+@property (nonatomic) BOOL startFailed;
 @property (nonatomic) BOOL firstSampleSeen;
 @property (nonatomic) BOOL delegateStopSeen;
 @property (nonatomic) BOOL failed;
+@property (nonatomic) BOOL stopRequested;
+@property (nonatomic) BOOL stopRequestIssued;
+@property (nonatomic, assign) dispatch_semaphore_t stopCompleted;
 @property (nonatomic, retain) NSNumber *stopAfterMilliseconds;
 @property (nonatomic) uint64_t stopTargetMachTicks;
 @property (nonatomic) uint64_t stopRegistrationMachTicks;
@@ -112,6 +116,11 @@ static SPCaptureAttempt* captureAttempt = nil;
 @end
 
 @implementation SPCaptureAttempt
+- (instancetype)init {
+    self = [super init];
+    if (self) _stopCompleted = dispatch_semaphore_create(0);
+    return self;
+}
 - (void)emit:(NSString *)phase level:(uint8_t)level callbackMachTicks:(NSNumber *)callbackMachTicks
     sampleType:(NSNumber *)sampleType statusPresent:(BOOL)statusPresent status:(NSNumber *)status
     displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(id)displayTimeMachTicks
@@ -216,12 +225,31 @@ static SPCaptureAttempt* captureAttempt = nil;
 - (void)dealloc {
     [_session release]; [_visible release]; [_occluded release]; [_displayID release]; [_applicationActive release];
     [_stopAfterMilliseconds release]; [_latestSampleStatus release];
+    if (_stopCompleted != NULL) dispatch_release(_stopCompleted);
     [super dealloc];
 }
 @end
 
 static SPCaptureAttempt *captureAttemptForStream(SCStream *stream) {
     return stream == nil ? nil : objc_getAssociatedObject(stream, &captureAttemptAssociationKey);
+}
+
+// The current caller or the delayed start callback claims the one stop request for its stream.
+static bool requestCaptureStopAfterStart(SCStream *stream, SPCaptureAttempt *attempt) {
+    if (stream == nil || attempt == nil) return false;
+    @synchronized (attempt) {
+        if (!attempt.stopRequested || !attempt.startCompletionSeen || attempt.startFailed
+            || attempt.stopRequestIssued) return false;
+        attempt.stopRequestIssued = YES;
+    }
+    [stream stopCaptureWithCompletionHandler:^(NSError *failed) {
+        if (failed != nil) {
+            reportCaptureStreamFailure(stream,
+                [NSString stringWithFormat:@"capture did not stop: %@", failed.localizedDescription], failed);
+        }
+        dispatch_semaphore_signal(attempt.stopCompleted);
+    }];
+    return true;
 }
 
 
@@ -1590,7 +1618,10 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:nil reason:nil];
     [stream startCaptureWithCompletionHandler:^(NSError* failed) {
         uint64_t completedAt = captureRawClock();
-        @synchronized (attempt) { attempt.startCompletionSeen = YES; }
+        @synchronized (attempt) {
+            attempt.startCompletionSeen = YES;
+            attempt.startFailed = failed != nil;
+        }
         [attempt emit:@"start-completion" level:SP_EVENT_DEBUG callbackMachTicks:@(completedAt) sampleType:nil
             statusPresent:NO status:nil displayTimePresent:NO displayTimeMachTicks:nil error:failed
             reason:failed.localizedDescription];
@@ -1599,6 +1630,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
                 [NSString stringWithFormat:@"capture did not start: %@", failed.localizedDescription], failed);
         }
         dispatch_semaphore_signal(startDone);
+        requestCaptureStopAfterStart(stream, attempt);
         dispatch_release(startDone);
     }];
     [attempt release];
@@ -1667,6 +1699,10 @@ int sp_capture_stop(double after) {
     }
     SCStream* stream = captureStream;
     SPCaptureAttempt *attempt = captureAttemptForStream(stream);
+    if (attempt == nil) {
+        setCaptureError(@"capture stream has no attempt context");
+        return 0;
+    }
     // Stops after a callback delivers a display time at or beyond the later of the call time and requested
     // presentation time. A pending size change must finish first. If no qualifying callback arrives within the
     // existing one-second wait, the stop reports an explicit error.
@@ -1694,30 +1730,23 @@ int sp_capture_stop(double after) {
         closeCaptureSampleIntake(stream);
     });
     dispatch_release(caughtUp);
-    // A stop request before the start finishes is rejected, so the stop happens after the start completes.
-    waitCaptureStart(5000);
-    dispatch_semaphore_t stopped = dispatch_semaphore_create(0);
-    // The completion block can arrive after the time limit has passed. The block owns one reference of the signal,
-    // and an error becomes a recording error
-    // only while that stream is still the current recording. The copied block retains the stream, so the address is
-    // not reused.
-    dispatch_retain(stopped);
-    [stream stopCaptureWithCompletionHandler:^(NSError* failed) {
-        if (failed != nil) {
-            reportCaptureStreamFailure(stream,
-                [NSString stringWithFormat:@"capture did not stop: %@", failed.localizedDescription], failed);
+    @synchronized (attempt) { attempt.stopRequested = YES; }
+    // A late start callback owns stop cleanup after the existing bound expires. The one-shot owner claim also
+    // resolves a completion that races the timeout without issuing two stop requests.
+    bool started = waitCaptureStart(5000);
+    bool stopIssued = requestCaptureStopAfterStart(stream, attempt);
+    BOOL stopIssuedOrAlready = stopIssued;
+    @synchronized (attempt) { stopIssuedOrAlready = stopIssuedOrAlready || attempt.stopRequestIssued; }
+    if (started && stopIssuedOrAlready) {
+        if (dispatch_semaphore_wait(attempt.stopCompleted,
+            dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
+            setCaptureError(@"capture stop did not complete within 5000ms");
         }
-        dispatch_semaphore_signal(stopped);
-        dispatch_release(stopped);
-    }];
-    if (dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
-        setCaptureError(@"capture stop did not complete within 5000ms");
     }
     // Source manifest finalization closes source intake and drains the shared writer queue.
     finalizeCaptureArtifacts(captureSink);
     @synchronized([SPCapture class]) { captureStream = nil; }
     dispatch_release(captureQueue);
-    dispatch_release(stopped);
     [stream release];
     // Records the reason for frames that were not recorded. blank means the window is not visible, and suspended
     // means the stream stopped.

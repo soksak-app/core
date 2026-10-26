@@ -9,6 +9,9 @@
 
 static int failures;
 static NSMutableArray *starts;
+static NSUInteger stopRequests;
+static BOOL stopRequestedBeforeStartCompletion;
+static NSError *stopReplyError;
 static const int8_t captureTracePolicy[SP_CLASS_COUNT] = {SP_EVENT_DEBUG, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR};
 static void check(BOOL condition, NSString *message) {
     fprintf(stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
@@ -20,6 +23,40 @@ static void expired(int signalNumber) {
 }
 static void holdStart(id stream, SEL selector, void (^reply)(NSError *)) {
     [starts addObject:[[reply copy] autorelease]];
+}
+static void observeStop(id stream, SEL selector, void (^reply)(NSError *)) {
+    stopRequests++;
+    SPCaptureAttempt *attempt = captureAttemptForStream((SCStream *)stream);
+    if (attempt == nil) stopRequestedBeforeStartCompletion = YES;
+    else @synchronized (attempt) { if (!attempt.startCompletionSeen) stopRequestedBeforeStartCompletion = YES; }
+    reply(stopReplyError);
+}
+static NSDictionary *artifactSnapshot(NSString *directory, NSError **errorOut) {
+    NSMutableDictionary *snapshot = [NSMutableDictionary dictionary];
+    NSDirectoryEnumerator *files = [[NSFileManager defaultManager] enumeratorAtPath:directory];
+    if (files == nil) {
+        if (errorOut != NULL) *errorOut = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoSuchFileError
+            userInfo:@{NSFilePathErrorKey: directory}];
+        return nil;
+    }
+    for (NSString *path in files) {
+        NSString *fullPath = [directory stringByAppendingPathComponent:path];
+        BOOL isDirectory = NO;
+        if (![[NSFileManager defaultManager] fileExistsAtPath:fullPath isDirectory:&isDirectory]) {
+            if (errorOut != NULL) *errorOut = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadUnknownError
+                userInfo:@{NSFilePathErrorKey: fullPath}];
+            return nil;
+        }
+        if (isDirectory) continue;
+        NSError *readError = nil;
+        NSData *data = [NSData dataWithContentsOfFile:fullPath options:0 error:&readError];
+        if (data == nil) {
+            if (errorOut != NULL) *errorOut = readError;
+            return nil;
+        }
+        snapshot[path] = data;
+    }
+    return snapshot;
 }
 static NSDictionary *lifecycleEvent(NSArray<NSDictionary *> *events, NSString *phase, NSString *session) {
     for (NSDictionary *event in events) {
@@ -388,6 +425,14 @@ int main(void) { @autoreleasepool {
                 && [failed[@"fields"][@"visible"] isKindOfClass:NSNumber.class]
                 && [failed[@"fields"][@"occluded"] isKindOfClass:NSNumber.class]
                 && [failed[@"fields"][@"applicationActive"] isKindOfClass:NSNumber.class]);
+        BOOL failureSummaryValid = failed != nil && [failed[@"level"] intValue] == SP_EVENT_ERROR
+            && ![failed[@"fields"][@"startCompletionSeen"] boolValue]
+            && ![failed[@"fields"][@"firstSampleSeen"] boolValue]
+            && ![failed[@"fields"][@"delegateStopSeen"] boolValue]
+            && [failed[@"fields"][@"reason"] containsString:@"no capture frame arrived"]
+            && [failed[@"fields"][@"machTimebaseNumerator"] unsignedIntValue] > 0
+            && [failed[@"fields"][@"machTimebaseDenominator"] unsignedIntValue] > 0
+            && failureCount == 1 && validFacts;
         check(failed != nil && [failed[@"level"] intValue] == SP_EVENT_ERROR
             && ![failed[@"fields"][@"startCompletionSeen"] boolValue]
             && ![failed[@"fields"][@"firstSampleSeen"] boolValue]
@@ -396,8 +441,9 @@ int main(void) { @autoreleasepool {
             && [failed[@"fields"][@"machTimebaseNumerator"] unsignedIntValue] > 0
             && [failed[@"fields"][@"machTimebaseDenominator"] unsignedIntValue] > 0
             && failureCount == 1 && validFacts,
-            [NSString stringWithFormat:@"the failure summary is in the process event sink before wait returns to folder cleanup (%@)",
-                failureEvents]);
+            [NSString stringWithFormat:@"the failure summary is in the process event sink before wait returns to folder cleanup "
+                @"(valid=%d session=%@ requestSession=%@ count=%lu facts=%@ event=%@)", failureSummaryValid,
+                failed[@"fields"][@"session"], timeoutSession, (unsigned long)failureCount, factsObserved, failed]);
         setCaptureError(@"fixture cleanup secondary error");
         NSArray *laterErrors = capturedEvents(^{ });
         check(lifecycleEvent(laterErrors, @"failed", timeoutSession) == nil,
@@ -406,6 +452,135 @@ int main(void) { @autoreleasepool {
         check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:path] error:&removeError],
             [NSString stringWithFormat:@"the failed-attempt folder is removed after its lifecycle summary (%@)", removeError]);
         discard();
+
+        // Hold a real stream's start callback across the bounded stop wait. The late callback must own the only
+        // valid stop request after the caller has closed sample intake and finalized its artifacts.
+        [starts removeAllObjects];
+        Method stopMethod = class_getInstanceMethod([SCStream class], @selector(stopCaptureWithCompletionHandler:));
+        check(stopMethod != NULL, @"the controlled stop request boundary exists");
+        if (stopMethod != NULL) {
+            IMP originalStop = method_setImplementation(stopMethod, (IMP)observeStop);
+            NSError *directoryError = nil;
+            BOOL directoryReady = [[NSFileManager defaultManager] createDirectoryAtPath:directory
+                withIntermediateDirectories:YES attributes:nil error:&directoryError];
+            check(directoryReady, [NSString stringWithFormat:@"the pending-start artifact directory exists (%@)", directoryError]);
+
+            // A failed start is already stopped; it must not receive a stop request.
+            [starts removeAllObjects];
+            NSArray *failedStartEvents = capturedEvents(^{ check(start(directory),
+                @"the controlled failed-start attempt starts"); });
+            NSDictionary *failedStartRequest = lifecycleEvent(failedStartEvents, @"start-request", nil);
+            if (starts.count == 1) {
+                void (^failStart)(NSError *) = starts[0];
+                failStart(fault(@"fixture controlled start failure"));
+            }
+            captureSink.latestCallbackSeen = YES;
+            captureSink.latestCallbackStatusPresent = YES;
+            captureSink.latestCallbackStatus = SCFrameStatusIdle;
+            captureSink.latestCallbackDisplayTimePresent = YES;
+            captureSink.latestCallbackDisplayTimeMachTicks = UINT64_MAX;
+            stopRequests = 0;
+            stopRequestedBeforeStartCompletion = NO;
+            stopReplyError = nil;
+            sp_capture_stop(0);
+            check(stopRequests == 0 && !stopRequestedBeforeStartCompletion,
+                @"a failed start completion does not receive a stop request");
+            check(strstr(sp_capture_error(), "fixture controlled start failure") != NULL,
+                @"a failed start keeps its original error through stop cleanup");
+            check(failedStartRequest != nil, @"the failed start retains its attempt request");
+
+            // Completion immediately after the stop boundary races the caller's waiter. The attempt must own one
+            // stop request, regardless of which side observes the completion first.
+            [starts removeAllObjects];
+            NSArray *onTimeStartEvents = capturedEvents(^{ check(start(directory),
+                @"the bounded-start attempt starts"); });
+            NSDictionary *onTimeRequest = lifecycleEvent(onTimeStartEvents, @"start-request", nil);
+            captureSink.latestCallbackSeen = YES;
+            captureSink.latestCallbackStatusPresent = YES;
+            captureSink.latestCallbackStatus = SCFrameStatusIdle;
+            captureSink.latestCallbackDisplayTimePresent = YES;
+            captureSink.latestCallbackDisplayTimeMachTicks = UINT64_MAX;
+            stopRequests = 0;
+            stopRequestedBeforeStartCompletion = NO;
+            stopReplyError = nil;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC),
+                dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+                    if (starts.count == 1) {
+                        void (^complete)(NSError *) = starts[0];
+                        complete(nil);
+                    }
+                });
+            sp_capture_stop(0);
+            check(onTimeRequest != nil && stopRequests == 1 && !stopRequestedBeforeStartCompletion,
+                @"a start completing inside the existing bound receives exactly one later stop request");
+
+            [starts removeAllObjects];
+            NSArray *pendingEvents = capturedEvents(^{ check(start(directory),
+                @"the pending-start cleanup attempt starts"); });
+            NSDictionary *pendingRequest = lifecycleEvent(pendingEvents, @"start-request", nil);
+            SCStream *pendingStream = [captureStream retain];
+            captureSink.latestCallbackSeen = YES;
+            captureSink.latestCallbackStatusPresent = YES;
+            captureSink.latestCallbackStatus = SCFrameStatusIdle;
+            captureSink.latestCallbackDisplayTimePresent = YES;
+            captureSink.latestCallbackDisplayTimeMachTicks = UINT64_MAX;
+            stopRequests = 0;
+            stopRequestedBeforeStartCompletion = NO;
+            stopReplyError = nil;
+            CFTimeInterval stopBegan = CACurrentMediaTime();
+            capturedEvents(^{ sp_capture_stop(0); });
+            double stopElapsed = CACurrentMediaTime() - stopBegan;
+            check(stopRequests == 0 && !stopRequestedBeforeStartCompletion,
+                @"a start timeout does not call stop before start completion");
+            check(stopElapsed >= 4.9 && stopElapsed < 6.0
+                && strstr(sp_capture_error(), "capture start did not complete within 5000ms") != NULL,
+                @"a pending start preserves its 5000ms timeout and returns within the existing bound");
+            check(captureStream == nil, @"the timed-out stream is retired before its delayed completion");
+            NSError *snapshotError = nil;
+            NSDictionary *beforeLateCompletion = artifactSnapshot(directory, &snapshotError);
+            check(beforeLateCompletion != nil, [NSString stringWithFormat:@"the finalized artifact snapshot is readable (%@)", snapshotError]);
+            NSObject *replacement = [NSObject new];
+            captureStream = (SCStream *)replacement;
+            stopReplyError = fault(@"fixture late cleanup stop failure");
+            NSArray *lateCompletionEvents = capturedEvents(^{
+                if (starts.count == 1) {
+                    void (^complete)(NSError *) = starts[0];
+                    complete(nil);
+                }
+            });
+            check(stopRequests == 1 && !stopRequestedBeforeStartCompletion,
+                @"a successful late start requests exactly one stop after completion");
+            check(strstr(sp_capture_error(), "capture start did not complete within 5000ms") != NULL
+                && strstr(sp_capture_error(), "fixture late cleanup stop failure") == NULL,
+                @"late cleanup preserves the primary start-timeout error and replacement recording state");
+            BOOL lateStopReported = NO;
+            for (NSDictionary *event in lateCompletionEvents) {
+                if (![event[@"name"] isEqual:@"native.record.error"]) continue;
+                lateStopReported |= [event[@"fields"][ @"text"] containsString:@"fixture late cleanup stop failure"];
+            }
+            check(lateStopReported, @"a late cleanup stop error is reported to diagnostics");
+            CMSampleBufferRef retiredSample = sampleWithStatus(YES);
+            int queuedBefore = captureSink.queued;
+            int completeBefore = captureSink.complete;
+            NSArray *retiredEvents = capturedEvents(^{
+                if (retiredSample != NULL) [captureSink stream:pendingStream
+                    didOutputSampleBuffer:retiredSample ofType:SCStreamOutputTypeScreen];
+            });
+            if (retiredSample != NULL) CFRelease(retiredSample);
+            NSDictionary *retired = lifecycleEvent(retiredEvents, @"sample-discarded", pendingRequest[@"fields"][@"session"]);
+            check(captureSink.queued == queuedBefore && captureSink.complete == completeBefore
+                && [retired[@"fields"][ @"reason"] isEqual:@"stream-replaced"],
+                @"a callback from the retired attempt cannot mutate replacement recording state");
+            snapshotError = nil;
+            NSDictionary *afterLateCompletion = artifactSnapshot(directory, &snapshotError);
+            check(afterLateCompletion != nil && [afterLateCompletion isEqualToDictionary:beforeLateCompletion],
+                @"late start and sample callbacks do not mutate finalized artifacts");
+            [pendingStream release];
+            [replacement release]; captureStream = nil;
+            stopReplyError = nil;
+            method_setImplementation(stopMethod, originalStop);
+            [starts removeAllObjects];
+        }
         method_setImplementation(method, originalMethod);
     }
     [starts release]; starts = nil;

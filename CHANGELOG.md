@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-189: Transfer exactly-once capture stop ownership to a late successful start callback when the existing start wait expires. Failed starts request no stop. Preserve the caller timeout, sample/source intake fence, finalized artifacts and replacement-recording isolation. The four-assertion controlled Red passes after correction, and late-stop and intake owners pass. Keep the unrelated intermittent summary assertion under F239-190 and the historical startup-delay cause unresolved.
+
 - F239-188: Preserve the live Wails view after a successful generation-qualified theme delivery. Remove the remaining invalid lifecycle end call from postViewGeneration. The owning ready-delivery regression fails before correction and passes afterward with no false end record; actual end owners still pass. Keep stale-generation cancellation and delivery-error behavior unchanged.
 
 - F212.16: Complete local process-label acceptance from the owning corrections, sidecar startup evidence and current non-activating native label check. Preserve the two existing publication gates and their IDs under F212.15. Host environment delivery removal is complete; public delivery and Activity Monitor-specific rendering are not claimed.

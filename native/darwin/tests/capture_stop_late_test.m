@@ -36,6 +36,10 @@ int main(void) { @autoreleasepool {
     captureStartDone = dispatch_semaphore_create(1);
     HeldStopFixture *held = [HeldStopFixture new];
     captureStream = (SCStream *)held;
+    SPCaptureAttempt *attempt = [[SPCaptureAttempt alloc] init];
+    attempt.session = @"capture-stop-late";
+    attempt.startCompletionSeen = YES;
+    objc_setAssociatedObject(held, &captureAttemptAssociationKey, attempt, OBJC_ASSOCIATION_RETAIN);
     clearCaptureError();
     sp_capture_stop(0);
     check(strstr(sp_capture_error(), "did not complete within 5000ms") != NULL,
@@ -57,6 +61,7 @@ int main(void) { @autoreleasepool {
     check([observed containsString:@"fixture late stop failure"], @"the late stop error is reported instead of discarded");
     [captureStream release]; captureStream = nil;
     [held release];
+    [attempt release];
     NSError *removeError = nil;
     check([[NSFileManager defaultManager] removeItemAtPath:captureSink.directory error:&removeError],
         [NSString stringWithFormat:@"the late-stop capture directory is removed (%@)", removeError]);

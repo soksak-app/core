@@ -22,6 +22,8 @@ int sp_capture_wait(void);
 // If the write queue capacity is exhausted, the recording fails. Stopping keeps both the earlier recording error and
 // the
 // stop error in sp_capture_error, so success is not judged by the returned frame count alone.
+// A start timeout keeps its existing error and wait bound. A successful late start owns exactly one deferred
+// native stop; failed starts request none. Deferred cleanup cannot change a replacement recording or finalized artifacts.
 int sp_capture_stop(double after);
 // Returns true if the last recording exhausted its callback evidence capacity.
 bool sp_capture_limited(void);

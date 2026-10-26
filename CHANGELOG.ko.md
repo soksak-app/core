@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-189: 기존 start 대기가 만료되면 정확히 한 번 capture stop 소유권을 나중에 성공하는 start callback으로 넘긴다. Start 실패 시 stop을 요청하지 않는다. 호출자 timeout, sample/source intake fence, 확정한 artifact와 교체된 recording 격리를 유지한다. 네 assertion의 controlled Red가 수정 후 통과하며 late-stop과 intake 소유 검사도 통과한다. 관련 없는 간헐적 summary assertion은 F239-190에서 유지하며 과거 startup 지연 원인은 미해결이다.
+
 - F239-188: generation을 지정한 theme 전달이 성공한 뒤 살아 있는 Wails view를 유지한다. postViewGeneration에 남은 잘못된 lifecycle 종료 호출을 제거한다. 소유 ready-delivery 회귀 검사는 수정 전 실패하고 수정 후 거짓 종료 record 없이 통과하며 실제 종료 소유 검사도 통과한다. 오래된 generation 취소와 전달 오류 동작을 유지한다.
 
 - F212.16: 소유 수정, sidecar startup 근거와 현재 비활성화 native label 검사로 로컬 process-label acceptance를 완료한다. 기존 publication gate 두 개와 ID를 F212.15 아래 유지한다. Host environment 전달 제거는 완료했으며 공개 전달이나 Activity Monitor 전용 표시를 주장하지 않는다.
