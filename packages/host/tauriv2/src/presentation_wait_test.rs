@@ -5,12 +5,18 @@ use serde_json::json;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::{PresentationWait, presentation_abandoned_payload};
+use super::{PresentationWait, ViewPlacement, presentation_abandoned_payload};
 use crate::event_record::buffered_fields;
 
 const SURFACE: &str = "presentation-probe-surface";
+const GENERATION: u64 = 7;
+const TICKET: u64 = 11;
 /// The surface of the abandon checks, which write abandoned records while the other checks read theirs.
 const ABANDON_SURFACE: &str = "presentation-abandon-surface";
+
+fn placement(frame: [f64; 4], visible: bool) -> ViewPlacement {
+    ViewPlacement { frame, visible }
+}
 
 /// The fields of each buffered abandoned-presentation record of the surface.
 fn abandoned_of_surface() -> Vec<serde_json::Value> {
@@ -22,16 +28,42 @@ fn abandoned_of_surface() -> Vec<serde_json::Value> {
 
 // contract: view.presentation-wait.ends
 #[test]
-fn a_view_joins_the_presentation_wait_once_per_change() {
+fn a_view_joins_once_for_a_changed_visible_placement_or_generation() {
     let wait = PresentationWait::default();
-    assert!(
-        wait.begin(SURFACE, None),
-        "the first join of the view joins the wait"
+    let first = placement([10.0, 20.0, 300.0, 200.0], true);
+    assert!(wait.needs_join(SURFACE, GENERATION, first));
+    wait.commit([(SURFACE.to_string(), GENERATION, first)]);
+    assert!(!wait.needs_join(SURFACE, GENERATION, first));
+    assert!(!wait.needs_join(SURFACE, GENERATION, placement(first.frame, false)));
+    assert!(wait.needs_join(
+        SURFACE,
+        GENERATION,
+        placement([11.0, 20.0, 300.0, 200.0], true)
+    ));
+    assert!(wait.needs_join(SURFACE, GENERATION + 1, first));
+    wait.commit([(
+        SURFACE.to_string(),
+        GENERATION,
+        placement(first.frame, false),
+    )]);
+    assert!(wait.needs_join(SURFACE, GENERATION, first));
+}
+
+// contract: view.presentation-wait.joins
+#[test]
+fn waits_are_keyed_by_surface_generation_and_ticket() {
+    let wait = PresentationWait::default();
+    assert!(wait.begin(SURFACE, GENERATION, TICKET));
+    assert!(!wait.begin(SURFACE, GENERATION, TICKET));
+    assert!(wait.begin(SURFACE, GENERATION, TICKET + 1));
+    assert!(wait.begin(SURFACE, GENERATION + 1, TICKET));
+    assert!(wait.waits(SURFACE, GENERATION, TICKET));
+    assert_eq!(
+        wait.end(SURFACE, GENERATION, TICKET, "presented"),
+        Ok(false)
     );
-    assert!(
-        !wait.begin(SURFACE, None),
-        "a second join of the waiting view does not join again"
-    );
+    assert!(wait.waits(SURFACE, GENERATION, TICKET + 1));
+    assert!(wait.waits(SURFACE, GENERATION + 1, TICKET));
 }
 
 // contract: view.presentation-wait.ends
@@ -39,71 +71,61 @@ fn a_view_joins_the_presentation_wait_once_per_change() {
 fn each_end_without_presentation_writes_the_abandoned_event() {
     for reason in ["process-ended", "hidden", "unresponsive"] {
         let wait = PresentationWait::default();
-        wait.begin(SURFACE, None);
+        wait.begin(SURFACE, GENERATION, TICKET);
         let before = abandoned_of_surface().len();
-        assert_eq!(
-            wait.end(SURFACE, reason),
-            Ok(true),
-            "the end {reason} ends the wait without presentation"
-        );
+        assert_eq!(wait.end(SURFACE, GENERATION, TICKET, reason), Ok(true));
         let written = abandoned_of_surface();
-        assert_eq!(
-            written.len(),
-            before + 1,
-            "the end {reason} writes one abandoned event"
-        );
+        assert_eq!(written.len(), before + 1);
         assert_eq!(
             written.last(),
             Some(&json!({"surface": SURFACE, "reason": reason}))
         );
-        assert_eq!(
-            wait.end(SURFACE, reason),
-            Ok(false),
-            "a second end {reason} ends nothing"
-        );
+        assert_eq!(wait.end(SURFACE, GENERATION, TICKET, reason), Ok(false));
     }
 }
 
 // contract: view.presentation-wait.ends
 #[test]
-fn a_presentation_ends_the_wait_without_an_abandoned_event() {
+fn a_presentation_ends_the_exact_wait_without_an_abandoned_event() {
     let wait = PresentationWait::default();
-    wait.begin("presentation-presented-surface", None);
+    wait.begin(SURFACE, GENERATION, TICKET);
     let before = buffered_fields("host.trace.view.presentation-abandoned").len();
     assert_eq!(
-        wait.end("presentation-presented-surface", "presented"),
+        wait.end(SURFACE, GENERATION, TICKET, "presented"),
         Ok(false)
     );
     assert_eq!(
         buffered_fields("host.trace.view.presentation-abandoned").len(),
-        before,
-        "a presentation writes no abandoned event"
+        before
     );
-    assert!(
-        wait.end(SURFACE, "timeout").is_err(),
-        "a reason that is not an end is refused"
-    );
+    assert!(wait.end(SURFACE, GENERATION, TICKET, "timeout").is_err());
 }
 
 // contract: view.presentation-wait.joins
 #[test]
-fn each_end_without_presentation_abandons_the_native_join_once() {
+fn lifecycle_ends_abandon_only_the_matching_native_joins() {
     for reason in ["process-ended", "hidden", "unresponsive"] {
         let wait = PresentationWait::default();
         let abandons = Arc::new(AtomicUsize::new(0));
         let counted = abandons.clone();
-        wait.begin(
+        wait.begin(ABANDON_SURFACE, GENERATION, TICKET);
+        assert!(wait.attach_abandon(
             ABANDON_SURFACE,
-            Some(Box::new(move || {
+            GENERATION,
+            TICKET,
+            Box::new(move || {
                 counted.fetch_add(1, Ordering::SeqCst);
                 Ok(())
-            })),
+            }),
+        ));
+        assert_eq!(
+            wait.end(ABANDON_SURFACE, GENERATION, TICKET, reason),
+            Ok(true)
         );
-        assert_eq!(wait.end(ABANDON_SURFACE, reason), Ok(true));
         assert_eq!(
             abandons.load(Ordering::SeqCst),
             1,
-            "the end {reason} abandons the native join once"
+            "the end {reason} abandons once"
         );
     }
 }
@@ -114,30 +136,88 @@ fn a_presentation_does_not_abandon_the_native_join() {
     let wait = PresentationWait::default();
     let abandons = Arc::new(AtomicUsize::new(0));
     let counted = abandons.clone();
-    wait.begin(
-        "presentation-joined-surface",
-        Some(Box::new(move || {
+    wait.begin(SURFACE, GENERATION, TICKET);
+    wait.attach_abandon(
+        SURFACE,
+        GENERATION,
+        TICKET,
+        Box::new(move || {
             counted.fetch_add(1, Ordering::SeqCst);
             Ok(())
-        })),
+        }),
     );
     assert_eq!(
-        wait.end("presentation-joined-surface", "presented"),
+        wait.end(SURFACE, GENERATION, TICKET, "presented"),
         Ok(false)
     );
-    assert_eq!(
-        abandons.load(Ordering::SeqCst),
-        0,
-        "the presentation does not abandon the native join"
-    );
+    assert_eq!(abandons.load(Ordering::SeqCst), 0);
+}
+
+// contract: view.presentation-wait.ends
+#[test]
+fn cancellation_removes_only_its_ticket_before_abandoning_the_native_join() {
+    let wait = Arc::new(PresentationWait::default());
+    let abandons = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&abandons);
+    let wait_for_abandon = Arc::clone(&wait);
+    wait.begin(SURFACE, GENERATION, TICKET);
+    wait.begin(SURFACE, GENERATION, TICKET + 1);
+    assert!(wait.attach_abandon(
+        SURFACE,
+        GENERATION,
+        TICKET,
+        Box::new(move || {
+            assert!(!wait_for_abandon.waits(SURFACE, GENERATION, TICKET));
+            counted.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }),
+    ));
+    let before = abandoned_of_surface().len();
+    assert_eq!(wait.abandon_ticket(TICKET), Ok(()));
+    assert!(!wait.waits(SURFACE, GENERATION, TICKET));
+    assert!(wait.waits(SURFACE, GENERATION, TICKET + 1));
+    assert_eq!(abandons.load(Ordering::SeqCst), 1);
+    assert_eq!(abandoned_of_surface().len(), before);
 }
 
 // contract: view.presentation-wait.joins
 #[test]
+fn window_reload_removes_all_waits_before_abandoning_each_native_join() {
+    let wait = Arc::new(PresentationWait::default());
+    let abandons = Arc::new(AtomicUsize::new(0));
+    for (surface, ticket) in [("reload-first-surface", 51), ("reload-second-surface", 52)] {
+        assert!(wait.begin(surface, GENERATION, ticket));
+        let wait_for_abandon = Arc::clone(&wait);
+        let counted = Arc::clone(&abandons);
+        assert!(wait.attach_abandon(
+            surface,
+            GENERATION,
+            ticket,
+            Box::new(move || {
+                assert!(!wait_for_abandon.waits("reload-first-surface", GENERATION, 51));
+                assert!(!wait_for_abandon.waits("reload-second-surface", GENERATION, 52));
+                counted.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }),
+        ));
+    }
+    assert_eq!(wait.abandon_all(), Ok(()));
+    assert_eq!(abandons.load(Ordering::SeqCst), 2);
+    assert!(wait.needs_join(
+        "reload-first-surface",
+        GENERATION,
+        ViewPlacement {
+            frame: [0.0; 4],
+            visible: true
+        },
+    ));
+}
+
+// contract: view.presentation-wait.ends
+#[test]
 fn the_abandoned_notice_names_the_surface_and_the_reason() {
     assert_eq!(
         presentation_abandoned_payload(SURFACE, "hidden"),
-        json!({"surface": SURFACE, "reason": "hidden"}),
-        "the notice of an abandoned presentation wait names its surface and reason"
+        json!({"surface": SURFACE, "reason": "hidden"})
     );
 }

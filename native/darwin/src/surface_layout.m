@@ -173,6 +173,21 @@ void surfaceLayoutCancel(void *owner) {
     releaseSettled();
 }
 
+void surfaceLayoutCancelTicket(void *owner, uint64_t ticket) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    for (SPLayoutRequest *request in [[waiting copy] autorelease]) {
+        if (request.owner != owner || request.ticket != ticket) continue;
+        [waiting removeObjectIdenticalTo:request];
+        request.ready(false);
+    }
+    if (activeOwner == owner && preparation == ticket) {
+        dropViewJoins();
+        if (committing) finishTransaction();
+        else surfaceLayoutCommit(owner, ticket);
+    }
+    releaseSettled();
+}
+
 // SPDisplayedFrame reads the target time of the next display refresh once. Content committed after a presentation
 // update finishes appears on the screen by that refresh at the latest. The refresh of the screen continues even when the window is occluded, so the display link is used.
 @interface SPDisplayedFrame : NSObject
@@ -229,7 +244,7 @@ int surfaceLayoutPrefersNear60FPS(void *handle) {
 void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
     NSCAssert(NSThread.isMainThread, @"surface presentation requires the UI thread");
     WKWebView *main = (WKWebView *)handle;
-    // All plugin DOM is in this web view. Other web views are independent document content.
+    // The app DOM is a separate web view; plugin roots and nested document regions are independent web views.
     uint64_t ticket = preparation;
     // Time at which the presentation check of the DOM drawn by the page was requested. This time and presented measure whether the wait
     // for presentation waits for the update of the frame that was drawn or for the update after it (docs/features.md F92).

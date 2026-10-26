@@ -76,7 +76,10 @@ type lifecyclePlatform struct {
 	ended        map[unsafe.Pointer]func()
 	posted       []string
 	// joins holds the native joins of the views, in the order of their joins.
-	joins []*viewJoin
+	joins            []*viewJoin
+	cancelledLayouts []unsafe.Pointer
+	cancelledTickets []uint64
+	layoutOperations []string
 }
 
 // viewJoin is one join of a view to a layout transaction. abandons counts the calls of its abandon.
@@ -94,6 +97,7 @@ func (p *lifecyclePlatform) JoinView(window unsafe.Pointer, ticket uint64, view 
 	p.joins = append(p.joins, join)
 	return func() error {
 		join.abandons++
+		p.layoutOperations = append(p.layoutOperations, "abandon")
 		return nil
 	}, true, nil
 }
@@ -101,6 +105,18 @@ func (p *lifecyclePlatform) JoinView(window unsafe.Pointer, ticket uint64, view 
 // EnqueueUI runs the function at once, because the test runs on the only thread.
 func (p *lifecyclePlatform) EnqueueUI(run func()) error {
 	run()
+	return nil
+}
+
+func (p *lifecyclePlatform) CancelLayout(window unsafe.Pointer) error {
+	p.cancelledLayouts = append(p.cancelledLayouts, window)
+	return nil
+}
+
+func (p *lifecyclePlatform) CancelLayoutTicket(window unsafe.Pointer, ticket uint64) error {
+	p.cancelledLayouts = append(p.cancelledLayouts, window)
+	p.cancelledTickets = append(p.cancelledTickets, ticket)
+	p.layoutOperations = append(p.layoutOperations, "cancel-ticket")
 	return nil
 }
 

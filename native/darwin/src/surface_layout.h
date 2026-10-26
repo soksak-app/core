@@ -9,6 +9,8 @@ bool surfaceLayoutRenderAtDisplayRate(void *webview);
 // Returns 1 when the web view prefers rendering updates at about 60 fps, 0 when it does not, and -1 when the feature does not exist.
 int surfaceLayoutPrefersNear60FPS(void *webview);
 void surfaceLayoutCancel(void *owner);
+// Cancels only the queued or active request with this owner and ticket. Completed or superseded tickets are unaffected.
+void surfaceLayoutCancelTicket(void *owner, uint64_t ticket);
 // Diagnostics only. Starts recording, for each layout transaction, the times of the begin, the app DOM presentation check, the commit, and the presentation check request
 // (ms, the same mach clock as the recording frames). Clears the earlier recording.
 void surfaceLayoutTraceStart(void);

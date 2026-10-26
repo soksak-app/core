@@ -22,7 +22,7 @@ use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
-use crate::presentation_wait::{PresentationWait, presentation_abandoned_payload, views_to_join};
+use crate::presentation_wait::{PresentationWait, ViewPlacement, presentation_abandoned_payload};
 use crate::source_origins::DeclaredSourceOrigins;
 use crate::surfaces::{Placement, require_region, surface_handle};
 use crate::surfaces::{ViewStart, view_origin_directory};
@@ -991,7 +991,7 @@ impl ViewChannels {
             .map(|channel| channel.plugin.clone())
     }
 
-    fn generation(&self, surface: &str) -> Option<u64> {
+    pub(crate) fn generation(&self, surface: &str) -> Option<u64> {
         self.lock()
             .get(surface)
             .map(|channel| channel.origin.generation)
@@ -1487,7 +1487,7 @@ pub(crate) fn sync_view(
     let data = window_data(window)?;
     if !visible {
         // A view that is not shown ends its presentation wait, because its presentation cannot come (presentation_wait.rs).
-        end_presentation_wait(window, surface, "hidden");
+        end_surface_presentation_wait(window, surface, "hidden");
     }
     data.documents.lifecycle().track(
         surface,
@@ -1678,7 +1678,12 @@ fn attach_view(
                         return;
                     }
                     if !responsive {
-                        end_presentation_wait(&notice_window, &notice_surface, "unresponsive");
+                        end_presentation_wait_for_generation(
+                            &notice_window,
+                            &notice_surface,
+                            notice_origin.generation,
+                            "unresponsive",
+                        );
                     }
                     let payload = view_responsiveness_notice(
                         &notice_surface,
@@ -1849,7 +1854,14 @@ fn view_failed(
         surface,
         plugin,
         origin,
-        || end_presentation_wait(window, surface, "process-ended"),
+        || {
+            end_presentation_wait_for_generation(
+                window,
+                surface,
+                origin.generation,
+                "process-ended",
+            )
+        },
         || {
             // The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
             if let Err(error) = data.documents.remove(&key) {
@@ -2492,6 +2504,8 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
         "document close",
         window
             .run_on_main_thread(move || {
+                end_surface_presentation_wait(&host, &surface, "hidden");
+                data.documents.presentation().forget_surface(&surface);
                 if let Some(generation) = data.declared_source_origins.current_view(&surface)
                     && let Some(plugin) = data
                         .documents
@@ -3064,7 +3078,7 @@ pub fn take_document_binary_of(
 mod binary_take_tests;
 
 /// Ends the presentation wait of the view of surface with reason, and writes the failure of the end to the application log.
-/// Joins each shown view that waits for no presentation yet to the open layout transaction of window with ticket
+/// Joins each changed visible root placement to the open layout transaction of window with ticket
 /// (docs/spec/plugin-processes.md, rule 6). A surface without a view document has no presentation to wait for, so it is skipped.
 pub(crate) fn join_shown_views(
     window: &Window,
@@ -3073,67 +3087,166 @@ pub(crate) fn join_shown_views(
     placements: &[Placement],
 ) -> Result<(), String> {
     let data = window_data(window)?;
-    let shown = placements
-        .iter()
-        .filter(|placement| placement.visible)
-        .map(|placement| placement.id.as_str());
-    let surfaces = views_to_join(
-        shown,
-        |surface| data.documents.lifecycle().spec(surface).is_some(),
-        |surface| data.documents.presentation().waits(surface),
-    );
-    for surface in surfaces {
+    for placement in placements {
+        let surface = placement.id.as_str();
+        if !placement.visible {
+            end_surface_presentation_wait(window, surface, "hidden");
+            continue;
+        }
+        if data.documents.lifecycle().spec(surface).is_none() {
+            continue;
+        }
+        let Some(generation) = data.documents.views().generation(surface) else {
+            continue;
+        };
+        let view_placement = ViewPlacement {
+            frame: [placement.x, placement.y, placement.w, placement.h],
+            visible: placement.visible,
+        };
+        if !data
+            .documents
+            .presentation()
+            .needs_join(surface, generation, view_placement)
+        {
+            continue;
+        }
         let key: Key = (surface.to_string(), VIEW_NAME.to_string());
         let Ok(view) = data.documents.get(&key) else {
             continue;
         };
+        if !data
+            .documents
+            .presentation()
+            .begin(surface, generation, ticket)
+        {
+            return Err(format!(
+                "view {surface} generation {generation} already waits for layout ticket {ticket}"
+            ));
+        }
         let presented_window = window.clone();
         let presented_surface = surface.to_string();
         let presented: Box<dyn FnOnce() + Send> = Box::new(move || {
             let ended = platform::current().and_then(|platform| {
                 platform.enqueue_ui(Box::new(move || {
-                    end_presentation_wait(&presented_window, &presented_surface, "presented")
+                    end_ticket_presentation_wait(
+                        &presented_window,
+                        &presented_surface,
+                        generation,
+                        ticket,
+                        "presented",
+                    )
                 }))
             });
             if let Err(error) = ended {
                 log_error("view channel", error);
             }
         });
-        let abandon = with_native_owner(window, move |owner| {
+        let joined = with_native_owner(window, move |owner| {
             platform.join_view(owner, ticket, view, presented)
-        })
-        .map_err(|error| error.to_string())?;
-        let Some(abandon) = abandon else {
-            continue;
+        });
+        match joined {
+            Ok(Some(abandon)) => {
+                data.documents
+                    .presentation()
+                    .attach_abandon(surface, generation, ticket, abandon);
+            }
+            Ok(None) => data
+                .documents
+                .presentation()
+                .remove_unjoined(surface, generation, ticket),
+            Err(error) => {
+                data.documents
+                    .presentation()
+                    .remove_unjoined(surface, generation, ticket);
+                return Err(error.to_string());
+            }
         };
-        if !data.documents.presentation().begin(surface, Some(abandon)) {
-            return Err(format!(
-                "view {surface} joined the layout transaction while it already waits"
-            ));
-        }
     }
     Ok(())
 }
 
-/// Ends the presentation wait of the view of surface. An end without presentation sends the view-presentation-abandoned notice to
-/// the window, which the surface counts in losses.abandoned.
-fn end_presentation_wait(window: &Window, surface: &str, reason: &str) {
+/// Ends every presentation join for a view generation and reports each abandoned layout ticket.
+fn end_presentation_wait_for_generation(
+    window: &Window,
+    surface: &str,
+    generation: u64,
+    reason: &str,
+) {
     let result = window_data(window).and_then(|data| {
         data.documents
             .presentation()
-            .end(surface, reason)
+            .end_generation(surface, generation, reason)
+            .map(|ended| ended.len())
             .map_err(|error| error.to_string())
     });
+    report_ended_presentation_waits(window, surface, reason, result);
+}
+
+/// Ends every presentation join for a hidden or closed surface.
+fn end_surface_presentation_wait(window: &Window, surface: &str, reason: &str) {
+    let result = window_data(window).and_then(|data| {
+        data.documents
+            .presentation()
+            .end_surface(surface, reason)
+            .map(|ended| ended.len())
+            .map_err(|error| error.to_string())
+    });
+    report_ended_presentation_waits(window, surface, reason, result);
+}
+
+/// Ends only the join identified by its surface, view generation and layout ticket.
+fn end_ticket_presentation_wait(
+    window: &Window,
+    surface: &str,
+    generation: u64,
+    ticket: u64,
+    reason: &str,
+) {
+    let result = window_data(window).and_then(|data| {
+        data.documents
+            .presentation()
+            .end(surface, generation, ticket, reason)
+            .map(|ended| usize::from(ended))
+            .map_err(|error| error.to_string())
+    });
+    report_ended_presentation_waits(window, surface, reason, result);
+}
+
+fn report_ended_presentation_waits(
+    window: &Window,
+    surface: &str,
+    reason: &str,
+    result: Result<usize, String>,
+) {
     match result {
-        Ok(true) => {
-            let payload = presentation_abandoned_payload(surface, reason);
-            if let Err(error) = emit_window(window, "view-presentation-abandoned", payload) {
-                log_error("view channel", error);
+        Ok(ended) if reason != "presented" => {
+            for _ in 0..ended {
+                let payload = presentation_abandoned_payload(surface, reason);
+                if let Err(error) = emit_window(window, "view-presentation-abandoned", payload) {
+                    log_error("view channel", error);
+                }
             }
         }
-        Ok(false) => {}
+        Ok(_) => {}
         Err(error) => log_error("view channel", error),
     }
+}
+
+/// Abandons the joins of a canceled ticket after removing its waits, so late callbacks cannot affect a later ticket.
+pub(crate) fn abandon_layout_presentation_waits(
+    window: &Window,
+    ticket: u64,
+) -> Result<(), String> {
+    let Ok(data) = window_data(window) else {
+        return Ok(());
+    };
+    data.documents.presentation().abandon_ticket(ticket)
+}
+
+/// Removes all presentation waits before the owner-wide layout cancellation of a window reload.
+pub(crate) fn abandon_all_layout_presentation_waits(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    data.documents.presentation().abandon_all()
 }
 
 #[cfg(test)]

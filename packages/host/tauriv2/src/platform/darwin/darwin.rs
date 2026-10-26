@@ -490,6 +490,10 @@ impl Platform for Darwin {
         layout::cancel(window);
         Ok(())
     }
+    fn cancel_layout_ticket(&self, window: Handle, ticket: u64) -> Result<(), String> {
+        layout::cancel_ticket(window, ticket);
+        Ok(())
+    }
     fn join_view(
         &self,
         window: Handle,

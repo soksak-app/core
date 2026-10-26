@@ -474,6 +474,8 @@ type Platform interface {
 	CommitLayout(window unsafe.Pointer, ticket uint64) bool
 	// CancelLayout cancels the layout in progress.
 	CancelLayout(window unsafe.Pointer) error
+	// CancelLayoutTicket cancels only the matching owner ticket; it does not cancel a later queued ticket.
+	CancelLayoutTicket(window unsafe.Pointer, ticket uint64) error
 	// JoinView joins the view webview to the open layout transaction of window with ticket, so that the commit waits until the view
 	// presents. presented is called on the UI thread when the view presents. abandon ends the join without presentation and is
 	// nil when joined is false, which means that no transaction of ticket is open.

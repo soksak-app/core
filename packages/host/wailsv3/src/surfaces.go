@@ -748,7 +748,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 					var err error
 					gone, placements, err = s.apply(win, req)
 					return err
-				}, func() error { return system.CancelLayout(win.NativeWindow()) })
+				}, func() error { return s.cancelLayoutPresentation(win.NativeWindow(), prepared.Ticket) })
 				if err == nil {
 					s.watch.Do(func() { s.watchInput(win) })
 				} else if !req.Settled {
@@ -778,7 +778,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 			if failure := outcome.restore(); failure != nil {
 				LogError("surface layout title bar restore", failure)
 			}
-			if failure := system.CancelLayout(win.NativeWindow()); failure != nil {
+			if failure := s.cancelLayoutPresentation(win.NativeWindow(), prepared.Ticket); failure != nil {
 				LogError("surface layout cancel", failure)
 			}
 		})
@@ -917,7 +917,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			// The commit and the cancel run outside the framework event lock.
 			if err := system.EnqueueUI(func() {
 				if waiting != nil {
-					if err := system.CancelLayout(win.NativeWindow()); err != nil {
+					if err := s.cancelLayoutPresentation(win.NativeWindow(), req.Ticket); err != nil {
 						waiting = fmt.Errorf("%w; cancelling layout: %v", waiting, err)
 					}
 					done <- result{err: waiting}
@@ -928,7 +928,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 					view := s.views[p.ID]
 					if view == nil {
 						failure := fmt.Errorf("surface %q closed before presentation", p.ID)
-						if err := system.CancelLayout(win.NativeWindow()); err != nil {
+						if err := s.cancelLayoutPresentation(win.NativeWindow(), req.Ticket); err != nil {
 							failure = fmt.Errorf("%w; cancelling layout: %v", failure, err)
 						}
 						done <- result{err: failure}
@@ -937,20 +937,23 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 					view.SetHidden(!p.Visible)
 					out = append(out, Placement{ID: p.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: p.Visible})
 				}
-				if req.Settled {
-					if err := s.joinShownViews(win.NativeWindow(), req.Ticket, req.Placements); err != nil {
-						if cancel := system.CancelLayout(win.NativeWindow()); cancel != nil {
-							err = fmt.Errorf("%w; cancelling layout: %v", err, cancel)
-						}
-						done <- result{err: err}
-						return
+				if err := s.joinViewsForPresentRequest(win.NativeWindow(), req, req.Placements); err != nil {
+					if cancel := s.cancelLayoutPresentation(win.NativeWindow(), req.Ticket); cancel != nil {
+						err = fmt.Errorf("%w; cancelling layout: %v", err, cancel)
 					}
+					done <- result{err: err}
+					return
 				}
 				committed := system.CommitLayout(win.NativeWindow(), req.Ticket)
 				if !committed {
-					done <- result{err: fmt.Errorf("surface preparation %d is no longer current", req.Ticket)}
+					failure := fmt.Errorf("surface preparation %d is no longer current", req.Ticket)
+					if cancel := s.cancelLayoutPresentation(win.NativeWindow(), req.Ticket); cancel != nil {
+						failure = fmt.Errorf("%w; cancelling layout: %v", failure, cancel)
+					}
+					done <- result{err: failure}
 					return
 				}
+				s.presentation.accept(req.Ticket)
 				if req.Settled {
 					s.run(false)
 				}

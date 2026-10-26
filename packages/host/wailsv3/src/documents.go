@@ -496,8 +496,12 @@ func surfaceStartScript(surface string, start ViewStart) (string, error) {
 // viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the
 // view-responsiveness event to the owning surface. It ends no call of the view (docs/spec/native-surfaces.md#view-surfaces).
 func (s *Surfaces) viewResponsiveness(surface, plugin string, generation uint64, responsive bool) {
+	if !s.documents.currentGeneration(surface, plugin, generation) {
+		s.traceStaleViewCallback(surface, "responsiveness")
+		return
+	}
 	if !responsive {
-		s.endPresentationWait(surface, "unresponsive")
+		s.endPresentationWaitFor(surface, 0, generation, "unresponsive")
 	}
 	if responsive {
 		EmitHost(LevelDebug, "host.trace.view.responsive", map[string]any{"plugin": plugin, "surface": surface})
@@ -514,7 +518,11 @@ func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, pa
 	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
 	if !visible {
 		// A view that is not shown ends its presentation wait, because its presentation cannot come (presentation_wait.go).
-		s.endPresentationWait(surfaceID, "hidden")
+		if channel, ok := s.documents.view(surfaceID); ok {
+			s.endPresentationWaitFor(surfaceID, 0, channel.generation, "hidden")
+		} else {
+			s.endPresentationWait(surfaceID, "hidden")
+		}
 	}
 	spec := s.viewRecords().track(surfaceID, surface, plugin, page, visible)
 	spec.start = start
@@ -1553,7 +1561,7 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation 
 	for _, call := range openCalls {
 		EmitHost(LevelError, "host.call.peer-lost", map[string]any{"plugin": call.plugin, "command": call.command, "reason": "process-ended"})
 	}
-	s.endPresentationWait(surface, "process-ended")
+	s.endPresentationWaitFor(surface, 0, generation, "process-ended")
 	// The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
 	s.emitToSurface(surface, "view-process-ended", map[string]any{"surface": surface, "plugin": channel.plugin, "generation": generation})
 	lifecycle := s.viewRecords()

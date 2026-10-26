@@ -40,6 +40,11 @@ func (implementation) CancelLayout(window unsafe.Pointer) error {
 	return nil
 }
 
+func (implementation) CancelLayoutTicket(window unsafe.Pointer, ticket uint64) error {
+	C.surfaceLayoutCancelTicket(window, C.uint64_t(ticket))
+	return nil
+}
+
 // JoinView joins the view webview to the layout transaction of window with ticket. The native join ends by the presentation of the
 // view or by abandon, whichever comes first. The native side calls the presentation callback only for a join that did not end by
 // abandon, and abandon does nothing after the presentation, so the callback handle is released exactly once.

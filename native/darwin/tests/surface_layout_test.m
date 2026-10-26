@@ -1,6 +1,5 @@
-// Checks that the display wait waits only for the single app DOM. Other webviews render independently, regardless of
-// origin and visibility, and a busy document must not block the native layout of the app DOM. The check does not
-// activate the application.
+// Checks that the app DOM presentation wait excludes independent webviews and that a layout transaction can join a
+// resized plugin root webview. A busy document must not block the app DOM layout. The check does not activate the app.
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
@@ -123,6 +122,103 @@ static WKWebView *page(NSWindow *window, WKWebViewConfiguration *configuration, 
     return view;
 }
 
+static BOOL snapshotShowsMarkerAtX(NSImage *image, CGFloat x) {
+    NSRect proposed = NSZeroRect;
+    CGImageRef cgImage = [image CGImageForProposedRect:&proposed context:nil hints:nil];
+    if (cgImage == NULL || image.size.width <= 0) return NO;
+    NSBitmapImageRep *bitmap = [[[NSBitmapImageRep alloc] initWithCGImage:cgImage] autorelease];
+    CGFloat scale = bitmap.pixelsWide / image.size.width;
+    NSInteger px = (NSInteger)floor(x * scale);
+    if (px < 0 || px >= bitmap.pixelsWide) return NO;
+    NSInteger markerRows = 0;
+    for (NSInteger py = 0; py < bitmap.pixelsHigh; py++) {
+        NSColor *color = [[bitmap colorAtX:px y:py] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+        // WebKit snapshots convert CSS colors when they create the bitmap, so identify the fixture's blue marker by its channel range.
+        if (color != nil && color.redComponent < 0.05 && color.greenComponent > 0.35 && color.greenComponent < 0.45
+            && color.blueComponent > 0.65 && color.blueComponent < 0.85) markerRows++;
+    }
+    return markerRows >= (NSInteger)ceil(60 * scale);
+}
+
+// A joined plugin root webview presents its resized content while its window transaction remains open, then the
+// transaction commits and allows the next layout request to start.
+static void checkRootViewResizeJoin(WKWebViewConfiguration *configuration) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 520, 400, 200)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    window.animationBehavior = NSWindowAnimationBehaviorNone;
+    WKWebView *view = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/root-resize");
+    [window orderFrontRegardless];
+    __block BOOL installed = NO;
+    [view evaluateJavaScript:@"document.head.innerHTML='<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}#marker{position:fixed;right:0;top:20px;width:8px;height:80px;background:rgb(0,80,180)}</style>';document.body.innerHTML='<div id=marker></div>'"
+        completionHandler:^(id value, NSError *error) {
+            check(error == nil, @"the root resize fixture installs a right-anchored marker"); installed = YES;
+        }];
+    until(^BOOL { return installed; });
+    __block BOOL fixtureStateRead = NO;
+    [view evaluateJavaScript:@"({viewport:[innerWidth,innerHeight],marker:(()=>{const r=document.querySelector('#marker').getBoundingClientRect(),s=getComputedStyle(document.querySelector('#marker'));return {rect:[r.x,r.y,r.width,r.height],background:s.backgroundColor}})()})"
+        completionHandler:^(id value, NSError *error) {
+            NSDictionary *state = [value isKindOfClass:NSDictionary.class] ? value : @{};
+            NSDictionary *marker = [state[@"marker"] isKindOfClass:NSDictionary.class] ? state[@"marker"] : @{};
+            check(error == nil && [state[@"viewport"] isEqual:@[@400, @200]]
+                    && [marker[@"rect"] isEqual:@[@392, @20, @8, @80]]
+                    && [marker[@"background"] isEqual:@"rgb(0, 80, 180)"],
+                [NSString stringWithFormat:@"the root resize fixture reports its expected viewport and marker geometry (%@, %@)", value, error]);
+            fixtureStateRead = YES;
+        }];
+    until(^BOOL { return fixtureStateRead; });
+    __block BOOL initialPresented = NO;
+    surfaceLayoutAfterPresentation(view, ^{ initialPresented = YES; });
+    until(^BOOL { return initialPresented; });
+    __block BOOL initialSnapshotFinished = NO;
+    __block BOOL initialPixels = NO;
+    WKSnapshotConfiguration *initialSnapshotConfiguration = [[[WKSnapshotConfiguration alloc] init] autorelease];
+    [view takeSnapshotWithConfiguration:initialSnapshotConfiguration completionHandler:^(NSImage *image, NSError *error) {
+        check(error == nil && image != nil, @"the initial root snapshot completes");
+        initialPixels = error == nil && image != nil && snapshotShowsMarkerAtX(image, 396);
+        initialSnapshotFinished = YES;
+    }];
+    until(^BOOL { return initialSnapshotFinished; });
+    check(initialPixels, @"the initial root snapshot contains the marker at its original right edge");
+
+    int otherOwner = 0;
+    __block BOOL otherStarted = NO;
+    __block BOOL presented = NO;
+    __block BOOL blockedAtPresentation = NO;
+    __block BOOL blockedDuringSnapshot = NO;
+    __block BOOL resizedPixels = NO;
+    surfaceLayoutBegin(window, 309, ^(int allowed) { check(allowed, @"the root resize transaction starts"); });
+    NSRect resizedFrame = view.frame;
+    resizedFrame.size.width = 320;
+    view.frame = resizedFrame;
+    check(surfaceLayoutJoinView(window, 309, view, ^{
+        blockedAtPresentation = !otherStarted;
+        __block BOOL snapshotFinished = NO;
+        WKSnapshotConfiguration *snapshotConfiguration = [[[WKSnapshotConfiguration alloc] init] autorelease];
+        snapshotConfiguration.afterScreenUpdates = NO;
+        [view takeSnapshotWithConfiguration:snapshotConfiguration
+            completionHandler:^(NSImage *image, NSError *error) {
+                check(error == nil && image != nil,
+                    [NSString stringWithFormat:@"the joined root snapshot completes before commit (%@)", error]);
+                blockedDuringSnapshot = !otherStarted;
+                resizedPixels = error == nil && image != nil && snapshotShowsMarkerAtX(image, 316);
+                snapshotFinished = YES;
+            }];
+        until(^BOOL { return snapshotFinished; });
+        presented = YES;
+    }), @"the resized root view joins its open layout transaction");
+    check(surfaceLayoutCommit(window, 309), @"the root resize commit defers until its presentation callback");
+    surfaceLayoutBegin(&otherOwner, 310, ^(int allowed) { otherStarted = allowed; });
+    check(!otherStarted, @"the next layout request waits for resized root pixels");
+    until(^BOOL { return presented && otherStarted; });
+    check(blockedAtPresentation, @"the resized root pixels arrive before transaction commit and next request start");
+    check(blockedDuringSnapshot, @"the next request remains blocked while the resized snapshot completes");
+    check(resizedPixels, @"the joined snapshot contains the marker at the resized right edge");
+    check(surfaceLayoutCommit(&otherOwner, 310), @"the layout after the root resize commits");
+    [window close];
+    [window release];
+}
+
 // A layout transaction that joins a view waits for the view's presentation before it commits. The transaction of another
 // owner starts only after that commit. An end without presentation (surfaceLayoutAbandonView) releases the deferred
 // commit, and a presentation that comes after the abandon is not reported.
@@ -161,8 +257,57 @@ static void checkViewJoin(WKWebViewConfiguration *configuration) {
     check(presented == 1, @"a presentation after the abandon is not reported");
     check(surfaceLayoutCommit(&otherOwner, 304), @"the transaction after the abandon commits");
 
+    __block BOOL replacementStarted = NO;
+    surfaceLayoutBegin(window, 305, ^(int allowed) { check(allowed, @"the ticket-scoped cancellation fixture starts its original ticket"); });
+    check(surfaceLayoutJoinView(window, 305, view, ^{}), @"the ticket-scoped cancellation fixture joins its view");
+    check(surfaceLayoutCommit(window, 305), @"the original ticket waits for its joined view");
+    surfaceLayoutBegin(window, 306, ^(int allowed) { replacementStarted = allowed; });
+    check(!replacementStarted, @"the replacement ticket waits for the original joined view");
+    check(surfaceLayoutAbandonView(window, view), @"abandoning the original ticket releases its last join");
+    surfaceLayoutCancelTicket(window, 305);
+    check(replacementStarted && surfaceLayoutCommit(window, 306),
+        @"cancelling the original ticket after abandonment preserves the replacement ticket");
+
+    surfaceLayoutBegin(window, 307, ^(int allowed) { check(allowed, @"the preparation replacement starts its older ticket"); });
+    surfaceLayoutBegin(window, 308, ^(int allowed) { check(allowed, @"the preparation replacement starts its newer ticket"); });
+    surfaceLayoutCancelTicket(window, 307);
+    check(surfaceLayoutCommit(window, 308), @"cancelling a superseded ticket leaves the active preparation open");
+
+    __block BOOL afterActiveCancelStarted = NO;
+    __block int canceledJoinPresented = 0;
+    surfaceLayoutBegin(window, 309, ^(int allowed) { check(allowed, @"the active ticket cancellation fixture starts"); });
+    check(surfaceLayoutJoinView(window, 309, view, ^{ canceledJoinPresented++; }),
+        @"the active ticket cancellation fixture joins its view");
+    check(surfaceLayoutCommit(window, 309), @"the active ticket cancellation fixture defers its commit");
+    surfaceLayoutBegin(&otherOwner, 310, ^(int allowed) { afterActiveCancelStarted = allowed; });
+    check(!afterActiveCancelStarted, @"the next owner waits for the active ticket join");
+    surfaceLayoutCancelTicket(window, 309);
+    check(afterActiveCancelStarted, @"canceling the exact active ticket releases its joined wait");
+    check(surfaceLayoutCommit(&otherOwner, 310), @"the owner after the canceled active ticket commits");
+    waitFrames(window.screen, 3);
+    check(canceledJoinPresented == 0, @"the canceled active ticket does not report a later presentation");
+
     [window close];
     [window release];
+}
+
+static void checkQueuedTicketCancel(void) {
+    int activeOwner = 0, targetOwner = 0, otherOwner = 0;
+    __block int canceledAllowed = -1;
+    __block BOOL targetTicketStarted = NO;
+    __block BOOL otherOwnerStarted = NO;
+    surfaceLayoutBegin(&activeOwner, 401, ^(int allowed) { check(allowed, @"the queued cancellation fixture starts its blocker"); });
+    surfaceLayoutBegin(&targetOwner, 402, ^(int allowed) { canceledAllowed = allowed; });
+    surfaceLayoutBegin(&targetOwner, 403, ^(int allowed) { targetTicketStarted = allowed; });
+    surfaceLayoutBegin(&otherOwner, 404, ^(int allowed) { otherOwnerStarted = allowed; });
+    surfaceLayoutCancelTicket(&targetOwner, 402);
+    check(canceledAllowed == 0, @"canceling a queued exact ticket resolves that request as denied");
+    check(surfaceLayoutCommit(&activeOwner, 401), @"the queued cancellation fixture releases its blocker");
+    check(targetTicketStarted && !otherOwnerStarted,
+        @"canceling one queued ticket preserves the other ticket of its owner and the next owner");
+    check(surfaceLayoutCommit(&targetOwner, 403), @"the preserved ticket of the canceled owner commits");
+    check(otherOwnerStarted, @"the preserved other owner starts after the target ticket commits");
+    check(surfaceLayoutCommit(&otherOwner, 404), @"the preserved other owner commits");
 }
 
 // The composition of the real DOM bounds and the native region must keep both bounds during preparation. Controls the
@@ -348,6 +493,8 @@ int main(void) { @autoreleasepool {
     checkRecordedComposition([[configuration copy] autorelease]);
     checkSettledWaitsForLayout(window, main);
     checkViewJoin([[configuration copy] autorelease]);
+    checkQueuedTicketCancel();
+    checkRootViewResizeJoin([[configuration copy] autorelease]);
 
     // In an open transaction, the new layout confirmation of the web process must also complete before the wait can
     // occur before the commit. The diagnostic trace records the start of this transaction, the app DOM display

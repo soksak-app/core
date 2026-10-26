@@ -14,10 +14,11 @@ use crate::documents;
 use crate::exposure;
 use crate::images;
 use crate::platform::{self, Handle};
+use crate::presentation_wait::ViewPlacement;
 use crate::sidecars::WindowSidecars;
 use crate::windows::{
-    Chrome, NativeFailure, TitlebarChange, cancel_window_layout, emit_window, restore_titlebar,
-    titlebar_chrome, validate_titlebar_height, window_data, with_native_owner,
+    Chrome, NativeFailure, TitlebarChange, cancel_window_layout_ticket, emit_window,
+    restore_titlebar, titlebar_chrome, validate_titlebar_height, window_data, with_native_owner,
 };
 
 /// The script that the surface webviews run before the document.
@@ -439,10 +440,10 @@ pub(crate) struct Rect {
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Placement {
     pub(crate) id: String,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) w: f64,
+    pub(crate) h: f64,
     pub(crate) visible: bool,
 }
 
@@ -477,6 +478,17 @@ fn cancel_layout_after_setup_error(
     match cancel() {
         Ok(()) => error,
         Err(cancel) => format!("{error}; cancelling layout: {cancel}"),
+    }
+}
+
+fn cancel_layout_with_waits(window: &Window, ticket: u64) -> Result<(), String> {
+    let abandon = documents::abandon_layout_presentation_waits(window, ticket);
+    let cancel = cancel_window_layout_ticket(window, ticket);
+    match (abandon, cancel) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(abandon), Ok(())) => Err(abandon),
+        (Ok(()), Err(cancel)) => Err(cancel),
+        (Err(abandon), Err(cancel)) => Err(format!("{abandon}; cancelling layout: {cancel}")),
     }
 }
 
@@ -1046,7 +1058,10 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     let cancel = || {
         let target = window.clone();
         if let Err(error) = platform.enqueue_ui(Box::new(move || {
-            log_failure("surface layout cancel", cancel_window_layout(&target));
+            log_failure(
+                "surface layout cancel",
+                cancel_layout_with_waits(&target, ticket),
+            );
         })) {
             log_error("surface layout cancel", error);
         }
@@ -1132,7 +1147,10 @@ pub(crate) async fn present(
         return Err(cancel_layout_after_setup_error(error, || {
             let target = window.clone();
             platform::current()?.enqueue_ui(Box::new(move || {
-                log_failure("surface layout cancel", cancel_window_layout(&target));
+                log_failure(
+                    "surface layout cancel",
+                    cancel_layout_with_waits(&target, ticket),
+                );
             }))
         }));
     }
@@ -1168,7 +1186,10 @@ pub(crate) async fn present(
         // returning so that the next split does not wait forever behind the failed owner.
         let target = window.clone();
         let cancel_error = platform::current()?.enqueue_ui(Box::new(move || {
-            log_failure("surface layout cancel", cancel_window_layout(&target));
+            log_failure(
+                "surface layout cancel",
+                cancel_layout_with_waits(&target, ticket),
+            );
         }));
         if let Err(cancel) = cancel_error {
             return Err(format!("{error}; cancelling layout: {cancel}"));
@@ -1207,26 +1228,55 @@ pub(crate) async fn present(
             {
                 Ok(placed) => placed,
                 Err(error) => {
-                    cancel_window_layout(&presentation_window)
+                    cancel_layout_with_waits(&presentation_window, ticket)
                         .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
                     return Err(error);
                 }
             };
-            if presentation_settled
-                && let Err(error) =
-                    documents::join_shown_views(&presentation_window, platform, ticket, &placed)
+            if let Err(error) =
+                documents::join_shown_views(&presentation_window, platform, ticket, &placed)
             {
-                cancel_window_layout(&presentation_window)
+                cancel_layout_with_waits(&presentation_window, ticket)
                     .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
                 return Err(error);
             }
-            let committed = with_native_owner(&presentation_window, move |owner| {
+            let committed = match with_native_owner(&presentation_window, move |owner| {
                 platform.commit_layout(owner, ticket)
-            })
-            .map_err(|e| e.to_string())?;
+            }) {
+                Ok(committed) => committed,
+                Err(error) => {
+                    cancel_layout_with_waits(&presentation_window, ticket)
+                        .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
+                    return Err(error.to_string());
+                }
+            };
             if !committed {
-                return Err(format!("surface preparation {ticket} is no longer current"));
+                let error = format!("surface preparation {ticket} is no longer current");
+                return match documents::abandon_layout_presentation_waits(
+                    &presentation_window,
+                    ticket,
+                ) {
+                    Ok(()) => Err(error),
+                    Err(abandon) => Err(format!("{error}; {abandon}")),
+                };
             }
+            let committed_views = placed.iter().filter_map(|placement| {
+                context
+                    .documents
+                    .views()
+                    .generation(&placement.id)
+                    .map(|generation| {
+                        (
+                            placement.id.clone(),
+                            generation,
+                            ViewPlacement {
+                                frame: [placement.x, placement.y, placement.w, placement.h],
+                                visible: placement.visible,
+                            },
+                        )
+                    })
+            });
+            context.documents.presentation().commit(committed_views);
             // The preparation update and the end decision run in order on the same UI thread.
             if committed
                 && presentation_settled

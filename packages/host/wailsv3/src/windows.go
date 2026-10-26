@@ -265,10 +265,10 @@ func prepareWindow(win *application.WebviewWindow) {
 }
 
 // cancelLayout cancels the surface layout in progress in the window. Call it on the UI thread.
-func cancelLayout(win *application.WebviewWindow) {
+func cancelLayout(s *Surfaces, win *application.WebviewWindow) {
 	owner := win.NativeWindow()
 	if err := system.EnqueueUI(func() {
-		if err := system.CancelLayout(owner); err != nil {
+		if err := s.cancelAllLayoutPresentations(owner); err != nil {
 			LogError("surface layout cancel", err)
 		}
 	}); err != nil {
@@ -278,6 +278,15 @@ func cancelLayout(win *application.WebviewWindow) {
 
 // An app DOM reload replaces all plugin documents but does not end the sessions.
 func (s *Surfaces) reloadSurfaceDocuments() ([]imageDetachTarget, error) {
+	if s.invoke != nil {
+		s.invoke(func() {
+			if err := s.presentation.cancelAll(); err != nil {
+				LogError("surface layout cancel", err)
+			}
+		})
+	} else if err := s.presentation.cancelAll(); err != nil {
+		LogError("surface layout cancel", err)
+	}
 	cancelLayout := s.reloadCancelLayout
 	if cancelLayout == nil {
 		cancelLayout = func() error { return system.CancelLayout(s.window.NativeWindow()) }
@@ -605,7 +614,7 @@ func (s *Surfaces) close() {
 	// A window that ends keeps no tab, so a removal that asked it is allowed.
 	s.host.removals.Abandon(s.name)
 	application.InvokeSync(func() {
-		cancelLayout(s.window)
+		cancelLayout(s, s.window)
 		if s.monitor != 0 {
 			system.UnwatchInput(s.monitor)
 		}

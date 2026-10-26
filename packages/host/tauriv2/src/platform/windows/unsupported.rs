@@ -339,6 +339,10 @@ pub fn cancel_layout(_window: Handle) -> Result<(), String> {
     missing("surface layout cancel")
 }
 
+pub fn cancel_layout_ticket(_window: Handle, _ticket: u64) -> Result<(), String> {
+    missing("surface layout ticket cancel")
+}
+
 pub fn join_view(
     _window: Handle,
     _ticket: u64,

@@ -79,6 +79,14 @@ pub fn cancel(window: Handle) {
     unsafe { surfaceLayoutCancel(window as *mut c_void) }
 }
 
+/// Cancels the exact queued or active surface placement transaction of window.
+pub fn cancel_ticket(window: Handle, ticket: u64) {
+    unsafe extern "C" {
+        fn surfaceLayoutCancelTicket(owner: *mut c_void, ticket: u64);
+    }
+    unsafe { surfaceLayoutCancelTicket(window as *mut c_void, ticket) }
+}
+
 /// Sets the title bar of the window to height (pt) when a new page starts. A visible window is set inside the start
 /// transaction of ticket and committed together with the first presentation of the new page. The result is passed to
 /// ready.

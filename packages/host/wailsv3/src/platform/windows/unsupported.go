@@ -411,6 +411,10 @@ func (implementation) CancelLayout(unsafe.Pointer) error {
 	return unsupported("surface layout cancel")
 }
 
+func (implementation) CancelLayoutTicket(unsafe.Pointer, uint64) error {
+	return unsupported("surface layout ticket cancel")
+}
+
 func (implementation) JoinView(unsafe.Pointer, uint64, unsafe.Pointer, func()) (func() error, bool, error) {
 	return nil, false, unsupported("view presentation wait")
 }

@@ -578,6 +578,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn commit_layout(&self, window: Handle, ticket: u64) -> Result<bool, String>;
     /// Cancels the surface placement transaction in progress of the window.
     fn cancel_layout(&self, window: Handle) -> Result<(), String>;
+    /// Cancels only the queued or active surface placement transaction identified by ticket.
+    fn cancel_layout_ticket(&self, window: Handle, ticket: u64) -> Result<(), String>;
     /// Joins the view document to the open layout transaction of window with ticket, so that the commit waits until the view
     /// presents. presented runs on the UI thread when the view presents. The returned function ends the join without the
     /// presentation; it is None when no transaction of ticket is open.

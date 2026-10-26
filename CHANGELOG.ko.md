@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-18: Child document의 독립성을 유지하면서 변경된 visible plugin root view를 각 layout transaction에 join한다. View generation과 layout ticket으로 wait를 식별하고 취소 전에 native join resource를 정리하며 실패한 ticket만 취소해 동기 handoff가 대체 ticket을 취소하지 않도록 한다. Wails와 Tauri 집중 owner 및 native resized-paint와 ticket-cancellation owner가 통과한다. 양쪽 최적화 diagnostic host가 macOS arm64에서 build되며 application 측정은 F212.14-5-5에 남는다.
+
 - F239-201: Window-check setup이 선택하는 platform 구현에 Darwin bundle 경로와 capture-text build를 둔다. 명시적 executable override와 build error는 유지한다. Platform audit는 기존 공통 분기를 거부했으며 이동 후 setup 소유 검사는 5/5, platform-audit 소유 검사는 2/2 통과한다. 양쪽 host test-inventory lane에 platform helper 두 개를 포함한다.
 
 - F212.14-5-19: 기존 capture stop target으로 HWP layout-display 허용 시간 전체를 기록한다. Content 누락을 판정하기 전에 실제 captured-frame coverage를 확인한다. 재현 stop-target 소유 검사는 수정 전에 실패하고 수정 후 불완전한 coverage와 정확한 deadline coverage를 포함한 HWP collector case 11개가 모두 통과한다. 100 ms deadline과 pixel 기준은 유지한다.

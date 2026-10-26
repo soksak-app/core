@@ -350,6 +350,9 @@ impl Platform for Windows {
     fn cancel_layout(&self, window: Handle) -> Result<(), String> {
         unsupported::cancel_layout(window)
     }
+    fn cancel_layout_ticket(&self, window: Handle, ticket: u64) -> Result<(), String> {
+        unsupported::cancel_layout_ticket(window, ticket)
+    }
     fn join_view(
         &self,
         window: Handle,

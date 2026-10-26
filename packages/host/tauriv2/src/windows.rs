@@ -198,7 +198,16 @@ pub(crate) fn reload_surface_documents(
     let owner = native_owner(window)?;
     let platform = platform::current()?;
     let window = window.clone();
-    platform.cancel_layout(owner)?;
+    let abandon = crate::documents::abandon_all_layout_presentation_waits(&window);
+    let cancel = platform.cancel_layout(owner);
+    match (abandon, cancel) {
+        (Ok(()), Ok(())) => {}
+        (Err(abandon), Ok(())) => return Err(abandon),
+        (Ok(()), Err(cancel)) => return Err(cancel),
+        (Err(abandon), Err(cancel)) => {
+            return Err(format!("{abandon}; cancelling layout: {cancel}"));
+        }
+    }
     let surfaces: Vec<_> = data
         .surface_hosts
         .lock()
@@ -438,11 +447,12 @@ pub(crate) fn with_native_owner<T: Send + 'static>(
     )
 }
 
-/// Cancels the open surface placement transaction of the window. The transaction of a closed window is canceled by
-/// Destroyed of that window, so there is nothing to cancel.
-pub(crate) fn cancel_window_layout(window: &Window) -> Result<(), String> {
+/// Cancels only the queued or active surface placement ticket of the window.
+pub(crate) fn cancel_window_layout_ticket(window: &Window, ticket: u64) -> Result<(), String> {
     let platform = platform::current()?;
-    match with_native_owner(window, move |owner| platform.cancel_layout(owner)) {
+    match with_native_owner(window, move |owner| {
+        platform.cancel_layout_ticket(owner, ticket)
+    }) {
         Ok(()) | Err(NativeFailure::Closed) => Ok(()),
         Err(NativeFailure::Failed(error)) => Err(error),
     }
@@ -816,6 +826,12 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             log_failure(
                 "window close",
                 platform.enqueue_ui(Box::new(move || {
+                    if let Ok(data) = &closing {
+                        log_failure(
+                            "surface layout cancel",
+                            data.documents.presentation().abandon_all(),
+                        );
+                    }
                     log_failure("surface layout cancel", platform.cancel_layout(owner));
                     match closing {
                         Ok(data) => dispose_plugin_hosts_of(&closing_host, &data, false),

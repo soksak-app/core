@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-18: Join changed visible plugin root views to every layout transaction while keeping child documents independent. Identify waits by view generation and layout ticket, retire native join resources before cancellation, and cancel only the failed ticket so a synchronous handoff cannot cancel its replacement. Focused Wails and Tauri owners and the native resized-paint and ticket-cancellation owner pass. Both optimized diagnostic hosts build on macOS arm64; application measurement remains under F212.14-5-5.
+
 - F239-201: Keep Darwin bundle paths and capture-text builds in the platform implementation selected by the window-check setup. Preserve explicit executable overrides and build errors. The platform audit rejected the former shared branch; setup owners pass 5/5 and platform-audit owners pass 2/2 after relocation. Both host test-inventory lanes include the two platform helpers.
 
 - F212.14-5-19: Record the full HWP layout-display allowance with the existing capture stop target. Verify actual captured-frame coverage before judging absent content. The reproducing stop-target owner fails before correction; all 11 HWP collector cases pass afterward, including incomplete and exact-deadline coverage. The 100 ms deadline and pixel criteria are unchanged.

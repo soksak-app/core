@@ -5,6 +5,180 @@ import (
 	"unsafe"
 )
 
+// contract: view.presentation-wait.changed-root-joins-each-geometry
+func TestUnsettledChangedRootPlacementJoinsItsPresentation(t *testing.T) {
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	window := unsafe.Pointer(new(int))
+	placements := []Placement{{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}}
+	request := PresentRequest{Ticket: 23, Placements: placements, Settled: false}
+	if err := s.joinViewsForPresentRequest(window, request, placements); err != nil {
+		t.Fatalf("join changed placement: %v", err)
+	}
+	if len(fake.joins) != 1 {
+		t.Fatalf("unsettled changed root placement joined %d views, want 1", len(fake.joins))
+	}
+	if fake.joins[0].ticket != request.Ticket || fake.joins[0].view != fake.created[0] {
+		t.Fatalf("join ticket/view are %d/%p, want %d/%p", fake.joins[0].ticket, fake.joins[0].view, request.Ticket, fake.created[0])
+	}
+}
+
+// contract: view.presentation-wait.changed-root-joins-each-geometry
+func TestChangedPlacementJoinTracksCommittedGeometryVisibilityAndGeneration(t *testing.T) {
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	root := fake.created[0]
+	child := unsafe.Pointer(new(int))
+	childKey := DocumentKey{Surface: "probe-surface", Name: "studio"}
+	if err := s.documents.Reserve(childKey); err != nil || !s.documents.Set(childKey, child) {
+		t.Fatalf("register nested document: reserve error %v", err)
+	}
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
+	request := func(ticket uint64, p Placement) PresentRequest {
+		return PresentRequest{Ticket: ticket, Placements: []Placement{p}, Settled: false}
+	}
+	join := func(req PresentRequest, p Placement) {
+		t.Helper()
+		if err := s.joinViewsForPresentRequest(window, req, []Placement{p}); err != nil {
+			t.Fatalf("join ticket %d: %v", req.Ticket, err)
+		}
+	}
+	complete := func(ticket uint64) {
+		t.Helper()
+		s.presentation.accept(ticket)
+		fake.joins[len(fake.joins)-1].presented()
+	}
+
+	first := request(30, placement)
+	join(first, placement)
+	if len(fake.joins) != 1 || fake.joins[0].view != root || fake.joins[0].view == child {
+		t.Fatalf("first join targets %v; want only root view %p, not nested document %p", fake.joins, root, child)
+	}
+	complete(first.Ticket)
+
+	unchanged := request(31, placement)
+	join(unchanged, placement)
+	if len(fake.joins) != 1 {
+		t.Fatalf("unchanged placement added a join; total joins %d, want 1", len(fake.joins))
+	}
+	s.presentation.accept(unchanged.Ticket)
+
+	placement.Rect.W = 321
+	changed := request(32, placement)
+	join(changed, placement)
+	if len(fake.joins) != 2 || fake.joins[1].ticket != changed.Ticket {
+		t.Fatalf("changed placement joins %v; want one join for ticket %d", fake.joins, changed.Ticket)
+	}
+	complete(changed.Ticket)
+
+	placement.Visible = false
+	hidden := request(33, placement)
+	join(hidden, placement)
+	if len(fake.joins) != 2 {
+		t.Fatalf("hidden placement added a join; total joins %d, want 2", len(fake.joins))
+	}
+	s.presentation.accept(hidden.Ticket)
+
+	placement.Visible = true
+	shown := request(34, placement)
+	join(shown, placement)
+	if len(fake.joins) != 3 || fake.joins[2].ticket != shown.Ticket {
+		t.Fatalf("newly shown placement joins %v; want one join for ticket %d", fake.joins, shown.Ticket)
+	}
+	complete(shown.Ticket)
+
+	channel, ok := s.documents.view("probe-surface")
+	if !ok {
+		t.Fatal("root view channel disappeared")
+	}
+	recreatedGeneration := channel.generation + 1
+	recreatedRoot := unsafe.Pointer(new(int))
+	s.documents.registerView("probe-surface", "probe", recreatedGeneration, recreatedRoot)
+	if !s.documents.Set(DocumentKey{Surface: "probe-surface", Name: viewRegionName}, recreatedRoot) {
+		t.Fatal("recreated root view document was not registered")
+	}
+	recreated := request(35, placement)
+	join(recreated, placement)
+	if len(fake.joins) != 4 || fake.joins[3].ticket != recreated.Ticket || fake.joins[3].view != recreatedRoot {
+		t.Fatalf("recreated generation joins %v; want root view %p for ticket %d", fake.joins, recreatedRoot, recreated.Ticket)
+	}
+}
+
+// contract: view.presentation-wait.completion-is-ticket-and-generation-specific
+func TestOlderViewPresentationCannotEndANewerJoin(t *testing.T) {
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 1, Y: 2, W: 300, H: 160}, Visible: true}
+	first := PresentRequest{Ticket: 40, Placements: []Placement{placement}}
+	if err := s.joinViewsForPresentRequest(window, first, []Placement{placement}); err != nil {
+		t.Fatalf("join first ticket: %v", err)
+	}
+	s.presentation.accept(first.Ticket)
+	channel, ok := s.documents.view(placement.ID)
+	if !ok {
+		t.Fatal("root view channel is missing")
+	}
+	s.endPresentationWaitFor(placement.ID, first.Ticket, channel.generation, "hidden")
+
+	placement.Rect.X = 8
+	second := PresentRequest{Ticket: 41, Placements: []Placement{placement}}
+	if err := s.joinViewsForPresentRequest(window, second, []Placement{placement}); err != nil {
+		t.Fatalf("join second ticket: %v", err)
+	}
+	s.presentation.accept(second.Ticket)
+	fake.joins[0].presented()
+	if !s.presentation.waits(placement.ID) {
+		t.Fatal("the first ticket's late callback ended the newer presentation wait")
+	}
+	fake.joins[1].presented()
+	if s.presentation.waits(placement.ID) {
+		t.Fatal("the current ticket's callback did not end its presentation wait")
+	}
+}
+
+// contract: view.presentation-wait.cancel-clears-ticket
+func TestLayoutCancellationClearsItsJoinWithoutPresentationAbandonment(t *testing.T) {
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	var events []string
+	s.events = func(name string, data any) { events = append(events, name) }
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 1, Y: 2, W: 300, H: 160}, Visible: true}
+	request := PresentRequest{Ticket: 42, Placements: []Placement{placement}}
+	if err := s.joinViewsForPresentRequest(window, request, []Placement{placement}); err != nil {
+		t.Fatalf("join canceled ticket: %v", err)
+	}
+	s.presentation.accept(request.Ticket)
+	if err := s.cancelLayoutPresentation(window, request.Ticket); err != nil {
+		t.Fatalf("cancel layout: %v", err)
+	}
+	if s.presentation.waits(placement.ID) || len(s.presentation.pending) != 0 {
+		t.Fatalf("canceled ticket left wait or pending state: waits=%v pending=%v", s.presentation.waiting, s.presentation.pending)
+	}
+	if len(fake.joins) != 1 {
+		t.Fatalf("canceled ticket has %d native joins, want 1", len(fake.joins))
+	}
+	if fake.joins[0].abandons != 1 {
+		t.Fatalf("canceled join abandonment count is %d; want 1", fake.joins[0].abandons)
+	}
+	if len(fake.cancelledLayouts) != 1 || fake.cancelledLayouts[0] != window {
+		t.Fatalf("native layout cancellations are %v; want exactly window %p", fake.cancelledLayouts, window)
+	}
+	if len(fake.cancelledTickets) != 1 || fake.cancelledTickets[0] != request.Ticket {
+		t.Fatalf("native layout cancellation tickets are %v; want only %d", fake.cancelledTickets, request.Ticket)
+	}
+	if len(fake.layoutOperations) != 2 || fake.layoutOperations[0] != "abandon" || fake.layoutOperations[1] != "cancel-ticket" {
+		t.Fatalf("layout cancellation operations are %v; want join abandonment before exact-ticket cancellation", fake.layoutOperations)
+	}
+	for _, event := range events {
+		if event == "view-presentation-abandoned" {
+			t.Fatal("layout cancellation reported presentation abandonment")
+		}
+	}
+	fake.joins[0].presented()
+	if s.presentation.waits(placement.ID) {
+		t.Fatal("late callback from a canceled ticket restored or ended a wait")
+	}
+}
+
 // contract: view.presentation-wait.joins
 // A shown view joins the open transaction once, and its presentation ends the wait without an abandon.
 func TestAShownViewJoinsTheOpenTransactionOnce(t *testing.T) {
