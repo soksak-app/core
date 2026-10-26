@@ -9,6 +9,17 @@ import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, pr
 
 const PROCESS_REQUEST = "host.trace.view.process-request";
 const PROCESS_READY = "host.trace.view.process-ready";
+
+/** Plans a horizontal width resize at the measured card's interior right boundary. */
+export function rightEdgeWidthDragPlan(grid, card) {
+  assert.ok(Number.isInteger(card?.c0) && Number.isInteger(card?.c1) && card.c1 > card.c0,
+    "width drag requires a measured card with ordered grid columns");
+  assert.ok(Array.isArray(grid?.lines?.x) && grid.lines.x.length > 2,
+    "width drag requires measured horizontal grid lines");
+  assert.ok(card.c0 > 0 && card.c1 < grid.lines.x.length - 1,
+    "width drag requires an interior horizontal boundary");
+  return { axis: "x", line: card.c1, dx: 80, dy: 0, ms: 500, times: 1 };
+}
 const HOST_OCR_LANGUAGES = Object.freeze({ ko: "ko-KR", en: "en-US" });
 
 /** Chooses a card that already has a visible-content anchor from another plugin. */

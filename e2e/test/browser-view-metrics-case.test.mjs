@@ -1,33 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertBrowserFrameMatchesSlot, browserViewDescriptor, browserWidthDragPlan } from "../benchmark/cases/browser.mjs";
-
-test("browser width drag uses the right edge of the measured card", { timeout: 5000 }, () => {
-  const grid = { lines: { x: [0, 196, 584, 970, 1186] } };
-  const parentCard = { c0: 1, c1: 2 };
-  const card = { c0: 2, c1: 3 };
-  const rightSidebar = { c0: 3, c1: 4, fixed: true };
-  const plan = browserWidthDragPlan(grid, card);
-  assert.deepEqual(plan, {
-    axis: "x", line: 3, dx: 80, dy: 0, ms: 500, times: 1,
-  });
-  assert.ok(plan.line > card.c0 && plan.line < grid.lines.x.length - 1,
-    "browser drag must use an interior boundary of the measured card");
-  assert.equal(parentCard.c0, 1, "the old line 1 is the outside edge of the parent card");
-  assert.ok(plan.line === card.c1 && plan.line === rightSidebar.c0,
-    "the selected boundary must resize the Browser card against the fixed right sidebar");
-});
-
-test("browser width drag rejects a card without ordered grid columns", { timeout: 5000 }, () => {
-  const grid = { lines: { x: [0, 196, 584, 970, 1186] } };
-  assert.throws(() => browserWidthDragPlan(grid, { c0: 3, c1: 2 }), /ordered grid columns/);
-});
-
-test("browser width drag rejects a card whose right edge is the outer grid edge", { timeout: 5000 }, () => {
-  const grid = { lines: { x: [0, 196, 584, 970, 1186] } };
-  assert.throws(() => browserWidthDragPlan(grid, { c0: 2, c1: 4 }), /interior horizontal boundary/);
-});
+import { assertBrowserFrameMatchesSlot, browserViewDescriptor } from "../benchmark/cases/browser.mjs";
 
 test("browser pixel geometry matches the independently declared document slot", { timeout: 5000 }, () => {
   const geometry = { cardRectPt: { left: 0, top: 0, right: 100, bottom: 100 },

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { readFrame } from "@soksak/window-check/frame.mjs";
+import * as viewMetrics from "../view-metrics-collection.mjs";
 import { closeViewGroup, collectViewStartAndMemory, openRecordedView, processStartSamples, viewContentFrameEvents,
   mapViewContentFramesToCapture, viewCardWithDifferentPluginTab, waitForViewReadiness,
   withViewContentTrace } from "../view-metrics-collection.mjs";
@@ -53,6 +54,29 @@ test("view anchor selection prefers the requested card and finds another card wh
   assert.throws(() => viewCardWithDifferentPluginTab({ cards: [{ id: "only", tabs: [
     { id: "same", plugin: "fixture" },
   ] }] }, "fixture"), /no card with an open plugin other than fixture/);
+});
+
+test("shared width drag plan uses the scratch card right boundary", { timeout: 5000 }, () => {
+  const grid = { lines: { x: [0, 196, 503, 970, 1186] } };
+  const card = { c0: 2, c1: 3 };
+  const rightSidebar = { c0: 3, c1: 4, fixed: true };
+  assert.equal(typeof viewMetrics.rightEdgeWidthDragPlan, "function",
+    "the shared view collector does not expose its right-edge width drag plan");
+  const plan = viewMetrics.rightEdgeWidthDragPlan(grid, card);
+  assert.deepEqual(plan, { axis: "x", line: 3, dx: 80, dy: 0, ms: 500, times: 1 });
+  assert.ok(plan.line > card.c0 && plan.line < grid.lines.x.length - 1,
+    "the width drag must use the scratch card's interior right boundary");
+  assert.equal(plan.line, rightSidebar.c0,
+    "the width drag must move the boundary between the scratch card and fixed right sidebar");
+  assert.notEqual(plan.line, 1, "line 1 is outside the actual c2-c3 scratch card");
+});
+
+test("shared width drag plan rejects invalid card boundaries", { timeout: 5000 }, () => {
+  assert.equal(typeof viewMetrics.rightEdgeWidthDragPlan, "function",
+    "the shared view collector does not expose its right-edge width drag plan");
+  const grid = { lines: { x: [0, 196, 583, 970, 1186] } };
+  assert.throws(() => viewMetrics.rightEdgeWidthDragPlan(grid, { c0: 3, c1: 2 }), /ordered grid columns/);
+  assert.throws(() => viewMetrics.rightEdgeWidthDragPlan(grid, { c0: 2, c1: 4 }), /interior horizontal boundary/);
 });
 
 test("the exported lifecycle collector forwards the selected card ID to its first recording", { timeout: 5000 }, async (t) => {

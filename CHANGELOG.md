@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-13: Select the measured Terminal card’s interior right divider through the shared Browser width planner. The fixed divider leaves the scratch view unchanged. All 27 affected owner cases pass; application source-frame acceptance remains separate.
+
 - F239-47-30-4: Classify the historical size assertions using retained native runner output and fixture source. Metadata-file indexing mislabeled earlier frames, and the one-frame run selected the frame awaited before resize. Neither assertion establishes stale post-resize pixels. Preserve current complete post-resize acceptance under F240; no capture correction or current runtime pass is claimed.
 
 - F212.14-5-10: Measure card boundaries through plane-colored slot gutters and declared rounded corners. Require independent perpendicular ownership for endpoint separator strokes and reject internal gaps or neighboring-card spans. All four view consumers provide the effective radius from public settings. The boundary regressions fail before correction; all 46 affected owners and preserved two-host frame replays pass afterward. Application measurements remain separate.

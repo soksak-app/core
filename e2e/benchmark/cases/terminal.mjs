@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { drag, keepCommonSettings } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
-  mapViewContentFramesToCapture, requireViewContentFrameCoverage,
+  mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
   waitForViewReadiness, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
@@ -194,8 +194,12 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
 }
 
 async function terminalDragObservation(t, s, descriptor, surface, card, configDir, cornerRadiusPt) {
+  const beforeGrid = await s.get("core.grid");
+  const pane = beforeGrid.cards.find((item) => item.id === card);
+  assert.ok(pane, `terminal measurement card ${card} is absent before drag`);
+  const plan = rightEdgeWidthDragPlan(beforeGrid, pane);
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
-    drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }));
+    drag(t, s, plan, { capture: true }));
   const run = traced.action;
   mkdirSync(join(configDir, "logs"), { recursive: true });
   const directory = mkdtempSync(join(configDir, "logs", "terminal-view-drag-"));

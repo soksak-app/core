@@ -7,7 +7,8 @@ import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
-  mapViewContentFramesToCapture, requireViewContentFrameCoverage, waitForViewReadiness, withViewContentTrace }
+  mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
+  waitForViewReadiness, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 
 /** Browser-specific inputs for the shared view lifecycle measurement collector. */
@@ -62,17 +63,6 @@ export function assertBrowserFrameMatchesSlot(geometry, slotInsetsPt) {
   assert.ok(errorPt <= GEOMETRY_LIMIT_PT,
     `browser content differs from its declared card slot by ${errorPt} pt (limit ${GEOMETRY_LIMIT_PT} pt)`);
   return errorPt;
-}
-
-/** The browser view resize uses the right boundary of its measured card. */
-export function browserWidthDragPlan(grid, card) {
-  assert.ok(Number.isInteger(card?.c0) && Number.isInteger(card?.c1) && card.c1 > card.c0,
-    "browser width drag requires a measured card with ordered grid columns");
-  assert.ok(Array.isArray(grid?.lines?.x) && grid.lines.x.length > 2,
-    "browser width drag requires measured horizontal grid lines");
-  assert.ok(card.c0 > 0 && card.c1 < grid.lines.x.length - 1,
-    "browser width drag requires an interior horizontal boundary");
-  return { axis: "x", line: card.c1, dx: 80, dy: 0, ms: 500, times: 1 };
 }
 
 /** Serves a distinctive opaque browser document with live content pixels for layout and drag recordings. */
@@ -169,7 +159,7 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
   const beforeGrid = await s.get("core.grid");
   const pane = beforeGrid.cards.find((item) => item.id === card);
   assert.ok(pane, `browser measurement card ${card} is absent before drag`);
-  const plan = browserWidthDragPlan(beforeGrid, pane);
+  const plan = rightEdgeWidthDragPlan(beforeGrid, pane);
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
     drag(t, s, plan, { capture: true }));
   const run = traced.action;
