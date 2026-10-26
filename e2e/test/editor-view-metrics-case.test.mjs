@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { collectEditorProcessFootprint, editorFootprintEvidence, editorGeometryPalette, editorSourceContentFrame, editorViewDescriptor }
+import { collectEditorProcessFootprint, collectHiddenEditorFootprint, editorFootprintEvidence, editorGeometryPalette,
+  editorSourceContentFrame, editorViewDescriptor }
   from "../benchmark/cases/editor.mjs";
 import { editorSlotInsets } from "../benchmark/cases/editor.mjs";
 import { measureViewFrameGeometry } from "../view-frame-geometry.mjs";
@@ -46,23 +47,108 @@ test("editor footprint collector binds OS samples to the exact public view proce
     return 5_000_000;
   });
   assert.deepEqual(sampled, [401, 999]);
-  assert.deepEqual(result, { pids: [401, 999], processes: [
+  assert.deepEqual(result, { pids: [401, 999], surfaces: ["editor-a"], processes: [
     { pid: 401, footprintBytes: 5_000_000 }, { pid: 999, footprintBytes: 5_000_000 },
   ] });
 });
 
-test("editor hidden fixture footprint uses the same live view PID and exact diagnostic document", () => {
-  const before = [{ pid: 401, footprintBytes: 5_000_000 }];
-  const after = [{ pid: 401, footprintBytes: 5_250_000 }];
-  assert.deepEqual(editorFootprintEvidence(before, after,
+test("editor footprint uses independent normal-view and hidden-only process-group totals", () => {
+  const viewProcesses = [{ pid: 401, footprintBytes: 5_000_000 }];
+  const hiddenProcesses = [{ pid: 402, footprintBytes: 4_800_000 }];
+  assert.deepEqual(editorFootprintEvidence(viewProcesses, hiddenProcesses,
     { mounted: true, documentLength: 22, historyEntries: 1, lines: 2, regionHistoryEntries: 0 },
     { documentLength: 22, lines: 2 }),
-  { viewBytes: 5_000_000, hiddenDomBytes: 250_000 });
-  assert.throws(() => editorFootprintEvidence(before, [{ pid: 402, footprintBytes: 5_250_000 }],
-    { mounted: true, documentLength: 22, historyEntries: 1, lines: 2 }, { documentLength: 22, lines: 2 }), /same view process identities/);
-  assert.throws(() => editorFootprintEvidence(before, after,
+  { viewBytes: 5_000_000, hiddenDomBytes: 4_800_000 });
+  assert.deepEqual(editorFootprintEvidence(viewProcesses, [{ pid: 401, footprintBytes: 4_800_000 }],
+    { mounted: true, documentLength: 22, historyEntries: 1, lines: 2, regionHistoryEntries: 0 },
+    { documentLength: 22, lines: 2 }),
+  { viewBytes: 5_000_000, hiddenDomBytes: 4_800_000 }, "the hidden-only sample is an absolute snapshot even when the PID is reused");
+  assert.throws(() => editorFootprintEvidence(viewProcesses, hiddenProcesses,
     { mounted: true, documentLength: 21, historyEntries: 1, lines: 2, regionHistoryEntries: 0 },
     { documentLength: 22, lines: 2 }), /unexpected document length/);
+});
+
+test("hidden-only editor measurement starts, reads and removes one isolated Editor process group", async () => {
+  const events = [];
+  let surfaces = [];
+  const fixture = { mounted: true, documentLength: 22, historyEntries: 1, lines: 2, regionHistoryEntries: 0 };
+  const session = {
+    async get(name) {
+      events.push(`get:${name}`);
+      if (name === "core.surfaces") return surfaces;
+      if (name === "core.grid") return { cards: [{ id: "card-a", active: "browser-a",
+        tabs: [{ id: "browser-a", plugin: "browser" }] }] };
+      if (name === "host.window") return { documents: [{ surface: "hidden-a", document: "", process: 402 }] };
+      throw new Error(`unexpected status ${name}`);
+    },
+    async until(name, predicate) {
+      events.push(`until:${name}`);
+      assert.equal(name, "core.surfaces");
+      assert.equal(predicate(surfaces), true);
+      return surfaces;
+    },
+    async run(name, params) {
+      events.push(`run:${name}:${params.action ?? ""}`);
+      if (name === "core.card.add-tab") {
+        assert.deepEqual(params, { card: "card-a", plugin: "editor",
+          params: { diagnosticMode: "hidden-memory", document: "SOKSAK EDITOR CONTENT\n" } });
+        surfaces = [{ surface: "hidden-a", plugin: "editor", exposes: ["command editor.memory.hidden"],
+          status: { phase: "ready", error: null } }];
+        return { tab: "hidden-a" };
+      }
+      if (name === "editor.memory.hidden" && params.action === "read") return fixture;
+      if (name === "editor.memory.hidden" && params.action === "remove") return { mounted: false };
+      if (name === "core.tab.close") {
+        assert.equal(params.tab, "hidden-a");
+        surfaces = [];
+        return { closed: true };
+      }
+      throw new Error(`unexpected command ${name}`);
+    },
+  };
+  const viewProcesses = [{ pid: 401, footprintBytes: 5_000_000 }];
+  const measuredPids = [];
+  const result = await collectHiddenEditorFootprint(session, viewProcesses, async (pid) => {
+    measuredPids.push(pid);
+    return 4_800_000;
+  });
+  assert.deepEqual(result.editorFootprint, { viewBytes: 5_000_000, hiddenDomBytes: 4_800_000 });
+  assert.deepEqual(result.evidence, { surface: "hidden-a", processGroupPids: [402], processGroupSurfaces: ["hidden-a"],
+    viewProcesses, hiddenProcesses: [{ pid: 402, footprintBytes: 4_800_000 }], fixture });
+  assert.deepEqual(measuredPids, [402]);
+  assert.ok(events.indexOf("run:editor.memory.hidden:read") < events.indexOf("get:host.window"),
+    "the hidden-only process was sampled before the fixture read");
+  assert.ok(events.includes("run:editor.memory.hidden:remove"), "the hidden EditorView was not removed");
+  assert.ok(events.includes("run:core.tab.close:"), "the hidden-only Editor surface was not closed");
+  assert.deepEqual(surfaces, []);
+});
+
+test("hidden-only editor measurement preserves the primary read error while removing and closing its view", async () => {
+  const events = [];
+  let surfaces = [];
+  const session = {
+    async get(name) {
+      if (name === "core.surfaces") return surfaces;
+      if (name === "core.grid") return { cards: [{ id: "card-a", active: "browser-a",
+        tabs: [{ id: "browser-a", plugin: "browser" }] }] };
+      throw new Error(`unexpected status ${name}`);
+    },
+    async until(name, predicate) { assert.equal(name, "core.surfaces"); assert.equal(predicate(surfaces), true); return surfaces; },
+    async run(name, params) {
+      if (name === "core.card.add-tab") {
+        surfaces = [{ surface: "hidden-a", plugin: "editor", exposes: ["command editor.memory.hidden"], status: { phase: "ready" } }];
+        return { tab: "hidden-a" };
+      }
+      if (name === "editor.memory.hidden" && params.action === "read") throw new Error("fixture read failed");
+      if (name === "editor.memory.hidden" && params.action === "remove") { events.push("removed"); return { mounted: false }; }
+      if (name === "core.tab.close") { events.push("closed"); surfaces = []; return { closed: true }; }
+      throw new Error(`unexpected command ${name}`);
+    },
+  };
+  await assert.rejects(collectHiddenEditorFootprint(session, [{ pid: 401, footprintBytes: 5_000_000 }],
+    async () => 4_800_000), /fixture read failed/);
+  assert.deepEqual(events, ["removed", "closed"]);
+  assert.deepEqual(surfaces, []);
 });
 
 

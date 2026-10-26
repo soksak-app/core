@@ -5,46 +5,124 @@ import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
   from "../../view-frame-geometry.mjs";
-import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture, monotonicTimeMs, viewFootprints,
+import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture, monotonicTimeMs,
+  viewCardWithDifferentPluginTab, viewFootprints,
   requireViewContentFrameCoverage, rootNativePlacementForSource, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
+import { viewProcessGroup } from "../../view-process-footprint.mjs";
 
 /** Measures the complete OS process group attached to selected editor view surfaces. */
 export async function collectEditorProcessFootprint(s, surfaces, measureFootprint) {
-  const processes = await viewFootprints(await s.get("host.window"), surfaces, measureFootprint);
-  return { pids: processes.map(({ pid }) => pid), processes };
+  const host = await s.get("host.window");
+  const group = viewProcessGroup(host, surfaces);
+  const processes = await viewFootprints(host, surfaces, measureFootprint);
+  assert.deepEqual(processes.map(({ pid }) => pid), group.pids,
+    "editor footprint samples do not cover the complete process-sharing group");
+  return { pids: group.pids, surfaces: group.surfaces, processes };
 }
 
-/** Converts before/after OS footprint samples and the diagnostic fixture reply into measured editor bytes. */
-export function editorFootprintEvidence(beforeProcesses, afterProcesses, fixture, { documentLength, lines }) {
-  assertProcessRows(beforeProcesses, "before");
-  assertProcessRows(afterProcesses, "after");
-  const before = new Map(beforeProcesses.map((row) => [row.pid, row.footprintBytes]));
-  const after = new Map(afterProcesses.map((row) => [row.pid, row.footprintBytes]));
-  assert.deepEqual([...after.keys()].sort((a, b) => a - b), [...before.keys()].sort((a, b) => a - b),
-    "hidden editor fixture footprint must use the same view process identities before and after mount");
+/** Converts the normal and hidden-only process-group samples into measured editor bytes. */
+export function editorFootprintEvidence(viewProcesses, hiddenProcesses, fixture, { documentLength, lines }) {
+  assertProcessRows(viewProcesses, "normal view");
+  assertProcessRows(hiddenProcesses, "hidden-only view");
   assert.deepEqual(Object.keys(fixture ?? {}).sort(), ["documentLength", "historyEntries", "lines", "mounted", "regionHistoryEntries"],
-    "hidden editor fixture returned unexpected measurement fields");
+    "hidden-only editor view returned unexpected measurement fields");
   assert.equal(fixture.mounted, true, "hidden editor fixture is not mounted");
   assert.equal(fixture.documentLength, documentLength, "hidden editor fixture copied an unexpected document length");
   assert.equal(fixture.lines, lines, "hidden editor fixture reports an unexpected line count");
   assert.equal(fixture.historyEntries, 1, "hidden editor fixture history contains entries beyond its initial document");
   assert.equal(fixture.regionHistoryEntries, 0, "hidden editor fixture unexpectedly attached a native document region");
-  const viewBytes = [...before.values()].reduce((sum, value) => sum + value, 0);
-  const afterBytes = [...after.values()].reduce((sum, value) => sum + value, 0);
-  assert.ok(Number.isSafeInteger(viewBytes) && Number.isSafeInteger(afterBytes), "editor footprint sum is not a safe integer");
-  assert.ok(afterBytes >= viewBytes, `editor process footprint decreased during hidden fixture mount: ${viewBytes} -> ${afterBytes}`);
-  return { viewBytes, hiddenDomBytes: afterBytes - viewBytes };
+  const viewBytes = viewProcesses.reduce((sum, row) => sum + row.footprintBytes, 0);
+  const hiddenDomBytes = hiddenProcesses.reduce((sum, row) => sum + row.footprintBytes, 0);
+  assert.ok(Number.isSafeInteger(viewBytes) && Number.isSafeInteger(hiddenDomBytes), "editor footprint sum is not a safe integer");
+  return { viewBytes, hiddenDomBytes };
 }
 
-function assertProcessRows(rows, phase) {
-  assert.ok(Array.isArray(rows) && rows.length > 0, `hidden editor fixture requires nonempty ${phase} process samples`);
-  assert.equal(new Set(rows.map((row) => row?.pid)).size, rows.length, `hidden editor fixture ${phase} PIDs must be unique`);
+function assertProcessRows(rows, label) {
+  assert.ok(Array.isArray(rows) && rows.length > 0, `editor footprint requires nonempty ${label} process samples`);
+  assert.equal(new Set(rows.map((row) => row?.pid)).size, rows.length, `editor footprint ${label} PIDs must be unique`);
   for (const row of rows) {
-    assert.ok(Number.isSafeInteger(row.pid) && row.pid > 0, `hidden editor fixture ${phase} PID is invalid`);
+    assert.ok(Number.isSafeInteger(row.pid) && row.pid > 0, `editor footprint ${label} PID is invalid`);
     assert.ok(Number.isSafeInteger(row.footprintBytes) && row.footprintBytes > 0,
-      `hidden editor fixture ${phase} footprint for ${row.pid} is invalid`);
+      `editor footprint ${label} value for ${row.pid} is invalid`);
   }
+}
+
+/** Opens and measures one diagnostic-only Editor view after all normal Editor views have closed. */
+export async function collectHiddenEditorFootprint(s, viewProcesses, measureFootprint) {
+  const existing = await s.get("core.surfaces");
+  assert.deepEqual(existing.filter((item) => item.plugin === "editor").map((item) => item.surface), [],
+    "hidden-only Editor measurement requires all normal Editor views to be closed");
+  const grid = await s.get("core.grid");
+  const activeCard = grid.cards.find((item) => item.active);
+  const card = viewCardWithDifferentPluginTab(grid, "editor", activeCard?.id);
+  const document = "SOKSAK EDITOR CONTENT\n";
+  const { tab: surface } = await s.run("core.card.add-tab", { card, plugin: "editor",
+    params: { diagnosticMode: "hidden-memory", document } });
+  assert.ok(typeof surface === "string" && surface.length > 0, "hidden-only Editor tab has no surface identity");
+
+  let commandReady = false;
+  let result;
+  let operationError;
+  try {
+    const registered = await s.until("core.surfaces", (items) => items.some((item) => item.surface === surface
+      && (item.exposes?.includes("command editor.memory.hidden") || item.status?.phase === "error")),
+    `hidden-only Editor view ${surface} did not register its memory command`);
+    const entry = registered.find((item) => item.surface === surface);
+    assert.ok(entry, `hidden-only Editor view ${surface} disappeared before measurement`);
+    assert.equal(entry.plugin, "editor", `hidden-only Editor view ${surface} has the wrong plugin identity`);
+    assert.ok(entry.exposes?.includes("command editor.memory.hidden"),
+      `hidden-only Editor view ${surface} failed before exposing its memory command: ${JSON.stringify(entry.status)}`);
+    commandReady = true;
+    const fixture = await s.run("editor.memory.hidden", { action: "read" }, surface);
+    assert.equal(fixture.documentLength, document.length, "hidden-only Editor view has an unexpected document length");
+    assert.equal(fixture.lines, 2, "hidden-only Editor view has an unexpected line count");
+    const surfaces = await s.get("core.surfaces");
+    assert.deepEqual(surfaces.filter((item) => item.plugin === "editor").map((item) => item.surface), [surface],
+      "hidden-only Editor measurement has another live Editor view");
+    const host = await s.get("host.window");
+    const group = viewProcessGroup(host, [surface]);
+    assert.deepEqual(group.surfaces, [surface],
+      "hidden-only Editor process group is shared with another live surface");
+    assert.deepEqual(group.documents.map(({ document: name }) => name), [""],
+      "hidden-only Editor process group has an attached native document process");
+    const measured = await collectEditorProcessFootprint(s, [surface], measureFootprint);
+    assert.deepEqual(measured.pids, group.pids, "hidden-only Editor process group changed during footprint sampling");
+    assert.deepEqual(measured.surfaces, [surface], "hidden-only Editor process group gained another live surface");
+    const editorFootprint = editorFootprintEvidence(viewProcesses, measured.processes, fixture,
+      { documentLength: document.length, lines: 2 });
+    result = { editorFootprint, evidence: { surface, processGroupPids: measured.pids,
+      processGroupSurfaces: measured.surfaces, viewProcesses, hiddenProcesses: measured.processes, fixture } };
+  } catch (error) {
+    operationError = error;
+  }
+
+  const cleanupErrors = [];
+  if (commandReady) {
+    try {
+      const removed = await s.run("editor.memory.hidden", { action: "remove" }, surface);
+      assert.equal(removed.mounted, false, "hidden-only Editor view remained mounted after remove");
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  }
+  try {
+    const registered = await s.get("core.surfaces");
+    if (registered.some((item) => item.surface === surface)) {
+      const closed = await s.run("core.tab.close", { tab: surface });
+      assert.equal(closed?.closed, true, `hidden-only Editor view ${surface} did not close`);
+      await s.until("core.surfaces", (items) => !items.some((item) => item.surface === surface),
+        `hidden-only Editor view ${surface} remained registered after close`);
+    }
+  } catch (error) {
+    cleanupErrors.push(error);
+  }
+  if (operationError !== undefined && cleanupErrors.length > 0) {
+    throw new AggregateError([operationError, ...cleanupErrors], "hidden-only Editor measurement and cleanup failed", { cause: operationError });
+  }
+  if (operationError !== undefined) throw operationError;
+  if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, "hidden-only Editor cleanup failed");
+  return result;
 }
 
 /** Derives slot inset values from the declared surface and card geometry, never from capture pixels. */
@@ -306,40 +384,13 @@ export function editorViewDescriptor(content) {
 export async function prepareEditorMeasurements(t, s) {
   const descriptor = await editorDescriptor(s, (message) => t.diagnostic(message));
   const start = await collectViewStartAndMemory(t, s, descriptor, { viewCount: 3 });
-  const surface = start.opened.at(-1).surface;
-  let mounted = false;
-  let editorFootprint;
-  try {
-    const beforeProcesses = await viewFootprints(await s.get("host.window"), [surface]);
-    const mount = await s.run("editor.memory.hidden", { action: "mount" }, surface);
-    assert.deepEqual(Object.keys(mount).sort(), ["documentLength", "historyEntries", "lines", "mounted", "regionHistoryEntries"]);
-    assert.equal(mount.mounted, true, "hidden editor fixture did not mount");
-    assert.equal(mount.documentLength, "SOKSAK EDITOR CONTENT".length + 1,
-      "hidden editor fixture did not copy the full editor document");
-    assert.equal(mount.lines, 2, "hidden editor fixture line count differs from the copied document");
-    assert.equal(mount.historyEntries, 1, "hidden editor fixture history differs from its initial document");
-    mounted = true;
-    const read = await s.run("editor.memory.hidden", { action: "read" }, surface);
-    for (const field of ["mounted", "documentLength", "lines", "historyEntries", "regionHistoryEntries"]) {
-      assert.equal(read[field], mount[field], `hidden editor fixture ${field} changed before the sample`);
-    }
-    const afterProcesses = await viewFootprints(await s.get("host.window"), [surface]);
-    editorFootprint = editorFootprintEvidence(beforeProcesses, afterProcesses, mount,
-      { documentLength: "SOKSAK EDITOR CONTENT".length + 1, lines: 2 });
-  } finally {
-    if (mounted) {
-      const removed = await s.run("editor.memory.hidden", { action: "remove" }, surface);
-      assert.equal(removed.mounted, false, "hidden editor fixture remained mounted after remove");
-    }
-  }
-
   const { values } = await s.get("core.settings");
   const mode = values.mode;
   const themeName = values.theme;
   const theme = (await s.get("core.themes")).find((item) => item.name === themeName)?.[mode];
   assert.ok(theme, `active core theme ${themeName}/${mode} is unavailable`);
   const cornerRadiusPt = effectiveCardCornerRadiusPt(values);
-  return { descriptor, start, editorFootprint, theme, cornerRadiusPt };
+  return { descriptor, start, theme, cornerRadiusPt };
 }
 
 /** Adds the three reclaim observations and editor-specific metrics to shared lifecycle and motion evidence. */
@@ -349,6 +400,7 @@ export async function finishEditorMeasurements(t, s, prepared, motion) {
   const evidence = { events: [...prepared.start.events, ...motion.evidence.events],
     recordings: [...prepared.start.recordings, ...motion.evidence.recordings] };
   const reclaim = await collectViewReclaimMeasurements(t, s, prepared.descriptor, prepared.start.opened, evidence);
+  const hiddenMemory = await collectHiddenEditorFootprint(s, prepared.start.total.oneViewProcesses);
   return {
     plugin: "editor",
     host: s.app.name,
@@ -356,9 +408,9 @@ export async function finishEditorMeasurements(t, s, prepared, motion) {
     reclaim,
     warmDisplay: prepared.start.warmDisplay,
     newProcess: { processStarts: prepared.start.processStarts, firstDisplays: prepared.start.firstDisplays },
-    editorFootprint: prepared.editorFootprint,
+    editorFootprint: hiddenMemory.editorFootprint,
     layoutDisplay: motion.layoutDisplay,
     drag: motion.drag,
-    _evidence: { ...evidence, pixelPalette: motion.evidence.pixelPalette },
+    _evidence: { ...evidence, pixelPalette: motion.evidence.pixelPalette, editorFootprint: hiddenMemory.evidence },
   };
 }

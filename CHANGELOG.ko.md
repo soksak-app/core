@@ -4,6 +4,16 @@
 
 ## 미배포
 
+- F212.14-5-16: 일반 Editor와 hidden-only diagnostic Editor를 별도 절대
+  process group으로 측정한다. 기존 동시 존재 before/after 추정은 유효한
+  감소를 거부하며 component 비용을 귀속할 수 없다. 소유 회귀 검사는 수정
+  전에 실패하고 수정 후 Editor metric 소유 검사 8개가 모두 통과한다.
+  최적화 host 집중 acceptance는 OCR로 첫 content를 확인한 뒤 2/2 통과한다.
+  Wails 일반/hidden-only footprint는 38,830,824/50,528,952 bytes이고
+  Tauri는 38,666,960/53,740,264 bytes다. 두 hidden fixture 모두 22자,
+  두 줄, history entry 하나, document region 0개를 보고한다. 앱 오류 감사와
+  정상 host 종료도 통과한다. 나머지 view matrix는 F212.14-5-5에 남는다.
+
 - F212.14-5-15: 실제 native placement event에서 투영한 WebKit viewport와 root document source 크기를 비교한다. 소수점 AppKit frame을 보존하고 source frame 시각 이전의 최신 visible placement를 선택하며 drag 전에는 settled root-frame baseline을 사용한다. Red: viewport evaluator가 785.5×286.5 native frame에 유효한 785×286 source를 거부하고 placement owner가 누락 및 settled-baseline 근거를 거부했다. Green: 영향을 받는 view-metric owner가 63/63 통과한다. 물리 정렬 및 timing 기준은 바꾸지 않으며 application acceptance는 F212.14-5-5에 남는다.
 
 - F239-200: E2E assertion의 정적인 expected build-command 인자를 source 읽기와 구분한다. 실제 import·파일 읽기, 동적 기대값과 가려진 assertion에는 source boundary 규칙을 유지한다. 소유 오탐 회귀 검사는 수정 전 실패하고 수정 후 해당 policy 두 개와 window-source 감사가 통과한다.
