@@ -11,11 +11,10 @@
 The source audits use the matching current SDK's public commands. Older installed SDK readers reject schema 3; their default command is not reported as passing. These are local development results. Publication and historical failure-closure tasks retain their own checklist states.
 
 
-The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 52 rows: 6 active and 46 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
+The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 51 rows: 5 active and 46 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
 
 - **Input/menu acceptance and linked parents: 7** — F239-47-32/-33; F212.12-2, F212.12-2-4, F212.12-2-1-2; F238-b/-3
 - **Reported failures and historical closure audits: 22** — F239-47-30/-4; F212.1-2-2; F212.10-hwp-2, F212.10-core-3/-5; F212.12-2-2-4-8; F239-32; F266.1 through F266.3 and F266.5 through F266.13; F239-78; F239-190
-- **HWP studio integration: 1** — F239-195
 - **Viewport measurement implementation: 1** — F212.14-5-8
 - **Performance measurements: 6** — F212.1, F212.7a, F212.9a, F212.14/-5/-5-5
 - **Package installation and publication: 8** — F212.12-1-10-6g; F212.15/-1; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -27,7 +26,7 @@ These rows retain their individual requirements and states. A passing functional
 
 - [o] F239-197 — P0, linked to F212.14-5: Recognize the surface field supplied by runtime.log context in the source event checker. Red: the owning catalog fixture reports a missing required surface for a valid runtime.log producer. Green: contextual fields satisfy literal and computed runtime.log entrances while a generic producer still fails. Runtime payload validation remains responsible for the actual context value. The affected Editor source-SDK check passes.
 
-- [~] F239-195 — P0, linked to F239-194 and HWP H23.5: Install an HWP candidate that includes the studio bridge referenced by its editor page and verify editor startup. Both hosts fail because ui/studio-host.js is absent from the plugin package. The owning HWP actual packed-page graph test reproduces the omission and passes after correction. Install the corrected candidate and run affected application checks after development corrections finish.
+- [o] F239-195 — P0, linked to F239-194 and HWP H23.5: Install the HWP studio bridge required by its editor page. Red: the owning packed-page graph test rejects the missing ui/studio-host.js module. Green: the corrected package graph passes and all 93 installed files match the candidate on both hosts. On macOS 26.6.2 arm64, the preserved application run loads the studio, completes document loading and records rendered editor pixels on both hosts instead of the former missing-file failure. This closes package delivery and editor startup only; viewport pixel measurement and performance acceptance remain under F212.14-5-8 and F212.14-5-5.
 
 - [o] F239-194 — P0, linked to F239-193 and F212.10-hwp-2: Install a browser-compatible HWP module graph and verify diagnostic startup. Both hosts failed at startup because HWP imported `node:assert/strict` through its browser module graph. HWP H23.3 removes that dependency with an owning graph Red/Green; H23.4 separately supplies the required view clock with a consumer Red/Green. The candidate installer replaces the diagnostic package on both hosts and verifies all 92 installed files against the archive. On macOS 26.6.2 arm64, both hosts start without application errors and the tracked diagnostic drag identity cases pass 2/2; the shared log audit and normal shutdown pass. The four-view measurements still fail on status-read ordering, separately owned by F212.14-5. No release or publication is claimed.
 
