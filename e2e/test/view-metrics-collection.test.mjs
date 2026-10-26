@@ -212,6 +212,46 @@ test("root source frames use the latest actual surface placement, not capture ge
     { baseline }), /ambiguous native placement state/);
 });
 
+test("one-shot layout selects the exact-size source after request and before later placement readback", { timeout: 5000 }, () => {
+  const beforeRequest = { sequence: 0, timeMs: 99, width: 453, height: 286 };
+  const requestedFrame = { sequence: 1, timeMs: 108, width: 453, height: 286 };
+  const afterReadbackWrongSize = { sequence: 2, timeMs: 116, width: 454, height: 286 };
+  const nativePlacement = { surface: "view-1", timeMs: 112,
+    framePt: { x: 500, y: 100, width: 453, height: 286.5 },
+    webKitViewport: { width: 453, height: 286 } };
+  const selection = viewMetrics.selectOneShotViewSourceFrame(
+    [beforeRequest, requestedFrame, afterReadbackWrongSize], { requestAtMs: 100, nativePlacement });
+
+  assert.equal(selection.frame, requestedFrame,
+    "the first exact-size source after the request must not wait for a later native placement readback");
+  assert.equal(selection.failure, null);
+});
+
+test("one-shot layout retains the target and every post-request candidate when no frame matches", { timeout: 5000 }, () => {
+  const nativePlacement = { surface: "view-1", timeMs: 112,
+    framePt: { x: 500, y: 100, width: 453, height: 286.5 },
+    webKitViewport: { width: 453, height: 286 } };
+  const selection = viewMetrics.selectOneShotViewSourceFrame([
+    { sequence: 0, timeMs: 99, width: 453, height: 286 },
+    { sequence: 1, timeMs: 108, width: 454, height: 286 },
+    { sequence: 2, timeMs: 116, width: 453, height: 287 },
+  ], { requestAtMs: 100, nativePlacement });
+
+  assert.equal(selection.frame, null);
+  assert.deepEqual(selection.failure, {
+    requestAtMs: 100,
+    target: {
+      surface: "view-1", placementAtMs: 112,
+      framePt: { x: 500, y: 100, width: 453, height: 286.5 },
+      webKitViewport: { width: 453, height: 286 },
+    },
+    postRequestCandidates: [
+      { sequence: 1, timeMs: 108, width: 454, height: 286 },
+      { sequence: 2, timeMs: 116, width: 453, height: 287 },
+    ],
+  });
+});
+
 test("generic content trace starts before an action and returns only scoped source events", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "view-content-trace-"));
   const logs = join(root, "logs");

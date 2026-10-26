@@ -6,7 +6,7 @@ import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture, monotonicTimeMs,
-  viewCardWithDifferentPluginTab, viewFootprints,
+  selectOneShotViewSourceFrame, viewCardWithDifferentPluginTab, viewFootprints,
   requireViewContentFrameCoverage, rootNativePlacementForSource, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
 import { viewProcessGroup } from "../../view-process-footprint.mjs";
@@ -184,10 +184,10 @@ async function editorLayoutObservation(t, s, descriptor, surface, card, theme, c
   const palette = editorGeometryPalette(captured[0], paletteRect, theme, cornerRadiusPt);
   const nativePlacement = rootNativePlacementForSource(traced.events, surface, displayed,
     { afterMs: beforeChangeTimeMs });
-  const source = traced.contentFrames.find((frame) => frame.timeMs >= nativePlacement.timeMs
-    && frame.width === nativePlacement.webKitViewport.width
-    && frame.height === nativePlacement.webKitViewport.height);
-  assert.ok(source, "editor source has no frame matching its final post-request native placement projection");
+  const sourceSelection = selectOneShotViewSourceFrame(traced.contentFrames,
+    { requestAtMs: beforeChangeTimeMs, nativePlacement });
+  const source = sourceSelection.frame;
+  assert.ok(source, `editor source has no frame matching its final post-request native placement projection: ${JSON.stringify(sourceSelection.failure)}`);
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
   const targetRect = { x: root.frame.x, y: root.frame.y,

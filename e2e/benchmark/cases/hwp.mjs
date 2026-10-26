@@ -7,7 +7,8 @@ import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE } from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture,
-  monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementForSource, withViewContentTrace }
+  monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementForSource, selectOneShotViewSourceFrame,
+  withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
 
@@ -220,10 +221,10 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
   const studio = documentRow(host, surface, "studio");
   const nativePlacement = rootNativePlacementForSource(traced.events, surface, displayed,
     { afterMs: beforeChangeTimeMs });
-  const source = traced.contentFrames.find((frame) => frame.timeMs >= nativePlacement.timeMs
-    && frame.width === nativePlacement.webKitViewport.width
-    && frame.height === nativePlacement.webKitViewport.height);
-  assert.ok(source, "HWP root trace has no source frame matching its final post-request native placement projection");
+  const sourceSelection = selectOneShotViewSourceFrame(traced.contentFrames,
+    { requestAtMs: beforeChangeTimeMs, nativePlacement });
+  const source = sourceSelection.frame;
+  assert.ok(source, `HWP root trace has no source frame matching its final post-request native placement projection: ${JSON.stringify(sourceSelection.failure)}`);
   const previousSource = traced.contentFrames.filter((frame) => frame.timeMs < source.timeMs).at(-1);
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");

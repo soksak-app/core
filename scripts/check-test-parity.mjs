@@ -6937,9 +6937,16 @@ const FEATURE_LINKS = [
   },
   {
     id: "F212.14-5-26",
-    implementation: [{ file: "e2e/benchmark/cases/browser.mjs", symbol: "export function browserLayoutSourceFrame(" }],
-    tests: [{ file: "e2e/test/browser-view-metrics-case.test.mjs", id: "browser layout uses a requested final-size source frame before the later native readback" }],
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export function selectOneShotViewSourceFrame(" }],
+    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "one-shot layout selects the exact-size source after request and before later placement readback" }],
     expected: "One-shot layout source selection uses the request boundary and exact final viewport projection, not a later geometry readback timestamp.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.14-5-29",
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export function selectOneShotViewSourceFrame(" }],
+    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "one-shot layout retains the target and every post-request candidate when no frame matches" }],
+    expected: "All one-shot view collectors use the request boundary and exact final viewport, with complete failed-selection evidence.",
     levels: ["unit"],
   },
   {

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-29: Browser, Editor, HWP, Terminal이 공유하는 helper로 resize 요청 시각 이후이며 투영된 viewport 크기와 정확히 일치하는 one-shot layout source frame을 선택한다. 기존 Editor, HWP, Terminal predicate가 이후 placement readback을 시간 경계로 사용하면 소유 회귀 검사가 실패한다. 수정 후 검사는 통과하며 일치하는 frame이 없을 때 요청, target, 모든 post-request 후보를 보고한다. Geometry, cadence, display deadline은 유지하며 application acceptance는 F212.14-5-5에 남는다.
+
 - F212.14-5-28: Attached document region을 plugin root 및 app DOM과 같은 display refresh rate로 렌더링한다. Region presentation 대기를 root transaction에 결합하지 않고 기존 WebKit preference를 사용한다. 실제 region factory owner는 수정 전 preference 1로 실패하고 수정 후 root와 region 모두 0으로 통과하며 background plugin host는 기본값을 유지한다. 실제 capture geometry acceptance는 별도로 남는다.
 
 - F212.14-5-27: Plugin root view 생성 시 기존 display-rate WebKit preference를 적용한다. App DOM은 display rate를 사용하지만 새 root configuration은 120Hz 화면에서도 near-60fps 기본값을 유지했다. 실제 factory owner는 수정 전에 실패하고 수정 후 root preference 0 및 변경되지 않은 document-region preference 1로 통과한다. Background plugin host는 기존 policy를 유지하며 지원 기능이 없으면 명시적 생성 오류를 반환한다.

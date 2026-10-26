@@ -7,7 +7,7 @@ import { drag, keepCommonSettings } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
-  rootNativePlacementForSource,
+  rootNativePlacementForSource, selectOneShotViewSourceFrame,
   waitForViewReadiness, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
@@ -186,10 +186,10 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
   const root = terminalDocument(host, surface);
   const nativePlacement = rootNativePlacementForSource(traced.events, surface, displayed,
     { afterMs: beforeChangeTimeMs });
-  const source = traced.contentFrames.find((frame) => frame.timeMs >= nativePlacement.timeMs
-    && frame.width === nativePlacement.webKitViewport.width
-    && frame.height === nativePlacement.webKitViewport.height);
-  assert.ok(source, "terminal observer has no source frame matching its final post-request native placement projection");
+  const sourceSelection = selectOneShotViewSourceFrame(traced.contentFrames,
+    { requestAtMs: beforeChangeTimeMs, nativePlacement });
+  const source = sourceSelection.frame;
+  assert.ok(source, `terminal observer has no source frame matching its final post-request native placement projection: ${JSON.stringify(sourceSelection.failure)}`);
   const slotInsetsPt = await terminalSlotInsets(s, card, surface);
   const targetRect = { x: root.frame.x, y: root.frame.y,
     width: root.frame.width, height: root.frame.height };

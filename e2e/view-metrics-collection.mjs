@@ -146,6 +146,42 @@ export function mapViewContentFramesToCapture(contentFrames, captured) {
   });
 }
 
+/** Selects the one-shot source frame for a requested final viewport. */
+export function selectOneShotViewSourceFrame(contentFrames, { requestAtMs, nativePlacement }) {
+  assert.ok(Array.isArray(contentFrames), "one-shot source frames must be an array");
+  assert.ok(Number.isFinite(requestAtMs) && requestAtMs >= 0, "one-shot resize request has an invalid timestamp");
+  assert.ok(Number.isFinite(nativePlacement?.timeMs) && nativePlacement.timeMs >= 0,
+    "one-shot source selection requires the final placement timestamp");
+  assert.ok(typeof nativePlacement?.surface === "string" && nativePlacement.surface.length > 0,
+    "one-shot source selection requires the final placement surface");
+  assert.ok(nativePlacement.webKitViewport && Number.isInteger(nativePlacement.webKitViewport.width)
+    && nativePlacement.webKitViewport.width > 0 && Number.isInteger(nativePlacement.webKitViewport.height)
+    && nativePlacement.webKitViewport.height > 0, "one-shot source selection requires the projected viewport");
+
+  const postRequestCandidates = contentFrames.filter((frame) => frame?.timeMs >= requestAtMs).map((frame) => ({
+    sequence: frame.sequence,
+    timeMs: frame.timeMs,
+    width: frame.width,
+    height: frame.height,
+  }));
+  const frame = contentFrames.find((candidate) => candidate?.timeMs >= requestAtMs
+    && candidate.width === nativePlacement.webKitViewport.width
+    && candidate.height === nativePlacement.webKitViewport.height);
+  return {
+    frame: frame ?? null,
+    failure: frame ? null : {
+      requestAtMs,
+      target: {
+        surface: nativePlacement.surface,
+        placementAtMs: nativePlacement.timeMs,
+        framePt: nativePlacement.framePt,
+        webKitViewport: nativePlacement.webKitViewport,
+      },
+      postRequestCandidates,
+    },
+  };
+}
+
 /** Selects the actual root WebView placement that was active when a source frame was produced. */
 export function rootNativePlacementForSource(events, surface, sourceTimeMs, { baseline, afterMs } = {}) {
   assert.ok(Array.isArray(events), "root native placement events must be an array");

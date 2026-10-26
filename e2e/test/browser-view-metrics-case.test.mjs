@@ -1,19 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertBrowserFrameMatchesSlot, BROWSER_FIXTURE_CONTENT_COLOR, browserLayoutSourceFrame, browserViewDescriptor,
+import { assertBrowserFrameMatchesSlot, BROWSER_FIXTURE_CONTENT_COLOR, browserViewDescriptor,
   measureBrowserFrameGeometry } from "../benchmark/cases/browser.mjs";
-
-test("browser layout uses a requested final-size source frame before the later native readback", {
-  timeout: 5000,
-}, () => {
-  const source = { sequence: 1, timeMs: 238970868.060666, width: 453, height: 286 };
-  const placement = { timeMs: 238970871.848083,
-    framePt: { x: 517, y: 116, width: 453, height: 286.5 },
-    webKitViewport: { width: 453, height: 286 } };
-
-  assert.deepEqual(browserLayoutSourceFrame([source], placement, 238970862.468791), source);
-});
 
 test("browser pixel geometry matches the independently declared document slot", { timeout: 5000 }, () => {
   const geometry = { cardRectPt: { left: 0, top: 0, right: 100, bottom: 100 },

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-29: Select one-shot layout source frames from the resize request boundary and exact projected viewport size through a shared helper used by Browser, Editor, HWP and Terminal. The tracked regression fails when the old Editor, HWP and Terminal predicate uses a later placement readback as its time boundary. The corrected owner test passes and reports the request, target and every post-request candidate when no frame matches. Geometry, cadence and display deadlines are unchanged; application acceptance remains under F212.14-5-5.
+
 - F212.14-5-28: Render attached document regions at the display refresh rate, matching plugin roots and the app DOM. Use the existing WebKit preference without coupling region presentation waits to the root transaction. The actual region factory owner fails at preference 1 before correction and passes with root and region both 0; background plugin hosts retain their default. Captured geometry acceptance remains separate.
 
 - F212.14-5-27: Apply the existing display-rate WebKit preference when creating a plugin root view. Fresh root configurations retained the near-60fps default on a 120Hz display even though the app DOM used the display rate. The actual factory owner fails before correction and passes afterward with root preference 0 and unchanged document-region preference 1. Background plugin hosts retain their existing policy; unavailable support returns an explicit creation error.

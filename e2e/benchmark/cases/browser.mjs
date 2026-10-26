@@ -8,7 +8,7 @@ import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFr
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, rootNativePlacementForSource,
-  waitForViewReadiness, withViewContentTrace }
+  selectOneShotViewSourceFrame, waitForViewReadiness, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 
 /** Browser-specific inputs for the shared view lifecycle measurement collector. */
@@ -106,13 +106,6 @@ function documentRow(host, surface, document) {
   return row;
 }
 
-/** Selects a source frame after the layout request that matches the final visible native viewport. */
-export function browserLayoutSourceFrame(contentFrames, nativePlacement, requestAtMs) {
-  return contentFrames.find((frame) => frame.timeMs >= requestAtMs
-    && frame.width === nativePlacement.webKitViewport.width
-    && frame.height === nativePlacement.webKitViewport.height);
-}
-
 async function layoutObservation(t, s, descriptor, surface, card, expectedWidth, url, cornerRadiusPt) {
   await s.run("browser.navigate", { url }, surface);
   await s.until("browser.location", (value) => value.url === url && !value.loading
@@ -134,14 +127,10 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
   const page = documentRow(host, surface, "page");
   const nativePlacement = rootNativePlacementForSource(traced.events, surface, displayed,
     { afterMs: beforeChangeTimeMs });
-  const source = browserLayoutSourceFrame(traced.contentFrames, nativePlacement, beforeChangeTimeMs);
-  assert.ok(source, `browser source has no frame matching its final post-request native placement projection: ${JSON.stringify({
-    requestAtMs: beforeChangeTimeMs,
-    nativePlacement: { timeMs: nativePlacement.timeMs, framePt: nativePlacement.framePt,
-      webKitViewport: nativePlacement.webKitViewport },
-    candidateFrames: traced.contentFrames.filter((frame) => frame.timeMs >= beforeChangeTimeMs)
-      .map(({ sequence, timeMs, width, height }) => ({ sequence, timeMs, width, height })),
-  })}`);
+  const sourceSelection = selectOneShotViewSourceFrame(traced.contentFrames,
+    { requestAtMs: beforeChangeTimeMs, nativePlacement });
+  const source = sourceSelection.frame;
+  assert.ok(source, `browser source has no frame matching its final post-request native placement projection: ${JSON.stringify(sourceSelection.failure)}`);
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
   const region = await s.rect("browser.document", undefined, surface);
