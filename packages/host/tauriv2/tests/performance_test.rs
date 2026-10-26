@@ -306,11 +306,11 @@ fn the_sampler_reads_the_processes_of_every_window() {
                     ],
                     plugin_hosts: vec![
                         performance::PluginHostProcess {
-                            plugin: "files".into(),
+                            plugin: "probealpha".into(),
                             process: page_pid,
                         },
                         performance::PluginHostProcess {
-                            plugin: "editor".into(),
+                            plugin: "probebeta".into(),
                             process: 0,
                         },
                     ],
@@ -348,7 +348,7 @@ fn the_sampler_reads_the_processes_of_every_window() {
         assert_eq!(document_record["window"], "window-a", "{document_record}");
         let plugin_host_record = samples
             .iter()
-            .find(|s| s["role"] == "plugin-host" && s["plugin"] == "files")
+            .find(|s| s["role"] == "plugin-host" && s["plugin"] == "probealpha")
             .expect("a plugin-host sample names files");
         assert_eq!(
             plugin_host_record["window"], "window-a",
@@ -361,7 +361,7 @@ fn the_sampler_reads_the_processes_of_every_window() {
         );
         let plugin_host_not_started = samples
             .iter()
-            .find(|s| s["role"] == "plugin-host" && s["plugin"] == "editor")
+            .find(|s| s["role"] == "plugin-host" && s["plugin"] == "probebeta")
             .expect("an unstarted plugin-host sample names editor");
         assert_eq!(plugin_host_not_started["window"], "window-a");
         assert_eq!(plugin_host_not_started["pid"], 0);
@@ -407,7 +407,7 @@ fn the_sampler_reads_the_processes_of_every_window() {
     );
     let plugin_host: Vec<_> = samples
         .iter()
-        .filter(|s| s["role"] == "plugin-host" && s["plugin"] == "files")
+        .filter(|s| s["role"] == "plugin-host" && s["plugin"] == "probealpha")
         .collect();
     assert_eq!(
         plugin_host.len(),
@@ -425,7 +425,7 @@ fn the_sampler_reads_the_processes_of_every_window() {
     );
     let plugin_host_not_started: Vec<_> = samples
         .iter()
-        .filter(|s| s["role"] == "plugin-host" && s["plugin"] == "editor")
+        .filter(|s| s["role"] == "plugin-host" && s["plugin"] == "probebeta")
         .collect();
     assert_eq!(plugin_host_not_started.len(), 1);
     assert_eq!(plugin_host_not_started[0]["window"], "window-a");

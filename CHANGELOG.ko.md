@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-217: Core sampler·adapter 소유 fixture에서 가상 plugin identity를 사용한다. Process mapping·오류 assertion을 유지하면서 plugin 저장소 참조를 제거한다. 경계 감사가 원래 literal을 거부하며 수정 후 관련 소유 사례 여섯 개와 경계 감사가 통과한다. Production 동작은 그대로다.
+
 - F239-215: Plugin-host page와 logging 문서를 현재 SDK·native loader에 맞춘다. Host가 삽입하는 import map, writer의 log 정책과 filtering 전 field 구성을 설명한다. 양 번역에서 오래된 page-owned map·enabled 조회 설명을 제거하며 runtime 동작은 그대로다.
 
 - F239-211: 양 host에서 로컬 IME Escape 취소 수정을 검증한다. 소유 sidecar S97은 한 번의 순서 있는 확정 문자·Escape write와 unknown selector 원자적 거부의 Red/Green을 유지한다. 양 앱 사례는 같은 window AppKit reference와 terminal document가 일치한다. Publication은 sidecar S97.1에 남으며 native input-source context 분류는 별도다.

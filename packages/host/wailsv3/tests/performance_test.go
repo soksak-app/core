@@ -285,8 +285,8 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 			{Surface: "surface-a", Process: document.Process.Pid},
 			{Surface: "surface-b", Process: 0},
 		}, PluginHosts: []host.PerformancePluginHostProcess{
-			{Plugin: "files", Process: page.Process.Pid},
-			{Plugin: "editor", Process: 0},
+			{Plugin: "probealpha", Process: page.Process.Pid},
+			{Plugin: "probebeta", Process: 0},
 		}}, nil
 	})
 	host.PerformanceWindowAdd("window-b", func() (host.PerformanceWindowProcesses, error) {
@@ -303,9 +303,9 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 			documentFields = fields
 		case fields["role"] == "document" && fields["surface"] == "surface-b":
 			notStarted = fields
-		case fields["role"] == "plugin-host" && fields["plugin"] == "files":
+		case fields["role"] == "plugin-host" && fields["plugin"] == "probealpha":
 			pluginHostFields = fields
-		case fields["role"] == "plugin-host" && fields["plugin"] == "editor":
+		case fields["role"] == "plugin-host" && fields["plugin"] == "probebeta":
 			pluginHostNotStarted = fields
 		case fields["role"] == "page" && fields["window"] == "window-b":
 			unreadable = fields

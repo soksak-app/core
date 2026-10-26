@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-217: Use synthetic plugin identities in the core sampler and adapter owner fixtures. Preserve process mapping and error assertions while removing references to plugin repositories. The boundary audit rejects the original literals; all six affected owner cases and the boundary audit pass after correction. Production behavior is unchanged.
+
 - F239-215: Align plugin-host page and logging documentation with the current SDK and native loader. Describe host-inserted import maps and writer-side log policy, including field construction before filtering. Remove obsolete page-owned-map and enabled-query descriptions in both translations; runtime behavior is unchanged.
 
 - F239-211: Accept the local IME Escape cancellation correction on both hosts. The owning sidecar S97 retains Red/Green for one ordered committed-text/Escape write and atomic unknown-selector rejection. Both application cases match the same-window AppKit reference and terminal document. Publication remains under sidecar S97.1, and native input-source context classification remains separate.
