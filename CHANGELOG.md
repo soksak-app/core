@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14: Record the local VT image-answer queue measurements without accepting the performance targets. All 160 matching answers have timing; traced geometry and log audits pass on both hosts, whose baseline installations and frontmost state are restored. Preserve separate total/queue durations and keep attribution to specific queued work unresolved.
+
 - F239-29: Complete installed native-package consumer acceptance for local sidecar development. Both owning package-interface checks and both standard Darwin builds pass on macOS arm64. Keep developer link overrides uncommitted and replace the mismatched remote-install fixture with path-independent installed-package checks. The external Git-ref/fresh-install requirement remains open under F239-29-1 and both owning sidecar checklists; no publication or historical dangling-store correction is claimed.
 
 - F266.4: Observe the drain fixture child receipts before cleanup can terminate its unread output. A controlled pending-copy regression fails with stop-before-receipt; bounded sidecar receipt events now confirm all required replies and closes before stopping. All four flush owners pass, including the unchanged shutdown-flush case. Preserve the historical CI cause/load limitation and the earlier closed record; no additional full-suite acceptance is claimed.

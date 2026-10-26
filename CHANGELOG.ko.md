@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14: 성능 목표를 통과 처리하지 않고 로컬 VT image-answer queue 측정을 기록한다. 일치하는 응답 160건 모두 timing이 있으며 trace geometry와 log 감사가 양 host에서 통과하고 baseline 설치와 frontmost 상태를 복원한다. 전체/queue 간격을 구분하고 구체적인 queue 작업으로의 원인 귀속은 미해결로 유지한다.
+
 - F239-29: 로컬 sidecar 개발의 설치된 native-package consumer acceptance를 완료한다. macOS arm64에서 양 소유 package-interface 검사와 표준 Darwin build가 모두 통과한다. Developer link override는 commit하지 않고 맞지 않는 remote-install fixture를 경로에 독립적인 설치 package 검사로 대체한다. 외부 Git-ref/fresh-install 요구는 F239-29-1과 양 소유 sidecar 체크리스트에 남기며 publication이나 과거 dangling-store 수정을 주장하지 않는다.
 
 - F266.4: Cleanup이 읽지 않은 output을 가진 child를 종료하기 전에 drain fixture의 child receipt를 관측한다. 제어된 pending-copy 회귀 검사가 stop-before-receipt에서 실패하며 bounded sidecar receipt event로 모든 필수 reply와 close를 확인한 뒤 종료한다. 변경하지 않은 shutdown-flush 사례를 포함해 flush owner 네 개가 모두 통과한다. 과거 CI 원인/부하의 한계와 이전 종료 기록을 유지하며 추가 전체 suite acceptance를 주장하지 않는다.
