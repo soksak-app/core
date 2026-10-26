@@ -60,11 +60,7 @@ export const PAGE_IMPORTS = Object.freeze({
   "@soksak/workbench/": "/",
 });
 
-/**
- * The imports of the import map of a view page. A view is served from the core root (docs/spec/plugin-processes.md, rule 4),
- * so its import map names the core targets at soksak://core, and it has no entry for runtime/ or the workbench. Its plugin-api entries
- * are the browser modules that plugin-api exports for pages: view and screen-hash (the export list of package.json, checked by a test).
- */
+/** The five entries of the release view import map (docs/spec/plugins.md, view page). */
 export const VIEW_IMPORTS = Object.freeze({
   "soksak": `soksak://core/${modulePath("soksak", "dist/index.js")}`,
   "@soksak/plugin-api": `soksak://core/${modulePath("@soksak/plugin-api", "index.js")}`,
@@ -72,6 +68,16 @@ export const VIEW_IMPORTS = Object.freeze({
   "@soksak/plugin-api/screen-hash": `soksak://core/${modulePath("@soksak/plugin-api", "screen-hash.js")}`,
   "@soksak/shared/": "soksak://core/shared/",
 });
+
+/** Returns the declared view import map for the build; diagnostic builds add only the diagnostic view observer entry. */
+export function viewImports({ diagnostics }) {
+  if (typeof diagnostics !== "boolean") throw new TypeError("viewImports requires diagnostics as a boolean");
+  if (!diagnostics) return VIEW_IMPORTS;
+  return Object.freeze({
+    ...VIEW_IMPORTS,
+    "@soksak/plugin-api/diagnostic-view-frames": `soksak://core/${modulePath("@soksak/plugin-api", "diagnostic-view-frames.js")}`,
+  });
+}
 
 /** The entry files of the view import closure, by package name (docs/spec/plugin-processes.md, rule 4). */
 const VIEW_CLOSURE_ENTRIES = Object.freeze({

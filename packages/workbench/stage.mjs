@@ -32,7 +32,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { STAGED } from "./staged.js";
 import {
-  CORE_ROOT_FILE, ENVIRONMENT, INSTALLED_PLUGINS, RUNTIME, VIEW_IMPORTS, VIEW_IMPORTS_FILE, modulePath, validateEnvironment, validateInstalledPlugins, viewCoreTargets,
+  CORE_ROOT_FILE, ENVIRONMENT, INSTALLED_PLUGINS, RUNTIME, VIEW_IMPORTS_FILE, modulePath, validateEnvironment, validateInstalledPlugins, viewCoreTargets, viewImports,
 } from "@soksak/plugin-api";
 
 const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>] [--registry-index <absolute index path>]";
@@ -147,6 +147,11 @@ copyPackage(workbench, target);
 for (const name of ["soksak", "@soksak/plugin-api"]) {
   copyPackage(packageDir(workbench, name), join(target, modulePath(name, "")));
 }
+for (const { package: name, file } of STAGED.viewDiagnostics) {
+  const path = join(target, modulePath(name, file));
+  if (diagnostics && !existsSync(path)) throw new Error(`declared diagnostic view module is missing: ${modulePath(name, file)}`);
+  if (!diagnostics) rmSync(path, { force: true });
+}
 cpSync(runtime, join(target, RUNTIME), { recursive: true });
 copyFileSync(join(workbench, diagnostics ? "observe.js" : "release-diagnostics.js"), join(target, "diagnostics.js"));
 if (diagnostics) {
@@ -154,13 +159,16 @@ if (diagnostics) {
 }
 writeFileSync(join(target, ENVIRONMENT), `${JSON.stringify(environment, null, 2)}\n`);
 // The core targets are computed from the staged files, so the list names only files that the staged frontend holds.
-const coreTargets = viewCoreTargets((name, file) => {
+const coreTargets = new Set(viewCoreTargets((name, file) => {
   const path = join(target, modulePath(name, file));
   return existsSync(path) ? readFileSync(path, "utf8") : undefined;
-});
-writeFileSync(join(target, CORE_ROOT_FILE), `${JSON.stringify(coreTargets)}\n`);
+}));
+if (diagnostics) {
+  for (const { package: name, file } of STAGED.viewDiagnostics) coreTargets.add(`/${modulePath(name, file)}`);
+}
+writeFileSync(join(target, CORE_ROOT_FILE), `${JSON.stringify([...coreTargets].sort())}\n`);
 // The view import map is the JSON text of VIEW_IMPORTS, which each host passes to the native view handler as the text it inserts.
-writeFileSync(join(target, VIEW_IMPORTS_FILE), JSON.stringify({ imports: VIEW_IMPORTS }));
+writeFileSync(join(target, VIEW_IMPORTS_FILE), JSON.stringify({ imports: viewImports({ diagnostics }) }));
 
 let plugins = [];
 if (installedDirectory) {

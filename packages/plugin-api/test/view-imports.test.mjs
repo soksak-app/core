@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { VIEW_IMPORTS } from "../index.js";
+import { VIEW_IMPORTS, viewImports } from "../index.js";
 
 const PACKAGE = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ENTRIES = ["index.js", "view.js"];
@@ -72,6 +72,16 @@ test("the view import map has exactly the five entries of rule 4", () => {
     "@soksak/shared/": "soksak://core/shared/",
   });
   assert.equal(Object.isFrozen(VIEW_IMPORTS), true);
+});
+
+test("diagnostic builds add only the declared view-frame observer entry", () => {
+  assert.deepEqual(viewImports({ diagnostics: false }), VIEW_IMPORTS);
+  assert.deepEqual(viewImports({ diagnostics: true }), {
+    ...VIEW_IMPORTS,
+    "@soksak/plugin-api/diagnostic-view-frames": "soksak://core/modules/@soksak/plugin-api/diagnostic-view-frames.js",
+  });
+  assert.equal(Object.isFrozen(viewImports({ diagnostics: true })), true);
+  assert.throws(() => viewImports({}), /requires diagnostics as a boolean/);
 });
 
 test("every import of index.js and view.js is served by the core targets or the view import map", () => {
@@ -141,4 +151,9 @@ test("the view map's plugin-api entries are the browser exports of the package, 
   const mapped = Object.keys(VIEW_IMPORTS).filter((key) => key.startsWith("@soksak/plugin-api/")).sort();
   assert.deepEqual(mapped, ["@soksak/plugin-api/screen-hash", "@soksak/plugin-api/view"]);
   assert.ok(mapped.every((key) => exported.includes(key)), `every mapped entry is an export of the package: ${mapped}`);
+  const diagnosticMapped = Object.keys(viewImports({ diagnostics: true }))
+    .filter((key) => key.startsWith("@soksak/plugin-api/")).sort();
+  assert.deepEqual(diagnosticMapped, [...mapped, "@soksak/plugin-api/diagnostic-view-frames"].sort());
+  assert.ok(diagnosticMapped.every((key) => exported.includes(key)),
+    `every diagnostic mapped entry is an export of the package: ${diagnosticMapped}`);
 });

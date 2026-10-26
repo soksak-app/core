@@ -5,11 +5,11 @@
 // A regular expression reads the text of a string literal as an import (ui/vendor/libraries.js of the editor holds the text
 // "import export from" in a keyword list), so the rule does not use one.
 import { parse } from "es-module-lexer/js";
-import { VIEW_IMPORTS } from "./index.js";
+import { viewImports } from "./index.js";
 
-/** Reports whether a bare specifier is one of the import map entries: an exact key, or a key with a trailing slash as a prefix. */
-function isMapped(specifier) {
-  return Object.keys(VIEW_IMPORTS).some((key) => (key.endsWith("/") ? specifier.startsWith(key) : specifier === key));
+/** Reports whether a bare specifier is one of the declared import map entries: exact key or slash-terminated prefix. */
+function isMapped(specifier, imports) {
+  return Object.keys(imports).some((key) => (key.endsWith("/") ? specifier.startsWith(key) : specifier === key));
 }
 
 /**
@@ -19,7 +19,9 @@ function isMapped(specifier) {
  * import whose specifier is not literal (a non-literal argument, or a template with a substitution) is not read. An error names
  * the importing module and the specifier. A module whose imports the lexer rejects is an error that names the module.
  */
-export function checkViewModules(read, entry) {
+export function checkViewModules(read, entry, { diagnostics = false } = {}) {
+  if (typeof diagnostics !== "boolean") throw new TypeError("checkViewModules diagnostics must be a boolean");
+  const allowedImports = viewImports({ diagnostics });
   const errors = [];
   const seen = new Set();
   const pending = [entry];
@@ -45,7 +47,7 @@ export function checkViewModules(read, entry) {
         const target = resolveRelative(path, specifier);
         if (read(target) === null) errors.push(`${path}: module ${target} does not exist`);
         else pending.push(target);
-      } else if (!isMapped(specifier)) {
+      } else if (!isMapped(specifier, allowedImports)) {
         errors.push(`${path}: import ${specifier} is not in the view import map`);
       }
     }

@@ -19,6 +19,10 @@ export const STAGED = Object.freeze({
     "resize-loop.js", // the ResizeObserver loop recorder that the diagnostics module uses
     "surface-reply-hold.js", // the hold of surface exposure replies that the diagnostics module uses
   ]),
+  // Modules served to plugin view documents only in diagnostic builds.
+  viewDiagnostics: Object.freeze([
+    Object.freeze({ package: "@soksak/plugin-api", file: "diagnostic-view-frames.js" }),
+  ]),
   // A document that the native host creates and provides for each request. An application without a host uses the --installed staging.
   served: Object.freeze([
     "installed-plugins.json", // The enabled installed plugins and their manifests (docs/spec/installation.md)

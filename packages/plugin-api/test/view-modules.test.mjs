@@ -13,6 +13,16 @@ test("a page whose module graph imports only the view import map entries passes"
   assert.deepEqual(checkViewModules(reader(files), "ui/view.js"), []);
 });
 
+test("the diagnostic observer entry is mapped only for a diagnostic module graph", () => {
+  const files = {
+    "ui/diagnostics.js": 'import { observeViewDocumentFrames } from "@soksak/plugin-api/diagnostic-view-frames";\n',
+  };
+  assert.deepEqual(checkViewModules(reader(files), "ui/diagnostics.js"), [
+    "ui/diagnostics.js: import @soksak/plugin-api/diagnostic-view-frames is not in the view import map",
+  ]);
+  assert.deepEqual(checkViewModules(reader(files), "ui/diagnostics.js", { diagnostics: true }), []);
+});
+
 test("a module that imports a specifier outside the view import map is an error that names the module and the specifier", () => {
   const files = {
     "ui/view.js": 'import { mount } from "./render.js";\n',

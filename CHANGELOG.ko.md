@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5: Diagnostic 전용 공유 view-document observer와 명시적 diagnostic import-map 항목을 추가한다. 명시적 command 뒤 animation frame에서만 관찰을 시작하고 ResizeObserver 다음 frame의 크기와 source clock을 기존 event log에 기록하며 stop에서 대기 중인 작업을 모두 취소한다. Release staging은 observer를 제외하고 기존 import map을 유지한다. Observer, import와 staging 소유 검사가 통과했으며 이 기록은 실제 paint를 입증하지 않는다.
+
 - F212.14-5-1: 두 host의 diagnostic drag에 opt-in frame identity를 전달하고 window-check helper에서 stop artifact를 유지한다. Boolean이 아닌 identity 값과 recording 없는 identity를 거부하며 기본 drag recording을 유지한다. 양 host 옵션 소유 검사와 consumer 소유 검사 세 개가 통과했다. Runtime 측정은 별도다.
 
 - F212.14-5: View 메모리 측정의 SI byte 단위와 process를 공유하는 전체 group을 명시한다. 닫기 전후 같은 process identity의 physical footprint를 비교하고 종료한 process는 0으로 세며 초기 document만 있는 history를 기록한다. 모든 메모리 한도와 회수 요구를 유지한다.

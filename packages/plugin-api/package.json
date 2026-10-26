@@ -13,7 +13,8 @@
     "./records-check": "./records-check.js",
     "./events-check": "./events-check.js",
     "./screen-hash": "./screen-hash.js",
-    "./view-modules": "./view-modules.js"
+    "./view-modules": "./view-modules.js",
+    "./diagnostic-view-frames": "./diagnostic-view-frames.js"
   },
   "files": [
     "index.js",
@@ -28,6 +29,7 @@
     "surface-composition.js",
     "surface.js",
     "view-page.js",
+    "diagnostic-view-frames.js",
     "plugin-runtime.js",
     "operation.js",
     "clipboard.js",

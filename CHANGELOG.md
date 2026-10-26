@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5: Add a diagnostic-only shared view-document observer and explicit diagnostic import-map entry. Start observation on an animation frame only after an explicit command, record ResizeObserver-to-next-frame sizes and source clocks in the existing event log, and cancel all pending work on stop. Release staging omits the observer and retains its existing import map. Focused observer, import and staging owners pass; these records do not prove physical paint.
+
 - F212.14-5-1: Forward opt-in frame identity through diagnostic drag on both hosts and preserve its stop artifact in the window-check helper. Reject non-boolean identity values and identity without recording; keep default drag recording unchanged. Both host option owners and all three consumer owners pass. Runtime measurement remains separate.
 
 - F212.14-5: Define SI byte units and the complete process-sharing group for view memory measurements. Compare physical footprints of the same process identities before and after closure, with ended processes counted as zero and initial-document-only history recorded. Keep all memory limits and reclaim requirements unchanged.

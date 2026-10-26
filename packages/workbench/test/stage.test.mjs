@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { VIEW_IMPORTS, VIEW_IMPORTS_FILE } from "@soksak/plugin-api";
+import { VIEW_IMPORTS, VIEW_IMPORTS_FILE, viewImports } from "@soksak/plugin-api";
 
 const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
 const OBSERVE = fileURLToPath(new URL("../observe.js", import.meta.url));
@@ -38,6 +38,8 @@ test("a staged frontend without --diagnostics has an empty diagnostics module an
   assert.doesNotMatch(module, /diagnostics\.\w+|registry|import/);
   assert.equal(existsSync(join(app, "out/observe.js")), false);
   assert.equal(existsSync(join(app, "out/transcript.js")), false);
+  assert.equal(existsSync(join(app, "out/modules/@soksak/plugin-api/diagnostic-view-frames.js")), false,
+    "the diagnostic view observer is absent from a release bundle");
   assert.doesNotMatch(readFileSync(join(app, "out/host.js"), "utf8"), /diagnostics\.\w+|transcript/i);
 });
 
@@ -46,6 +48,10 @@ test("a staged frontend with --diagnostics has the page diagnostic methods", (t)
   assert.match(stage(app, "--diagnostics"), /with diagnostics/);
   assert.equal(readFileSync(join(app, "out/diagnostics.js"), "utf8"), readFileSync(OBSERVE, "utf8"));
   assert.equal(existsSync(join(app, "out/transcript.js")), true);
+  assert.equal(existsSync(join(app, "out/modules/@soksak/plugin-api/diagnostic-view-frames.js")), true,
+    "the diagnostic view observer is staged for view checks");
+  assert.ok(JSON.parse(readFileSync(join(app, "out/core-root.json"), "utf8"))
+    .includes("/modules/@soksak/plugin-api/diagnostic-view-frames.js"), "the host serves the diagnostic view observer to view documents");
 });
 
 test("unknown staging arguments are rejected", (t) => {
@@ -198,4 +204,7 @@ test("staging writes the view import map as the JSON text of VIEW_IMPORTS, which
   const app = fixtureApp(t);
   stage(app);
   assert.equal(readFileSync(join(app, "out", VIEW_IMPORTS_FILE), "utf8"), JSON.stringify({ imports: VIEW_IMPORTS }));
+  stage(app, "--diagnostics");
+  assert.equal(readFileSync(join(app, "out", VIEW_IMPORTS_FILE), "utf8"),
+    JSON.stringify({ imports: viewImports({ diagnostics: true }) }));
 });
