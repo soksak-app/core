@@ -6920,6 +6920,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-186",
+    implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: 'payload["params"] = message' }],
+    tests: [{ file: "packages/host/tauriv2/tests/documents/view_decode_test.rs", id: "a_view_call_transfers_the_owned_params_tree_without_copying_it" }],
+    expected: "View-call forwarding transfers the decoded params tree without copying nested values.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-161",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "fn dispatch_with_decoder(" }],
     tests: [

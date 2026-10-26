@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-186: Transfer the decoded Tauri view-call params into the relay envelope instead of cloning and reserializing their Value tree. The ownership regression fails before correction and passes afterward; seven existing call/decode owners pass. Keep validation, cancellation, cids, default null params and open-call tracking unchanged. Current diagnostic host samples identify the copied path without establishing end-to-end latency improvement; performance targets remain open.
+
 - F212.12-1-9-1: Complete the document binary take contract audit. Clarify the existing main-thread precondition; no production caller violates it. The native owner and four host consumer cases pass. Consumer fakes do not establish production dispatch, and no unused dispatcher is added.
 
 - F212.12-1-10: Complete local start-values and shared import-map acceptance from the owning corrections and retained two-host content/project evidence. All seven source-removal owners are complete. Keep the existing seven-plugin publication gate open under F212.15 with its ID and targets preserved; no published delivery is claimed and no completed runtime suite is repeated.

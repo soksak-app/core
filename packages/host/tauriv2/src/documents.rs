@@ -1207,7 +1207,7 @@ impl ViewChannels {
         surface: &str,
         received: ViewReceived,
     ) -> Result<Option<Value>, String> {
-        let Some(message) = received.message else {
+        let Some(mut message) = received.message else {
             return Ok(None);
         };
         let field = |name: &str| message.get(name).filter(|value| !value.is_null());
@@ -1230,6 +1230,7 @@ impl ViewChannels {
                 field("command")
                     .and_then(Value::as_str)
                     .filter(|command| !command.is_empty())
+                    .map(str::to_owned)
                     .ok_or_else(|| format!("{surface}: view call {id} has an empty command"))?,
             ),
         };
@@ -1248,22 +1249,24 @@ impl ViewChannels {
                 "cancel": true,
             })));
         };
-        // default: a call without params sends null to its command, as the call envelope has no params for it.
-        let params = message.get("params").cloned().unwrap_or(Value::Null);
         // The cids of the cause of the call are forwarded only when the call has some.
         let cids = cause_cids_of(message.get("cids"))
             .map_err(|refusal| format!("{surface}: view call {id} {refusal}"))?;
         // The call is open until the main page answers it (docs/spec/native-surfaces.md#view-surfaces).
         if let Some(channel) = self.lock().get_mut(surface) {
-            channel.calls.insert(id, command.to_string());
+            channel.calls.insert(id, command.clone());
         }
         let mut payload = json!({
             "surface": surface,
             "plugin": plugin,
             "id": id,
             "command": command,
-            "params": params,
         });
+        // default: a call without params sends null to its command, as the call envelope has no params for it.
+        payload["params"] = message
+            .get_mut("params")
+            .map(Value::take)
+            .unwrap_or(Value::Null);
         if !cids.is_empty() {
             payload["cids"] = json!(cids);
         }

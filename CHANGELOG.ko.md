@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-186: decoded Tauri view-call params의 Value tree를 clone하고 다시 직렬화하는 대신 relay envelope로 옮긴다. 소유권 회귀 검사는 수정 전에 실패하고 수정 후 통과하며 기존 call/decode 소유 검사 일곱 개도 통과한다. 검증, 취소, cids, 기본 null params와 open-call 추적을 유지한다. 현재 진단 host sample은 복사 경로를 확인하지만 전체 지연 개선을 입증하지 않으며 성능 목표는 열린 상태다.
+
 - F212.12-1-9-1: document binary take 계약 감사를 완료한다. 기존 main-thread 사전 조건을 명시하며 이를 위반하는 production 호출자는 없다. native 소유 검사와 host consumer 네 사례가 통과한다. consumer fake는 production dispatch를 증명하지 않으며 사용하지 않는 dispatcher를 추가하지 않는다.
 
 - F212.12-1-10: 소유 수정과 보존한 양 host content/project 근거로 로컬 start-values 및 공통 import-map acceptance를 완료한다. 소스 제거 owner 일곱 곳이 모두 완료다. 기존 plugin 일곱 곳의 publication gate는 ID와 대상을 유지해 F212.15 아래에 열어 두며 공개 전달을 주장하거나 완료된 runtime suite를 반복하지 않는다.

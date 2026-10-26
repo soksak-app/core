@@ -72,3 +72,57 @@ fn view_dispatch_preserves_precedence_and_invalid_field_errors() {
         Ok(ViewDispatch::Ready(Err("queue full for probe".to_string())))
     );
 }
+
+#[test]
+fn a_view_call_transfers_the_owned_params_tree_without_copying_it() {
+    let channels = ViewChannels::default();
+    channels.register("surface", "probe", 1);
+    let params = json!({"items": [{"text": "kept parameter allocation"}]});
+    let pointer = params["items"][0]["text"].as_str().unwrap().as_ptr() as usize;
+    let mut message = json!({"id": 7, "command": "probe.run", "cids": ["cause-1"]});
+    message["params"] = params;
+    let payload = channels
+        .call_received(
+            "surface",
+            super::ViewReceived {
+                message: Some(message),
+                error: None,
+            },
+        )
+        .expect("valid call")
+        .expect("forwarded call");
+    assert_eq!(
+        payload["params"]["items"][0]["text"],
+        "kept parameter allocation"
+    );
+    assert_eq!(
+        payload["params"]["items"][0]["text"]
+            .as_str()
+            .unwrap()
+            .as_ptr() as usize,
+        pointer,
+        "forwarding must transfer the decoded params tree without copying it"
+    );
+    assert_eq!(payload["cids"], json!(["cause-1"]));
+    assert_eq!(
+        channels.end_calls("surface"),
+        vec![("probe".to_string(), "probe.run".to_string())]
+    );
+    for message in [
+        json!({"id": 8, "command": "probe.run"}),
+        json!({"id": 9, "command": "probe.run", "params": null}),
+    ] {
+        let payload = channels
+            .call_received(
+                "surface",
+                super::ViewReceived {
+                    message: Some(message),
+                    error: None,
+                },
+            )
+            .expect("valid default params")
+            .expect("forwarded default params");
+        assert_eq!(payload["params"], serde_json::Value::Null);
+        assert!(payload.get("cids").is_none());
+    }
+}
