@@ -6927,6 +6927,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-187",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "NSString *sp_document_view_message_json(id body)" }],
+    tests: [{ file: "native/darwin/tests/view_channel_test.m", id: "view message encoding releases its temporary JSON string" }],
+    expected: "The view-channel encoder releases its temporary JSON string while preserving the complete message.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-186",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: 'payload["params"] = message' }],
     tests: [{ file: "packages/host/tauriv2/tests/documents/view_decode_test.rs", id: "a_view_call_transfers_the_owned_params_tree_without_copying_it" }],

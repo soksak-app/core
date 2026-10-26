@@ -12,6 +12,7 @@
 #import "application_log.h"
 #import "document_upload_body.h"
 #import "document_view.h"
+#import "document_message.h"
 #import "event_ring.h"
 #import "observe.h"
 #import "private/webkit.h"
@@ -19,6 +20,13 @@
 #import "webview_input.h"
 
 static NSString *const kScrollMessage = @"soksakDocumentScroll";
+
+// The callback borrows the encoded message until delivery returns.
+NSString *sp_document_view_message_json(id body) {
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"message": body } options:0 error:nil];
+    NSString *json = data ? [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease] : nil;
+    return json ?: @"{\"error\":\"the view channel message is not JSON\"}";
+}
 
 // The script message handler of the view channel of a view configuration (docs/spec/native-surfaces.md#view-surfaces). The
 // handler belongs to the page world, where the channel script runs, so the page can post to it.
@@ -736,9 +744,7 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
     if (!message.frameInfo.isMainFrame) {
         json = @"{\"error\":\"the view channel message comes from a frame that is not the main frame\"}";
     } else {
-        NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"message": message.body } options:0 error:nil];
-        json = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : nil;
-        if (!json) json = @"{\"error\":\"the view channel message is not JSON\"}";
+        json = sp_document_view_message_json(message.body);
     }
     if (!self.viewMessage) {
         sp_log_error("document view", "view channel message without a receiver");

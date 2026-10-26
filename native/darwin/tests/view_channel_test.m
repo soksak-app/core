@@ -6,6 +6,7 @@
 #import "support/temporary_folder.h"
 #import "support/view_import_map.h"
 #import "document_view.h"
+#import "document_message.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
 
@@ -92,7 +93,23 @@ static BOOL hasChannelScript(WKWebView *web) {
     return NO;
 }
 
+static void checkMessageLifetime(void) {
+    NSHashTable *strings = [[NSHashTable weakObjectsHashTable] retain];
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    NSString *text = [@"message" stringByPaddingToLength:65536 withString:@"x" startingAtIndex:0];
+    NSDictionary *body = @{ @"value": text, @"null": NSNull.null };
+    NSString *json = sp_document_view_message_json(body);
+    NSDictionary *decoded = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
+        options:0 error:nil];
+    check([decoded isEqual:@{ @"message": body }], @"view message encoding preserves the complete body");
+    [strings addObject:json];
+    [pool drain];
+    check(strings.allObjects.count == 0, @"view message encoding releases its temporary JSON string");
+    [strings release];
+}
+
 int main(void) { @autoreleasepool {
+    checkMessageLifetime();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
