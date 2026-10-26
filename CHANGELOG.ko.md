@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.1-4: 한 창·두 창의 main-page footprint benchmark를 추가한다. 정확한 process identity를 대조하고 공유 PID를 중복 합산하지 않으며 load와 sampler 참고값을 보존한다. 오류와 process 교체를 거부하고 baseline 창 집합을 복원한다. Runtime Red와 독립 리뷰 후 소유 검사 아홉 개가 통과한다. 소유 검사로 앱 측정 결과를 추론하지 않는다.
+
 - F212.9a-1: 등록된 plugin-host WebContent process를 양 host memory sampler에 포함한다. 등록된 handle을 대조하고 소유자별 process identity와 footprint를 유지하며 누락되거나 시작 전인 process는 명시적으로 보고한다. 누락 행을 재현한 뒤 Go/Rust adapter와 sampler 소유 검사가 통과한다. 앱 측정은 아직 남아 있다.
 
 - F238-b-3: Host마다 독립 선택 가능한 시험 열 개로 macOS keyboard-routing 탐침을 추가한다. Run 32에서 13개가 통과하고 7개가 실패했으며, 그 7개만 run 33에서 재실행해 모두 통과했다. Run 32에서는 hidden-library command assertion으로 catalog 감사 항목 두 개가 나왔다. 통과한 13개 사례의 개별 판정은 깨끗하다. Run 33의 감사 오류는 0개이며 양 host는 두 실행 모두 정상 종료했다. 탐침은 native input과 registry command 결과, picker/modal 소유권, native menu shortcut, 표시된 library의 검색 focus, 숨겨진 library에서의 key 소유, 같은 window AppKit document에 대한 IME Escape를 확인한다. 한 번의 run을 20/20 통과로 기록하지 않는다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.1-4: Add the tracked main-page footprint benchmark for one and two windows. Match exact process identities, deduplicate shared PIDs, preserve load and sampler context, reject errors and process replacement, and restore the baseline window set. Nine owning checks pass after runtime Reds and independent review. Application measurement results are not inferred from these owner tests.
+
 - F212.9a-1: Include registered plugin-host WebContent processes in both host memory samplers. Match registered handles, retain per-owner process identity and footprint, and report missing or unstarted processes explicitly. Go and Rust adapter and sampler owner checks pass after reproducing the omitted row. Application measurements remain outstanding.
 
 - F238-b-3: Add a tracked macOS keyboard-routing probe with ten separately selectable cases per host. Run 32 accepted 13 cases and failed seven; only those seven were rerun in run 33, and all passed. The 13 accepted cases have clean individual judgments. Run 32 also reported two catalog audit findings from the hidden-library command assertion. Run 33 has zero audit errors; both hosts shut down normally in both runs. The probe records native input and registry-command outcomes, verifies picker and modal ownership, native menu shortcuts, shown-library search focus, hidden-library key ownership, and IME Escape against the same-window AppKit document. No single run is recorded as 20/20.

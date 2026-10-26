@@ -198,6 +198,53 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F212.1-4",
+  "implementation": [
+    {
+      "file": "e2e/benchmark/cases/main-page-footprint.mjs",
+      "symbol": "export function reduceMainPageFootprint("
+    },
+    {
+      "file": "e2e/benchmark/cases/main-page-footprint.mjs",
+      "symbol": "export async function readMainPageFootprint("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint records both windows and sums unique process footprints"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint selects the latest owner rows and counts one shared PID once"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint waits on host.log notices until each assigned PID has a sampler row"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint reports a window-level sampler error without a PID"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint rejects a malformed window-level sampler error"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "two-window main-page footprint refuses a changed baseline page PID"
+    },
+    {
+      "file": "e2e/test/main-page-footprint.test.mjs",
+      "id": "main-page footprint cleanup attempts every added window and preserves close errors"
+    }
+  ],
+  "expected": "The collector preserves process identities, unique physical footprints, sampler errors and cleanup; owner verification does not establish measured application values.",
+  "levels": [
+    "unit"
+  ]
+},
+  {
   "id": "F212.9a-1",
   "implementation": [
     {
