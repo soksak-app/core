@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F266.14: Complete the blocked-writer closure audit through the later deterministic fixture correction. Preserve the limitation that the original full-crate runs at load 25–34 do not prove non-recurrence at about 40. The corrected fixture waits for the in-progress large write before filling its queue; the current four-MiB owner passes 1/1 with exactly two refusals. Keep the earlier closed record unchanged and claim no additional full-suite or historical load coverage.
+
 - F240: Reconcile the remaining checklist rows with the five current functional cohorts. Account for all 54 open rows across input/menu acceptance, reported failures and historical audits, performance, package installation/publication, and aggregate requirements. Include parent rows explicitly and preserve every individual state; functional acceptance does not imply publication or historical closure.
 
 - F212.12-2-3: Verify inactive view/main native input and focus retention on both macOS arm64 hosts. Native Escape cancels main rename and dismisses the picker; address input preserves its draft before replacing its selected text. All 41 Wails and 45 Tauri recorded frames decode, and error audits, shared-baseline restoration and normal shutdown pass. Keep native-menu key equivalents in the separate activation-tier acceptance; no production input dispatch changes are added.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F266.14: 이후의 결정적 fixture 수정으로 blocked-writer 종료 감사를 완료한다. 원래 full-crate 실행 부하 25–34가 약 40의 비재현을 입증하지 못한다는 한계를 유지한다. 수정된 fixture는 큰 write의 진행을 확인한 뒤 queue를 채우며 현재 four-MiB owner는 정확한 refusal 두 개로 1/1 통과한다. 이전 종료 기록은 그대로 두고 추가 전체 suite나 과거 부하 검증을 주장하지 않는다.
+
 - F240: 남은 체크리스트 행을 현재 기능 cohort 다섯 개와 구분해 집계한다. 미완료 54행 전체를 입력/menu acceptance, 보고된 실패와 과거 감사, 성능, package 설치/publication 및 집계 요구사항으로 설명한다. Parent 행의 포함을 명시하고 모든 개별 상태를 유지하며 기능 acceptance로 publication이나 과거 종료를 추론하지 않는다.
 
 - F212.12-2-3: macOS arm64 양 host에서 비활성 view/main native 입력과 focus 보존을 검증한다. Native Escape가 main rename을 취소하고 picker를 닫으며 주소 입력은 draft를 보존한 뒤 선택된 text를 교체한다. Wails 녹화 frame 41개와 Tauri frame 45개를 모두 decode하고 오류 감사, 공통 baseline 복원과 정상 종료가 통과한다. Native-menu key equivalent는 별도의 activation-tier acceptance에 유지하며 제품 input dispatch를 변경하지 않는다.
