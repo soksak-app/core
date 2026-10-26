@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-211: 양 host에서 로컬 IME Escape 취소 수정을 검증한다. 소유 sidecar S97은 한 번의 순서 있는 확정 문자·Escape write와 unknown selector 원자적 거부의 Red/Green을 유지한다. 양 앱 사례는 같은 window AppKit reference와 terminal document가 일치한다. Publication은 sidecar S97.1에 남으며 native input-source context 분류는 별도다.
+
 - F239-214: Session tree마다 최초의 원래 input source를 baseline cleanup 뒤에 한 번 복원한다. 최초 선택이 cleanup 전에 닫히는 자식에서 발생해도 root requester를 사용한다. 두 소유 사례가 수정 전 순서·닫힌 자식 오류를 재현하고 수정 후 통과하며 독립 리뷰와 문서 검사도 통과한다. Native context 정책은 그대로다.
 
 - F212.1-4: 한 창·두 창의 main-page footprint benchmark를 추가한다. 정확한 process identity를 대조하고 공유 PID를 중복 합산하지 않으며 load와 sampler 참고값을 보존한다. 오류와 process 교체를 거부하고 baseline 창 집합을 복원한다. Runtime Red와 독립 리뷰 후 소유 검사 아홉 개가 통과한다. 소유 검사로 앱 측정 결과를 추론하지 않는다.

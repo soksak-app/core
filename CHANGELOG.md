@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-211: Accept the local IME Escape cancellation correction on both hosts. The owning sidecar S97 retains Red/Green for one ordered committed-text/Escape write and atomic unknown-selector rejection. Both application cases match the same-window AppKit reference and terminal document. Publication remains under sidecar S97.1, and native input-source context classification remains separate.
+
 - F239-214: Restore the first original input source once per session tree after baseline cleanup. Use the root requester even when the first selection occurs in a child that closes before cleanup. Two owner cases reproduce ordering and closed-child failures before their corrections and pass afterward; independent review and documentation checks pass. Native context policy is unchanged.
 
 - F212.1-4: Add the tracked main-page footprint benchmark for one and two windows. Match exact process identities, deduplicate shared PIDs, preserve load and sampler context, reject errors and process replacement, and restore the baseline window set. Nine owning checks pass after runtime Reds and independent review. Application measurement results are not inferred from these owner tests.

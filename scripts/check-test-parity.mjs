@@ -198,6 +198,25 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F239-211",
+  "implementation": [
+    {
+      "file": "packages/plugin-api/view.js",
+      "symbol": "export function createViewBridge("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/activation/view-keyboard-routing.test.mjs",
+      "id": "IME Escape ends view composition as it does in AppKit"
+    }
+  ],
+  "expected": "The current consumer accepts committed text while IME Escape matches the same-window AppKit reference without forwarding a workbench command; sidecar publication remains separate.",
+  "levels": [
+    "application"
+  ]
+},
+  {
   "id": "F239-214",
   "implementation": [
     {
