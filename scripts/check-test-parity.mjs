@@ -6936,6 +6936,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-5-26",
+    implementation: [{ file: "e2e/benchmark/cases/browser.mjs", symbol: "export function browserLayoutSourceFrame(" }],
+    tests: [{ file: "e2e/test/browser-view-metrics-case.test.mjs", id: "browser layout uses a requested final-size source frame before the later native readback" }],
+    expected: "One-shot layout source selection uses the request boundary and exact final viewport projection, not a later geometry readback timestamp.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.14-5-27",
     implementation: [{ file: "native/darwin/src/document_view.m", symbol: "surfaceLayoutRenderAtDisplayRate(view)" }],
     tests: [{ file: "native/darwin/tests/document_core_root_test.m", id: "a plugin root view renders at the display refresh rate (preference %d)" }],
