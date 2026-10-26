@@ -305,8 +305,10 @@ test("HWP descriptor waits for its declared document status exposure", { timeout
     const descriptor = await hwpViewDescriptor({
       async get(name) { assert.equal(name, "core.project"); return { root }; },
       cleanup(callback) { cleanups.push(callback); },
-    });
+    }, undefined, 1001);
     assert.equal(descriptor.readinessStatus, "hwp.document");
+    assert.equal(descriptor.captureObservationWindowMs, 1001,
+      "the HWP descriptor dropped the host-specific first-display observation window");
   } finally {
     for (const cleanup of cleanups) cleanup();
     if (previous === undefined) delete process.env.SOKSAK_CAPTURE_TEXT;

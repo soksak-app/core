@@ -8,6 +8,8 @@ import { runViewMeasurements } from "@soksak/window-check/view-metrics.mjs";
 import { fresh } from "../fixture.mjs";
 import { collectHwpViewMeasurements } from "./cases/hwp.mjs";
 
+const BASELINES_MS = Object.freeze({ wailsv3: 701, tauriv2: 813 });
+
 for (const app of Object.values(APPS)) {
   test(`${app.name}: HWP process, history, layout, and drag measurements meet the declared contract`,
     { timeout: 240000 }, async (t) => {
@@ -23,8 +25,8 @@ for (const app of Object.values(APPS)) {
       });
       const result = await runViewMeasurements(t, s, {
         plugin: "hwp",
-        baselinesMs: { wailsv3: 701, tauriv2: 813 },
-        collect: async () => collectHwpViewMeasurements(t, s),
+        baselinesMs: BASELINES_MS,
+        collect: async () => collectHwpViewMeasurements(t, s, { baselineMs: BASELINES_MS[app.name] }),
       });
       const directory = join(app.configDir, "logs", "hwp-view-metrics");
       mkdirSync(directory, { recursive: true });

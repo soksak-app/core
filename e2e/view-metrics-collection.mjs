@@ -393,7 +393,7 @@ async function presentDifferentPluginAnchor(s, { card, plugin }) {
 
 /** Opens a view under a live recording and proves its first visible content from a decoded capture frame. */
 export async function openRecordedView(t, s, { card, plugin, params, readiness, readinessStatus, expectedContent, language,
-  recognizeFrame } = {}) {
+  recognizeFrame, captureObservationWindowMs } = {}) {
   assert.ok(typeof card === "string" && card.length > 0, "view card must be nonempty text");
   assert.ok(typeof plugin === "string" && plugin.length > 0, "view plugin must be nonempty text");
   assert.equal(typeof readiness, "function", "view readiness callback is required");
@@ -402,6 +402,10 @@ export async function openRecordedView(t, s, { card, plugin, params, readiness, 
   assert.ok(typeof expectedContent === "string" && expectedContent.length > 0, "expected view content is required");
   assert.ok(typeof language === "string" && language.length > 0, "view content language is required");
   assert.ok(recognizeFrame === undefined || typeof recognizeFrame === "function", "view frame recognizer must be a function");
+  if (captureObservationWindowMs !== undefined) {
+    assert.ok(Number.isFinite(captureObservationWindowMs) && captureObservationWindowMs > 0,
+      "view capture observation window must be a finite positive duration");
+  }
 
   const offsets = currentEventOffsets(s.app.configDir);
   const recording = await s.record();
@@ -421,7 +425,7 @@ export async function openRecordedView(t, s, { card, plugin, params, readiness, 
     });
     const readinessEvidence = await waitForViewReadiness(s, tab, { readiness, readinessStatus });
     const { displayed } = await s.presented();
-    capture = await recording.stop({ after: displayed });
+    capture = await recording.stop({ after: displayed + (captureObservationWindowMs ?? 0) });
     stopped = true;
     assert.equal(capture.limited, false, `${plugin} first-content recording reached its bounded frame limit`);
     const paths = frames(capture.frames);

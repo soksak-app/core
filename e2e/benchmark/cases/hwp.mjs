@@ -125,7 +125,7 @@ export async function collectHwpReclaimAfterMotion(t, s, descriptor, start, evid
 }
 
 /** HWP inputs for the shared view startup, footprint, and reclaim collector. */
-export async function hwpViewDescriptor(s, diagnostic = () => {}) {
+export async function hwpViewDescriptor(s, diagnostic = () => {}, captureObservationWindowMs) {
   const cases = await viewContentCases(s, diagnostic);
   const content = cases.get("hwp");
   assert.ok(content?.params?.path, "the HWP measurement fixture has no document path");
@@ -137,6 +137,7 @@ export async function hwpViewDescriptor(s, diagnostic = () => {}) {
     params: content.params,
     expectedContent: HWP_CONTENT,
     language: "ko-KR",
+    ...(captureObservationWindowMs === undefined ? {} : { captureObservationWindowMs }),
     readinessStatus: "hwp.document",
     readiness: async (session, surface) => {
       await session.until("hwp.document", (value) => value.path === path && value.phase === "ready" && value.pages === 1,
@@ -463,8 +464,11 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
 }
 
 /** Collects the HWP lifecycle, source content, layout and full-gesture measurements. */
-export async function collectHwpViewMeasurements(t, s) {
-  const descriptor = await hwpViewDescriptor(s, (message) => t.diagnostic(message));
+export async function collectHwpViewMeasurements(t, s, { baselineMs } = {}) {
+  if (!Number.isFinite(baselineMs) || baselineMs <= 0) {
+    throw new Error(`HWP first-display baseline must be finite and positive, found ${JSON.stringify(baselineMs)}`);
+  }
+  const descriptor = await hwpViewDescriptor(s, (message) => t.diagnostic(message), baselineMs + 300);
   const start = await collectViewStartAndMemory(t, s, descriptor, { viewCount: 3 });
   const surface = start.warmDisplay.surface;
   const settings = (await s.get("core.settings")).values;

@@ -396,6 +396,15 @@ test("anchor OCR rejects missing or unsupported host menu languages", { timeout:
   }
 });
 
+test("recorded view observation window rejects nonpositive and nonfinite durations", { timeout: 5000 }, async () => {
+  for (const captureObservationWindowMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    await assert.rejects(openRecordedView({}, {}, {
+      card: "card-1", plugin: "fixture", readinessStatus: "fixture.ready", readiness: async () => {},
+      expectedContent: "fixture", language: "en-US", captureObservationWindowMs,
+    }), /finite positive duration/);
+  }
+});
+
 test("one recording proves the physical anchor boundary before target content", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "view-metrics-session-"));
   const logDirectory = join(root, "logs");
@@ -430,9 +439,10 @@ test("one recording proves the physical anchor boundary before target content", 
       writeCapturedFrame(recordingDirectory, 2, 6.1);
       writeCapturedFrame(recordingDirectory, 3, 7.1);
       writeCapturedFrame(recordingDirectory, 4, 10);
-      return { stop: async () => {
-        calls.push("stop");
-        return { frames: recordingDirectory, count: 5, limited: false };
+      return { stop: async ({ after }) => {
+        calls.push(`stop after ${after}`);
+        if (after >= 13) writeCapturedFrame(recordingDirectory, 5, 13);
+        return { frames: recordingDirectory, count: after >= 13 ? 6 : 5, limited: false };
       } };
     },
     async request(method) { calls.push(method); return { mono_ns: "6000000" }; },
@@ -500,12 +510,13 @@ test("one recording proves the physical anchor boundary before target content", 
       readinessCalls++;
       assert.equal(surface, "view-1");
     },
-    expectedContent: "SOKSAK FIXTURE", language: "en-US",
+    expectedContent: "SOKSAK FIXTURE", language: "en-US", captureObservationWindowMs: 20,
     recognizeFrame: async (decoded, rect, language) => {
       assert.deepEqual(rect, { x: 0, y: 0, w: 1, h: 1 });
       recognizedTimes.push(decoded.time);
       recognizedLanguages.push(language);
-      return { lines: [decoded.time === 7.1 ? "different anchor" : "SOKSAK FIXTURE"] };
+      return { lines: [decoded.time === 7.1 ? "different anchor"
+        : decoded.time === 10 ? "loading" : "SOKSAK FIXTURE"] };
     },
   });
   const openingResult = opening.then((value) => ({ value }), (error) => ({ error }));
@@ -524,13 +535,15 @@ test("one recording proves the physical anchor boundary before target content", 
   assert.equal(calls.indexOf("presented") < calls.indexOf("core.card.add-tab"), true,
     "the target view request preceded its different-content anchor presentation");
   assert.equal(calls.indexOf("record"), calls.lastIndexOf("record"), "one view lifecycle started multiple recordings");
-  assert.equal(calls.indexOf("stop") > calls.indexOf("core.card.add-tab"), true,
+  const stopIndex = calls.findIndex((call) => typeof call === "string" && call.startsWith("stop after "));
+  assert.ok(stopIndex > calls.indexOf("core.card.add-tab"),
     "the continuous recording stopped before the target view request");
-  assert.equal(calls.indexOf("stop") > calls.lastIndexOf("presented"), true,
+  assert.ok(stopIndex > calls.lastIndexOf("presented"),
     "the continuous recording stopped before the target view presentation");
-  assert.deepEqual(recognizedTimes, [0.5, 5.5, 6.1, 7.1, 10],
+  assert.ok(calls.includes("stop after 32"), `the observation window was not retained through its deadline: ${calls}`);
+  assert.deepEqual(recognizedTimes, [0.5, 5.5, 6.1, 7.1, 10, 13],
     "the scanner skipped old target frames, missed the actual anchor transition, or scanned target before its boundary");
-  assert.deepEqual(recognizedLanguages, ["ko-KR", "ko-KR", "ko-KR", "ko-KR", "en-US"],
+  assert.deepEqual(recognizedLanguages, ["ko-KR", "ko-KR", "ko-KR", "ko-KR", "en-US", "en-US"],
     "anchor OCR did not use the host menu language while target OCR retained its declared language");
   assert.equal(result.surface, "view-1");
   assert.equal(result.openedPid, 3141);
@@ -538,14 +551,14 @@ test("one recording proves the physical anchor boundary before target content", 
     "the different-content pixel boundary preceded the anchor presentation");
   assert.ok(result.contentFrame.frameIndex > result.anchor.contentFrame.frameIndex,
     "target content was accepted before the different-content pixel boundary");
-  assert.deepEqual(result.anchor.contentFrame, { frameIndex: 3, frameCount: 5, timeMs: 7.1,
+  assert.deepEqual(result.anchor.contentFrame, { frameIndex: 3, frameCount: 6, timeMs: 7.1,
     proof: { targetAbsent: "SOKSAK FIXTURE", actual: "different anchor", lines: ["different anchor"] } });
   assert.deepEqual(result.recording.anchorContentFrame, result.anchor.contentFrame,
     "raw anchor recording evidence omitted the different-content OCR proof");
-  assert.equal(result.recording.files.length, 5);
+  assert.equal(result.recording.files.length, 6);
   assert.equal(readFrame(result.recording.files[0]).time, 0.5,
     "the recording discarded the original old-content frame before the UI anchor transition");
-  assert.deepEqual(result.contentFrame, { frameIndex: 4, frameCount: 5, timeMs: 10,
+  assert.deepEqual(result.contentFrame, { frameIndex: 5, frameCount: 6, timeMs: 13,
     proof: { expected: "SOKSAK FIXTURE", actual: "SOKSAK FIXTURE", lines: ["SOKSAK FIXTURE"] } });
   assert.equal(s.cleanups.length, 1, "the opened view had no cleanup owner");
   s.run = async (method) => {

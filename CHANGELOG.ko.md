@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-31: HWP first-content capture를 root presentation 뒤에도 기존 host baseline과 300 ms 동안 유지한다. Root presentation은 독립 document의 paint를 입증하지 않는다. 가장 이른 recorded content timestamp와 모든 first-display 기준을 유지한다. 기존 collector는 지연된 content owner의 capture를 자르며 수정 후 capture/validation owner 2/2와 descriptor 전달 1/1이 통과한다. Application acceptance는 별도로 남는다.
+
 - F239-203: Format gate가 지적한 Tauri host 파일 여덟 개를 edition 2024 서식으로 복원한다. `skip_children=true`로 해당 파일만 정리했고 이후 gate가 통과하며 동작은 바뀌지 않는다.
 
 - F212.14-5-30: 실제 native document view에 diagnostic cyan 2-point border를 추가하고 capture bounds를 선언된 slot과 비교한다. 이는 CSS paint나 source-frame 근거를 대신하지 않는다. Native owner는 구현 전 `not implemented`로 실패하고 이후 1/1 통과한다. 후속 background interaction 회귀는 marker stop이 background 소유 layer backing을 보존하지 못해 실패하며, 수정 후 같은 native owner가 1/1 통과한다. Wails는 6/6, Tauri endpoint/diagnostic owner 다섯 개는 각각 1/1, 최신 HWP consumer owner는 16/16 통과한다. Application acceptance는 F212.14-5-5에 남는다.
