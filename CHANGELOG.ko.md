@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-1-9-1: document binary take 계약 감사를 완료한다. 기존 main-thread 사전 조건을 명시하며 이를 위반하는 production 호출자는 없다. native 소유 검사와 host consumer 네 사례가 통과한다. consumer fake는 production dispatch를 증명하지 않으며 사용하지 않는 dispatcher를 추가하지 않는다.
+
 - F212.12-1-10: 소유 수정과 보존한 양 host content/project 근거로 로컬 start-values 및 공통 import-map acceptance를 완료한다. 소스 제거 owner 일곱 곳이 모두 완료다. 기존 plugin 일곱 곳의 publication gate는 ID와 대상을 유지해 F212.15 아래에 열어 두며 공개 전달을 주장하거나 완료된 runtime suite를 반복하지 않는다.
 
 - F212.12-2-2, F212.12-2-2-3: 보존한 소유 Red/Green과 통과한 양 host click/native-input 근거로 로컬 terminal focus/input acceptance를 완료한다. Terminal P66-1의 공개 미배포를 유지하고 오래된 core 하드코딩 pin 대신 실제 호환 public-registry 선택을 검증하는 F212.15-1을 등록한다. Cadence 진단 subtree는 종료하거나 기준을 바꾸지 않고 F212.14 아래로 옮긴다. 상위 view-input activation 작업은 열어 둔다.

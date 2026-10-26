@@ -396,6 +396,7 @@ type Platform interface {
 	AddDocumentScript(document unsafe.Pointer, source string) error
 	// TakeDocumentBinary takes the bytes that the binary store of the document keeps under id, and releases the id. It returns the error
 	// text of the native layer when the document is closed or the id is not stored (docs/spec/native-surfaces.md#document-regions).
+	// The caller must run this operation on the main thread.
 	TakeDocumentBinary(document unsafe.Pointer, id string) ([]byte, error)
 	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
 	// SetDocumentStream receives {"stream": "elements" or "requests", "message": {...}} for each stream message of the document.

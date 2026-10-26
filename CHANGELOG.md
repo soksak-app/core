@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-1-9-1: Complete the document binary take contract audit. Clarify the existing main-thread precondition; no production caller violates it. The native owner and four host consumer cases pass. Consumer fakes do not establish production dispatch, and no unused dispatcher is added.
+
 - F212.12-1-10: Complete local start-values and shared import-map acceptance from the owning corrections and retained two-host content/project evidence. All seven source-removal owners are complete. Keep the existing seven-plugin publication gate open under F212.15 with its ID and targets preserved; no published delivery is claimed and no completed runtime suite is repeated.
 
 - F212.12-2-2, F212.12-2-2-3: Complete local terminal focus/input acceptance from the retained owning Red/Green and passing two-host click/native-input evidence. Keep terminal P66-1 publicly unreleased and register F212.15-1 for actual compatible public-registry selection instead of an obsolete hardcoded core pin. Move the unchanged cadence diagnostic subtree under F212.14 without closing it or changing its criterion. The broader view-input activation work remains open.

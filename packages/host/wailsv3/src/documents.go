@@ -2219,6 +2219,7 @@ func ViewReplyEvent(surface, plugin string, message json.RawMessage) (map[string
 // takeDocumentBinary takes the bytes that the binary store of the document name of surface keeps under id, and releases the id. A
 // document that is not attached gives the error `document "<name>" is not attached`, and a closed document or an unstored id gives the
 // native error text (docs/spec/native-surfaces.md#document-regions).
+// The caller must run this operation on the main thread.
 func (s *Surfaces) takeDocumentBinary(surface, name, id string) ([]byte, error) {
 	handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: name})
 	if err != nil {

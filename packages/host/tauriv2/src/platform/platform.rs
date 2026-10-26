@@ -443,6 +443,7 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn set_view_ended(&self, document: Handle, ended: Box<dyn Fn() + Send>) -> Result<(), String>;
     /// Takes the bytes that the binary store of the document keeps under id, and releases the id. The error is the text of the native layer
     /// when the document is closed or the id is not stored (docs/spec/native-surfaces.md#document-regions).
+    /// The caller must run this operation on the main thread.
     fn take_document_binary(&self, document: Handle, id: &str) -> Result<Vec<u8>, String>;
     /// Adds a user script that runs at document start in the page world, before any page script, for each load of the document from
     /// now on. The host adds the theme script of a view before it loads the page (docs/spec/native-surfaces.md#view-surfaces).
