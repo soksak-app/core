@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-2-4: 양쪽 host의 focus된 plugin view를 위한 activation-tier Command-zero 사례를 추가한다. Address text를 보존하고 정확한 card text factor를 확인하며 전체 gesture를 기록한다. 구문 검사는 통과하며 승인된 activation 실행은 개발 완료 후로 대기한다.
+
 - F212.14-5-1: 선택적 diagnostic drag identity artifact의 완료 상태, source byte 수와 SHA-256을 확인하는 양쪽 host consumer 사례를 추가한다. 구문 검사는 통과하며 애플리케이션 실행은 개발 완료 후로 대기한다.
 
 - F239-47-30: 기존 capture pipeline을 사용하는 image-region 소유 비교 검사를 추가한다. Opaque IOSurface와 layer CGImage provider byte를 검증하고 color profile을 보존하며 실제 배율 capture를 정확히 비교한다. 현재 1× 실행은 일치하며 명시적인 과거 2× 재현은 맞지 않는 capture geometry를 거부한다. Production 색상 수정이나 과거 원인은 확립되지 않았다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-2-4: Add the activation-tier Command-zero case for a focused plugin view on both hosts. Preserve the address text, check the exact card text factor and record the full gesture. Syntax validation passes; the approved activation execution remains pending until development completes.
+
 - F212.14-5-1: Add a two-host consumer case for opt-in diagnostic drag identity artifacts, including finalization status, source byte counts and SHA-256. Syntax validation passes; application execution remains pending until development completes.
 
 - F239-47-30: Add an owning image-region capture comparator through the existing capture pipeline. Verify opaque IOSurface and layer CGImage provider bytes, preserve color profiles, and compare the actual-scale capture exactly. The current 1× run matches; the explicit historical 2× reproduction rejects incompatible capture geometry. No production color correction or historical cause is established.
