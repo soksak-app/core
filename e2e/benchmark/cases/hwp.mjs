@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { drag } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
-import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry,
+import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE } from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture,
   monotonicTimeMs, requireViewContentFrameCoverage, withViewContentTrace }
@@ -102,15 +102,16 @@ function captureFrames(result, label) {
   return files.map(readFrame);
 }
 
-function hwpThemeGeometry(theme, contentColor) {
+function hwpThemeGeometry(theme, contentColor, cornerRadiusPt) {
   const parse = (name, token) => {
     assert.ok(typeof token === "string" && /^#[0-9a-f]{6}$/iu.test(token), `core theme ${name} is not an RGB hex token`);
     return [1, 3, 5].map((index) => Number.parseInt(token.slice(index, index + 2), 16));
   };
-  const borderColors = [theme.edge, theme.focus].filter((value) => value !== undefined)
+  const borderColors = [theme.edge, theme.rule, theme.focus].filter((value) => value !== undefined)
     .map((value, index) => parse(`border ${index}`, value));
   assert.ok(borderColors.length > 0, "core theme has no declared card border or focus color");
-  return { contentColor, cardColor: parse("card", theme.card), planeColor: parse("background", theme.bg), borderColors };
+  return { contentColor, cardColor: parse("card", theme.card), planeColor: parse("background", theme.bg),
+    borderColors, cornerRadiusPt };
 }
 
 function validateHwpStudioViewport(value) {
@@ -186,7 +187,7 @@ export function measureHwpViewportMarkerFrame(frame, viewportReply, { targetRect
     viewportMarker: { color: [...viewport.markerColor], borderWidthCssPx: viewport.borderWidth, captureRatio } };
 }
 
-export async function layoutObservation(t, s, descriptor, surface, card, theme) {
+export async function layoutObservation(t, s, descriptor, surface, card, theme, cornerRadiusPt) {
   const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
     assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
     const viewport = validateHwpStudioViewport(startReply.studioViewport);
@@ -218,7 +219,7 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme) 
   const targetRect = { x: studio.frame.x, y: studio.frame.y,
     width: studio.frame.width, height: studio.frame.height };
   const viewport = traced.action.viewport;
-  const themeGeometry = hwpThemeGeometry(theme, viewport.markerColor);
+  const themeGeometry = hwpThemeGeometry(theme, viewport.markerColor, cornerRadiusPt);
   const measured = captured.map((frame) => measureHwpViewportMarkerFrame(frame, viewport,
     { targetRect, themeGeometry }));
   let transition;
@@ -286,7 +287,7 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme) 
   };
 }
 
-async function dragObservation(t, s, descriptor, surface, card, theme) {
+async function dragObservation(t, s, descriptor, surface, card, theme, cornerRadiusPt) {
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
   const rootSlotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface });
@@ -311,7 +312,7 @@ async function dragObservation(t, s, descriptor, surface, card, theme) {
   const targetRect = { x: studio.frame.x, y: studio.frame.y,
     width: studio.frame.width, height: studio.frame.height };
   const viewport = traced.action.viewport;
-  const themeGeometry = hwpThemeGeometry(theme, viewport.markerColor);
+  const themeGeometry = hwpThemeGeometry(theme, viewport.markerColor, cornerRadiusPt);
   const geometryFrames = [];
   const geometryByFrame = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
@@ -363,10 +364,11 @@ export async function collectHwpViewMeasurements(t, s) {
   const start = await collectViewStartAndMemory(t, s, descriptor, { viewCount: 3 });
   const surface = start.warmDisplay.surface;
   const settings = (await s.get("core.settings")).values;
+  const cornerRadiusPt = effectiveCardCornerRadiusPt(settings);
   const theme = (await s.get("core.themes")).find((item) => item.name === settings.theme)?.[settings.mode];
   assert.ok(theme, `active core theme ${settings.theme}/${settings.mode} is unavailable`);
-  const layout = await layoutObservation(t, s, descriptor, surface, start.card, theme);
-  const drag = await dragObservation(t, s, descriptor, surface, start.card, theme);
+  const layout = await layoutObservation(t, s, descriptor, surface, start.card, theme, cornerRadiusPt);
+  const drag = await dragObservation(t, s, descriptor, surface, start.card, theme, cornerRadiusPt);
   const closeWarm = await s.run("core.tab.close", { tab: surface });
   assert.equal(closeWarm?.closed, true, `HWP motion view ${surface} did not close after capture`);
   await s.until("core.surfaces", (items) => !items.some((item) => item.surface === surface),

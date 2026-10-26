@@ -1,18 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "../view-frame-geometry.mjs";
+import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
+  from "../view-frame-geometry.mjs";
 
 const PALETTE = {
   contentColor: [30, 30, 30],
   cardColor: [25, 27, 36],
   planeColor: [16, 17, 23],
-  borderColors: [[43, 46, 61]],
+  borderColors: [[43, 46, 61], [34, 36, 47]],
+  cornerRadiusPt: 0,
   colorTolerance: 0,
 };
 
 function recordedFrame({ card = { left: 10, top: 8, right: 90, bottom: 72 },
-  content = { left: 14, top: 22, right: 86, bottom: 64 }, scale = 2,
+  content = { left: 14, top: 22, right: 86, bottom: 64 }, leftSlotGutter = false, roundedCorners = false,
+  resumedBorderAfterPlaneGap = false, endpointCrossStroke = false, scale = 2,
   contentOrigin = { x: 0, y: 0 }, contentScale = 1 } = {}) {
   const width = 100;
   const height = 80;
@@ -33,11 +36,42 @@ function recordedFrame({ card = { left: 10, top: 8, right: 90, bottom: 72 },
   for (let y = content.top; y < content.bottom; y++) for (let x = content.left; x < content.right; x++) {
     paint(x, y, PALETTE.contentColor);
   }
+  if (leftSlotGutter) {
+    for (let y = card.top + 1; y < card.bottom - 1; y++) {
+      for (let x = card.left + 1; x < content.left; x++) paint(x, y, PALETTE.planeColor);
+      paint(card.left, y, PALETTE.borderColors[1]);
+    }
+  }
+  if (roundedCorners) {
+    const radius = 5;
+    for (let y = 0; y < radius; y++) for (let x = 0; x < radius; x++) {
+      const corners = [
+        [card.left + radius, card.top + radius, card.left + x, card.top + y],
+        [card.right - radius - 1, card.top + radius, card.right - 1 - x, card.top + y],
+        [card.left + radius, card.bottom - radius - 1, card.left + x, card.bottom - 1 - y],
+        [card.right - radius - 1, card.bottom - radius - 1, card.right - 1 - x, card.bottom - 1 - y],
+      ];
+      for (const [cx, cy, px, py] of corners) {
+        if ((px - cx) ** 2 + (py - cy) ** 2 >= radius ** 2) paint(px, py, PALETTE.planeColor);
+      }
+    }
+  }
+  if (endpointCrossStroke) {
+    for (let y = card.top - 1; y <= card.top + 1; y++) paint(card.left, y, PALETTE.borderColors[1]);
+    for (let y = card.bottom - 2; y <= card.bottom; y++) paint(card.left, y, PALETTE.borderColors[1]);
+    for (let x = card.left - 1; x <= card.left + 1; x++) {
+      paint(x, card.top, PALETTE.borderColors[1]);
+      paint(x, card.bottom - 1, PALETTE.borderColors[1]);
+    }
+  }
+  if (resumedBorderAfterPlaneGap) {
+    for (let x = card.left + 3; x < card.left + 6; x++) paint(x, card.top, PALETTE.planeColor);
+  }
   return { width, height, stride, scale, contentScale, content: contentOrigin, time: 12.5, data };
 }
 
 function twoCardFrame({ extraTargetContent = false, fragmentedTarget = false, centerDifferentColor = false,
-  outsideTargetContent = false } = {}) {
+  outsideTargetContent = false, overdrawTargetToNeighbor = false } = {}) {
   const width = 210;
   const height = 90;
   const stride = width * 4;
@@ -68,6 +102,7 @@ function twoCardFrame({ extraTargetContent = false, fragmentedTarget = false, ce
   } else {
     content(14, 22, 91, 78);
   }
+  if (overdrawTargetToNeighbor) content(90, 22, 106, 78);
   if (outsideTargetContent) content(20, 12, 30, 16);
   card(110, 8, 195, 82);
   content(114, 22, 191, 78);
@@ -91,6 +126,37 @@ test("recorded pixels measure content and outer card on all four edges", { timeo
   assert.deepEqual(measured.cardRectPt, { left: 5, top: 4, right: 45, bottom: 36 });
   assert.deepEqual(measured.nativeRectPt, { left: 7, top: 11, right: 43, bottom: 32 });
   assert.equal(measured.timeMs, 12.5);
+});
+
+test("effective card radius follows public settings and removes the radius at zero gap", { timeout: 1000 }, () => {
+  assert.equal(effectiveCardCornerRadiusPt({ radius: 8, gap: 4 }), 8);
+  assert.equal(effectiveCardCornerRadiusPt({ radius: 8, gap: 0 }), 0);
+  assert.throws(() => effectiveCardCornerRadiusPt({ radius: 8 }), /radius and gap/);
+});
+
+test("recorded pixels find the outer card boundary behind a plane-colored slot gutter", { timeout: 1000 }, () => {
+  const measured = measureViewFrameGeometry(recordedFrame({ leftSlotGutter: true }), PALETTE);
+  assert.deepEqual(measured.cardRectPx, { left: 10, top: 8, right: 90, bottom: 72 });
+  assert.deepEqual(measured.nativeRectPx, { left: 14, top: 22, right: 86, bottom: 64 });
+});
+
+test("recorded pixels allow rounded corner prefixes and suffixes around a plane-colored slot gutter", { timeout: 1000 }, () => {
+  const measured = measureViewFrameGeometry(recordedFrame({ leftSlotGutter: true, roundedCorners: true }),
+    { ...PALETTE, cornerRadiusPt: 3 });
+  assert.deepEqual(measured.cardRectPx, { left: 10, top: 8, right: 90, bottom: 72 });
+  assert.deepEqual(measured.nativeRectPx, { left: 14, top: 22, right: 86, bottom: 64 });
+});
+
+test("recorded pixels reject an internal plane gap followed by a resumed border", { timeout: 1000 }, () => {
+  assert.throws(() => measureViewFrameGeometry(recordedFrame({ resumedBorderAfterPlaneGap: true }),
+    { ...PALETTE, cornerRadiusPt: 3 }),
+    /corner stroke does not cross|complete card perimeter at top/);
+});
+
+test("recorded pixels accept rounded corner strokes only when their 2D palette component crosses the edge", { timeout: 1000 }, () => {
+  const measured = measureViewFrameGeometry(recordedFrame({ roundedCorners: true, endpointCrossStroke: true }),
+    { ...PALETTE, cornerRadiusPt: 3 });
+  assert.deepEqual(measured.cardRectPx, { left: 10, top: 8, right: 90, bottom: 72 });
 });
 
 test("asymmetric content insets remain visible instead of being mistaken for aligned edges", { timeout: 1000 }, () => {
@@ -152,6 +218,12 @@ test("geometry measurement includes same-card color components outside the decla
   const targetRect = { x: 14, y: 22, width: 77, height: 56 };
   const measured = measureViewFrameGeometry(frame, { ...PALETTE, targetRect });
   assert.deepEqual(measured.nativeRectPx, { left: 14, top: 12, right: 91, bottom: 78 });
+});
+
+test("geometry measurement rejects an obscured edge that would otherwise select a neighboring card", { timeout: 1000 }, () => {
+  const frame = twoCardFrame({ overdrawTargetToNeighbor: true });
+  assert.throws(() => measureViewFrameGeometry(frame, { ...PALETTE,
+    targetRect: { x: 14, y: 22, width: 77, height: 56 } }), /card right edge.*plane-colored gap/);
 });
 
 test("geometry measurement finds a target card when its center is not the content fill", { timeout: 1000 }, () => {

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { drag } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
-import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "../../view-frame-geometry.mjs";
+import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
+  from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture, monotonicTimeMs, viewFootprints,
   requireViewContentFrameCoverage, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
@@ -68,7 +69,7 @@ function editorDocumentRow(host, surface) {
   return row;
 }
 
-async function editorLayoutObservation(t, s, descriptor, surface, card, theme) {
+async function editorLayoutObservation(t, s, descriptor, surface, card, theme, cornerRadiusPt) {
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () => {
     const recording = await s.record();
     const grid = await s.get("core.grid");
@@ -88,7 +89,7 @@ async function editorLayoutObservation(t, s, descriptor, surface, card, theme) {
   const { beforeChangeTimeMs, result, captured, paletteRect } = traced.action;
   const host = await s.get("host.window");
   const root = editorDocumentRow(host, surface);
-  const palette = editorGeometryPalette(captured[0], paletteRect, theme);
+  const palette = editorGeometryPalette(captured[0], paletteRect, theme, cornerRadiusPt);
   const source = traced.contentFrames.find((frame) => frame.timeMs >= beforeChangeTimeMs
     && frame.width === root.frame.width && frame.height === root.frame.height);
   assert.ok(source, `editor content trace has no frame at declared size ${root.frame.width}x${root.frame.height}`);
@@ -189,7 +190,7 @@ async function editorDragObservation(t, s, descriptor, surface, card, palette) {
 export async function collectEditorMotionMeasurements(t, s, prepared) {
   const surface = prepared.start.warmDisplay.surface;
   const layoutDisplay = await editorLayoutObservation(t, s, prepared.descriptor, surface,
-    prepared.start.card, prepared.theme);
+    prepared.start.card, prepared.theme, prepared.cornerRadiusPt);
   const drag = await editorDragObservation(t, s, prepared.descriptor, surface,
     prepared.start.card, layoutDisplay.pixelPalette);
   return { layoutDisplay: [layoutDisplay], drag,
@@ -199,12 +200,14 @@ export async function collectEditorMotionMeasurements(t, s, prepared) {
 }
 
 /** Derives an opaque editor-fill palette from the interior, rejecting core geometry colors. */
-export function editorGeometryPalette(frame, rect, theme) {
+export function editorGeometryPalette(frame, rect, theme, cornerRadiusPt) {
   assert.ok(frame && frame.data instanceof Uint8Array && frame.data.length === frame.stride * frame.height,
     "editor palette requires a complete decoded frame");
   assert.ok(rect && [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
     && rect.width > 0 && rect.height > 0, "editor palette requires a visible document rectangle");
   assert.ok(theme && typeof theme === "object", "editor palette requires the active core theme");
+  assert.ok(Number.isFinite(cornerRadiusPt) && cornerRadiusPt >= 0,
+    "editor palette requires the effective core card radius");
   const ratio = frame.scale * frame.contentScale;
   const left = Math.floor(frame.content.x * frame.scale + (rect.x + rect.width * 0.2) * ratio);
   const top = Math.floor(frame.content.y * frame.scale + (rect.y + rect.height * 0.2) * ratio);
@@ -231,14 +234,15 @@ export function editorGeometryPalette(frame, rect, theme) {
   };
   const cardColor = parse("card", theme.card);
   const planeColor = parse("background", theme.bg);
-  const borderColors = [theme.edge, theme.focus].filter((value) => value !== undefined).map((value, index) =>
+  const borderColors = [theme.edge, theme.rule, theme.focus].filter((value) => value !== undefined).map((value, index) =>
     parse(`border ${index}`, value));
   assert.ok(borderColors.length > 0, "theme has no declared border or focus color");
   const rgb = contentColor.split(",").map(Number);
   const conflicts = [cardColor, planeColor, ...borderColors].some((color) =>
     color.every((channel, index) => Math.abs(channel - rgb[index]) <= 4));
   assert.equal(conflicts, false, `editor fill color ${JSON.stringify(rgb)} conflicts with core card geometry colors`);
-  return { contentColor: rgb, cardColor, planeColor, borderColors, sampleCount: sampled, dominantCount: count };
+  return { contentColor: rgb, cardColor, planeColor, borderColors, cornerRadiusPt,
+    sampleCount: sampled, dominantCount: count };
 }
 
 async function editorDescriptor(s, diagnostic) {
@@ -315,11 +319,13 @@ export async function prepareEditorMeasurements(t, s) {
     }
   }
 
-  const mode = (await s.get("core.settings")).values.mode;
-  const themeName = (await s.get("core.settings")).values.theme;
+  const { values } = await s.get("core.settings");
+  const mode = values.mode;
+  const themeName = values.theme;
   const theme = (await s.get("core.themes")).find((item) => item.name === themeName)?.[mode];
   assert.ok(theme, `active core theme ${themeName}/${mode} is unavailable`);
-  return { descriptor, start, editorFootprint, theme };
+  const cornerRadiusPt = effectiveCardCornerRadiusPt(values);
+  return { descriptor, start, editorFootprint, theme, cornerRadiusPt };
 }
 
 /** Adds the three reclaim observations and editor-specific metrics to shared lifecycle and motion evidence. */

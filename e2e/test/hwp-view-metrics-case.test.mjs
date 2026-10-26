@@ -162,7 +162,7 @@ test("HWP unmatched layout geometry reports captured native document frames", { 
   const captureDirectory = join(root, "capture");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const { session, descriptor, theme } = layoutFailureSession(root, captureDirectory);
-  await assert.rejects(layoutObservation({ diagnostic() {} }, session, descriptor, "view-a", "card-a", theme), (error) => {
+  await assert.rejects(layoutObservation({ diagnostic() {} }, session, descriptor, "view-a", "card-a", theme, 0), (error) => {
     assert.match(error.message, /HWP pixel geometry evidence/);
     const evidence = JSON.parse(error.message.slice(error.message.indexOf("HWP pixel geometry evidence ")
       + "HWP pixel geometry evidence ".length));
@@ -261,7 +261,7 @@ test("HWP marker measurement requires a complete four-edge border", { timeout: 5
   assert.equal(typeof hwpCase.measureHwpViewportMarkerFrame, "function",
     "HWP marker-assisted viewport geometry consumer is required");
   const themeGeometry = { contentColor: geometryColors.content, cardColor: geometryColors.card,
-    planeColor: geometryColors.plane, borderColors: [geometryColors.border] };
+    planeColor: geometryColors.plane, borderColors: [geometryColors.border], cornerRadiusPt: 0 };
   const targetRect = { x: 30, y: 35, width: 60, height: 95 };
   const measure = (frame) => hwpCase.measureHwpViewportMarkerFrame(frame,
     viewportMarkerDeclaration(), { targetRect, themeGeometry });

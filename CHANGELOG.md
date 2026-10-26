@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-10: Measure card boundaries through plane-colored slot gutters and declared rounded corners. Require independent perpendicular ownership for endpoint separator strokes and reject internal gaps or neighboring-card spans. All four view consumers provide the effective radius from public settings. The boundary regressions fail before correction; all 46 affected owners and preserved two-host frame replays pass afterward. Application measurements remain separate.
+
 - F212.14-5-9: Derive the Browser width-drag boundary from the measured scratch card and verify it is an interior grid line. The fixed line leaves that card unchanged and produces no source resize frames. The owning selection regression fails before correction and all eight Browser consumer cases pass afterward. Application measurements remain separate.
 
 - F212.14-5-11: Use the effective host UI language to recognize the existing anchor and keep the target OCR language unchanged. The owning language-dispatch assertion fails before correction and all 21 affected owners pass afterward. Preserve recorded frames and reject absent or unsupported host languages explicitly.

@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { drag } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
-import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry }
+import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, waitForViewReadiness, withViewContentTrace }
@@ -39,7 +39,7 @@ export const browserViewDescriptor = Object.freeze({
 });
 
 const GEOMETRY = Object.freeze({ contentColor: [30, 30, 30], cardColor: [25, 27, 36],
-  planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [255, 179, 107]], colorTolerance: 3 });
+  planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]], colorTolerance: 3 });
 const CONTENT = "SOKSAK BROWSER CONTENT";
 const GEOMETRY_LIMIT_PT = 2;
 
@@ -110,7 +110,7 @@ function documentRow(host, surface, document) {
   return row;
 }
 
-async function layoutObservation(t, s, descriptor, surface, card, expectedWidth, url) {
+async function layoutObservation(t, s, descriptor, surface, card, expectedWidth, url, cornerRadiusPt) {
   await s.run("browser.navigate", { url }, surface);
   await s.until("browser.location", (value) => value.url === url && !value.loading
     && value.error === null && value.title === CONTENT, "the controlled browser content did not load", { surface });
@@ -140,7 +140,7 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
     width: page.frame.width, height: page.frame.height };
   const slotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
-  const measured = decoded.map((frame) => measureViewFrameGeometry(frame, { ...GEOMETRY, targetRect }));
+  const measured = decoded.map((frame) => measureViewFrameGeometry(frame, { ...GEOMETRY, cornerRadiusPt, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
   const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= content.timeMs);
   assert.ok(candidates.length > 0, "browser layout has no declared-slot pixel match after its source resize event");
@@ -165,7 +165,7 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
   };
 }
 
-async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt) {
+async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, cornerRadiusPt) {
   const beforeGrid = await s.get("core.grid");
   const pane = beforeGrid.cards.find((item) => item.id === card);
   assert.ok(pane, `browser measurement card ${card} is absent before drag`);
@@ -190,7 +190,7 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt) {
   const geometryFrames = [];
   const geometryByFrame = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = measureViewFrameGeometry(captured[frameIndex], { ...GEOMETRY, targetRect });
+    const measured = measureViewFrameGeometry(captured[frameIndex], { ...GEOMETRY, cornerRadiusPt, targetRect });
     geometryByFrame.set(frameIndex, measured);
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
@@ -202,7 +202,7 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt) {
   for (const source of mapped) {
     if (source.frameIndex === null) continue;
     const geometry = geometryByFrame.get(source.frameIndex)
-      ?? measureViewFrameGeometry(captured[source.frameIndex], { ...GEOMETRY, targetRect });
+      ?? measureViewFrameGeometry(captured[source.frameIndex], { ...GEOMETRY, cornerRadiusPt, targetRect });
     const nativeWidth = geometry.cardRectPt.right - geometry.cardRectPt.left
       - rootSlotInsetsPt.left - rootSlotInsetsPt.right;
     const nativeHeight = geometry.cardRectPt.bottom - geometry.cardRectPt.top
@@ -234,6 +234,8 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt) {
 /** Collects the browser view lifecycle, actual source-frame, and same-capture pixel geometry evidence. */
 export async function collectBrowserViewMeasurements(t, s, descriptor) {
   const start = await collectViewStartAndMemory(t, s, descriptor);
+  const settings = (await s.get("core.settings")).values;
+  const cornerRadiusPt = effectiveCardCornerRadiusPt(settings);
   const url = await serveContentPage(s);
   const split = await s.run("core.card.split", { card: start.card, side: "right", plugin: descriptor.plugin });
   const surface = split.tab;
@@ -248,8 +250,8 @@ export async function collectBrowserViewMeasurements(t, s, descriptor) {
   });
   const readinessEvidence = await waitForViewReadiness(s, surface, descriptor);
   assert.equal(readinessEvidence?.historyEntries, 1, "browser drag fixture did not begin at initial history");
-  const layout = await layoutObservation(t, s, descriptor, surface, card, 80, url);
-  const drag = await dragObservation(t, s, descriptor, surface, card, layout.slotInsetsPt);
+  const layout = await layoutObservation(t, s, descriptor, surface, card, 80, url, cornerRadiusPt);
+  const drag = await dragObservation(t, s, descriptor, surface, card, layout.slotInsetsPt, cornerRadiusPt);
   const scratch = { surface, readinessEvidence };
   const close = await s.run("core.tab.close", { tab: surface });
   assert.equal(close?.closed, true, `browser measurement view ${surface} did not close after capture`);

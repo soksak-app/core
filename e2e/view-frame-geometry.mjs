@@ -3,6 +3,15 @@ import { pixel } from "@soksak/window-check/frame.mjs";
 export const VIEW_GEOMETRY_COLOR_TOLERANCE = 4;
 const DEFAULT_TOLERANCE = VIEW_GEOMETRY_COLOR_TOLERANCE;
 
+/** Returns the effective card radius from the public settings shape. */
+export function effectiveCardCornerRadiusPt(settings) {
+  if (!settings || !Number.isFinite(settings.radius) || settings.radius < 0
+      || !Number.isFinite(settings.gap) || settings.gap < 0) {
+    throw new Error("card geometry requires nonnegative core settings radius and gap");
+  }
+  return settings.gap === 0 ? 0 : settings.radius;
+}
+
 function requireColor(value, name) {
   if (!Array.isArray(value) || value.length !== 3 ||
       !value.every((channel) => Number.isInteger(channel) && channel >= 0 && channel <= 255)) {
@@ -105,39 +114,99 @@ function contentRectangle(frame, color, tolerance, cardRect) {
   return { left, top, right, bottom };
 }
 
-function cardRectangle(frame, content, { planeColor, cardColor, borderColors, tolerance }) {
+function cardRectangle(frame, content, { planeColor, cardColor, borderColors, cornerRadiusPx, tolerance }) {
   const x = Math.floor((content.left + content.right - 1) / 2);
   const y = Math.floor((content.top + content.bottom - 1) / 2);
   const isPlane = (px, py) => nearAt(frame, px, py, planeColor, tolerance);
   const isCard = (px, py) => nearAt(frame, px, py, cardColor, tolerance);
   const isBorder = (px, py) => borderColors.some((color) => nearAt(frame, px, py, color, tolerance));
+  const borderColorAt = (px, py) => borderColors.find((color) => nearAt(frame, px, py, color, tolerance));
+  const crossesSide = (name, px, py, color) => {
+    const outward = { top: [0, -1], right: [1, 0], bottom: [0, 1], left: [-1, 0] }[name];
+    const [dx, dy] = outward;
+    const insideX = px - dx, insideY = py - dy;
+    const outsideX = px + dx, outsideY = py + dy;
+    return outsideX >= 0 && outsideX < frame.width && outsideY >= 0 && outsideY < frame.height &&
+      insideX >= 0 && insideX < frame.width && insideY >= 0 && insideY < frame.height &&
+      nearAt(frame, outsideX, outsideY, color, tolerance) && nearAt(frame, insideX, insideY, color, tolerance);
+  };
   if (isPlane(x, y)) throw new Error("recorded content center is outside the card");
   const walk = (dx, dy, edge) => {
     let px = x, py = y;
-    while (!isPlane(px, py)) {
-      const nx = px + dx, ny = py + dy;
-      if (nx < 0 || nx >= frame.width || ny < 0 || ny >= frame.height) {
-        throw new Error(`recorded frame clips the card ${edge} edge`);
-      }
-      px = nx;
-      py = ny;
+    const inside = (cx, cy) => cx >= 0 && cx < frame.width && cy >= 0 && cy < frame.height;
+    while (inside(px, py) && !isPlane(px, py)) {
+      px += dx;
+      py += dy;
     }
+    if (!inside(px, py)) throw new Error(`recorded frame clips or does not identify the card ${edge} edge`);
     const edgeX = px - dx, edgeY = py - dy;
-    if (!isBorder(edgeX, edgeY) && !(isCard(edgeX, edgeY) && isCard(px - 2 * dx, py - 2 * dy))) {
-      throw new Error(`recorded pixels do not identify the card ${edge} edge`);
+    if (isBorder(edgeX, edgeY) || (isCard(edgeX, edgeY) && isCard(px - 2 * dx, py - 2 * dy))) {
+      return { cardX: edgeX, cardY: edgeY };
     }
-    return { planeX: px, planeY: py, cardX: px - dx, cardY: py - dy };
+    while (inside(px, py) && isPlane(px, py)) {
+      px += dx;
+      py += dy;
+    }
+    if (!inside(px, py) || !isBorder(px, py) || !isPlane(px + dx, py + dy)) {
+      throw new Error(`recorded pixels do not identify the card ${edge} edge after a plane-colored gap`);
+    }
+    return { cardX: px, cardY: py };
   };
   const left = walk(-1, 0, "left");
   const right = walk(1, 0, "right");
   const top = walk(0, -1, "top");
   const bottom = walk(0, 1, "bottom");
-  return {
+  const rectangle = {
     left: left.cardX,
     top: top.cardY,
     right: right.cardX + 1,
     bottom: bottom.cardY + 1,
   };
+  const verifySide = (name, horizontal, fixed, start, end) => {
+    const center = Math.floor((start + end - 1) / 2);
+    const centerX = horizontal ? center : fixed;
+    const centerY = horizontal ? fixed : center;
+    if (isPlane(centerX, centerY) || frame.data[centerY * frame.stride + centerX * 4 + 3] !== 255) {
+      throw new Error(`recorded pixels do not identify the card perimeter midpoint at ${name}`);
+    }
+    for (const [endpoint, step] of [[start, -1], [end - 1, 1]]) {
+      let cornerStarted = false;
+      let cornerStroke;
+      for (let position = center; position !== endpoint + step; position += step) {
+        const px = horizontal ? position : fixed;
+        const py = horizontal ? fixed : position;
+        if (isPlane(px, py)) {
+          if (Math.max(0, Math.abs(position - endpoint) - 1) > cornerRadiusPx) {
+            throw new Error(`recorded pixels exceed the declared rounded corner at ${name}`);
+          }
+          cornerStarted = true;
+          continue;
+        }
+        if (frame.data[py * frame.stride + px * 4 + 3] !== 255) {
+          throw new Error(`recorded pixels do not identify the complete card perimeter at ${name}`);
+        }
+        if (cornerStarted) {
+          const stroke = borderColorAt(px, py);
+          if (!stroke || (cornerStroke && !near(stroke, cornerStroke, tolerance))) {
+            throw new Error(`recorded pixels do not identify the complete card perimeter at ${name}`);
+          }
+          cornerStroke = stroke;
+        }
+      }
+      if (cornerStroke) {
+        const px = horizontal ? endpoint : fixed;
+        const py = horizontal ? fixed : endpoint;
+        if (!crossesSide(name, px, py, cornerStroke)) {
+          throw new Error(`recorded corner stroke does not cross the ${name} side at its endpoint`);
+        }
+      }
+    }
+  };
+  verifySide("top", true, rectangle.top, rectangle.left, rectangle.right);
+  verifySide("bottom", true, rectangle.bottom - 1, rectangle.left, rectangle.right);
+  verifySide("left", false, rectangle.left, rectangle.top, rectangle.bottom);
+  verifySide("right", false, rectangle.right - 1, rectangle.top, rectangle.bottom);
+  return rectangle;
 }
 
 /** Derives expected slot insets from declared composition geometry and the workbench card layout. */
@@ -241,6 +310,7 @@ export function measureViewFrameGeometry(frame, {
   cardColor,
   planeColor,
   borderColors,
+  cornerRadiusPt,
   targetRect,
   colorTolerance = DEFAULT_TOLERANCE,
 } = {}) {
@@ -262,11 +332,15 @@ export function measureViewFrameGeometry(frame, {
   requireColor(contentColor, "contentColor");
   requireColor(cardColor, "cardColor");
   requireColor(planeColor, "planeColor");
+  if (!Number.isFinite(cornerRadiusPt) || cornerRadiusPt < 0) {
+    throw new Error("cornerRadiusPt must be a finite nonnegative number");
+  }
   if (!Array.isArray(borderColors) || borderColors.length === 0) {
     throw new Error("borderColors must contain at least one RGB byte triplet");
   }
   borderColors.forEach((color, index) => requireColor(color, `borderColors[${index}]`));
-  const options = { planeColor, cardColor, borderColors, tolerance: colorTolerance };
+  const cornerRadiusPx = cornerRadiusPt * frame.scale * frame.contentScale;
+  const options = { planeColor, cardColor, borderColors, cornerRadiusPx, tolerance: colorTolerance };
   let anchor;
   let targetCardRectPx;
   if (targetRect !== undefined) {

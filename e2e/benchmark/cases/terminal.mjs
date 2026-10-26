@@ -9,7 +9,8 @@ import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTim
   mapViewContentFramesToCapture, requireViewContentFrameCoverage,
   waitForViewReadiness, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
-import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "../../view-frame-geometry.mjs";
+import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
+  from "../../view-frame-geometry.mjs";
 import { outside, terminalMarks } from "../../outside.mjs";
 import { readScreenUntil, setMeasuredBackground } from "../../terminal-screen.mjs";
 import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips, measureDragPerformance,
@@ -114,7 +115,7 @@ export function terminalSourceContentFrame(source, frameIndex, displayFrame, nat
 }
 
 const TERMINAL_GEOMETRY = Object.freeze({ contentColor: [30, 30, 30], cardColor: [25, 27, 36],
-  planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [255, 179, 107]], colorTolerance: 3 });
+  planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]], colorTolerance: 3 });
 
 function terminalDocument(host, surface) {
   const row = host.documents.find((document) => document.surface === surface && document.document === "");
@@ -137,7 +138,7 @@ function frameAtOrAfter(captured, timeMs, description) {
   return index;
 }
 
-async function terminalLayoutObservation(t, s, descriptor, surface, card, directory) {
+async function terminalLayoutObservation(t, s, descriptor, surface, card, directory, cornerRadiusPt) {
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () => {
     const recording = await s.record();
     const grid = await s.get("core.grid");
@@ -167,7 +168,8 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
   const slotInsetsPt = await terminalSlotInsets(s, card, surface);
   const targetRect = { x: root.frame.x, y: root.frame.y,
     width: root.frame.width, height: root.frame.height };
-  const measured = decoded.map((frame) => measureViewFrameGeometry(frame, { ...TERMINAL_GEOMETRY, targetRect }));
+  const measured = decoded.map((frame) => measureViewFrameGeometry(frame,
+    { ...TERMINAL_GEOMETRY, cornerRadiusPt, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
   const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= source.timeMs);
   assert.ok(candidates.length > 0, "terminal layout has no declared-slot pixel match after its source resize event");
@@ -191,7 +193,7 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
   };
 }
 
-async function terminalDragObservation(t, s, descriptor, surface, card, configDir) {
+async function terminalDragObservation(t, s, descriptor, surface, card, configDir, cornerRadiusPt) {
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
     drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }));
   const run = traced.action;
@@ -219,7 +221,8 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   const geometryFrames = [];
   const geometries = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = measureViewFrameGeometry(captured[frameIndex], { ...TERMINAL_GEOMETRY, targetRect });
+    const measured = measureViewFrameGeometry(captured[frameIndex],
+      { ...TERMINAL_GEOMETRY, cornerRadiusPt, targetRect });
     geometries.set(frameIndex, measured);
     geometryFrames.push(terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt));
   }
@@ -229,7 +232,8 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   });
   const sourceFrames = mapped.map((source) => {
     const geometry = geometries.get(source.frameIndex)
-      ?? measureViewFrameGeometry(captured[source.frameIndex], { ...TERMINAL_GEOMETRY, targetRect });
+      ?? measureViewFrameGeometry(captured[source.frameIndex],
+        { ...TERMINAL_GEOMETRY, cornerRadiusPt, targetRect });
     const nativeWidth = geometry.cardRectPt.right - geometry.cardRectPt.left
       - rootSlotInsetsPt.left - rootSlotInsetsPt.right;
     const nativeHeight = geometry.cardRectPt.bottom - geometry.cardRectPt.top
@@ -264,6 +268,7 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
 /** Collects the terminal lifecycle, initial-prompt pixels, source-frame sizes and measured drag geometry. */
 export async function collectTerminalViewMeasurements(t, s, descriptor, configDir) {
   const start = await collectViewStartAndMemory(t, s, descriptor);
+  const cornerRadiusPt = effectiveCardCornerRadiusPt((await s.get("core.settings")).values);
   const split = await s.run("core.card.split", { card: start.card, side: "right", plugin: descriptor.plugin });
   const surface = split.tab;
   const card = split.card;
@@ -280,8 +285,8 @@ export async function collectTerminalViewMeasurements(t, s, descriptor, configDi
   await setMeasuredBackground(s, surface);
   mkdirSync(join(configDir, "logs"), { recursive: true });
   const directory = mkdtempSync(join(configDir, "logs", "terminal-view-layout-"));
-  const layout = await terminalLayoutObservation(t, s, descriptor, surface, card, directory);
-  const dragEvidence = await terminalDragObservation(t, s, descriptor, surface, card, configDir);
+  const layout = await terminalLayoutObservation(t, s, descriptor, surface, card, directory, cornerRadiusPt);
+  const dragEvidence = await terminalDragObservation(t, s, descriptor, surface, card, configDir, cornerRadiusPt);
   const closed = await s.run("core.tab.close", { tab: surface });
   assert.equal(closed?.closed, true, `terminal measurement view ${surface} did not close after capture`);
   await s.until("core.surfaces", (items) => !items.some((item) => item.surface === surface),
@@ -309,6 +314,7 @@ export async function collectTerminalDrag(t, s, terminal, configDir) {
   assert.equal(process.env.SOKSAK_VT_TRACE_DIR, undefined,
     "the benchmark requires renderer tracing to be unset");
   const { values } = await s.get("core.settings");
+  const cornerRadiusPt = effectiveCardCornerRadiusPt(values);
   assert.equal(values["diagnostics.performance"], false, "the application performance trace is enabled");
   assert.deepEqual(values["diagnostics.log"], {}, "the application is not using its default error-only log policy");
   assert.equal((await s.get("terminal.cursor", terminal.surface)).render, null,
@@ -345,7 +351,8 @@ export async function collectTerminalDrag(t, s, terminal, configDir) {
         contentColor: [30, 30, 30],
         cardColor: [25, 27, 36],
         planeColor: [16, 17, 23],
-        borderColors: [[43, 46, 61], [255, 179, 107]],
+        borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]],
+        cornerRadiusPt,
         targetRect,
       });
       geometryFrames.push(terminalDragGeometryFrame(frameIndex, geometry, slotInsetsPt));

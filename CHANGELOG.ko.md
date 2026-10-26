@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-10: Plane 색상의 slot 여백과 선언된 둥근 모서리를 통해 card 경계를 측정한다. 끝점 separator stroke의 독립된 수직 연결을 확인하고 내부 구멍·이웃 card를 걸친 경계를 거부한다. 네 view consumer 모두 공개 설정의 실제 radius를 전달한다. 경계 회귀 검사는 수정 전 실패하며 수정 후 해당 소유 검사 46개와 보존된 양쪽 host frame 재생이 통과한다. 실제 앱 측정은 별도로 유지한다.
+
 - F212.14-5-9: 측정 Browser scratch card에서 폭 drag 경계를 구하고 내부 grid line인지 확인한다. 기존 고정 line은 해당 card를 바꾸지 않아 source resize frame이 없다. 소유 경계 선택 회귀 검사가 수정 전 실패하고 수정 후 Browser consumer 사례 여덟 개 모두 통과한다. 실제 앱 측정은 별도로 유지한다.
 
 - F212.14-5-11: 기존 anchor 인식에는 실제 host UI 언어를 사용하고 target OCR 언어는 유지한다. 소유 언어 전달 assertion이 수정 전 실패하며 수정 후 해당 소유 검사 21개 모두 통과한다. 녹화한 frame을 보존하고 host 언어 누락·미지원 값을 명시적으로 거부한다.
