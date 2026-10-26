@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-15: Compare root document source sizes with the WebKit viewport projected from actual native placement events. Preserve fractional AppKit frames and select the latest visible placement at or before each source frame; use a settled root-frame baseline before dragging. Red: the viewport evaluator rejected a valid 785×286 source for a 785.5×286.5 native frame, and placement owners rejected missing and settled-baseline evidence. Green: the affected view-metric owners pass 63/63. Physical alignment and timing criteria are unchanged; application acceptance remains under F212.14-5-5.
+
 - F239-200: Recognize static expected build-command arguments in E2E assertions without treating them as source reads. Keep actual imports, file reads, dynamic expected values and shadowed assertions subject to the source boundary rule. The owning false-positive regression fails before correction, then both focused policies and the window-source audit pass.
 
 - F212.14-5-14: Require app DOM presentation before raster readiness and native commit for continuous layouts in both hosts. Remove the optional presentation bypass flag and cancel Tauri layouts when callback registration fails while preserving both setup and cancellation errors. The two ordering regressions and setup-cancellation regression fail before correction; all ten affected host and workbench owner cases pass afterward. Both optimized diagnostic hosts build, and the affected structural checks pass. Application measurements remain separate.

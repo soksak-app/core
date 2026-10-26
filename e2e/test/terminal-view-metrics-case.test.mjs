@@ -33,12 +33,14 @@ test("terminal drag geometry keeps four measured card and raster edges from the 
   });
 });
 
-test("terminal source content mapping retains distinct source identity and root-slot dimensions", { timeout: 5000 }, () => {
+test("terminal source content mapping retains actual placement and projected viewport evidence", { timeout: 5000 }, () => {
   const source = { sequence: 4, timeMs: 148, width: 198, height: 120,
     resizeAtMs: 31, frameTimeMs: 33, documentTimeOriginMs: 1000,
     source: { ts_us: 1_200_000, mono_ns: 148_000_000 } };
-  assert.deepEqual(terminalSourceContentFrame(source, 7, { time: 150 }, { width: 198, height: 120 }), {
-    sourceSequence: 4, frameIndex: 7, timeMs: 148, width: 198, height: 120, nativeWidth: 198, nativeHeight: 120,
+  const nativePlacement = { surface: "terminal-1", phase: "placed", visible: true, timeMs: 147,
+    framePt: { x: 10.5, y: 20, width: 198.5, height: 120.5 }, webKitViewport: { width: 198, height: 120 } };
+  assert.deepEqual(terminalSourceContentFrame(source, 7, { time: 150 }, nativePlacement), {
+    sourceSequence: 4, frameIndex: 7, timeMs: 148, width: 198, height: 120, nativePlacement,
     source: { sequence: 4, resizeAtMs: 31, frameTimeMs: 33, documentTimeOriginMs: 1000,
       ts_us: 1_200_000, mono_ns: 148_000_000 },
     displayTimeMs: 150,

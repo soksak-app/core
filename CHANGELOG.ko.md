@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-15: 실제 native placement event에서 투영한 WebKit viewport와 root document source 크기를 비교한다. 소수점 AppKit frame을 보존하고 source frame 시각 이전의 최신 visible placement를 선택하며 drag 전에는 settled root-frame baseline을 사용한다. Red: viewport evaluator가 785.5×286.5 native frame에 유효한 785×286 source를 거부하고 placement owner가 누락 및 settled-baseline 근거를 거부했다. Green: 영향을 받는 view-metric owner가 63/63 통과한다. 물리 정렬 및 timing 기준은 바꾸지 않으며 application acceptance는 F212.14-5-5에 남는다.
+
 - F239-200: E2E assertion의 정적인 expected build-command 인자를 source 읽기와 구분한다. 실제 import·파일 읽기, 동적 기대값과 가려진 assertion에는 source boundary 규칙을 유지한다. 소유 오탐 회귀 검사는 수정 전 실패하고 수정 후 해당 policy 두 개와 window-source 감사가 통과한다.
 
 - F212.14-5-14: 양쪽 host의 연속 layout에서 raster 준비와 native commit 전에 앱 DOM presentation을 요구한다. 선택적 presentation 우회 flag를 제거하고 Tauri callback 등록 실패 시 layout을 취소하며 등록·취소 오류를 모두 보존한다. 순서 회귀 검사 두 개와 등록 실패 취소 검사는 수정 전 실패하고 수정 후 관련 host·workbench 소유 검사 열 개 모두 통과한다. 양쪽 최적화 diagnostic host 빌드와 관련 구조 검사가 통과하며 앱 측정은 별도로 남는다.

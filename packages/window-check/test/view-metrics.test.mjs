@@ -11,8 +11,19 @@ function process(pid, footprintBytes) {
   return { pid, footprintBytes };
 }
 
+function nativePlacement(width, height, timeMs, surface = "fixture-surface") {
+  const monoNs = timeMs * 1_000_000;
+  const framePt = { x: 0.5, y: 1.5, width, height };
+  return { surface, phase: "placed", visible: true, timeMs,
+    framePt,
+    webKitViewport: { width: Math.trunc(width), height: Math.trunc(height) },
+    placement: { event: "host.trace.surface", ts_us: timeMs * 1000, mono_ns: monoNs,
+      fields: { surface, phase: "placed", visible: true, x: framePt.x, y: framePt.y, w: width, h: height } } };
+}
+
 function contentFrame(sourceSequence, frameIndex, timeMs, width, nativeWidth) {
-  return { sourceSequence, frameIndex, timeMs, width, height: 80, nativeWidth, nativeHeight: 80 };
+  return { sourceSequence, frameIndex, timeMs, width, height: 80,
+    nativePlacement: nativePlacement(nativeWidth, 80, timeMs - 1) };
 }
 
 function metrics() {
@@ -62,8 +73,8 @@ function metrics() {
     },
     layoutDisplay: [{
       changeFrame: { frameIndex: 2, frameCount: 8, timeMs: 10 },
-      contentFrame: { frameIndex: 4, frameCount: 8, timeMs: 110, width: 120, height: 80,
-        nativeWidth: 120, nativeHeight: 80,
+      contentFrame: { frameIndex: 4, frameCount: 8, timeMs: 110, sourceTimeMs: 109, requestAtMs: 50, width: 120, height: 80,
+        nativePlacement: nativePlacement(120, 80, 100),
         proof: { expected: "fixture text", actual: "fixture text", lines: ["fixture text"] } },
     }],
     drag: {
@@ -110,6 +121,56 @@ test("view metrics accept exact thresholds and preserve frame and process eviden
   assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 8);
   assert.equal(report.evaluation.drag.convergedFrame, 2);
   assert.strictEqual(report.measurements, raw);
+});
+
+test("layout source matches the WebKit viewport projected from a fractional native frame", { timeout: 1000 }, () => {
+  const raw = metrics();
+  raw.layoutDisplay[0].contentFrame = {
+    ...raw.layoutDisplay[0].contentFrame,
+    width: 785,
+    height: 286,
+    nativePlacement: nativePlacement(785.5, 286.5, 100),
+  };
+  assert.doesNotThrow(() => assertViewMeasurements(raw, options));
+  assert.deepEqual(raw.layoutDisplay[0].contentFrame.nativePlacement.framePt,
+    { x: 0.5, y: 1.5, width: 785.5, height: 286.5 });
+
+  raw.layoutDisplay[0].contentFrame.width = 784;
+  assert.throws(() => assertViewMeasurements(raw, options), /content frame matching the projected WebKit viewport/);
+
+  const wrongProjection = metrics();
+  wrongProjection.layoutDisplay[0].contentFrame.nativePlacement = nativePlacement(785.5, 286.5, 100);
+  wrongProjection.layoutDisplay[0].contentFrame.width = 785;
+  wrongProjection.layoutDisplay[0].contentFrame.height = 286;
+  wrongProjection.layoutDisplay[0].contentFrame.nativePlacement.webKitViewport.width = 786;
+  assert.throws(() => assertViewMeasurements(wrongProjection, options), /per-axis integer truncation/);
+
+  const stalePlacement = metrics();
+  stalePlacement.layoutDisplay[0].contentFrame.nativePlacement.timeMs = 50;
+  stalePlacement.layoutDisplay[0].contentFrame.nativePlacement.placement.mono_ns = 50_000_000;
+  stalePlacement.layoutDisplay[0].contentFrame.nativePlacement.placement.ts_us = 50_000;
+  assert.throws(() => assertViewMeasurements(stalePlacement, options), /applied placement after request/);
+
+  const futurePlacement = metrics();
+  futurePlacement.layoutDisplay[0].contentFrame.nativePlacement.timeMs = 111;
+  futurePlacement.layoutDisplay[0].contentFrame.nativePlacement.placement.mono_ns = 111_000_000;
+  futurePlacement.layoutDisplay[0].contentFrame.nativePlacement.placement.ts_us = 111_000;
+  assert.throws(() => assertViewMeasurements(futurePlacement, options), /<= source frame time 109 ms/);
+});
+
+test("drag source rows retain fractional native frames and use their explicit viewport projection", { timeout: 1000 }, () => {
+  const raw = metrics();
+  raw.drag.contentFrames[0] = {
+    ...raw.drag.contentFrames[0],
+    width: 785,
+    height: 286,
+    nativePlacement: nativePlacement(785.5, 286.5, 79),
+  };
+  const report = assertViewMeasurements(raw, options);
+  assert.deepEqual(report.measurements.drag.contentFrames[0].nativePlacement.framePt,
+    { x: 0.5, y: 1.5, width: 785.5, height: 286.5 });
+  assert.deepEqual(report.measurements.drag.contentFrames[0].nativePlacement.webKitViewport,
+    { width: 785, height: 286 });
 });
 
 test("total footprint rejects one byte over the SI 10 MB margin", { timeout: 1000 }, () => {
@@ -236,7 +297,7 @@ test("drag cadence is in-gesture and convergence meets both frame and time bound
   assert.throws(() => assertViewMeasurements(tooLate, options), /within 33 ms after gesture end/);
 
   const alreadyMatched = metrics();
-  alreadyMatched.drag.contentFrames[2].nativeWidth = 100;
+  alreadyMatched.drag.contentFrames[2].nativePlacement = nativePlacement(100, 80, 87);
   alreadyMatched.drag.contentFrames.splice(3);
   const report = assertViewMeasurements(alreadyMatched, options);
   assert.equal(report.evaluation.drag.convergedFrame, 0);
@@ -247,11 +308,11 @@ test("drag cadence preserves distinct source frames that map to the same capture
   raw.drag.gestureStartedAtMs = 70;
   raw.drag.gestureEndedAtMs = 100;
   raw.drag.contentFrames = [
-    { sourceSequence: 1, frameIndex: 2, timeMs: 68, width: 100, height: 80, nativeWidth: 100, nativeHeight: 80 },
-    { sourceSequence: 2, frameIndex: 2, timeMs: 80, width: 101, height: 80, nativeWidth: 110, nativeHeight: 80 },
-    { sourceSequence: 3, frameIndex: 2, timeMs: 88, width: 102, height: 80, nativeWidth: 110, nativeHeight: 80 },
-    { sourceSequence: 4, frameIndex: 3, timeMs: 96, width: 103, height: 80, nativeWidth: 120, nativeHeight: 80 },
-    { sourceSequence: 5, frameIndex: 5, timeMs: 112, width: 120, height: 80, nativeWidth: 120, nativeHeight: 80 },
+    contentFrame(1, 2, 68, 100, 100),
+    contentFrame(2, 2, 80, 101, 110),
+    contentFrame(3, 2, 88, 102, 110),
+    contentFrame(4, 3, 96, 103, 120),
+    contentFrame(5, 5, 112, 120, 120),
   ];
   const report = assertViewMeasurements(raw, options);
   assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 8);
@@ -265,7 +326,7 @@ test("layout display measures the first pixel frame at the changed size", { time
 
   const wrongSize = metrics();
   wrongSize.layoutDisplay[0].contentFrame.width = 110;
-  assert.throws(() => assertViewMeasurements(wrongSize, options), /content frame matching the new native size/);
+  assert.throws(() => assertViewMeasurements(wrongSize, options), /content frame matching the projected WebKit viewport/);
 });
 
 test("editor footprint reports the exact SI 50 MB sidecar trigger without treating it as a pass value", { timeout: 1000 }, () => {

@@ -7,7 +7,7 @@ import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
-  mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
+  mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, rootNativePlacementForSource,
   waitForViewReadiness, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 
@@ -116,13 +116,15 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
     const capture = await stopRecording(recording, s, displayed);
     return { ...capture, displayed, beforeChangeTimeMs };
   });
-  const { decoded, result, beforeChangeTimeMs } = traced.action;
+  const { decoded, result, beforeChangeTimeMs, displayed } = traced.action;
   const host = await s.get("host.window");
-  const root = documentRow(host, surface, "");
   const page = documentRow(host, surface, "page");
-  const content = traced.contentFrames.find((frame) => frame.width === root.frame.width
-    && frame.height === root.frame.height && frame.timeMs >= beforeChangeTimeMs);
-  assert.ok(content, `browser source has no content frame at its new native size ${root.frame.width}x${root.frame.height}`);
+  const nativePlacement = rootNativePlacementForSource(traced.events, surface, displayed,
+    { afterMs: beforeChangeTimeMs });
+  const source = traced.contentFrames.find((frame) => frame.timeMs >= nativePlacement.timeMs
+    && frame.width === nativePlacement.webKitViewport.width
+    && frame.height === nativePlacement.webKitViewport.height);
+  assert.ok(source, "browser source has no frame matching its final post-request native placement projection");
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
   const region = await s.rect("browser.document", undefined, surface);
@@ -132,7 +134,7 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
   const measured = decoded.map((frame) => measureViewFrameGeometry(frame, { ...GEOMETRY, cornerRadiusPt, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
-  const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= content.timeMs);
+  const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= source.timeMs);
   assert.ok(candidates.length > 0, "browser layout has no declared-slot pixel match after its source resize event");
   const localProof = await firstContentFrame({ captured: candidates.map((index) => decoded[index]),
     rect: { x: page.frame.x, y: page.frame.y, w: page.frame.width, h: page.frame.height },
@@ -145,8 +147,9 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: decoded.length,
       timeMs: decoded[transition.changeFrameIndex].time },
     contentFrame: { frameIndex, frameCount: decoded.length, timeMs: decoded[frameIndex].time,
-      width: content.width, height: content.height, nativeWidth: root.frame.width, nativeHeight: root.frame.height, proof },
-    sourceFrame: content,
+      requestAtMs: beforeChangeTimeMs, sourceTimeMs: source.timeMs,
+      width: source.width, height: source.height, nativePlacement, proof },
+    sourceFrame: source,
     slotInsetsPt,
     initialGeometry: { frameIndex, timeMs: decoded[frameIndex].time, cardRectPt: initialGeometry.cardRectPt,
       nativeRectPt: initialGeometry.nativeRectPt, slotInsetsPt, errorPt: initialGeometryErrorPt },
@@ -160,6 +163,12 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
   const pane = beforeGrid.cards.find((item) => item.id === card);
   assert.ok(pane, `browser measurement card ${card} is absent before drag`);
   const plan = rightEdgeWidthDragPlan(beforeGrid, pane);
+  await s.presented();
+  const baselineDocument = documentRow(await s.get("host.window"), surface, "");
+  const baselineClock = await monotonicTimeMs(s);
+  const baselineTimeMs = baselineClock.timeMs;
+  const baseline = { surface, timeMs: baselineTimeMs, monoNs: baselineClock.monoNs, visible: baselineDocument.visible,
+    framePt: baselineDocument.frame };
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
     drag(t, s, plan, { capture: true }));
   const run = traced.action;
@@ -178,10 +187,8 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
     width: page.frame.width, height: page.frame.height };
   const rootSlotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface });
   const geometryFrames = [];
-  const geometryByFrame = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
     const measured = measureViewFrameGeometry(captured[frameIndex], { ...GEOMETRY, cornerRadiusPt, targetRect });
-    geometryByFrame.set(frameIndex, measured);
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
   }
@@ -191,16 +198,10 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
   });
   for (const source of mapped) {
     if (source.frameIndex === null) continue;
-    const geometry = geometryByFrame.get(source.frameIndex)
-      ?? measureViewFrameGeometry(captured[source.frameIndex], { ...GEOMETRY, cornerRadiusPt, targetRect });
-    const nativeWidth = geometry.cardRectPt.right - geometry.cardRectPt.left
-      - rootSlotInsetsPt.left - rootSlotInsetsPt.right;
-    const nativeHeight = geometry.cardRectPt.bottom - geometry.cardRectPt.top
-      - rootSlotInsetsPt.top - rootSlotInsetsPt.bottom;
-    assert.ok(nativeWidth > 0 && nativeHeight > 0, "browser root declared slot has no positive size");
+    const nativePlacement = rootNativePlacementForSource(traced.events, surface, source.timeMs, { baseline });
     contentFrames.push({ sourceSequence: source.sourceSequence, frameIndex: source.frameIndex,
       timeMs: source.timeMs, width: source.width, height: source.height,
-      nativeWidth, nativeHeight, source });
+      nativePlacement, source });
   }
   const recordedFrameCount = captured.length;
   return {

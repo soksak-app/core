@@ -262,15 +262,84 @@ function evaluateLayoutDisplay(value) {
     if (measuredMs < 0) fail(`${path}.contentFrame.timeMs`, `>= changeFrame.timeMs ${changeFrame.timeMs}`, contentFrame.timeMs);
     const width = numberAt(entry.contentFrame.width, `${path}.contentFrame.width`, { minimum: Number.MIN_VALUE });
     const height = numberAt(entry.contentFrame.height, `${path}.contentFrame.height`, { minimum: Number.MIN_VALUE });
-    const nativeWidth = numberAt(entry.contentFrame.nativeWidth, `${path}.contentFrame.nativeWidth`, { minimum: Number.MIN_VALUE });
-    const nativeHeight = numberAt(entry.contentFrame.nativeHeight, `${path}.contentFrame.nativeHeight`, { minimum: Number.MIN_VALUE });
-    if (width !== nativeWidth || height !== nativeHeight) {
-      fail(`${path}.contentFrame`, "content frame matching the new native size", { width, height, nativeWidth, nativeHeight });
+    const requestAtMs = numberAt(entry.contentFrame.requestAtMs, `${path}.contentFrame.requestAtMs`);
+    const sourceTimeMs = numberAt(entry.contentFrame.sourceTimeMs, `${path}.contentFrame.sourceTimeMs`);
+    const nativePlacement = nativePlacementAt(entry.contentFrame.nativePlacement, `${path}.contentFrame.nativePlacement`);
+    if (nativePlacement.phase !== "placed" || nativePlacement.timeMs <= requestAtMs) {
+      fail(`${path}.contentFrame.nativePlacement`, `an applied placement after request ${requestAtMs} ms`, nativePlacement);
+    }
+    if (nativePlacement.timeMs > sourceTimeMs) {
+      fail(`${path}.contentFrame.nativePlacement.timeMs`, `<= source frame time ${sourceTimeMs} ms`, nativePlacement.timeMs);
+    }
+    if (sourceTimeMs > contentFrame.timeMs) {
+      fail(`${path}.contentFrame.sourceTimeMs`, `<= captured content frame time ${contentFrame.timeMs} ms`, sourceTimeMs);
+    }
+    const { width: viewportWidth, height: viewportHeight } = nativePlacement.webKitViewport;
+    if (width !== viewportWidth || height !== viewportHeight) {
+      fail(`${path}.contentFrame`, "content frame matching the projected WebKit viewport", {
+        width, height, nativeFramePt: nativePlacement.framePt, webKitViewport: nativePlacement.webKitViewport,
+      });
     }
     assert.ok(measuredMs <= LAYOUT_DISPLAY_LIMIT_MS,
       `view measurement ${path} measured ${measuredMs} ms, exceeding ${LAYOUT_DISPLAY_LIMIT_MS} ms`);
     return { changeFrame, contentFrame, measuredMs, passed: true };
   });
+}
+
+function nativePlacementAt(value, path) {
+  objectAt(value, path);
+  const surface = textAt(value.surface, `${path}.surface`);
+  const phase = textAt(value.phase, `${path}.phase`);
+  if (phase !== "placed" && phase !== "settled") fail(`${path}.phase`, "placed or settled", phase);
+  if (value.visible !== true) fail(`${path}.visible`, "true", value.visible);
+  const timeMs = numberAt(value.timeMs, `${path}.timeMs`);
+  const frame = objectAt(value.framePt, `${path}.framePt`);
+  const framePt = {
+    x: numberAt(frame.x, `${path}.framePt.x`, { minimum: -Infinity }),
+    y: numberAt(frame.y, `${path}.framePt.y`, { minimum: -Infinity }),
+    width: numberAt(frame.width, `${path}.framePt.width`, { minimum: Number.MIN_VALUE }),
+    height: numberAt(frame.height, `${path}.framePt.height`, { minimum: Number.MIN_VALUE }),
+  };
+  const projection = objectAt(value.webKitViewport, `${path}.webKitViewport`);
+  const webKitViewport = {
+    width: numberAt(projection.width, `${path}.webKitViewport.width`, { minimum: 1, integer: true }),
+    height: numberAt(projection.height, `${path}.webKitViewport.height`, { minimum: 1, integer: true }),
+  };
+  if (webKitViewport.width !== Math.trunc(framePt.width)
+      || webKitViewport.height !== Math.trunc(framePt.height)) {
+    fail(`${path}.webKitViewport`, "the per-axis integer truncation of framePt dimensions", { framePt, webKitViewport });
+  }
+  const placement = objectAt(value.placement, `${path}.placement`);
+  if (phase === "placed") {
+    sameValue(placement.event, "host.trace.surface", `${path}.placement.event`);
+    const fields = objectAt(placement.fields, `${path}.placement.fields`);
+    sameValue(fields.surface, surface, `${path}.placement.fields.surface`);
+    sameValue(fields.phase, "placed", `${path}.placement.fields.phase`);
+    sameValue(fields.visible, true, `${path}.placement.fields.visible`);
+    sameValue(fields.x, framePt.x, `${path}.placement.fields.x`);
+    sameValue(fields.y, framePt.y, `${path}.placement.fields.y`);
+    sameValue(fields.w, framePt.width, `${path}.placement.fields.w`);
+    sameValue(fields.h, framePt.height, `${path}.placement.fields.h`);
+    const monoNs = numberAt(placement.mono_ns, `${path}.placement.mono_ns`, { minimum: 1 });
+    const tsUs = numberAt(placement.ts_us, `${path}.placement.ts_us`, { minimum: 1 });
+    if (!Number.isInteger(monoNs) || !Number.isInteger(tsUs)) {
+      fail(`${path}.placement`, "integer host ts_us and mono_ns clocks", { ts_us: tsUs, mono_ns: monoNs });
+    }
+    sameValue(monoNs / 1_000_000, timeMs, `${path}.placement mono_ns time`);
+  } else {
+    sameValue(placement.surface, surface, `${path}.placement.surface`);
+    sameValue(placement.visible, true, `${path}.placement.visible`);
+    sameValue(placement.timeMs, timeMs, `${path}.placement.timeMs`);
+    sameValue(placement.framePt?.x, framePt.x, `${path}.placement.framePt.x`);
+    sameValue(placement.framePt?.y, framePt.y, `${path}.placement.framePt.y`);
+    sameValue(placement.framePt?.width, framePt.width, `${path}.placement.framePt.width`);
+    sameValue(placement.framePt?.height, framePt.height, `${path}.placement.framePt.height`);
+    if (typeof placement.monoNs !== "string" || !/^\d+$/u.test(placement.monoNs)) {
+      fail(`${path}.placement.monoNs`, "raw monotonic clock text", placement.monoNs);
+    }
+    sameValue(Number(BigInt(placement.monoNs)) / 1_000_000, timeMs, `${path}.placement monoNs time`);
+  }
+  return { surface, phase, visible: value.visible, timeMs, framePt, webKitViewport, placement };
 }
 
 function evaluateEditorFootprint(value, requested) {
@@ -351,14 +420,19 @@ function evaluateDrag(value) {
       if (frameIndex < previousFrameIndex) fail(`${path}.frameIndex`, `>= prior mapped capture index ${previousFrameIndex}`, frameIndex);
       previousFrameIndex = frameIndex;
     }
+    const width = numberAt(frame.width, `${path}.width`, { minimum: Number.MIN_VALUE });
+    const height = numberAt(frame.height, `${path}.height`, { minimum: Number.MIN_VALUE });
+    const nativePlacement = nativePlacementAt(frame.nativePlacement, `${path}.nativePlacement`);
+    if (nativePlacement.timeMs > timeMs) {
+      fail(`${path}.nativePlacement.timeMs`, `<= source frame time ${timeMs} ms`, nativePlacement.timeMs);
+    }
     return {
       sourceSequence,
       frameIndex,
       timeMs,
-      width: numberAt(frame.width, `${path}.width`, { minimum: Number.MIN_VALUE }),
-      height: numberAt(frame.height, `${path}.height`, { minimum: Number.MIN_VALUE }),
-      nativeWidth: numberAt(frame.nativeWidth, `${path}.nativeWidth`, { minimum: Number.MIN_VALUE }),
-      nativeHeight: numberAt(frame.nativeHeight, `${path}.nativeHeight`, { minimum: Number.MIN_VALUE }),
+      width,
+      height,
+      nativePlacement,
     };
   });
   const inGestureFrames = contentFrames.filter(({ timeMs }) =>
@@ -379,14 +453,15 @@ function evaluateDrag(value) {
 
   const atEnd = inGestureFrames.at(-1);
   if (!atEnd) fail("drag.contentFrames", "a content frame at or before gesture end", contentFrames.map(({ frameIndex }) => frameIndex));
-  const mismatchedAtEnd = atEnd.width !== atEnd.nativeWidth || atEnd.height !== atEnd.nativeHeight;
+  const mismatchedAtEnd = atEnd.width !== atEnd.nativePlacement.webKitViewport.width
+    || atEnd.height !== atEnd.nativePlacement.webKitViewport.height;
   let convergedFrame = 0;
   let convergenceMs = 0;
   if (mismatchedAtEnd) {
     const postGestureFrames = contentFrames.filter(({ timeMs }) => timeMs > gestureEndedAtMs);
-    const converged = postGestureFrames.find(({ frameIndex, width, height, nativeWidth, nativeHeight }) =>
+    const converged = postGestureFrames.find(({ frameIndex, width, height, nativePlacement }) =>
       frameIndex !== null && frameIndex > gestureEndedFrameIndex
-      && width === nativeWidth && height === nativeHeight);
+      && width === nativePlacement.webKitViewport.width && height === nativePlacement.webKitViewport.height);
     if (!converged) fail("drag.contentFrames", "content size convergence after gesture end", postGestureFrames);
     convergedFrame = converged.frameIndex - gestureEndedFrameIndex;
     convergenceMs = converged.timeMs - gestureEndedAtMs;

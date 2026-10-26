@@ -6,7 +6,7 @@ import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE } from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture,
-  monotonicTimeMs, requireViewContentFrameCoverage, withViewContentTrace }
+  monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementForSource, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
 
@@ -195,21 +195,25 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
     const grid = await s.get("core.grid");
     const pane = grid.cards.find((item) => item.id === card);
     assert.ok(pane && Number.isFinite(pane.w), `HWP measurement card ${card} has no current width`);
-    const studioBefore = documentRow(await s.get("host.window"), surface, "studio");
-    const beforeChangeTimeMs = (await monotonicTimeMs(s)).timeMs;
+    const hostBefore = await s.get("host.window");
+    const studioBefore = documentRow(hostBefore, surface, "studio");
+    const baselineClock = await monotonicTimeMs(s);
+    const beforeChangeTimeMs = baselineClock.timeMs;
     await s.run("core.grid.size", { card, axis: "x", size: pane.w + 80 });
     const { displayed } = await s.presented();
     const result = await recording.stop({ after: displayed });
     return { displayed, beforeChangeTimeMs, result, captured: captureFrames(result, "layout"),
       nativeDocumentBefore: studioBefore.frame, viewport };
   });
-  const { beforeChangeTimeMs, captured, result, nativeDocumentBefore } = traced.action;
+  const { beforeChangeTimeMs, displayed, captured, result, nativeDocumentBefore } = traced.action;
   const host = await s.get("host.window");
-  const root = documentRow(host, surface, "");
   const studio = documentRow(host, surface, "studio");
-  const source = traced.contentFrames.find((frame) => frame.timeMs >= beforeChangeTimeMs
-    && frame.width === root.frame.width && frame.height === root.frame.height);
-  assert.ok(source, `HWP root trace has no post-layout frame at ${root.frame.width}x${root.frame.height}`);
+  const nativePlacement = rootNativePlacementForSource(traced.events, surface, displayed,
+    { afterMs: beforeChangeTimeMs });
+  const source = traced.contentFrames.find((frame) => frame.timeMs >= nativePlacement.timeMs
+    && frame.width === nativePlacement.webKitViewport.width
+    && frame.height === nativePlacement.webKitViewport.height);
+  assert.ok(source, "HWP root trace has no source frame matching its final post-request native placement projection");
   const previousSource = traced.contentFrames.filter((frame) => frame.timeMs < source.timeMs).at(-1);
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
@@ -250,6 +254,7 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
       previousSourceFrame: previousSource && { timeMs: previousSource.timeMs,
         width: previousSource.width, height: previousSource.height },
       sourceFrame: { timeMs: source.timeMs, width: source.width, height: source.height },
+      rootNativeFrame: nativePlacement.framePt,
       nativeDocumentBefore,
       nativeDocumentAfter: studio.frame,
       declaredSurface: placed.declared,
@@ -272,9 +277,8 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: captured.length,
       timeMs: captured[transition.changeFrameIndex].time },
     contentFrame: { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].time,
-      width: source.width, height: source.height,
-      nativeWidth: geometry.nativeRectPt.right - geometry.nativeRectPt.left,
-      nativeHeight: geometry.nativeRectPt.bottom - geometry.nativeRectPt.top, proof },
+      requestAtMs: beforeChangeTimeMs, sourceTimeMs: source.timeMs,
+      width: source.width, height: source.height, nativePlacement, proof },
     sourceFrame: source,
     slotInsetsPt,
     initialGeometry: { frameIndex, timeMs: captured[frameIndex].time, cardRectPt: geometry.cardRectPt,
@@ -294,6 +298,12 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
   const region = await s.rect("hwp.studio", undefined, surface);
   const slotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
+  await s.presented();
+  const nativeRootBefore = documentRow(await s.get("host.window"), surface, "");
+  const baselineClock = await monotonicTimeMs(s);
+  const baselineTimeMs = baselineClock.timeMs;
+  const baseline = { surface, timeMs: baselineTimeMs, monoNs: baselineClock.monoNs, visible: nativeRootBefore.visible,
+    framePt: nativeRootBefore.frame };
   const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
     assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
     const viewport = validateHwpStudioViewport(startReply.studioViewport);
@@ -314,11 +324,9 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
   const viewport = traced.action.viewport;
   const themeGeometry = hwpThemeGeometry(theme, viewport.markerColor, cornerRadiusPt);
   const geometryFrames = [];
-  const geometryByFrame = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
     const measured = measureHwpViewportMarkerFrame(captured[frameIndex], viewport, { targetRect, themeGeometry });
     const slotErrorPt = assertHwpFrameMatchesSlot(measured, slotInsetsPt);
-    geometryByFrame.set(frameIndex, measured);
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt,
       errorPt: slotErrorPt, geometryEvidence: measured.geometryEvidence, viewportMarker: measured.viewportMarker });
@@ -329,16 +337,10 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
   });
   for (const source of mapped) {
     if (source.frameIndex === null) continue;
-    const geometry = geometryByFrame.get(source.frameIndex)
-      ?? measureHwpViewportMarkerFrame(captured[source.frameIndex], viewport, { targetRect, themeGeometry });
-    const nativeWidth = geometry.cardRectPt.right - geometry.cardRectPt.left
-      - rootSlotInsetsPt.left - rootSlotInsetsPt.right;
-    const nativeHeight = geometry.cardRectPt.bottom - geometry.cardRectPt.top
-      - rootSlotInsetsPt.top - rootSlotInsetsPt.bottom;
-    assert.ok(nativeWidth > 0 && nativeHeight > 0, "HWP root declared slot has no positive size");
+    const nativePlacement = rootNativePlacementForSource(traced.events, surface, source.timeMs, { baseline });
     contentFrames.push({ sourceSequence: source.sourceSequence, frameIndex: source.frameIndex,
       timeMs: source.timeMs, width: source.width, height: source.height,
-      nativeWidth, nativeHeight, source });
+      nativePlacement, source });
   }
   return {
     recordedFrameCount: captured.length,

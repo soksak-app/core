@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { collectEditorProcessFootprint, editorFootprintEvidence, editorGeometryPalette, editorViewDescriptor }
+import { collectEditorProcessFootprint, editorFootprintEvidence, editorGeometryPalette, editorSourceContentFrame, editorViewDescriptor }
   from "../benchmark/cases/editor.mjs";
 import { editorSlotInsets } from "../benchmark/cases/editor.mjs";
 import { measureViewFrameGeometry } from "../view-frame-geometry.mjs";
@@ -129,4 +129,15 @@ test("editor slot insets come from declared composition and card geometry", () =
   { left: 5, top: 9, right: 11, bottom: 19 });
   assert.throws(() => editorSlotInsets({ plane: { x: 10, y: 20 }, cards: [] }, [], "card-1", "editor-1"),
     /missing declared composition geometry/);
+});
+
+test("editor motion evidence retains applied fractional native frame and WebKit viewport projection", { timeout: 1000 }, () => {
+  const source = { sourceSequence: 4, frameIndex: 7, timeMs: 148, width: 785, height: 286 };
+  const nativePlacement = { surface: "editor-1", phase: "placed", visible: true, timeMs: 147,
+    framePt: { x: 10.5, y: 20, width: 785.5, height: 286.5 },
+    webKitViewport: { width: 785, height: 286 } };
+  assert.deepEqual(editorSourceContentFrame(source, nativePlacement), {
+    sourceSequence: 4, frameIndex: 7, timeMs: 148, width: 785, height: 286, nativePlacement, source,
+  });
+  assert.throws(() => editorSourceContentFrame({ ...source, width: 0 }, nativePlacement), /invalid dimensions/);
 });

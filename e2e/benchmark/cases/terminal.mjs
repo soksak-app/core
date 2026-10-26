@@ -7,6 +7,7 @@ import { drag, keepCommonSettings } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
+  rootNativePlacementForSource,
   waitForViewReadiness, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
@@ -85,23 +86,22 @@ export function terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt) {
 }
 
 /** Maps one source document size update to its measured screenshot geometry and preserves both clocks. */
-export function terminalSourceContentFrame(source, frameIndex, displayFrame, nativeSize) {
+export function terminalSourceContentFrame(source, frameIndex, displayFrame, nativePlacement) {
   assert.ok(Number.isSafeInteger(frameIndex) && frameIndex >= 0, "terminal source frame index is invalid");
   assert.ok(Number.isFinite(displayFrame?.time) && displayFrame.time >= source.timeMs,
     "terminal source frame must map to a captured frame at or after its document event");
   assert.ok(Number.isFinite(source?.sequence) && source.sequence >= 0, "terminal source event sequence is invalid");
   assert.ok(Number.isFinite(source?.width) && source.width > 0 && Number.isFinite(source?.height) && source.height > 0,
     "terminal source content dimensions are invalid");
-  assert.ok(nativeSize && Number.isFinite(nativeSize.width) && nativeSize.width > 0
-    && Number.isFinite(nativeSize.height) && nativeSize.height > 0, "terminal root slot size is invalid");
+  assert.ok(nativePlacement && nativePlacement.surface && nativePlacement.framePt
+    && nativePlacement.webKitViewport, "terminal source frame has no actual native placement projection");
   return {
     sourceSequence: source.sequence,
     frameIndex,
     timeMs: source.timeMs,
     width: source.width,
     height: source.height,
-    nativeWidth: nativeSize.width,
-    nativeHeight: nativeSize.height,
+    nativePlacement,
     source: {
       sequence: source.sequence,
       resizeAtMs: source.resizeAtMs,
@@ -162,9 +162,12 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
     captureDirectory: capture.frames }, null, 2) + "\n");
   const host = await s.get("host.window");
   const root = terminalDocument(host, surface);
-  const source = traced.contentFrames.find((frame) => frame.timeMs >= beforeChangeTimeMs
-    && frame.width === root.frame.width && frame.height === root.frame.height);
-  assert.ok(source, `terminal observer has no content frame at new size ${root.frame.width}x${root.frame.height}`);
+  const nativePlacement = rootNativePlacementForSource(traced.events, surface, displayed,
+    { afterMs: beforeChangeTimeMs });
+  const source = traced.contentFrames.find((frame) => frame.timeMs >= nativePlacement.timeMs
+    && frame.width === nativePlacement.webKitViewport.width
+    && frame.height === nativePlacement.webKitViewport.height);
+  assert.ok(source, "terminal observer has no source frame matching its final post-request native placement projection");
   const slotInsetsPt = await terminalSlotInsets(s, card, surface);
   const targetRect = { x: root.frame.x, y: root.frame.y,
     width: root.frame.width, height: root.frame.height };
@@ -182,7 +185,8 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: decoded.length,
       timeMs: decoded[transition.changeFrameIndex].time },
     contentFrame: { frameIndex, frameCount: decoded.length, timeMs: decoded[frameIndex].time,
-      width: source.width, height: source.height, nativeWidth: root.frame.width, nativeHeight: root.frame.height,
+      requestAtMs: beforeChangeTimeMs, sourceTimeMs: source.timeMs,
+      width: source.width, height: source.height, nativePlacement,
       proof: proof.proof },
     sourceFrame: source,
     initialGeometry: { frameIndex, timeMs: decoded[frameIndex].time, cardRectPt: geometry.cardRectPt,
@@ -198,6 +202,12 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   const pane = beforeGrid.cards.find((item) => item.id === card);
   assert.ok(pane, `terminal measurement card ${card} is absent before drag`);
   const plan = rightEdgeWidthDragPlan(beforeGrid, pane);
+  await s.presented();
+  const baselineDocument = terminalDocument(await s.get("host.window"), surface);
+  const baselineClock = await monotonicTimeMs(s);
+  const baselineTimeMs = baselineClock.timeMs;
+  const baseline = { surface, timeMs: baselineTimeMs, monoNs: baselineClock.monoNs, visible: baselineDocument.visible,
+    framePt: baselineDocument.frame };
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
     drag(t, s, plan, { capture: true }));
   const run = traced.action;
@@ -223,11 +233,9 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   const targetRect = { x: root.frame.x, y: root.frame.y,
     width: root.frame.width, height: root.frame.height };
   const geometryFrames = [];
-  const geometries = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
     const measured = measureViewFrameGeometry(captured[frameIndex],
       { ...TERMINAL_GEOMETRY, cornerRadiusPt, targetRect });
-    geometries.set(frameIndex, measured);
     geometryFrames.push(terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt));
   }
 
@@ -235,16 +243,8 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
     gestureStartedAtMs: run.ticks[0], gestureEndedAtMs: run.ticks.at(-1),
   });
   const sourceFrames = mapped.map((source) => {
-    const geometry = geometries.get(source.frameIndex)
-      ?? measureViewFrameGeometry(captured[source.frameIndex],
-        { ...TERMINAL_GEOMETRY, cornerRadiusPt, targetRect });
-    const nativeWidth = geometry.cardRectPt.right - geometry.cardRectPt.left
-      - rootSlotInsetsPt.left - rootSlotInsetsPt.right;
-    const nativeHeight = geometry.cardRectPt.bottom - geometry.cardRectPt.top
-      - rootSlotInsetsPt.top - rootSlotInsetsPt.bottom;
-    return terminalSourceContentFrame(source, source.frameIndex, captured[source.frameIndex], {
-      width: nativeWidth, height: nativeHeight,
-    });
+    const nativePlacement = rootNativePlacementForSource(traced.events, surface, source.timeMs, { baseline });
+    return terminalSourceContentFrame(source, source.frameIndex, captured[source.frameIndex], nativePlacement);
   });
   writeFileSync(join(directory, "source-frames.json"), JSON.stringify({
     frames: sourceFrames, rawEvents: traced.events, contentFrames: traced.contentFrames,

@@ -140,6 +140,108 @@ export function mapViewContentFramesToCapture(contentFrames, captured) {
   });
 }
 
+/** Selects the actual root WebView placement that was active when a source frame was produced. */
+export function rootNativePlacementForSource(events, surface, sourceTimeMs, { baseline, afterMs } = {}) {
+  assert.ok(Array.isArray(events), "root native placement events must be an array");
+  assert.ok(typeof surface === "string" && surface.length > 0, "root native placement requires a surface");
+  assert.ok(Number.isFinite(sourceTimeMs) && sourceTimeMs >= 0, "root source frame has an invalid timestamp");
+  if (afterMs !== undefined) {
+    assert.ok(Number.isFinite(afterMs) && afterMs >= 0, "root placement request has an invalid timestamp");
+  }
+
+  const rows = [];
+  if (baseline !== undefined) {
+    assert.equal(baseline.surface, surface, "root native placement baseline belongs to another surface");
+    assert.ok(Number.isFinite(baseline.timeMs) && baseline.timeMs >= 0,
+      "root native placement baseline has an invalid timestamp");
+    assert.ok(typeof baseline.monoNs === "string" && /^\d+$/u.test(baseline.monoNs),
+      "root native placement baseline has no raw mono_ns clock");
+    assert.equal(Number(BigInt(baseline.monoNs)) / 1_000_000, baseline.timeMs,
+      "root native placement baseline time does not match mono_ns");
+    assert.equal(baseline.visible, true, "root native placement baseline is not visible");
+    rows.push({
+      phase: "settled",
+      surface,
+      visible: true,
+      timeMs: baseline.timeMs,
+      framePt: nativeFrameAt(baseline.framePt, "root native placement baseline"),
+      placement: baseline,
+    });
+  }
+
+  for (const event of events) {
+    if (event?.event !== "host.trace.surface" || event.fields?.surface !== surface) continue;
+    const monoNs = event.mono_ns;
+    assert.ok(Number.isInteger(monoNs) && monoNs > 0,
+      `host.trace.surface for ${surface} has invalid mono_ns ${JSON.stringify(monoNs)}`);
+    const fields = event.fields;
+    const row = {
+      phase: fields.phase,
+      surface,
+      visible: fields.visible,
+      timeMs: monoNs / 1_000_000,
+      placement: event,
+    };
+    if (fields.phase === "placed") {
+      assert.equal(typeof fields.visible, "boolean",
+        `host.trace.surface placement for ${surface} has no visibility state`);
+      row.framePt = nativeFrameAt({ x: fields.x, y: fields.y, width: fields.w, height: fields.h },
+        `host.trace.surface placement for ${surface}`);
+    } else if (!["created", "destroyed"].includes(fields.phase)) {
+      assert.fail(`host.trace.surface for ${surface} has unknown phase ${JSON.stringify(fields.phase)}`);
+    }
+    rows.push(row);
+  }
+
+  const eligible = rows.filter((row) => row.timeMs <= sourceTimeMs
+    && (afterMs === undefined || row.timeMs > afterMs));
+  if (eligible.length === 0) {
+    if (afterMs !== undefined) {
+      assert.fail(`no applied native placement after ${afterMs} ms and at or before source frame ${sourceTimeMs} ms for ${surface}`);
+    }
+    assert.fail(`no native placement at or before source frame ${sourceTimeMs} ms for ${surface}`);
+  }
+  eligible.sort((left, right) => left.timeMs - right.timeMs
+    || placementSequence(left.placement) - placementSequence(right.placement));
+  const latest = eligible.at(-1);
+  const tied = eligible.filter((row) => row.timeMs === latest.timeMs);
+  const state = (row) => JSON.stringify({ phase: row.phase, surface: row.surface,
+    visible: row.visible, framePt: row.framePt });
+  if (tied.some((row) => state(row) !== state(latest))) {
+    assert.fail(`ambiguous native placement state at ${latest.timeMs} ms for ${surface}`);
+  }
+  assert.ok(latest.phase === "placed" || latest.phase === "settled",
+    `latest native placement state for ${surface} is ${latest.phase}, not placed or settled`);
+  assert.equal(latest.visible, true, `latest native placement for ${surface} is not visible`);
+  if (afterMs !== undefined) {
+    assert.ok(latest.timeMs > afterMs,
+      `latest native placement for ${surface} is not after request ${afterMs} ms`);
+  }
+  const webKitViewport = {
+    width: Math.trunc(latest.framePt.width),
+    height: Math.trunc(latest.framePt.height),
+  };
+  assert.ok(webKitViewport.width > 0 && webKitViewport.height > 0,
+    `root native placement for ${surface} projects to a nonpositive WebKit viewport`);
+  return { surface, timeMs: latest.timeMs, phase: latest.phase, visible: latest.visible,
+    framePt: latest.framePt, webKitViewport, placement: latest.placement };
+}
+
+function nativeFrameAt(frame, label) {
+  assert.ok(frame !== null && typeof frame === "object" && !Array.isArray(frame), `${label} has no frame`);
+  const { x, y, width, height } = frame;
+  for (const [name, value] of Object.entries({ x, y, width, height })) {
+    assert.ok(Number.isFinite(value), `${label} has invalid ${name} ${JSON.stringify(value)}`);
+  }
+  assert.ok(width > 0 && height > 0, `${label} has nonpositive dimensions ${width}x${height}`);
+  return { x, y, width, height };
+}
+
+function placementSequence(event) {
+  if (event?.phase === "settled") return -1;
+  return Number.isSafeInteger(event?.seq) ? event.seq : 0;
+}
+
 /** Keeps capture-backed events and rejects any source event during the gesture that recording missed. */
 export function requireViewContentFrameCoverage(mappedFrames, { gestureStartedAtMs, gestureEndedAtMs }) {
   assert.ok(Number.isFinite(gestureStartedAtMs) && Number.isFinite(gestureEndedAtMs)
