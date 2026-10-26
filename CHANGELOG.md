@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F240: Reconcile the remaining checklist rows with the five current functional cohorts. Account for all 54 open rows across input/menu acceptance, reported failures and historical audits, performance, package installation/publication, and aggregate requirements. Include parent rows explicitly and preserve every individual state; functional acceptance does not imply publication or historical closure.
+
 - F212.12-2-3: Verify inactive view/main native input and focus retention on both macOS arm64 hosts. Native Escape cancels main rename and dismisses the picker; address input preserves its draft before replacing its selected text. All 41 Wails and 45 Tauri recorded frames decode, and error audits, shared-baseline restoration and normal shutdown pass. Keep native-menu key equivalents in the separate activation-tier acceptance; no production input dispatch changes are added.
 
 - F239-47: Complete the original four-vowel/Space acceptance from the current passing both-host consumer. Each of four reference documents matches received-frame-coherent terminal state; strict native/PTY transactions commit exactly four vowels and one Space with empty final preedit and one displayed occurrence. All 354 recorded frames decode, and callback mapping, error audit, input-source/baseline restoration and shutdown pass. Preserve separate resyllabification/lifecycle work and the unreleased owning plugin publication; no repeated runtime or expanded glyph-proof claim is used for closure.

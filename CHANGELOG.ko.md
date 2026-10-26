@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F240: 남은 체크리스트 행을 현재 기능 cohort 다섯 개와 구분해 집계한다. 미완료 54행 전체를 입력/menu acceptance, 보고된 실패와 과거 감사, 성능, package 설치/publication 및 집계 요구사항으로 설명한다. Parent 행의 포함을 명시하고 모든 개별 상태를 유지하며 기능 acceptance로 publication이나 과거 종료를 추론하지 않는다.
+
 - F212.12-2-3: macOS arm64 양 host에서 비활성 view/main native 입력과 focus 보존을 검증한다. Native Escape가 main rename을 취소하고 picker를 닫으며 주소 입력은 draft를 보존한 뒤 선택된 text를 교체한다. Wails 녹화 frame 41개와 Tauri frame 45개를 모두 decode하고 오류 감사, 공통 baseline 복원과 정상 종료가 통과한다. Native-menu key equivalent는 별도의 activation-tier acceptance에 유지하며 제품 input dispatch를 변경하지 않는다.
 
 - F239-47: 현재 통과한 양 host consumer 근거로 원래 모음 네 회/Space acceptance를 완료한다. Reference document 네 개가 수신 frame과 일관된 terminal 상태와 일치하고 엄격한 native/PTY transaction이 모음 네 개와 Space 한 개를 정확히 commit하며 최종 preedit는 비어 있고 표시 횟수는 한 번이다. 녹화 frame 354개가 모두 decode되며 callback 대응, 오류 감사, 입력기/baseline 복원 및 종료가 통과한다. 별도 재조합/lifecycle 작업 및 소유 plugin publication 미배포 상태를 유지하며 완료 처리를 위해 runtime을 반복하거나 glyph-proof 주장을 확대하지 않는다.
