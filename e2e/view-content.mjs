@@ -30,22 +30,36 @@ export function cropViewPixels(frame, rect) {
   return { width, height, data };
 }
 
-const normalized = text => text.normalize("NFC").replace(/\s/gu, "");
+export const normalizeViewText = text => text.normalize("NFC").replace(/\s/gu, "");
+
+/** Reads text from one captured view frame without treating readiness as pixel evidence. */
+export async function recognizeViewFrame({ frame, rect, language, directory, artifactName = "view-content",
+  command = process.env.SOKSAK_CAPTURE_TEXT }) {
+  assert.ok(typeof language === "string" && language.length > 0, "view content recognition requires a language");
+  assert.ok(typeof directory === "string" && directory.length > 0, "view content recognition requires a recording directory");
+  assert.ok(typeof artifactName === "string" && /^[a-zA-Z0-9_-]+$/u.test(artifactName),
+    "view content recognition requires a safe artifact name");
+  assert.ok(typeof command === "string" && command.length > 0,
+    "SOKSAK_CAPTURE_TEXT must name the built capture_text_test executable");
+  const crop = cropViewPixels(frame, rect);
+  const file = join(directory, `${artifactName}.bgra.bin`);
+  writeFileSync(file, crop.data);
+  const { stdout } = await run(command, ["--bgra", file, String(crop.width), String(crop.height),
+    String(crop.width * 4), language], { timeout: 10000, maxBuffer: 1024 * 1024 });
+  const result = JSON.parse(stdout);
+  assert.ok(Array.isArray(result.lines) && result.lines.every(line => typeof line === "string"),
+    `capture text recognition returned invalid lines for ${artifactName}`);
+  return { ...result, crop: { width: crop.width, height: crop.height }, file };
+}
 
 /** Recognizes the final complete frame; readiness alone cannot satisfy the pixel assertion. */
 function pixels(command, expected, language, diagnostic) {
   return async ({ captured, rect, directory }) => {
-    const crop = cropViewPixels(captured.at(-1), rect);
-    const file = join(directory, "view-content.bgra.bin");
-    writeFileSync(file, crop.data);
-    const { stdout } = await run(command, ["--bgra", file, String(crop.width), String(crop.height),
-      String(crop.width * 4), language], { timeout: 10000, maxBuffer: 1024 * 1024 });
-    const result = JSON.parse(stdout);
-    assert.ok(Array.isArray(result.lines) && result.lines.every(line => typeof line === "string"),
-      "capture text recognition returned invalid lines");
+    const recognized = await recognizeViewFrame({ frame: captured.at(-1), rect, language, directory, command });
+    const { crop, file, ...result } = recognized;
     writeFileSync(join(directory, "view-content.json"), JSON.stringify({ expected, language, ...result }, null, 2) + "\n");
-    assert.ok(normalized(result.lines.join(" ")).includes(normalized(expected)),
-      `captured view does not contain ${JSON.stringify(expected)}: ${JSON.stringify(result.lines)}`);
+    assert.ok(normalizeViewText(recognized.lines.join(" ")).includes(normalizeViewText(expected)),
+      `captured view does not contain ${JSON.stringify(expected)}: ${JSON.stringify(recognized.lines)}`);
     diagnostic(`captured content ${JSON.stringify(expected)} in decoded frame ${captured.length}`);
   };
 }

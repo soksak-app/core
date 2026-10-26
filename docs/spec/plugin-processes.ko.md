@@ -33,7 +33,7 @@ Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름
 
 ## 통과값
 
-각 값은 행에 적힌 측정으로, 애플리케이션 안에서 도는 timer가 아니라 녹화에서 판정한다. 메모리 값은 SI megabyte를 사용하며 1 MB는 1,000,000 bytes다. 회수 측정은 process를 공유하는 전체 group과 그 group의 모든 view를 닫기 직전 physical footprint를 기록한다. 닫은 뒤 같은 process identity를 비교하며 종료한 process는 0으로 센다. View를 열기 전 baseline을 빼지 않는다. 기록은 닫은 각 view의 session history에 초기 document만 있음을 입증한다.
+각 값은 행에 적힌 측정으로, 애플리케이션 안에서 도는 timer가 아니라 녹화에서 판정한다. 메모리 값은 SI megabyte를 사용하며 1 MB는 1,000,000 bytes다. 회수 측정은 process를 공유하는 전체 group과 그 group의 모든 view를 닫기 직전 physical footprint를 기록한다. 닫은 뒤 같은 process identity를 비교하며 종료한 process는 0으로 센다. View를 열기 전 baseline을 빼지 않는다. Group은 root view와 연결된 모든 native document-region process를 포함하며 포함한 process를 공유하는 모든 surface로 확장한다. 기록은 닫은 각 view의 root와 연결된 각 document region의 session history에 초기 document만 있음을 입증한다.
 
 | 기준 | 통과 조건 |
 |---|---|
@@ -44,9 +44,11 @@ Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름
 | (v) 표시 판정값 | card 배치가 바뀐 녹화에서, view의 내용 frame이 그 변경의 첫 frame부터 100 ms 안에 새 크기로 나타난다. |
 | (vi) 재시작 한도 | 실패 event가 올 때 실패 시각을 기록하고 그 자리에서 센다(timer를 쓰지 않는다). 최근 300초 안의 실패가 4번째에 이르면 재시작을 멈춘다. 300초보다 오래된 실패는 세지 않는다(sliding window). 멈춘 뒤에도 실패 기록은 남긴다. 그 프로세스가 필요한 표면을 사용자가 열 때만 기록을 비우고 프로세스를 다시 띄운다. |
 | (iv) editor 측정 | editor view의 footprint와 숨긴 DOM editor의 footprint를 잰다. view 쪽 footprint가 50 MB를 넘으면 editor의 buffer와 분석을 sidecar로 옮긴다. 이것은 통과 조건이 아니라 측정 규칙이다. |
-| (viii) 끌기 | gesture 동안 (a) 매 frame에서 native frame 경계와 card 경계의 차이가 2 pt 이하다(같은 commit, 기대값 0). (b) 내용 frame(view가 자기 document에 그린 frame이며, view의 ResizeObserver 다음 requestAnimationFrame이 내는 표시)의 연속 간격이 33 ms 이하다. (c) 내용 frame 크기가 native frame 크기와 다른 상태가 gesture 끝난 뒤 2 frame(33 ms) 안에 사라진다. |
+| (viii) 끌기 | gesture 동안 (a) 매 frame에서 native content 경계와 card 및 독립적으로 선언된 DOM inset으로 구한 예상 composition slot 경계의 차이가 2 pt 이하다(같은 commit, 기대값 0). (b) 내용 frame(view가 자기 document에 그린 frame이며, view의 ResizeObserver 다음 requestAnimationFrame이 내는 표시)의 연속 간격이 33 ms 이하다. (c) 내용 frame 크기가 native frame 크기와 다른 상태가 gesture 끝난 뒤 2 frame(33 ms) 안에 사라진다. |
 
 모든 plugin view는 (i), (ii), (iii), (iii-b), (v), (viii)을 만족하고, 재시작 창 검사는 (vi)을 만족한다. (iv)는 잰다. 기구 값 (v), (vi), (viii)이 실패하면 그 기구에 기대는 일을 멈춘다. plugin 값 (i), (ii), (iii), (iii-b)가 실패하면 그 plugin만 멈추고, 그 plugin의 층이나 view 수는 adversarial review에 올리는 이 명세의 개정판에서 다시 연다. 개정 결정은 소유자가 한다.
+
+기준 (iii)은 열린 view가 시작 요청 직전에 이미 실행 중인 process에 배정된 경우에만 적용한다. 측정은 요청 전 process snapshot과 배정된 view process를 기록한다. 새 process에 배정된 열기는 (iii)을 통과가 아닌 해당 없음으로 보고하고 (iii-b)로 측정하며 process 재사용을 강제하지 않는다. 녹화한 pixel은 (viii)(a)의 표시 정렬을 입증하고 소유 layout transaction 검사는 card와 native 배치의 연결을 별도로 입증한다. 캡처 frame은 인과적 commit identifier를 입증하지 않는다.
 
 ## 규칙
 

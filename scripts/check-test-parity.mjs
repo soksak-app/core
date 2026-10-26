@@ -885,7 +885,7 @@ const FEATURE_LINKS = [
     id: "F212.14-1",
     implementation: [
       { file: "e2e/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
-      { file: "e2e/benchmark/view-drag.test.mjs", symbol: "writeFileSync(result," },
+      { file: "e2e/benchmark/view-drag.test.mjs", symbol: "writeFileSync(path," },
     ],
     tests: [
       { file: "e2e/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
@@ -923,7 +923,7 @@ const FEATURE_LINKS = [
     id: "F212.14-3",
     implementation: [
       { file: "e2e/drag-measurement.mjs", symbol: "committing: spread(" },
-      { file: "e2e/benchmark/view-drag.test.mjs", symbol: "transactionCadence: transactionCadence(run.layouts)" },
+      { file: "e2e/benchmark/cases/terminal.mjs", symbol: "transactionCadence: transactionCadence(run.layouts)" },
     ],
     tests: [
       { file: "e2e/test/drag-measurement.test.mjs", id: "transaction cadence includes commit waiting and total transaction duration" },
@@ -6924,6 +6924,13 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/host/tauriv2/src/modals.rs", symbol: 'let errors: Vec<_> = buffered_fields("host.record.error")' }],
     tests: [{ file: "packages/host/tauriv2/src/modals.rs", id: "a_poisoned_modal_record_is_recovered_when_it_is_read" }],
     expected: "Modal recovery preserves unrelated lifecycle records without replacing the shared event writer.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-192",
+    implementation: [{ file: "packages/workbench/projects.js", symbol: "await inTurn(emptyToLibrary);" }],
+    tests: [{ file: "packages/workbench/test/projects-switch.test.mjs", id: "an activation received while a removed project is clearing waits for the clear" }],
+    expected: "Registry-removal clearing finishes before a later project activation loads its layout.",
     levels: ["unit"],
   },
   {
