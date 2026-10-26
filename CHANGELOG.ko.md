@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5: View 메모리 측정의 SI byte 단위와 process를 공유하는 전체 group을 명시한다. 닫기 전후 같은 process identity의 physical footprint를 비교하고 종료한 process는 0으로 세며 초기 document만 있는 history를 기록한다. 모든 메모리 한도와 회수 요구를 유지한다.
+
 - F240: 미해결 작업을 닫지 않고 현재 구현을 acceptance 대기와 과거 원인 감사에서 구분한다. 누락된 view별 측정 모음을 F212.14-5에 기록하고 완료한 F212.14-3 timing 보고를 유지한다. Open register는 49행이며 세 행은 진행 중이고 46행은 대기한다.
 
 - F212.14: 완료한 VT screen 소유권/body-copy 수정을 기록하고 최적화한 diagnostic binary를 로컬 성능 acceptance profile로 정한다. 모든 debug-profile 목표 미달과 그대로인 목표를 유지한다. Compile profile은 diagnostic 지원과 독립적이며 공개 release, 인과적 지연 개선이나 두 profile의 통과를 주장하지 않는다.

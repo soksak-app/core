@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5: Define SI byte units and the complete process-sharing group for view memory measurements. Compare physical footprints of the same process identities before and after closure, with ended processes counted as zero and initial-document-only history recorded. Keep all memory limits and reclaim requirements unchanged.
+
 - F240: Distinguish current implementation from waiting acceptance and historical audits without closing unresolved work. Record the missing per-view measurement matrix under F212.14-5 and preserve the completed F212.14-3 timing report. The open register includes 49 rows, of which three are active and 46 are waiting.
 
 - F212.14: Record completed VT screen ownership/body-copy corrections and define optimized diagnostic binaries as the local performance acceptance profile. Keep all debug-profile misses and unchanged targets. The compilation profile is independent of diagnostic support; no public release, causal latency improvement or both-profile pass is claimed.

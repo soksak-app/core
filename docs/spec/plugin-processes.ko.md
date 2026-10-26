@@ -33,7 +33,7 @@ Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름
 
 ## 통과값
 
-각 값은 행에 적힌 측정으로, 애플리케이션 안에서 도는 timer가 아니라 녹화에서 판정한다.
+각 값은 행에 적힌 측정으로, 애플리케이션 안에서 도는 timer가 아니라 녹화에서 판정한다. 메모리 값은 SI megabyte를 사용하며 1 MB는 1,000,000 bytes다. 회수 측정은 process를 공유하는 전체 group과 그 group의 모든 view를 닫기 직전 physical footprint를 기록한다. 닫은 뒤 같은 process identity를 비교하며 종료한 process는 0으로 센다. View를 열기 전 baseline을 빼지 않는다. 기록은 닫은 각 view의 session history에 초기 document만 있음을 입증한다.
 
 | 기준 | 통과 조건 |
 |---|---|

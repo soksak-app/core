@@ -33,7 +33,7 @@ A plugin view's WebContent process uses the display label `soksak://plugin/<plug
 
 ## Pass values
 
-Each value is judged by the measurement named in its row, on a recording and not by a timer that runs in the application.
+Each value is judged by the measurement named in its row, on a recording and not by a timer that runs in the application. Memory values use SI megabytes: 1 MB is 1,000,000 bytes. A reclaim measurement records the complete process-sharing group and its physical footprints immediately before closing all views in that group. It compares the same process identities after closure, counting ended processes as zero; it does not subtract a pre-view baseline. The record establishes that each closed view holds only its initial document in session history.
 
 | criterion | pass condition |
 |---|---|
