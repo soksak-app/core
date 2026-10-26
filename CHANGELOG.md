@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-206: Load and await the registered main document in the native view-focus fixture before activation. Report navigation failures and retain the existing activity-state wait and timeout. The owning readiness assertion fails before the correction and the final default view-focus test passes 1/1; activation acceptance remains separate.
+
 - F239-47-32, F239-47-33: Complete the marked-buffer acceptance with current two-host Latin-prefix Korean and OS resyllabification results, combined with the retained repeated-vowel visual and ten individually accepted lifecycle conditions per host. Preserve historical failed measurements and use the current functional/cadence separation from F239-175. The new sequence checks pass AppKit/terminal agreement, ordered single commits, error audits, input-source and baseline restoration, and normal shutdown.
 
 - F239-204: Make native input-source selection and readiness one operation.

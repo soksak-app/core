@@ -107,6 +107,34 @@ static NSString *const page = @"<!doctype html><meta charset=utf-8><title>loadin
     "<script>document.title = 'ready';"
     "document.addEventListener('mousedown', () => { document.title = 'down'; }, true);"
     "document.addEventListener('keydown', (e) => { document.title = 'key:' + e.key; }, true);</script>";
+static NSString *const mainPageHTML = @"<!doctype html><meta charset=utf-8><title>main-ready</title><body></body>";
+
+@interface MainPageReadiness : NSObject <WKNavigationDelegate>
+@property(assign) BOOL finished;
+@property(retain) NSError *failure;
+@end
+
+@implementation MainPageReadiness
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    (void)webView;
+    (void)navigation;
+    self.finished = YES;
+}
+- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    (void)webView;
+    (void)navigation;
+    self.failure = error;
+}
+- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    (void)webView;
+    (void)navigation;
+    self.failure = error;
+}
+- (void)dealloc {
+    [_failure release];
+    [super dealloc];
+}
+@end
 
 static BOOL activationDone;
 static sp_activate_result activationResult;
@@ -365,6 +393,20 @@ int main(int argc, char **argv) { @autoreleasepool {
     BOOL mainRegistered = sp_window_set_main_webview(window, main);
     check(mainRegistered && sp_window_main_webview(window) == main,
         @"the activation fixture registers its app DOM web view");
+    MainPageReadiness *mainPage = [[[MainPageReadiness alloc] init] autorelease];
+    main.navigationDelegate = mainPage;
+    [main loadHTMLString:mainPageHTML baseURL:nil];
+    BOOL mainReady = waitFor(^BOOL { return mainPage.finished || mainPage.failure != nil; })
+        && mainPage.finished && [main.title isEqual:@"main-ready"];
+    check(mainReady, mainPage.failure
+        ? [NSString stringWithFormat:@"the registered app DOM web view finishes its main page before activation (%@)", mainPage.failure]
+        : @"the registered app DOM web view finishes its main page before activation");
+    if (!mainReady) {
+        [window close];
+        [window release];
+        restoreFrontmost(previous, activation);
+        return 1;
+    }
     void *surface = sp_surface_create(main);
     webviewSetFrame(surface, 0, 0, 500, 400);
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
