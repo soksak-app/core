@@ -12,6 +12,8 @@ use tauri::webview::PlatformWebview;
 
 use std::time::Duration;
 
+#[cfg(feature = "diagnostics")]
+use super::DocumentViewportMarker;
 use super::{
     ClipboardValue, Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame,
     Handle, Hit, ImagePresentation, Insets, Key, Listener, PersistentStream, Platform, Pointer,
@@ -271,6 +273,14 @@ impl Platform for Windows {
         visible: bool,
     ) -> Result<(), String> {
         unsupported::place_document(document, insets, visible)
+    }
+    #[cfg(feature = "diagnostics")]
+    fn document_viewport_marker(
+        &self,
+        _document: Option<Handle>,
+        _enabled: bool,
+    ) -> Result<DocumentViewportMarker, String> {
+        Err("not implemented on Windows".into())
     }
     fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String> {
         unsupported::set_document_background(document, enabled)

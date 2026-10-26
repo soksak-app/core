@@ -14,6 +14,8 @@ import { viewContentCases } from "../../view-content.mjs";
 
 const HWP_CONTENT = "속삭한글문서확인";
 const GEOMETRY_LIMIT_PT = 2;
+const NATIVE_MARKER_COLOR = [0, 255, 255];
+const NATIVE_MARKER_WIDTH_PT = 2;
 
 /** Requires the current view and studio document histories from the HWP diagnostic reply. */
 export function hwpDocumentHistoryEvidence(value) {
@@ -41,11 +43,76 @@ export function assertHwpFrameMatchesSlot(geometry, slotInsetsPt) {
   };
   assert.ok(expected.right > expected.left && expected.bottom > expected.top,
     `HWP declared studio slot has no positive area: ${JSON.stringify(expected)}`);
-  const errorPt = Math.max(...["left", "top", "right", "bottom"]
-    .map((edge) => Math.abs(expected[edge] - geometry.nativeRectPt[edge])));
-  assert.ok(errorPt <= GEOMETRY_LIMIT_PT,
-    `HWP studio frame differs from its declared slot by ${errorPt} pt (limit ${GEOMETRY_LIMIT_PT} pt)`);
+  const residualPt = Object.fromEntries(["left", "top", "right", "bottom"]
+    .map((edge) => [edge, geometry.nativeRectPt[edge] - expected[edge]]));
+  const errorPt = Math.max(...Object.values(residualPt).map(Math.abs));
+  if (errorPt > GEOMETRY_LIMIT_PT) {
+    throw new Error(`HWP native region bounds differ from the declared slot by ${errorPt} pt `
+      + `(limit ${GEOMETRY_LIMIT_PT} pt); HWP frame geometry evidence ${JSON.stringify({
+        frameIndex: geometry.frameIndex, timeMs: geometry.timeMs, actualEdgesPt: geometry.nativeRectPt,
+        expectedEdgesPt: expected, residualPt, slotInsetsPt,
+      })}`);
+  }
   return errorPt;
+}
+
+/** Validates the declared native studio marker reply. */
+export function validateHwpNativeMarkerReply(value, enabled = true) {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value),
+    "HWP native viewport marker reply must be an object");
+  assert.equal(value.enabled, enabled, `HWP native viewport marker enabled state must be ${enabled}`);
+  if (enabled) {
+    assert.equal(value.kind, "native", "HWP viewport marker must identify the native view layer");
+    assert.deepEqual(value.markerColor, NATIVE_MARKER_COLOR,
+      "HWP native viewport marker color differs from its cyan RGB token");
+    assert.equal(value.borderWidthPt, NATIVE_MARKER_WIDTH_PT,
+      "HWP native viewport marker border must be exactly 2 points");
+  }
+  return value;
+}
+
+/** Starts the native studio marker around one capture action and removes it on every exit path. */
+export async function withHwpNativeMarker(s, surface, action) {
+  assert.ok(typeof surface === "string" && surface.length > 0, "HWP native marker requires a surface identity");
+  assert.equal(typeof action, "function", "HWP native marker action is required");
+  let marker;
+  let result;
+  let actionError;
+  let stopError;
+  let started = false;
+  let markerActive = false;
+  const stopMarker = async () => {
+    if (!markerActive) return;
+    validateHwpNativeMarkerReply(await s.request("diagnostics.document.viewport-marker",
+      { surface, document: "studio", enabled: false }), false);
+    markerActive = false;
+  };
+  try {
+    marker = await s.request("diagnostics.document.viewport-marker", { surface, document: "studio", enabled: true });
+    started = true;
+    markerActive = true;
+    assert.equal(typeof s.cleanup, "function", "HWP native marker requires session cleanup support");
+    s.cleanup(async () => {
+      if (markerActive) await stopMarker();
+    });
+    validateHwpNativeMarkerReply(marker);
+    result = await action(marker);
+  } catch (error) {
+    actionError = error;
+  }
+  if (started) {
+    try {
+      await stopMarker();
+    } catch (error) {
+      stopError = error;
+    }
+  }
+  if (actionError && stopError) {
+    throw new AggregateError([actionError, stopError], `HWP native marker action and cleanup failed for ${surface}`);
+  }
+  if (actionError) throw actionError;
+  if (stopError) throw stopError;
+  return { marker, result };
 }
 
 /** Records reclaim for the complete HWP opening set; the reclaim collector owns closing those views. */
@@ -85,7 +152,7 @@ export async function hwpViewDescriptor(s, diagnostic = () => {}) {
     stopContentTrace: async (session, surface) => {
       const value = await session.run("hwp.diagnostics.frames.stop", {}, surface);
       assert.equal(value.enabled, false, `HWP view ${surface} content-frame observer did not stop`);
-      assert.equal(value.studioViewport, null, `HWP view ${surface} diagnostic viewport marker remained after stop`);
+      assert.equal(value.studioViewport, null, `HWP view ${surface} HTML viewport marker remained after observer stop`);
       return value;
     },
   });
@@ -113,7 +180,7 @@ function captureFrames(result, label) {
   return files.map(readFrame);
 }
 
-function hwpThemeGeometry(theme, contentColor, cornerRadiusPt) {
+function hwpThemeGeometry(theme, cornerRadiusPt) {
   const parse = (name, token) => {
     assert.ok(typeof token === "string" && /^#[0-9a-f]{6}$/iu.test(token), `core theme ${name} is not an RGB hex token`);
     return [1, 3, 5].map((index) => Number.parseInt(token.slice(index, index + 2), 16));
@@ -121,102 +188,99 @@ function hwpThemeGeometry(theme, contentColor, cornerRadiusPt) {
   const borderColors = [theme.edge, theme.rule, theme.focus].filter((value) => value !== undefined)
     .map((value, index) => parse(`border ${index}`, value));
   assert.ok(borderColors.length > 0, "core theme has no declared card border or focus color");
-  return { contentColor, cardColor: parse("card", theme.card), planeColor: parse("background", theme.bg),
+  return { cardColor: parse("card", theme.card), planeColor: parse("background", theme.bg),
     borderColors, cornerRadiusPt };
 }
 
-function validateHwpStudioViewport(value) {
-  assert.ok(value && typeof value === "object", "HWP marker reply is missing studio viewport metadata");
-  assert.deepEqual(value.markerColor, [255, 0, 255], "HWP marker color differs from its declared unique RGB token");
-  assert.equal(value.borderWidth, 2, "HWP marker border must be exactly 2 CSS pixels");
-  for (const field of ["innerWidth", "innerHeight", "clientWidth", "clientHeight"]) {
-    assert.ok(Number.isFinite(value[field]) && value[field] > 0, `HWP marker reply has invalid ${field}`);
-  }
-  assert.deepEqual(value.rect, { left: 0, top: 0, right: value.innerWidth, bottom: value.innerHeight },
-    "HWP marker does not cover the declared studio viewport");
-  assert.equal(value.clientWidth, value.innerWidth, "HWP studio viewport has a horizontal scrollbar gutter");
-  assert.equal(value.clientHeight, value.innerHeight, "HWP studio viewport has a vertical scrollbar gutter");
-  assert.deepEqual(value.visualViewport, { width: value.innerWidth, height: value.innerHeight,
-    offsetLeft: 0, offsetTop: 0, scale: 1 }, "HWP visual viewport is zoomed, offset, or smaller than its layout viewport");
-  assert.deepEqual(value.fixedContainingBlock, { transform: "none", perspective: "none", filter: "none",
-    contain: "none", willChange: "auto", containerType: "normal" },
-  "HWP fixed marker has a transformed or contained ancestor");
-  return value;
-}
-
-/** Measures one diagnostic HWP viewport border from captured pixels; it does not infer natural content bounds. */
-export function measureHwpViewportMarkerFrame(frame, viewportReply, { targetRect, themeGeometry } = {}) {
-  const viewport = validateHwpStudioViewport(viewportReply);
+/** Measures the cyan border drawn by the native studio view, not HTML paint or natural document extent. */
+export function measureHwpNativeMarkerFrame(frame, markerReply, { targetRect, themeGeometry } = {}) {
+  const marker = validateHwpNativeMarkerReply(markerReply);
   assert.ok(targetRect && [targetRect.x, targetRect.y, targetRect.width, targetRect.height]
     .every(Number.isFinite) && targetRect.width > 0 && targetRect.height > 0,
-  "HWP marker measurement requires the visible target card rectangle");
+  "HWP native marker measurement requires the target card rectangle");
   assert.ok(themeGeometry && typeof themeGeometry === "object", "HWP marker measurement requires the active card palette");
   const captureRatio = frame?.scale * frame?.contentScale;
   assert.ok(Number.isFinite(captureRatio) && captureRatio > 0,
     `HWP marker measurement has an invalid capture ratio ${captureRatio}`);
-  const borderPixels = viewport.borderWidth * captureRatio;
-  assert.ok(Number.isSafeInteger(borderPixels), "HWP viewport marker border is not an integral capture-pixel width");
-
-  const cardGeometry = measureViewFrameGeometry(frame,
-    { ...themeGeometry, contentColor: viewport.markerColor, targetRect,
-      colorTolerance: VIEW_GEOMETRY_COLOR_TOLERANCE });
-  const card = cardGeometry.cardRectPx;
-  const bounds = cardGeometry.nativeRectPx;
+  const borderPixels = marker.borderWidthPt * captureRatio;
+  assert.ok(Number.isSafeInteger(borderPixels),
+    "HWP native marker border is not an integral capture-pixel width at this capture scale");
+  const geometry = measureViewFrameGeometry(frame, { ...themeGeometry, contentColor: marker.markerColor,
+    targetRect, colorTolerance: VIEW_GEOMETRY_COLOR_TOLERANCE });
+  const card = geometry.cardRectPx;
+  const bounds = geometry.nativeRectPx;
   const width = bounds.right - bounds.left, height = bounds.bottom - bounds.top;
   assert.ok(Number.isSafeInteger(width) && width > borderPixels * 2
     && Number.isSafeInteger(height) && height > borderPixels * 2,
-  "HWP target card has no complete viewport marker with positive interior area");
+  "HWP target card has no native marker with positive interior area");
   const isMarker = (x, y) => {
     const offset = y * frame.stride + x * 4;
     return frame.data[offset + 3] === 255
-      && [2, 1, 0].every((channel, index) => Math.abs(frame.data[offset + channel] - viewport.markerColor[index])
+      && [2, 1, 0].every((channel, index) => Math.abs(frame.data[offset + channel] - marker.markerColor[index])
         <= VIEW_GEOMETRY_COLOR_TOLERANCE);
   };
-  for (let y = card.top; y < card.bottom; y++) for (let x = card.left; x < card.right; x++) {
-    if (!isMarker(x, y)) continue;
-    const inBounds = x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom;
-    const onBorder = inBounds && (x < bounds.left + borderPixels || x >= bounds.right - borderPixels
-      || y < bounds.top + borderPixels || y >= bounds.bottom - borderPixels);
-    assert.ok(onBorder, "extra marker pixels in the selected card");
+  for (let y = card.top; y < card.bottom; y++) {
+    for (let x = card.left; x < card.right; x++) {
+      const inBounds = x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom;
+      const expectedBorder = inBounds && (x < bounds.left + borderPixels || x >= bounds.right - borderPixels
+        || y < bounds.top + borderPixels || y >= bounds.bottom - borderPixels);
+      if (isMarker(x, y) && !expectedBorder) {
+        throw new Error("HWP native marker has extra cyan pixels in the selected card");
+      }
+      if (expectedBorder && !isMarker(x, y)) {
+        throw new Error("HWP native marker is missing part of its four-edge border");
+      }
+    }
   }
-  for (let y = bounds.top; y < bounds.bottom; y++) for (let x = bounds.left; x < bounds.right; x++) {
-    const actual = isMarker(x, y);
-    const expected = x < bounds.left + borderPixels || x >= bounds.right - borderPixels
-      || y < bounds.top + borderPixels || y >= bounds.bottom - borderPixels;
-    assert.equal(actual, expected, "HWP viewport marker does not contain a complete 2-pixel border on all four edges");
+  return { ...geometry, geometryEvidence: "native region bounds alignment",
+    nativeMarker: { color: [...marker.markerColor], borderWidthPt: marker.borderWidthPt, captureRatio } };
+}
+
+function measureHwpCaptureFrame(frame, frameIndex, markerReply, { targetRect, themeGeometry, slotInsetsPt }) {
+  let geometry;
+  try {
+    geometry = measureHwpNativeMarkerFrame(frame, markerReply, { targetRect, themeGeometry });
+  } catch (error) {
+    throw new Error(`HWP native region pixel measurement failed; HWP frame geometry evidence ${JSON.stringify({
+      frameIndex, timeMs: frame.time, slotInsetsPt, markerColor: markerReply?.markerColor,
+      measurementError: error.message,
+    })}`, { cause: error });
   }
-  const nativeRectPx = { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
-  const originX = frame.content.x * frame.scale, originY = frame.content.y * frame.scale;
-  const nativeRectPt = {
-    left: (bounds.left - originX) / captureRatio,
-    top: (bounds.top - originY) / captureRatio,
-    right: (bounds.right - originX) / captureRatio,
-    bottom: (bounds.bottom - originY) / captureRatio,
-  };
-  return { ...cardGeometry, nativeRectPx, nativeRectPt,
-    geometryEvidence: "marker-assisted viewport geometry",
-    viewportMarker: { color: [...viewport.markerColor], borderWidthCssPx: viewport.borderWidth, captureRatio } };
+  geometry.frameIndex = frameIndex;
+  geometry.timeMs = frame.time;
+  geometry.errorPt = assertHwpFrameMatchesSlot(geometry, slotInsetsPt);
+  return geometry;
+}
+
+function cardTargetRect(grid, cardId) {
+  const card = grid?.cards?.find((item) => item.id === cardId);
+  const plane = grid?.plane;
+  assert.ok(card && plane && [card.x, card.y, card.w, card.h, plane.x, plane.y].every(Number.isFinite)
+    && card.w > 0 && card.h > 0, `HWP measurement card ${cardId} has no finite captured-card target`);
+  return { x: plane.x + card.x, y: plane.y + card.y, width: card.w, height: card.h };
 }
 
 export async function layoutObservation(t, s, descriptor, surface, card, theme, cornerRadiusPt, { recognizeFrame } = {}) {
   const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
     assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
-    const viewport = validateHwpStudioViewport(startReply.studioViewport);
-    const recording = await s.record();
-    const grid = await s.get("core.grid");
-    const pane = grid.cards.find((item) => item.id === card);
-    assert.ok(pane && Number.isFinite(pane.w), `HWP measurement card ${card} has no current width`);
-    const hostBefore = await s.get("host.window");
-    const studioBefore = documentRow(hostBefore, surface, "studio");
-    const baselineClock = await monotonicTimeMs(s);
-    const beforeChangeTimeMs = baselineClock.timeMs;
-    await s.run("core.grid.size", { card, axis: "x", size: pane.w + 80 });
-    const { displayed } = await s.presented();
-    const result = await recording.stop({ after: displayed + LAYOUT_DISPLAY_LIMIT_MS });
-    return { displayed, beforeChangeTimeMs, result, captured: captureFrames(result, "layout"),
-      nativeDocumentBefore: studioBefore.frame, viewport };
+    return withHwpNativeMarker(s, surface, async (marker) => {
+      const recording = await s.record();
+      const grid = await s.get("core.grid");
+      const pane = grid.cards.find((item) => item.id === card);
+      assert.ok(pane && Number.isFinite(pane.w), `HWP measurement card ${card} has no current width`);
+      const hostBefore = await s.get("host.window");
+      const studioBefore = documentRow(hostBefore, surface, "studio");
+      const baselineClock = await monotonicTimeMs(s);
+      const beforeChangeTimeMs = baselineClock.timeMs;
+      await s.run("core.grid.size", { card, axis: "x", size: pane.w + 80 });
+      const { displayed } = await s.presented();
+      const result = await recording.stop({ after: displayed + LAYOUT_DISPLAY_LIMIT_MS });
+      return { displayed, beforeChangeTimeMs, result, captured: captureFrames(result, "layout"),
+        nativeDocumentBefore: studioBefore.frame, marker };
+    });
   });
-  const { beforeChangeTimeMs, displayed, captured, result, nativeDocumentBefore } = traced.action;
+  const { marker, result: action } = traced.action;
+  const { beforeChangeTimeMs, displayed, captured, result, nativeDocumentBefore } = action;
   const host = await s.get("host.window");
   const studio = documentRow(host, surface, "studio");
   const nativePlacement = rootNativePlacementForSource(traced.events, surface, displayed,
@@ -231,12 +295,21 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
   const region = await s.rect("hwp.studio", undefined, surface);
   const slotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
-  const targetRect = { x: studio.frame.x, y: studio.frame.y,
-    width: studio.frame.width, height: studio.frame.height };
-  const viewport = traced.action.viewport;
-  const themeGeometry = hwpThemeGeometry(theme, viewport.markerColor, cornerRadiusPt);
-  const measured = captured.map((frame) => measureHwpViewportMarkerFrame(frame, viewport,
-    { targetRect, themeGeometry }));
+  const targetRect = cardTargetRect(grid, card);
+  const themeGeometry = hwpThemeGeometry(theme, cornerRadiusPt);
+  const measured = captured.map((frame, frameIndex) => {
+    try {
+      const geometry = measureHwpNativeMarkerFrame(frame, marker, { targetRect, themeGeometry });
+      geometry.frameIndex = frameIndex;
+      geometry.timeMs = frame.time;
+      return geometry;
+    } catch (error) {
+      throw new Error(`HWP native region pixel measurement failed; HWP frame geometry evidence ${JSON.stringify({
+        frameIndex, timeMs: frame.time, slotInsetsPt, markerColor: marker.markerColor,
+        measurementError: error.message,
+      })}`, { cause: error });
+    }
+  });
   let transition;
   try {
     transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
@@ -252,10 +325,17 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
     };
     const rows = measured.map((geometry, frameIndex) => {
       const actual = geometry.nativeRectPt;
+      const expectedEdgesPt = {
+        left: geometry.cardRectPt.left + slotInsetsPt.left,
+        top: geometry.cardRectPt.top + slotInsetsPt.top,
+        right: geometry.cardRectPt.right - slotInsetsPt.right,
+        bottom: geometry.cardRectPt.bottom - slotInsetsPt.bottom,
+      };
       const residualPt = Object.fromEntries(["left", "top", "right", "bottom"].map((edge) => [
-        edge, actual[edge] - declaredSlotRectPt[edge],
+        edge, actual[edge] - expectedEdgesPt[edge],
       ]));
-      return { frameIndex, timeMs: captured[frameIndex].time, nativeRectPt: actual, residualPt };
+      return { frameIndex, timeMs: captured[frameIndex].time, actualEdgesPt: actual, expectedEdgesPt,
+        residualPt, slotInsetsPt };
     });
     const afterSource = rows.filter((row) => row.timeMs >= source.timeMs);
     const closest = afterSource.sort((left, right) => Math.max(...Object.values(left.residualPt).map(Math.abs))
@@ -301,9 +381,10 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
     slotInsetsPt,
     initialGeometry: { frameIndex, timeMs: captured[frameIndex].time, cardRectPt: geometry.cardRectPt,
       nativeRectPt: geometry.nativeRectPt, slotInsetsPt, errorPt: initialGeometryErrorPt,
-      geometryEvidence: geometry.geometryEvidence, viewportMarker: geometry.viewportMarker },
-    markerGeometry: { color: [...viewport.markerColor], borderWidthCssPx: viewport.borderWidth,
-      geometryEvidence: "marker-assisted viewport geometry" },
+      geometryEvidence: geometry.geometryEvidence, nativeMarker: geometry.nativeMarker },
+    htmlViewportEvidence: traced.start?.studioViewport,
+    markerGeometry: { color: [...marker.markerColor], borderWidthPt: marker.borderWidthPt,
+      geometryEvidence: "native region bounds alignment" },
     events: traced.events,
     captureDirectory: result.frames,
   };
@@ -324,11 +405,12 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
     framePt: nativeRootBefore.frame };
   const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
     assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
-    const viewport = validateHwpStudioViewport(startReply.studioViewport);
-    return { viewport,
-      run: await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }) };
+    return withHwpNativeMarker(s, surface, async () => ({
+      run: await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }),
+    }));
   });
-  const run = traced.action.run;
+  const { marker, result: action } = traced.action;
+  const run = action.run;
   const captured = captureFrames(run, "drag");
   assert.ok(captured.length > 2, "HWP drag recording contains too few frames");
   const firstGestureFrameIndex = captured.findIndex((frame) => frame.time >= run.ticks[0]);
@@ -337,17 +419,16 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
     "HWP drag capture does not cover the complete requested gesture");
   const host = await s.get("host.window");
   const studio = documentRow(host, surface, "studio");
-  const targetRect = { x: studio.frame.x, y: studio.frame.y,
-    width: studio.frame.width, height: studio.frame.height };
-  const viewport = traced.action.viewport;
-  const themeGeometry = hwpThemeGeometry(theme, viewport.markerColor, cornerRadiusPt);
+  const gridAfter = await s.get("core.grid");
+  const targetRect = cardTargetRect(gridAfter, card);
+  const themeGeometry = hwpThemeGeometry(theme, cornerRadiusPt);
   const geometryFrames = [];
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = measureHwpViewportMarkerFrame(captured[frameIndex], viewport, { targetRect, themeGeometry });
-    const slotErrorPt = assertHwpFrameMatchesSlot(measured, slotInsetsPt);
+    const measured = measureHwpCaptureFrame(captured[frameIndex], frameIndex, marker,
+      { targetRect, themeGeometry, slotInsetsPt });
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt,
-      errorPt: slotErrorPt, geometryEvidence: measured.geometryEvidence, viewportMarker: measured.viewportMarker });
+      errorPt: measured.errorPt, geometryEvidence: measured.geometryEvidence, nativeMarker: measured.nativeMarker });
   }
   const contentFrames = [];
   const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
@@ -370,6 +451,9 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
     geometryFrames,
     contentFrames,
     sourceContentFrames: traced.contentFrames,
+    htmlViewportEvidence: traced.start?.studioViewport,
+    markerGeometry: { color: [...marker.markerColor], borderWidthPt: marker.borderWidthPt,
+      geometryEvidence: "native region bounds alignment" },
     rootSlotInsetsPt,
     layouts: run.layouts,
     ticks: run.ticks,

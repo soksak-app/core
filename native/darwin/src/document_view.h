@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 // A webview that shows an external document in one region of a surface document.
 //
@@ -149,6 +150,11 @@ bool sp_document_go(void *document, int action, int offset);
 // Sets the region by the CSS pixel margins (left, top, right, bottom) of the surface viewport. The margins are kept
 // when the surface size changes.
 void sp_document_place(void *document, double left, double top, double right, double bottom, bool visible);
+#ifdef SOKSAK_DIAGNOSTIC
+// Adds or removes a diagnostic viewport marker on the document view. The marker is a cyan 2-point layer border.
+// All three output pointers are required. On failure, error receives an allocated UTF-8 message for the caller to free.
+bool sp_document_viewport_marker(void *document, bool enabled, uint8_t *rgb3, double *borderWidthPt, char **error);
+#endif
 
 // Writes the region in window coordinates and the visibility {x, y, width, height, visible} to out[0..4].
 void sp_document_frame(void *document, double *out);

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-30: Add a diagnostic cyan 2-point border to the actual native document view and measure captured bounds against the declared slot, without treating it as CSS paint or source-frame evidence. The native owner fails before implementation with `not implemented` and passes 1/1 afterward. A later background-interaction regression fails because marker stop loses background-owned layer backing; the same native owner passes 1/1 after correction. Wails passes 6/6, five Tauri endpoint/diagnostic owners pass 1/1 each, and the latest HWP consumer owner passes 16/16. Application acceptance remains under F212.14-5-5.
+
 - F212.14-5-29: Select one-shot layout source frames from the resize request boundary and exact projected viewport size through a shared helper used by Browser, Editor, HWP and Terminal. The tracked regression fails when the old Editor, HWP and Terminal predicate uses a later placement readback as its time boundary. The corrected owner test passes and reports the request, target and every post-request candidate when no frame matches. Geometry, cadence and display deadlines are unchanged; application acceptance remains under F212.14-5-5.
 
 - F212.14-5-28: Render attached document regions at the display refresh rate, matching plugin roots and the app DOM. Use the existing WebKit preference without coupling region presentation waits to the root transaction. The actual region factory owner fails at preference 1 before correction and passes with root and region both 0; background plugin hosts retain their default. Captured geometry acceptance remains separate.

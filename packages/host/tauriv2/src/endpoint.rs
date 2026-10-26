@@ -92,6 +92,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.page.collect",
     "diagnostics.native.objects",
     "diagnostics.native.window-color-space",
+    "diagnostics.document.viewport-marker",
     "diagnostics.objects",
     "diagnostics.process.exit",
     "diagnostics.memory.pressure",
@@ -1434,5 +1435,14 @@ mod native_window_color_space_declaration_test {
     #[test]
     fn native_window_color_space_method_is_declared() {
         assert!(super::declared("diagnostics.native.window-color-space"));
+    }
+}
+
+#[cfg(all(test, feature = "diagnostics"))]
+mod document_viewport_marker_declaration_test {
+    // contract: diagnostics.document.viewport-marker.is-declared
+    #[test]
+    fn document_viewport_marker_method_is_declared() {
+        assert!(super::declared("diagnostics.document.viewport-marker"));
     }
 }

@@ -48,6 +48,27 @@ pub struct WindowObjects {
     pub input_registrations: i64,
 }
 
+/// The native result of diagnostics.document.viewport-marker.
+#[cfg(feature = "diagnostics")]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DocumentViewportMarker {
+    pub enabled: bool,
+    pub color: [u8; 3],
+    pub border_width_pt: f64,
+}
+
+#[cfg(feature = "diagnostics")]
+impl DocumentViewportMarker {
+    pub fn payload(&self) -> Value {
+        serde_json::json!({
+            "enabled": self.enabled,
+            "kind": "native",
+            "markerColor": self.color,
+            "borderWidthPt": self.border_width_pt,
+        })
+    }
+}
+
 #[cfg(feature = "diagnostics")]
 impl WindowObjects {
     /// The response of diagnostics.native.objects.
@@ -503,6 +524,14 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Sets the document region with the CSS pixel insets of the surface viewport. Call it on the main thread.
     fn place_document(&self, document: Handle, insets: Insets, visible: bool)
     -> Result<(), String>;
+    #[cfg(feature = "diagnostics")]
+    /// Sets the diagnostic marker on an attached native document view. `None` is allowed only for an idempotent stop.
+    /// Returns the marker style reported by the native view. Call it on the main thread.
+    fn document_viewport_marker(
+        &self,
+        document: Option<Handle>,
+        enabled: bool,
+    ) -> Result<DocumentViewportMarker, String>;
     /// Dims the document while a dialog is open. Call it on the main thread.
     fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String>;
     /// Sets the appearance of the native document webview to the current host scheme.

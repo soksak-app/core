@@ -17,6 +17,8 @@ use tauri::webview::PlatformWebview;
 
 use std::time::Duration;
 
+#[cfg(feature = "diagnostics")]
+use super::DocumentViewportMarker;
 use super::{
     Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
     ImagePresentation, Insets, Key, Listener, PersistentStream, Platform, Pointer, Raster,
@@ -395,6 +397,14 @@ impl Platform for Darwin {
     ) -> Result<(), String> {
         document::place(document, insets, visible);
         Ok(())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn document_viewport_marker(
+        &self,
+        document: Option<Handle>,
+        enabled: bool,
+    ) -> Result<DocumentViewportMarker, String> {
+        document::viewport_marker(document, enabled)
     }
     fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String> {
         document::background(document, enabled);

@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // contract: recording.finish.layout-trace-failure-preserves-folder
@@ -258,5 +261,163 @@ func TestInputReferenceMethodIsDeclared(t *testing.T) {
 func TestNativeWindowColorSpaceMethodIsDeclared(t *testing.T) {
 	if diagnosticMethods["diagnostics.native.window-color-space"] == nil {
 		t.Fatal("the diagnostic endpoint has no native window color-space query")
+	}
+}
+
+// contract: diagnostics.document.viewport-marker.is-declared
+func TestDiagnosticViewportMarkerIsDeclared(t *testing.T) {
+	method, ok := diagnosticMethods["diagnostics.document.viewport-marker"]
+	if !ok || method == nil {
+		t.Fatal("diagnostics.document.viewport-marker is not registered")
+	}
+}
+
+type viewportMarkerPlatform struct {
+	platform.Platform
+	document unsafe.Pointer
+	enabled  bool
+	color    [3]uint8
+	width    float64
+	err      error
+	calls    int
+	inUI     func() bool
+}
+
+func (p *viewportMarkerPlatform) SetDocumentViewportMarker(document unsafe.Pointer, enabled bool) ([3]uint8, float64, error) {
+	p.calls++
+	p.document, p.enabled = document, enabled
+	if p.inUI != nil && !p.inUI() {
+		return [3]uint8{}, 0, errors.New("marker called outside UI thread")
+	}
+	return p.color, p.width, p.err
+}
+
+func viewportMarkerEndpoint(t *testing.T, marker *viewportMarkerPlatform, attached bool) (*Endpoint, *Surfaces) {
+	t.Helper()
+	h := &Host{windows: map[uint]*Surfaces{}}
+	s := &Surfaces{name: "window-a", documents: NewDocuments()}
+	h.windows[1] = s
+	if attached {
+		key := DocumentKey{Surface: "surface-a", Name: "document-a"}
+		if err := s.documents.Reserve(key); err != nil {
+			t.Fatal(err)
+		}
+		if !s.documents.Set(key, unsafe.Pointer(uintptr(0x1234))) {
+			t.Fatal("document reservation disappeared")
+		}
+	}
+	onUI := false
+	s.invoke = func(task func()) {
+		onUI = true
+		task()
+		onUI = false
+	}
+	marker.inUI = func() bool { return onUI }
+	oldSystem := system
+	system = marker
+	t.Cleanup(func() { system = oldSystem })
+	return &Endpoint{backend: hostBackend{h: h}}, s
+}
+
+func runViewportMarker(t *testing.T, e *Endpoint, params string) (any, error) {
+	t.Helper()
+	method := diagnosticMethods["diagnostics.document.viewport-marker"]
+	if method == nil {
+		t.Fatal("diagnostics.document.viewport-marker is not registered")
+	}
+	return method(e, nil, json.RawMessage(params))
+}
+
+// contract: diagnostics.document.viewport-marker.validates-owned-region-and-runs-on-ui
+func TestDiagnosticViewportMarkerValidatesAndRunsOnUI(t *testing.T) {
+	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
+	e, _ := viewportMarkerEndpoint(t, marker, true)
+	result, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":true}`)
+	if err != nil {
+		t.Fatalf("diagnostics.document.viewport-marker: %v", err)
+	}
+	if marker.calls != 1 || marker.document != unsafe.Pointer(uintptr(0x1234)) || !marker.enabled {
+		t.Fatalf("native request = calls:%d document:%p enabled:%t", marker.calls, marker.document, marker.enabled)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["enabled"] != true || got["kind"] != "native" || got["borderWidthPt"] != float64(2) {
+		t.Fatalf("reply = %s", encoded)
+	}
+	color, ok := got["markerColor"].([]any)
+	if !ok || len(color) != 3 || color[0] != float64(0) || color[1] != float64(255) || color[2] != float64(255) {
+		t.Fatalf("markerColor = %#v", got["markerColor"])
+	}
+}
+
+// contract: diagnostics.document.viewport-marker.rejects-invalid-and-unowned-targets
+func TestDiagnosticViewportMarkerRejectsInvalidAndUnownedTargets(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		params string
+	}{
+		{"missing window", `{"surface":"surface-a","document":"document-a","enabled":true}`},
+		{"empty surface", `{"window":"window-a","surface":"","document":"document-a","enabled":true}`},
+		{"empty document", `{"window":"window-a","surface":"surface-a","document":"","enabled":true}`},
+		{"missing enabled", `{"window":"window-a","surface":"surface-a","document":"document-a"}`},
+		{"null enabled", `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":null}`},
+		{"string enabled", `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":"true"}`},
+		{"unowned surface", `{"window":"window-a","surface":"surface-b","document":"document-a","enabled":true}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
+			e, _ := viewportMarkerEndpoint(t, marker, true)
+			if _, err := runViewportMarker(t, e, test.params); err == nil {
+				t.Fatalf("accepted invalid request %s", test.params)
+			}
+			if marker.calls != 0 {
+				t.Fatalf("native marker called %d times for invalid request", marker.calls)
+			}
+		})
+	}
+}
+
+// contract: diagnostics.document.viewport-marker.requires-existing-region-to-start
+func TestDiagnosticViewportMarkerStartRequiresAttachedRegion(t *testing.T) {
+	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
+	e, _ := viewportMarkerEndpoint(t, marker, false)
+	_, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":true}`)
+	if err == nil || !strings.Contains(err.Error(), "not attached") {
+		t.Fatalf("start without region error = %v", err)
+	}
+	if marker.calls != 0 {
+		t.Fatalf("native marker called %d times for missing region", marker.calls)
+	}
+}
+
+// contract: diagnostics.document.viewport-marker.stop-is-idempotent-after-region-removal
+func TestDiagnosticViewportMarkerStopAfterRegionRemoval(t *testing.T) {
+	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
+	e, _ := viewportMarkerEndpoint(t, marker, false)
+	result, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":false}`)
+	if err != nil {
+		t.Fatalf("stop after region removal: %v", err)
+	}
+	if marker.calls != 1 || marker.document != nil || marker.enabled {
+		t.Fatalf("native stop = calls:%d document:%p enabled:%t", marker.calls, marker.document, marker.enabled)
+	}
+	if result == nil {
+		t.Fatal("stop after region removal returned no metadata")
+	}
+}
+
+// contract: diagnostics.document.viewport-marker.propagates-native-failures
+func TestDiagnosticViewportMarkerPropagatesNativeFailure(t *testing.T) {
+	marker := &viewportMarkerPlatform{err: errors.New("native marker failed")}
+	e, _ := viewportMarkerEndpoint(t, marker, true)
+	_, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":true}`)
+	if err == nil || err.Error() != "native marker failed" {
+		t.Fatalf("native error = %v", err)
 	}
 }

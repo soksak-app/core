@@ -70,6 +70,7 @@ func init() {
 	diagnosticMethods["diagnostics.memory.pressure"] = diagnosticMemoryPressure
 	diagnosticMethods["diagnostics.page.request"] = diagnosticPageMethod("diagnostics.page.request")
 	diagnosticMethods["diagnostics.page.calls"] = diagnosticPageMethod("diagnostics.page.calls")
+	diagnosticMethods["diagnostics.document.viewport-marker"] = diagnosticDocumentViewportMarker
 	diagnosticMethods["diagnostics.host.events"] = diagnosticHostEvents
 	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
 	diagnosticMethods["diagnostics.surface.held"] = diagnosticPageMethod("diagnostics.surface.held")
@@ -80,6 +81,67 @@ func init() {
 	transcribe = func(e *Endpoint, window, line string) {
 		e.publish(topic{window, logTopic, ""}, "diagnostics.log", map[string]any{"window": window, "line": line})
 	}
+}
+
+// documentViewportMarkerPlatform is implemented only by platforms that expose the diagnostic native viewport marker.
+type documentViewportMarkerPlatform interface {
+	SetDocumentViewportMarker(document unsafe.Pointer, enabled bool) (color [3]uint8, borderWidthPt float64, err error)
+}
+
+func diagnosticDocumentViewportMarker(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	var request struct {
+		Window   *string `json:"window"`
+		Surface  *string `json:"surface"`
+		Document *string `json:"document"`
+		Enabled  *bool   `json:"enabled"`
+	}
+	if err := decode(params, &request); err != nil {
+		return nil, err
+	}
+	if request.Surface == nil || *request.Surface == "" {
+		return nil, rpcError(codeInvalidParams, "surface is required and must be non-empty")
+	}
+	if request.Document == nil || *request.Document == "" {
+		return nil, rpcError(codeInvalidParams, "document is required and must be non-empty")
+	}
+	if request.Enabled == nil {
+		return nil, rpcError(codeInvalidParams, "enabled is required and must be a boolean")
+	}
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	marker, ok := system.(documentViewportMarkerPlatform)
+	if !ok {
+		return nil, errors.New("native document viewport marker is unavailable on this platform")
+	}
+	if s.invoke == nil {
+		return nil, errors.New("document viewport marker has no UI-thread dispatcher")
+	}
+	var color [3]uint8
+	var borderWidthPt float64
+	var markerErr error
+	key := DocumentKey{Surface: *request.Surface, Name: *request.Document}
+	s.invoke(func() {
+		document, getErr := s.documents.Get(key)
+		if getErr != nil {
+			if *request.Enabled {
+				markerErr = getErr
+				return
+			}
+			document = nil
+		}
+		color, borderWidthPt, markerErr = marker.SetDocumentViewportMarker(document, *request.Enabled)
+	})
+	if markerErr != nil {
+		return nil, markerErr
+	}
+	return struct {
+		Enabled       bool     `json:"enabled"`
+		Kind          string   `json:"kind"`
+		MarkerColor   [3]uint8 `json:"markerColor"`
+		BorderWidthPt float64  `json:"borderWidthPt"`
+	}{Enabled: *request.Enabled, Kind: "native", MarkerColor: color, BorderWidthPt: borderWidthPt}, nil
 }
 
 func diagnosticClock(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {

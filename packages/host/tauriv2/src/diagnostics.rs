@@ -19,12 +19,14 @@ use serde_json::{Map, Value, json};
 use tauri::{Emitter, EventTarget, Manager, Window};
 
 use crate::application_log::log_error;
+use crate::documents::Documents;
 use crate::endpoint::Failure;
 use crate::exposure::{self, Exposure, Host, TIMEOUT, on_main};
 use crate::object_counts::{
     DocumentObjects, HostObjects, ObjectCounter, ObjectCounts, PageObjects,
 };
 use crate::platform;
+use crate::platform::{DocumentViewportMarker, Handle};
 use crate::recording::{Capture, Recording, Target, layout_trace};
 use crate::workspace::Workspace;
 
@@ -84,6 +86,7 @@ pub(crate) fn call(
     match method {
         "diagnostics.fixture" => fixture(host, window, params),
         "diagnostics.drag" => drag(host, window, params),
+        "diagnostics.document.viewport-marker" => document_viewport_marker(window, &params),
         "diagnostics.capture.start" => {
             let options = parse_capture_start_options(&params)?;
             let display = options.display;
@@ -177,6 +180,86 @@ pub(crate) fn call(
             format!("{method} is not a diagnostic method"),
         )),
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DocumentViewportMarkerRequest {
+    surface: String,
+    document: String,
+    enabled: bool,
+}
+
+fn parse_document_viewport_marker_request(
+    params: &Map<String, Value>,
+) -> Result<DocumentViewportMarkerRequest, Failure> {
+    let text = |name: &str| {
+        params
+            .get(name)
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+            .ok_or_else(|| Failure::params(format!("{name} must be a non-empty string")))
+    };
+    let enabled = params
+        .get("enabled")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| Failure::params("enabled must be a boolean"))?;
+    Ok(DocumentViewportMarkerRequest {
+        surface: text("surface")?,
+        document: text("document")?,
+        enabled,
+    })
+}
+
+fn resolve_document_viewport_marker_handle(
+    documents: &Documents,
+    request: &DocumentViewportMarkerRequest,
+) -> Result<Option<Handle>, String> {
+    let key = (request.surface.clone(), request.document.clone());
+    let document = documents
+        .attached()
+        .into_iter()
+        .find_map(|(attached, handle)| (attached == key).then_some(handle));
+    match (document, request.enabled) {
+        (Some(handle), _) => Ok(Some(handle)),
+        (None, false) => Ok(None),
+        (None, true) => Err(format!(
+            "document {:?} is not attached to surface {:?} in this window",
+            request.document, request.surface
+        )),
+    }
+}
+
+type DocumentViewportMarkerWork =
+    Box<dyn FnOnce() -> Result<DocumentViewportMarker, String> + Send>;
+
+fn dispatch_document_viewport_marker(
+    request: DocumentViewportMarkerRequest,
+    schedule: impl FnOnce(DocumentViewportMarkerWork) -> Result<DocumentViewportMarker, String>,
+    apply: impl FnOnce(DocumentViewportMarkerRequest) -> Result<DocumentViewportMarker, String>
+    + Send
+    + 'static,
+) -> Result<Value, Failure> {
+    let result = schedule(Box::new(move || apply(request))).map_err(internal)?;
+    Ok(result.payload())
+}
+
+fn document_viewport_marker(
+    window: &Window,
+    params: &Map<String, Value>,
+) -> Result<Value, Failure> {
+    let request = parse_document_viewport_marker_request(params)?;
+    let scheduled_window = window.clone();
+    let operation_window = window.clone();
+    dispatch_document_viewport_marker(
+        request,
+        move |work| on_main(&scheduled_window, work),
+        move |request| {
+            let data = crate::windows::window_data(&operation_window)?;
+            let document = resolve_document_viewport_marker_handle(&data.documents, &request)?;
+            platform::current()?.document_viewport_marker(document, request.enabled)
+        },
+    )
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -1124,6 +1207,135 @@ mod drag_capture_options_test {
                 "params {params}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod document_viewport_marker_test {
+    use super::*;
+
+    fn params(value: Value) -> Map<String, Value> {
+        value.as_object().unwrap().clone()
+    }
+
+    fn request(enabled: bool) -> DocumentViewportMarkerRequest {
+        DocumentViewportMarkerRequest {
+            surface: "surface-a".into(),
+            document: "page".into(),
+            enabled,
+        }
+    }
+
+    fn marker(enabled: bool) -> DocumentViewportMarker {
+        DocumentViewportMarker {
+            enabled,
+            color: [0, 255, 255],
+            border_width_pt: 2.0,
+        }
+    }
+
+    // contract: diagnostics.document.viewport-marker.requires-valid-parameters
+    #[test]
+    fn document_viewport_marker_requires_nonempty_names_and_a_boolean() {
+        for (value, expected) in [
+            (
+                json!({"surface":"surface-a","document":"page","enabled":true}),
+                true,
+            ),
+            (
+                json!({"surface":"surface-a","document":"page","enabled":false}),
+                false,
+            ),
+        ] {
+            assert_eq!(
+                parse_document_viewport_marker_request(&params(value))
+                    .unwrap()
+                    .enabled,
+                expected
+            );
+        }
+        for value in [
+            json!({"document":"page","enabled":true}),
+            json!({"surface":"","document":"page","enabled":true}),
+            json!({"surface":"surface-a","document":"","enabled":true}),
+            json!({"surface":"surface-a","document":"page"}),
+            json!({"surface":"surface-a","document":"page","enabled":null}),
+            json!({"surface":"surface-a","document":"page","enabled":"true"}),
+        ] {
+            assert!(
+                parse_document_viewport_marker_request(&params(value.clone())).is_err(),
+                "invalid params unexpectedly parsed: {value}"
+            );
+        }
+    }
+
+    // contract: diagnostics.document.viewport-marker.uses-the-owning-window-document
+    #[test]
+    fn document_viewport_marker_resolves_only_attached_documents_in_the_window() {
+        let owner = Documents::default();
+        let other_window = Documents::default();
+        let key = ("surface-a".into(), "page".into());
+        owner.reserve(&key).unwrap();
+        assert!(owner.set(&key, 23));
+        assert_eq!(
+            resolve_document_viewport_marker_handle(&owner, &request(true)).unwrap(),
+            Some(23)
+        );
+        assert!(resolve_document_viewport_marker_handle(&other_window, &request(true)).is_err());
+        assert_eq!(
+            resolve_document_viewport_marker_handle(&other_window, &request(false)).unwrap(),
+            None,
+            "stopping after the region was removed must be idempotent"
+        );
+        let wrong_surface = DocumentViewportMarkerRequest {
+            surface: "surface-b".into(),
+            ..request(true)
+        };
+        assert!(resolve_document_viewport_marker_handle(&owner, &wrong_surface).is_err());
+    }
+
+    // contract: diagnostics.document.viewport-marker.schedules-native-work-and-returns-native-result
+    #[test]
+    fn document_viewport_marker_runs_through_ui_dispatch_and_preserves_native_result() {
+        let mut scheduled_on_ui = false;
+        let result = dispatch_document_viewport_marker(
+            request(true),
+            |work| {
+                scheduled_on_ui = true;
+                work()
+            },
+            |request| {
+                assert_eq!(request, super::document_viewport_marker_test::request(true));
+                Ok(marker(request.enabled))
+            },
+        )
+        .unwrap();
+        assert!(
+            scheduled_on_ui,
+            "native marker work bypassed the UI dispatcher"
+        );
+        assert_eq!(
+            result,
+            json!({
+                "enabled": true,
+                "kind": "native",
+                "markerColor": [0, 255, 255],
+                "borderWidthPt": 2.0,
+            })
+        );
+    }
+
+    // contract: diagnostics.document.viewport-marker.reports-native-errors
+    #[test]
+    fn document_viewport_marker_returns_native_errors() {
+        let error = dispatch_document_viewport_marker(
+            request(false),
+            |work| work(),
+            |_| Err("native marker failure".into()),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, -32603);
+        assert_eq!(error.message, "native marker failure");
     }
 }
 

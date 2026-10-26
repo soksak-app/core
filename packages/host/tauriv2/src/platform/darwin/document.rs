@@ -7,6 +7,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use super::super::{CoreRootResolver, Handle, Insets};
 use crate::application_log::log_error;
 
+#[cfg(feature = "diagnostics")]
+use super::super::DocumentViewportMarker;
+
 type Changed = extern "C" fn(*mut c_void, *const c_char);
 type Event = extern "C" fn(*mut c_void, *const c_char);
 type Ended = extern "C" fn(*mut c_void);
@@ -21,6 +24,14 @@ type CoreRoot = extern "C" fn(
 ) -> bool;
 
 unsafe extern "C" {
+    #[cfg(feature = "diagnostics")]
+    fn sp_document_viewport_marker(
+        document: *mut c_void,
+        enabled: bool,
+        rgb3: *mut u8,
+        border_width_pt: *mut f64,
+        error: *mut *mut c_char,
+    ) -> bool;
     fn sp_document_create(
         surface: *mut c_void,
         store: *const c_char,
@@ -82,6 +93,47 @@ unsafe extern "C" {
     fn sp_document_interaction_state(document: *mut c_void) -> *mut c_char;
     fn sp_document_restore(document: *mut c_void, state: *const c_char) -> *const c_char;
     fn free(pointer: *mut c_void);
+}
+
+/// Sets or removes the viewport marker on the native document view. Call it on the main thread.
+#[cfg(feature = "diagnostics")]
+pub fn viewport_marker(
+    document: Option<Handle>,
+    enabled: bool,
+) -> Result<DocumentViewportMarker, String> {
+    let document = document.map_or(std::ptr::null_mut(), |handle| handle as *mut c_void);
+    let mut color = [0_u8; 3];
+    let mut border_width_pt = 0.0;
+    let mut error = std::ptr::null_mut();
+    let succeeded = unsafe {
+        sp_document_viewport_marker(
+            document,
+            enabled,
+            color.as_mut_ptr(),
+            &mut border_width_pt,
+            &mut error,
+        )
+    };
+    if !error.is_null() {
+        let message = unsafe { CStr::from_ptr(error) }.to_bytes().to_vec();
+        unsafe { free(error.cast()) };
+        let message = String::from_utf8(message)
+            .map_err(|invalid| format!("document viewport marker error is not UTF-8: {invalid}"))?;
+        return Err(format!("document viewport marker failed: {message}"));
+    }
+    if !succeeded {
+        return Err("document viewport marker failed without a native error".into());
+    }
+    if !border_width_pt.is_finite() || border_width_pt <= 0.0 {
+        return Err(format!(
+            "document viewport marker returned an invalid border width: {border_width_pt}"
+        ));
+    }
+    Ok(DocumentViewportMarker {
+        enabled,
+        color,
+        border_width_pt,
+    })
 }
 
 /// The state receiver of each document handle. It is used only on the main thread.

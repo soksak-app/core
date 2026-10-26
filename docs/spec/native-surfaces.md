@@ -365,3 +365,5 @@ Native presentation validation currently targets macOS. Windows and Linux behavi
 Image region tokens on macOS consist of a global IOSurface identifier and a 16-byte nonce attached to that surface. When the host receives an image, it looks up the surface by identifier and rejects the image if the nonce does not match. This guards against reuse of recycled 32-bit identifiers.
 
 IOSurface identifiers are in the global namespace of the user who owns the process. Different processes of the same user can look up and open the surface; this trust boundary is the same as the endpoint socket used for sidecar communication.
+
+Diagnostic viewport markers use the actual attached document view layer, with a cyan 2 pt border drawn inside its bounds. They inherit clipping, visibility and transforms, disable implicit animation, preserve frame geometry and input, and restore prior border style on stop or disposal. They exist only in diagnostic builds and never couple document-region paint to root presentation waits. Native border pixels prove native region bounds; HTML viewport paint and natural-content extent remain separate observations.

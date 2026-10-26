@@ -8,7 +8,10 @@
 #import <Cocoa/Cocoa.h>
 #import <CommonCrypto/CommonDigest.h>
 #import <CoreImage/CoreImage.h>
+#import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
+#include <stdlib.h>
+#include <string.h>
 #import "application_log.h"
 #import "document_upload_body.h"
 #import "document_view.h"
@@ -347,6 +350,13 @@ static BOOL isBinaryIdentifier(NSString *text) {
 @property(retain) SPHiddenDelay *hiddenDelay;
 // The frame documents with a form flag, by the identifier that the form script of each frame document generates.
 @property(retain) NSMutableSet<NSString *> *formFrames;
+#ifdef SOKSAK_DIAGNOSTIC
+@property BOOL viewportMarkerEnabled;
+@property BOOL viewportMarkerOriginalWantsLayer;
+@property CGFloat viewportMarkerOriginalBorderWidth;
+@property CGColorRef viewportMarkerOriginalBorderColor;
+- (void)restoreViewportMarker;
+#endif
 - (void)clearBackForwardCache:(NSString *)reason;
 - (void)stopHiddenTimer;
 - (void)report;
@@ -668,7 +678,30 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
 
 @implementation SPDocumentView
 
+#ifdef SOKSAK_DIAGNOSTIC
+- (void)restoreViewportMarker {
+    if (!self.viewportMarkerEnabled) return;
+    CALayer *layer = self.layer;
+    if (layer) {
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        layer.borderColor = self.viewportMarkerOriginalBorderColor;
+        layer.borderWidth = self.viewportMarkerOriginalBorderWidth;
+        [CATransaction commit];
+    }
+    if (!self.viewportMarkerOriginalWantsLayer) self.wantsLayer = NO;
+    if (self.viewportMarkerOriginalBorderColor) {
+        CGColorRelease(self.viewportMarkerOriginalBorderColor);
+        self.viewportMarkerOriginalBorderColor = NULL;
+    }
+    self.viewportMarkerEnabled = NO;
+}
+#endif
+
 - (void)dealloc {
+#ifdef SOKSAK_DIAGNOSTIC
+    [self restoreViewportMarker];
+#endif
     [_formFrames release];
     [_scroll release];
     [_failure release];
@@ -1536,9 +1569,78 @@ bool sp_document_zoom(void *document, double zoom) {
     return true;
 }
 
+#ifdef SOKSAK_DIAGNOSTIC
+static void documentViewportMarkerError(char **error, const char *message) {
+    if (error) *error = strdup(message);
+}
+
+bool sp_document_viewport_marker(void *document, bool enabled, uint8_t *rgb3, double *borderWidthPt, char **error) {
+    NSCAssert(NSThread.isMainThread, @"document viewport markers require the UI thread");
+    if (error) *error = NULL;
+    if (!error) return false;
+    if (!rgb3 || !borderWidthPt) {
+        documentViewportMarkerError(error, "viewport marker metadata outputs are required");
+        return false;
+    }
+    rgb3[0] = 0;
+    rgb3[1] = 255;
+    rgb3[2] = 255;
+    *borderWidthPt = 2;
+    if (!document && !enabled) return true;
+    if (!document) {
+        documentViewportMarkerError(error, "the document view is required to enable the viewport marker");
+        return false;
+    }
+
+    SPDocumentView *view = (SPDocumentView *)document;
+    if (view.closed) {
+        documentViewportMarkerError(error, "the document view is closed");
+        return false;
+    }
+    if (!enabled) {
+        [view restoreViewportMarker];
+        return true;
+    }
+    if (view.viewportMarkerEnabled) return true;
+
+    view.viewportMarkerOriginalWantsLayer = view.wantsLayer;
+    CALayer *layer = view.layer;
+    view.viewportMarkerOriginalBorderWidth = layer ? layer.borderWidth : 0;
+    view.viewportMarkerOriginalBorderColor = layer && layer.borderColor ? CGColorRetain(layer.borderColor) : NULL;
+    view.viewportMarkerEnabled = YES;
+    if (!view.wantsLayer) view.wantsLayer = YES;
+    layer = view.layer;
+    if (!layer) {
+        [view restoreViewportMarker];
+        documentViewportMarkerError(error, "the document view cannot create a marker layer");
+        return false;
+    }
+
+    CGColorRef cyan = CGColorCreateGenericRGB(0, 1, 1, 1);
+    if (!cyan) {
+        [view restoreViewportMarker];
+        documentViewportMarkerError(error, "the cyan viewport marker color cannot be created");
+        return false;
+    }
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    layer.borderColor = cyan;
+    layer.borderWidth = 2;
+    [CATransaction commit];
+    CGColorRelease(cyan);
+    return true;
+}
+#endif
+
 void sp_document_background(void *handle, bool enabled) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     NSView *view = (NSView *)handle;
+#ifdef SOKSAK_DIAGNOSTIC
+    if ([view isKindOfClass:SPDocumentView.class]) {
+        SPDocumentView *document = (SPDocumentView *)view;
+        if (document.viewportMarkerEnabled) document.viewportMarkerOriginalWantsLayer = YES;
+    }
+#endif
     view.wantsLayer = YES;
     view.layerUsesCoreImageFilters = YES;
     if (!enabled) {
@@ -1562,6 +1664,9 @@ void sp_document_appearance(void *handle, bool dark) {
 void sp_document_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
+#ifdef SOKSAK_DIAGNOSTIC
+    [view restoreViewportMarker];
+#endif
     view.closed = YES;
     [view.binaries releaseAll];
     view.binaries = nil;

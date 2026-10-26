@@ -365,3 +365,5 @@ Review는 glyph 획이 cell 아래쪽까지 내려올 수 있고 cursor color는
 macOS 그림 영역의 토큰은 전역 IOSurface 식별자와 그 표면에 붙인 16바이트 논스로 이루어진다. 호스트가 그림을 받으면 식별자로 표면을 조회하고, 논스가 일치하지 않으면 거절한다. 이는 재사용된 32비트 식별자를 방지한다.
 
 IOSurface 식별자는 프로세스 소유자의 전역 사용자 네임스페이스에 있다. 같은 사용자의 다른 프로세스도 표면을 조회해 열 수 있다. 이 신뢰 경계는 사이드카 통신에 쓰는 엔드포인트 소켓과 같다.
+
+Diagnostic viewport marker는 실제 attached document view layer의 bounds 안에 cyan 2 pt border를 그린다. Clipping, visibility 및 transform을 따르고 implicit animation을 끄며 frame geometry와 input을 유지하고 stop 또는 dispose 시 이전 border style을 복원한다. Diagnostic build에서만 존재하며 document-region paint를 root presentation 대기에 결합하지 않는다. Native border pixel은 native region bounds를 입증하고 HTML viewport paint와 자연 content 범위는 별도 관측으로 유지한다.

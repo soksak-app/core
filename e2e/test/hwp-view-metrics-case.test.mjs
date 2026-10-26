@@ -14,9 +14,10 @@ import { viewProcessPids } from "../view-process-footprint.mjs";
 
 const geometryColors = { content: [30, 30, 30], card: [25, 27, 36], plane: [16, 17, 23], border: [43, 46, 61] };
 const viewportMarker = [255, 0, 255];
+const nativeMarker = [0, 255, 255];
 
 function viewportMarkerFrame({ scale = 1, missing = null, secondMarker = false, overdraw = false,
-  markerWidthCss = 60, cardRight = 110, markerShift = 0 } = {}) {
+  markerWidthCss = 60, markerTop = 35, cardRight = 110, markerShift = 0, markerColor = viewportMarker } = {}) {
   const width = 240 * scale, height = 160 * scale, stride = width * 4;
   const data = new Uint8Array(stride * height);
   const paint = (x, y, color) => {
@@ -37,7 +38,7 @@ function viewportMarkerFrame({ scale = 1, missing = null, secondMarker = false, 
   }
   const drawMarker = (left, top, right, bottom, missingSide = null) => {
     const thickness = 2 * scale;
-    const renderedMarker = [viewportMarker[0], viewportMarker[1] + markerShift, viewportMarker[2] - markerShift];
+    const renderedMarker = [markerColor[0], markerColor[1] - markerShift, markerColor[2] - markerShift];
     for (let y = top * scale; y < bottom * scale; y++) for (let x = left * scale; x < right * scale; x++) {
       const edge = x < left * scale + thickness || x >= right * scale - thickness
         || y < top * scale + thickness || y >= bottom * scale - thickness;
@@ -53,20 +54,15 @@ function viewportMarkerFrame({ scale = 1, missing = null, secondMarker = false, 
       if (!onMissing) paint(x, y, renderedMarker);
     }
   };
-  drawMarker(30, 35, 30 + markerWidthCss, 130, missing);
-  if (secondMarker) drawMarker(secondCardLeft + 20, 35, secondCardLeft + 80, 130);
+  drawMarker(30, markerTop, 30 + markerWidthCss, 130, missing);
+  if (secondMarker) drawMarker(secondCardLeft + 20, markerTop, secondCardLeft + 80, 130);
   if (overdraw) paint(45 * scale, 80 * scale,
-    [viewportMarker[0], viewportMarker[1] + markerShift, viewportMarker[2] - markerShift]);
+    [markerColor[0], markerColor[1] - markerShift, markerColor[2] - markerShift]);
   return { width, height, stride, data, scale, contentScale: 1, content: { x: 0, y: 0 }, time: 100 };
 }
 
-function viewportMarkerDeclaration() {
-  return { markerColor: viewportMarker, borderWidth: 2,
-    rect: { left: 0, top: 0, right: 60, bottom: 95 }, innerWidth: 60, innerHeight: 95,
-    clientWidth: 60, clientHeight: 95,
-    visualViewport: { width: 60, height: 95, offsetLeft: 0, offsetTop: 0, scale: 1 },
-    fixedContainingBlock: { transform: "none", perspective: "none", filter: "none", contain: "none",
-      willChange: "auto", containerType: "normal" } };
+function nativeMarkerDeclaration(enabled = true) {
+  return { enabled, kind: "native", markerColor: nativeMarker, borderWidthPt: 2 };
 }
 
 function writeLayoutFrame(directory, index, time, cardRight) {
@@ -87,7 +83,7 @@ function writeLayoutFrame(directory, index, time, cardRight) {
   for (let y = 11; y < 18; y++) for (let x = 14; x < 86; x++) paint(x, y, geometryColors.content);
   const markerRight = cardRight - 6;
   for (let y = 20; y < 62; y++) for (let x = 14; x < markerRight; x++) {
-    if (x < 16 || x >= markerRight - 2 || y < 22 || y >= 60) paint(x, y, viewportMarker);
+    if (x < 16 || x >= markerRight - 2 || y < 22 || y >= 60) paint(x, y, nativeMarker);
   }
   let remaining = pixels.length - 15;
   const encoded = [Buffer.from([0xf0])];
@@ -106,6 +102,7 @@ function writeLayoutFrame(directory, index, time, cardRight) {
 }
 
 function layoutFailureSession(root, captureDirectory) {
+  const sequence = [];
   const logs = join(root, "logs");
   mkdirSync(logs);
   mkdirSync(captureDirectory);
@@ -121,8 +118,12 @@ function layoutFailureSession(root, captureDirectory) {
   ] };
   const session = {
     app: { configDir: root },
+    sequence,
+    cleanups: [],
+    cleanup(callback) { this.cleanups.push(callback); },
     stopAfter: undefined,
-    async record() { return { async stop(options) {
+    async record() { sequence.push("record-start"); return { async stop(options) {
+      sequence.push("record-stop");
       session.stopAfter = options?.after;
       return { frames: captureDirectory, count: 2, limited: false };
     } }; },
@@ -132,7 +133,13 @@ function layoutFailureSession(root, captureDirectory) {
       if (name === "core.surfaces") return surfaces;
       assert.fail(`unexpected session read ${name}`);
     },
-    async request(name) { assert.equal(name, "diagnostics.clock"); return { mono_ns: "10000000" }; },
+    async request(name, params = {}) {
+      if (name === "diagnostics.clock") return { mono_ns: "10000000" };
+      assert.equal(name, "diagnostics.document.viewport-marker");
+      assert.deepEqual(params, { surface: "view-a", document: "studio", enabled: params.enabled });
+      sequence.push(params.enabled);
+      return nativeMarkerDeclaration(params.enabled);
+    },
     async run(name) {
       assert.equal(name, "core.grid.size");
       const placement = { level: "debug", seq: 1, event: "host.trace.surface", ts_us: 10050, mono_ns: 10050000,
@@ -184,6 +191,8 @@ function layoutDeadlineSession(root, captureDirectory, lastFrameTimeMs) {
   let hostReads = 0;
   const session = {
     app: { configDir: root },
+    cleanups: [],
+    cleanup(callback) { this.cleanups.push(callback); },
     stopAfter: undefined,
     async record() { return { async stop(options) {
       session.stopAfter = options?.after;
@@ -195,7 +204,12 @@ function layoutDeadlineSession(root, captureDirectory, lastFrameTimeMs) {
       if (name === "core.surfaces") return [{ surface: "view-a", declared: surfaceRect(85), applied: surfaceRect(85) }];
       assert.fail(`unexpected session read ${name}`);
     },
-    async request(name) { assert.equal(name, "diagnostics.clock"); return { mono_ns: "10000000" }; },
+    async request(name, params = {}) {
+      if (name === "diagnostics.clock") return { mono_ns: "10000000" };
+      assert.equal(name, "diagnostics.document.viewport-marker");
+      assert.deepEqual(params, { surface: "view-a", document: "studio", enabled: params.enabled });
+      return nativeMarkerDeclaration(params.enabled);
+    },
     async run(name) {
       assert.equal(name, "core.grid.size");
       const placement = { level: "debug", seq: 1, event: "host.trace.surface", ts_us: 10050, mono_ns: 10050000,
@@ -237,6 +251,9 @@ test("HWP unmatched layout geometry reports captured native document frames", { 
     assert.match(error.cause.message, /no changed frame matching the new declared slot/);
     return true;
   });
+  for (const cleanup of session.cleanups) await cleanup();
+  assert.deepEqual(session.sequence, [true, "record-start", "record-stop", false],
+    "native marker must bracket the capture and stop after recording finalizes");
 });
 
 test("HWP layout recording covers the full display deadline after presentation", { timeout: 5000 }, async (t) => {
@@ -378,44 +395,125 @@ test("HWP geometry compares measured studio edges with the declared slot insets"
     nativeRectPt: { left: 8, top: 6, right: 92, bottom: 74 },
   };
   assert.equal(assertHwpFrameMatchesSlot(geometry, { left: 8, top: 6, right: 8, bottom: 6 }), 0);
-  assert.throws(() => assertHwpFrameMatchesSlot({ ...geometry,
-    nativeRectPt: { ...geometry.nativeRectPt, right: 88 } }, { left: 8, top: 6, right: 8, bottom: 6 }), /differs from its declared slot/);
+  assert.throws(() => assertHwpFrameMatchesSlot({ ...geometry, frameIndex: 7, timeMs: 12,
+    nativeRectPt: { ...geometry.nativeRectPt, right: 88 } }, { left: 8, top: 6, right: 8, bottom: 6 }), (error) => {
+    assert.match(error.message, /differ from the declared slot/);
+    const evidence = JSON.parse(error.message.slice(error.message.indexOf("HWP frame geometry evidence ")
+      + "HWP frame geometry evidence ".length));
+    assert.equal(evidence.frameIndex, 7);
+    assert.equal(evidence.timeMs, 12);
+    assert.equal(evidence.actualEdgesPt.right, 88);
+    assert.equal(evidence.expectedEdgesPt.right, 92);
+    assert.deepEqual(evidence.slotInsetsPt, { left: 8, top: 6, right: 8, bottom: 6 });
+    return true;
+  });
 });
 
-test("HWP marker measurement requires a complete four-edge border", { timeout: 5000 }, () => {
-  assert.equal(typeof hwpCase.measureHwpViewportMarkerFrame, "function",
-    "HWP marker-assisted viewport geometry consumer is required");
-  const themeGeometry = { contentColor: geometryColors.content, cardColor: geometryColors.card,
-    planeColor: geometryColors.plane, borderColors: [geometryColors.border], cornerRadiusPt: 0 };
-  const targetRect = { x: 30, y: 35, width: 60, height: 95 };
-  const measure = (frame) => hwpCase.measureHwpViewportMarkerFrame(frame,
-    viewportMarkerDeclaration(), { targetRect, themeGeometry });
-  const slotInsetsPt = { left: 20, top: 25, right: 20, bottom: 20 };
-  const oneToOne = measure(viewportMarkerFrame());
-  assert.deepEqual(oneToOne.nativeRectPt, { left: 30, top: 35, right: 90, bottom: 130 });
-  assert.equal(assertHwpFrameMatchesSlot(oneToOne, slotInsetsPt), 0);
-  assert.deepEqual(measure(viewportMarkerFrame({ markerShift: 1 })).nativeRectPt, oneToOne.nativeRectPt,
-    "the shared four-channel tolerance must apply to every marker pixel predicate");
-  assert.throws(() => measure(viewportMarkerFrame({ markerShift: 5 })), /no opaque content-color pixels/,
-    "marker matching must stop at the shared four-channel tolerance");
+test("HWP native viewport marker measures native studio bounds at fixed and fractional capture scales", { timeout: 5000 }, () => {
+  const themeGeometry = { cardColor: geometryColors.card, planeColor: geometryColors.plane,
+    borderColors: [geometryColors.border], cornerRadiusPt: 0 };
+  const targetRect = { x: 30, y: 36, width: 60, height: 94 };
+  const measure = (frame, declaration = nativeMarkerDeclaration()) => hwpCase.measureHwpNativeMarkerFrame(frame,
+    declaration, { targetRect, themeGeometry });
+  const slotInsetsPt = { left: 20, top: 26, right: 20, bottom: 20 };
+  const baseline = measure(viewportMarkerFrame({ markerTop: 36, markerColor: nativeMarker }));
+  assert.deepEqual(baseline.nativeRectPt, { left: 30, top: 36, right: 90, bottom: 130 });
+  assert.equal(baseline.geometryEvidence, "native region bounds alignment");
+  assert.deepEqual(baseline.nativeMarker, { color: nativeMarker, borderWidthPt: 2, captureRatio: 1 });
+  assert.equal(assertHwpFrameMatchesSlot(baseline, slotInsetsPt), 0);
+  assert.deepEqual(measure(viewportMarkerFrame({ markerTop: 36, markerShift: 1, markerColor: nativeMarker })).nativeRectPt,
+    baseline.nativeRectPt, "the shared four-channel tolerance must apply to every marker pixel predicate");
+  assert.throws(() => measure(viewportMarkerFrame({ markerTop: 36, markerShift: 5, markerColor: nativeMarker })),
+    /no opaque content-color pixels/, "marker matching must stop at the shared four-channel tolerance");
   for (const edge of ["left", "top", "right", "bottom"]) {
-    assert.throws(() => measure(viewportMarkerFrame({ missing: edge })), /complete 2-pixel border/,
+    assert.throws(() => measure(viewportMarkerFrame({ markerTop: 36, missing: edge, markerColor: nativeMarker })), /four-edge border/,
       `${edge} border omission must fail`);
   }
-  assert.deepEqual(measure(viewportMarkerFrame({ secondMarker: true })).nativeRectPt,
-    { left: 30, top: 35, right: 90, bottom: 130 }, "a marker in another card must not replace the target card marker");
-  assert.throws(() => measure(viewportMarkerFrame({ overdraw: true })), /extra marker pixels in the selected card/);
-  const invalidViewport = viewportMarkerDeclaration();
-  invalidViewport.visualViewport.scale = 1.5;
-  assert.throws(() => hwpCase.measureHwpViewportMarkerFrame(viewportMarkerFrame(), invalidViewport,
-    { targetRect, themeGeometry }), /visual viewport is zoomed/);
-  const twoToOne = measure(viewportMarkerFrame({ scale: 2 }));
-  assert.deepEqual(twoToOne.nativeRectPt, { left: 30, top: 35, right: 90, bottom: 130 },
-    "two capture pixels per CSS pixel must preserve the measured slot");
-  assert.equal(assertHwpFrameMatchesSlot(twoToOne, slotInsetsPt), 0);
-  const resizedSlot = measure(viewportMarkerFrame({ markerWidthCss: 80, cardRight: 130 }));
+  assert.deepEqual(measure(viewportMarkerFrame({ markerTop: 36, secondMarker: true, markerColor: nativeMarker })).nativeRectPt,
+    baseline.nativeRectPt, "a native marker in another card must not replace the selected studio marker");
+  assert.throws(() => measure(viewportMarkerFrame({ markerTop: 36, overdraw: true, markerColor: nativeMarker })),
+    /extra cyan pixels in the selected card/);
+  for (const scale of [1.5, 2]) {
+    const scaled = measure(viewportMarkerFrame({ scale, markerTop: 36, markerColor: nativeMarker }));
+    assert.deepEqual(scaled.nativeRectPt, baseline.nativeRectPt,
+      `${scale} capture pixels per point must preserve the measured native slot`);
+    assert.equal(assertHwpFrameMatchesSlot(scaled, slotInsetsPt), 0);
+  }
+  const resizedSlot = measure(viewportMarkerFrame({ markerTop: 36, markerWidthCss: 80, cardRight: 130,
+    markerColor: nativeMarker }));
   assert.deepEqual(resizedSlot.cardRectPt, { left: 10, top: 10, right: 130, bottom: 150 });
-  assert.deepEqual(resizedSlot.nativeRectPt, { left: 30, top: 35, right: 110, bottom: 130 },
-    "the overlay bounds must follow a resized viewport after the initial diagnostic reply");
+  assert.deepEqual(resizedSlot.nativeRectPt, { left: 30, top: 36, right: 110, bottom: 130 },
+    "native view bounds must follow the current captured placement");
   assert.equal(assertHwpFrameMatchesSlot(resizedSlot, slotInsetsPt), 0);
+  assert.throws(() => measure(viewportMarkerFrame({ markerTop: 36, markerColor: nativeMarker }),
+    { ...nativeMarkerDeclaration(), borderWidthPt: 3 }), /exactly 2 points/);
+  assert.throws(() => measure(viewportMarkerFrame({ markerTop: 36, markerColor: nativeMarker }),
+    { ...nativeMarkerDeclaration(), kind: "html" }), /native view layer/);
+});
+
+test("HWP native marker starts before capture and is removed after capture failures", { timeout: 1000 }, async () => {
+  const calls = [];
+  const cleanups = [];
+  const session = { cleanup(callback) { cleanups.push(callback); }, async request(method, params) {
+      assert.equal(method, "diagnostics.document.viewport-marker");
+      assert.deepEqual(params, { surface: "view-a", document: "studio", enabled: params.enabled });
+      calls.push(params.enabled);
+      return params.enabled ? nativeMarkerDeclaration() : nativeMarkerDeclaration(false);
+    } };
+  await assert.rejects(hwpCase.withHwpNativeMarker(session, "view-a", async () => {
+    calls.push("capture");
+    throw new Error("capture failed");
+  }), /capture failed/);
+  assert.deepEqual(calls, [true, "capture", false]);
+  await cleanups[0]();
+  assert.deepEqual(calls, [true, "capture", false], "session cleanup must not repeat a completed stop");
+});
+
+test("HWP native marker cleanup runs after an invalid successful start reply", { timeout: 1000 }, async () => {
+  const calls = [];
+  const cleanups = [];
+  const session = { cleanup(callback) { cleanups.push(callback); }, async request(_method, params) {
+      calls.push(params.enabled);
+      return params.enabled ? { ...nativeMarkerDeclaration(), markerColor: viewportMarker }
+        : nativeMarkerDeclaration(false);
+    } };
+  await assert.rejects(hwpCase.withHwpNativeMarker(session, "view-a", async () => assert.fail("invalid marker ran capture")),
+    /cyan RGB token/);
+  assert.deepEqual(calls, [true, false]);
+  await cleanups[0]();
+  assert.deepEqual(calls, [true, false], "validation rollback must disable the deferred cleanup after success");
+});
+
+test("HWP native marker forwards a failed start without issuing a stop", { timeout: 1000 }, async () => {
+  const calls = [];
+  const cleanups = [];
+  const session = { cleanup(callback) { cleanups.push(callback); }, async request(_method, params) {
+    calls.push(params.enabled);
+    throw new Error("native marker startup failed and rolled back");
+  } };
+  await assert.rejects(hwpCase.withHwpNativeMarker(session, "view-a", async () => "unreachable"),
+    /native marker startup failed and rolled back/);
+  assert.deepEqual(calls, [true]);
+  assert.equal(cleanups.length, 0);
+});
+
+test("HWP native marker retries a failed stop during session cleanup", { timeout: 1000 }, async () => {
+  const calls = [];
+  const cleanups = [];
+  let stopAttempts = 0;
+  const session = {
+    cleanup(callback) { cleanups.push(callback); },
+    async request(_method, params) {
+      calls.push(params.enabled);
+      if (params.enabled) return nativeMarkerDeclaration();
+      stopAttempts++;
+      if (stopAttempts === 1) throw new Error("native marker stop reply was lost");
+      return nativeMarkerDeclaration(false);
+    },
+  };
+  await assert.rejects(hwpCase.withHwpNativeMarker(session, "view-a", async () => "captured"),
+    /native marker stop reply was lost/);
+  assert.equal(cleanups.length, 1, "a successfully started marker must retain a final session cleanup");
+  await cleanups[0]();
+  assert.deepEqual(calls, [true, false, false]);
 });

@@ -332,6 +332,10 @@ func (implementation) SetDocumentAppearance(unsafe.Pointer, bool) {
 	unreachable("document appearance")
 }
 
+func (implementation) SetDocumentViewportMarker(unsafe.Pointer, bool) ([3]uint8, float64, error) {
+	return [3]uint8{}, 0, unsupported("native document viewport marker")
+}
+
 func (implementation) CloseDocument(unsafe.Pointer) {
 	unreachable("document removal")
 }
