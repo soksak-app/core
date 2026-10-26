@@ -64,6 +64,17 @@ export function assertBrowserFrameMatchesSlot(geometry, slotInsetsPt) {
   return errorPt;
 }
 
+/** The browser view resize uses the right boundary of its measured card. */
+export function browserWidthDragPlan(grid, card) {
+  assert.ok(Number.isInteger(card?.c0) && Number.isInteger(card?.c1) && card.c1 > card.c0,
+    "browser width drag requires a measured card with ordered grid columns");
+  assert.ok(Array.isArray(grid?.lines?.x) && grid.lines.x.length > 2,
+    "browser width drag requires measured horizontal grid lines");
+  assert.ok(card.c0 > 0 && card.c1 < grid.lines.x.length - 1,
+    "browser width drag requires an interior horizontal boundary");
+  return { axis: "x", line: card.c1, dx: 80, dy: 0, ms: 500, times: 1 };
+}
+
 /** Serves a distinctive opaque browser document with live content pixels for layout and drag recordings. */
 async function serveContentPage(s) {
   const server = createServer((_request, response) => {
@@ -155,8 +166,12 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
 }
 
 async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt) {
+  const beforeGrid = await s.get("core.grid");
+  const pane = beforeGrid.cards.find((item) => item.id === card);
+  assert.ok(pane, `browser measurement card ${card} is absent before drag`);
+  const plan = browserWidthDragPlan(beforeGrid, pane);
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
-    drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }));
+    drag(t, s, plan, { capture: true }));
   const run = traced.action;
   const files = frames(run.frames);
   assert.equal(files.length, run.count, "browser drag recording omitted finalized frame files");

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-9: 측정 Browser scratch card에서 폭 drag 경계를 구하고 내부 grid line인지 확인한다. 기존 고정 line은 해당 card를 바꾸지 않아 source resize frame이 없다. 소유 경계 선택 회귀 검사가 수정 전 실패하고 수정 후 Browser consumer 사례 여덟 개 모두 통과한다. 실제 앱 측정은 별도로 유지한다.
+
 - F212.14-5-11: 기존 anchor 인식에는 실제 host UI 언어를 사용하고 target OCR 언어는 유지한다. 소유 언어 전달 assertion이 수정 전 실패하며 수정 후 해당 소유 검사 21개 모두 통과한다. 녹화한 frame을 보존하고 host 언어 누락·미지원 값을 명시적으로 거부한다.
 
 - F212.14-5-8: HWP viewport marker pixel을 완전한 perimeter·overdraw 검사, 독립적으로 선언한 slot과 기존 네 변 기준으로 측정한다. Trace 시작 근거를 기존 action cleanup 경계로 전달하고 이전 toolbar 색상 추론을 제거한다. Consumer 부재·metadata·cleanup·resize·색상 판정 회귀를 재현한 뒤 해당 소유 검사 35개 모두 통과하며 독립 검토에 남은 core 이의가 없다. 실제 앱 acceptance는 별도로 유지한다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-9: Derive the Browser width-drag boundary from the measured scratch card and verify it is an interior grid line. The fixed line leaves that card unchanged and produces no source resize frames. The owning selection regression fails before correction and all eight Browser consumer cases pass afterward. Application measurements remain separate.
+
 - F212.14-5-11: Use the effective host UI language to recognize the existing anchor and keep the target OCR language unchanged. The owning language-dispatch assertion fails before correction and all 21 affected owners pass afterward. Preserve recorded frames and reject absent or unsupported host languages explicitly.
 
 - F212.14-5-8: Measure HWP viewport-marker pixels with complete perimeter and overdraw checks, independently declared slots and unchanged four-edge limits. Pass trace-start evidence through the existing action cleanup boundary and remove obsolete toolbar-color inference. All 35 affected owners pass after the tracked missing-consumer, metadata, cleanup, resize and color-predicate regressions; independent review has no remaining core objection. Actual application acceptance remains separate.

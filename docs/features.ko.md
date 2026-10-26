@@ -11,11 +11,11 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 6개와 waiting 46개인 52개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 5개와 waiting 46개인 51개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
 - **입력/menu acceptance와 연결된 parent: 7** — F239-47-32/-33; F212.12-2, F212.12-2-4, F212.12-2-1-2; F238-b/-3
 - **보고된 실패와 과거 종료 감사: 22** — F239-47-30/-4; F212.1-2-2; F212.10-hwp-2, F212.10-core-3/-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3 및 F266.5부터 F266.13; F239-78; F239-190
-- **측정 consumer 수정: 2** — F212.14-5-9/-10
+- **측정 consumer 수정: 1** — F212.14-5-10
 - **성능 측정: 6** — F212.1, F212.7a, F212.9a, F212.14/-5/-5-5
 - **Package 설치와 publication: 8** — F212.12-1-10-6g; F212.15/-1; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
 - **집계 요구사항과 미완료 작업 register: 7** — F160, F160.29, F161, F212, F212.10, F212.12, F240
@@ -1717,7 +1717,7 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
     - [o] F212.14-5-6 — P0, F212.14-5-5 연결: First-display 측정에서 기존 픽셀과 새로 연 content를 구분한다. 하나의 연속 recording을 보존하고 기존 다른 plugin anchor를 선택하여 비어 있지 않은 다른 content가 관측된 뒤 target 픽셀을 인정한다. Red: 새 request 전에 기존 target 픽셀이 인정된다. Green: 기존 픽셀, 두 anchor 순서와 card identifier 경계를 포함한 first-content·collection 소유 검사 18개 모두 통과한다. 애플리케이션 acceptance는 F212.14-5-5가 유지한다.
     - [o] F212.14-5-7 — P0, F212.14-5-5 연결: DOM anchor로 선택한 card와 교차하는 모든 opaque content-color component를 측정하고 HWP pixel alignment 실패 보고에 layout 전 native frame을 보존한다. Red: DOM anchor 밖의 same-card content가 네 변 bounds에서 잘렸고, 제어된 unmatched HWP layout은 evidence를 보고하기 전에 `ReferenceError`를 던졌다. Green: same-card overdraw, fragmented fill, 동일 색의 다른 card를 포함한 geometry owner 13/13이 통과한다. 제어된 HWP 오류 경로는 native frame 두 개와 frame별 slot residual을 보고하고 pixel-alignment 실패를 cause로 유지한다. 보존된 HWP capture에는 top residual 8 px가 남아 있지만 responsive breakpoint에서 palette 색이 바뀌므로 native viewport 이동을 입증하지 않는다. 올바른 viewport pixel bounds와 application acceptance는 F212.14-5-5에 남는다. Application measurement는 실행하지 않는다.
     - [o] F212.14-5-8 — P0, F212.14-5-7 및 HWP H23.6 연결: Responsive toolbar 색상으로 viewport 경계를 추론하는 대신 studio viewport marker를 소비하여 캡처된 HWP geometry를 측정한다. Red: Marker consumer 부재, trace 시작 metadata 누락, 잘못된 시작 metadata의 cleanup 우회, 초기 크기와 다른 resize marker 거부 및 component 검출 후 한 채널 색상 차이의 perimeter 검출 실패를 재현한다. Green: 해당 geometry·HWP·collection 소유 검사 35개 모두 통과한다. 기존 component scanner와 하나의 색상 허용 오차로 경계·완전한 2 CSS pixel perimeter·추가 pixel 거부를 검증한다. Capture scale, 독립적으로 선언한 slot, 네 변 2 pt 기준, source clock과 content OCR을 유지한다. 독립 검토에 남은 core 이의가 없다. Marker 생성·lifecycle은 HWP H23.6이 소유하며 candidate 전달과 실제 앱 acceptance는 F212.14-5-5에 남는다.
-    - [~] F212.14-5-9 — P0, F212.14-5-5 연결: 측정 대상 view의 Browser drag source frame을 수집한다. 양쪽 host가 수집을 마치지만 drag.contentFrames 배열이 비어 있다. 요청한 divider와 scratch card 및 실제 source event 계약을 확인한 뒤 소유 consumer를 수정한다.
+    - [o] F212.14-5-9 — P0, F212.14-5-5 연결: 측정 대상 Browser scratch card의 실제 내부 grid 경계로 폭을 변경한다. Terminal card 분할 후 scratch card는 열 2부터 3을 차지하며 고정 line 1은 폭을 바꾸지 않아 양쪽 host의 drag source frame이 없다. Red: 소유 경계 선택 assertion이 측정 card의 오른쪽 경계 대신 고정 line 1을 받는다. Green: 분할 topology와 외곽 grid 경계의 명시적 거부를 포함한 Browser consumer 소유 검사 여덟 개 모두 통과한다. Core.grid에서 경계를 읽고 source event·geometry·timing 기준을 유지한다. 실제 앱 acceptance는 F212.14-5-5에 남는다.
     - [~] F212.14-5-10 — P0, F212.14-5-5 연결: 제스처 동안 녹화된 Editor card 경계를 식별한다. 양쪽 host에서 캡처한 card 왼쪽 경계 검사가 실패한다. 실패한 raw frame과 독립적으로 선언한 geometry를 보존하고 소유 검사에서 재현하여 경계 기준을 바꾸지 않고 원인을 수정한다.
     - [o] F212.14-5-11 — P0, F212.14-5-5 연결: Anchor content는 실제 host UI 언어로 인식하고 target OCR에는 target descriptor 언어를 유지한다. 양쪽 보존 화면의 Korean Browser anchor를 en-US OCR은 놓치고 ko-KR OCR은 인식한다. Red: 소유 consumer가 ko-KR anchor 인식 네 번과 en-US target 인식 한 번 대신 en-US 인식 다섯 번을 받는다. Green: host 언어 누락·미지원 값의 명시적 거부를 포함한 first-content·collection 소유 검사 21개 모두 통과한다. 녹화한 모든 frame과 원래 clock을 보존한다. 실제 앱 acceptance는 F212.14-5-5에 남는다.
     - [~] F212.14-5-5 — P0, F212.14-5 연결: 완료된 collector 구현과 수정한 HWP candidate로 view별 애플리케이션 측정 matrix를 실행한다. 네 view와 양쪽 host의 기존 사례 8개를 실행하며 raw data와 모든 실패를 보존한다. 고정 pass value는 유지하고 통과한 identity 사례는 반복하지 않는다.
