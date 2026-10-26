@@ -461,8 +461,23 @@ pub(crate) struct PresentRequest {
     ticket: u64,
     placements: Vec<Placement>,
     settled: bool,
-    #[serde(default, rename = "waitForPresentation")]
-    wait_for_presentation: bool,
+}
+
+fn complete_layout_presentation(
+    await_dom: impl FnOnce() -> Result<(), String>,
+    await_raster: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    await_dom().and_then(|()| await_raster())
+}
+
+fn cancel_layout_after_setup_error(
+    error: String,
+    cancel: impl FnOnce() -> Result<(), String>,
+) -> String {
+    match cancel() {
+        Ok(()) => error,
+        Err(cancel) => format!("{error}; cancelling layout: {cancel}"),
+    }
 }
 
 /// One step of a drag. phase is 0 for press, 1 for move and 2 for release.
@@ -1088,15 +1103,9 @@ pub(crate) async fn present(
     let presentation_window = finished.clone();
     let placements = request.placements;
     let presentation_settled = request.settled;
-    let wait_for_presentation = presentation_settled || request.wait_for_presentation;
-    // During a continuous divider gesture, the native surface frame and the DOM are committed at every display cycle.
-    // Waiting for the application presentation at every frame would serialize the next transaction behind the WebKit
-    // refresh, so the DOM barrier keeps only the settled frames. The raster barrier is kept for every frame. Even a
-    // continuous placement does not commit the new region size together with the previous raster
-    // (docs/spec/surface-composition.md).
-    let dom = if wait_for_presentation {
-        let (dom_tx, dom_rx) = mpsc::channel();
-        main.with_webview(move |view| {
+    let (dom_tx, dom_rx) = mpsc::channel();
+    let setup = main
+        .with_webview(move |view| {
             let outcome = platform::current().and_then(|platform| {
                 let ready = dom_tx.clone();
                 platform.after_presentation(
@@ -1118,37 +1127,43 @@ pub(crate) async fn present(
                 }
             }
         })
-        .map_err(|error| error.to_string())?;
-        Some(dom_rx)
-    } else {
-        None
-    };
+        .map_err(|error| error.to_string());
+    if let Err(error) = setup {
+        return Err(cancel_layout_after_setup_error(error, || {
+            let target = window.clone();
+            platform::current()?.enqueue_ui(Box::new(move || {
+                log_failure("surface layout cancel", cancel_window_layout(&target));
+            }))
+        }));
+    }
     let raster_window = window.clone();
-    let ready = Some(
-        tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-            if let Some(dom_rx) = dom {
+    let ready = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        complete_layout_presentation(
+            || {
                 dom_rx
                     .recv_timeout(exposure::TIMEOUT)
                     .map_err(|error| format!("application documents did not present: {error}"))??;
-            }
-            crate::composition::refresh_image_rasters(&raster_window)?;
-            images.wait_current(exposure::TIMEOUT).map_err(|reason| {
-                if reason == "presentationTimeout" {
-                    format!(
-                        "the current image raster did not present within {:?}; pending {}",
-                        exposure::TIMEOUT,
-                        images.pending_rasters()
-                    )
-                } else {
-                    format!("the current image raster failed to present: {reason}")
-                }
-            })?;
-            Ok(())
-        })
-        .await
-        .map_err(|error| error.to_string())?,
-    );
-    if let Some(Err(error)) = ready {
+                Ok(())
+            },
+            || {
+                crate::composition::refresh_image_rasters(&raster_window)?;
+                images.wait_current(exposure::TIMEOUT).map_err(|reason| {
+                    if reason == "presentationTimeout" {
+                        format!(
+                            "the current image raster did not present within {:?}; pending {}",
+                            exposure::TIMEOUT,
+                            images.pending_rasters()
+                        )
+                    } else {
+                        format!("the current image raster failed to present: {reason}")
+                    }
+                })
+            },
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?;
+    if let Err(error) = ready {
         // A presentation failure occurs after sync opened the native transaction. The transaction is released before
         // returning so that the next split does not wait forever behind the failed owner.
         let target = window.clone();
@@ -1165,38 +1180,31 @@ pub(crate) async fn present(
     platform::current()?.enqueue_ui(Box::new(move || {
         let result = (|| -> Result<Vec<Placement>, String> {
             let platform = platform::current()?;
-            let prepared = ready
-                .as_ref()
-                .map_or(Ok(()), |result| result.clone())
-                .and_then(|_| {
-                    placements
-                        .iter()
-                        .map(|p| {
-                            let handle = context
-                                .surface_hosts
-                                .lock()
-                                // default: a lock that a panicking thread poisoned still holds the surface registrations,
-                                // which are only read; the panic hook records the panic.
-                                .unwrap_or_else(PoisonError::into_inner)
-                                .get(&p.id)
-                                .copied()
-                                .ok_or_else(|| {
-                                    format!("surface {:?} closed before presentation", p.id)
-                                })?;
-                            platform.set_surface_hidden_handle(handle, !p.visible)?;
-                            let [x, y, w, h] = platform.surface_frame(handle)?;
-                            Ok(Placement {
-                                id: p.id.clone(),
-                                x,
-                                y,
-                                w,
-                                h,
-                                visible: p.visible,
-                            })
-                        })
-                        .collect::<Result<Vec<_>, String>>()
-                });
-            let placed = match prepared {
+            let placed = match placements
+                .iter()
+                .map(|p| {
+                    let handle = context
+                        .surface_hosts
+                        .lock()
+                        // default: a lock that a panicking thread poisoned still holds the surface registrations,
+                        // which are only read; the panic hook records the panic.
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .get(&p.id)
+                        .copied()
+                        .ok_or_else(|| format!("surface {:?} closed before presentation", p.id))?;
+                    platform.set_surface_hidden_handle(handle, !p.visible)?;
+                    let [x, y, w, h] = platform.surface_frame(handle)?;
+                    Ok(Placement {
+                        id: p.id.clone(),
+                        x,
+                        y,
+                        w,
+                        h,
+                        visible: p.visible,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()
+            {
                 Ok(placed) => placed,
                 Err(error) => {
                     cancel_window_layout(&presentation_window)

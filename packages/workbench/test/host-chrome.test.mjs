@@ -102,7 +102,7 @@ test("the preparation carries the title bar height and the presented chrome is t
     await surfaces.place(record(54, true));
     assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "presentSurfaces"],
       "the draw makes no request other than the presentation");
-    assert.deepEqual(Object.keys(calls[1].request).sort(), ["placements", "settled", "ticket", "waitForPresentation"],
+    assert.deepEqual(Object.keys(calls[1].request).sort(), ["placements", "settled", "ticket"],
       "the presentation sends the prepared ticket and placements");
     assert.deepEqual(chrome.presented(), { controls: { x: 13, y: 20, w: 54, h: 14 }, row: 54 });
 

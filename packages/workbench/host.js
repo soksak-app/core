@@ -554,14 +554,9 @@ export const surfaces = native ? {
         // place is called on every render, and on every frame while a divider is dragged.
         // A request identical to the previous one is not sent.
         const request = {
-          // Whether this is the last update or updates continue. While they continue and the view grows,
-          // the area that has not been rendered yet appears white.
+          // Every placement waits for the matching app DOM and required rasters;
+          // settled distinguishes the final update from a continuing gesture.
           settled: record.settled !== false,
-          // The image raster must commit after the DOM frame of the page. Other
-          // surfaces can commit consecutive frames immediately.
-          waitForPresentation: record.surfaces.some(({ id, surface, visible }) => !deferredIds.has(id) &&
-            visible === true && surface?.composition?.kind === "view" &&
-            surface.composition.regions?.some(({ kind }) => kind === "image") === true),
           overlays: windowOverlays(),
           surfaces: requestedSurfaces,
           // The height (pt) of the first row that the next drawing will show. The host sets the window title bar to this height in the transaction of this preparation.
@@ -605,7 +600,6 @@ export const surfaces = native ? {
               ticket: frame.ticket,
               placements: frame.placements,
               settled: request.settled,
-              waitForPresentation: request.waitForPresentation,
             }).then((placed) => {
               presentedChrome = frame.chrome;
               return placed;

@@ -12,6 +12,82 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
+// contract: surface-layout.continuous-waits-for-app-dom
+func TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit(t *testing.T) {
+	phases := make(chan string, 3)
+	domRelease := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		completeLayoutPresentation(func() error {
+			phases <- "dom"
+			<-domRelease
+			return nil
+		}, func() error {
+			phases <- "raster"
+			return nil
+		}, func(err error) {
+			if err == nil {
+				phases <- "commit"
+			}
+			done <- err
+		})
+	}()
+	select {
+	case phase := <-phases:
+		if phase != "dom" {
+			t.Fatalf("continuous layout reached %s before the controlled DOM presentation callback", phase)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("continuous layout did not request DOM presentation")
+	}
+	select {
+	case phase := <-phases:
+		t.Fatalf("continuous layout reached %s while DOM presentation was pending", phase)
+	default:
+	}
+	close(domRelease)
+	if got := <-phases; got != "raster" {
+		t.Fatalf("phase after DOM presentation is %s; want raster", got)
+	}
+	if got := <-phases; got != "commit" {
+		t.Fatalf("phase after raster readiness is %s; want commit", got)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("layout completion returned %v", err)
+	}
+}
+
+// contract: surface-layout.continuous-presentation-failures-stop-before-commit
+func TestLayoutPresentationFailureSkipsLaterStages(t *testing.T) {
+	domFailure := errors.New("application presentation failed")
+	var rasterCalls, commitCalls int
+	var got error
+	completeLayoutPresentation(func() error { return domFailure }, func() error {
+		rasterCalls++
+		return nil
+	}, func(err error) {
+		commitCalls++
+		got = err
+	})
+	if !errors.Is(got, domFailure) || rasterCalls != 0 || commitCalls != 1 {
+		t.Fatalf("DOM failure reached raster %d times and commit %d times with error %v", rasterCalls, commitCalls, got)
+	}
+
+	rasterFailure := errors.New("image raster failed")
+	rasterCalls, commitCalls = 0, 0
+	got = nil
+	completeLayoutPresentation(func() error { return nil }, func() error {
+		rasterCalls++
+		return rasterFailure
+	}, func(err error) {
+		commitCalls++
+		got = err
+	})
+	if !errors.Is(got, rasterFailure) || rasterCalls != 1 || commitCalls != 1 {
+		t.Fatalf("raster failure reached raster %d times and commit %d times with error %v", rasterCalls, commitCalls, got)
+	}
+}
+
 // contract: exposure.host-window.reads-during-surface-close
 func TestSurfaceNameIsForgottenInTheStepThatClosesItsNativeView(t *testing.T) {
 	s := &Surfaces{named: map[uintptr]string{}}

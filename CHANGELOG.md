@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-14: Require app DOM presentation before raster readiness and native commit for continuous layouts in both hosts. Remove the optional presentation bypass flag and cancel Tauri layouts when callback registration fails while preserving both setup and cancellation errors. The two ordering regressions and setup-cancellation regression fail before correction; all ten affected host and workbench owner cases pass afterward. Both optimized diagnostic hosts build, and the affected structural checks pass. Application measurements remain separate.
+
 - F239-199: Restore exact readiness and contextual-event feature links. Classify package installations and historical source audits separately from runtime capabilities; unlinked product capabilities remain errors. The owning inventory checks and structural parity audit pass after reproducing five record errors.
 
 - F212.14-5-12: Preserve frame, target, palette, corner radius, candidate bounds and failing RGBA coordinates in geometry errors. The owning missing-diagnostic regression fails before correction and all 20 geometry cases pass afterward. Measurement acceptance remains unchanged.

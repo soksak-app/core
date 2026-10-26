@@ -1,12 +1,100 @@
 //! Checks that a window status read during the creation and the close of a surface finds the registered surface.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, PoisonError, mpsc};
+use std::thread;
+use std::time::Duration;
 
 use super::{
-    Running, SurfaceComposition, clear_page_compositions, close_registered_surface,
-    create_registered_surface, mark_first_commit, pressed_surface, removed_surfaces,
+    Running, SurfaceComposition, cancel_layout_after_setup_error, clear_page_compositions,
+    close_registered_surface, complete_layout_presentation, create_registered_surface,
+    mark_first_commit, pressed_surface, removed_surfaces,
 };
+
+// contract: surface-layout.setup-failure-cancels-open-transaction
+#[test]
+fn webview_presentation_registration_failure_cancels_open_layout() {
+    let mut cancelled = false;
+    let error = cancel_layout_after_setup_error("webview callback setup failed".into(), || {
+        cancelled = true;
+        Ok(())
+    });
+    assert!(
+        cancelled,
+        "layout transaction remained open after callback setup failed"
+    );
+    assert_eq!(error, "webview callback setup failed");
+
+    let error = cancel_layout_after_setup_error("webview callback setup failed".into(), || {
+        Err("layout cancellation enqueue failed".into())
+    });
+    assert_eq!(
+        error,
+        "webview callback setup failed; cancelling layout: layout cancellation enqueue failed"
+    );
+}
+
+// contract: surface-layout.continuous-waits-for-app-dom
+#[test]
+fn continuous_layout_waits_for_application_dom_before_raster_and_commit() {
+    let (phase_tx, phase_rx) = mpsc::channel();
+    let (dom_release, dom_wait) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        let ready = complete_layout_presentation(
+            || {
+                phase_tx.send("dom").unwrap();
+                dom_wait.recv().unwrap();
+                Ok(())
+            },
+            || {
+                phase_tx.send("raster").unwrap();
+                Ok(())
+            },
+        );
+        if ready.is_ok() {
+            phase_tx.send("commit").unwrap();
+        }
+    });
+    let first = phase_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("continuous layout did not request DOM presentation");
+    assert_eq!(
+        first, "dom",
+        "continuous layout reached {first} before the controlled DOM presentation callback"
+    );
+    assert!(
+        phase_rx.try_recv().is_err(),
+        "layout advanced while DOM was pending"
+    );
+    dom_release.send(()).unwrap();
+    assert_eq!(
+        phase_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        "raster"
+    );
+    assert_eq!(
+        phase_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        "commit"
+    );
+    worker.join().unwrap();
+}
+
+// contract: surface-layout.presentation-failure-stops-before-commit
+#[test]
+fn dom_failure_skips_raster_and_dom_and_raster_errors_are_preserved() {
+    let mut raster_called = false;
+    let ready = complete_layout_presentation(
+        || Err("application DOM failed".to_string()),
+        || {
+            raster_called = true;
+            Ok(())
+        },
+    );
+    assert_eq!(ready, Err("application DOM failed".to_string()));
+    assert!(!raster_called, "raster ran after DOM presentation failed");
+
+    let ready = complete_layout_presentation(|| Ok(()), || Err("image raster failed".to_string()));
+    assert_eq!(ready, Err("image raster failed".to_string()));
+}
 
 // contract: exposure.host-window.reads-during-surface-creation
 #[test]

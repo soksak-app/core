@@ -857,10 +857,17 @@ type PreparedSurfaces struct {
 
 // PresentRequest is the DOM display confirmation request. PresentSurfaces confirms without blocking the AppKit thread.
 type PresentRequest struct {
-	Ticket              uint64      `json:"ticket"`
-	Placements          []Placement `json:"placements"`
-	Settled             bool        `json:"settled"`
-	WaitForPresentation bool        `json:"waitForPresentation,omitempty"`
+	Ticket     uint64      `json:"ticket"`
+	Placements []Placement `json:"placements"`
+	Settled    bool        `json:"settled"`
+}
+
+func completeLayoutPresentation(awaitDOM, awaitRasters func() error, commit func(error)) {
+	err := awaitDOM()
+	if err == nil {
+		err = awaitRasters()
+	}
+	commit(err)
 }
 
 func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
@@ -873,86 +880,85 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 		err    error
 	}
 	done := make(chan result, 1)
-	// A settled frame checks the DOM document and the image raster. A continuous frame commits after the native preparation so that the next
-	// display cycle is not serialized behind a document or raster callback. The frame check handles
-	// this transition.
 	routine.Go("layout-prepare", func() {
-		var waiting error
-		if req.Settled || req.WaitForPresentation {
+		completeLayoutPresentation(func() error {
 			domReady := make(chan struct{})
+			var waiting error
 			application.InvokeSync(func() {
 				waiting = system.AfterPresentation(win.NativeWindow(), func() { close(domReady) })
 			})
-			if waiting == nil {
-				timer := time.NewTimer(pageTimeout)
-				select {
-				case <-domReady:
-				case <-timer.C:
-					waiting = fmt.Errorf("application documents did not present within %s", pageTimeout)
-				}
-				timer.Stop()
+			if waiting != nil {
+				return waiting
 			}
-		}
-		// A continuous frame also waits, before the commit, for each visible image region to display a raster of the prepared size.
-		// Without waiting, a surface resize would show the previous raster while the region is enlarged
-		// (docs/spec/surface-composition.md).
-		if waiting == nil {
-			waiting = s.refreshImageRasters()
-		}
-		if waiting == nil {
+			timer := time.NewTimer(pageTimeout)
+			defer timer.Stop()
+			select {
+			case <-domReady:
+				return nil
+			case <-timer.C:
+				return fmt.Errorf("application documents did not present within %s", pageTimeout)
+			}
+		}, func() error {
+			// A continuous frame also waits for each visible image region to display a raster of the prepared size.
+			// Without waiting, a surface resize would show the previous raster while the region is enlarged
+			// (docs/spec/surface-composition.md).
+			if err := s.refreshImageRasters(); err != nil {
+				return err
+			}
 			if err := s.images.WaitCurrentError(pageTimeout); err != nil {
 				if err.Error() == "presentationTimeout" {
-					waiting = fmt.Errorf("the current image raster did not present within %s; pending %s",
+					return fmt.Errorf("the current image raster did not present within %s; pending %s",
 						pageTimeout, s.images.PendingRasters())
-				} else {
-					waiting = fmt.Errorf("the current image raster failed to present: %w", err)
 				}
+				return fmt.Errorf("the current image raster failed to present: %w", err)
 			}
-		}
-		// The commit and the cancel run outside the framework event lock.
-		if err := system.EnqueueUI(func() {
-			if waiting != nil {
-				if err := system.CancelLayout(win.NativeWindow()); err != nil {
-					waiting = fmt.Errorf("%w; cancelling layout: %v", waiting, err)
-				}
-				done <- result{err: waiting}
-				return
-			}
-			out := make([]Placement, 0, len(req.Placements))
-			for _, p := range req.Placements {
-				view := s.views[p.ID]
-				if view == nil {
-					failure := fmt.Errorf("surface %q closed before presentation", p.ID)
+			return nil
+		}, func(waiting error) {
+			// The commit and the cancel run outside the framework event lock.
+			if err := system.EnqueueUI(func() {
+				if waiting != nil {
 					if err := system.CancelLayout(win.NativeWindow()); err != nil {
-						failure = fmt.Errorf("%w; cancelling layout: %v", failure, err)
+						waiting = fmt.Errorf("%w; cancelling layout: %v", waiting, err)
 					}
-					done <- result{err: failure}
+					done <- result{err: waiting}
 					return
 				}
-				view.SetHidden(!p.Visible)
-				out = append(out, Placement{ID: p.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: p.Visible})
-			}
-			if req.Settled {
-				if err := s.joinShownViews(win.NativeWindow(), req.Ticket, req.Placements); err != nil {
-					if cancel := system.CancelLayout(win.NativeWindow()); cancel != nil {
-						err = fmt.Errorf("%w; cancelling layout: %v", err, cancel)
+				out := make([]Placement, 0, len(req.Placements))
+				for _, p := range req.Placements {
+					view := s.views[p.ID]
+					if view == nil {
+						failure := fmt.Errorf("surface %q closed before presentation", p.ID)
+						if err := system.CancelLayout(win.NativeWindow()); err != nil {
+							failure = fmt.Errorf("%w; cancelling layout: %v", failure, err)
+						}
+						done <- result{err: failure}
+						return
 					}
-					done <- result{err: err}
+					view.SetHidden(!p.Visible)
+					out = append(out, Placement{ID: p.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: p.Visible})
+				}
+				if req.Settled {
+					if err := s.joinShownViews(win.NativeWindow(), req.Ticket, req.Placements); err != nil {
+						if cancel := system.CancelLayout(win.NativeWindow()); cancel != nil {
+							err = fmt.Errorf("%w; cancelling layout: %v", err, cancel)
+						}
+						done <- result{err: err}
+						return
+					}
+				}
+				committed := system.CommitLayout(win.NativeWindow(), req.Ticket)
+				if !committed {
+					done <- result{err: fmt.Errorf("surface preparation %d is no longer current", req.Ticket)}
 					return
 				}
+				if req.Settled {
+					s.run(false)
+				}
+				done <- result{placed: out}
+			}); err != nil {
+				done <- result{err: err}
 			}
-			committed := system.CommitLayout(win.NativeWindow(), req.Ticket)
-			if !committed {
-				done <- result{err: fmt.Errorf("surface preparation %d is no longer current", req.Ticket)}
-				return
-			}
-			if req.Settled {
-				s.run(false)
-			}
-			done <- result{placed: out}
-		}); err != nil {
-			done <- result{err: err}
-		}
+		})
 	})
 	outcome := <-done
 	if outcome.err != nil {

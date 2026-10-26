@@ -6935,6 +6935,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-5-14",
+    implementation: [
+      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func completeLayoutPresentation(" },
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn complete_layout_presentation(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "continuous_layout_waits_for_application_dom_before_raster_and_commit" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "webview_presentation_registration_failure_cancels_open_layout" },
+    ],
+    expected: "Continuous layouts wait for app DOM presentation before raster readiness and commit; callback setup failure queues cancellation and preserves errors.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.14-5-2",
     implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function waitForViewReadiness(" }],
     tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "shared readiness wrapper waits for the declared status exposure before reading it" }],
