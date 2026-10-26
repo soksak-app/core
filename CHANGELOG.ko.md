@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-202: 기존 private Rust case 10개를 대응 owner test module에 두고 중복 path module 네 개를 제거한다. 구조 규칙을 확장하거나 platform 예외를 추가하지 않고 정확한 inventory link를 갱신한다. Host 구조 audit는 기존 경로에서 실패하며 이동한 모든 case와 정리된 host 구조가 통과한다.
+
 - F212.14-5-18: Child document의 독립성을 유지하면서 변경된 visible plugin root view를 각 layout transaction에 join한다. View generation과 layout ticket으로 wait를 식별하고 취소 전에 native join resource를 정리하며 실패한 ticket만 취소해 동기 handoff가 대체 ticket을 취소하지 않도록 한다. Wails와 Tauri 집중 owner 및 native resized-paint와 ticket-cancellation owner가 통과한다. 양쪽 최적화 diagnostic host가 macOS arm64에서 build되며 application 측정은 F212.14-5-5에 남는다.
 
 - F239-201: Window-check setup이 선택하는 platform 구현에 Darwin bundle 경로와 capture-text build를 둔다. 명시적 executable override와 build error는 유지한다. Platform audit는 기존 공통 분기를 거부했으며 이동 후 setup 소유 검사는 5/5, platform-audit 소유 검사는 2/2 통과한다. 양쪽 host test-inventory lane에 platform helper 두 개를 포함한다.

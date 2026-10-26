@@ -1706,11 +1706,3 @@ pub(crate) fn present_on_ui(
         .recv()
         .map_err(|error| format!("native image presentation result: {error}"))?
 }
-
-#[cfg(test)]
-#[path = "../tests/images/presentation_queue_test.rs"]
-mod presentation_queue_test;
-
-#[cfg(test)]
-#[path = "../tests/images/wait_boundary_test.rs"]
-mod wait_boundary_test;

@@ -506,8 +506,9 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn read_surface_placements(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/surfaces/placement_snapshot_test.rs", id: "prepared_frames_share_one_main_thread_turn" },
-      { file: "packages/host/tauriv2/tests/surfaces/placement_snapshot_test.rs", id: "frame_read_failure_rejects_the_placement_reply" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "prepared_frames_share_one_main_thread_turn" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "frame_read_failure_rejects_the_placement_reply" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "no_surfaces_require_no_main_thread_turn" },
     ],
     expected: "Prepared placement reads share one main-thread turn and preserve read errors.",
     levels: ["unit"],
@@ -518,9 +519,9 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/images.rs", symbol: "pub(crate) fn present_on_ui(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/images/presentation_queue_test.rs", id: "image_commit_runs_after_the_framework_event_releases_its_lock" },
-      { file: "packages/host/tauriv2/tests/images/presentation_queue_test.rs", id: "image_enqueue_failure_reaches_the_frame_handler" },
-      { file: "packages/host/tauriv2/tests/images/presentation_queue_test.rs", id: "native_image_failure_reaches_the_frame_handler" },
+      { file: "packages/host/tauriv2/src/images_test.rs", id: "image_commit_runs_after_the_framework_event_releases_its_lock" },
+      { file: "packages/host/tauriv2/src/images_test.rs", id: "image_enqueue_failure_reaches_the_frame_handler" },
+      { file: "packages/host/tauriv2/src/images_test.rs", id: "native_image_failure_reaches_the_frame_handler" },
     ],
     expected: "Image commits leave the framework event lock and preserve enqueue and native presentation failures.",
     levels: ["unit"],
@@ -532,7 +533,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/images.go", symbol: "waitCurrentObserved" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/images/wait_boundary_test.rs", id: "a_pending_newer_frame_is_required_after_the_wait_begins" },
+      { file: "packages/host/tauriv2/src/images_test.rs", id: "a_pending_newer_frame_is_required_after_the_wait_begins" },
       { file: "packages/host/wailsv3/src/images_test.go", id: "TestPendingNewerFrameIsRequiredAfterTheWaitBegins" },
     ],
     expected: "Both image waiters require a newer accepted frame to present before completing.",
@@ -6956,6 +6957,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-201",
+    implementation: [{ file: "e2e/platform/darwin/darwin.js", symbol: "export function captureTextCommand(" }],
+    tests: [{ file: "e2e/test/setup.test.mjs", id: "capture recognition resolves its executable through the native build target" }],
+    expected: "The selected platform setup builds the declared capture helper and preserves explicit build errors.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-200",
     implementation: [{ file: "scripts/check-e2e.mjs", symbol: "function expectedPathLiteralRanges(" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit distinguishes expected path literals from source access" }],
@@ -7038,7 +7046,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-186",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: 'payload["params"] = message' }],
-    tests: [{ file: "packages/host/tauriv2/tests/documents/view_decode_test.rs", id: "a_view_call_transfers_the_owned_params_tree_without_copying_it" }],
+    tests: [{ file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_view_call_transfers_the_owned_params_tree_without_copying_it" }],
     expected: "View-call forwarding transfers the decoded params tree without copying nested values.",
     levels: ["unit"],
   },
@@ -7046,8 +7054,8 @@ const FEATURE_LINKS = [
     id: "F239-161",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "fn dispatch_with_decoder(" }],
     tests: [
-      { file: "packages/host/tauriv2/tests/documents/view_decode_test.rs", id: "a_current_view_envelope_is_decoded_once_for_every_dispatch_kind" },
-      { file: "packages/host/tauriv2/tests/documents/view_decode_test.rs", id: "view_dispatch_preserves_precedence_and_invalid_field_errors" },
+      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_current_view_envelope_is_decoded_once_for_every_dispatch_kind" },
+      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "view_dispatch_preserves_precedence_and_invalid_field_errors" },
     ],
     expected: "Current view dispatch decodes once while preserving handler precedence, payloads and field errors.",
     levels: ["unit"],
@@ -7821,8 +7829,8 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // requires exact implementation and owning-test links.
 // F239-195 and F239-198 record candidate installation, F239-47-30-4 classifies
 // historical source evidence, and F239-199 corrects inventory records. None
-// adds runtime behavior.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199"]);
+// adds runtime behavior. F239-202 relocates existing owner cases without changing their assertions.
+const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read

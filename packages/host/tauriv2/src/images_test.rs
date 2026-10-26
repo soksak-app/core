@@ -61,6 +61,92 @@ fn a_timed_out_detach_target_remains_for_the_next_page_start() {
     assert!(images.begin_reload(surface).is_empty());
 }
 
+mod presentation_queue {
+    use super::super::present_on_ui;
+    use std::sync::{Arc, Mutex, mpsc};
+    use std::time::Duration;
+
+    #[test]
+    fn image_commit_runs_after_the_framework_event_releases_its_lock() {
+        let event_lock = Arc::new(Mutex::new(()));
+        let event = event_lock.lock().expect("hold framework event lock");
+        let commit_lock = Arc::clone(&event_lock);
+        let (enqueue, queued) = mpsc::sync_channel::<Box<dyn FnOnce() + Send>>(1);
+        let worker = std::thread::spawn(move || {
+            present_on_ui(
+                Box::new(move || {
+                    let _guard = commit_lock
+                        .try_lock()
+                        .map_err(|error| format!("redraw re-entered framework event lock: {error}"))?;
+                    Ok(())
+                }),
+                |work| enqueue.send(work).map_err(|error| error.to_string()),
+            )
+        });
+        let callback = queued.recv_timeout(Duration::from_secs(2));
+        drop(event);
+        if let Ok(callback) = callback {
+            callback();
+        }
+        let result = worker.join().expect("join image presentation worker");
+        assert_eq!(result, Ok(()), "image commit must run outside the framework event lock");
+    }
+
+    #[test]
+    fn image_enqueue_failure_reaches_the_frame_handler() {
+        let result = present_on_ui(Box::new(|| panic!("refused work ran")), |_| {
+            Err("native queue refused".into())
+        });
+        assert_eq!(result, Err("native queue refused".into()));
+    }
+
+    #[test]
+    fn native_image_failure_reaches_the_frame_handler() {
+        let result = present_on_ui(Box::new(|| Err("native presentation refused".into())), |work| {
+            work();
+            Ok(())
+        });
+        assert_eq!(result, Err("native presentation refused".into()));
+    }
+}
+
+mod wait_boundary {
+    use super::super::*;
+    use std::sync::mpsc;
+
+    #[test]
+    fn a_pending_newer_frame_is_required_after_the_wait_begins() {
+        let images = Images::default();
+        let key = ("surface".into(), "view".into());
+        images.reserve(&key, "owner", "sidecar").expect("reserve image");
+        assert!(images.set(&key, 100));
+        let config = images.configure_raster(&key, 800, 600, 2.0, true).expect("configure raster").expect("new raster");
+        images.lock().states.get_mut(&key).expect("image state").last_sequence = 1;
+        let began = Instant::now();
+        let timeout = Duration::from_millis(500);
+        let waiter = images.clone();
+        let (started, waiting) = mpsc::sync_channel(1);
+        let worker = std::thread::spawn(move || {
+            waiter.wait_current_observed(timeout, || started.send(()).expect("signal initialized wait"))
+        });
+        waiting.recv_timeout(Duration::from_secs(2)).expect("wait begins");
+        let arrival_elapsed = {
+            let mut inner = images.lock();
+            let state = inner.states.get_mut(&key).expect("image state");
+            state.presented_raster = config.raster;
+            state.presented_sequence = 1;
+            state.last_sequence = 2;
+            images.changed();
+            began.elapsed()
+        };
+        let result = worker.join().expect("join image wait");
+        assert!(arrival_elapsed < timeout, "controlled arrival missed the active wait deadline: {arrival_elapsed:?}");
+        assert_eq!(result, Err("presentationTimeout".into()), "the newer accepted frame remains pending after the earlier frame completed");
+        assert!(!images.current_presented(), "instantaneous status still reports the pending newer frame");
+        assert_eq!(images.wait_current(Duration::ZERO), Err("presentationTimeout".into()), "a new wait must require the already accepted second frame");
+    }
+}
+
 // contract: images.detach.timeout-retains-target
 #[test]
 fn a_timed_out_detach_keeps_its_supplier_in_the_next_reconnect_targets() {

@@ -3256,7 +3256,3 @@ mod view_origin_tests;
 #[cfg(test)]
 #[path = "../tests/declared_source_origins/view_generation_test.rs"]
 mod view_generation_tests;
-
-#[cfg(test)]
-#[path = "../tests/documents/view_decode_test.rs"]
-mod view_decode_tests;

@@ -1519,7 +1519,3 @@ fn read_surface_placements(
     }
     read(targets)
 }
-
-#[cfg(test)]
-#[path = "../tests/surfaces/placement_snapshot_test.rs"]
-mod placement_snapshot_test;
