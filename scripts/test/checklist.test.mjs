@@ -124,6 +124,65 @@ test("checklist permits a platform-excluded item only with a named unavailable p
   }
 });
 
+test("checklist permits a fully specified unavailable-evidence record in both translations", { timeout: 3000 }, (t) => {
+  const english = "- [-] G1 — Evidence unavailable: Scope: the historical callback assertion. Evidence: retained runs pass, but the first run dump is absent. Result: Unverified because the original event cannot be inspected. Follow-up when: the original run artifact is recovered.\n";
+  const korean = "- [-] G1 — 근거 복구 불가: 범위: 과거 callback assertion. 근거: 보존 실행은 통과했으나 최초 실행 dump는 없다. 결과: 미검증, 최초 event를 확인할 수 없다. 후속 조건: 최초 실행 artifact를 복구할 때.\n";
+  const result = check(t, english, korean);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test("unavailable-evidence records require every nonempty canonical field in both languages", { timeout: 1000 }, () => {
+  const cases = [
+    { name: "Scope", en: ["Evidence: logs", "Result: Unverified because the original run is absent", "Follow-up when: the run is recovered"],
+      ko: ["근거: 로그", "결과: 미검증, 최초 실행이 없다", "후속 조건: 실행을 복구할 때"] },
+    { name: "Evidence", en: ["Scope: old assertion", "Result: Unverified because the original run is absent", "Follow-up when: the run is recovered"],
+      ko: ["범위: 과거 assertion", "결과: 미검증, 최초 실행이 없다", "후속 조건: 실행을 복구할 때"] },
+    { name: "Result", en: ["Scope: old assertion", "Evidence: logs", "Follow-up when: the run is recovered"],
+      ko: ["범위: 과거 assertion", "근거: 로그", "후속 조건: 실행을 복구할 때"] },
+    { name: "Follow-up when", en: ["Scope: old assertion", "Evidence: logs", "Result: Unverified because the original run is absent"],
+      ko: ["범위: 과거 assertion", "근거: 로그", "결과: 미검증, 최초 실행이 없다"] },
+    { name: "Scope", en: ["Scope:", "Evidence: logs", "Result: Unverified because the original run is absent", "Follow-up when: the run is recovered"],
+      ko: ["범위:", "근거: 로그", "결과: 미검증, 최초 실행이 없다", "후속 조건: 실행을 복구할 때"] },
+    { name: "Evidence", en: ["Scope: old assertion", "Evidence:", "Result: Unverified because the original run is absent", "Follow-up when: the run is recovered"],
+      ko: ["범위: 과거 assertion", "근거:", "결과: 미검증, 최초 실행이 없다", "후속 조건: 실행을 복구할 때"] },
+    { name: "Result", en: ["Scope: old assertion", "Evidence: logs", "Result:", "Follow-up when: the run is recovered"],
+      ko: ["범위: 과거 assertion", "근거: 로그", "결과:", "후속 조건: 실행을 복구할 때"] },
+    { name: "Follow-up when", en: ["Scope: old assertion", "Evidence: logs", "Result: Unverified because the original run is absent", "Follow-up when:"],
+      ko: ["범위: 과거 assertion", "근거: 로그", "결과: 미검증, 최초 실행이 없다", "후속 조건:"] },
+  ];
+  for (const entry of cases) {
+    const enFields = entry.en.join(" ");
+    const enErrors = [];
+    checklist(`- [-] G1 — Evidence unavailable: ${enFields}\n`, "docs/features.md", enErrors);
+    assert.match(enErrors.join("\n"), new RegExp(`requires (?:a )?nonempty ${entry.name}:? field`),
+      `English ${entry.name} omission or empty value was accepted`);
+
+    const koFields = entry.ko.join(" ");
+    const koErrors = [];
+    checklist(`- [-] G1 — 근거 복구 불가: ${koFields}\n`, "docs/features.ko.md", koErrors);
+    const koName = { Scope: "범위", Evidence: "근거", Result: "결과", "Follow-up when": "후속 조건" }[entry.name];
+    assert.match(koErrors.join("\n"), new RegExp(`requires (?:a )?nonempty ${koName}:? field`),
+      `Korean ${koName} omission or empty value was accepted`);
+  }
+});
+
+test("unavailable-evidence records reject verified results and noncanonical field order", { timeout: 1000 }, () => {
+  for (const [file, line, message] of [
+    ["docs/features.md", "- [-] G1 — Evidence unavailable: Scope: assertion Evidence: retained logs Result: Verified Follow-up when: source recovery\n", /begin with Unverified/],
+    ["docs/features.md", "- [-] G1 — Evidence unavailable: Scope: assertion Evidence: retained logs Result: not unverified Follow-up when: source recovery\n", /begin with Unverified/],
+    ["docs/features.md", "- [-] G1 — Evidence unavailable: Scope: assertion Evidence: retained logs Result: Unverified, comparison passed Follow-up when: source recovery\n", /cannot state a verified or passing Result/],
+    ["docs/features.md", "- [-] G1 — Evidence unavailable: Evidence: retained logs Scope: assertion Result: Unverified Follow-up when: source recovery\n", /canonical order/],
+    ["docs/features.md", "- [-] G1 — Evidence unavailable: Scope: assertion Scope: duplicate Evidence: retained logs Result: Unverified Follow-up when: source recovery\n", /repeats Scope: field/],
+    ["docs/features.ko.md", "- [-] G1 — 근거 복구 불가: 범위: assertion 근거: logs 결과: 검증 완료 후속 조건: 복구\n", /begin with 미검증/],
+    ["docs/features.ko.md", "- [-] G1 — 근거 복구 불가: 범위: assertion 근거: logs 결과: 미검증, 비교 통과 후속 조건: 복구\n", /cannot state a verified or passing Result/],
+    ["docs/features.ko.md", "- [-] G1 — 근거 복구 불가: 근거: logs 범위: assertion 결과: 미검증 후속 조건: 복구\n", /canonical order/],
+  ]) {
+    const errors = [];
+    checklist(line, file, errors);
+    assert.match(errors.join("\n"), message, `invalid record was accepted: ${line}`);
+  }
+});
+
 for (const [name, english, korean, expectedError] of [
   ["missing record", "- [-] G1 — failed once.\n", "- [-] G1 — 한 번 실패했다. 재현되지 않음: 세 번.\n", /docs\/features\.md:1: closed checklist item G1 requires either a nonempty Not reproduced record or a complete Platform excluded record/],
   ["empty record", "- [-] G1 — failed once. Not reproduced: .\n", "- [-] G1 — 한 번 실패했다. 재현되지 않음: 세 번.\n", /docs\/features\.md:1: closed checklist item G1 requires either a nonempty Not reproduced record or a complete Platform excluded record/],

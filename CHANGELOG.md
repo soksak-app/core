@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-208, F266.8: Validate evidence-unavailable audit records with ordered, nonempty scope, evidence, explicitly unverified result and follow-up fields in both checklist translations. The owner reproduces the prior rejection and passes six affected checks after correction. Close only the original CI load-recovery comparison after independent evidence review; preserve unverified comparability, the historical watcher failure and separate later suite results.
+
 - F212.12-2-1-2, F212.12-2, F212.12: Complete native view-focus activation acceptance after initializing the fixture main document. The final activation check passes press/key receipt, first-responder ownership and frontmost restoration in 0.463 seconds. Combine it with retained input, native-menu, display, drag and restart acceptances to close the linked functional parents; performance and historical audits remain separate.
 
 - F239-206: Load and await the registered main document in the native view-focus fixture before activation. Report navigation failures and retain the existing activity-state wait and timeout. The owning readiness assertion fails before the correction and the final default view-focus test passes 1/1; activation acceptance remains separate.

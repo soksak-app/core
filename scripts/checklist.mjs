@@ -1,4 +1,58 @@
 // Compares task ID, depth, and state instead of translated sentences.
+function unavailableEvidenceErrors(label, file, line, id, korean) {
+  const prefix = korean ? "근거 복구 불가:" : "Evidence unavailable:";
+  const fields = korean
+    ? ["범위:", "근거:", "결과:", "후속 조건:"]
+    : ["Scope:", "Evidence:", "Result:", "Follow-up when:"];
+  const prefixMention = korean ? label.includes("근거 복구 불가:") : /Evidence unavailable:/i.test(label);
+  if (!prefixMention) return null;
+
+  const errors = [];
+  const item = id ?? "without an identifier";
+  const prefixAt = label.indexOf(prefix);
+  if (prefixAt < 0 || label.split(prefix).length !== 2) {
+    errors.push(`${file}:${line}: closed checklist item ${item} requires one canonical ${prefix.trim()} prefix`);
+    return errors;
+  }
+
+  const body = label.slice(prefixAt + prefix.length).trimStart();
+  const occurrences = fields.map((field) => body.split(field).length - 1);
+  for (let index = 0; index < fields.length; index++) {
+    if (occurrences[index] === 0) {
+      errors.push(`${file}:${line}: closed checklist item ${item} requires a nonempty ${fields[index]} field`);
+    } else if (occurrences[index] > 1) {
+      errors.push(`${file}:${line}: closed checklist item ${item} repeats ${fields[index]} field`);
+    }
+  }
+  const positions = fields.map((field) => body.indexOf(field));
+  const present = positions.map((position, index) => ({ position, index })).filter(({ position }) => position >= 0);
+  const ordered = present.every((entry, index) => entry.index === index && (index === 0
+    ? entry.position === 0 : entry.position > present[index - 1].position));
+  if (!ordered) {
+    errors.push(`${file}:${line}: closed checklist item ${item} requires fields in canonical order ${fields.join(" ")}`);
+  }
+  if (errors.length) return errors;
+
+  const values = fields.map((field, index) => body.slice(positions[index] + field.length,
+    index + 1 < fields.length ? positions[index + 1] : body.length).trim());
+  for (let index = 0; index < values.length; index++) {
+    if (!/[\p{L}\p{N}]/u.test(values[index])) {
+      errors.push(`${file}:${line}: closed checklist item ${item} requires nonempty ${fields[index]} field`);
+    }
+  }
+  const result = values[2];
+  const explicitlyUnverified = korean ? result.startsWith("미검증") : /^Unverified(?:\b|:)/u.test(result);
+  if (!explicitlyUnverified) {
+    errors.push(`${file}:${line}: closed checklist item ${item} requires Result: to begin with ${korean ? "미검증" : "Unverified"}`);
+  }
+  const passingResult = korean ? /(?:검증 완료|검증됨|검증되었|통과|성공)/u.test(result)
+    : /\b(?:verified|pass(?:ed|es|ing)?)\b/iu.test(result);
+  if (passingResult) {
+    errors.push(`${file}:${line}: closed checklist item ${item} cannot state a verified or passing Result:`);
+  }
+  return errors;
+}
+
 export function checklist(text, file, errors) {
   const entries = [], identifiers = new Map();
   const lines = text.split("\n");
@@ -18,19 +72,24 @@ export function checklist(text, file, errors) {
       const missing = [!hasContent(causeValue) && (korean ? "원인" : "cause"), !hasContent(retryValue) && (korean ? "재시도 조건" : "retry condition")].filter(Boolean);
       if (missing.length) errors.push(`${file}:${index + 1}: blocked checklist item ${id ?? "without an identifier"} requires nonempty ${missing.join(" and ")}`);
     }
-    // [-] records either an evidence-backed non-reproduction or an explicitly scoped Windows/Linux exclusion.
+    // [-] records non-reproduction, an authorized unavailable-evidence audit, or a scoped Windows/Linux exclusion.
     if (state === "-") {
       const korean = file.endsWith(".ko.md");
-      const record = (korean ? /재현되지 않음:\s*(.+)$/u : /Not reproduced:\s*(.+)$/i).exec(label)?.[1]?.trim();
-      const hasAttemptRecord = record && /[\p{L}\p{N}]/u.test(record);
-      const scopeRecord = (korean ? /플랫폼 범위 제외:\s*(.+)$/u : /Platform excluded:\s*(.+)$/i).exec(label)?.[1]?.trim();
-      const hasScopedPlatformRecord = scopeRecord
-        && /\b(?:Windows|Linux)\b/i.test(scopeRecord)
-        && (korean
-          ? /(?:환경이 없|구현되지 않|사용할 수 없|실행할 수 없)/u.test(scopeRecord) && /(?:미검증|검증되지 않)/u.test(scopeRecord)
-          : /(?:unavailable|not implemented|not available)/i.test(scopeRecord) && /(?:unverified|not verified)/i.test(scopeRecord));
-      if (!hasAttemptRecord && !hasScopedPlatformRecord) {
-        errors.push(`${file}:${index + 1}: closed checklist item ${id ?? "without an identifier"} requires either a nonempty ${korean ? "재현되지 않음" : "Not reproduced"} record or a complete ${korean ? "플랫폼 범위 제외" : "Platform excluded"} record`);
+      const unavailable = unavailableEvidenceErrors(label, file, index + 1, id, korean);
+      if (unavailable !== null) {
+        errors.push(...unavailable);
+      } else {
+        const record = (korean ? /재현되지 않음:\s*(.+)$/u : /Not reproduced:\s*(.+)$/i).exec(label)?.[1]?.trim();
+        const hasAttemptRecord = record && /[\p{L}\p{N}]/u.test(record);
+        const scopeRecord = (korean ? /플랫폼 범위 제외:\s*(.+)$/u : /Platform excluded:\s*(.+)$/i).exec(label)?.[1]?.trim();
+        const hasScopedPlatformRecord = scopeRecord
+          && /\b(?:Windows|Linux)\b/i.test(scopeRecord)
+          && (korean
+            ? /(?:환경이 없|구현되지 않|사용할 수 없|실행할 수 없)/u.test(scopeRecord) && /(?:미검증|검증되지 않)/u.test(scopeRecord)
+            : /(?:unavailable|not implemented|not available)/i.test(scopeRecord) && /(?:unverified|not verified)/i.test(scopeRecord));
+        if (!hasAttemptRecord && !hasScopedPlatformRecord) {
+          errors.push(`${file}:${index + 1}: closed checklist item ${id ?? "without an identifier"} requires either a nonempty ${korean ? "재현되지 않음" : "Not reproduced"} record or a complete ${korean ? "플랫폼 범위 제외" : "Platform excluded"} record`);
+        }
       }
     }
     // An identifier that two lines state is refused whatever its form, with the line of its first statement.

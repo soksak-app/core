@@ -762,6 +762,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F239-208",
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "function unavailableEvidenceErrors(" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a fully specified unavailable-evidence record in both translations" }],
+    expected: "Unavailable historical evidence records require scoped evidence, an explicitly unverified result and a follow-up condition without claiming a functional pass.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-206",
     implementation: [{ file: "native/darwin/tests/view_focus_test.m", symbol: "@implementation MainPageReadiness" }],
     tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "the registered app DOM web view finishes its main page before activation" }],

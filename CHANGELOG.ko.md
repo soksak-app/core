@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-208, F266.8: 양 checklist 번역에서 근거 복구 불가 감사 기록의 범위, 근거, 명시적 미검증 결과 및 후속 조건이 비어 있지 않고 순서대로 있는지 검사한다. 소유 검사는 기존 거절을 재현하며 수정 뒤 영향받는 여섯 검사를 통과한다. 독립 근거 검토 뒤 원래 CI load 복구 비교만 닫고 미검증 비교 가능성, 과거 watcher 실패 및 별도 후속 suite 결과를 유지한다.
+
 - F212.12-2-1-2, F212.12-2, F212.12: Fixture main document 초기화 뒤 native view-focus activation 수용을 완료한다. 최종 activation 검사는 press/key 수신, first-responder 소유권 및 frontmost 복원을 0.463초에 통과한다. 보존된 입력, native-menu, 표시, drag와 restart 수용을 결합해 연결된 기능 parent를 닫으며 성능과 과거 감사는 별도로 남는다.
 
 - F239-206: Native view-focus fixture에서 activation 전에 등록된 main document를 로드하고 준비를 기다린다. Navigation 오류를 명시하고 기존 activity-state 대기와 timeout을 유지한다. 소유 readiness assertion은 수정 전에 실패하며 최종 기본 view-focus 검사는 1/1 통과한다. Activation 수용은 별도로 남긴다.
