@@ -394,7 +394,7 @@ int main(void) { @autoreleasepool {
         "<div style='height:2000px'></div></div><script>"
         "window.probe={events:[]}; window.buttonClicks=0; button.addEventListener('click',()=>buttonClicks++);"
         "for (const type of ['pointerdown','pointerup','pointermove','click','wheel','keydown','input'])"
-        " addEventListener(type,e=>probe.events.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY,key:e.key}),true);"
+        " addEventListener(type,e=>probe.events.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY,key:e.key,code:e.code}),true);"
         "</script>";
     [view loadHTMLString:html baseURL:nil];
     [window orderBack:nil];
@@ -466,6 +466,30 @@ int main(void) { @autoreleasepool {
     check([keysSeen isEqual:@[@"a", @"Enter"]],
         [NSString stringWithFormat:@"keys reach the focused field in a window that is not key: %@", keysSeen]);
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"text input reaches the field");
+
+    evaluate(view, @"probe.events.length=0; null");
+    sp_input_result equalDown = sp_input_key(window, "=", NULL, 0, true);
+    sp_input_result equalUp = sp_input_key(window, "=", NULL, 0, false);
+    check(equalDown == SP_INPUT_DELIVERED && equalUp == SP_INPUT_DELIVERED,
+        @"the equal character is delivered through its physical ANSI key");
+    if (equalDown == SP_INPUT_DELIVERED && equalUp == SP_INPUT_DELIVERED) {
+        until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='keydown').length") unsignedIntegerValue] >= 1; });
+        NSArray *equalKey = evaluate(view, @"probe.events.filter(e=>e.type==='keydown').map(e=>({key:e.key,code:e.code}))");
+        check([equalKey isEqual:@[@{@"key": @"=", @"code": @"Equal"}]],
+            [NSString stringWithFormat:@"the equal character keeps its physical ANSI key identity: %@", equalKey]);
+    }
+
+    evaluate(view, @"probe.events.length=0; null");
+    sp_input_result minusDown = sp_input_key(window, "-", NULL, 0, true);
+    sp_input_result minusUp = sp_input_key(window, "-", NULL, 0, false);
+    check(minusDown == SP_INPUT_DELIVERED && minusUp == SP_INPUT_DELIVERED,
+        @"the minus character is delivered through its physical ANSI key");
+    if (minusDown == SP_INPUT_DELIVERED && minusUp == SP_INPUT_DELIVERED) {
+        until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='keydown').length") unsignedIntegerValue] >= 1; });
+        NSArray *minusKey = evaluate(view, @"probe.events.filter(e=>e.type==='keydown').map(e=>({key:e.key,code:e.code}))");
+        check([minusKey isEqual:@[@{@"key": @"-", @"code": @"Minus"}]],
+            [NSString stringWithFormat:@"the minus character keeps its physical ANSI key identity: %@", minusKey]);
+    }
 
     // Focused input can leave WebKit work in the queue. The next native click must
     // still deliver down before up and synthesize exactly one DOM click.

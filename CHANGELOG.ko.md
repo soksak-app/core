@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-213: Equal과 Minus native input 문자를 Carbon ANSI 물리 key code에 매핑한다. 공개 native input 검사는 수정 전에 실패하고 뒤에는 WebKit key/code 일치로 통과하며 미지원 문자는 명시적 오류로 유지한다.
+
 - F239-210: Root-view presentation-join 기록의 Go, Rust 및 JavaScript event class table을 재생성한다. 기존 generator/class 소유 검사는 재생성 전에 실패하고 뒤에 통과하며 Go/Rust runtime class assertion도 보강한다. Logging 정책과 감사 기준은 유지한다.
 
 - F239-209: 인자 없는 `core.library.search.focus`를 선언하고 shortcut table과 main keyboard handler의 Command-K에서 사용한다. 현재 projects/plugins 검색 필드에 focus하고 page를 바꾸지 않고 hidden library를 거절하며 SDK exposure 선언을 다시 생성한다. 변경 전 registry 호출은 동작이 없어 실패했고, 유지한 직접 호출 및 shortcut-row 통합과 아홉 shortcut-table 검사가 통과한다. Runtime keyboard 수용은 별도로 남는다.

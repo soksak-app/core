@@ -12,6 +12,7 @@
 // (WebFrame::handleMouseEvent). A move in a window that is not the key window is therefore rejected with
 // SP_INPUT_INACTIVE, and a caller that needs hover activates the window with sp_input_activate before sending the move.
 #import <Cocoa/Cocoa.h>
+#import <Carbon/Carbon.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
 #import "input_activity_wait.h"
@@ -610,6 +611,8 @@ static const SPKey keys[] = {
 // character specified by the endpoint to a macOS ANSI keyboard position, and rejects an unknown character instead of
 // replacing it with a guessed code.
 static unsigned short characterKeyCode(unichar character) {
+    if (character == '=') return kVK_ANSI_Equal;
+    if (character == '-') return kVK_ANSI_Minus;
     static const char *letters = "abcdefghijklmnopqrstuvwxyz";
     static const unsigned short letterCodes[] = {0, 11, 8, 2, 14, 3, 5, 4, 34, 38, 40, 37, 46, 45, 31, 35, 12, 15, 1, 17, 32, 9, 13, 7, 16, 6};
     for (NSUInteger i = 0; i < 26; i++) if (character == letters[i]) return letterCodes[i];

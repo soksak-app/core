@@ -777,6 +777,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-213",
+    implementation: [{ file: "native/darwin/src/input_inject.m", symbol: "static unsigned short characterKeyCode(" }],
+    tests: [{ file: "native/darwin/tests/input_inject_test.m", id: "the equal character keeps its physical ANSI key identity" }],
+    expected: "Equal and Minus native keys preserve their physical ANSI identity without a text override.",
+    levels: ["native"],
+  },
+  {
     id: "F239-209",
     implementation: [{ file: "packages/workbench/core-exposure.js", symbol: "export async function installCoreExposure(" }],
     tests: [{ file: "packages/workbench/test/library-search-focus.test.mjs", id: "the declared cmd+k command targets the shown library page and rejects a hidden library" }],

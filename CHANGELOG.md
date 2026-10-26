@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-213: Map the Equal and Minus native input characters to their Carbon ANSI physical key codes. Public native input tests fail before correction and pass with matching WebKit key/code pairs afterward; unsupported characters remain explicit errors.
+
 - F239-210: Regenerate Go, Rust and JavaScript event class tables for root-view presentation-join records. The existing generator/class owner fails before regeneration and passes afterward, with additional runtime class assertions on Go and Rust. Keep logging policy and audit criteria unchanged.
 
 - F239-209: Declare parameterless `core.library.search.focus` and use it for Command-K in the shortcut table and main keyboard handler. Focus the current projects/plugins search field, reject a hidden library without changing its page, and regenerate the SDK exposure declaration. The pre-change registry call failed because the operation was absent; the retained direct invocation and shortcut-row integration pass, alongside nine shortcut-table checks. Runtime keyboard acceptance remains separate.
