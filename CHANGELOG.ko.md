@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-201: Window-check setup이 선택하는 platform 구현에 Darwin bundle 경로와 capture-text build를 둔다. 명시적 executable override와 build error는 유지한다. Platform audit는 기존 공통 분기를 거부했으며 이동 후 setup 소유 검사는 5/5, platform-audit 소유 검사는 2/2 통과한다. 양쪽 host test-inventory lane에 platform helper 두 개를 포함한다.
+
 - F212.14-5-19: 기존 capture stop target으로 HWP layout-display 허용 시간 전체를 기록한다. Content 누락을 판정하기 전에 실제 captured-frame coverage를 확인한다. 재현 stop-target 소유 검사는 수정 전에 실패하고 수정 후 불완전한 coverage와 정확한 deadline coverage를 포함한 HWP collector case 11개가 모두 통과한다. 100 ms deadline과 pixel 기준은 유지한다.
 
 - F212.14-5-17: Served HTML과 pixel 측정에 하나의 구별되는 Browser fixture fill을 사용한다. 기존 회색 fill은 card chrome에도 일치해 측정 경계를 25 pt 확장한다. 재현 Browser 소유 검사는 수정 전에 실패하고 수정 후 여섯 case가 모두 통과하며 detector tolerance, component union 및 통과 한계는 유지한다.
