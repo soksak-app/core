@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-198: Install corrected Editor and Terminal diagnostic event catalogs through the public installer for both hosts. Verify every installed package file against its immutable candidate: 29 Editor files and 16 Terminal files per configuration. Application measurements and publication remain separate.
+
 - F212.14-5-6: Require recorded different-plugin content before measuring a newly opened view. Keep the full continuous recording and its original clocks, and reject stale target pixels without timestamp filtering. The regression fails before correction; all 18 affected owning cases pass afterward. Application measurements remain separate.
 
 - F239-197: Include runtime-supplied surface context when checking required event fields at runtime.log entrances. Keep generic producers subject to explicit required fields and preserve runtime payload validation. The owning regression fails before correction and passes afterward; the affected Editor source-SDK check also passes.

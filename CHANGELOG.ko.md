@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-198: 공개 installer로 양쪽 host에 수정한 Editor·Terminal diagnostic event catalog를 설치한다. Configuration별 Editor 29개·Terminal 16개 설치 파일 모두를 보존한 candidate와 비교한다. 애플리케이션 측정과 publication은 별도로 유지한다.
+
 - F212.14-5-6: 새 view 측정 전에 recording에서 다른 plugin content를 확인한다. 전체 연속 recording과 원래 clock을 유지하며 timestamp filtering 없이 기존 target 픽셀을 거부한다. 회귀 검사는 수정 전 실패하고 수정 후 해당 소유 검사 18개 모두 통과한다. 애플리케이션 측정은 별도로 유지한다.
 
 - F239-197: runtime.log entrance의 필수 event 필드 검사에 runtime이 제공하는 surface context를 포함한다. Generic producer의 명시적 필수 필드 검사와 runtime payload validation은 유지한다. 소유 회귀 검사는 수정 전 실패하고 수정 후 통과하며 해당 Editor source-SDK 검사도 통과한다.

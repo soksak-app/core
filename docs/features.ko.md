@@ -22,6 +22,8 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
+- [o] F239-198 — P0, F239-197, Editor E32/E33 및 Terminal P92-terminal 연결: 수정한 published event schema의 diagnostic candidate를 설치한다. 소유 strict-payload 회귀 검사가 schema 수정 전 실패하고 수정 후 통과한다. macOS 26.6.2 arm64에서 공개 installer가 양쪽 host configuration에 Editor 0.0.7과 Terminal 0.0.21을 선택하고 Editor 29개·Terminal 16개 파일 모두 candidate package와 바이트 단위로 일치한다. 기존 package는 보존한다. 애플리케이션 실행·성능 acceptance·publication은 주장하지 않는다.
+
 - [o] F239-197 — P0, F212.14-5 연결: Source event checker에서 runtime.log context가 제공하는 surface 필드를 인식한다. Red: 소유 catalog fixture가 유효한 runtime.log producer의 필수 surface 누락을 보고한다. Green: literal·computed runtime.log entrance는 context 필드로 통과하고 generic producer는 계속 실패한다. 실제 context 값은 runtime payload validation이 검증한다. 해당 Editor source-SDK 검사는 통과한다.
 
 - [ ] F239-195 — P0, F239-194 및 HWP H23.5 연결: Editor page가 참조하는 studio bridge가 포함된 HWP candidate를 설치하고 editor startup을 검증한다. 양쪽 host는 ui/studio-host.js가 plugin package에 없어 실패한다. 소유 HWP의 실제 packed-page graph 검사가 누락을 재현하고 수정 후 통과한다. 수정한 candidate 설치와 해당 앱 확인은 개발 수정이 끝난 뒤 수행한다.
