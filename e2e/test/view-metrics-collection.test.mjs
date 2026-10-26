@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { closeViewGroup, openRecordedView, processStartSamples, viewContentFrameEvents,
-  mapViewContentFramesToCapture, withViewContentTrace } from "../view-metrics-collection.mjs";
+  mapViewContentFramesToCapture, waitForViewReadiness, withViewContentTrace } from "../view-metrics-collection.mjs";
 
 const event = (name, surface, ts_us, mono_ns) => ({ event: name, ts_us, mono_ns,
   fields: { plugin: "fixture", surface } });
@@ -103,6 +103,46 @@ test("generic content trace starts before an action and returns only scoped sour
   assert.deepEqual(result.stop, { sequence: 1 });
 });
 
+test("shared readiness wrapper waits for the declared status exposure before reading it", { timeout: 5000 }, async () => {
+  const calls = [];
+  let registered = false;
+  let releaseExposure;
+  let signalWaitStarted;
+  let signalReadinessStarted;
+  const exposureNotification = new Promise((resolve) => { releaseExposure = resolve; });
+  const waitStarted = new Promise((resolve) => { signalWaitStarted = resolve; });
+  const readinessStarted = new Promise((resolve) => { signalReadinessStarted = resolve; });
+  const session = {
+    async until(name, predicate, message) {
+      calls.push(`until:${name}`);
+      signalWaitStarted();
+      await exposureNotification;
+      registered = true;
+      const surfaces = [{ surface: "view-a", exposes: ["status fixture.ready"] }];
+      assert.ok(predicate(surfaces), message);
+      return surfaces;
+    },
+  };
+  const readiness = waitForViewReadiness(session, "view-a", {
+    readinessStatus: "fixture.ready",
+    async readiness() {
+      calls.push("readiness");
+      signalReadinessStarted();
+      assert.equal(registered, true, "readiness ran before the exposed status notification");
+      return "ready";
+    },
+  });
+  const outcome = readiness.then((value) => ({ value }), (error) => ({ error }));
+  const firstStep = await Promise.race([waitStarted.then(() => "wait"), readinessStarted.then(() => "readiness")]);
+  assert.equal(firstStep, "wait", "readiness ran before waiting for status exposure");
+  assert.deepEqual(calls, ["until:core.surfaces"]);
+  releaseExposure();
+  const { value, error } = await outcome;
+  if (error) throw error;
+  assert.equal(value, "ready");
+  assert.deepEqual(calls, ["until:core.surfaces", "readiness"]);
+});
+
 test("opening a view records before creation and proves pixels from a finalized frame", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "view-metrics-session-"));
   const logDirectory = join(root, "logs");
@@ -125,6 +165,14 @@ test("opening a view records before creation and proves pixels from a finalized 
 
   const calls = [];
   let viewOpen = true;
+  let exposureRegistered = false;
+  let releaseExposure;
+  let signalExposureWait;
+  const exposureWaitStarted = new Promise((resolve) => { signalExposureWait = resolve; });
+  const exposureNotification = new Promise((resolve) => { releaseExposure = resolve; });
+  let signalReadiness;
+  const readinessStarted = new Promise((resolve) => { signalReadiness = resolve; });
+  let readinessCalls = 0;
   const s = {
     async get(name) {
       assert.equal(name, "host.window");
@@ -145,10 +193,19 @@ test("opening a view records before creation and proves pixels from a finalized 
         fields: { plugin: "fixture", surface: "view-1" } })}\n`);
       return { tab: "view-1" };
     },
-    async until(name, predicate) {
-      calls.push(name);
-      const value = viewOpen ? [{ surface: "view-1" }] : [];
-      assert.ok(predicate(value));
+    async until(name, predicate, message, options) {
+      calls.push(["until", name, options]);
+      if (!exposureRegistered) {
+        assert.equal(name, "core.surfaces");
+        signalExposureWait();
+        await exposureNotification;
+        exposureRegistered = true;
+        const value = [{ surface: "view-1", exposes: ["status fixture.ready"] }];
+        assert.ok(predicate(value), message);
+        return value;
+      }
+      const value = viewOpen ? [{ surface: "view-1", exposes: ["status fixture.ready"] }] : [];
+      assert.ok(predicate(value), message);
       return value;
     },
     async presented() { return { displayed: 10 }; },
@@ -160,9 +217,15 @@ test("opening a view records before creation and proves pixels from a finalized 
     },
     cleanup(fn) { calls.push("cleanup"); this.cleanups ??= []; this.cleanups.push(fn); },
   };
-  const result = await openRecordedView({ diagnostic: () => {} }, s, {
+  const opening = openRecordedView({ diagnostic: () => {} }, s, {
     card: "card-1", plugin: "fixture", params: { path: "file.txt" },
-    readiness: async (_session, surface) => { assert.equal(surface, "view-1"); },
+    readinessStatus: "fixture.ready",
+    readiness: async (_session, surface) => {
+      signalReadiness();
+      assert.equal(exposureRegistered, true, "status read began before its exposure registration notification");
+      readinessCalls++;
+      assert.equal(surface, "view-1");
+    },
     expectedContent: "SOKSAK FIXTURE", language: "en-US",
     recognizeFrame: async (decoded, rect, language) => {
       assert.equal(decoded.time, 10);
@@ -171,6 +234,16 @@ test("opening a view records before creation and proves pixels from a finalized 
       return { lines: ["SOKSAK FIXTURE"] };
     },
   });
+  const openingResult = opening.then((value) => ({ value }), (error) => ({ error }));
+  const firstStep = await Promise.race([
+    exposureWaitStarted.then(() => "exposure-wait"),
+    readinessStarted.then(() => "readiness"),
+  ]);
+  assert.equal(firstStep, "exposure-wait", "status readiness began before waiting for exposure registration");
+  assert.equal(readinessCalls, 0, "status readiness ran before its exposure was registered");
+  releaseExposure();
+  const { value: result, error } = await openingResult;
+  if (error) throw error;
   assert.equal(calls.indexOf("record") < calls.indexOf("core.card.add-tab"), true);
   assert.equal(result.surface, "view-1");
   assert.equal(result.openedPid, 3141);

@@ -182,12 +182,27 @@ export async function monotonicTimeMs(s) {
   return { monoNs: value.mono_ns, timeMs: Number(BigInt(value.mono_ns)) / 1_000_000 };
 }
 
+/** Waits for a view's declared status exposure before reading that status. */
+export async function waitForViewReadiness(s, surface, descriptor) {
+  assert.ok(typeof surface === "string" && surface.length > 0, "view readiness requires a surface identity");
+  assert.ok(typeof descriptor?.readinessStatus === "string" && descriptor.readinessStatus.length > 0,
+    "view readiness status exposure is required");
+  assert.equal(typeof descriptor.readiness, "function", "view readiness callback is required");
+  const exposure = `status ${descriptor.readinessStatus}`;
+  await s.until("core.surfaces", (items) => items.some((item) => item.surface === surface
+    && item.exposes?.includes(exposure)),
+  `view ${surface} did not register ${exposure}`);
+  return descriptor.readiness(s, surface);
+}
+
 /** Opens a view under a live recording and proves its first visible content from a decoded capture frame. */
-export async function openRecordedView(t, s, { card, plugin, params, readiness, expectedContent, language,
+export async function openRecordedView(t, s, { card, plugin, params, readiness, readinessStatus, expectedContent, language,
   recognizeFrame } = {}) {
   assert.ok(typeof card === "string" && card.length > 0, "view card must be nonempty text");
   assert.ok(typeof plugin === "string" && plugin.length > 0, "view plugin must be nonempty text");
   assert.equal(typeof readiness, "function", "view readiness callback is required");
+  assert.ok(typeof readinessStatus === "string" && readinessStatus.length > 0,
+    "view readiness status exposure is required");
   assert.ok(typeof expectedContent === "string" && expectedContent.length > 0, "expected view content is required");
   assert.ok(typeof language === "string" && language.length > 0, "view content language is required");
   assert.ok(recognizeFrame === undefined || typeof recognizeFrame === "function", "view frame recognizer must be a function");
@@ -207,7 +222,7 @@ export async function openRecordedView(t, s, { card, plugin, params, readiness, 
       await s.until("core.surfaces", (items) => !items.some((item) => item.surface === tab),
         `view ${tab} remained registered during cleanup`);
     });
-    const readinessEvidence = await readiness(s, tab);
+    const readinessEvidence = await waitForViewReadiness(s, tab, { readiness, readinessStatus });
     const { displayed } = await s.presented();
     capture = await recording.stop({ after: displayed });
     stopped = true;

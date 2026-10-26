@@ -7,7 +7,7 @@ import { drag, keepCommonSettings } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage,
-  withViewContentTrace } from "../../view-metrics-collection.mjs";
+  waitForViewReadiness, withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "../../view-frame-geometry.mjs";
 import { outside, terminalMarks } from "../../outside.mjs";
@@ -27,6 +27,7 @@ export const terminalViewDescriptor = Object.freeze({
   params: undefined,
   expectedContent: "sh-3.2$",
   language: "en-US",
+  readinessStatus: "terminal.session",
   readiness: async (s, surface) => {
     const session = await s.until("terminal.session", (value) => value?.sessionId && value.cols > 0 && value.rows > 0,
       `terminal view ${surface} did not open its session`, { surface });
@@ -269,7 +270,7 @@ export async function collectTerminalViewMeasurements(t, s, descriptor, configDi
     await s.until("core.grid", (value) => !value.cards.some((item) => item.id === card),
       `terminal measurement card ${card} remained during cleanup`);
   });
-  const readinessEvidence = await descriptor.readiness(s, surface);
+  const readinessEvidence = await waitForViewReadiness(s, surface, descriptor);
   assert.equal(readinessEvidence.historyEntries, 1, `terminal view ${surface} did not begin at initial history`);
   await setMeasuredBackground(s, surface);
   mkdirSync(join(configDir, "logs"), { recursive: true });

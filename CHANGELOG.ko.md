@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-2: 새 view를 읽기 전에 선언한 readiness-status 노출을 기다린다. 초기 open과 scratch view에 공통 event-driven wrapper를 재사용한다. 수정 전 지연 등록 사례가 실패하며 수정 후 영향받는 소유 검사 31개가 통과한다. 애플리케이션 측정 확인은 대기 중이다.
+
 - F212.14-5-1: 양쪽 최적화 diagnostic host에서 선택적 diagnostic drag identity를 검증한다. 두 애플리케이션 사례가 애플리케이션 오류 없이 artifact 완료, byte 수와 SHA-256 assertion을 통과한다. View별 성능이나 실제 pixel의 정확한 일치를 입증하지 않는다.
 
 - F239-194: 양쪽 host에서 browser-compatible HWP candidate 설치와 diagnostic startup을 검증한다. 설치 파일 92개 모두를 수정한 archive와 비교하고 애플리케이션 오류 audit이 비어 있는 상태로 양쪽 diagnostic drag identity 사례가 통과한다. View별 측정은 별도 readiness 순서 수정으로 미완료를 유지한다.

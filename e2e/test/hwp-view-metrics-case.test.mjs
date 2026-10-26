@@ -1,10 +1,32 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { assertHwpFrameMatchesSlot, hwpDocumentHistoryEvidence, hwpFirstContentFrame, hwpGeometryPalette }
+import { assertHwpFrameMatchesSlot, hwpDocumentHistoryEvidence, hwpFirstContentFrame, hwpGeometryPalette, hwpViewDescriptor }
   from "../benchmark/cases/hwp.mjs";
 import { processStartSamples } from "../view-metrics-collection.mjs";
 import { viewProcessPids } from "../view-process-footprint.mjs";
+
+test("HWP descriptor waits for its declared document status exposure", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "hwp-view-readiness-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const previous = process.env.SOKSAK_CAPTURE_TEXT;
+  process.env.SOKSAK_CAPTURE_TEXT = previous ?? "not-invoked";
+  const cleanups = [];
+  try {
+    const descriptor = await hwpViewDescriptor({
+      async get(name) { assert.equal(name, "core.project"); return { root }; },
+      cleanup(callback) { cleanups.push(callback); },
+    });
+    assert.equal(descriptor.readinessStatus, "hwp.document");
+  } finally {
+    for (const cleanup of cleanups) cleanup();
+    if (previous === undefined) delete process.env.SOKSAK_CAPTURE_TEXT;
+    else process.env.SOKSAK_CAPTURE_TEXT = previous;
+  }
+});
 
 test("HWP reclaim evidence reads exact root and studio histories from the diagnostic reply", () => {
   assert.deepEqual(hwpDocumentHistoryEvidence({ historyEntries: 1, regionHistoryEntries: 1 }), {

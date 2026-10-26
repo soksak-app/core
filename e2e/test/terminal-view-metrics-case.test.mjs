@@ -46,6 +46,7 @@ test("terminal source content mapping retains distinct source identity and root-
 });
 
 test("terminal view descriptor reads browser history and controls only the diagnostic frame observer", { timeout: 5000 }, async () => {
+  assert.equal(terminalViewDescriptor.readinessStatus, "terminal.session");
   const calls = [];
   const session = {
     async run(name, params, surface) {

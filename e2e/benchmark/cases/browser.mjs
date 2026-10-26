@@ -7,7 +7,7 @@ import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry }
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
-  mapViewContentFramesToCapture, requireViewContentFrameCoverage, withViewContentTrace }
+  mapViewContentFramesToCapture, requireViewContentFrameCoverage, waitForViewReadiness, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 
 /** Browser-specific inputs for the shared view lifecycle measurement collector. */
@@ -16,6 +16,7 @@ export const browserViewDescriptor = Object.freeze({
   params: undefined,
   expectedContent: "주소를 입력하세요",
   language: "ko-KR",
+  readinessStatus: "browser.location",
   readiness: async (s, surface) => {
     const location = await s.until("browser.location", (value) => value.url === "" && !value.loading && value.error === null,
       `browser view ${surface} did not reach its initial empty state`, { surface });
@@ -222,7 +223,7 @@ export async function collectBrowserViewMeasurements(t, s, descriptor) {
     await s.until("core.grid", (value) => !value.cards.some((item) => item.id === card),
       `browser measurement card ${card} remained during cleanup`);
   });
-  const readinessEvidence = await descriptor.readiness(s, surface);
+  const readinessEvidence = await waitForViewReadiness(s, surface, descriptor);
   assert.equal(readinessEvidence?.historyEntries, 1, "browser drag fixture did not begin at initial history");
   const layout = await layoutObservation(t, s, descriptor, surface, card, 80, url);
   const drag = await dragObservation(t, s, descriptor, surface, card, layout.slotInsetsPt);

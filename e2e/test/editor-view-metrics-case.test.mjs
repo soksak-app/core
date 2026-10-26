@@ -8,6 +8,7 @@ import { editorSlotInsets } from "../benchmark/cases/editor.mjs";
 test("editor view descriptor calls the declared hyphenated content-trace command", async () => {
   const calls = [];
   const descriptor = editorViewDescriptor({ params: { path: "view-content/content.txt" } });
+  assert.equal(descriptor.readinessStatus, "editor.document");
   const session = {
     async until(name, predicate) {
       assert.equal(name, "editor.document");

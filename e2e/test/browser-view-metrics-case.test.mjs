@@ -29,6 +29,7 @@ test("browser metrics descriptor waits for the initial empty state and its visib
   assert.equal(browserViewDescriptor.plugin, "browser");
   assert.equal(browserViewDescriptor.expectedContent, "주소를 입력하세요");
   assert.equal(browserViewDescriptor.language, "ko-KR");
+  assert.equal(browserViewDescriptor.readinessStatus, "browser.location");
   assert.deepEqual(await browserViewDescriptor.readiness(s, "browser-1"), {
     historyEntries: 1,
     location: { url: "", loading: false, error: null, canGoBack: false, canGoForward: false },

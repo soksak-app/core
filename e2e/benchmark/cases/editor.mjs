@@ -252,6 +252,7 @@ export function editorViewDescriptor(content) {
     params: content.params,
     expectedContent: "SOKSAK EDITOR CONTENT",
     language: "en-US",
+    readinessStatus: "editor.document",
     readiness: async (session, surface) => {
       await session.until("editor.document", (value) => value.path === editorPath && value.length === expectedLength,
         `editor ${surface} did not load its measurement document`, { surface });

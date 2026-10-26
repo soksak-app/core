@@ -105,6 +105,7 @@ export async function hwpViewDescriptor(s, diagnostic = () => {}) {
     params: content.params,
     expectedContent: HWP_CONTENT,
     language: "ko-KR",
+    readinessStatus: "hwp.document",
     readiness: async (session, surface) => {
       await session.until("hwp.document", (value) => value.path === path && value.phase === "ready" && value.pages === 1,
         `HWP view ${surface} did not load its one-page measurement document`, { surface });
