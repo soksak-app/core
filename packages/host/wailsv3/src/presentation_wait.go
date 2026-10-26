@@ -21,9 +21,11 @@ type presentationJoin struct {
 
 // pendingPresentation holds placement state until the transaction's root-view joins end.
 type pendingPresentation struct {
-	placements map[string]presentationPlacement
-	invalid    map[string]bool
-	accepted   bool
+	placements   map[string]presentationPlacement
+	requiresJoin map[string]bool
+	joined       map[string]uint64
+	invalid      map[string]bool
+	accepted     bool
 }
 
 // presentationWait holds each joined view, its accepted placement state, and placements of open layout tickets. It runs on the UI
@@ -42,7 +44,9 @@ func (w *presentationWait) prepare(ticket uint64, placements []Placement, genera
 	if w.pending == nil {
 		w.pending = map[uint64]*pendingPresentation{}
 	}
-	state := &pendingPresentation{placements: map[string]presentationPlacement{}, invalid: map[string]bool{}}
+	state := &pendingPresentation{
+		placements: map[string]presentationPlacement{}, requiresJoin: map[string]bool{}, joined: map[string]uint64{}, invalid: map[string]bool{},
+	}
 	changed := make([]Placement, 0, len(placements))
 	for _, placement := range placements {
 		current := presentationPlacement{rect: placement.Rect, visible: placement.Visible, generation: generations[placement.ID]}
@@ -50,6 +54,7 @@ func (w *presentationWait) prepare(ticket uint64, placements []Placement, genera
 		previous, exists := w.committed[placement.ID]
 		if placement.Visible && (!exists || previous != current) {
 			changed = append(changed, placement)
+			state.requiresJoin[placement.ID] = true
 		}
 	}
 	w.pending[ticket] = state
@@ -97,17 +102,38 @@ func (w *presentationWait) endFor(surface string, ticket, generation uint64, rea
 		return false, fmt.Errorf("presentation wait ends with %q, which is not an end", reason)
 	}
 	join, waiting := w.waiting[surface]
-	if !waiting || ticket != 0 && join.ticket != ticket || generation != 0 && join.generation != generation {
+	if waiting && (ticket != 0 && join.ticket != ticket || generation != 0 && join.generation != generation) {
 		return false, nil
 	}
-	delete(w.waiting, surface)
+	if waiting {
+		delete(w.waiting, surface)
+	}
 	if reason != "presented" {
-		if state := w.pending[join.ticket]; state != nil {
-			state.invalid[surface] = true
+		if waiting {
+			if state := w.pending[join.ticket]; state != nil {
+				state.invalid[surface] = true
+			}
+		}
+		if generation != 0 {
+			for pendingTicket, state := range w.pending {
+				if ticket != 0 && pendingTicket != ticket {
+					continue
+				}
+				placement, exists := state.placements[surface]
+				if exists && placement.generation == generation {
+					state.invalid[surface] = true
+					w.finishIfReady(pendingTicket)
+				}
+			}
 		}
 	}
-	w.finishIfReady(join.ticket)
+	if waiting {
+		w.finishIfReady(join.ticket)
+	}
 	if reason == "presented" {
+		return false, nil
+	}
+	if !waiting {
 		return false, nil
 	}
 	EmitHost(LevelDebug, "host.trace.view.presentation-abandoned", map[string]any{"surface": surface, "reason": reason})
@@ -202,34 +228,44 @@ func (s *Surfaces) joinShownViews(window unsafe.Pointer, ticket uint64, placemen
 		if !p.Visible || s.presentation.waits(p.ID) || s.viewRecords().specs[p.ID] == nil {
 			continue
 		}
-		view, err := s.documents.Get(DocumentKey{Surface: p.ID, Name: viewRegionName})
-		if err != nil {
-			continue
-		}
-		channel, ok := s.documents.view(p.ID)
-		if !ok {
-			continue
-		}
-		surface, generation := p.ID, channel.generation
-		abandon, joined, err := system.JoinView(window, ticket, view, func() {
-			if err := system.EnqueueUI(func() { s.endPresentationWaitFor(surface, ticket, generation, "presented") }); err != nil {
-				LogError("view channel", err)
-			}
-		})
-		if err != nil {
-			return fmt.Errorf("joining view %s to the layout transaction: %w", p.ID, err)
-		}
-		if !joined {
-			continue
-		}
-		if !s.presentation.beginFor(surface, ticket, generation, abandon) {
-			if err := abandon(); err != nil {
-				return fmt.Errorf("view %s already waits and its extra native join could not be abandoned: %w", surface, err)
-			}
-			return fmt.Errorf("view %s joined the layout transaction while it already waits", surface)
+		if _, _, err := s.joinViewForPresentation(window, ticket, p); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func (s *Surfaces) joinViewForPresentation(window unsafe.Pointer, ticket uint64, placement Placement) (uint64, bool, error) {
+	view, err := s.documents.Get(DocumentKey{Surface: placement.ID, Name: viewRegionName})
+	if err != nil {
+		return 0, false, nil
+	}
+	channel, ok := s.documents.view(placement.ID)
+	if !ok {
+		return 0, false, nil
+	}
+	surface, generation := placement.ID, channel.generation
+	abandon, joined, err := system.JoinView(window, ticket, view, func() {
+		if err := system.EnqueueUI(func() { s.endPresentationWaitFor(surface, ticket, generation, "presented") }); err != nil {
+			LogError("view channel", err)
+		}
+	})
+	if err != nil {
+		return generation, false, fmt.Errorf("joining view %s to the layout transaction: %w", surface, err)
+	}
+	if !joined {
+		return generation, false, nil
+	}
+	if !s.presentation.beginFor(surface, ticket, generation, abandon) {
+		if err := abandon(); err != nil {
+			return generation, false, fmt.Errorf("view %s already waits and its extra native join could not be abandoned: %w", surface, err)
+		}
+		return generation, false, fmt.Errorf("view %s joined the layout transaction while it already waits", surface)
+	}
+	if state := s.presentation.pending[ticket]; state != nil {
+		state.joined[surface] = generation
+	}
+	return generation, true, nil
 }
 
 // endPresentationWait ends the current wait of surface and reports lifecycle abandonment to the page.

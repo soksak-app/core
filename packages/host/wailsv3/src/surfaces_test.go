@@ -14,11 +14,14 @@ import (
 
 // contract: surface-layout.continuous-waits-for-app-dom
 func TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit(t *testing.T) {
-	phases := make(chan string, 3)
+	phases := make(chan string, 4)
 	domRelease := make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
 		completeLayoutPresentation(func() error {
+			phases <- "views"
+			return nil
+		}, func() error {
 			phases <- "dom"
 			<-domRelease
 			return nil
@@ -32,6 +35,14 @@ func TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit(t *testing.
 			done <- err
 		})
 	}()
+	select {
+	case phase := <-phases:
+		if phase != "views" {
+			t.Fatalf("continuous layout reached %s before registering root-view presentation", phase)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("continuous layout did not register root-view presentation")
+	}
 	select {
 	case phase := <-phases:
 		if phase != "dom" {
@@ -62,7 +73,9 @@ func TestLayoutPresentationFailureSkipsLaterStages(t *testing.T) {
 	domFailure := errors.New("application presentation failed")
 	var rasterCalls, commitCalls int
 	var got error
-	completeLayoutPresentation(func() error { return domFailure }, func() error {
+	completeLayoutPresentation(func() error {
+		return nil
+	}, func() error { return domFailure }, func() error {
 		rasterCalls++
 		return nil
 	}, func(err error) {
@@ -76,7 +89,9 @@ func TestLayoutPresentationFailureSkipsLaterStages(t *testing.T) {
 	rasterFailure := errors.New("image raster failed")
 	rasterCalls, commitCalls = 0, 0
 	got = nil
-	completeLayoutPresentation(func() error { return nil }, func() error {
+	completeLayoutPresentation(func() error {
+		return nil
+	}, func() error { return nil }, func() error {
 		rasterCalls++
 		return rasterFailure
 	}, func(err error) {
@@ -85,6 +100,30 @@ func TestLayoutPresentationFailureSkipsLaterStages(t *testing.T) {
 	})
 	if !errors.Is(got, rasterFailure) || rasterCalls != 1 || commitCalls != 1 {
 		t.Fatalf("raster failure reached raster %d times and commit %d times with error %v", rasterCalls, commitCalls, got)
+	}
+}
+
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+func TestLayoutRegistersRootViewsBeforeWaitingForApplicationDOM(t *testing.T) {
+	var phases []string
+	completeLayoutPresentation(func() error {
+		phases = append(phases, "root views")
+		return nil
+	}, func() error {
+		phases = append(phases, "dom")
+		return nil
+	}, func() error {
+		phases = append(phases, "raster")
+		return nil
+	}, func(err error) {
+		if err != nil {
+			t.Fatalf("layout presentation failed: %v", err)
+		}
+		phases = append(phases, "commit")
+	})
+	want := []string{"root views", "dom", "raster", "commit"}
+	if !reflect.DeepEqual(phases, want) {
+		t.Fatalf("layout presentation phases = %v, want %v", phases, want)
 	}
 }
 

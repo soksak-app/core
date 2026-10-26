@@ -1,14 +1,16 @@
 //! Checks that a window status read during the creation and the close of a surface finds the registered surface.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, PoisonError, mpsc};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::thread;
 use std::time::Duration;
 
 use super::{
     Running, SurfaceComposition, cancel_layout_after_setup_error, clear_page_compositions,
-    close_registered_surface, complete_layout_presentation, create_registered_surface,
-    mark_first_commit, prepare_surface_visibility, pressed_surface, removed_surfaces,
+    close_registered_surface, commit_layout_after_root_joins, committed_view_updates,
+    complete_layout_presentation, create_registered_surface, mark_first_commit,
+    prepare_surface_visibility, pressed_surface, removed_surfaces,
 };
 
 // contract: surface-layout.setup-failure-cancels-open-transaction
@@ -72,13 +74,30 @@ fn prepare_preserves_requested_visible_state_and_hides_requested_invisible_surfa
     );
 }
 
-// contract: surface-layout.continuous-waits-for-app-dom
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
 #[test]
-fn continuous_layout_waits_for_application_dom_before_raster_and_commit() {
+fn root_view_join_is_registered_before_dom_presentation_wait() {
     let (phase_tx, phase_rx) = mpsc::channel();
     let (dom_release, dom_wait) = mpsc::channel();
+    let presented = Arc::new(AtomicBool::new(false));
+    let pending_join = Arc::new(Mutex::new(None::<Box<dyn FnOnce() + Send>>));
+    let view_presented = Arc::clone(&presented);
+    let registered_join = Arc::clone(&pending_join);
+    let joined_slot = Arc::clone(&pending_join);
     let worker = thread::spawn(move || {
         let ready = complete_layout_presentation(
+            || {
+                assert!(
+                    registered_join.lock().unwrap().is_some(),
+                    "DOM presentation was registered before the fake platform join"
+                );
+                assert!(
+                    !view_presented.load(Ordering::SeqCst),
+                    "the fake platform presented the root view before the DOM wait"
+                );
+                phase_tx.send("register-dom").unwrap();
+                Ok(())
+            },
             || {
                 phase_tx.send("dom").unwrap();
                 dom_wait.recv().unwrap();
@@ -88,6 +107,14 @@ fn continuous_layout_waits_for_application_dom_before_raster_and_commit() {
                 phase_tx.send("raster").unwrap();
                 Ok(())
             },
+            || {
+                phase_tx.send("root-join").unwrap();
+                let view_presented = Arc::clone(&view_presented);
+                *joined_slot.lock().unwrap() = Some(Box::new(move || {
+                    view_presented.store(true, Ordering::SeqCst);
+                }));
+                Ok(())
+            },
         );
         if ready.is_ok() {
             phase_tx.send("commit").unwrap();
@@ -95,43 +122,234 @@ fn continuous_layout_waits_for_application_dom_before_raster_and_commit() {
     });
     let first = phase_rx
         .recv_timeout(Duration::from_secs(1))
-        .expect("continuous layout did not request DOM presentation");
+        .expect("layout did not register its first presentation stage");
+    dom_release.send(()).unwrap();
+    let mut phases = vec![first];
+    while phases.last() != Some(&"commit") {
+        phases.push(
+            phase_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("layout did not finish its presentation stages"),
+        );
+    }
+    worker.join().unwrap();
+    assert!(
+        !presented.load(Ordering::SeqCst),
+        "the fake platform join was released before the root view presented"
+    );
+    pending_join
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the root-view presentation callback was not retained")();
+    assert!(presented.load(Ordering::SeqCst));
     assert_eq!(
-        first, "dom",
-        "continuous layout reached {first} before the controlled DOM presentation callback"
+        phases,
+        ["root-join", "register-dom", "dom", "raster", "commit"],
+        "layout did not register changed root-view joins before the DOM wait, then wait for DOM and rasters before commit"
+    );
+}
+
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+#[test]
+fn a_replacement_generation_is_not_committed_without_its_own_join() {
+    let joined_generation = 12;
+    let current_generation = 13;
+    let placed = [super::Placement {
+        id: "tab-recreated".into(),
+        x: 30.0,
+        y: 20.0,
+        w: 300.0,
+        h: 200.0,
+        visible: true,
+    }];
+    let stages = Arc::new(Mutex::new(Vec::new()));
+    let join_stages = Arc::clone(&stages);
+    let commit_stages = Arc::clone(&stages);
+
+    let result = commit_layout_after_root_joins(
+        &placed,
+        vec![("tab-recreated".into(), joined_generation)],
+        41,
+        |_| Some(current_generation),
+        |_, _, _| true,
+        |missing| {
+            assert_eq!(missing.len(), 1);
+            assert_eq!(missing[0].id, "tab-recreated");
+            join_stages.lock().unwrap().push("join-generation-13");
+            Ok(super::documents::ViewJoinOutcome {
+                required: vec![("tab-recreated".into(), current_generation)],
+                joined: vec![("tab-recreated".into(), current_generation)],
+            })
+        },
+        || {
+            commit_stages.lock().unwrap().push("native-commit");
+            Ok(true)
+        },
+    )
+    .expect("replacement view generation joins before commit");
+
+    assert!(
+        result
+            .1
+            .contains(&("tab-recreated".into(), current_generation)),
+        "the replacement generation was not retained as joined"
+    );
+    assert_eq!(
+        *stages.lock().unwrap(),
+        ["join-generation-13", "native-commit"],
+        "the native commit ran before the replacement generation joined"
+    );
+}
+
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+#[test]
+fn presentation_state_does_not_commit_an_unjoined_visible_generation() {
+    let visible = [super::Placement {
+        id: "tab-recreated".into(),
+        x: 30.0,
+        y: 20.0,
+        w: 300.0,
+        h: 200.0,
+        visible: true,
+    }];
+    let prior_join = [("tab-recreated".to_string(), 12)];
+
+    let updates = committed_view_updates(&visible, &prior_join, |_| Some(13));
+    assert!(
+        updates.is_empty(),
+        "an unjoined replacement generation was marked committed"
+    );
+
+    let hidden = [super::Placement {
+        visible: false,
+        ..visible[0].clone()
+    }];
+    let hidden_updates = committed_view_updates(&hidden, &prior_join, |_| Some(13));
+    assert_eq!(
+        hidden_updates.len(),
+        1,
+        "hiding a view lost its committed hidden placement"
+    );
+    assert_eq!(hidden_updates[0].1, 13);
+    assert!(!hidden_updates[0].2.visible);
+}
+
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+#[test]
+fn a_required_replacement_join_failure_stops_before_native_commit() {
+    let placed = [super::Placement {
+        id: "tab-recreated".into(),
+        x: 30.0,
+        y: 20.0,
+        w: 300.0,
+        h: 200.0,
+        visible: true,
+    }];
+    let mut commit_called = false;
+
+    let error = commit_layout_after_root_joins(
+        &placed,
+        vec![("tab-recreated".into(), 12)],
+        41,
+        |_| Some(13),
+        |_, _, _| true,
+        |_| {
+            Ok(super::documents::ViewJoinOutcome {
+                required: vec![("tab-recreated".into(), 13)],
+                joined: Vec::new(),
+            })
+        },
+        || {
+            commit_called = true;
+            Ok(true)
+        },
+    )
+    .expect_err("an unjoined replacement generation cannot be committed");
+
+    assert_eq!(
+        error,
+        "view tab-recreated generation 13 could not join layout ticket 41"
     );
     assert!(
-        phase_rx.try_recv().is_err(),
-        "layout advanced while DOM was pending"
+        !commit_called,
+        "native commit ran after a required root-view join failed"
     );
-    dom_release.send(()).unwrap();
-    assert_eq!(
-        phase_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
-        "raster"
+}
+
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
+#[test]
+fn an_unchanged_committed_root_does_not_join_again() {
+    let placed = [super::Placement {
+        id: "tab-stable".into(),
+        x: 30.0,
+        y: 20.0,
+        w: 300.0,
+        h: 200.0,
+        visible: true,
+    }];
+    let mut join_called = false;
+    let (committed, joined) = commit_layout_after_root_joins(
+        &placed,
+        Vec::new(),
+        42,
+        |_| Some(13),
+        |_, _, placement| placement.frame != [30.0, 20.0, 300.0, 200.0],
+        |_| {
+            join_called = true;
+            Ok(super::documents::ViewJoinOutcome::default())
+        },
+        || Ok(true),
+    )
+    .expect("an unchanged committed root remains settled");
+
+    assert!(committed);
+    assert!(joined.is_empty());
+    assert!(
+        !join_called,
+        "an unchanged committed root was probed for another join"
     );
-    assert_eq!(
-        phase_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
-        "commit"
-    );
-    worker.join().unwrap();
 }
 
 // contract: surface-layout.presentation-failure-stops-before-commit
 #[test]
 fn dom_failure_skips_raster_and_dom_and_raster_errors_are_preserved() {
     let mut raster_called = false;
+    let mut roots_prepared = false;
     let ready = complete_layout_presentation(
+        || Ok(()),
         || Err("application DOM failed".to_string()),
         || {
             raster_called = true;
             Ok(())
         },
+        || {
+            roots_prepared = true;
+            Ok(())
+        },
     );
     assert_eq!(ready, Err("application DOM failed".to_string()));
+    assert!(
+        roots_prepared,
+        "root views were not prepared before DOM presentation"
+    );
     assert!(!raster_called, "raster ran after DOM presentation failed");
 
-    let ready = complete_layout_presentation(|| Ok(()), || Err("image raster failed".to_string()));
+    roots_prepared = false;
+    let ready = complete_layout_presentation(
+        || Ok(()),
+        || Ok(()),
+        || Err("image raster failed".to_string()),
+        || {
+            roots_prepared = true;
+            Ok(())
+        },
+    );
     assert_eq!(ready, Err("image raster failed".to_string()));
+    assert!(
+        roots_prepared,
+        "root views were not prepared before raster wait"
+    );
 }
 
 // contract: exposure.host-window.reads-during-surface-creation
@@ -375,8 +593,14 @@ mod placement_snapshot {
             },
         )
         .expect("read prepared frames");
-        assert_eq!(turns, 1, "one placement reply must use one main-thread turn");
-        assert_eq!(placements[0].x, placements[1].x, "frames must share the same native turn");
+        assert_eq!(
+            turns, 1,
+            "one placement reply must use one main-thread turn"
+        );
+        assert_eq!(
+            placements[0].x, placements[1].x,
+            "frames must share the same native turn"
+        );
         assert_eq!(placements[0].id, "first");
         assert_eq!(placements[1].id, "second");
         assert!(placements[0].visible);
@@ -385,7 +609,9 @@ mod placement_snapshot {
 
     #[test]
     fn frame_read_failure_rejects_the_placement_reply() {
-        let result = read_surface_placements(vec![(1, "first".into(), true)], |_| Err("frame read failed".into()));
+        let result = read_surface_placements(vec![(1, "first".into(), true)], |_| {
+            Err("frame read failed".into())
+        });
         assert_eq!(result.err().as_deref(), Some("frame read failed"));
     }
 

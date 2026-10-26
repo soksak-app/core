@@ -869,8 +869,11 @@ type PresentRequest struct {
 	Settled    bool        `json:"settled"`
 }
 
-func completeLayoutPresentation(awaitDOM, awaitRasters func() error, commit func(error)) {
-	err := awaitDOM()
+func completeLayoutPresentation(prepareViews, awaitDOM, awaitRasters func() error, commit func(error)) {
+	err := prepareViews()
+	if err == nil {
+		err = awaitDOM()
+	}
 	if err == nil {
 		err = awaitRasters()
 	}
@@ -889,6 +892,20 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	done := make(chan result, 1)
 	routine.Go("layout-prepare", func() {
 		completeLayoutPresentation(func() error {
+			var prepareErr error
+			application.InvokeSync(func() {
+				for _, p := range req.Placements {
+					view := s.views[p.ID]
+					if view == nil {
+						prepareErr = fmt.Errorf("surface %q closed before presentation", p.ID)
+						return
+					}
+					view.SetHidden(!p.Visible)
+				}
+				prepareErr = s.joinViewsForPresentRequest(win.NativeWindow(), req, req.Placements)
+			})
+			return prepareErr
+		}, func() error {
 			domReady := make(chan struct{})
 			var waiting error
 			application.InvokeSync(func() {
@@ -930,39 +947,10 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 					done <- result{err: waiting}
 					return
 				}
-				out := make([]Placement, 0, len(req.Placements))
-				for _, p := range req.Placements {
-					view := s.views[p.ID]
-					if view == nil {
-						failure := fmt.Errorf("surface %q closed before presentation", p.ID)
-						if err := s.cancelLayoutPresentation(win.NativeWindow(), req.Ticket); err != nil {
-							failure = fmt.Errorf("%w; cancelling layout: %v", failure, err)
-						}
-						done <- result{err: failure}
-						return
-					}
-					view.SetHidden(!p.Visible)
-					out = append(out, Placement{ID: p.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: p.Visible})
-				}
-				if err := s.joinViewsForPresentRequest(win.NativeWindow(), req, req.Placements); err != nil {
-					if cancel := s.cancelLayoutPresentation(win.NativeWindow(), req.Ticket); cancel != nil {
-						err = fmt.Errorf("%w; cancelling layout: %v", err, cancel)
-					}
-					done <- result{err: err}
-					return
-				}
-				committed := system.CommitLayout(win.NativeWindow(), req.Ticket)
-				if !committed {
-					failure := fmt.Errorf("surface preparation %d is no longer current", req.Ticket)
-					if cancel := s.cancelLayoutPresentation(win.NativeWindow(), req.Ticket); cancel != nil {
-						failure = fmt.Errorf("%w; cancelling layout: %v", failure, cancel)
-					}
+				out, failure := s.finishLayoutPresentation(win.NativeWindow(), req)
+				if failure != nil {
 					done <- result{err: failure}
 					return
-				}
-				s.presentation.accept(req.Ticket)
-				if req.Settled {
-					s.run(false)
 				}
 				done <- result{placed: out}
 			}); err != nil {
@@ -977,6 +965,101 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	placed := outcome.placed
 	s.windowChanged()
 	return placed, nil
+}
+
+// finishLayoutPresentation reads the actual surface frames and commits an accepted presentation on the UI thread.
+func (s *Surfaces) finishLayoutPresentation(window unsafe.Pointer, req PresentRequest) ([]Placement, error) {
+	if err := s.ensureCurrentPresentationJoins(window, req); err != nil {
+		if cancel := s.cancelLayoutPresentation(window, req.Ticket); cancel != nil {
+			err = fmt.Errorf("%w; cancelling layout: %v", err, cancel)
+		}
+		return nil, err
+	}
+	out := make([]Placement, 0, len(req.Placements))
+	for _, p := range req.Placements {
+		view := s.views[p.ID]
+		if view == nil {
+			failure := fmt.Errorf("surface %q closed before presentation", p.ID)
+			if err := s.cancelLayoutPresentation(window, req.Ticket); err != nil {
+				failure = fmt.Errorf("%w; cancelling layout: %v", failure, err)
+			}
+			return nil, failure
+		}
+		out = append(out, Placement{ID: p.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: p.Visible})
+	}
+	committed := system.CommitLayout(window, req.Ticket)
+	if !committed {
+		failure := fmt.Errorf("surface preparation %d is no longer current", req.Ticket)
+		if cancel := s.cancelLayoutPresentation(window, req.Ticket); cancel != nil {
+			failure = fmt.Errorf("%w; cancelling layout: %v", failure, cancel)
+		}
+		return nil, failure
+	}
+	s.presentation.accept(req.Ticket)
+	if req.Settled {
+		s.run(false)
+	}
+	return out, nil
+}
+
+// ensureCurrentPresentationJoins verifies that each visible root view in the request still matches its ticket join.
+func (s *Surfaces) ensureCurrentPresentationJoins(window unsafe.Pointer, req PresentRequest) error {
+	state := s.presentation.pending[req.Ticket]
+	if state == nil {
+		return fmt.Errorf("surface presentation %d has no pending root-view state", req.Ticket)
+	}
+	for _, placement := range req.Placements {
+		if !placement.Visible || s.viewRecords().specs[placement.ID] == nil {
+			continue
+		}
+		previous, exists := state.placements[placement.ID]
+		if !exists {
+			return fmt.Errorf("visible view %s has no placement in presentation %d", placement.ID, req.Ticket)
+		}
+		channel, current := s.documents.view(placement.ID)
+		if !current {
+			if state.invalid[placement.ID] {
+				continue
+			}
+			if previous.generation == 0 {
+				state.invalid[placement.ID] = true
+				continue
+			}
+			return fmt.Errorf("visible view %s has no current generation for presentation %d", placement.ID, req.Ticket)
+		}
+		if state.joined[placement.ID] == channel.generation {
+			continue
+		}
+		if !state.requiresJoin[placement.ID] && previous.generation == channel.generation {
+			continue
+		}
+		if join, waiting := s.presentation.waiting[placement.ID]; waiting {
+			if join.ticket != req.Ticket {
+				return fmt.Errorf("visible view %s still waits for presentation %d", placement.ID, join.ticket)
+			}
+			if join.generation == channel.generation {
+				return fmt.Errorf("visible view %s has a pending join that is not recorded for presentation %d", placement.ID, req.Ticket)
+			}
+			delete(s.presentation.waiting, placement.ID)
+			if join.abandon != nil {
+				if err := join.abandon(); err != nil {
+					return fmt.Errorf("abandoning replaced generation %d of view %s: %w", join.generation, placement.ID, err)
+				}
+			}
+		}
+		previous.generation = channel.generation
+		state.placements[placement.ID] = previous
+		state.requiresJoin[placement.ID] = true
+		delete(state.invalid, placement.ID)
+		generation, joined, err := s.joinViewForPresentation(window, req.Ticket, placement)
+		if err != nil {
+			return err
+		}
+		if !joined || generation != channel.generation {
+			return fmt.Errorf("visible view %s generation %d was not joined to presentation %d", placement.ID, channel.generation, req.Ticket)
+		}
+	}
+	return nil
 }
 
 // CreateLogicalSurfaceHandle passes a native creation failure as it is and rejects a nil handle.

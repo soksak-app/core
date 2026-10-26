@@ -2,6 +2,7 @@ package host
 
 import (
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -19,6 +20,141 @@ func TestUnsettledChangedRootPlacementJoinsItsPresentation(t *testing.T) {
 	}
 	if fake.joins[0].ticket != request.Ticket || fake.joins[0].view != fake.created[0] {
 		t.Fatalf("join ticket/view are %d/%p, want %d/%p", fake.joins[0].ticket, fake.joins[0].view, request.Ticket, fake.created[0])
+	}
+}
+
+// contract: view.presentation-wait.rejoins-current-generation-before-commit
+func TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit(t *testing.T) {
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
+	request := PresentRequest{Ticket: 36, Placements: []Placement{placement}, Settled: false}
+	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
+		t.Fatalf("join initial generation: %v", err)
+	}
+	old, ok := s.documents.view(placement.ID)
+	if !ok {
+		t.Fatal("initial root view channel is missing")
+	}
+	if _, err := s.documents.Remove(DocumentKey{Surface: placement.ID, Name: viewRegionName}); err != nil {
+		t.Fatalf("remove ended root document: %v", err)
+	}
+	s.endPresentationWaitFor(placement.ID, request.Ticket, old.generation, "process-ended")
+
+	replacementGeneration := old.generation + 1
+	replacementRoot := unsafe.Pointer(new(int))
+	s.documents.registerView(placement.ID, "probe", replacementGeneration, replacementRoot)
+	key := DocumentKey{Surface: placement.ID, Name: viewRegionName}
+	if err := s.documents.Reserve(key); err != nil {
+		t.Fatalf("reserve replacement root document: %v", err)
+	}
+	if !s.documents.Set(key, replacementRoot) {
+		t.Fatal("replacement root document was not registered")
+	}
+	if err := s.ensureCurrentPresentationJoins(window, request); err != nil {
+		t.Fatalf("recheck presentation generation: %v", err)
+	}
+	if len(fake.joins) != 2 || fake.joins[1].ticket != request.Ticket || fake.joins[1].view != replacementRoot {
+		t.Fatalf("same-ticket joins are %+v; want generation %d joined to ticket %d before commit", fake.joins, replacementGeneration, request.Ticket)
+	}
+}
+
+// contract: view.presentation-wait.rejoins-current-generation-before-commit
+func TestRestartLimitLeavesNoReplacementGenerationToJoin(t *testing.T) {
+	clock := &fakeClock{}
+	s, fake, _ := newLifecycleSurfaces(t, clock)
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
+	request := PresentRequest{Ticket: 37, Placements: []Placement{placement}, Settled: false}
+	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
+		t.Fatalf("join initial generation: %v", err)
+	}
+	initial, ok := s.documents.view(placement.ID)
+	if !ok {
+		t.Fatal("initial root view channel is missing")
+	}
+	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
+		clock.set(offset)
+		endView(t, s, fake)
+	}
+	if !s.viewRecords().isStopped(placement.ID) {
+		t.Fatal("the fourth process end did not stop the view restart")
+	}
+	if _, ok := s.documents.view(placement.ID); ok {
+		t.Fatal("a replacement view exists after the restart limit")
+	}
+	if err := s.ensureCurrentPresentationJoins(window, request); err != nil {
+		t.Fatalf("the stopped view blocked its open layout: %v", err)
+	}
+	state := s.presentation.pending[request.Ticket]
+	if !state.invalid[placement.ID] || state.placements[placement.ID].generation != initial.generation {
+		t.Fatalf("stopped view pending state = %+v; want invalid old generation and no replacement", state)
+	}
+}
+
+// contract: view.presentation-wait.rejoins-current-generation-before-commit
+func TestRestartLimitInvalidatesPlacementAfterItsJoinPresented(t *testing.T) {
+	clock := &fakeClock{}
+	s, fake, _ := newLifecycleSurfaces(t, clock)
+	events := recordWindowEvents(s)
+	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second} {
+		clock.set(offset)
+		endView(t, s, fake)
+	}
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
+	request := PresentRequest{Ticket: 39, Placements: []Placement{placement}, Settled: false}
+	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
+		t.Fatalf("join current generation: %v", err)
+	}
+	current, ok := s.documents.view(placement.ID)
+	if !ok {
+		t.Fatal("current root generation is missing before its presentation")
+	}
+	fake.joins[len(fake.joins)-1].presented()
+	if fake.joins[len(fake.joins)-1].abandons != 0 {
+		t.Fatal("a presented join was abandoned")
+	}
+	clock.set(30 * time.Second)
+	endView(t, s, fake)
+	if !s.viewRecords().isStopped(placement.ID) {
+		t.Fatal("the fourth process end did not stop the view restart")
+	}
+	if _, ok := s.documents.view(placement.ID); ok {
+		t.Fatal("a replacement root exists after the restart limit")
+	}
+	if err := s.ensureCurrentPresentationJoins(window, request); err != nil {
+		t.Fatalf("the stopped view blocked its open layout after its join presented: %v", err)
+	}
+	for _, event := range *events {
+		if event.name == "view-presentation-abandoned" {
+			t.Fatalf("a previously presented join emitted an abandonment event: %+v", event)
+		}
+	}
+	state := s.presentation.pending[request.Ticket]
+	if !state.invalid[placement.ID] || state.placements[placement.ID].generation != current.generation {
+		t.Fatalf("pending placement after the stopped generation ended = %+v; want its presented generation invalidated", state)
+	}
+}
+
+// contract: view.presentation-wait.rejoins-current-generation-before-commit
+func TestInitiallyAbsentRootGenerationIsNotPromoted(t *testing.T) {
+	s, _, _ := newLifecycleSurfaces(t, &fakeClock{})
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
+	if _, err := s.documents.Remove(DocumentKey{Surface: placement.ID, Name: viewRegionName}); err != nil {
+		t.Fatalf("remove initial root document: %v", err)
+	}
+	request := PresentRequest{Ticket: 38, Placements: []Placement{placement}, Settled: false}
+	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
+		t.Fatalf("prepare placement without an initial root generation: %v", err)
+	}
+	if err := s.ensureCurrentPresentationJoins(window, request); err != nil {
+		t.Fatalf("an absent initial root generation blocked its open layout: %v", err)
+	}
+	state := s.presentation.pending[request.Ticket]
+	if !state.invalid[placement.ID] || state.placements[placement.ID].generation != 0 || state.joined[placement.ID] != 0 {
+		t.Fatalf("absent initial generation was promoted: %+v", state)
 	}
 }
 

@@ -6936,14 +6936,29 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-5-24",
+    implementation: [
+      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func (s *Surfaces) ensureCurrentPresentationJoins(" },
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn commit_layout_after_root_joins(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/view_join_test.go", id: "TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit" },
+      { file: "packages/host/wailsv3/src/view_join_test.go", id: "TestRestartLimitInvalidatesPlacementAfterItsJoinPresented" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "a_replacement_generation_is_not_committed_without_its_own_join" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "an_unchanged_committed_root_does_not_join_again" },
+    ],
+    expected: "Root joins precede independent waits; replacement generations join the same ticket before commit while unchanged roots and lifecycle stop states remain valid.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.14-5-14",
     implementation: [
       { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func completeLayoutPresentation(" },
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn complete_layout_presentation(" },
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn complete_layout_presentation<T>(" },
     ],
     tests: [
       { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit" },
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "continuous_layout_waits_for_application_dom_before_raster_and_commit" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "root_view_join_is_registered_before_dom_presentation_wait" },
       { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "webview_presentation_registration_failure_cancels_open_layout" },
     ],
     expected: "Continuous layouts wait for app DOM presentation before raster readiness and commit; callback setup failure queues cancellation and preserves errors.",

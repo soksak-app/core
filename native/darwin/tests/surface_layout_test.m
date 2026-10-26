@@ -140,6 +140,36 @@ static BOOL snapshotShowsMarkerAtX(NSImage *image, CGFloat x) {
     return markerRows >= (NSInteger)ceil(60 * scale);
 }
 
+static BOOL captureFrameHasColorAtPoint(NSData *data, CGFloat x, CGFloat y, double *displayed) {
+    if (data.length < sizeof(uint32_t) * 3 + sizeof(double) * 7) return NO;
+    uint32_t head[3] = {0};
+    double info[7] = {0};
+    [data getBytes:head length:sizeof(head)];
+    [data getBytes:info range:NSMakeRange(sizeof(head), sizeof(info))];
+    if (head[0] == 0 || head[1] == 0 || head[2] < head[0] * 4 || info[4] <= 0 || info[5] <= 0
+        || data.length != sizeof(head) + sizeof(info) + (size_t)head[2] * head[1]) return NO;
+    if (displayed) *displayed = info[6];
+    double scale = info[4] * info[5];
+    size_t px = (size_t)floor(info[0] * info[5] + x * scale);
+    size_t py = (size_t)floor(info[1] * info[5] + y * scale);
+    if (px >= head[0] || py >= head[1]) return NO;
+    const uint8_t *pixels = (const uint8_t *)data.bytes + sizeof(head) + sizeof(info);
+    const uint8_t *pixel = pixels + py * head[2] + px * 4;
+    return abs((int)pixel[2]) <= 3 && abs((int)pixel[1] - 160) <= 3 && abs((int)pixel[0] - 210) <= 3;
+}
+
+static BOOL bitmapContainsFirstShowMarker(NSBitmapImageRep *bitmap) {
+    if (bitmap == nil) return NO;
+    for (NSInteger y = 0; y < bitmap.pixelsHigh; y++) {
+        for (NSInteger x = 0; x < bitmap.pixelsWide; x++) {
+            NSColor *color = [[bitmap colorAtX:x y:y] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+            if (color != nil && fabs(color.redComponent) <= 0.03 && fabs(color.greenComponent - 160.0/255) <= 0.03
+                && fabs(color.blueComponent - 210.0/255) <= 0.03) return YES;
+        }
+    }
+    return NO;
+}
+
 // A joined plugin root webview presents its resized content while its window transaction remains open, then the
 // transaction commits and allows the next layout request to start.
 static void checkRootViewResizeJoin(WKWebViewConfiguration *configuration) {
@@ -433,6 +463,156 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
     [window close]; [window release];
 }
 
+// A loaded root webview stays unpublished while its initially hidden surface is prepared, then appears at its placed geometry after commit.
+static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(160, 160, 400, 200)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    window.animationBehavior = NSWindowAnimationBehaviorNone;
+    WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/first-show");
+    check(sp_window_set_main_webview(window, main), @"the first-show fixture registers its app DOM");
+    void *compositionSurface = sp_surface_create(main);
+    check(compositionSurface != NULL, @"the first-show fixture creates the native composition");
+    if (compositionSurface == NULL) { [window close]; [window release]; return; }
+    WKWebView *root = page(window, [[configuration copy] autorelease], NSMakeRect(0, 0, 180, 100),
+        @"sptest://plugin/first-show");
+    __block BOOL markerLoaded = NO;
+    [root evaluateJavaScript:@"document.documentElement.style.cssText='margin:0;width:100%;height:100%';"
+        "document.body.style.cssText='margin:0;width:100%;height:100%';"
+        "document.body.innerHTML='<div style=\"position:absolute;left:20px;top:20px;width:40px;height:40px;"
+        "background:rgb(0,160,210)\"></div>'"
+        completionHandler:^(id value, NSError *error) {
+            check(error == nil, @"the first-show marker loads before its surface is revealed"); markerLoaded = YES;
+        }];
+    until(^BOOL { return markerLoaded; });
+    root.hidden = YES;
+    webviewAttachSurface(root, main);
+    webviewSetFrame(root, 40, 40, 180, 100);
+    __block BOOL fixtureStateRead = NO;
+    [root evaluateJavaScript:@"({viewport:[innerWidth,innerHeight],marker:(()=>{const r=document.querySelector('div').getBoundingClientRect();"
+        "return {rect:[r.x,r.y,r.width,r.height],background:getComputedStyle(document.querySelector('div')).backgroundColor}})()})"
+        completionHandler:^(id value, NSError *error) {
+            NSDictionary *state = [value isKindOfClass:NSDictionary.class] ? value : @{};
+            NSDictionary *marker = [state[@"marker"] isKindOfClass:NSDictionary.class] ? state[@"marker"] : @{};
+            check(error == nil && [state[@"viewport"] isEqual:@[@180, @100]]
+                    && [marker[@"rect"] isEqual:@[@20, @20, @40, @40]]
+                    && [marker[@"background"] isEqual:@"rgb(0, 160, 210)"],
+                [NSString stringWithFormat:@"the hidden root reports its target viewport and marker geometry (%@, %@)", value, error]);
+            fixtureStateRead = YES;
+        }];
+    until(^BOOL { return fixtureStateRead; });
+    [window makeFirstResponder:main];
+    check(window.firstResponder == main, @"the app DOM owns keyboard focus before the first show");
+    [window orderFrontRegardless];
+    __block double shown = 0;
+    surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
+        check(error == NULL, @"the first-show baseline is presented"); shown = at;
+    });
+    until(^BOOL { return shown != 0; });
+    char directory[] = "/tmp/soksak-first-show-test-XXXXXX";
+    BOOL created = mkdtemp(directory) != NULL;
+    check(created, @"the first-show recording directory is created");
+    if (!created) { webviewDetachSurface(root); sp_surface_close(compositionSurface); [window close]; [window release]; return; }
+    compositionDirectory = [[NSString stringWithUTF8String:directory] copy];
+    char *operationError = NULL;
+    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
+    BOOL started = NO;
+    if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
+    check(started, [NSString stringWithFormat:@"the first-show recording starts (%s)", operationError == NULL ? "" : operationError]);
+    free(operationError);
+    if (started) {
+        check(sp_capture_wait() > 0, @"the hidden-root recording contains its initial frame");
+        surfaceLayoutTraceStart();
+        __block BOOL prepared = NO;
+        surfaceLayoutBegin(window, 108, ^(int allowed) { prepared = allowed != 0; });
+        check(prepared, @"the first-show layout transaction starts");
+        webviewSetFrame(root, 40, 40, 180, 100);
+        webviewSetSurfaceHidden(root, false);
+        check(!((NSView *)root.superview).hidden && !root.hidden,
+            @"the first-show root is made visible during preparation");
+        check(window.firstResponder == main,
+            @"the first show does not take keyboard focus from the app DOM");
+        __block BOOL rootPresented = NO;
+        check(surfaceLayoutJoinView(window, 108, root, ^{ rootPresented = YES; }),
+            @"the first-show root joins its open layout transaction");
+        __block BOOL appDOMBarrierPending = YES;
+        __block BOOL appDOMPresented = NO;
+        surfaceLayoutAfterPresentation(main, ^{ appDOMPresented = YES; });
+        until(^BOOL { return rootPresented && appDOMPresented; });
+        waitFrames(window.screen, 3);
+        check(appDOMBarrierPending && surfaceLayoutIsPreparing(window),
+            @"the controlled app-DOM barrier remains pending after both presentation callbacks");
+        check(window.firstResponder == main,
+            @"root presentation while the app-DOM barrier is pending keeps the existing keyboard owner");
+        NSString *pendingStillPath = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"pending.png"];
+        char *stillError = NULL;
+        BOOL stillCaptured = sp_capture_still(window.windowNumber, pendingStillPath.fileSystemRepresentation, &stillError);
+        check(stillCaptured, [NSString stringWithFormat:@"the pending first-show window is captured (%s)",
+            stillError == NULL ? "no error" : stillError]);
+        free(stillError);
+        if (stillCaptured) {
+            NSBitmapImageRep *pendingBitmap = [NSBitmapImageRep imageRepWithData:
+                [NSData dataWithContentsOfFile:pendingStillPath]];
+            check(pendingBitmap != nil && !bitmapContainsFirstShowMarker(pendingBitmap),
+                @"the actual pending SCK image contains no pixels from the hidden root marker");
+        }
+        appDOMBarrierPending = NO;
+        check(surfaceLayoutCommit(window, 108), @"the first-show transaction commits after both presentation barriers");
+        shown = 0;
+        surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
+            check(error == NULL, @"the first-show marker is displayed after commit"); shown = at;
+        });
+        until(^BOOL { return shown != 0; });
+        int count = sp_capture_stop(shown);
+        const char *captureError = sp_capture_error();
+        check(count >= 2 && !sp_capture_limited() && captureError[0] == '\0',
+            [NSString stringWithFormat:@"the first-show recording completes without dropped frames or errors "
+                "(%d frames, limited %d, error %s)", count, sp_capture_limited(), captureError ?: ""]);
+        double timeline[SURFACE_LAYOUT_TRACE_STAGES] = {0};
+        check(surfaceLayoutTraceStop(timeline, 1) == 1 && timeline[0] == 108 && timeline[1] <= timeline[2]
+                && timeline[2] <= timeline[3],
+            @"the first-show trace orders begin, app-DOM presentation, and commit");
+        BOOL precommitFrame = NO;
+        BOOL precommitMarkerAbsent = YES;
+        BOOL postcommitFrame = NO;
+        BOOL finalMarkerPresent = NO;
+        NSError *listingError = nil;
+        NSArray<NSString *> *contents = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:
+            [NSString stringWithUTF8String:directory] error:&listingError];
+        NSMutableArray<NSString *> *frameNames = [NSMutableArray array];
+        for (NSString *name in contents) if ([name.pathExtension isEqualToString:@"bgra"]) [frameNames addObject:name];
+        [frameNames sortUsingSelector:@selector(compare:)];
+        check(listingError == nil && (int)frameNames.count == count,
+            [NSString stringWithFormat:@"the first-show directory contains every recorded frame (%lu files, %d reported, %@)",
+                (unsigned long)frameNames.count, count, listingError]);
+        for (NSUInteger index = 0; index < frameNames.count; index++) {
+            NSString *path = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:frameNames[index]];
+            NSData *data = readCaptureFrame([NSData dataWithContentsOfFile:path]);
+            check(data != nil, [NSString stringWithFormat:@"first-show frame %@ decodes completely", frameNames[index]]);
+            double display = 0;
+            BOOL marker = data != nil && captureFrameHasColorAtPoint(data, 70, 70, &display);
+            if (display < timeline[3]) {
+                precommitFrame = YES;
+                if (marker) precommitMarkerAbsent = NO;
+            }
+            if (display >= timeline[3]) postcommitFrame = YES;
+            if (index + 1 == frameNames.count) finalMarkerPresent = marker;
+        }
+        check(precommitFrame, @"the recording contains a decoded frame before commit");
+        check(precommitMarkerAbsent, @"the first-show marker remains unpublished in every recorded pre-commit frame");
+        check(postcommitFrame && finalMarkerPresent,
+            @"the final post-commit frame contains the first-show marker at its declared geometry");
+    }
+    NSError *cleanupError = nil;
+    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:&cleanupError],
+        [NSString stringWithFormat:@"the first-show recording is removed (%@)", cleanupError]);
+    if (cleanupError == nil) { [compositionDirectory release]; compositionDirectory = nil; }
+    webviewDetachSurface(root);
+    sp_surface_close(compositionSurface);
+    [root removeFromSuperview];
+    [window close]; [window release];
+}
+
 typedef struct { NSTimeInterval took; BOOL beforeRelease; double requested; double finished; double displayed; } SPWait;
 
 // Holds the web process of busy, resizes the main webview, and returns the time until the display wait ends and
@@ -491,6 +671,7 @@ int main(void) { @autoreleasepool {
     until(^BOOL { return painted; });
 
     checkRecordedComposition([[configuration copy] autorelease]);
+    checkFirstShowPublication([[configuration copy] autorelease]);
     checkSettledWaitsForLayout(window, main);
     checkViewJoin([[configuration copy] autorelease]);
     checkQueuedTicketCancel();

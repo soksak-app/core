@@ -3085,8 +3085,9 @@ pub(crate) fn join_shown_views(
     platform: &'static dyn Platform,
     ticket: u64,
     placements: &[Placement],
-) -> Result<(), String> {
+) -> Result<ViewJoinOutcome, String> {
     let data = window_data(window)?;
+    let mut outcome = ViewJoinOutcome::default();
     for placement in placements {
         let surface = placement.id.as_str();
         if !placement.visible {
@@ -3114,6 +3115,9 @@ pub(crate) fn join_shown_views(
         let Ok(view) = data.documents.get(&key) else {
             continue;
         };
+        outcome
+            .required
+            .push((surface.to_string(), generation));
         if !data
             .documents
             .presentation()
@@ -3149,6 +3153,9 @@ pub(crate) fn join_shown_views(
                 data.documents
                     .presentation()
                     .attach_abandon(surface, generation, ticket, abandon);
+                outcome
+                    .joined
+                    .push((surface.to_string(), generation));
             }
             Ok(None) => data
                 .documents
@@ -3162,7 +3169,13 @@ pub(crate) fn join_shown_views(
             }
         };
     }
-    Ok(())
+    Ok(outcome)
+}
+
+#[derive(Default)]
+pub(crate) struct ViewJoinOutcome {
+    pub required: Vec<(String, u64)>,
+    pub joined: Vec<(String, u64)>,
 }
 
 /// Ends every presentation join for a view generation and reports each abandoned layout ticket.

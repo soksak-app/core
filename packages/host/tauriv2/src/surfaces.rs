@@ -464,11 +464,116 @@ pub(crate) struct PresentRequest {
     settled: bool,
 }
 
-fn complete_layout_presentation(
+fn complete_layout_presentation<T>(
+    register_dom: impl FnOnce() -> Result<(), String>,
     await_dom: impl FnOnce() -> Result<(), String>,
     await_raster: impl FnOnce() -> Result<(), String>,
-) -> Result<(), String> {
-    await_dom().and_then(|()| await_raster())
+    prepare_roots: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let prepared = prepare_roots()?;
+    register_dom()?;
+    await_dom()?;
+    await_raster()?;
+    Ok(prepared)
+}
+
+fn root_placements_without_join(
+    placed: &[Placement],
+    joined: &[(String, u64)],
+    mut generation: impl FnMut(&str) -> Option<u64>,
+    mut needs_join: impl FnMut(&str, u64, ViewPlacement) -> bool,
+) -> Vec<Placement> {
+    placed
+        .iter()
+        .filter(|placement| {
+            placement.visible
+                && generation(&placement.id).is_some_and(|generation| {
+                    let already_joined = joined.iter().any(|(surface, joined_generation)| {
+                        surface == &placement.id && *joined_generation == generation
+                    });
+                    !already_joined
+                        && needs_join(
+                            &placement.id,
+                            generation,
+                            ViewPlacement {
+                                frame: [placement.x, placement.y, placement.w, placement.h],
+                                visible: placement.visible,
+                            },
+                        )
+                })
+        })
+        .cloned()
+        .collect()
+}
+
+fn committed_view_updates(
+    placed: &[Placement],
+    joined: &[(String, u64)],
+    mut generation: impl FnMut(&str) -> Option<u64>,
+) -> Vec<(String, u64, ViewPlacement)> {
+    placed
+        .iter()
+        .filter_map(|placement| {
+            generation(&placement.id).and_then(|generation| {
+                (!placement.visible
+                    || joined.iter().any(|(surface, joined_generation)| {
+                        surface == &placement.id && *joined_generation == generation
+                    }))
+                .then(|| {
+                    (
+                        placement.id.clone(),
+                        generation,
+                        ViewPlacement {
+                            frame: [placement.x, placement.y, placement.w, placement.h],
+                            visible: placement.visible,
+                        },
+                    )
+                })
+            })
+        })
+        .collect()
+}
+
+fn commit_layout_after_root_joins(
+    placed: &[Placement],
+    mut joined: Vec<(String, u64)>,
+    ticket: u64,
+    mut generation: impl FnMut(&str) -> Option<u64>,
+    mut needs_join: impl FnMut(&str, u64, ViewPlacement) -> bool,
+    mut join_missing: impl FnMut(&[Placement]) -> Result<documents::ViewJoinOutcome, String>,
+    commit: impl FnOnce() -> Result<bool, String>,
+) -> Result<(bool, Vec<(String, u64)>), String> {
+    loop {
+        let missing = root_placements_without_join(
+            placed,
+            &joined,
+            |surface| generation(surface),
+            |surface, generation, placement| needs_join(surface, generation, placement),
+        );
+        if missing.is_empty() {
+            break;
+        }
+        let outcome = join_missing(&missing)?;
+        for (surface, generation) in &outcome.required {
+            if !outcome
+                .joined
+                .iter()
+                .any(|(joined_surface, joined_generation)| {
+                    joined_surface == surface && joined_generation == generation
+                })
+            {
+                return Err(format!(
+                    "view {surface} generation {generation} could not join layout ticket {ticket}"
+                ));
+            }
+        }
+        if outcome.joined.is_empty() {
+            break;
+        }
+        joined.extend(outcome.joined);
+    }
+    let committed = commit()?;
+    Ok((committed, joined))
 }
 
 fn cancel_layout_after_setup_error(
@@ -1131,83 +1236,138 @@ pub(crate) async fn present(
     let placements = request.placements;
     let presentation_settled = request.settled;
     let (dom_tx, dom_rx) = mpsc::channel();
-    let setup = main
-        .with_webview(move |view| {
-            let outcome = platform::current().and_then(|platform| {
-                let ready = dom_tx.clone();
-                platform.after_presentation(
-                    &view,
-                    Box::new(move || {
-                        if ready.send(Ok(())).is_err() {
-                            crate::application_log::log_info(
-                                "surface",
-                                "surface readiness arrived after its request ended",
-                            );
-                        }
-                    }),
-                )
-            });
-            if let Err(error) = outcome {
-                // A failure after the request ended was not reported by that request, so it is left as an error line.
-                if let Err(mpsc::SendError(Err(error))) = dom_tx.send(Err(error)) {
-                    log_error("DOM presentation", error);
-                }
-            }
-        })
-        .map_err(|error| error.to_string());
-    if let Err(error) = setup {
-        return Err(cancel_layout_after_setup_error(error, || {
-            let target = window.clone();
-            platform::current()?.enqueue_ui(Box::new(move || {
-                log_failure(
-                    "surface layout cancel",
-                    cancel_layout_with_waits(&target, ticket),
-                );
-            }))
-        }));
-    }
+    let preparation_window = presentation_window.clone();
+    let preparation_context = context.clone();
+    let preparation_placements = placements.clone();
+    let dom_main = main.clone();
     let raster_window = window.clone();
-    let ready = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        complete_layout_presentation(
-            || {
-                dom_rx
-                    .recv_timeout(exposure::TIMEOUT)
-                    .map_err(|error| format!("application documents did not present: {error}"))??;
-                Ok(())
-            },
-            || {
-                crate::composition::refresh_image_rasters(&raster_window)?;
-                images.wait_current(exposure::TIMEOUT).map_err(|reason| {
-                    if reason == "presentationTimeout" {
-                        format!(
-                            "the current image raster did not present within {:?}; pending {}",
-                            exposure::TIMEOUT,
-                            images.pending_rasters()
-                        )
-                    } else {
-                        format!("the current image raster failed to present: {reason}")
-                    }
-                })
-            },
-        )
-    })
-    .await
-    .map_err(|error| error.to_string())?;
-    if let Err(error) = ready {
-        // A presentation failure occurs after sync opened the native transaction. The transaction is released before
-        // returning so that the next split does not wait forever behind the failed owner.
-        let target = window.clone();
-        let cancel_error = platform::current()?.enqueue_ui(Box::new(move || {
-            log_failure(
-                "surface layout cancel",
-                cancel_layout_with_waits(&target, ticket),
-            );
-        }));
-        if let Err(cancel) = cancel_error {
-            return Err(format!("{error}; cancelling layout: {cancel}"));
+    let ready =
+        tauri::async_runtime::spawn_blocking(move || -> Result<Vec<(String, u64)>, String> {
+            complete_layout_presentation(
+                || {
+                    dom_main
+                        .with_webview(move |view| {
+                            let outcome = platform::current().and_then(|platform| {
+                                let ready = dom_tx.clone();
+                                platform.after_presentation(
+                                    &view,
+                                    Box::new(move || {
+                                        if ready.send(Ok(())).is_err() {
+                                            crate::application_log::log_info(
+                                                "surface",
+                                                "surface readiness arrived after its request ended",
+                                            );
+                                        }
+                                    }),
+                                )
+                            });
+                            if let Err(error) = outcome {
+                                // A failure after the request ended was not reported by that request, so it is left as an error line.
+                                if let Err(mpsc::SendError(Err(error))) = dom_tx.send(Err(error)) {
+                                    log_error("DOM presentation", error);
+                                }
+                            }
+                        })
+                        .map_err(|error| error.to_string())
+                },
+                || {
+                    dom_rx.recv_timeout(exposure::TIMEOUT).map_err(|error| {
+                        format!("application documents did not present: {error}")
+                    })??;
+                    Ok(())
+                },
+                || {
+                    crate::composition::refresh_image_rasters(&raster_window)?;
+                    images.wait_current(exposure::TIMEOUT).map_err(|reason| {
+                        if reason == "presentationTimeout" {
+                            format!(
+                                "the current image raster did not present within {:?}; pending {}",
+                                exposure::TIMEOUT,
+                                images.pending_rasters()
+                            )
+                        } else {
+                            format!("the current image raster failed to present: {reason}")
+                        }
+                    })
+                },
+                || {
+                    let (prepared_tx, prepared_rx) = mpsc::channel();
+                    let target = preparation_window.clone();
+                    let context = preparation_context.clone();
+                    let placements = preparation_placements.clone();
+                    platform::current()?.enqueue_ui(Box::new(move || {
+                        let prepared = (|| -> Result<Vec<(String, u64)>, String> {
+                            let platform = platform::current()?;
+                            let placed = placements
+                                .iter()
+                                .map(|placement| {
+                                    let handle = context
+                                        .surface_hosts
+                                        .lock()
+                                        // default: a lock that a panicking thread poisoned still holds the surface registrations,
+                                        // which are only read; the panic hook records the panic.
+                                        .unwrap_or_else(PoisonError::into_inner)
+                                        .get(&placement.id)
+                                        .copied()
+                                        .ok_or_else(|| {
+                                            format!(
+                                                "surface {:?} closed before presentation",
+                                                placement.id
+                                            )
+                                        })?;
+                                    platform
+                                        .set_surface_hidden_handle(handle, !placement.visible)?;
+                                    let [x, y, w, h] = platform.surface_frame(handle)?;
+                                    Ok(Placement {
+                                        id: placement.id.clone(),
+                                        x,
+                                        y,
+                                        w,
+                                        h,
+                                        visible: placement.visible,
+                                    })
+                                })
+                                .collect::<Result<Vec<_>, String>>()?;
+                            documents::join_shown_views(&target, platform, ticket, &placed)
+                                .map(|outcome| outcome.joined)
+                        })();
+                        match prepared_tx.send(prepared) {
+                            Ok(()) => {}
+                            Err(mpsc::SendError(Err(error))) => {
+                                log_error("surface placement", error);
+                            }
+                            Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
+                                "surface",
+                                "root-view presentation setup arrived after its request ended",
+                            ),
+                        }
+                    }))?;
+                    prepared_rx
+                        .recv_timeout(exposure::TIMEOUT)
+                        .map_err(|error| {
+                            format!("root-view presentation setup did not complete: {error}")
+                        })?
+                },
+            )
+        })
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut joined_generations = match ready {
+        Ok(joined) => joined,
+        Err(error) => {
+            // A presentation failure occurs after sync opened the native transaction. The transaction is released before
+            // returning so that the next split does not wait forever behind the failed owner.
+            return Err(cancel_layout_after_setup_error(error, || {
+                let target = window.clone();
+                platform::current()?.enqueue_ui(Box::new(move || {
+                    log_failure(
+                        "surface layout cancel",
+                        cancel_layout_with_waits(&target, ticket),
+                    );
+                }))
+            }));
         }
-        return Err(error);
-    }
+    };
     let (ui_tx, mut ui_rx) = tauri::async_runtime::channel(1);
     // A commit can call an AppKit redraw, so it runs outside the Tao event lock.
     platform::current()?.enqueue_ui(Box::new(move || {
@@ -1225,7 +1385,6 @@ pub(crate) async fn present(
                         .get(&p.id)
                         .copied()
                         .ok_or_else(|| format!("surface {:?} closed before presentation", p.id))?;
-                    platform.set_surface_hidden_handle(handle, !p.visible)?;
                     let [x, y, w, h] = platform.surface_frame(handle)?;
                     Ok(Placement {
                         id: p.id.clone(),
@@ -1245,21 +1404,32 @@ pub(crate) async fn present(
                     return Err(error);
                 }
             };
-            if let Err(error) =
-                documents::join_shown_views(&presentation_window, platform, ticket, &placed)
-            {
-                cancel_layout_with_waits(&presentation_window, ticket)
-                    .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
-                return Err(error);
-            }
-            let committed = match with_native_owner(&presentation_window, move |owner| {
-                platform.commit_layout(owner, ticket)
-            }) {
-                Ok(committed) => committed,
+            let (committed, joined_generations) = match commit_layout_after_root_joins(
+                &placed,
+                std::mem::take(&mut joined_generations),
+                ticket,
+                |surface| context.documents.views().generation(surface),
+                |surface, generation, placement| {
+                    context
+                        .documents
+                        .presentation()
+                        .needs_join(surface, generation, placement)
+                },
+                |missing| {
+                    documents::join_shown_views(&presentation_window, platform, ticket, missing)
+                },
+                || {
+                    with_native_owner(&presentation_window, move |owner| {
+                        platform.commit_layout(owner, ticket)
+                    })
+                    .map_err(|error| error.to_string())
+                },
+            ) {
+                Ok(result) => result,
                 Err(error) => {
                     cancel_layout_with_waits(&presentation_window, ticket)
                         .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
-                    return Err(error.to_string());
+                    return Err(error);
                 }
             };
             if !committed {
@@ -1272,21 +1442,8 @@ pub(crate) async fn present(
                     Err(abandon) => Err(format!("{error}; {abandon}")),
                 };
             }
-            let committed_views = placed.iter().filter_map(|placement| {
-                context
-                    .documents
-                    .views()
-                    .generation(&placement.id)
-                    .map(|generation| {
-                        (
-                            placement.id.clone(),
-                            generation,
-                            ViewPlacement {
-                                frame: [placement.x, placement.y, placement.w, placement.h],
-                                visible: placement.visible,
-                            },
-                        )
-                    })
+            let committed_views = committed_view_updates(&placed, &joined_generations, |surface| {
+                context.documents.views().generation(surface)
             });
             context.documents.presentation().commit(committed_views);
             // The preparation update and the end decision run in order on the same UI thread.

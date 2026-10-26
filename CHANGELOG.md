@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-24: Register changed root-view presentation before independent DOM and raster waits, then rejoin any replacement generation before the same ticket commits. Preserve unchanged roots and lifecycle stop states without caching unjoined generations. Host ordering, replacement, cancellation and lifecycle owners pass; native captures prove first-show pixels remain unpublished until commit and focus remains correct. Application cadence acceptance remains separate.
+
 - F212.14-5-23: Coalesce repeated diagnostic ResizeObserver deliveries into one actual animation-frame record with first/latest timestamps and a positive delivery count. Reject invalid provenance at consumers, preserve it through frame collection, and retain Terminal document clock origin from the canonical nested source. The original helper and consumer regressions fail before correction; all 44 affected Core owners pass afterward. Four plugin consumer owners and current-source SDK checks pass, and both fresh profiles match all 167 selected archive files. Cadence and pixel acceptance remain unchanged.
 
 - F212.14-5-22: Preserve existing visible surfaces during layout preparation and hide requested-invisible surfaces immediately. New and previously hidden surfaces still wait for presentation. Native surface hits fall through to the app DOM while their window owns an active transaction, without changing keyboard focus. Paired host visibility owners, the native hit owner and the controlled before/after-commit composition recording pass; application cadence remains under F212.14-5-5.
