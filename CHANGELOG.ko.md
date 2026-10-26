@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14: 관측된 2560 x 1440, scale-1, 60Hz display mode에서 현재 다시 build한 host benchmark를 기록한다. 양 host가 일치하는 refresh rate를 보고하고 모든 capture frame을 측정하지만 그대로인 cadence와 latency 목표를 모두 넘는다. 이전 120Hz cohort를 별도로 유지하며 display나 구현의 효과를 통제한 개선을 주장하지 않는다. Log 감사, host/service 종료와 설치/frontmost 복원이 통과한다.
+
 - F239-186: decoded Tauri view-call params의 Value tree를 clone하고 다시 직렬화하는 대신 relay envelope로 옮긴다. 소유권 회귀 검사는 수정 전에 실패하고 수정 후 통과하며 기존 call/decode 소유 검사 일곱 개도 통과한다. 검증, 취소, cids, 기본 null params와 open-call 추적을 유지한다. 현재 진단 host sample은 복사 경로를 확인하지만 전체 지연 개선을 입증하지 않으며 성능 목표는 열린 상태다.
 
 - F212.12-1-9-1: document binary take 계약 감사를 완료한다. 기존 main-thread 사전 조건을 명시하며 이를 위반하는 production 호출자는 없다. native 소유 검사와 host consumer 네 사례가 통과한다. consumer fake는 production dispatch를 증명하지 않으며 사용하지 않는 dispatcher를 추가하지 않는다.

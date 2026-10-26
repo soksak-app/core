@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14: Record the current rebuilt-host benchmark under the observed 2560 x 1440, scale-1, 60 Hz display mode. Both hosts report the matching refresh rate and measure every captured frame, but exceed all unchanged cadence and latency targets. Preserve the earlier 120 Hz cohorts separately; no controlled display or implementation improvement is claimed. Log audits, host/service termination and installation/frontmost restoration pass.
+
 - F239-186: Transfer the decoded Tauri view-call params into the relay envelope instead of cloning and reserializing their Value tree. The ownership regression fails before correction and passes afterward; seven existing call/decode owners pass. Keep validation, cancellation, cids, default null params and open-call tracking unchanged. Current diagnostic host samples identify the copied path without establishing end-to-end latency improvement; performance targets remain open.
 
 - F212.12-1-9-1: Complete the document binary take contract audit. Clarify the existing main-thread precondition; no production caller violates it. The native owner and four host consumer cases pass. Consumer fakes do not establish production dispatch, and no unused dispatcher is added.
