@@ -1,7 +1,8 @@
 // The native tests run one at a time through the test runner (docs/operations/examples.md#test-runner): they open windows, so they
 // share the screen, and each one is named when it starts and ends with its elapsed time and has a limit of its own.
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -25,6 +26,61 @@ test("a native test is an executable of the build folder with optional arguments
   ]);
   assert.throws(() => nativeTests("/b", []), /there is no native test to run/);
   assert.throws(() => nativeTests("/b", ["a_test", "a_test"]), /the native test a_test is listed twice/);
+});
+
+test("the activation target builds and runs its cases through the native test runner", () => {
+  const darwin = new URL("../../native/darwin/", import.meta.url);
+  const temporary = mkdtempSync(join(tmpdir(), "native-activation-contract-"));
+  const buildDir = join(temporary, "build");
+  mkdirSync(buildDir, { recursive: true });
+  const future = new Date(Date.now() + 60 * 60 * 1000);
+  const library = join(buildDir, "libsoksak-darwin.a");
+  writeFileSync(library, "");
+  utimesSync(library, future, future);
+  for (const name of [
+    "input_activate_test",
+    "webview_input_test",
+    "webview_inspector_test",
+    "window_fullscreen_test",
+    "document_view_test",
+    "image_region_ime_test",
+    "view_focus_test",
+  ]) {
+    const path = join(buildDir, name);
+    writeFileSync(path, "");
+    utimesSync(path, future, future);
+  }
+
+  const output = execFileSync("make", [
+    "-n",
+    "-o",
+    library,
+    "-C",
+    darwin.pathname,
+    `BUILD=${buildDir}`,
+    "test-activation",
+  ], { encoding: "utf8" });
+  const lines = output.split("\n");
+  const runnerLines = lines.filter((line) => line.includes("native-tests.mjs"));
+  assert.equal(runnerLines.length, 1, output);
+  const runnerArgs = runnerLines[0].trim().split(/\s+/).slice(2);
+  assert.equal(runnerArgs[0], buildDir);
+  assert.deepEqual(runnerArgs.slice(1), [
+    "input_activate_test",
+    "webview_inspector_test",
+    "window_fullscreen_test",
+    "webview_input_test,--baseline",
+    "webview_input_test",
+    "document_view_test,--activation",
+    "image_region_test,--activation",
+    "image_region_ime_test",
+    "view_focus_test,--activation",
+  ]);
+  assert.ok(
+    lines.some((line) => line.includes(`-o ${buildDir}/image_region_test`)),
+    "the activation target does not build image_region_test before running it",
+  );
+  assert.deepEqual(lines.filter((line) => /^\s*@?[^ ]*\/[^ ]+_test(?:\s|$)/.test(line)), [], output);
 });
 
 test("the native tests run one at a time, each with its start and end, and a failure fails the run", async () => {

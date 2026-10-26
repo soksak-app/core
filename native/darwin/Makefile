@@ -344,16 +344,8 @@ test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test
 
-test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_ime_test $(BUILD)/view_focus_test
-	@$(BUILD)/input_activate_test
-	@$(BUILD)/webview_inspector_test
-	@$(BUILD)/window_fullscreen_test
-	@$(BUILD)/webview_input_test --baseline
-	@$(BUILD)/webview_input_test
-	@$(BUILD)/document_view_test --activation
-	@$(BUILD)/image_region_test --activation
-	@$(BUILD)/image_region_ime_test
-	@$(BUILD)/view_focus_test --activation
+test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test $(BUILD)/view_focus_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) input_activate_test webview_inspector_test window_fullscreen_test webview_input_test,--baseline webview_input_test document_view_test,--activation image_region_test,--activation image_region_ime_test view_focus_test,--activation
 
 test-view-focus-restore: $(BUILD)/view_focus_test
 	@$(BUILD)/view_focus_test --frontmost-restore-test

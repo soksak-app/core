@@ -6927,6 +6927,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-191",
+    implementation: [{ file: "native/darwin/Makefile", symbol: "test-activation:" }],
+    tests: [{ file: "scripts/test/native-tests.test.mjs", id: "activation target builds and runs its cases through the native test runner" }],
+    expected: "Activation cases build their declared executables and use the sequential bounded native runner without changing their order.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-189",
     implementation: [{ file: "native/darwin/src/capture.m", symbol: "static bool requestCaptureStopAfterStart(" }],
     tests: [{ file: "native/darwin/tests/capture_callback_test.m", id: "a successful late start requests exactly one stop after completion" }],

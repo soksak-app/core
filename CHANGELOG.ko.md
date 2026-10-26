@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-191: 기존 순차 runner로 native activation 사례를 실행해 test별 결과, 경과 시간과 timeout을 적용한다. image_region_test를 prerequisite로 선언하고 모든 아홉 사례와 인자를 유지한다. 비활성화 target fixture는 수정 전 실패하고 수정 후 native 앱을 실행하지 않고 통과한다.
+
 - F239-189: 기존 start 대기가 만료되면 정확히 한 번 capture stop 소유권을 나중에 성공하는 start callback으로 넘긴다. Start 실패 시 stop을 요청하지 않는다. 호출자 timeout, sample/source intake fence, 확정한 artifact와 교체된 recording 격리를 유지한다. 네 assertion의 controlled Red가 수정 후 통과하며 late-stop과 intake 소유 검사도 통과한다. 관련 없는 간헐적 summary assertion은 F239-190에서 유지하며 과거 startup 지연 원인은 미해결이다.
 
 - F239-188: generation을 지정한 theme 전달이 성공한 뒤 살아 있는 Wails view를 유지한다. postViewGeneration에 남은 잘못된 lifecycle 종료 호출을 제거한다. 소유 ready-delivery 회귀 검사는 수정 전 실패하고 수정 후 거짓 종료 record 없이 통과하며 실제 종료 소유 검사도 통과한다. 오래된 generation 취소와 전달 오류 동작을 유지한다.
