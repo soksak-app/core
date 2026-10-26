@@ -762,6 +762,21 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F239-210",
+    implementation: [
+      { file: "packages/workbench/event-classes.js", symbol: "export function classOf(" },
+      { file: "packages/sok/wailsv3/src/event_classes.go", symbol: "func EventClassOf(" },
+      { file: "packages/sok/tauriv2/src/event_classes.rs", symbol: "pub fn class_of(" },
+    ],
+    tests: [
+      { file: "scripts/test/event-classes.test.mjs", id: "the committed class tables equal what the catalog gives" },
+      { file: "packages/sok/wailsv3/tests/event_class_test.go", id: "TestTheClassTableGivesTheCatalogClassOfEventsAndFamilies" },
+      { file: "packages/sok/tauriv2/tests/event_class_test.rs", id: "the_class_table_gives_the_catalog_class_of_events_and_families" },
+    ],
+    expected: "The root-view presentation join event has the declared call class in generated and runtime tables.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-209",
     implementation: [{ file: "packages/workbench/core-exposure.js", symbol: "export async function installCoreExposure(" }],
     tests: [{ file: "packages/workbench/test/library-search-focus.test.mjs", id: "the declared cmd+k command targets the shown library page and rejects a hidden library" }],

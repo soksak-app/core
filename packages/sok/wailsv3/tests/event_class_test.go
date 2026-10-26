@@ -36,6 +36,7 @@ func TestTheClassTableGivesTheCatalogClassOfEventsAndFamilies(t *testing.T) {
 	for name, want := range map[string]sok.Class{
 		"log.open": sok.ClassLifecycle, "host.binding.call": sok.ClassCall, "host.input.relay": sok.ClassInput, "host.sidecar.request": sok.ClassIo,
 		"native.observe.counted": sok.ClassFrame, "page.console.warn": sok.ClassLifecycle, "host.trace.mark": sok.ClassCall,
+		"host.trace.view.presentation-join": sok.ClassCall,
 	} {
 		if got, declared := sok.EventClassOf(name); !declared || got != want {
 			t.Fatalf("%s: %q declared %v, want %q", name, got, declared, want)

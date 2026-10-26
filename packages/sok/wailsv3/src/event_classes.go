@@ -62,6 +62,7 @@ var eventClasses = map[string]Class{
 	"host.trace.status.notify":                ClassCall,
 	"host.trace.view.callback-cancelled":      ClassCall,
 	"host.trace.view.presentation-abandoned":  ClassCall,
+	"host.trace.view.presentation-join":       ClassCall,
 	"host.trace.view.process-ready":           ClassCall,
 	"host.trace.view.process-request":         ClassCall,
 	"host.trace.view.responsive":              ClassCall,

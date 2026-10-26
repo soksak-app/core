@@ -69,6 +69,7 @@ fn the_class_table_gives_the_catalog_class_of_events_and_families() {
         ("native.observe.counted", Class::Frame),
         ("page.console.warn", Class::Lifecycle),
         ("host.trace.mark", Class::Call),
+        ("host.trace.view.presentation-join", Class::Call),
     ] {
         assert_eq!(class_of(name), Some(want), "{name}");
     }

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-210: Regenerate Go, Rust and JavaScript event class tables for root-view presentation-join records. The existing generator/class owner fails before regeneration and passes afterward, with additional runtime class assertions on Go and Rust. Keep logging policy and audit criteria unchanged.
+
 - F239-209: Declare parameterless `core.library.search.focus` and use it for Command-K in the shortcut table and main keyboard handler. Focus the current projects/plugins search field, reject a hidden library without changing its page, and regenerate the SDK exposure declaration. The pre-change registry call failed because the operation was absent; the retained direct invocation and shortcut-row integration pass, alongside nine shortcut-table checks. Runtime keyboard acceptance remains separate.
 
 - F239-207: Trace each changed root-view presentation join through the existing performance log with surface, generation and layout ticket. Record request, native result, callback and abandonment without changing scheduling or presentation policy. Preserve synchronous and late-callback ordering; allocate fields only behind the performance/debug gates. Owner Red/Green covers both hosts, with two Wails and three Tauri checks passing. Runtime latency attribution remains open.

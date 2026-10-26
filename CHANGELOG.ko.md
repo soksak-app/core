@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-210: Root-view presentation-join 기록의 Go, Rust 및 JavaScript event class table을 재생성한다. 기존 generator/class 소유 검사는 재생성 전에 실패하고 뒤에 통과하며 Go/Rust runtime class assertion도 보강한다. Logging 정책과 감사 기준은 유지한다.
+
 - F239-209: 인자 없는 `core.library.search.focus`를 선언하고 shortcut table과 main keyboard handler의 Command-K에서 사용한다. 현재 projects/plugins 검색 필드에 focus하고 page를 바꾸지 않고 hidden library를 거절하며 SDK exposure 선언을 다시 생성한다. 변경 전 registry 호출은 동작이 없어 실패했고, 유지한 직접 호출 및 shortcut-row 통합과 아홉 shortcut-table 검사가 통과한다. Runtime keyboard 수용은 별도로 남는다.
 
 - F239-207: 기존 performance log에서 surface, generation 및 layout ticket으로 변경된 root-view presentation join을 추적한다. Scheduling이나 presentation 정책을 바꾸지 않고 요청, native 결과, callback과 abandonment를 기록한다. 동기 및 늦은 callback 순서를 유지하고 performance/debug gate 뒤에서만 필드를 만든다. 양 host 소유 Red/Green에서 Wails 두 검사와 Tauri 세 검사가 통과하며 runtime 지연 귀속은 미완료다.
