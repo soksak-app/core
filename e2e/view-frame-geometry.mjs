@@ -114,9 +114,32 @@ function contentRectangle(frame, color, tolerance, cardRect) {
   return { left, top, right, bottom };
 }
 
-function cardRectangle(frame, content, { planeColor, cardColor, borderColors, cornerRadiusPx, tolerance }) {
+function cardRectangle(frame, content, { planeColor, cardColor, borderColors, cornerRadiusPx, cornerRadiusPt,
+  contentColor, targetRect, targetSeed, tolerance }) {
   const x = Math.floor((content.left + content.right - 1) / 2);
   const y = Math.floor((content.top + content.bottom - 1) / 2);
+  const measuredBounds = { left: null, top: null, right: null, bottom: null };
+  const rgbaAt = (px, py) => {
+    if (px < 0 || px >= frame.width || py < 0 || py >= frame.height) return null;
+    const offset = py * frame.stride + px * 4;
+    return [frame.data[offset + 2], frame.data[offset + 1], frame.data[offset], frame.data[offset + 3]];
+  };
+  const fail = (message, failedEdge, point, candidateBounds = measuredBounds) => {
+    const diagnostic = {
+      frame: { width: frame.width, height: frame.height, timeMs: frame.time },
+      targetRect: targetRect ?? null,
+      targetSeed: targetSeed ?? { x, y },
+      contentAnchor: { x, y },
+      palette: { contentColor, cardColor, planeColor, borderColors },
+      cornerRadiusPt,
+      cornerRadiusPx,
+      colorTolerance: tolerance,
+      failedEdge,
+      candidateBounds,
+      failingPixel: { x: point.x, y: point.y, rgba: rgbaAt(point.x, point.y) },
+    };
+    throw new Error(`${message}; geometryDiagnostic=${JSON.stringify(diagnostic)}`);
+  };
   const isPlane = (px, py) => nearAt(frame, px, py, planeColor, tolerance);
   const isCard = (px, py) => nearAt(frame, px, py, cardColor, tolerance);
   const isBorder = (px, py) => borderColors.some((color) => nearAt(frame, px, py, color, tolerance));
@@ -130,7 +153,9 @@ function cardRectangle(frame, content, { planeColor, cardColor, borderColors, co
       insideX >= 0 && insideX < frame.width && insideY >= 0 && insideY < frame.height &&
       nearAt(frame, outsideX, outsideY, color, tolerance) && nearAt(frame, insideX, insideY, color, tolerance);
   };
-  if (isPlane(x, y)) throw new Error("recorded content center is outside the card");
+  const candidateEdge = (edge, px, py) => edge === "left" ? px : edge === "right" ? px + 1
+    : edge === "top" ? py : py + 1;
+  if (isPlane(x, y)) fail("recorded content center is outside the card", null, { x, y });
   const walk = (dx, dy, edge) => {
     let px = x, py = y;
     const inside = (cx, cy) => cx >= 0 && cx < frame.width && cy >= 0 && cy < frame.height;
@@ -138,19 +163,30 @@ function cardRectangle(frame, content, { planeColor, cardColor, borderColors, co
       px += dx;
       py += dy;
     }
-    if (!inside(px, py)) throw new Error(`recorded frame clips or does not identify the card ${edge} edge`);
+    if (!inside(px, py)) {
+      const candidateBounds = { ...measuredBounds, [edge]: candidateEdge(edge, px - dx, py - dy) };
+      fail(`recorded frame clips or does not identify the card ${edge} edge`, edge, { x: px, y: py }, candidateBounds);
+    }
     const edgeX = px - dx, edgeY = py - dy;
     if (isBorder(edgeX, edgeY) || (isCard(edgeX, edgeY) && isCard(px - 2 * dx, py - 2 * dy))) {
-      return { cardX: edgeX, cardY: edgeY };
+      const result = { cardX: edgeX, cardY: edgeY };
+      measuredBounds[edge] = edge === "left" ? result.cardX : edge === "right" ? result.cardX + 1
+        : edge === "top" ? result.cardY : result.cardY + 1;
+      return result;
     }
     while (inside(px, py) && isPlane(px, py)) {
       px += dx;
       py += dy;
     }
-    if (!inside(px, py) || !isBorder(px, py) || !isPlane(px + dx, py + dy)) {
-      throw new Error(`recorded pixels do not identify the card ${edge} edge after a plane-colored gap`);
+    if (!inside(px, py) || !isBorder(px, py) || px + dx < 0 || px + dx >= frame.width
+        || py + dy < 0 || py + dy >= frame.height || !isPlane(px + dx, py + dy)) {
+      fail(`recorded pixels do not identify the card ${edge} edge after a plane-colored gap`, edge,
+        { x: px, y: py }, { ...measuredBounds, [edge]: candidateEdge(edge, px, py) });
     }
-    return { cardX: px, cardY: py };
+    const result = { cardX: px, cardY: py };
+    measuredBounds[edge] = edge === "left" ? px : edge === "right" ? px + 1
+      : edge === "top" ? py : py + 1;
+    return result;
   };
   const left = walk(-1, 0, "left");
   const right = walk(1, 0, "right");
@@ -167,7 +203,8 @@ function cardRectangle(frame, content, { planeColor, cardColor, borderColors, co
     const centerX = horizontal ? center : fixed;
     const centerY = horizontal ? fixed : center;
     if (isPlane(centerX, centerY) || frame.data[centerY * frame.stride + centerX * 4 + 3] !== 255) {
-      throw new Error(`recorded pixels do not identify the card perimeter midpoint at ${name}`);
+      fail(`recorded pixels do not identify the card perimeter midpoint at ${name}`, name,
+        { x: centerX, y: centerY }, rectangle);
     }
     for (const [endpoint, step] of [[start, -1], [end - 1, 1]]) {
       let cornerStarted = false;
@@ -177,18 +214,18 @@ function cardRectangle(frame, content, { planeColor, cardColor, borderColors, co
         const py = horizontal ? fixed : position;
         if (isPlane(px, py)) {
           if (Math.max(0, Math.abs(position - endpoint) - 1) > cornerRadiusPx) {
-            throw new Error(`recorded pixels exceed the declared rounded corner at ${name}`);
+            fail(`recorded pixels exceed the declared rounded corner at ${name}`, name, { x: px, y: py }, rectangle);
           }
           cornerStarted = true;
           continue;
         }
         if (frame.data[py * frame.stride + px * 4 + 3] !== 255) {
-          throw new Error(`recorded pixels do not identify the complete card perimeter at ${name}`);
+          fail(`recorded pixels do not identify the complete card perimeter at ${name}`, name, { x: px, y: py }, rectangle);
         }
         if (cornerStarted) {
           const stroke = borderColorAt(px, py);
           if (!stroke || (cornerStroke && !near(stroke, cornerStroke, tolerance))) {
-            throw new Error(`recorded pixels do not identify the complete card perimeter at ${name}`);
+            fail(`recorded pixels do not identify the complete card perimeter at ${name}`, name, { x: px, y: py }, rectangle);
           }
           cornerStroke = stroke;
         }
@@ -197,7 +234,7 @@ function cardRectangle(frame, content, { planeColor, cardColor, borderColors, co
         const px = horizontal ? endpoint : fixed;
         const py = horizontal ? fixed : endpoint;
         if (!crossesSide(name, px, py, cornerStroke)) {
-          throw new Error(`recorded corner stroke does not cross the ${name} side at its endpoint`);
+          fail(`recorded corner stroke does not cross the ${name} side at its endpoint`, name, { x: px, y: py }, rectangle);
         }
       }
     }
@@ -340,7 +377,8 @@ export function measureViewFrameGeometry(frame, {
   }
   borderColors.forEach((color, index) => requireColor(color, `borderColors[${index}]`));
   const cornerRadiusPx = cornerRadiusPt * frame.scale * frame.contentScale;
-  const options = { planeColor, cardColor, borderColors, cornerRadiusPx, tolerance: colorTolerance };
+  const options = { planeColor, cardColor, borderColors, contentColor, cornerRadiusPx, cornerRadiusPt,
+    targetRect, tolerance: colorTolerance };
   let anchor;
   let targetCardRectPx;
   if (targetRect !== undefined) {
@@ -359,6 +397,10 @@ export function measureViewFrameGeometry(frame, {
     targetCardRectPx = cardRectangle(frame, { left: anchor.x, top: anchor.y, right: anchor.x + 1, bottom: anchor.y + 1 }, options);
   }
   const nativeRectPx = contentRectangle(frame, contentColor, colorTolerance, targetCardRectPx);
+  options.targetSeed = anchor ?? {
+    x: Math.floor((nativeRectPx.left + nativeRectPx.right - 1) / 2),
+    y: Math.floor((nativeRectPx.top + nativeRectPx.bottom - 1) / 2),
+  };
   const cardRectPx = targetCardRectPx ?? cardRectangle(frame, nativeRectPx, options);
   return {
     timeMs: frame.time,

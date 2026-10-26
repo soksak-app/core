@@ -183,6 +183,25 @@ test("geometry measurement rejects missing content and a card edge clipped by th
   }), PALETTE), /card.*edge|edge.*card/);
 });
 
+test("geometry boundary errors retain the frame, target, palette, radius, candidate bounds, and failing pixel", { timeout: 1000 }, () => {
+  const frame = recordedFrame({ card: { left: 0, top: 8, right: 90, bottom: 72 } });
+  assert.throws(() => measureViewFrameGeometry(frame, PALETTE), (error) => {
+    assert.match(error.message, /geometryDiagnostic=/);
+    const diagnostic = JSON.parse(error.message.split("geometryDiagnostic=")[1]);
+    assert.deepEqual(diagnostic.frame, { width: 100, height: 80, timeMs: 12.5 });
+    assert.deepEqual(diagnostic.targetSeed, { x: 49, y: 42 });
+    assert.deepEqual(diagnostic.contentAnchor, { x: 49, y: 42 });
+    assert.deepEqual(diagnostic.palette, { contentColor: PALETTE.contentColor, cardColor: PALETTE.cardColor,
+      planeColor: PALETTE.planeColor, borderColors: PALETTE.borderColors });
+    assert.equal(diagnostic.cornerRadiusPt, 0);
+    assert.equal(diagnostic.cornerRadiusPx, 0);
+    assert.equal(diagnostic.failedEdge, "left");
+    assert.deepEqual(diagnostic.candidateBounds, { left: 0, top: null, right: null, bottom: null });
+    assert.deepEqual(diagnostic.failingPixel, { x: -1, y: 42, rgba: null });
+    return true;
+  });
+});
+
 test("geometry measurement rejects ambiguous content colors and an overdraw that hides the card edge", { timeout: 1000 }, () => {
   const ambiguous = recordedFrame();
   const offset = 2 * ambiguous.stride + 2 * 4;
