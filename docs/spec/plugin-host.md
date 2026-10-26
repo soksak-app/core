@@ -44,7 +44,7 @@ The Tauri main page registers one `declaredSourceEventStream` channel before que
 - the script message handler `sok-view`;
 - the persistent website data store of the plugin, keyed by the plugin id.
 
-The host loads `soksak://<plugin id>/<page>` from the folder that `plugins/installed.json` records for the plugin, as it loads the page of a view. The page declares the [view import map](plugins.md#view-surfaces) of four entries and passes `checkViewPage`; it imports the [view bridge](plugins.md#view-surfaces) and calls `createViewChannel()` over the `sok-view` handler.
+The host loads `soksak://<plugin id>/<page>` from the folder that `plugins/installed.json` records for the plugin, as it loads the page of a view. The page begins with a doctype and holds no import map of its own, as checked by `checkViewPage`. The host inserts the [view import map](plugins.md#view-surfaces). The page imports the [view bridge](plugins.md#view-surfaces) and calls `createViewChannel()` over the `sok-view` handler.
 
 The web view is attached to the window, not to a surface host. It is not a surface: it holds no `SurfaceHost`, no surface frame, no regions, and no presentation wait. The host places it hidden and shows nothing: the web view holds a zero frame, is submitted as invisible, draws nothing on the screen, takes no hit testing, and never becomes the first responder. The host page receives no input and registers no shortcut table. `host.hit` never reports it.
 

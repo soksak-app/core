@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-215: Plugin-host page와 logging 문서를 현재 SDK·native loader에 맞춘다. Host가 삽입하는 import map, writer의 log 정책과 filtering 전 field 구성을 설명한다. 양 번역에서 오래된 page-owned map·enabled 조회 설명을 제거하며 runtime 동작은 그대로다.
+
 - F239-211: 양 host에서 로컬 IME Escape 취소 수정을 검증한다. 소유 sidecar S97은 한 번의 순서 있는 확정 문자·Escape write와 unknown selector 원자적 거부의 Red/Green을 유지한다. 양 앱 사례는 같은 window AppKit reference와 terminal document가 일치한다. Publication은 sidecar S97.1에 남으며 native input-source context 분류는 별도다.
 
 - F239-214: Session tree마다 최초의 원래 input source를 baseline cleanup 뒤에 한 번 복원한다. 최초 선택이 cleanup 전에 닫히는 자식에서 발생해도 root requester를 사용한다. 두 소유 사례가 수정 전 순서·닫힌 자식 오류를 재현하고 수정 후 통과하며 독립 리뷰와 문서 검사도 통과한다. Native context 정책은 그대로다.

@@ -44,7 +44,7 @@ Tauri main page는 `declaredSourceOrigins`를 조회하기 전에 `declaredSourc
 - script message handler `sok-view`.
 - plugin id로 key되는 plugin의 persistent website data store.
 
-host는 `plugins/installed.json`이 그 plugin에 대해 기록한 폴더에서 `soksak://<plugin id>/<page>`를 불러온다. view의 페이지를 불러오는 것과 같다. 페이지는 네 항목의 [view import map](plugins.ko.md#view-표면)을 선언하고 `checkViewPage`를 통과하며, [view bridge](plugins.ko.md#view-표면)를 import하고 `sok-view` handler로 `createViewChannel()`을 부른다.
+host는 `plugins/installed.json`이 그 plugin에 대해 기록한 폴더에서 `soksak://<plugin id>/<page>`를 불러온다. view의 페이지를 불러오는 것과 같다. 페이지는 doctype으로 시작하고 자체 import map을 두지 않으며 `checkViewPage`가 이를 검사한다. Host가 [view import map](plugins.ko.md#view-표면)을 삽입한다. 페이지는 [view bridge](plugins.ko.md#view-표면)를 import하고 `sok-view` handler로 `createViewChannel()`을 부른다.
 
 web view는 surface host가 아니라 창에 붙는다. 그것은 surface가 아니다. `SurfaceHost`를, surface frame을, region을, presentation wait을 가지지 않는다. host는 그것을 숨겨 놓고 아무것도 보여주지 않는다. web view는 0 frame을 가지고, 보이지 않음으로 제출되고, 화면에 아무것도 그리지 않고, hit testing을 받지 않고, first responder가 되지 않는다. host 페이지는 입력을 받지 않고 shortcut table을 등록하지 않는다. `host.hit`은 그것을 보고하지 않는다.
 
