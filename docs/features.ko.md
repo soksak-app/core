@@ -21,6 +21,8 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
+- [o] F239-193 — P0, F212.14-5 연결: 두 document realm에서 diagnostic view-frame helper를 해결한다. Workbench는 설치된 diagnostic module을 main page에서 import하지만 helper는 native view에서만 mapping하여 최적화 diagnostic build의 plugin mount가 실패했다. Red: 실제 diagnostic staged-page import-map assertion에서 helper mapping이 없었다. Green: API 사례, diagnostic·release staging 사례와 기존 view-map 사례인 소유 검사 총 4개가 통과한다. Diagnostic staging은 main page에 mapping을 추가하며 비진단 staging은 PAGE_IMPORTS를 유지하고 helper module을 제외한다. 중단한 애플리케이션 측정은 실패 근거이며 통과한 성능 acceptance가 아니고 해당 acceptance는 F212.14가 유지한다.
+
 - [o] F239-192 — P1, F212.10-core-5 연결: 활성 project의 registry 제거 후 library 정리를 project activation과 직렬화한다. 제거 경로가 기존 transition lane을 우회하여 제거된 project를 정리하는 중에 대체 project가 load될 수 있다. Red: 소유 project-switch 회귀 검사가 보류한 정리 완료 전에 load를 관측한다. Green: 기존 lane으로 제거를 처리한 후 같은 회귀 검사 1개와 project-switch 소유 검사 15개가 통과한다. 이 순서 결함은 과거 exposure 실패의 원인을 입증하지 않는다.
 
 - [o] F239-191 — P1: 기존 순차 per-test runner로 native activation target을 실행하고 호출하는 모든 executable을 prerequisite로 선언한다. 현재 target은 runner의 결과·경과 시간·timeout 계약 없이 binary를 직접 호출하며 image_region_test를 prerequisite 없이 실행한다. Recipe를 수정하기 전에 비활성화 build/command fixture로 target 계약을 재현한다. 정확한 activation 사례와 순서를 유지하며 compile 준비가 이를 실행하면 안 된다. Red: 비활성화 dry-run fixture는 native runner 명령을 찾지 못하고 직접 executable 호출 아홉 개를 드러낸다. Green: 기존 순차 runner를 한 번 사용하고 누락한 image-region prerequisite를 추가하면 같은 fixture가 14.7ms에 통과한다. Fixture는 이름 아홉 개, 인자와 순서, 필요한 image-region compile과 직접 activation 호출이 없음을 검증한다. 앞선 prerequisite noise fixture는 준비 실패이며 Red가 아니다. 이 항목에서 앱이나 activation 검사를 실행하지 않는다.

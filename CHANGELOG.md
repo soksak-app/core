@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-193: Map the diagnostic view-frame helper in the staged workbench page as well as native view pages. Installed diagnostic modules are imported in both document realms. The staged-page regression fails before correction; the API, diagnostic and release stage, and view-map owners pass after correction. Non-diagnostic builds retain their original map and omit the helper module.
+
 - F212.12-2-4: Add the activation-tier Command-zero case for a focused plugin view on both hosts. Preserve the address text, check the exact card text factor and record the full gesture. Syntax validation passes; the approved activation execution remains pending until development completes.
 
 - F212.14-5-1: Add a two-host consumer case for opt-in diagnostic drag identity artifacts, including finalization status, source byte counts and SHA-256. Syntax validation passes; application execution remains pending until development completes.

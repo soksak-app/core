@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-193: Staging한 workbench page와 native view page 모두에서 diagnostic view-frame helper를 mapping한다. 설치된 diagnostic module은 두 document realm에서 import된다. 수정 전 staged-page 회귀 검사가 실패하며 수정 후 API, diagnostic·release stage와 view-map 소유 검사가 통과한다. 비진단 build는 기존 map을 유지하고 helper module을 제외한다.
+
 - F212.12-2-4: 양쪽 host의 focus된 plugin view를 위한 activation-tier Command-zero 사례를 추가한다. Address text를 보존하고 정확한 card text factor를 확인하며 전체 gesture를 기록한다. 구문 검사는 통과하며 승인된 activation 실행은 개발 완료 후로 대기한다.
 
 - F212.14-5-1: 선택적 diagnostic drag identity artifact의 완료 상태, source byte 수와 SHA-256을 확인하는 양쪽 host consumer 사례를 추가한다. 구문 검사는 통과하며 애플리케이션 실행은 개발 완료 후로 대기한다.

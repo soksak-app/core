@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { VIEW_IMPORTS, VIEW_IMPORTS_FILE, viewImports } from "@soksak/plugin-api";
+import { PAGE_IMPORTS, VIEW_IMPORTS, VIEW_IMPORTS_FILE, pageImports, viewImports } from "@soksak/plugin-api";
 
 const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
 const OBSERVE = fileURLToPath(new URL("../observe.js", import.meta.url));
@@ -36,6 +36,8 @@ test("a staged frontend without --diagnostics has an empty diagnostics module an
   const module = readFileSync(join(app, "out/diagnostics.js"), "utf8");
   assert.equal(module, readFileSync(RELEASE_DIAGNOSTICS, "utf8"));
   assert.doesNotMatch(module, /diagnostics\.\w+|registry|import/);
+  assert.deepEqual(pageImports(readFileSync(join(app, "out/index.html"), "utf8")), PAGE_IMPORTS,
+    "a release workbench page keeps only the release imports");
   assert.equal(existsSync(join(app, "out/observe.js")), false);
   assert.equal(existsSync(join(app, "out/transcript.js")), false);
   assert.equal(existsSync(join(app, "out/modules/@soksak/plugin-api/diagnostic-view-frames.js")), false,
@@ -52,6 +54,14 @@ test("a staged frontend with --diagnostics has the page diagnostic methods", (t)
     "the diagnostic view observer is staged for view checks");
   assert.ok(JSON.parse(readFileSync(join(app, "out/core-root.json"), "utf8"))
     .includes("/modules/@soksak/plugin-api/diagnostic-view-frames.js"), "the host serves the diagnostic view observer to view documents");
+  const imports = pageImports(readFileSync(join(app, "out/index.html"), "utf8"));
+  assert.equal(imports["@soksak/plugin-api/diagnostic-view-frames"],
+    "/modules/@soksak/plugin-api/diagnostic-view-frames.js",
+    "the workbench page resolves diagnostic modules imported from installed plugins");
+  const releaseImports = Object.fromEntries(Object.entries(imports)
+    .filter(([name]) => name !== "@soksak/plugin-api/diagnostic-view-frames"));
+  assert.deepEqual(releaseImports,
+    { ...PAGE_IMPORTS }, "diagnostic staging adds only the helper required by installed diagnostic modules");
 });
 
 test("unknown staging arguments are rejected", (t) => {

@@ -6928,6 +6928,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-193",
+    implementation: [{ file: "packages/workbench/stage.mjs", symbol: "pageImportsForBuild({ diagnostics })" }],
+    tests: [{ file: "packages/workbench/test/stage.test.mjs", id: "a staged frontend with --diagnostics has the page diagnostic methods" }],
+    expected: "The diagnostic workbench page resolves the helper imported by installed plugin diagnostics.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-192",
     implementation: [{ file: "packages/workbench/projects.js", symbol: "await inTurn(emptyToLibrary);" }],
     tests: [{ file: "packages/workbench/test/projects-switch.test.mjs", id: "an activation received while a removed project is clearing waits for the clear" }],

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { VIEW_IMPORTS, viewImports } from "../index.js";
+import { PAGE_IMPORTS, VIEW_IMPORTS, pageImportsForBuild, viewImports } from "../index.js";
 
 const PACKAGE = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ENTRIES = ["index.js", "view.js"];
@@ -82,6 +82,16 @@ test("diagnostic builds add only the declared view-frame observer entry", () => 
   });
   assert.equal(Object.isFrozen(viewImports({ diagnostics: true })), true);
   assert.throws(() => viewImports({}), /requires diagnostics as a boolean/);
+});
+
+test("diagnostic workbench pages map the observer imported by installed diagnostic modules", () => {
+  assert.deepEqual(pageImportsForBuild({ diagnostics: false }), PAGE_IMPORTS);
+  assert.deepEqual(pageImportsForBuild({ diagnostics: true }), {
+    ...PAGE_IMPORTS,
+    "@soksak/plugin-api/diagnostic-view-frames": "/modules/@soksak/plugin-api/diagnostic-view-frames.js",
+  });
+  assert.equal(Object.isFrozen(pageImportsForBuild({ diagnostics: true })), true);
+  assert.throws(() => pageImportsForBuild({}), /requires diagnostics as a boolean/);
 });
 
 test("every import of index.js and view.js is served by the core targets or the view import map", () => {

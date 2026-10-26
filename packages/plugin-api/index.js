@@ -60,6 +60,16 @@ export const PAGE_IMPORTS = Object.freeze({
   "@soksak/workbench/": "/",
 });
 
+/** Returns the declared workbench page import map; diagnostic builds add the helper imported by plugin diagnostic modules. */
+export function pageImportsForBuild({ diagnostics }) {
+  if (typeof diagnostics !== "boolean") throw new TypeError("pageImportsForBuild requires diagnostics as a boolean");
+  if (!diagnostics) return PAGE_IMPORTS;
+  return Object.freeze({
+    ...PAGE_IMPORTS,
+    "@soksak/plugin-api/diagnostic-view-frames": `/${modulePath("@soksak/plugin-api", "diagnostic-view-frames.js")}`,
+  });
+}
+
 /** The five entries of the release view import map (docs/spec/plugins.md, view page). */
 export const VIEW_IMPORTS = Object.freeze({
   "soksak": `soksak://core/${modulePath("soksak", "dist/index.js")}`,

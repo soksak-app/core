@@ -150,7 +150,7 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 
 표면이 있는 플러그인은 검사에만 쓰는 status와 명령 항목을 plugin 루트의 `diagnostics.json` 파일에 둘 수 있다: `{ "module": "ui/<파일>.js", "exposes": { ... } }`. `module`은 plugin 안의 파일이며, `exposes`는 `plugin.json` `exposes`의 형식과 소유자 규칙을 따른다. 한 이름은 `plugin.json`과 `diagnostics.json` 중 한 곳에만 선언한다. `diagnostics.json`과 그 모듈은 `package.json`의 `files`에 나열하지 않으므로, plugin release는 `sok plugin pack --diagnostics`가 쓸 때만 이를 담는다([command line](cli.ko.md#release-registry)). 둘 중 하나가 나열되어 있으면 스테이징과 pack이 실패한다. 사용자 입력이나 OS가 만드는 상태를 주입하거나 검사를 위해 내부 이벤트를 기록하는 항목은 `diagnostics.json`에 속하고, 보이는 상태를 보고하거나 사용자 조작을 수행하는 항목은 `plugin.json`에 속한다.
 
-진단 빌드에서 워크벤치는 이 선언을 플러그인의 표면 선언에 더한다. View page는 자기 plugin origin에서 설치된 diagnostic 선언을 읽고 선언이 있을 때만 해당 module을 불러온다. 선언이 없으면(HTTP 404) diagnostics를 사용하지 않으며 다른 읽기 또는 import 실패는 오류다. Plugin adapter가 해당 module을 연결하고 해제한다. Release package에는 diagnostic 선언이나 module이 없다.
+진단 빌드에서 워크벤치는 이 선언을 플러그인의 표면 선언에 더한다. 선언된 diagnostic module을 view page뿐 아니라 workbench page에서도 import하므로 diagnostic staging은 두 import map에 `@soksak/plugin-api/diagnostic-view-frames`를 포함한다. 비진단 staging은 이 mapping과 module을 제외한다. View page는 자기 plugin origin에서 설치된 diagnostic 선언을 읽고 선언이 있을 때만 해당 module을 불러온다. 선언이 없으면(HTTP 404) diagnostics를 사용하지 않으며 다른 읽기 또는 import 실패는 오류다. Plugin adapter가 해당 module을 연결하고 해제한다. Release package에는 diagnostic 선언이나 module이 없다.
 
 ## 표면 소유권
 

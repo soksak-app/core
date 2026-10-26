@@ -32,7 +32,8 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { STAGED } from "./staged.js";
 import {
-  CORE_ROOT_FILE, ENVIRONMENT, INSTALLED_PLUGINS, RUNTIME, VIEW_IMPORTS_FILE, modulePath, validateEnvironment, validateInstalledPlugins, viewCoreTargets, viewImports,
+  CORE_ROOT_FILE, ENVIRONMENT, INSTALLED_PLUGINS, PAGE_IMPORTS, RUNTIME, VIEW_IMPORTS_FILE,
+  modulePath, pageImports, pageImportsForBuild, validateEnvironment, validateInstalledPlugins, viewCoreTargets, viewImports,
 } from "@soksak/plugin-api";
 
 const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>] [--registry-index <absolute index path>]";
@@ -144,6 +145,16 @@ rmSync(target, { recursive: true, force: true });
 mkdirSync(target, { recursive: true });
 
 copyPackage(workbench, target);
+const pagePath = join(target, "index.html");
+const page = readFileSync(pagePath, "utf8");
+const declaredPageImports = pageImports(page);
+if (JSON.stringify(declaredPageImports) !== JSON.stringify(PAGE_IMPORTS)) {
+  throw new Error(`${pagePath}: the workbench import map differs from PAGE_IMPORTS`);
+}
+const pageImportMap = JSON.stringify({ imports: pageImportsForBuild({ diagnostics }) }, null, 2);
+const stagedPage = page.replace(/<script type="importmap">[\s\S]*?<\/script>/,
+  `<script type="importmap">\n${pageImportMap}\n</script>`);
+writeFileSync(pagePath, stagedPage);
 for (const name of ["soksak", "@soksak/plugin-api"]) {
   copyPackage(packageDir(workbench, name), join(target, modulePath(name, "")));
 }
