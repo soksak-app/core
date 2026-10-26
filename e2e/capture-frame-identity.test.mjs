@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { readScreenUntil } from "./terminal-screen.mjs";
 
@@ -159,5 +159,35 @@ for (const app of Object.values(APPS)) {
     if (operationError && preservationError) throw new AggregateError([operationError, preservationError], "frame-identity check and evidence preservation failed");
     if (operationError) throw operationError;
     if (preservationError) throw preservationError;
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: diagnostic drag retains opt-in frame identity artifacts`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s, { settings: { memorySaver: false, "terminal.cursor.blink": "Never" } });
+    const result = await drag(t, s,
+      { axis: "x", line: 1, dx: 40, dy: 0, ms: 200, times: 1 },
+      { capture: true, frameIdentity: true });
+    assert.equal(result.frameIdentity?.status, "complete", "drag did not finalize requested frame identity");
+    const manifestPath = join(result.frames, "frame-identities", "manifest.json");
+    assert.equal(result.frameIdentity.manifest, manifestPath);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    assert.equal(manifest.format, 1);
+    assert.ok(manifest.decodedFrames > 0, "drag identity capture contains no decoded frames");
+    assert.ok(Array.isArray(manifest.artifacts) && manifest.artifacts.length > 0,
+      "drag identity capture contains no issued source artifacts");
+    for (const field of ["droppedArtifacts", "writeFailures", "cleanupFailures", "decodedWriteFailures"]) {
+      assert.equal(manifest[field], 0, `drag identity capture reported ${field}`);
+    }
+    assert.equal(manifest.identityFailure, null);
+    for (const artifact of manifest.artifacts) {
+      const file = join(result.frames, "frame-identities", artifact.file);
+      const bytes = readFileSync(file);
+      assert.equal(bytes.length, artifact.byteCount, `drag source byte count differs: ${artifact.file}`);
+      assert.equal(createHash("sha256").update(bytes).digest("hex"), artifact.sha256,
+        `drag source digest differs: ${artifact.file}`);
+    }
+    t.diagnostic(`drag frame identity evidence ${manifestPath}`);
   });
 }

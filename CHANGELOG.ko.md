@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-1: 선택적 diagnostic drag identity artifact의 완료 상태, source byte 수와 SHA-256을 확인하는 양쪽 host consumer 사례를 추가한다. 구문 검사는 통과하며 애플리케이션 실행은 개발 완료 후로 대기한다.
+
 - F239-47-30: 기존 capture pipeline을 사용하는 image-region 소유 비교 검사를 추가한다. Opaque IOSurface와 layer CGImage provider byte를 검증하고 color profile을 보존하며 실제 배율 capture를 정확히 비교한다. 현재 1× 실행은 일치하며 명시적인 과거 2× 재현은 맞지 않는 capture geometry를 거부한다. Production 색상 수정이나 과거 원인은 확립되지 않았다.
 
 - F239-192: Registry 제거 정리를 기존 project transition lane에서 직렬화하여 정리 완료 전에 대체 project가 load되지 않도록 한다. 수정 전 소유 회귀 검사가 실패하고 수정 후 project-switch 검사 15개가 모두 통과한다. 과거 exposure 실패의 원인을 특정하지 않는다.
