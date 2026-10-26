@@ -36,6 +36,54 @@ function recordedFrame({ card = { left: 10, top: 8, right: 90, bottom: 72 },
   return { width, height, stride, scale, contentScale, content: contentOrigin, time: 12.5, data };
 }
 
+function twoCardFrame({ extraTargetContent = false, fragmentedTarget = false, centerDifferentColor = false,
+  outsideTargetContent = false } = {}) {
+  const width = 210;
+  const height = 90;
+  const stride = width * 4;
+  const data = Buffer.alloc(stride * height);
+  const paint = (x, y, color) => {
+    const offset = y * stride + x * 4;
+    data[offset] = color[2];
+    data[offset + 1] = color[1];
+    data[offset + 2] = color[0];
+    data[offset + 3] = 255;
+  };
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) paint(x, y, PALETTE.planeColor);
+  const card = (left, top, right, bottom) => {
+    for (let y = top; y < bottom; y++) for (let x = left; x < right; x++) {
+      const edge = x === left || x === right - 1 || y === top || y === bottom - 1;
+      paint(x, y, edge ? PALETTE.borderColors[0] : PALETTE.cardColor);
+    }
+  };
+  const content = (left, top, right, bottom) => {
+    for (let y = top; y < bottom; y++) for (let x = left; x < right; x++) paint(x, y, PALETTE.contentColor);
+  };
+  card(10, 8, 95, 82);
+  if (fragmentedTarget) {
+    content(14, 22, 30, 35);
+    content(32, 22, 91, 35);
+    content(14, 37, 30, 78);
+    content(32, 37, 91, 78);
+  } else {
+    content(14, 22, 91, 78);
+  }
+  if (outsideTargetContent) content(20, 12, 30, 16);
+  card(110, 8, 195, 82);
+  content(114, 22, 191, 78);
+  if (centerDifferentColor) {
+    for (let y = 22; y < 78; y++) {
+      const offset = y * stride + 52 * 4;
+      data[offset] = 255;
+      data[offset + 1] = 255;
+      data[offset + 2] = 255;
+      data[offset + 3] = 255;
+    }
+  }
+  if (extraTargetContent) content(112, 30, 113, 31);
+  return { width, height, stride, scale: 1, contentScale: 1, content: { x: 0, y: 0 }, time: 20, data };
+}
+
 test("recorded pixels measure content and outer card on all four edges", { timeout: 1000 }, () => {
   const measured = measureViewFrameGeometry(recordedFrame(), PALETTE);
   assert.deepEqual(measured.cardRectPx, { left: 10, top: 8, right: 90, bottom: 72 });
@@ -81,6 +129,52 @@ test("geometry measurement rejects ambiguous content colors and an overdraw that
   assert.throws(() => measureViewFrameGeometry(recordedFrame({
     content: { left: 8, top: 22, right: 86, bottom: 64 },
   }), PALETTE), /card left edge/);
+});
+
+test("geometry measurement selects the anchored card when another visible card has the same content fill", { timeout: 1000 }, () => {
+  const targetRect = { x: 110, y: 8, width: 85, height: 74 };
+  const measured = measureViewFrameGeometry(twoCardFrame(), { ...PALETTE, targetRect });
+  assert.deepEqual(measured.cardRectPx, { left: 110, top: 8, right: 195, bottom: 82 });
+  assert.deepEqual(measured.nativeRectPx, { left: 114, top: 22, right: 191, bottom: 78 });
+  const overdraw = measureViewFrameGeometry(twoCardFrame({ extraTargetContent: true }), { ...PALETTE, targetRect });
+  assert.deepEqual(overdraw.nativeRectPx, { left: 112, top: 22, right: 191, bottom: 78 });
+});
+
+test("geometry measurement unions fragmented target fill while excluding an equally colored other card", { timeout: 1000 }, () => {
+  const targetRect = { x: 10, y: 8, width: 85, height: 74 };
+  const measured = measureViewFrameGeometry(twoCardFrame({ fragmentedTarget: true }), { ...PALETTE, targetRect });
+  assert.deepEqual(measured.cardRectPx, { left: 10, top: 8, right: 95, bottom: 82 });
+  assert.deepEqual(measured.nativeRectPx, { left: 14, top: 22, right: 91, bottom: 78 });
+});
+
+test("geometry measurement includes same-card color components outside the declared target rectangle", { timeout: 1000 }, () => {
+  const frame = twoCardFrame({ outsideTargetContent: true });
+  const targetRect = { x: 14, y: 22, width: 77, height: 56 };
+  const measured = measureViewFrameGeometry(frame, { ...PALETTE, targetRect });
+  assert.deepEqual(measured.nativeRectPx, { left: 14, top: 12, right: 91, bottom: 78 });
+});
+
+test("geometry measurement finds a target card when its center is not the content fill", { timeout: 1000 }, () => {
+  const targetRect = { x: 10, y: 8, width: 85, height: 74 };
+  const measured = measureViewFrameGeometry(twoCardFrame({ centerDifferentColor: true }), { ...PALETTE, targetRect });
+  assert.deepEqual(measured.cardRectPx, { left: 10, top: 8, right: 95, bottom: 82 });
+  assert.deepEqual(measured.nativeRectPx, { left: 14, top: 22, right: 91, bottom: 78 });
+});
+
+test("anchored geometry measures the complete selected content rectangle without clipping overdraw", { timeout: 1000 }, () => {
+  const expanded = twoCardFrame();
+  const stride = expanded.stride;
+  for (let y = 20; y < 28; y++) for (let x = 190; x < 200; x++) {
+    const offset = y * stride + x * 4;
+    expanded.data[offset] = PALETTE.contentColor[2];
+    expanded.data[offset + 1] = PALETTE.contentColor[1];
+    expanded.data[offset + 2] = PALETTE.contentColor[0];
+    expanded.data[offset + 3] = 255;
+  }
+  const measured = measureViewFrameGeometry(expanded, { ...PALETTE,
+    targetRect: { x: 114, y: 22, width: 77, height: 56 } });
+  assert.deepEqual(measured.nativeRectPx, { left: 114, top: 20, right: 200, bottom: 78 });
+  assert.deepEqual(measured.cardRectPx, { left: 110, top: 8, right: 195, bottom: 82 });
 });
 
 test("content-color islands enclosed by an opaque glyph remain part of the measured rectangle", { timeout: 1000 }, () => {

@@ -125,9 +125,11 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
   const region = await s.rect("browser.document", undefined, surface);
+  const targetRect = { x: page.frame.x, y: page.frame.y,
+    width: page.frame.width, height: page.frame.height };
   const slotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
-  const measured = decoded.map((frame) => measureViewFrameGeometry(frame, GEOMETRY));
+  const measured = decoded.map((frame) => measureViewFrameGeometry(frame, { ...GEOMETRY, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
   const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= content.timeMs);
   assert.ok(candidates.length > 0, "browser layout has no declared-slot pixel match after its source resize event");
@@ -166,11 +168,14 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt) {
     "browser drag capture does not cover the complete requested gesture");
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
+  const page = documentRow(await s.get("host.window"), surface, "page");
+  const targetRect = { x: page.frame.x, y: page.frame.y,
+    width: page.frame.width, height: page.frame.height };
   const rootSlotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface });
   const geometryFrames = [];
   const geometryByFrame = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = measureViewFrameGeometry(captured[frameIndex], GEOMETRY);
+    const measured = measureViewFrameGeometry(captured[frameIndex], { ...GEOMETRY, targetRect });
     geometryByFrame.set(frameIndex, measured);
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
@@ -182,7 +187,7 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt) {
   for (const source of mapped) {
     if (source.frameIndex === null) continue;
     const geometry = geometryByFrame.get(source.frameIndex)
-      ?? measureViewFrameGeometry(captured[source.frameIndex], GEOMETRY);
+      ?? measureViewFrameGeometry(captured[source.frameIndex], { ...GEOMETRY, targetRect });
     const nativeWidth = geometry.cardRectPt.right - geometry.cardRectPt.left
       - rootSlotInsetsPt.left - rootSlotInsetsPt.right;
     const nativeHeight = geometry.cardRectPt.bottom - geometry.cardRectPt.top

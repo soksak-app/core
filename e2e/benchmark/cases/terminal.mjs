@@ -165,7 +165,9 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
     && frame.width === root.frame.width && frame.height === root.frame.height);
   assert.ok(source, `terminal observer has no content frame at new size ${root.frame.width}x${root.frame.height}`);
   const slotInsetsPt = await terminalSlotInsets(s, card, surface);
-  const measured = decoded.map((frame) => measureViewFrameGeometry(frame, TERMINAL_GEOMETRY));
+  const targetRect = { x: root.frame.x, y: root.frame.y,
+    width: root.frame.width, height: root.frame.height };
+  const measured = decoded.map((frame) => measureViewFrameGeometry(frame, { ...TERMINAL_GEOMETRY, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
   const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= source.timeMs);
   assert.ok(candidates.length > 0, "terminal layout has no declared-slot pixel match after its source resize event");
@@ -211,10 +213,13 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
   const rootSlotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface });
+  const root = terminalDocument(await s.get("host.window"), surface);
+  const targetRect = { x: root.frame.x, y: root.frame.y,
+    width: root.frame.width, height: root.frame.height };
   const geometryFrames = [];
   const geometries = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = measureViewFrameGeometry(captured[frameIndex], TERMINAL_GEOMETRY);
+    const measured = measureViewFrameGeometry(captured[frameIndex], { ...TERMINAL_GEOMETRY, targetRect });
     geometries.set(frameIndex, measured);
     geometryFrames.push(terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt));
   }
@@ -224,7 +229,7 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   });
   const sourceFrames = mapped.map((source) => {
     const geometry = geometries.get(source.frameIndex)
-      ?? measureViewFrameGeometry(captured[source.frameIndex], TERMINAL_GEOMETRY);
+      ?? measureViewFrameGeometry(captured[source.frameIndex], { ...TERMINAL_GEOMETRY, targetRect });
     const nativeWidth = geometry.cardRectPt.right - geometry.cardRectPt.left
       - rootSlotInsetsPt.left - rootSlotInsetsPt.right;
     const nativeHeight = geometry.cardRectPt.bottom - geometry.cardRectPt.top
@@ -316,6 +321,9 @@ export async function collectTerminalDrag(t, s, terminal, configDir) {
   const card = grid.cards.find((item) => item.active);
   assert.ok(card?.id, "terminal drag benchmark has no active card");
   const slotInsetsPt = await terminalSlotInsets(s, card.id, terminal.surface);
+  const root = terminalDocument(await s.get("host.window"), terminal.surface);
+  const targetRect = { x: root.frame.x, y: root.frame.y,
+    width: root.frame.width, height: root.frame.height };
   const run = await drag(t, s, { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 }, { capture: true });
   mkdirSync(join(configDir, "logs"), { recursive: true });
   const directory = mkdtempSync(join(configDir, "logs", "view-drag-benchmark-"));
@@ -338,6 +346,7 @@ export async function collectTerminalDrag(t, s, terminal, configDir) {
         cardColor: [25, 27, 36],
         planeColor: [16, 17, 23],
         borderColors: [[43, 46, 61], [255, 179, 107]],
+        targetRect,
       });
       geometryFrames.push(terminalDragGeometryFrame(frameIndex, geometry, slotInsetsPt));
     } catch (error) {

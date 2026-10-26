@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-7: Use the DOM anchor to select a card, then include every same-card content-color component in the measured four-edge bounds. Red: the owning two-card fixture clipped same-card top overdraw (measured top 22 px, expected full bound 12 px); the controlled HWP unmatched-layout path also threw `ReferenceError` before reporting its evidence. Green: the geometry owner passes 13/13, including fragmented content and an equally colored other card; the HWP error-path owner reports before/after native frames and per-frame slot residuals while retaining the geometry error as its cause. A preserved HWP capture still has an 8 px top residual. Its color changes at a responsive breakpoint, so this result does not establish a native viewport shift or application acceptance.
+
 - F239-198: Install corrected Editor and Terminal diagnostic event catalogs through the public installer for both hosts. Verify every installed package file against its immutable candidate: 29 Editor files and 16 Terminal files per configuration. Application measurements and publication remain separate.
 
 - F212.14-5-6: Require recorded different-plugin content before measuring a newly opened view. Keep the full continuous recording and its original clocks, and reject stale target pixels without timestamp filtering. The regression fails before correction; all 18 affected owning cases pass afterward. Application measurements remain separate.

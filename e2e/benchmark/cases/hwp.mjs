@@ -24,7 +24,7 @@ export function hwpDocumentHistoryEvidence(value) {
   return { historyEntries: value.historyEntries, regionHistoryEntries: value.regionHistoryEntries };
 }
 
-/** Derives the HWP document-root fill from recorded opaque pixels inside its actual studio child rectangle. */
+/** Samples an opaque HWP row to anchor its card scan; the row is not a viewport boundary. */
 export function hwpGeometryPalette(frame, rect, theme) {
   assert.ok(frame?.data instanceof Uint8Array && frame.data.length === frame.stride * frame.height,
     "HWP geometry palette requires a complete decoded frame");
@@ -34,27 +34,26 @@ export function hwpGeometryPalette(frame, rect, theme) {
   const ratio = frame.scale * frame.contentScale;
   assert.ok(Number.isFinite(ratio) && ratio > 0 && frame.content
     && Number.isFinite(frame.content.x) && Number.isFinite(frame.content.y), "HWP geometry palette has invalid capture scale");
-  const left = Math.floor(frame.content.x * frame.scale + (rect.x + rect.width * 0.2) * ratio);
-  const top = Math.floor(frame.content.y * frame.scale + (rect.y + rect.height * 0.2) * ratio);
-  const right = Math.ceil(frame.content.x * frame.scale + (rect.x + rect.width * 0.8) * ratio);
-  const bottom = Math.ceil(frame.content.y * frame.scale + (rect.y + rect.height * 0.8) * ratio);
-  assert.ok(left >= 0 && top >= 0 && right <= frame.width && bottom <= frame.height && right > left && bottom > top,
-    "HWP studio palette sample lies outside the decoded frame");
+  const left = Math.floor(frame.content.x * frame.scale + rect.x * ratio);
+  const top = Math.floor(frame.content.y * frame.scale + (rect.y + 0.5) * ratio);
+  const right = Math.ceil(frame.content.x * frame.scale + (rect.x + rect.width) * ratio);
+  assert.ok(left >= 0 && top >= 0 && right <= frame.width && right > left,
+    "HWP studio top-row sample lies outside the decoded frame");
 
   const colors = new Map();
   let sampled = 0;
-  for (let y = top; y < bottom; y += 2) for (let x = left; x < right; x += 2) {
-    const offset = y * frame.stride + x * 4;
+  for (let x = left; x < right; x++) {
+    const offset = top * frame.stride + x * 4;
     if (frame.data[offset + 3] !== 255) continue;
     const color = [frame.data[offset + 2], frame.data[offset + 1], frame.data[offset]];
     const key = color.join(",");
     colors.set(key, (colors.get(key) ?? 0) + 1);
     sampled++;
   }
-  assert.ok(sampled > 0, "HWP studio palette sample contains no opaque pixels");
+  assert.ok(sampled > 0, "HWP studio top row contains no opaque pixels");
   const [contentKey, dominantCount] = [...colors.entries()].sort((a, b) => b[1] - a[1])[0];
   assert.ok(dominantCount / sampled >= 0.35,
-    `HWP studio rectangle has no dominant opaque fill: ${dominantCount}/${sampled} pixels`);
+    `HWP studio top row has no dominant opaque fill: ${dominantCount}/${sampled} pixels`);
   const parse = (name, token) => {
     assert.ok(typeof token === "string" && /^#[0-9a-f]{6}$/iu.test(token), `core theme ${name} is not an RGB hex token`);
     return [1, 3, 5].map((index) => Number.parseInt(token.slice(index, index + 2), 16));
@@ -153,7 +152,7 @@ function geometryPalette(frame, studio, theme) {
   return hwpGeometryPalette(frame, studio.frame, theme);
 }
 
-async function layoutObservation(t, s, descriptor, surface, card, theme) {
+export async function layoutObservation(t, s, descriptor, surface, card, theme) {
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () => {
     const recording = await s.record();
     const grid = await s.get("core.grid");
@@ -165,23 +164,63 @@ async function layoutObservation(t, s, descriptor, surface, card, theme) {
     const { displayed } = await s.presented();
     const result = await recording.stop({ after: displayed });
     return { displayed, beforeChangeTimeMs, result, captured: captureFrames(result, "layout"),
-      paletteRect: studioBefore.frame };
+      paletteRect: studioBefore.frame, nativeDocumentBefore: studioBefore.frame };
   });
-  const { beforeChangeTimeMs, captured, result, paletteRect } = traced.action;
+  const { beforeChangeTimeMs, captured, result, paletteRect, nativeDocumentBefore } = traced.action;
   const host = await s.get("host.window");
   const root = documentRow(host, surface, "");
   const studio = documentRow(host, surface, "studio");
   const source = traced.contentFrames.find((frame) => frame.timeMs >= beforeChangeTimeMs
     && frame.width === root.frame.width && frame.height === root.frame.height);
   assert.ok(source, `HWP root trace has no post-layout frame at ${root.frame.width}x${root.frame.height}`);
+  const previousSource = traced.contentFrames.filter((frame) => frame.timeMs < source.timeMs).at(-1);
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
   const region = await s.rect("hwp.studio", undefined, surface);
   const slotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
   const themeGeometry = geometryPalette(captured[0], { frame: paletteRect }, theme);
-  const measured = captured.map((frame) => measureViewFrameGeometry(frame, themeGeometry));
-  const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
+  const targetRect = { x: studio.frame.x, y: studio.frame.y,
+    width: studio.frame.width, height: studio.frame.height };
+  const measured = captured.map((frame) => measureViewFrameGeometry(frame, { ...themeGeometry, targetRect }));
+  let transition;
+  try {
+    transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
+  } catch (error) {
+    const placed = surfaces.find((item) => item.surface === surface);
+    assert.ok(placed?.declared && placed?.applied,
+      `HWP surface ${surface} has no declared and applied slot for pixel comparison`);
+    const declaredSlotRectPt = {
+      left: placed.declared.x + region.x - placed.applied.x,
+      top: placed.declared.y + region.y - placed.applied.y,
+      right: placed.declared.x + region.x - placed.applied.x + region.width,
+      bottom: placed.declared.y + region.y - placed.applied.y + region.height,
+    };
+    const rows = measured.map((geometry, frameIndex) => {
+      const actual = geometry.nativeRectPt;
+      const residualPt = Object.fromEntries(["left", "top", "right", "bottom"].map((edge) => [
+        edge, actual[edge] - declaredSlotRectPt[edge],
+      ]));
+      return { frameIndex, timeMs: captured[frameIndex].time, nativeRectPt: actual, residualPt };
+    });
+    const afterSource = rows.filter((row) => row.timeMs >= source.timeMs);
+    const closest = afterSource.sort((left, right) => Math.max(...Object.values(left.residualPt).map(Math.abs))
+      - Math.max(...Object.values(right.residualPt).map(Math.abs)))[0];
+    throw new Error(`${error.message}; HWP pixel geometry evidence ${JSON.stringify({
+      tolerancePt: 2,
+      previousSourceFrame: previousSource && { timeMs: previousSource.timeMs,
+        width: previousSource.width, height: previousSource.height },
+      sourceFrame: { timeMs: source.timeMs, width: source.width, height: source.height },
+      nativeDocumentBefore,
+      nativeDocumentAfter: studio.frame,
+      declaredSurface: placed.declared,
+      appliedSurface: placed.applied,
+      DOMRegion: { x: region.x, y: region.y, width: region.width, height: region.height },
+      declaredSlotRectPt,
+      closestPostSourceFrame: closest,
+      frameResiduals: rows,
+    })}`, { cause: error });
+  }
   const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= source.timeMs);
   assert.ok(candidates.length > 0, "HWP layout has no declared-slot pixel match after its source resize event");
   const localProof = await hwpFirstContentFrame({ captured: candidates.map((index) => captured[index]),
@@ -225,11 +264,13 @@ async function dragObservation(t, s, descriptor, surface, card, theme) {
     "HWP drag capture does not cover the complete requested gesture");
   const host = await s.get("host.window");
   const studio = documentRow(host, surface, "studio");
+  const targetRect = { x: studio.frame.x, y: studio.frame.y,
+    width: studio.frame.width, height: studio.frame.height };
   const palette = geometryPalette(captured[firstGestureFrameIndex], studio, theme);
   const geometryFrames = [];
   const geometryByFrame = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = measureViewFrameGeometry(captured[frameIndex], palette);
+    const measured = measureViewFrameGeometry(captured[frameIndex], { ...palette, targetRect });
     geometryByFrame.set(frameIndex, measured);
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
@@ -241,7 +282,7 @@ async function dragObservation(t, s, descriptor, surface, card, theme) {
   for (const source of mapped) {
     if (source.frameIndex === null) continue;
     const geometry = geometryByFrame.get(source.frameIndex)
-      ?? measureViewFrameGeometry(captured[source.frameIndex], palette);
+      ?? measureViewFrameGeometry(captured[source.frameIndex], { ...palette, targetRect });
     const nativeWidth = geometry.cardRectPt.right - geometry.cardRectPt.left
       - rootSlotInsetsPt.left - rootSlotInsetsPt.right;
     const nativeHeight = geometry.cardRectPt.bottom - geometry.cardRectPt.top

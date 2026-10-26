@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-7: DOM anchor로 card를 선택한 뒤 same-card content-color component를 모두 네 변 bounds에 포함한다. Red: 소유 two-card fixture가 same-card top overdraw를 잘라 측정 top 22 px, 전체 경계 기대 12 px를 냈다. 제어된 HWP unmatched-layout 경로도 evidence를 보고하기 전에 `ReferenceError`를 던졌다. Green: fragmented content와 동일 색의 다른 card를 포함한 geometry owner 13/13이 통과한다. HWP 오류 경로 owner는 before/after native frame과 frame별 slot residual을 보고하며 geometry error를 cause로 유지한다. 보존된 HWP capture에는 top residual 8 px가 남아 있다. Responsive breakpoint에서 색이 바뀌므로 이 결과는 native viewport 이동이나 application acceptance를 입증하지 않는다.
+
 - F239-198: 공개 installer로 양쪽 host에 수정한 Editor·Terminal diagnostic event catalog를 설치한다. Configuration별 Editor 29개·Terminal 16개 설치 파일 모두를 보존한 candidate와 비교한다. 애플리케이션 측정과 publication은 별도로 유지한다.
 
 - F212.14-5-6: 새 view 측정 전에 recording에서 다른 plugin content를 확인한다. 전체 연속 recording과 원래 clock을 유지하며 timestamp filtering 없이 기존 target 픽셀을 거부한다. 회귀 검사는 수정 전 실패하고 수정 후 해당 소유 검사 18개 모두 통과한다. 애플리케이션 측정은 별도로 유지한다.

@@ -31,7 +31,7 @@ function rectPoint(rect, frame) {
   ]));
 }
 
-function contentRectangle(frame, color, tolerance) {
+function contentRectangle(frame, color, tolerance, cardRect) {
   const runs = [];
   let previous = [];
   const root = (id) => {
@@ -83,12 +83,21 @@ function contentRectangle(frame, color, tolerance) {
     components.set(key, component);
   }
   const ordered = [...components.values()].sort((left, right) => right.pixels - left.pixels);
-  const [{ left, top, right, bottom, pixels }, ...other] = ordered;
-  for (const component of other) {
-    if (component.left < left || component.top < top || component.right > right || component.bottom > bottom) {
-      throw new Error("recorded frame has a separate opaque content-color region outside the measured rectangle");
-    }
+  const selected = cardRect
+    ? ordered.filter((component) => component.left < cardRect.right && component.right > cardRect.left
+      && component.top < cardRect.bottom && component.bottom > cardRect.top)
+    : ordered;
+  if (cardRect && selected.length === 0) throw new Error("recorded target card has no opaque content-color pixels");
+  if (!cardRect && selected.length > 1 && selected.slice(1).some((component) =>
+    component.left < selected[0].left || component.top < selected[0].top
+      || component.right > selected[0].right || component.bottom > selected[0].bottom)) {
+    throw new Error("recorded frame has a separate opaque content-color region outside the measured rectangle");
   }
+  const left = Math.min(...selected.map((component) => component.left));
+  const top = Math.min(...selected.map((component) => component.top));
+  const right = Math.max(...selected.map((component) => component.right));
+  const bottom = Math.max(...selected.map((component) => component.bottom));
+  const pixels = selected.reduce((sum, component) => sum + component.pixels, 0);
   if (pixels < 4 || right - left < 2 || bottom - top < 2) {
     throw new Error("recorded content-color pixels do not identify a rectangle");
   }
@@ -231,6 +240,7 @@ export function measureViewFrameGeometry(frame, {
   cardColor,
   planeColor,
   borderColors,
+  targetRect,
   colorTolerance = DEFAULT_TOLERANCE,
 } = {}) {
   if (!frame || !Number.isSafeInteger(frame.width) || frame.width < 1 ||
@@ -256,8 +266,25 @@ export function measureViewFrameGeometry(frame, {
   }
   borderColors.forEach((color, index) => requireColor(color, `borderColors[${index}]`));
   const options = { planeColor, cardColor, borderColors, tolerance: colorTolerance };
-  const nativeRectPx = contentRectangle(frame, contentColor, colorTolerance);
-  const cardRectPx = cardRectangle(frame, nativeRectPx, options);
+  let anchor;
+  let targetCardRectPx;
+  if (targetRect !== undefined) {
+    if (!targetRect || ![targetRect.x, targetRect.y, targetRect.width, targetRect.height].every(Number.isFinite)
+        || targetRect.width <= 0 || targetRect.height <= 0) {
+      throw new Error("targetRect must be a finite non-empty window-content rectangle");
+    }
+    const ratio = frame.scale * frame.contentScale;
+    anchor = {
+      x: Math.floor(frame.content.x * frame.scale + (targetRect.x + targetRect.width / 2) * ratio),
+      y: Math.floor(frame.content.y * frame.scale + (targetRect.y + targetRect.height / 2) * ratio),
+    };
+    if (anchor.x < 0 || anchor.y < 0 || anchor.x >= frame.width || anchor.y >= frame.height) {
+      throw new Error("targetRect center lies outside the recorded frame");
+    }
+    targetCardRectPx = cardRectangle(frame, { left: anchor.x, top: anchor.y, right: anchor.x + 1, bottom: anchor.y + 1 }, options);
+  }
+  const nativeRectPx = contentRectangle(frame, contentColor, colorTolerance, targetCardRectPx);
+  const cardRectPx = targetCardRectPx ?? cardRectangle(frame, nativeRectPx, options);
   return {
     timeMs: frame.time,
     scale: frame.scale,

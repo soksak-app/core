@@ -57,8 +57,8 @@ export function editorContentSlotInsets(grid, surfaces, cardId, surfaceId, regio
     regionRect: { x: regionRect.x, y: regionRect.y, w: regionRect.width, h: regionRect.height } });
 }
 
-function editorFrameGeometry(frame, palette) {
-  return measureViewFrameGeometry(frame, palette);
+function editorFrameGeometry(frame, palette, targetRect) {
+  return measureViewFrameGeometry(frame, { ...palette, targetRect });
 }
 
 function editorDocumentRow(host, surface) {
@@ -94,9 +94,10 @@ async function editorLayoutObservation(t, s, descriptor, surface, card, theme) {
   assert.ok(source, `editor content trace has no frame at declared size ${root.frame.width}x${root.frame.height}`);
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
-  const region = await s.rect("editor.content", undefined, surface);
-  const slotInsetsPt = editorContentSlotInsets(grid, surfaces, card, surface, region);
-  const measured = captured.map((frame) => editorFrameGeometry(frame, palette));
+  const targetRect = { x: root.frame.x, y: root.frame.y,
+    width: root.frame.width, height: root.frame.height };
+  const slotInsetsPt = editorSlotInsets(grid, surfaces, card, surface);
+  const measured = captured.map((frame) => editorFrameGeometry(frame, palette, targetRect));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
   const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= source.timeMs);
   assert.ok(candidates.length > 0, "editor layout has no declared-slot pixel match after its source resize event");
@@ -135,13 +136,16 @@ async function editorDragObservation(t, s, descriptor, surface, card, palette) {
     "editor drag capture does not cover the complete requested gesture");
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
-  const slotInsetsPt = editorContentSlotInsets(grid, surfaces, card, surface,
-    await s.rect("editor.content", undefined, surface));
-  const rootSlotInsetsPt = editorSlotInsets(grid, surfaces, card, surface);
+  const root = editorDocumentRow(await s.get("host.window"), surface);
+  const targetRect = { x: root.frame.x, y: root.frame.y,
+    width: root.frame.width, height: root.frame.height };
+  const slotInsetsPt = editorSlotInsets(grid, surfaces, card, surface);
+  const contentRect = targetRect;
+  const rootSlotInsetsPt = slotInsetsPt;
   const geometryFrames = [];
   const geometryByFrame = new Map();
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = editorFrameGeometry(captured[frameIndex], palette);
+    const measured = editorFrameGeometry(captured[frameIndex], palette, contentRect);
     geometryByFrame.set(frameIndex, measured);
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
@@ -153,7 +157,7 @@ async function editorDragObservation(t, s, descriptor, surface, card, palette) {
   for (const source of mapped) {
     if (source.frameIndex === null) continue;
     const geometry = geometryByFrame.get(source.frameIndex)
-      ?? editorFrameGeometry(captured[source.frameIndex], palette);
+      ?? editorFrameGeometry(captured[source.frameIndex], palette, contentRect);
     const nativeWidth = geometry.cardRectPt.right - geometry.cardRectPt.left
       - rootSlotInsetsPt.left - rootSlotInsetsPt.right;
     const nativeHeight = geometry.cardRectPt.bottom - geometry.cardRectPt.top
