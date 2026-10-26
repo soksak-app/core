@@ -305,6 +305,27 @@ test("HWP reclaim evidence reads exact root and studio histories from the diagno
   assert.throws(() => hwpDocumentHistoryEvidence({ historyEntries: 1, regionHistoryEntries: 2 }), /exactly its initial entry/);
 });
 
+test("HWP reclaim captures the opened group before reclaim closes the warm motion view", { timeout: 5000 }, async () => {
+  const opened = ["hwp-a", "hwp-b", "hwp-c", "hwp-d", "hwp-e", "hwp-warm"];
+  const live = new Set(opened);
+  let groupAtReclaim;
+  const session = {
+    async run(command, args) {
+      assert.fail(`the HWP case closed ${args?.tab ?? command} before reclaim owned the initial group`);
+    },
+  };
+  const start = { warmDisplay: { surface: "hwp-warm" }, opened: opened.map((surface) => ({ surface })) };
+  await hwpCase.collectHwpReclaimAfterMotion({}, session, {}, start, {}, async (_t, _s, _descriptor, views) => {
+    groupAtReclaim = [...live].sort();
+    assert.deepEqual(views.map(({ surface }) => surface).sort(), [...opened].sort());
+    for (const { surface } of views) live.delete(surface);
+    return [];
+  });
+  assert.deepEqual(groupAtReclaim, [...opened].sort(),
+    "reclaim must capture the complete still-open group before it closes the warm motion view");
+  assert.deepEqual([...live], [], "the reclaim collector closes every view in the complete opening set");
+});
+
 test("HWP process starts use the canonical shared event clock parser", () => {
   const surfaces = ["hwp-a"];
   const events = [

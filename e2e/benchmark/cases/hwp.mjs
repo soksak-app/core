@@ -47,6 +47,15 @@ export function assertHwpFrameMatchesSlot(geometry, slotInsetsPt) {
   return errorPt;
 }
 
+/** Records reclaim for the complete HWP opening set; the reclaim collector owns closing those views. */
+export async function collectHwpReclaimAfterMotion(t, s, descriptor, start, evidence,
+  collect = collectViewReclaimMeasurements) {
+  const surface = start.warmDisplay.surface;
+  assert.ok(start.opened.some((view) => view.surface === surface),
+    `HWP motion view ${surface} is missing from the opening set passed to reclaim`);
+  return collect(t, s, descriptor, start.opened, evidence);
+}
+
 /** HWP inputs for the shared view startup, footprint, and reclaim collector. */
 export async function hwpViewDescriptor(s, diagnostic = () => {}) {
   const cases = await viewContentCases(s, diagnostic);
@@ -379,13 +388,9 @@ export async function collectHwpViewMeasurements(t, s) {
   assert.ok(theme, `active core theme ${settings.theme}/${settings.mode} is unavailable`);
   const layout = await layoutObservation(t, s, descriptor, surface, start.card, theme, cornerRadiusPt);
   const drag = await dragObservation(t, s, descriptor, surface, start.card, theme, cornerRadiusPt);
-  const closeWarm = await s.run("core.tab.close", { tab: surface });
-  assert.equal(closeWarm?.closed, true, `HWP motion view ${surface} did not close after capture`);
-  await s.until("core.surfaces", (items) => !items.some((item) => item.surface === surface),
-    `HWP motion view ${surface} remained registered after capture`);
   const evidence = { events: [...start.events, ...layout.events, ...drag.events],
     recordings: [...start.recordings, { directory: layout.captureDirectory }, { directory: drag.captureDirectory }] };
-  const reclaim = await collectViewReclaimMeasurements(t, s, descriptor, start.opened, evidence);
+  const reclaim = await collectHwpReclaimAfterMotion(t, s, descriptor, start, evidence);
   return {
     plugin: descriptor.plugin,
     host: s.app.name,

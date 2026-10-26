@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-20: Keep the HWP warm motion view in the live initial group until reclaim samples and closes it. Remove the premature close without relaxing process-sharing, footprint or history checks. The consumer regression fails before correction; all 12 HWP owner cases pass afterward, and earlier-failure session cleanup remains registered.
+
 - F239-202: Keep the 10 existing private Rust cases in their paired owner test modules and remove four redundant path modules. Update exact inventory links without widening structural rules or adding a platform exception. The host structure audit fails on the old paths; all moved cases and the reconciled host structure pass.
 
 - F212.14-5-18: Join changed visible plugin root views to every layout transaction while keeping child documents independent. Identify waits by view generation and layout ticket, retire native join resources before cancellation, and cancel only the failed ticket so a synchronous handoff cannot cancel its replacement. Focused Wails and Tauri owners and the native resized-paint and ticket-cancellation owner pass. Both optimized diagnostic hosts build on macOS arm64; application measurement remains under F212.14-5-5.
