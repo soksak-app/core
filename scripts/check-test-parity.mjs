@@ -6936,6 +6936,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.14-5-25",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function surfacePlacementsForHost(" }],
+    tests: [{ file: "packages/workbench/test/view-start-handoff.test.mjs", id: "core.file.open parameters reach the host placement request" }],
+    expected: "A placement projects one current core declaration snapshot for all view start values without retaining it between placements.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.14-5-24",
     implementation: [
       { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func (s *Surfaces) ensureCurrentPresentationJoins(" },

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-5-25: Host placement마다 core surface declaration을 한 번 projection하고 모든 view start 값이 같은 snapshot을 공유한다. 직접 single-view 구성도 한 번만 읽는다. Placement 사이에 snapshot을 보존하지 않고 origin 검증, plugin declaration 및 요청 구조를 유지한다. 변경 전 두 view owner는 snapshot을 여섯 번 읽어 실패하며 수정 후 placement owner 및 start-value/origin owner 두 개가 통과한다. Application cadence acceptance는 남는다.
+
 - F212.14-5-24: 독립적인 DOM 및 raster 대기 전에 변경된 root-view presentation을 등록하고, 같은 ticket을 commit하기 전에 교체된 generation을 다시 join한다. 미참여 generation을 cache하지 않고 변경되지 않은 root 및 lifecycle stop state를 유지한다. Host 순서, 교체, 취소 및 lifecycle owner가 통과하며 native capture는 first-show pixel이 commit 전까지 게시되지 않고 focus가 올바름을 입증한다. Application cadence acceptance는 별도로 남는다.
 
 - F212.14-5-23: 반복된 diagnostic ResizeObserver delivery를 첫 시각, 마지막 시각 및 양의 delivery count를 가진 하나의 실제 animation-frame record로 합친다. Consumer는 잘못된 provenance를 거부하고 frame collection 전체에서 보존하며 Terminal은 canonical 중첩 source에서 document clock origin을 유지한다. 기존 helper와 consumer 회귀 검사는 수정 전에 실패하고 수정 후 영향받는 Core owner 44개가 모두 통과한다. Plugin consumer 네 개의 owner와 current-source SDK 검사가 통과하고 양쪽 새 profile의 선택된 archive file 167개가 모두 일치한다. Cadence와 pixel acceptance는 유지한다.

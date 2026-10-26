@@ -61,10 +61,44 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const plane = await import("../plane.js");
   const compositor = await import("../compositor.js");
-  const { authorizeSurface, surfacePlacementsForHost } = await import("../surface-modules.js");
+  const { authorizeSurface, surfacePlacementsForHost, viewStartValues } = await import("../surface-modules.js");
   const { recordOrigin } = await import("../tab-reports.js");
   const { surfaces: hostSurfaces } = await import("../host.js");
   try {
+    const startValuesSurfaces = ["tab-snapshot-one", "tab-snapshot-two"].map((surfaceId) => {
+      recordOrigin(surfaceId, null, "test fixture");
+      return { id: surfaceId, surface: {
+        surfaceId, pluginId, params: null, declarations: { status: [], commands: [], dom: [] },
+        composition: { kind: "view", page: "ui/index.html" },
+      } };
+    });
+    const currentDeclarations = registry.surfaceDeclarations;
+    let declarationReads = 0;
+    registry.surfaceDeclarations = () => {
+      const version = ++declarationReads;
+      return Object.fromEntries(["status", "commands", "dom"].map((kind) => [kind, [
+        { name: `core.${kind}.snapshot-${version}` },
+      ]]));
+    };
+    try {
+      const starts = surfacePlacementsForHost(startValuesSurfaces, null).map(({ start }) => start);
+      assert.equal(declarationReads, 1,
+        "one placement must project the complete declaration registry once, not three times for each view");
+      for (const start of starts) {
+        for (const kind of ["status", "commands", "dom"]) {
+          assert.equal(start.declarations[kind][0].name, `core.${kind}.snapshot-1`,
+            `${kind} declarations came from a different registry snapshot`);
+        }
+      }
+      const directStart = viewStartValues(startValuesSurfaces[0].surface, null);
+      assert.equal(declarationReads, 2, "a direct single-view start-value calculation must read one declaration snapshot");
+      for (const kind of ["status", "commands", "dom"]) {
+        assert.equal(directStart.declarations[kind][0].name, `core.${kind}.snapshot-2`);
+      }
+    } finally {
+      registry.surfaceDeclarations = currentDeclarations;
+    }
+
     let draw;
     plane.onLayout((_made, next) => { draw = next; });
     plane.adopt(plane.fresh());

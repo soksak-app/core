@@ -233,23 +233,32 @@ function originOf(surface) {
   }
 }
 
+function viewStartOrigin(surface) {
+  // The layout read refuses a view tab first and the place leaves it out; a refusal that reaches this point is a defect, so it throws.
+  const refusal = viewRefusal(surface.surfaceId);
+  if (refusal !== null) throw new TypeError(refusal);
+  return originOf(surface);
+}
+
+function viewStartValuesFromDeclarations(surface, project, origin, declarations) {
+  return {
+    // default: a tab without parameters gives null, as tab.params does (docs/spec/plugins.md).
+    params: surface.params ?? null,
+    origin,
+    project: project === null ? null : { id: project.id, root: project.root },
+    declarations: Object.fromEntries(["status", "commands", "dom"].map((kind) =>
+      [kind, [...declarations[kind], ...(surface.declarations[kind] ?? [])]])), // default: a surface without plugin declarations contributes none beyond core declarations.
+  };
+}
+
 /**
  * The start values of the view of surface (docs/spec/native-surfaces.md#view-surfaces): the members of the surface context that
  * the page receives at start, which the host injects as window.sokSurface before the page of the view runs. project is the
  * project that the window shows, or null in a window without one.
  */
 export function viewStartValues(surface, project) {
-  // The layout read refuses a view tab first and the place leaves it out; a refusal that reaches this point is a defect, so it throws.
-  const refusal = viewRefusal(surface.surfaceId);
-  if (refusal !== null) throw new TypeError(refusal);
-  return {
-    // default: a tab without parameters gives null, as tab.params does (docs/spec/plugins.md).
-    params: surface.params ?? null,
-    origin: originOf(surface),
-    project: project === null ? null : { id: project.id, root: project.root },
-    declarations: Object.fromEntries(["status", "commands", "dom"].map((kind) =>
-      [kind, [...registry.surfaceDeclarations()[kind], ...(surface.declarations[kind] ?? [])]])), // default: a surface without plugin declarations contributes none beyond core declarations.
-  };
+  const origin = viewStartOrigin(surface);
+  return viewStartValuesFromDeclarations(surface, project, origin, registry.surfaceDeclarations());
 }
 
 /** Builds the canonical surface descriptor from the tab, including its stored start parameters. */
@@ -259,9 +268,13 @@ export function surfaceForTab(tab) {
 
 /** Adds the document-start values to each view using the descriptor supplied by its slot or stored tab. */
 export function surfacePlacementsForHost(surfaces, project) {
-  return surfaces.map((entry) => entry.surface.composition?.kind === "view" && native
-    ? { ...entry, start: viewStartValues(entry.surface, project) }
-    : entry);
+  const origins = surfaces.map((entry) => native && entry.surface.composition?.kind === "view"
+    ? viewStartOrigin(entry.surface)
+    : null);
+  const declarations = origins.some((origin) => origin !== null) ? registry.surfaceDeclarations() : null;
+  return surfaces.map((entry, index) => origins[index] === null
+    ? entry
+    : { ...entry, start: viewStartValuesFromDeclarations(entry.surface, project, origins[index], declarations) });
 }
 
 /**
