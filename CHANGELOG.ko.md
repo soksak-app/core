@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-212: Input-source 선택이 current가 아닌 context를 거절할 때 captured/current window, responder, text context 및 context-client 사실을 보고한다. 제어된 진단 소유 검사는 빠진 사실을 재현한 뒤 통과한다. 선택 정책은 유지하며 실제 원인은 미해결이다.
+
 - F239-213: Equal과 Minus native input 문자를 Carbon ANSI 물리 key code에 매핑한다. 공개 native input 검사는 수정 전에 실패하고 뒤에는 WebKit key/code 일치로 통과하며 미지원 문자는 명시적 오류로 유지한다.
 
 - F239-210: Root-view presentation-join 기록의 Go, Rust 및 JavaScript event class table을 재생성한다. 기존 generator/class 소유 검사는 재생성 전에 실패하고 뒤에 통과하며 Go/Rust runtime class assertion도 보강한다. Logging 정책과 감사 기준은 유지한다.

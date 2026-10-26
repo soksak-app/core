@@ -10,6 +10,7 @@
 - (NSString *)globalSource;
 - (BOOL)hasActiveTextClient;
 - (BOOL)targetContextIsCurrent;
+- (NSString *)targetContextFailureDetails;
 - (NSString *)targetContextSource;
 - (BOOL)selectGlobalSource:(NSString *)identifier error:(NSString **)error;
 - (id)observeSelection:(void (^)(void))changed;

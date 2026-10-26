@@ -45,6 +45,13 @@ static BOOL completionTokenDeallocated = NO;
 - (NSString *)globalSource { return self.global; }
 - (BOOL)hasActiveTextClient { return self.activeClient; }
 - (BOOL)targetContextIsCurrent { return self.currentContext; }
+- (NSString *)targetContextFailureDetails {
+    return @"capturedWindow=0x1 currentWindow=0x1 windowIsCurrent=1 "
+        @"capturedResponder=0x2(ControlledTextResponder) currentResponder=0x2(ControlledTextResponder) "
+        @"responderIsCurrent=1 capturedContext=0x3(NSTextInputContext) "
+        @"currentContext=0x4(NSTextInputContext) contextIsCurrent=0 "
+        @"contextClient=0x2(ControlledTextResponder) clientIsResponder=1";
+}
 - (NSString *)targetContextSource { return self.contextSource; }
 - (BOOL)selectGlobalSource:(NSString *)identifier error:(NSString **)error {
     self.selections++;
@@ -191,9 +198,11 @@ int main(void) { @autoreleasepool {
     __block NSString *mismatchReason = nil;
     sp_input_source_select_and_await_with_driver("com.apple.inputmethod.Korean.2SetKorean", mismatch,
         ^(const char *error) { mismatchCalls++; mismatchReason = error ? @(error) : nil; });
-    check(mismatchCalls == 1 && [mismatchReason isEqual:@"the key responder's text input context is not current"]
+    check(mismatchCalls == 1 && [mismatchReason containsString:@"contextIsCurrent=0"]
+        && [mismatchReason containsString:@"capturedContext=0x3(NSTextInputContext)"]
+        && [mismatchReason containsString:@"currentContext=0x4(NSTextInputContext)"]
         && mismatch.selections == 0,
-        @"an active text responder without its current context fails instead of reporting global selection as ready");
+        @"a stale active context rejection identifies captured and current text-context facts");
 
     SPControlledInputSourceDriver *timedOut = [[[SPControlledInputSourceDriver alloc] init] autorelease];
     timedOut.global = @"com.apple.keylayout.ABC";

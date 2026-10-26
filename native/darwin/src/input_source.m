@@ -51,6 +51,27 @@ char *sp_input_source_current(void) {
         && self.context && NSTextInputContext.currentInputContext == self.context
         && self.context.client == self.responder;
 }
+- (NSString *)targetContextFailureDetails {
+    NSWindow *currentWindow = NSApp.keyWindow;
+    id currentResponder = self.window.firstResponder;
+    NSTextInputContext *currentContext = NSTextInputContext.currentInputContext;
+    id contextClient = self.context.client;
+    NSString *capturedResponderClass = self.responder ? NSStringFromClass([self.responder class]) : @"<nil>";
+    NSString *currentResponderClass = currentResponder ? NSStringFromClass([currentResponder class]) : @"<nil>";
+    NSString *capturedContextClass = self.context ? NSStringFromClass([self.context class]) : @"<nil>";
+    NSString *currentContextClass = currentContext ? NSStringFromClass([currentContext class]) : @"<nil>";
+    NSString *contextClientClass = contextClient ? NSStringFromClass([contextClient class]) : @"<nil>";
+    return [NSString stringWithFormat:
+        @"capturedWindow=%p currentKeyWindow=%p windowIsCurrent=%d "
+        @"capturedResponder=%p(%@) currentResponder=%p(%@) responderIsCurrent=%d "
+        @"capturedContext=%p(%@) currentContext=%p(%@) contextIsCurrent=%d "
+        @"contextClient=%p(%@) clientIsResponder=%d",
+        (void *)self.window, (void *)currentWindow, self.window == currentWindow,
+        (void *)self.responder, capturedResponderClass, (void *)currentResponder, currentResponderClass,
+        currentResponder == self.responder, (void *)self.context, capturedContextClass,
+        (void *)currentContext, currentContextClass, currentContext == self.context,
+        (void *)contextClient, contextClientClass, contextClient == self.responder];
+}
 - (NSString *)targetContextSource {
     return self.context.selectedKeyboardInputSource;
 }
@@ -115,7 +136,9 @@ char *sp_input_source_current(void) {
         return;
     }
     if (![self.driver targetContextIsCurrent]) {
-        [self finish:@"the key responder's text input context is not current"];
+        NSString *details = [self.driver targetContextFailureDetails];
+        [self finish:[NSString stringWithFormat:@"the key responder's text input context is not current (%@)",
+            details ?: @"identity details unavailable"]];
         return;
     }
     NSString *globalBefore = [self.driver globalSource];
