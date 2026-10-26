@@ -762,6 +762,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F239-209",
+    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: "export async function installCoreExposure(" }],
+    tests: [{ file: "packages/workbench/test/library-search-focus.test.mjs", id: "the declared cmd+k command targets the shown library page and rejects a hidden library" }],
+    expected: "The parameterless library search focus command and declared shortcut select the current projects/plugins search field and explicitly reject a hidden library.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-207",
     implementation: [
       { file: "packages/host/wailsv3/src/presentation_wait.go", symbol: "func tracePresentationJoin(" },

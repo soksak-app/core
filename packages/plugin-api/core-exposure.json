@@ -136,6 +136,7 @@
     "core.library.page",
     "core.library.plugins.search",
     "core.library.search",
+    "core.library.search.focus",
     "core.library.sort",
     "core.library.open",
     "core.library.pin",

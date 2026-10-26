@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-209: 인자 없는 `core.library.search.focus`를 선언하고 shortcut table과 main keyboard handler의 Command-K에서 사용한다. 현재 projects/plugins 검색 필드에 focus하고 page를 바꾸지 않고 hidden library를 거절하며 SDK exposure 선언을 다시 생성한다. 변경 전 registry 호출은 동작이 없어 실패했고, 유지한 직접 호출 및 shortcut-row 통합과 아홉 shortcut-table 검사가 통과한다. Runtime keyboard 수용은 별도로 남는다.
+
 - F239-207: 기존 performance log에서 surface, generation 및 layout ticket으로 변경된 root-view presentation join을 추적한다. Scheduling이나 presentation 정책을 바꾸지 않고 요청, native 결과, callback과 abandonment를 기록한다. 동기 및 늦은 callback 순서를 유지하고 performance/debug gate 뒤에서만 필드를 만든다. 양 host 소유 Red/Green에서 Wails 두 검사와 Tauri 세 검사가 통과하며 runtime 지연 귀속은 미완료다.
 
 - F239-208, F266.8: 양 checklist 번역에서 근거 복구 불가 감사 기록의 범위, 근거, 명시적 미검증 결과 및 후속 조건이 비어 있지 않고 순서대로 있는지 검사한다. 소유 검사는 기존 거절을 재현하며 수정 뒤 영향받는 여섯 검사를 통과한다. 독립 근거 검토 뒤 원래 CI load 복구 비교만 닫고 미검증 비교 가능성, 과거 watcher 실패 및 별도 후속 suite 결과를 유지한다.

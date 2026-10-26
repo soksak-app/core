@@ -3723,6 +3723,17 @@
         }
       },
       {
+        "name": "core.library.search.focus",
+        "description": "Focuses the search field of the currently shown library page.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.library.sort",
         "description": "Sets the library sort order.",
         "params": {

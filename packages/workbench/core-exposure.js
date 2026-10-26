@@ -560,6 +560,15 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.library.page", ({ page }) => { library.actions.page(page); });
   registry.command("core.library.plugins.search", ({ query }) => { library.actions.searchPlugins(query); });
   registry.command("core.library.search", ({ query }) => { library.actions.search(query); });
+  registry.command("core.library.search.focus", () => {
+    if (!projects.inLibrary()) throw new Error("the library is not shown");
+    const page = library.state().page;
+    const name = page === "projects" ? "core.library.search"
+      : page === "plugins" ? "core.library.plugins.search"
+        : null;
+    if (!name) throw new Error(`unknown library page ${JSON.stringify(page)}`);
+    focusElement(name);
+  });
   registry.command("core.library.sort", ({ order }) => { library.actions.sort(order); });
   registry.command("core.library.open", async ({ id }) => { await library.actions.open(id); });
   registry.command("core.library.pin", async ({ id, pinned }) => { await library.actions.pin(id, pinned); });

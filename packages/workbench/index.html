@@ -664,8 +664,7 @@ addEventListener("keydown", (event) => {
   if (!chrome && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); return run("core.window.new"); }
   if (event.key.toLowerCase() === "k" && projects.inLibrary()) {
     event.preventDefault();
-    // Goes to the search field of the visible page of the library.
-    return run("core.focus.set", { name: library.state().page === "plugins" ? "core.library.plugins.search" : "core.library.search" });
+    return run("core.library.search.focus", {});
   }
 });
 /* When a frame outside the plane is pressed, the scope of the text size is the frame (docs/spec/text-size.md). */

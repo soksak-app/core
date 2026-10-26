@@ -8,7 +8,7 @@ import { answerViewCall, viewStopState } from "../view-calls.js";
 // row that does not.
 const SHORTCUTS = [
   { key: "cmd+q", owner: "native menu", command: "framework role", menu: "app/quit", when: "Any focus" },
-  { key: "cmd+k", owner: "workbench", command: "core.focus.set", menu: null, when: "The library is shown" },
+  { key: "cmd+k", owner: "workbench", command: "core.library.search.focus", menu: null, when: "The library is shown" },
   { key: "cmd+j", owner: "workbench", command: "core.probe.jump", menu: null, when: "Any focus" },
   { key: "Escape", owner: "view", command: "none", menu: null, when: "A plugin view has keyboard focus" },
 ];
@@ -329,7 +329,7 @@ test("runtime.shortcuts.read returns the rows of the workbench and view owners, 
   const { options } = fakes();
   const result = await answerViewCall({ id: 1, command: "runtime.shortcuts.read", params: null }, options).catch((error) => error);
   assert.deepEqual(result, [
-    { key: "cmd+k", owner: "workbench", command: "core.focus.set" },
+    { key: "cmd+k", owner: "workbench", command: "core.library.search.focus" },
     { key: "cmd+j", owner: "workbench", command: "core.probe.jump" },
     { key: "Escape", owner: "view", command: "none" },
   ]);
