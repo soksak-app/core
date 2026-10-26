@@ -78,6 +78,8 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 ## View drag benchmark
 
+`make DIAGNOSTIC_RELEASE=1 wailsv3-build-release tauriv2-build-release`로 로컬 최적화 diagnostic candidate를 build하고 설치된 각 sidecar를 release profile과 diagnostic feature로 build한다. Benchmark 실행 전에 정확한 executable hash와 source revision을 기록한다. 로컬 compile은 release를 공개하지 않는다. Rust development profile은 host crate를 최적화하지 않으므로 이전 debug-profile 측정은 별도 관측으로 보존한다.
+
 두 disposable diagnostic host가 이미 실행 중인 상태에서 window check와 같은 run metadata 및 binary/configuration 선언으로 `pnpm -F @soksak/e2e benchmark:view-drag`를 실행한다. 두 host와 검사 process에서 `SOKSAK_PERFORMANCE_TRACE` 및 `SOKSAK_VT_TRACE_DIR`를 설정하지 않는다. Benchmark는 performance trace 비활성화, null terminal renderer metadata 및 기본 error-only log policy를 확인한다. 어느 host도 활성화하지 않고 전체 synthetic drag를 녹화한다. 성능 계약은 capture frame을 측정하므로 diagnostic recording은 켠다.
 
 녹화 drag는 performance 및 renderer trace 설정과 독립적으로 native transaction timestamp를 이미 수집한다. Benchmark는 분석 전에 원본 row를 `layouts.json`에 보존하고 cadence 집계를 `result.json`에 포함한다. `committing` 구간은 DOM presentation부터 transaction commit까지이며 `total`은 native 준비 시작부터 commit까지다. 발생하지 않은 단계는 null로 유지하고 잘못됐거나 역전된 timestamp는 명시적으로 실패한다.

@@ -78,6 +78,8 @@ A check removes every folder and file that it writes to the temporary folder, al
 
 ## View drag benchmark
 
+Build local optimized diagnostic candidates with `make DIAGNOSTIC_RELEASE=1 wailsv3-build-release tauriv2-build-release` and build each installed sidecar with its release profile and diagnostic feature. Record the exact executable hashes and source revisions before running the benchmark; local compilation does not publish a release. Preserve earlier debug-profile measurements as separate observations because the Rust development profile leaves the host crate unoptimized.
+
 With both disposable diagnostic hosts already running, use `pnpm -F @soksak/e2e benchmark:view-drag` with the same run metadata and binary/configuration declarations as the window checks. Leave `SOKSAK_PERFORMANCE_TRACE` and `SOKSAK_VT_TRACE_DIR` unset in both hosts and the check process. The benchmark verifies disabled performance tracing, null terminal renderer metadata and the default error-only log policy. It records the complete synthetic drag without activating either host; diagnostic recording remains enabled because the performance contract measures captured frames.
 
 Recorded drag already collects native transaction timestamps independently of the performance and renderer trace settings. The benchmark preserves these original rows in `layouts.json` before analysis and includes their cadence summaries in `result.json`. The `committing` interval runs from DOM presentation to transaction commit; `total` runs from native preparation start to commit. Missing stages remain null, and invalid or reversed timestamps fail explicitly.

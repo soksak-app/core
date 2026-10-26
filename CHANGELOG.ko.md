@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14: 완료한 VT screen 소유권/body-copy 수정을 기록하고 최적화한 diagnostic binary를 로컬 성능 acceptance profile로 정한다. 모든 debug-profile 목표 미달과 그대로인 목표를 유지한다. Compile profile은 diagnostic 지원과 독립적이며 공개 release, 인과적 지연 개선이나 두 profile의 통과를 주장하지 않는다.
+
 - F239-191: 기존 순차 runner로 native activation 사례를 실행해 test별 결과, 경과 시간과 timeout을 적용한다. image_region_test를 prerequisite로 선언하고 모든 아홉 사례와 인자를 유지한다. 비활성화 target fixture는 수정 전 실패하고 수정 후 native 앱을 실행하지 않고 통과한다.
 
 - F239-189: 기존 start 대기가 만료되면 정확히 한 번 capture stop 소유권을 나중에 성공하는 start callback으로 넘긴다. Start 실패 시 stop을 요청하지 않는다. 호출자 timeout, sample/source intake fence, 확정한 artifact와 교체된 recording 격리를 유지한다. 네 assertion의 controlled Red가 수정 후 통과하며 late-stop과 intake 소유 검사도 통과한다. 관련 없는 간헐적 summary assertion은 F239-190에서 유지하며 과거 startup 지연 원인은 미해결이다.

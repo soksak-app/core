@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14: Record completed VT screen ownership/body-copy corrections and define optimized diagnostic binaries as the local performance acceptance profile. Keep all debug-profile misses and unchanged targets. The compilation profile is independent of diagnostic support; no public release, causal latency improvement or both-profile pass is claimed.
+
 - F239-191: Run native activation cases through the existing sequential runner with per-test results, elapsed times and timeouts. Declare image_region_test as a prerequisite and preserve all nine cases and arguments. The non-activating target fixture fails before correction and passes afterward without running any native application.
 
 - F239-189: Transfer exactly-once capture stop ownership to a late successful start callback when the existing start wait expires. Failed starts request no stop. Preserve the caller timeout, sample/source intake fence, finalized artifacts and replacement-recording isolation. The four-assertion controlled Red passes after correction, and late-stop and intake owners pass. Keep the unrelated intermittent summary assertion under F239-190 and the historical startup-delay cause unresolved.

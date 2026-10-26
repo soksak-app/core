@@ -347,6 +347,8 @@ Review는 glyph 획이 cell 아래쪽까지 내려올 수 있고 cursor color는
 
 기능 window 검사는 cadence 및 latency 측정값과 목표 초과 여부를 보존한다. 개발 완료 후 전용 benchmark가 이 목표를 판정한다. 측정 누락이나 잘못된 값, 불완전한 recording, geometry 실패 및 멈춘 rendering은 계속 기능 실패다.
 
+성능 acceptance는 로컬에서 최적화한 diagnostic binary를 사용한다. 양 core host와 설치된 sidecar는 diagnostic 지원을 켠 release compile profile을 사용한다. Source revision, executable hash, profile, display mode와 system load를 기록한다. Debug-profile 관측은 별도로 보존하며 통과는 측정한 profile만 증명한다. Compiler 최적화로 목표를 바꾸지 않는다.
+
 - 연속 capture view-drag frame의 목표 최대 간격은 33 ms다. ScreenCaptureKit은 요청된 update 간격을 보장하지 않으며 측정 간격과 목표 초과 여부를 보존한다.
 - 경계를 끄는 동안 녹화된 프레임은 격자가 한 걸음의 배치를 떠난 뒤 최대 화면 네 프레임 안에 그 배치를 보여주고, 끌기 전체에서 지연의 중앙값은 2.5 프레임, 90번째 백분위수는 3 프레임 이하다(60Hz에서 66.7ms, 41.7ms, 50ms).
 
