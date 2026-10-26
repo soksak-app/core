@@ -182,3 +182,23 @@ test("checkTestPathReads discovers the declared e2e owner from the production pa
     `${file}:${source.split("\n").length - 1}: test of e2e reads a path of packages/plugin-api: ../packages/plugin-api/index.js`,
   ], "the main owner discovery must reject implementation reads by an e2e test");
 });
+
+test("e2e fixture payload manifests do not create independent core test owners", { timeout: 1000 }, () => {
+  const owners = corePackageFolders();
+  const e2eTest = "e2e/test/fixture-owner.test.mjs";
+  const fixtureManifest = "../fixtures/memory-saver/unload-probe/package.json";
+  const fixtureSource = "../fixtures/memory-saver/unload-probe/ui/app.js";
+  const source = [
+    `readFileSync(new URL(${JSON.stringify(fixtureManifest)}, import.meta.url));`,
+    `readFileSync(new URL(${JSON.stringify(fixtureSource)}, import.meta.url));`,
+  ].join("\n");
+
+  assert.ok(!owners.some((owner) => owner.dir.startsWith("e2e/fixtures/")));
+  assert.deepEqual(checkTestPathReads(owners, [e2eTest], () => source), []);
+
+  const coreTest = "packages/workbench/test/fixture-owner.test.mjs";
+  const coreSource = 'readFileSync(new URL("../../../e2e/fixtures/memory-saver/unload-probe/ui/app.js", import.meta.url));';
+  assert.deepEqual(checkTestPathReads(owners, [coreTest], () => coreSource), [
+    `${coreTest}:1: test of packages/workbench reads a path of e2e: ../../../e2e/fixtures/memory-saver/unload-probe/ui/app.js`,
+  ]);
+});

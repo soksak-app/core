@@ -198,6 +198,29 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F239-218",
+  "implementation": [
+    {
+      "file": "scripts/check-boundaries.mjs",
+      "symbol": "export function corePackageFolders("
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/test/check-boundaries.test.mjs",
+      "id": "e2e fixture payload manifests do not create independent core test owners"
+    },
+    {
+      "file": "scripts/test/check-boundaries.test.mjs",
+      "id": "checkTestPathReads discovers the declared e2e owner from the production package list"
+    }
+  ],
+  "expected": "E2E fixture payloads belong to the E2E owner while independent core implementation reads remain rejected.",
+  "levels": [
+    "unit"
+  ]
+},
+  {
   "id": "F239-211",
   "implementation": [
     {

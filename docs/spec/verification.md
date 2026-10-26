@@ -10,6 +10,8 @@ On macOS, recorded view content is checked with the public Vision text recognize
 
 The canonical work status is [features](../features.md). A source-file inventory is structural evidence only. It must not report feature parity or application correctness.
 
+Core test ownership follows independently declared core packages. The root `e2e` package owns its window checks and the installable payloads under `e2e/fixtures/`; a fixture `package.json` describes an installed payload, not an independent core test owner. E2E tests may read their fixture manifests and sources. Core package tests remain unable to read E2E fixture files, and E2E tests remain unable to read another core package's implementation paths.
+
 Documentation checks require unique task identifiers and only waiting (`[ ]`), in-progress (`[~]`), complete (`[o]`), or temporarily bypassed (`[!]`) states. A `[!]` item records a nonempty cause and retry condition in both translations. Checklist identifiers, ordering, indentation, and states must match across translations. The text may be translated; the task state must not differ. The changelog and its translation must have the same sections, the same number of entries in each section, and, at each position, the same task identifiers and code spans.
 
 Additional work must receive a priority and acceptance criteria in that same checklist before implementation. A completed task retains its status and the scope of its evidence. A subsequent issue uses a linked identifier with a numeric suffix instead of reopening the completed task or starting another checklist.

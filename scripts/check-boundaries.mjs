@@ -178,6 +178,8 @@ export function corePackageFolders(root = ROOT) {
   }).split("\0").filter((file) => file !== "");
   const folders = new Set(tracked
     .filter((file) => PACKAGE_MARKERS.includes(posix.basename(file)))
+    // Fixture package manifests describe E2E-installed payloads, not independently owned core test packages.
+    .filter((file) => !(file.startsWith("e2e/fixtures/") && posix.basename(file) === "package.json"))
     .map((file) => posix.dirname(file))
     .filter((dir) => dir !== "."));
   return [...folders]

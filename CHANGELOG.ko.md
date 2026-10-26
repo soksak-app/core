@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-218: E2E 설치용 fixture payload를 E2E test owner 아래에 둔다. 해당 package manifest는 독립 core workspace module이 아니라 packaging 입력이다. 변경 전 감사가 정당한 fixture 읽기를 거부하고, 수정 후 소유 사례와 경계 사례 열아홉 개가 통과하며 독립 core 구현 경로는 계속 보호한다. Namespace 검사는 그대로다.
+
 - F239-217: Core sampler·adapter 소유 fixture에서 가상 plugin identity를 사용한다. Process mapping·오류 assertion을 유지하면서 plugin 저장소 참조를 제거한다. 경계 감사가 원래 literal을 거부하며 수정 후 관련 소유 사례 여섯 개와 경계 감사가 통과한다. Production 동작은 그대로다.
 
 - F239-215: Plugin-host page와 logging 문서를 현재 SDK·native loader에 맞춘다. Host가 삽입하는 import map, writer의 log 정책과 filtering 전 field 구성을 설명한다. 양 번역에서 오래된 page-owned map·enabled 조회 설명을 제거하며 runtime 동작은 그대로다.

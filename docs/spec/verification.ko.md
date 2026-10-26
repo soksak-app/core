@@ -10,6 +10,8 @@ macOS에서는 검사 전용 executable의 공개 Vision text recognizer로 녹�
 
 작업 상태 정본은 [기능 상태](../features.ko.md)다. 소스 파일 목록은 구조적 증거일 뿐 기능 동등성이나 애플리케이션의 정상 동작을 판정하지 않는다.
 
+Core test 소유권은 독립적으로 선언된 core package를 따른다. Root `e2e` package가 window check와 `e2e/fixtures/` 아래 설치 가능한 payload를 소유한다. Fixture의 `package.json`은 설치 payload를 설명하며 별도의 core test 소유자를 만들지 않는다. E2E test는 자기 fixture manifest와 source를 읽을 수 있다. Core package test는 계속 E2E fixture 파일을 읽을 수 없고, E2E test도 다른 core package의 구현 경로를 읽을 수 없다.
+
 문서 검사는 작업 ID 중복 금지와 대기(`[ ]`), 진행(`[~]`), 완료(`[o]`), 임시 우회(`[!]`) 상태만 사용하도록 요구한다. `[!]` 항목은 두 번역 모두에 비어 있지 않은 원인과 재시도 조건을 기록한다. 양쪽 번역의 체크리스트 ID·순서·들여쓰기·상태는 같아야 한다. 문장은 번역하되 작업 상태가 달라서는 안 된다. 변경 기록과 번역은 같은 구역, 구역마다 같은 항목 수, 위치마다 같은 작업 ID와 코드 조각을 가져야 한다.
 
 추가 작업은 구현 전에 같은 체크리스트에 우선순위와 완료 기준을 기록한다. 완료 작업은 상태와 증거 범위를 유지한다. 후속 이슈는 완료 작업을 재개하거나 다른 체크리스트를 만드는 대신 숫자 접미사로 연결한 새 식별자를 쓴다.

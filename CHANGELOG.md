@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-218: Keep E2E installable fixture payloads under the E2E test owner. Their package manifests are packaging inputs, not independent core workspace modules. The unchanged audit rejects legitimate fixture reads; the owning case and nineteen boundary cases pass after correction while independent core implementation paths remain protected. Namespace checks are unchanged.
+
 - F239-217: Use synthetic plugin identities in the core sampler and adapter owner fixtures. Preserve process mapping and error assertions while removing references to plugin repositories. The boundary audit rejects the original literals; all six affected owner cases and the boundary audit pass after correction. Production behavior is unchanged.
 
 - F239-215: Align plugin-host page and logging documentation with the current SDK and native loader. Describe host-inserted import maps and writer-side log policy, including field construction before filtering. Remove obsolete page-owned-map and enabled-query descriptions in both translations; runtime behavior is unchanged.
