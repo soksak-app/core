@@ -736,6 +736,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.12-2-3",
+    implementation: [
+      { file: "e2e/view-input.test.mjs", symbol: "const clickAddress =" },
+    ],
+    tests: [
+      { file: "e2e/view-input.test.mjs", id: "an inactive view retains input across main focus and handles picker Escape" },
+    ],
+    expected: "Native text and focus move between view and main without losing the view draft; native Escape cancels rename and dismisses the picker without application activation.",
+    levels: ["application"],
+  },
+  {
     id: "F212.12-2-1-1",
     implementation: [
       { file: "e2e/editor.test.mjs", symbol: "const focusEditorForKeys =" },
