@@ -85,8 +85,9 @@ function writeLayoutFrame(directory, index, time, cardRight) {
     paint(x, y, edge ? geometryColors.border : geometryColors.card);
   }
   for (let y = 11; y < 18; y++) for (let x = 14; x < 86; x++) paint(x, y, geometryColors.content);
-  for (let y = 20; y < 62; y++) for (let x = 14; x < 86; x++) {
-    if (x < 16 || x >= 84 || y < 22 || y >= 60) paint(x, y, viewportMarker);
+  const markerRight = cardRight - 6;
+  for (let y = 20; y < 62; y++) for (let x = 14; x < markerRight; x++) {
+    if (x < 16 || x >= markerRight - 2 || y < 22 || y >= 60) paint(x, y, viewportMarker);
   }
   let remaining = pixels.length - 15;
   const encoded = [Buffer.from([0xf0])];
@@ -120,7 +121,11 @@ function layoutFailureSession(root, captureDirectory) {
   ] };
   const session = {
     app: { configDir: root },
-    async record() { return { async stop() { return { frames: captureDirectory, count: 2, limited: false }; } }; },
+    stopAfter: undefined,
+    async record() { return { async stop(options) {
+      session.stopAfter = options?.after;
+      return { frames: captureDirectory, count: 2, limited: false };
+    } }; },
     async get(name) {
       if (name === "core.grid") return grid;
       if (name === "host.window") return host;
@@ -153,11 +158,68 @@ function layoutFailureSession(root, captureDirectory) {
 }
 
 function viewportMarkerDeclarationForLayout() {
-  return { markerColor: viewportMarker, borderWidth: 2, rect: { left: 0, top: 0, right: 72, bottom: 42 },
-    innerWidth: 72, innerHeight: 42, clientWidth: 72, clientHeight: 42,
-    visualViewport: { width: 72, height: 42, offsetLeft: 0, offsetTop: 0, scale: 1 },
+  return { markerColor: viewportMarker, borderWidth: 2, rect: { left: 0, top: 0, right: 70, bottom: 42 },
+    innerWidth: 70, innerHeight: 42, clientWidth: 70, clientHeight: 42,
+    visualViewport: { width: 70, height: 42, offsetLeft: 0, offsetTop: 0, scale: 1 },
     fixedContainingBlock: { transform: "none", perspective: "none", filter: "none", contain: "none",
       willChange: "auto", containerType: "normal" } };
+}
+
+function layoutDeadlineSession(root, captureDirectory, lastFrameTimeMs) {
+  const logs = join(root, "logs");
+  mkdirSync(logs);
+  mkdirSync(captureDirectory);
+  writeFileSync(join(logs, "host-1-1.jsonl"), "");
+  writeLayoutFrame(captureDirectory, 0, 5, 90);
+  writeLayoutFrame(captureDirectory, 1, 15, 95);
+  if (lastFrameTimeMs > 15) writeLayoutFrame(captureDirectory, 2, lastFrameTimeMs, 95);
+  const grid = (width) => ({ plane: { x: 0, y: 0 }, cards: [{ id: "card-a", x: 10, y: 8, w: width, h: 64 }] });
+  const surfaceRect = (width) => ({ x: 10, y: 8, w: width, h: 64 });
+  const documents = (width) => ({ documents: [
+    { surface: "view-a", document: "", visible: true, frame: { x: 10, y: 8, width, height: 64 } },
+    { surface: "view-a", document: "studio", visible: true,
+      frame: { x: 14, y: 20, width: width - 10, height: 42 } },
+  ] });
+  let gridReads = 0;
+  let hostReads = 0;
+  const session = {
+    app: { configDir: root },
+    stopAfter: undefined,
+    async record() { return { async stop(options) {
+      session.stopAfter = options?.after;
+      return { frames: captureDirectory, count: lastFrameTimeMs > 15 ? 3 : 2, limited: false };
+    } }; },
+    async get(name) {
+      if (name === "core.grid") return grid(++gridReads === 1 ? 80 : 85);
+      if (name === "host.window") return documents(++hostReads === 1 ? 80 : 85);
+      if (name === "core.surfaces") return [{ surface: "view-a", declared: surfaceRect(85), applied: surfaceRect(85) }];
+      assert.fail(`unexpected session read ${name}`);
+    },
+    async request(name) { assert.equal(name, "diagnostics.clock"); return { mono_ns: "10000000" }; },
+    async run(name) {
+      assert.equal(name, "core.grid.size");
+      const placement = { level: "debug", seq: 1, event: "host.trace.surface", ts_us: 10050, mono_ns: 10050000,
+        fields: { phase: "placed", surface: "view-a", x: 10, y: 8, w: 85, h: 64, visible: true } };
+      const content = { level: "debug", seq: 2, event: "plugin.hwp.view.content_frame",
+        ts_us: 10100, mono_ns: 10100000, surface: "view-a", fields: { sequence: 1,
+          documentTimeOriginMs: 10, resizeAtMs: 0.1, frameTimeMs: 0.1, width: 85, height: 64 } };
+      appendFileSync(join(logs, "host-1-1.jsonl"), `${JSON.stringify(placement)}\n${JSON.stringify(content)}\n`);
+    },
+    async presented() { return { displayed: 15 }; },
+    async rect(name, unused, surface) {
+      assert.equal(name, "hwp.studio");
+      assert.equal(surface, "view-a");
+      return { x: 14, y: 20, width: 75, height: 42 };
+    },
+    async flushLog() {},
+  };
+  const descriptor = {
+    plugin: "hwp",
+    async startContentTrace() { return { enabled: true, studioViewport: viewportMarkerDeclarationForLayout() }; },
+    async stopContentTrace() { return { enabled: false, studioViewport: null }; },
+  };
+  const theme = { card: "#191b24", bg: "#101117", edge: "#2b2e3d", focus: "#ff0000" };
+  return { session, descriptor, theme };
 }
 
 test("HWP unmatched layout geometry reports captured native document frames", { timeout: 5000 }, async (t) => {
@@ -175,6 +237,45 @@ test("HWP unmatched layout geometry reports captured native document frames", { 
     assert.match(error.cause.message, /no changed frame matching the new declared slot/);
     return true;
   });
+});
+
+test("HWP layout recording covers the full display deadline after presentation", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "hwp-layout-deadline-"));
+  const captureDirectory = join(root, "capture");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const { session, descriptor, theme } = layoutFailureSession(root, captureDirectory);
+  await assert.rejects(layoutObservation({ diagnostic() {} }, session, descriptor, "view-a", "card-a", theme, 0), (error) => {
+    assert.equal(session.stopAfter, 115,
+      "recording must include the 100 ms display allowance after the presented layout");
+    assert.match(error.message, /HWP pixel geometry evidence/);
+    return true;
+  });
+});
+
+test("HWP layout rejects an incomplete capture before judging absent document text", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "hwp-layout-incomplete-"));
+  const captureDirectory = join(root, "capture");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const { session, descriptor, theme } = layoutDeadlineSession(root, captureDirectory, 114.9);
+  let recognized = 0;
+  await assert.rejects(layoutObservation({ diagnostic() {} }, session, descriptor, "view-a", "card-a", theme, 0, {
+    recognizeFrame: async () => { recognized += 1; return { lines: [] }; },
+  }), /HWP layout recording ended at 114\.9 ms before the 100 ms content deadline at 115 ms/);
+  assert.equal(session.stopAfter, 115);
+  assert.equal(recognized, 0, "an incomplete recording must not be judged as a missing-content failure");
+});
+
+test("HWP layout judges absent document text only after the full content deadline is captured", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "hwp-layout-complete-"));
+  const captureDirectory = join(root, "capture");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const { session, descriptor, theme } = layoutDeadlineSession(root, captureDirectory, 115);
+  let recognized = 0;
+  await assert.rejects(layoutObservation({ diagnostic() {} }, session, descriptor, "view-a", "card-a", theme, 0, {
+    recognizeFrame: async () => { recognized += 1; return { lines: [] }; },
+  }), /no recorded frame contains expected content/);
+  assert.equal(session.stopAfter, 115);
+  assert.ok(recognized > 0, "a complete recording with absent text must reach captured-pixel OCR");
 });
 
 test("HWP descriptor waits for its declared document status exposure", { timeout: 5000 }, async (t) => {

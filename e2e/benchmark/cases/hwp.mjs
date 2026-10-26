@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { drag } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { LAYOUT_DISPLAY_LIMIT_MS } from "@soksak/window-check/view-metrics.mjs";
 import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE } from "../../view-frame-geometry.mjs";
@@ -187,7 +188,7 @@ export function measureHwpViewportMarkerFrame(frame, viewportReply, { targetRect
     viewportMarker: { color: [...viewport.markerColor], borderWidthCssPx: viewport.borderWidth, captureRatio } };
 }
 
-export async function layoutObservation(t, s, descriptor, surface, card, theme, cornerRadiusPt) {
+export async function layoutObservation(t, s, descriptor, surface, card, theme, cornerRadiusPt, { recognizeFrame } = {}) {
   const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
     assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
     const viewport = validateHwpStudioViewport(startReply.studioViewport);
@@ -201,7 +202,7 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
     const beforeChangeTimeMs = baselineClock.timeMs;
     await s.run("core.grid.size", { card, axis: "x", size: pane.w + 80 });
     const { displayed } = await s.presented();
-    const result = await recording.stop({ after: displayed });
+    const result = await recording.stop({ after: displayed + LAYOUT_DISPLAY_LIMIT_MS });
     return { displayed, beforeChangeTimeMs, result, captured: captureFrames(result, "layout"),
       nativeDocumentBefore: studioBefore.frame, viewport };
   });
@@ -265,10 +266,17 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
       frameResiduals: rows,
     })}`, { cause: error });
   }
+  const changeFrame = captured[transition.changeFrameIndex];
+  const contentDeadlineMs = changeFrame.time + LAYOUT_DISPLAY_LIMIT_MS;
+  const lastFrame = captured.at(-1);
+  assert.ok(lastFrame.time >= contentDeadlineMs,
+    `HWP layout recording ended at ${lastFrame.time} ms before the ${LAYOUT_DISPLAY_LIMIT_MS} ms content deadline `
+      + `at ${contentDeadlineMs} ms after its first changed frame`);
   const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= source.timeMs);
   assert.ok(candidates.length > 0, "HWP layout has no declared-slot pixel match after its source resize event");
   const localProof = await hwpFirstContentFrame({ captured: candidates.map((index) => captured[index]),
-    rect: { x: studio.frame.x, y: studio.frame.y, w: studio.frame.width, h: studio.frame.height }, directory: result.frames });
+    rect: { x: studio.frame.x, y: studio.frame.y, w: studio.frame.width, h: studio.frame.height },
+    directory: result.frames, recognizeFrame });
   const frameIndex = candidates[localProof.frameIndex];
   const proof = localProof.proof;
   const geometry = measured[frameIndex];

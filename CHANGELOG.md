@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-5-19: Record the full HWP layout-display allowance with the existing capture stop target. Verify actual captured-frame coverage before judging absent content. The reproducing stop-target owner fails before correction; all 11 HWP collector cases pass afterward, including incomplete and exact-deadline coverage. The 100 ms deadline and pixel criteria are unchanged.
+
 - F212.14-5-17: Use one distinctive Browser fixture fill in served HTML and pixel measurement. The old gray fill also matched card chrome, expanding measured bounds by 25 pt. The reproducing Browser owner fails before correction and all six cases pass afterward; detector tolerance, component union and pass limits remain unchanged.
 
 - F212.14-5-16: Measure the normal Editor and hidden-only diagnostic Editor
