@@ -48,6 +48,17 @@ export function viewGenerationForSurface(rows, surface) {
   return successful[0];
 }
 
+/** Returns editable workspace card IDs while excluding fixed sidebar rows from core.grid. */
+export function documentIdentityCardIds(grid) {
+  if (!Array.isArray(grid?.cards)) throw new TypeError("core.grid must expose a cards array");
+  const ids = grid.cards.filter((card) => Number.isInteger(card?.pane)).map((card) => card.id);
+  if (ids.some((id) => typeof id !== "string" || id.length === 0)) {
+    throw new Error(`core.grid has an editable card without an ID: ${JSON.stringify(grid.cards)}`);
+  }
+  if (ids.length === 0) throw new Error("document identity fixture has no editable pane card in core.grid");
+  return ids;
+}
+
 /** Validates that decoded ScreenCaptureKit pixels match an identity issued to the requested root document. */
 export function verifyDocumentFrameIdentityCapture({ start, stop, manifest, decodedRows, surface, generation }) {
   if (typeof surface !== "string" || surface.length === 0) throw new TypeError("document identity surface must be nonempty");

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { verifyDocumentFrameIdentityCapture, viewGenerationForSurface } from "../document-frame-identity.mjs";
+import { documentIdentityCardIds, verifyDocumentFrameIdentityCapture, viewGenerationForSurface } from "../document-frame-identity.mjs";
 
 const join = (phase, { surface = "surface-a", generation = 7, ticket = 12, joined } = {}) => ({
   layer: "host",
@@ -35,6 +35,18 @@ test("view identity generation rejects missing, failed, or conflicting join evid
   assert.equal(viewGenerationForSurface([
     join("requested"), join("result", { joined: true }), join("requested", { ticket: 13 }),
   ], "surface-a"), 7, "an unrelated pending join does not invalidate a successful current-generation join");
+});
+
+test("document identity setup adds its editor tab only to editable pane cards", { timeout: 1000 }, () => {
+  const observedGrid = {
+    cards: [
+      { id: "left", fixed: true, pane: null, tabs: [], active: null },
+      { id: "terminal", fixed: false, pane: 0, tabs: [{ id: "tab-a", plugin: "terminal" }], active: "tab-a" },
+    ],
+  };
+  assert.deepEqual(documentIdentityCardIds(observedGrid), ["terminal"]);
+  assert.throws(() => documentIdentityCardIds({ cards: [{ id: "left", fixed: true, pane: null, tabs: [] }] }),
+    /no editable pane card/);
 });
 
 const documentCapture = () => {

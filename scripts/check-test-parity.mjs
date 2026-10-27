@@ -239,6 +239,10 @@ const FEATURE_LINKS = [
     {
       "file": "native/darwin/src/image_capture_match.m",
       "symbol": "bool sp_image_capture_match_identity_session_fail_for_nonce("
+    },
+    {
+      "file": "e2e/document-frame-identity.mjs",
+      "symbol": "export function documentIdentityCardIds("
     }
   ],
   "tests": [
@@ -301,6 +305,10 @@ const FEATURE_LINKS = [
     {
       "file": "packages/host/tauriv2/src/diagnostics_test.rs",
       "id": "late_document_frame_identity_callback_errors_are_logged_as_errors"
+    },
+    {
+      "file": "e2e/test/capture-document-frame-identity.test.mjs",
+      "id": "document identity setup adds its editor tab only to editable pane cards"
     }
   ],
   "expected": "An opt-in current WebKit root document issues bounded non-repeating QR identities whose actual captured pixels and exact ScreenCaptureKit displayTime are retained with complete generated, issued and decoded accounting; stale and unmatched states remain unknown and cleanup preserves existing capture modes.",

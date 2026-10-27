@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-234: Restrict the document-identity fixture to editable pane cards. Fixed sidebar rows in core.grid are not add-tab targets; both application attempts stopped during preparation before capture. The owning selector changes from Red to Green while retaining the actual pane and excluding sidebar IDs. Application acceptance remains pending.
+
 - F239-234: Add opt-in WebKit root-document QR identities to diagnostic capture. Preserve generated/issued counts and exact decoded sample pixels/displayTime, reject unissued identities, and fence late callbacks by capture nonce. Bound callback waits, serialize recording and trace initialization, preserve existing capture modes, and verify idempotent marker cleanup. Native matcher, atlas, actual WebKit lifecycle, paired host and E2E consumer owners pass after the tracked Reds. Two-host application capture remains pending; this channel does not prove desktop visibility, independent source-presentation time or the cause of the historical cadence gap.
 
 - F239-235: Collect clock-bracketed one-view and N-view footprints before offline frame decoding and OCR. Preserve capture finalization, process identities, original pixel proofs and eager direct consumers; fresh repeated reclaim likewise samples before analysis. Four tracked failure conditions become Green and all 33 owner cases pass. Keep the N-times-plus-10-MB limit and all prior application failures; this collector correction does not establish a HWP memory improvement.

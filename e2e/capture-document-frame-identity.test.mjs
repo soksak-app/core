@@ -7,7 +7,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
-import { verifyDocumentFrameIdentityCapture, viewGenerationForSurface } from "./document-frame-identity.mjs";
+import { documentIdentityCardIds, verifyDocumentFrameIdentityCapture, viewGenerationForSurface } from "./document-frame-identity.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: document-frame identity matches captured WebKit root pixels`, { timeout: 120000 }, async (t) => {
@@ -22,7 +22,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => rmSync(fixturePath, { force: true }));
 
     const grid = await s.get("core.grid");
-    for (const card of grid.cards) await s.run("core.card.add-tab", { card: card.id, plugin: "editor" });
+    for (const card of documentIdentityCardIds(grid)) await s.run("core.card.add-tab", { card, plugin: "editor" });
 
     const offsets = currentEventOffsets(s.app.configDir);
     const opened = await s.run("core.file.open", { path: relativePath });
