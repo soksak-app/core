@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-223-3: 기본 suite 밖에 명시적 native resize-cadence 재현 target을 추가한다. 안정된 300×200 baseline을 관측하고 1 point pulse 48개를 모두 적용하며 예측 refresh와 실제 setter 시각을 보존하고 연속 pulse response row만 33 ms로 판정한다. 가려지지 않은 비활성 실행은 setter 간격 최대 16.741 ms에서 source cadence 34 ms를 기록하며 별도 실행은 통과한다. 이는 독립 측정 경로이며 application 수정이나 성능 통과가 아니다. 초기 fixture 실패는 cadence 측정에 도달하지 못했다.
+
 - F239-47-30: 독립 감사 후 과거 P86 원인 규명을 evidence unavailable로 종결한다. AppKit backing override는 ScreenCaptureKit output scale을 결정하지 않으므로 지원되지 않는 fake-window 2× comparator 모드와 target을 제거한다. Actual-scale exact-byte comparator를 유지하며 1×에서 한 번 실행해 0 differing pixels로 통과한다. 과거 원인과 원래 2× 재현은 미검증이며 실제 display-scale 지원과 exact-match 기준은 변경하지 않는다.
 
 - F239-223, F239-233, F239-235: Optimized 양 host 측정 묶음의 측정 실패 7개와 active-window 거부 1개를 기록한다. HWP footprint는 양 host에서 통과하고 HWP first display와 측정된 drag source cadence는 기준을 벗어난다. Observer cadence, 입력부터 표시까지의 latency, 미통과 convergence를 구분한다. 양 host error 감사와 정상 종료는 통과한다.

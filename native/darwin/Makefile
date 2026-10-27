@@ -63,6 +63,10 @@
 #                         without activating the application, and prints the load averages and, per variant, the footprint total,
 #                         WebKit malloc and the heap counts of Text, HTMLDocument and the JSC:: classes every 2 minutes, and again
 #                         after a simulated warn memory pressure of 10 seconds
+#   make benchmark-webview-resize-cadence
+#                         measures source ResizeObserver-to-next-rAF cadence during 48 display-paced root-view resizes
+#                         from an observed 300×200 source baseline, and gates intervals after the first pulse response
+#                         at 33 ms; the baseline interval and first-pulse response latency are not gated
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make repeat-activation-backspace COUNT=<n>
@@ -100,7 +104,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: all capture-text-path test test-capture-frame-identity test-capture-stop-intake test-activation test-input-reference-readiness test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all capture-text-path test test-capture-frame-identity test-capture-stop-intake test-activation test-input-reference-readiness test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -339,6 +343,9 @@ VIEW_PAGE_CASES := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../packages/p
 
 test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS)
+
+benchmark-webview-resize-cadence: $(BUILD)/webview_resize_cadence_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) webview_resize_cadence_test
 
 test-capture-frame-identity: $(BUILD)/capture_frame_identity_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_frame_identity_test

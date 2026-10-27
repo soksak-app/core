@@ -86,6 +86,8 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 각 host는 기존 cadence 및 refresh-rate 지연 목표를 판정하기 전에 `logs/view-drag-benchmark-*/result.json`을 쓴다. Report는 decoded-frame timestamp 전체, 측정 card 위치, input tick, layout boundary, 미측정 frame index, system load 및 trace mode를 포함한다. Frame 누락, 불완전 이동 및 잘못된 data는 느리지만 유효한 측정과 독립적으로 실패한다. 목표 측정에 실패하면 녹화와 report를 보존하며 기능 geometry 검사의 통과는 benchmark 통과가 아니다.
 
+`SOKSAK_NATIVE_TEST_RUN_FOLDER=<unique-dir> make -C native/darwin benchmark-webview-resize-cadence`로 host layout과 plugin 작업에서 root-view ResizeObserver-to-next-requestAnimationFrame 전달을 분리한다. 비활성 native fixture는 초기 300×200 source row를 관측한 뒤 폭을 1 point씩 48회 증가시킨다. Baseline, 각 native setter interval, 예측 display-link timestamp, 실제 setter clock과 source row를 보존한다. Pulse response row 사이 간격만 변경하지 않은 33 ms 기준으로 판정하며 baseline idle 시간과 first-pulse response latency는 판정하지 않는다. 이 target은 기본 native suite 밖의 전용 성능 재현 target이다. Rendered pixel을 녹화하거나 application drag, initial-response 또는 convergence 통과를 입증하지 않는다. 실패한 측정을 포함해 runner manifest와 executable output을 보존한다.
+
 ## 창 검사
 
 Focused `e2e/view-restart.test.mjs` case는 노출된 browser view process를 네 번 종료하고 각 전체 fault/recovery 단계를 녹화하며 replacement마다 저장 주소, 호출 가능한 reload command 및 view/document의 보이는 배치를 검증하고 네 번째 실패의 stop reason을 확인한다. 같은 tab을 숨기고 unload한 뒤 다시 열어 stopped error 없이 상태가 복원돼야 한다. 의도한 process-end 진단과 네 번째 실패 표시만 선언하고 정확한 개수를 확인하며 예상하지 않은 등록 또는 lifecycle 오류는 실행을 실패시킨다. 일반적인 실행 중 diagnostic host와 run metadata를 사용한다.
