@@ -568,7 +568,7 @@ fn a_view_surface_creates_a_view_configuration_and_loads_its_page() {
     assert!(closed.borrow().is_empty(), "a loaded view is not closed");
 }
 
-const READY: &str = r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}"#;
+const READY: &str = r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1791948729050"}}"#;
 
 // The document-state payload of a view as the native host sends it (docs/spec/native-surfaces.md, document-state): loading is a JSON
 // boolean, and navigations counts the navigations that the view has started.

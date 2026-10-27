@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-240: Send view event batches and clock requests directly to the native event writer through the existing bounded batcher. Remove single-record Workbench forwarding, bind records to the ready document generation and page, reject caller-supplied surface identity, and preserve trusted identity when bounding fields. SDK, Workbench and both native host owner tests reproduce the missing direct path and pass after correction. Application latency acceptance remains separate.
+
 - F212.10-core-3: Accept the retired-window callback correction with both rebuilt hosts. The project-close checks pass with zero new Wails missing-window warnings, zero log-audit findings, normal host/sidecar shutdown and restored foreground state. All three framework warning paths have owning Red/Green coverage and preserve warnings for unallocated IDs. Independent audit closes the functional defect while retaining uncertainty about the exact nine historical callers.
 
 - F212.10-core-3-16: Pin both Wails modules and checksums to the published callback-lifetime correction. Preserve event filtering and single-window event routing from the pinned base. Eleven framework owner cases and independent review pass; both core modules resolve the public replacement, and focused event-binding, window-event and runtime-listener checks pass. Application rebuild and project-close acceptance remain pending.

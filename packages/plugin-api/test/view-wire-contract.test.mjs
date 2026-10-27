@@ -8,6 +8,7 @@ import vm from "node:vm";
 
 const CONTRACT = JSON.parse(readFileSync(new URL("../contract/view-wire.json", import.meta.url), "utf8"));
 const SCRIPT = readFileSync(new URL("../view-start.js", import.meta.url), "utf8");
+const PAGE = "1700000000000.5";
 
 /**
  * Starts the view script in a fresh context with a window that records what it posts and where it attaches its message
@@ -24,7 +25,7 @@ function startView(host, document) {
       if (type === "message") messages.listener = listener;
     },
   };
-  vm.runInNewContext(SCRIPT, { window, crypto: { randomUUID: () => document } });
+  vm.runInNewContext(SCRIPT, { window, crypto: { randomUUID: () => document }, performance: { timeOrigin: Number(PAGE) } });
   return { window, posted, delivered, messages };
 }
 

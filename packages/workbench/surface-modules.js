@@ -453,8 +453,6 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       links: scoped.links,
       // The record path of the error display: the host call report of the surface writes the error line to the application log.
       report: (line) => scoped.native.call("report", line),
-      // The log levels of the surface context: the level gate of the page applies at delivery, and a gated record is counted there.
-      log: context.runtime.log,
       textSize: context.runtime.textSize,
       settings: context.runtime.settings,
       subscribe: {

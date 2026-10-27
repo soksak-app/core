@@ -418,3 +418,13 @@ emitter는 catalog 검사에서 하나의 지점이고(이름, level, 리터럴 
 - page는 파일을 쓸 수 없어 배치 호출로 host를 거쳐 기록한다. page 프로세스가 끝날 때 아직 보내지 않은 배치는 잃는다(flush 간격까지).
 - 보존은 실행들의 파일이 6 GiB를 넘으면 가장 오래된 실행을 지우므로, PTY 출력이 폭주하면 디스크를 상한까지 채운 뒤 가장 오래된 실행을 교체한다. writer는 각 회전과 파일을 지우는 보존 회차를 기록한다.
 - 입력기는 활성 애플리케이션의 key window에서만 답하므로, 조합한 입력의 검사에는 애플리케이션이 활성인 실행이 필요하다.
+
+### View record 전달
+
+View는 공통 bounded event batcher를 사용해 record마다 workbench document를 거치지 않고 host writer로 직접 log를 보낸다. View에는 policy gate가 없어 모든 record를 만들고 host writer가 설치된 event catalog와 policy를 적용한다. Queue bound, clock anchor, correlation identifier, field truncation, loss report 및 전달 실패 보고는 page batcher와 공유한다.
+
+주입하는 `view.ready` message에는 document UUID와 함께 정확히 `String(performance.timeOrigin)`인 `page`가 들어 있다. Host는 두 identity를 native surface generation에 묶는다. View batcher는 비어 있지 않은 document URL을 담은 `page.start`와 해당 document의 `page.log.clock`을 내보내며 plugin record는 workbench document 대신 그 view document identity를 가진다.
+
+View channel은 기존 writer request인 `action: "clock"`과 `action: "batch"`만으로 `runtime.log`를 직접 처리한다. Batch는 등록된 page와 소유 plugin prefix를 이름으로 가져야 한다. Plugin record의 caller-provided `fields.surface`는 거부하며 host가 source에 묶인 surface를 더한다. Writer가 만드는 lifecycle, clock 및 loss record는 선언한 이름으로 제한한다. Host는 전체 batch를 검증한 뒤에만 기록한다. Policy 변경, identity 불일치와 이전 단일 record payload는 오류다. Clock은 `{ts_us, mono_ns}`로, batch는 `null`로 답하고 오류는 같은 ID에 `{code: -32000, message}`로 답한다. 처리 전과 result 또는 error reply를 post하기 전에 generation을 검사한다. 종료된 document는 대체 generation으로 기록할 수 없다.
+
+이 writer request는 중계하는 application call이 아니므로 실제로 발생하지 않은 `page.view.call`, `page.view.reply`나 workbench 전달을 주장하는 `host.view.call`을 내보내지 않는다. 실제 record 및 기존 writer clock, gate와 loss report가 결과를 설명한다. 전달 실패는 기존 view error 경로를 사용한다. 종료된 view의 미전송 queue는 기존 `host.view.killed {unsent: true}`로 설명한다.

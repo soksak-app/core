@@ -11,7 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -204,4 +206,235 @@ func (h *Host) Log(ctx context.Context, requestJSON json.RawMessage) (any, error
 		return reply.Clock, nil
 	}
 	return nil, nil
+}
+
+const viewLogFailureCode = -32000
+
+const viewLogFieldsLimitBytes = 65536
+
+var viewPageIdentityPattern = regexp.MustCompile(`^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$`)
+
+func validViewPageIdentity(page string) bool {
+	if !viewPageIdentityPattern.MatchString(page) {
+		return false
+	}
+	value, err := strconv.ParseFloat(page, 64)
+	return err == nil && value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func (s *Surfaces) viewLogRequest(surface, plugin string, generation uint64, call map[string]any) error {
+	channel, ok := s.documents.view(surface)
+	if !ok || channel.plugin != plugin || channel.generation != generation {
+		return nil
+	}
+	if channel.document == "" || channel.page == "" {
+		return fmt.Errorf("%s: runtime.log has no ready document", surface)
+	}
+	if s.host == nil || s.host.events == nil {
+		return fmt.Errorf("%s: runtime.log event writer is not running", surface)
+	}
+	id, ok := call["id"].(uint64)
+	if !ok {
+		return fmt.Errorf("%s: runtime.log call has no integer id", surface)
+	}
+	params, ok := call["params"].(json.RawMessage)
+	if !ok || len(params) == 0 {
+		return s.replyViewLog(surface, generation, channel.document, channel.page, id, nil,
+			fmt.Errorf("runtime.log params must be an object"))
+	}
+	var request map[string]any
+	if err := json.Unmarshal(params, &request); err != nil || request == nil {
+		if err == nil {
+			err = errors.New("params must be an object")
+		}
+		return s.replyViewLog(surface, generation, channel.document, channel.page, id, nil,
+			fmt.Errorf("runtime.log params are invalid: %w", err))
+	}
+	requestReply, err := viewLogCommand(s.host.events, plugin, surface, channel.page, request)
+	if err != nil {
+		return s.replyViewLog(surface, generation, channel.document, channel.page, id, nil, err)
+	}
+	var result any
+	if requestReply.Clock != nil {
+		result = requestReply.Clock
+	}
+	return s.replyViewLog(surface, generation, channel.document, channel.page, id, result, nil)
+}
+
+func (s *Surfaces) replyViewLog(surface string, generation uint64, document, page string, id uint64, result any, requestErr error) error {
+	var reply ViewReplyRequest
+	if requestErr != nil {
+		reply = ViewReplyRequest{Page: page, Surface: surface, Generation: generation, ID: id,
+			Error: &ViewReplyError{Code: viewLogFailureCode, Message: requestErr.Error()}}
+	} else {
+		data, err := json.Marshal(result)
+		if err != nil {
+			return fmt.Errorf("%s: encode runtime.log reply: %w", surface, err)
+		}
+		reply = ViewReplyRequest{Page: page, Surface: surface, Generation: generation, ID: id, Result: data}
+	}
+	message, err := ViewReplyMessage(reply)
+	if err != nil {
+		return err
+	}
+	posted, stale, postErr := s.postViewDocumentGeneration(surface, generation, document, page, message)
+	if stale {
+		return nil
+	}
+	if postErr != nil {
+		postErr = fmt.Errorf("%s: post runtime.log reply: %w", surface, postErr)
+		if requestErr != nil {
+			return errors.Join(requestErr, postErr)
+		}
+		return postErr
+	}
+	if !posted {
+		return fmt.Errorf("%s: runtime.log reply has no ready document", surface)
+	}
+	return nil
+}
+
+// postViewDocumentGeneration checks the ready document identity and generation in the UI task that posts the reply.
+func (s *Surfaces) postViewDocumentGeneration(surface string, generation uint64, document, page string, message map[string]any) (bool, bool, error) {
+	message["sok"] = viewChannelMarker
+	data, err := json.Marshal(message)
+	if err != nil {
+		return false, false, err
+	}
+	var posted, stale bool
+	var postErr error
+	s.invoke(func() {
+		channel, ok := s.documents.view(surface)
+		if !ok || channel.generation != generation || channel.document != document || channel.page != page {
+			stale = true
+			return
+		}
+		handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: viewRegionName})
+		if err != nil {
+			postErr = err
+			return
+		}
+		if !system.PostDocument(handle, string(data)) {
+			postErr = fmt.Errorf("the view document refused the message")
+			return
+		}
+		posted = true
+	})
+	return posted, stale, postErr
+}
+
+func viewLogCommand(log *EventLog, plugin, surface, page string, request map[string]any) (LogReply, error) {
+	action, ok := request["action"].(string)
+	if !ok {
+		return LogReply{}, errors.New("runtime.log action must be batch or clock")
+	}
+	switch action {
+	case "clock":
+		if len(request) != 1 {
+			return LogReply{}, errors.New("runtime.log clock request accepts only action")
+		}
+	case "batch":
+		if len(request) != 2 {
+			return LogReply{}, errors.New("runtime.log batch request accepts only action and events")
+		}
+		if err := validateViewLogBatch(plugin, surface, page, request); err != nil {
+			return LogReply{}, err
+		}
+		var err error
+		request, err = withViewSurface(request, plugin, surface)
+		if err != nil {
+			return LogReply{}, err
+		}
+	default:
+		return LogReply{}, fmt.Errorf("runtime.log action must be batch or clock, not %q", action)
+	}
+	return LogCommand(log, request)
+}
+
+func validateViewLogBatch(plugin, surface, page string, request map[string]any) error {
+	items, ok := request["events"].([]any)
+	if !ok {
+		return errors.New("events must be an array")
+	}
+	pageOrigin, err := strconv.ParseFloat(page, 64)
+	if err != nil || pageOrigin <= 0 || math.IsNaN(pageOrigin) || math.IsInf(pageOrigin, 0) {
+		return errors.New("registered view page is not a positive finite time origin")
+	}
+	for index, item := range items {
+		event, ok := item.(map[string]any)
+		if !ok {
+			return fmt.Errorf("events[%d]: the event must be an object", index)
+		}
+		if eventPage, ok := event["page"].(string); !ok || eventPage != page {
+			return fmt.Errorf("events[%d]: page must match the ready view document", index)
+		}
+		name, ok := event["event"].(string)
+		if !ok || name == "" {
+			return fmt.Errorf("events[%d]: event must be a name", index)
+		}
+		fields, ok := event["fields"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("events[%d]: fields must be an object", index)
+		}
+		switch name {
+		case "page.start":
+			timeOrigin, ok := fields["time_origin"].(float64)
+			if !ok || timeOrigin != pageOrigin {
+				return fmt.Errorf("events[%d]: page.start time_origin must match the ready page identity", index)
+			}
+			if url, ok := fields["url"].(string); !ok || url == "" {
+				return fmt.Errorf("events[%d]: page.start url must be non-empty text", index)
+			}
+		case "page.log.clock", "page.log.dropped":
+		case "page.log.gated":
+			return fmt.Errorf("events[%d]: a view has no policy gate and cannot write page.log.gated", index)
+		default:
+			prefix := "plugin." + plugin + "."
+			if !strings.HasPrefix(name, prefix) || len(name) == len(prefix) {
+				return fmt.Errorf("events[%d]: event %q is not a record of plugin %q or an allowed page record", index, name, plugin)
+			}
+			if _, present := fields["surface"]; present {
+				return fmt.Errorf("events[%d]: plugin record must not supply its surface", index)
+			}
+		}
+	}
+	return nil
+}
+
+func withViewSurface(request map[string]any, plugin, surface string) (map[string]any, error) {
+	copyRequest := make(map[string]any, len(request))
+	for key, value := range request {
+		copyRequest[key] = value
+	}
+	items := request["events"].([]any)
+	copyEvents := make([]any, len(items))
+	for index, item := range items {
+		event := item.(map[string]any)
+		copyEvent := make(map[string]any, len(event))
+		for key, value := range event {
+			copyEvent[key] = value
+		}
+		name := event["event"].(string)
+		prefix := "plugin." + plugin + "."
+		if strings.HasPrefix(name, prefix) && len(name) > len(prefix) {
+			fields := event["fields"].(map[string]any)
+			copyFields := make(map[string]any, len(fields)+1)
+			for key, value := range fields {
+				copyFields[key] = value
+			}
+			copyFields["surface"] = surface
+			text, produced, err := sok.BoundedMarshal(copyFields, viewLogFieldsLimitBytes)
+			if err != nil {
+				return nil, fmt.Errorf("events[%d].fields cannot be serialized: %w", index, err)
+			}
+			if produced > 0 {
+				head, _ := sok.CutText(text, EventHeadBytes)
+				copyFields = map[string]any{"head": head, "truncated": true, "surface": surface}
+			}
+			copyEvent["fields"] = copyFields
+		}
+		copyEvents[index] = copyEvent
+	}
+	copyRequest["events"] = copyEvents
+	return copyRequest, nil
 }

@@ -40,6 +40,7 @@ test("the injected script posts the ready message with a document identifier at 
   assert.equal(posted[0].event, "view.ready");
   assert.equal(posted[0].plugin, "probe");
   assert.match(posted[0].document, UUID);
+  assert.equal(posted[0].page, String(globalThis.window.performance.timeOrigin));
 });
 
 test("each page has its own document identifier", (t) => {
@@ -391,17 +392,33 @@ test("contributions(point) returns the connected items of the point, and fail(re
   assert.equal(await failing, undefined);
 });
 
-test("the view bridge has no level query: runtime.log sends each record and asks no stored levels", async (t) => {
-  // The writer of the event log decides whether a record is stored, so the page has no level query (docs/spec/native-surfaces.md).
+test("the view bridge keeps the public log API and batches source-clocked records through the direct writer", { timeout: 5000 }, async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const reports = [];
+  const { runtime, calls } = createViewBridge({ handler: { postMessage: (message) => posted.push(plain(message)) }, report: (error) => reports.push(error) });
   assert.equal(runtime.log.enabled, undefined, "the view bridge still exports runtime.log.enabled");
   let built = 0;
   runtime.log.info("saved", () => { built += 1; return { n: built }; }, { cids: ["b.1"] });
-  assert.deepEqual(posted.filter(({ command }) => command !== undefined), [{ sok: 1, id: 1, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 }, cids: ["b.1"] } }]);
-  host({ sok: 1, id: 1, result: null });
+  for (let index = 0; index < 5; index += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    const clocks = posted.filter(({ command, params }) => command === "runtime.log" && params?.action === "clock");
+    const request = clocks[index];
+    assert.ok(request, `clock anchor ${index + 1} was not requested`);
+    host({ sok: 1, id: request.id, result: { ts_us: 1_791_000_000_000_000 + index, mono_ns: 5_000_000_000 + index } });
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+  const batch = posted.find(({ command, params }) => command === "runtime.log" && params?.action === "batch");
+  assert.ok(batch, "the view did not send a batch request");
+  assert.deepEqual(batch.params.events.map(({ event }) => event), ["page.log.clock", "page.start", "plugin.probe.saved"]);
+  assert.ok(batch.params.events.every(({ page }) => page === posted[0].page), "the batch does not use the ready page identity");
+  assert.deepEqual(batch.params.events[1].fields, { time_origin: Number(posted[0].page), url: "soksak://probe/" });
+  assert.deepEqual(batch.params.events[2].fields, { n: 1 });
+  assert.deepEqual(batch.params.events[2].cids, ["b.1"]);
+  host({ sok: 1, id: batch.id, result: null });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(built, 1, "the builder of a record was not run once");
+  assert.equal(calls.openCalls().count, 0, "the batch call remained open after its reply");
+  assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), [], "a successful writer reply reported an error");
 });
 
 /** Dispatches a cancelable keydown on the window of the view and returns the event. */
@@ -485,20 +502,29 @@ test("a registration that the page refuses leaves no handler, so a request for i
 test("a view record that the host refuses is reported, and so is its refused error line", async (t) => {
   const { posted, host } = setup(t);
   const reports = [];
+  let clockReads = 0;
   const { runtime } = createViewBridge({
-    handler: { postMessage: (message) => posted.push(message) },
+    handler: { postMessage: (message) => {
+      posted.push(message);
+      if (message.command === "runtime.log" && message.params.action === "clock") {
+        clockReads += 1;
+        queueMicrotask(() => host({ sok: 1, id: message.id, result: { ts_us: 1_000_000 + clockReads, mono_ns: 2_000_000 + clockReads } }));
+      } else if (message.command === "runtime.log") {
+        queueMicrotask(() => host({ sok: 1, id: message.id, error: { code: -32000, message: "log refused" } }));
+      } else if (message.command === "runtime.error") {
+        queueMicrotask(() => host({ sok: 1, id: message.id, error: { code: -32000, message: "error refused" } }));
+      }
+    } },
     report: (event) => reports.push(event),
   });
   runtime.log.info("saved", { n: 1 });
-  host({ sok: 1, id: 1, error: { code: -32000, message: "log refused" } });
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  host({ sok: 1, id: 2, error: { code: -32000, message: "error refused" } });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
   // The report also receives the counts and losses of the calls, which have no where.
   const refused = reports.filter((event) => event.where !== undefined);
   assert.equal(refused.length, 1, "the refused record is reported once, with its refused error line");
-  assert.equal(refused[0].where, "log plugin.probe.saved");
-  assert.equal(refused[0].text, "log refused");
+  assert.equal(refused[0].where, "log batch");
+  assert.match(refused[0].text, /batch of \d+ events failed: log refused/);
   assert.equal(refused[0].error?.message, "error refused");
 });
 
@@ -630,7 +656,6 @@ const BRIDGE_ACTIONS = {
   "view.bridge.tab-state-read-write": ["create", "request", "host-reply", "request", "host-reply"],
   "view.bridge.sidecar-send": ["create", "sidecar-send", "host-reply"],
   "view.bridge.sidecar-subscriptions": ["create", "sidecar-subscribe", "host-reply", "sidecar-subscribe", "host-reply", "host-event", "host-event", "host-event"],
-  "view.bridge.runtime-log-without-level-query": ["create", "log", "host-reply", "log-builder", "log", "host-reply", "host-reply"],
 };
 const OPEN_CALL_COUNTS = {
   "view.bridge.ready-and-request-reply": [1, 0],
@@ -639,7 +664,6 @@ const OPEN_CALL_COUNTS = {
   "view.bridge.tab-state-read-write": [1, 0, 1, 0],
   "view.bridge.sidecar-send": [1, 0],
   "view.bridge.sidecar-subscriptions": [1, 0, 1, 0],
-  "view.bridge.runtime-log-without-level-query": [1, 0, 1, 2, 1, 0],
 };
 function assertOpenCallSequence(reports, plugin, expected) {
   const updates = reports.filter(({ kind }) => kind === "open-calls");
@@ -793,28 +817,6 @@ test("published view bridge cases match calls, replies, events, and refusals", a
             assert.deepEqual(received, step.output);
           } else {
             throw new Error("unsupported sidecar-subscriptions action " + step.action);
-          }
-        }
-      } else if (item.id === "view.bridge.runtime-log-without-level-query") {
-        assert.equal(globalThis.window.location.host, "probe");
-        const { runtime } = bridge;
-        for (const step of item.steps.slice(1)) {
-          if (step.action === "log") {
-            const before = posted.length;
-            const fields = () => ({ ...step.input.fields });
-            runtime.log[step.input.level](step.input.event, fields, step.input.cids === undefined ? undefined : { cids: step.input.cids });
-            assert.deepEqual(plain(posted.slice(before)), step.output);
-          } else if (step.action === "host-reply") {
-            host(step.input);
-            await new Promise((resolve) => setImmediate(resolve));
-            assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), []);
-          } else if (step.action === "log-builder") {
-            const before = posted.length;
-            let built = false;
-            runtime.log[step.input.level](step.input.event, () => { built = true; return step.input.fields; });
-            assert.deepEqual({ calls: posted.length - before, built }, step.output);
-          } else {
-            throw new Error("unsupported runtime-log case action " + step.action);
           }
         }
       } else {

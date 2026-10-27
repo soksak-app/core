@@ -420,3 +420,13 @@ Typed text is stored in `logs/` on this computer. It leaves the computer only wh
 - The page cannot write files, so it records through the host with batched calls. A batch not yet sent when the page process ends is lost (up to the flush interval).
 - The retention removes the oldest runs when the files of the runs pass 6 GiB, so a flood of PTY output fills the disk up to the bound and then replaces the oldest runs. The writer records each rotation and each pass of the retention that removes a file.
 - The input method answers only in the key window of the active application, so a check of composed input needs a run in which the application is active.
+
+### View record delivery
+
+A view uses the shared bounded event batcher and sends its log directly to the host writer, without relaying each record through the workbench document. The view has no policy gate: it builds every record, and the host writer applies the installed event catalog and policy. Queue bounds, clock anchoring, correlation identifiers, field truncation, loss reports and failed-delivery reporting are shared with the page batcher.
+
+The injected `view.ready` message includes `page`, exactly `String(performance.timeOrigin)`, alongside its document UUID. The host binds both identities to the native surface generation. The view batcher emits `page.start` with a non-empty document URL and `page.log.clock` for that document; plugin records carry that view document identity rather than the workbench document identity.
+
+The view channel handles `runtime.log` directly with only the existing writer requests `action: "clock"` and `action: "batch"`. A batch must name the registered page and the owning plugin prefix. Caller-provided `fields.surface` in a plugin record is rejected; the host adds the surface bound to the source. Writer-generated lifecycle, clock and loss records are restricted to their declared names. The host validates the complete batch before writing any of it. Policy mutation, a mismatched identity and the earlier single-record payload are errors. A clock request replies with `{ts_us, mono_ns}`, a batch with `null`, and an error with the same ID and `{code: -32000, message}`. Generation checks apply before processing and before posting the result or error reply. Retired documents cannot write through a replacement generation.
+
+These writer requests are not forwarded application calls: they emit no synthetic `page.view.call` or `page.view.reply` and no `host.view.call` claiming workbench delivery. Actual records and the existing writer clock, gate and loss reports describe their outcomes. A failed delivery uses the existing view error path. An ended view's unsent queue remains covered by `host.view.killed {unsent: true}`.

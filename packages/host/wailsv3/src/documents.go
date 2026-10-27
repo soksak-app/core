@@ -1326,6 +1326,7 @@ type viewChannel struct {
 	generation uint64
 	handle     unsafe.Pointer
 	document   string
+	page       string
 	// processReady is set by the first ready message of the view, which writes host.trace.view.process-ready once.
 	processReady bool
 	// navigations is the navigation count that the last document state of the view reported. A higher count starts a new document.
@@ -1446,14 +1447,15 @@ func (d *Documents) viewSurfaces() []string {
 }
 
 // setReadyDocument records document as the ready document of the view of surface, and clears the record when document is empty.
-func (d *Documents) setReadyDocument(surface string, generation uint64, document string) bool {
+func (d *Documents) setReadyDocument(surface string, generation uint64, document, page string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	channel, ok := d.views[surface]
-	if !ok || channel.generation != generation {
+	if !ok || channel.generation != generation || document == "" || !validViewPageIdentity(page) {
 		return false
 	}
 	channel.document = document
+	channel.page = page
 	return true
 }
 
@@ -1646,6 +1648,9 @@ func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, va
 		return true, err
 	}
 	if isCall {
+		if payload["command"] == "runtime.log" {
+			return true, s.viewLogRequest(surface, plugin, generation, payload)
+		}
 		// A call request goes to the main page of the window, which answers it (docs/spec/native-surfaces.md#view-surfaces). A
 		// cancel carries no command and opens no call.
 		if id, ok := payload["id"].(uint64); ok {
@@ -1677,6 +1682,7 @@ func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, va
 		Event    string `json:"event"`
 		Plugin   string `json:"plugin"`
 		Document string `json:"document"`
+		Page     string `json:"page"`
 		Reason   string `json:"reason"`
 	}
 	if err := json.Unmarshal(received.Message, &event); err != nil {
@@ -1684,10 +1690,10 @@ func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, va
 	}
 	switch event.Event {
 	case "view.ready":
-		if event.Plugin != plugin || event.Document == "" {
-			return true, fmt.Errorf("%s: view.ready names plugin %q and document %q, want plugin %q", surface, event.Plugin, event.Document, plugin)
+		if event.Plugin != plugin || event.Document == "" || !validViewPageIdentity(event.Page) {
+			return true, fmt.Errorf("%s: view.ready names plugin %q, document %q and page %q, want plugin %q, a document and a positive finite page time origin", surface, event.Plugin, event.Document, event.Page, plugin)
 		}
-		if !s.documents.setReadyDocument(surface, generation, event.Document) {
+		if !s.documents.setReadyDocument(surface, generation, event.Document, event.Page) {
 			return false, nil
 		}
 		if s.documents.firstReady(surface, generation) {
@@ -1779,6 +1785,7 @@ func (d *Documents) recordViewNavigations(surface string, navigations uint64) er
 	if navigations > channel.navigations {
 		channel.navigations = navigations
 		channel.document = ""
+		channel.page = ""
 	}
 	return nil
 }

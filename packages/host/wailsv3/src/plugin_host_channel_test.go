@@ -760,7 +760,7 @@ func TestPluginHostPostsRunOnTheUIThread(t *testing.T) {
 // contract: view.channel.ui-thread
 func TestViewPostsRunOnTheUIThread(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`
 	if err := s.viewMessage("probe-surface", ready); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}

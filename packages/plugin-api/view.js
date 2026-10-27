@@ -10,6 +10,7 @@
 import { causeCids, createCalls } from "./calls.js";
 import { createOperationCids } from "./operation.js";
 import { createPluginRuntime } from "./plugin-runtime.js";
+import { createEventBatcher } from "./log-batch.js";
 import { createSnapshotSender, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
 import { createSurfaceCompositionController } from "./surface-composition.js";
 import { createExpose } from "./index.js";
@@ -149,15 +150,23 @@ export function createViewBridge({ handler, report }) {
     // A refused error line is reported through the bridge's report, which the page writes to the application log.
     runtime.error(where, text).catch((failure) => report({ where, text, error: failure }));
   };
-  // The prefix that the page adds to the event of a plugin record; the call carries the event without it.
-  const prefix = `plugin.${plugin}.`;
   // The identifiers of the operations that start in this view page (docs/spec/logging.md#operation-chains).
   const nextOperationCids = createOperationCids();
+  let eventBatcher = null;
+  const writeLog = (level, event, fields, cids) => {
+    if (eventBatcher === null) {
+      eventBatcher = createEventBatcher({
+        call: (request) => calls.request("runtime.log", request),
+        report: recordError("log batch"),
+        now: () => window.performance.now(),
+        page: String(window.performance.timeOrigin),
+      });
+      eventBatcher.emit("info", "page.start", { time_origin: window.performance.timeOrigin, url: window.location.href });
+    }
+    eventBatcher.emit(level, event, fields, cids);
+  };
   const { log } = createPluginRuntime({ pluginId: plugin, hooks: {
-    log: (level, event, fields, cids) => {
-      calls.request("runtime.log", { level, event: event.slice(prefix.length), fields, ...(cids === undefined ? {} : { cids }) })
-        .catch(recordError(`log ${event}`));
-    },
+    log: (level, event, fields, cids) => writeLog(level, event, fields, cids),
   } });
   const runtime = {
     native: {
@@ -436,6 +445,7 @@ export function createViewBridge({ handler, report }) {
       expose.command("core.surface.hit", state.hit),
     ]).catch(recordError("core surface entries"));
     view.addEventListener("pagehide", () => {
+      if (eventBatcher !== null) eventBatcher.flush().catch(recordError("log batch flush"));
       state.dispose();
       expose.dispose().catch(recordError("core surface entries"));
     }, { once: true });

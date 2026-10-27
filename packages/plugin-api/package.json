@@ -14,6 +14,8 @@
     "./events-check": "./events-check.js",
     "./screen-hash": "./screen-hash.js",
     "./view-modules": "./view-modules.js",
+    "./log-batch.js": "./log-batch.js",
+    "./bounded-json.js": "./bounded-json.js",
     "./diagnostic-view-frames": "./diagnostic-view-frames.js"
   },
   "files": [
@@ -41,6 +43,8 @@
     "view-start.js",
     "view-check.js",
     "view-modules.js",
+    "log-batch.js",
+    "bounded-json.js",
     "exposure-check.js",
     "engines-check.js",
     "core-exposure.json",

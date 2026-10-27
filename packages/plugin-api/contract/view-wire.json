@@ -8,7 +8,7 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000001" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000001" }],
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000001", "page": "1700000000000.5" }],
             "delivered": [],
             "throws": null
           }
@@ -25,7 +25,7 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000002" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000002" }],
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000002", "page": "1700000000000.5" }],
             "delivered": [],
             "throws": null
           }
@@ -46,7 +46,7 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000003" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000003" }],
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000003", "page": "1700000000000.5" }],
             "delivered": [],
             "throws": null
           }
@@ -79,7 +79,7 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000004" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000004" }],
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000004", "page": "1700000000000.5" }],
             "delivered": [],
             "throws": null
           }
@@ -104,7 +104,7 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000005" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000005" }],
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000005", "page": "1700000000000.5" }],
             "delivered": [],
             "throws": null
           }
@@ -137,7 +137,7 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000006" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000006" }],
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000006", "page": "1700000000000.5" }],
             "delivered": [],
             "throws": null
           }
@@ -167,7 +167,7 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000007" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000007" }],
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000007", "page": "1700000000000.5" }],
             "delivered": [],
             "throws": null
           }
@@ -188,7 +188,7 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000008" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000008" }],
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000008", "page": "1700000000000.5" }],
             "delivered": [],
             "throws": null
           }

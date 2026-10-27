@@ -53,6 +53,8 @@ const REPLAY_KINDS = ["output", "write", "resize", "selection", "viewport", "the
 export const PAGE_IMPORTS = Object.freeze({
   "soksak": `/${modulePath("soksak", "dist/index.js")}`,
   "@soksak/plugin-api": `/${modulePath("@soksak/plugin-api", "index.js")}`,
+  "@soksak/plugin-api/bounded-json.js": `/${modulePath("@soksak/plugin-api", "bounded-json.js")}`,
+  "@soksak/plugin-api/log-batch.js": `/${modulePath("@soksak/plugin-api", "log-batch.js")}`,
   "@soksak/plugin-api/page": `/${modulePath("@soksak/plugin-api", "page.js")}`,
   "@soksak/plugin-api/screen-hash": `/${modulePath("@soksak/plugin-api", "screen-hash.js")}`,
   "@soksak/runtime": `/${RUNTIME}/index.js`,

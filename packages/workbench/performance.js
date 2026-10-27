@@ -2,7 +2,9 @@
 // event contract (docs/spec/logging.md#writers): it is queued without waiting and relayed to the host in a batch through the
 // call `log`. The switch is the call `performance`; its requests run in the order they were made.
 import { host as bridge } from "@soksak/runtime";
-import { createEventBatcher } from "./log-batch.js";
+import { createEventBatcher } from "@soksak/plugin-api/log-batch.js";
+import { classOf } from "./event-classes.js";
+import { logGate } from "./log-gate.js";
 import { rawConsole } from "./page-log.js";
 
 function reportRelayError(error) {
@@ -18,7 +20,7 @@ export function createTracer(call, report = reportRelayError, log = null) {
   let switching = false;
   let revision = 0;
   let pending = Promise.resolve();
-  const batcher = log ? createEventBatcher({ call: log, report }) : null;
+  const batcher = log ? createEventBatcher({ call: log, report, classify: classOf, gate: logGate }) : null;
   const enqueue = (work) => {
     // The failure of an earlier request reached the caller of that request.
     // A later explicit request has its own result and runs in order.

@@ -17,7 +17,7 @@ import { isDeepStrictEqual } from "node:util";
 import { pathToFileURL } from "node:url";
 
 /** The SHA-256 of view-start.js as of this check. */
-export const VIEW_START_SHA256 = "d96923ada1f03a2af97f8e09ee32bc323ec72f235fffc1d4519f6f641db1dffc";
+export const VIEW_START_SHA256 = "29010247a058570913b2e9beaf1fc2f8154709f8bc6de49e8f97d0a6f8304bd8";
 
 const VIEW_START = new URL("./view-start.js", import.meta.url);
 

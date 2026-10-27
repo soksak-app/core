@@ -225,7 +225,7 @@ func TestReadyViewDeliveryDoesNotEndTheView(t *testing.T) {
 		fake.created[0],
 		"probe",
 		channel.generation,
-		`{"message":{"event":"view.ready","plugin":"probe","document":"ui/page.html"}}`,
+		`{"message":{"event":"view.ready","plugin":"probe","document":"ui/page.html","page":"1234.5"}}`,
 	)
 	if len(fake.posted) != 1 {
 		t.Fatalf("messages posted to the ready view: %d, want the initial theme", len(fake.posted))

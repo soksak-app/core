@@ -34,7 +34,7 @@ func TestViewCallAnsweredBeforeTheProcessEndWritesNoPeerLost(t *testing.T) {
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	recordWindowEvents(s)
 	generation := viewGeneration(s, "probe-surface")
-	s.documents.setReadyDocument("probe-surface", generation, "doc-1")
+	s.documents.setReadyDocument("probe-surface", generation, "doc-1", "1234.5")
 	if err := s.viewMessage("probe-surface", `{"message":{"sok":1,"id":8,"command":"probe.run","params":{}}}`); err != nil {
 		t.Fatalf("view call: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestSuccessfulViewDeliveryKeepsTheViewAlive(t *testing.T) {
 	for _, kind := range []string{"reply", "event", "request"} {
 		t.Run(kind, func(t *testing.T) {
 			s, _ := newViewChannelSurfaces(t)
-			if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`); err != nil {
+			if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
 				t.Fatal(err)
 			}
 			lifecycle := s.viewRecords()

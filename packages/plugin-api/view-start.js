@@ -64,7 +64,7 @@
     reportFailure(`unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
   });
 
-  handler.postMessage({ event: "view.ready", plugin, document: crypto.randomUUID() });
+  handler.postMessage({ event: "view.ready", plugin, document: crypto.randomUUID(), page: String(performance.timeOrigin) });
 
   window.sokView = Object.freeze({
     attach(next) {

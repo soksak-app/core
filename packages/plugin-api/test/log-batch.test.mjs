@@ -2,11 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEventBatcher } from "../log-batch.js";
-import { withoutClock } from "./support/records.mjs";
-import { logGate } from "../log-gate.js";
-// The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
-// examine, so the state of every class at trace is set here.
-logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
+import { withoutClock } from "./support/logging.mjs";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -28,6 +24,37 @@ test("events emitted in one turn are relayed in one call, in order", async () =>
     [["info", "page.test.first", 1], ["error", "page.test.second", 2]]);
   assert.ok(calls[0].events.every((event) => Number.isInteger(event.ts_us) && event.ts_us > 1.7e15));
   assert.ok(calls[0].events.every((event) => Number.isInteger(event.mono_ns) && event.mono_ns > 0));
+});
+
+test("the shared batcher applies only the classifier and gate supplied by its consumer", async () => {
+  const calls = [];
+  const refused = [];
+  const gate = { enabled: (klass, level) => { refused.push([klass, level]); return false; } };
+  const batcher = createEventBatcher({
+    call: answering(async (request) => { calls.push(request); }),
+    report: assert.ifError,
+    classify: (event) => event === "page.call" ? "call" : undefined,
+    gate,
+  });
+  let built = false;
+  assert.equal(batcher.emit("debug", "page.call", () => { built = true; return {}; }), false);
+  assert.equal(built, false, "a refused field builder ran");
+  assert.deepEqual(refused, [["call", "debug"]]);
+  assert.equal(batcher.emit("debug", "plugin.probe.saved", { key: "value" }), true);
+  await batcher.flush();
+  assert.deepEqual(calls.flatMap((request) => request.events).filter(({ event }) => event === "plugin.probe.saved").map(({ fields }) => fields), [{ key: "value" }]);
+});
+
+test("a view batcher without a local gate sends plugin records for the host writer to decide", async () => {
+  const calls = [];
+  const batcher = createEventBatcher({
+    call: answering(async (request) => { calls.push(request); }),
+    report: assert.ifError,
+    classify: () => "call",
+  });
+  assert.equal(batcher.emit("debug", "plugin.probe.saved", { key: "value" }), true);
+  await batcher.flush();
+  assert.ok(calls.flatMap((request) => request.events).some(({ event }) => event === "plugin.probe.saved"));
 });
 
 test("an event takes the wall clock and the monotonic clock of the host at its own reading, in microseconds and nanoseconds", async () => {

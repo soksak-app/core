@@ -4,7 +4,7 @@
 use serde_json::Value;
 use serde_json::value::to_raw_value;
 
-use crate::bounds::Fields;
+use crate::bounds::{Fields, bounded_serialize, cut_text};
 use crate::event_log::{EventLog, Level, RelayedEvent, monotonic_ns, valid_cid};
 
 /// One validated event of a page batch.
@@ -211,4 +211,123 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
         clock: None,
         classes: None,
     })
+}
+
+/// Handles the page writer requests from one plugin view without accepting policy changes or another source identity.
+pub fn view_log_command(
+    log: &EventLog,
+    request: Value,
+    plugin: &str,
+    surface: &str,
+    page: &str,
+) -> Result<Value, String> {
+    match request.get("action").and_then(Value::as_str) {
+        Some("clock") => {
+            if request.as_object().is_none_or(|object| object.len() != 1) {
+                return Err("runtime.log clock request accepts only action".into());
+            }
+            let reply = log_command(log, request)?;
+            serde_json::to_value(reply.clock).map_err(|error| error.to_string())
+        }
+        Some("batch") => {
+            if request.as_object().is_none_or(|object| object.len() != 2) {
+                return Err("runtime.log batch request accepts only action and events".into());
+            }
+            let mut request = request;
+            let events = request
+                .get("events")
+                .and_then(Value::as_array)
+                .ok_or_else(|| "events must be an array".to_string())?;
+            let plugin_prefix = format!("plugin.{plugin}.");
+            let page_time_origin = page
+                .parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value > 0.0)
+                .ok_or_else(|| {
+                    "the registered page is not a positive numeric time origin".to_string()
+                })?;
+            for (index, item) in events.iter().enumerate() {
+                let object = item
+                    .as_object()
+                    .ok_or_else(|| format!("events[{index}]: the event must be an object"))?;
+                let named_page = object.get("page").and_then(Value::as_str).ok_or_else(|| {
+                    format!("events[{index}]: page must name the document that wrote the event")
+                })?;
+                if named_page != page {
+                    return Err(format!(
+                        "events[{index}]: page {named_page:?} does not match the ready view page {page:?}"
+                    ));
+                }
+                let event = object
+                    .get("event")
+                    .and_then(Value::as_str)
+                    .filter(|event| !event.is_empty())
+                    .ok_or_else(|| format!("events[{index}]: event must be a name"))?;
+                let fields = object
+                    .get("fields")
+                    .and_then(Value::as_object)
+                    .ok_or_else(|| format!("events[{index}]: fields must be an object"))?;
+                if event.starts_with(&plugin_prefix) {
+                    if fields.contains_key("surface") {
+                        return Err(format!(
+                            "events[{index}]: plugin event {event:?} cannot set its owning surface"
+                        ));
+                    }
+                } else if matches!(event, "page.start" | "page.log.clock" | "page.log.dropped") {
+                    if event == "page.start" {
+                        let time_origin = fields
+                            .get("time_origin")
+                            .and_then(Value::as_f64)
+                            .ok_or_else(|| {
+                                format!("events[{index}]: page.start time_origin must be a number")
+                            })?;
+                        if time_origin != page_time_origin {
+                            return Err(format!(
+                                "events[{index}]: page.start time_origin {time_origin} does not match ready page {page:?}"
+                            ));
+                        }
+                        if fields
+                            .get("url")
+                            .and_then(Value::as_str)
+                            .filter(|url| !url.is_empty())
+                            .is_none()
+                        {
+                            return Err(format!(
+                                "events[{index}]: page.start url must be non-empty text"
+                            ));
+                        }
+                    }
+                } else {
+                    return Err(format!(
+                        "events[{index}]: event {event:?} is not allowed for plugin {plugin:?}"
+                    ));
+                }
+            }
+            for item in request["events"]
+                .as_array_mut()
+                .expect("validated events array")
+            {
+                let event = item["event"].as_str().expect("validated event name");
+                if event.starts_with(&plugin_prefix) {
+                    item["fields"]["surface"] = Value::String(surface.to_string());
+                    let (fields, produced) =
+                        bounded_serialize(&item["fields"], 65_536).map_err(|error| {
+                            format!("plugin event fields cannot be bounded: {error}")
+                        })?;
+                    if produced.is_some() {
+                        let (head, _) = cut_text(&fields, 4_096);
+                        item["fields"] = serde_json::json!({
+                            "head": head,
+                            "truncated": true,
+                            "surface": surface
+                        });
+                    }
+                }
+            }
+            log_command(log, request)?;
+            Ok(Value::Null)
+        }
+        Some(other) => Err(format!("action must be batch or clock, not {other:?}")),
+        None => Err("action must be batch or clock".into()),
+    }
 }

@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEventBatcher } from "../log-batch.js";
-import { hostClock, withoutClock } from "./support/records.mjs";
+import { hostClock, withoutClock } from "./support/logging.mjs";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 

@@ -87,7 +87,7 @@ func TestViewProcessEventsMarkTheRequestAndTheFirstReadyMessage(t *testing.T) {
 	if len(requests) != 1 || requests[0]["surface"] != "probe-surface" || requests[0]["plugin"] != "probe" {
 		t.Fatalf("host.trace.view.process-request records: %v, want one for probe-surface", requests)
 	}
-	ready := `{"message":{"sok":1,"event":"view.ready","plugin":"probe","document":"doc-1"}}`
+	ready := `{"message":{"sok":1,"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`
 	for i := 0; i < 2; i++ {
 		if err := s.viewMessage("probe-surface", ready); err != nil {
 			t.Fatalf("ready message %d: %v", i, err)

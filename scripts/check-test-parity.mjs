@@ -3314,11 +3314,11 @@ const FEATURE_LINKS = [
     id: "F150.4.1",
     implementation: [
       { file: "packages/workbench/page-log.js", symbol: "export function reportRecord" },
-      { file: "packages/workbench/log-batch.js", symbol: "export function createEventBatcher" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "export function createEventBatcher" },
     ],
     tests: [
       { file: "packages/workbench/test/page-log.test.mjs", id: "a failure is the event page.record.error with the place and the text, and the wait ends when it was relayed" },
-      { file: "packages/workbench/test/log-batch.test.mjs", id: "emitAndWait ends when the batch that carries the event was relayed, and the events of one turn share the batch" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "emitAndWait ends when the batch that carries the event was relayed, and the events of one turn share the batch" },
       { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
       { file: "e2e/host-records.test.mjs", id: "the event log holds the run record and the records the page reports" },
     ],
@@ -3502,11 +3502,11 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.4.1",
     implementation: [
-      { file: "packages/workbench/log-batch.js", symbol: "export function createEventBatcher" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "export function createEventBatcher" },
     ],
     tests: [
-      { file: "packages/workbench/test/log-batch.test.mjs", id: "events emitted in one turn are relayed in one call, in order" },
-      { file: "packages/workbench/test/log-batch.test.mjs", id: "a full queue refuses events and the next batch starts with the counted loss" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "events emitted in one turn are relayed in one call, in order" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "a full queue refuses events and the next batch starts with the counted loss" },
     ],
     expected: "The events of one turn travel to the host in one ordered call, a full queue counts the refused events in page.log.dropped, and a failed call is reported with its event count.",
     levels: ["unit"],
@@ -4413,12 +4413,79 @@ const FEATURE_LINKS = [
   },
   {
     id: "F242",
-    implementation: [{ file: "packages/workbench/view-calls.js", symbol: "fields.cids === undefined ? undefined : { cids: fields.cids }" }],
+    implementation: [{ file: "packages/plugin-api/view.js", symbol: "const writeLog = (level, event, fields, cids) =>" }],
     tests: [
-      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.log passes the cids of the record to the writer of the page" },
-      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin event carries the cids of its chain to the page writer" },
+      { file: "packages/plugin-api/test/view.test.mjs", id: "the view bridge keeps the public log API and batches source-clocked records through the direct writer" },
+      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_stores_the_clock_and_the_cids_that_the_page_gave" },
+      { file: "packages/host/wailsv3/src/view_call_record_test.go", id: "TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay" },
     ],
-    expected: "The view call runtime.log passes cids to the log of the surface context, which validates them as the page log path does.",
+    expected: "The public runtime.log API carries its cids through the SDK direct writer, and host relays retain the supplied cids while storing page events.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-240",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "const writeLog = (level, event, fields, cids) =>" },
+      { file: "packages/host/wailsv3/src/event_relay.go", symbol: "func viewLogCommand(" },
+      { file: "packages/host/tauriv2/src/event_relay.rs", symbol: "pub fn view_log_command(" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "the view bridge keeps the public log API and batches source-clocked records through the direct writer" },
+      { file: "packages/host/wailsv3/src/view_call_record_test.go", id: "TestViewRuntimeLogReplyDoesNotReachANavigatedDocument" },
+      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_view_batch_rejects_a_foreign_source_without_writing_earlier_events" },
+      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_view_log_rejects_unknown_clock_and_batch_request_fields" },
+    ],
+    expected: "View records use the bounded direct writer with source clock, page and surface identity; malformed batches write no events and replies cannot reach a replacement document.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-236",
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function withViewContentTrace(" }],
+    tests: [
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "generic content trace brackets the successful start command with native clock reads" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace stops its diagnostic marker when the recorded action fails" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace start failure does not read an after clock or stop an unstarted observer" },
+    ],
+    expected: "The content trace brackets the successful start command with native clock reads and stops the diagnostic marker on action failure; start failure does not read an after clock or stop an unstarted observer.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-237",
+    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "export function auditActivationUnboundNames" }],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation fixture audit rejects unresolved identifiers" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit ignores unrelated multiline TypeScript diagnostics" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit reports the selected TypeScript diagnostic codes" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit reports compiler syntax errors" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit preserves analysis and cleanup failures" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit rejects malformed selected diagnostics" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "activation unbound-name audit skips only confirmed external diagnostics" },
+    ],
+    expected: "The activation audit uses compiler diagnostic objects, reports selected unresolved-name and syntax failures, rejects malformed diagnostics, and preserves cleanup errors while skipping only confirmed external diagnostics.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-238",
+    implementation: [{ file: "packages/window-check/view-metrics.mjs", symbol: "export function assertViewMeasurements(" }],
+    tests: [
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metrics report independent failures together" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "drag geometry requires every contiguous gesture frame and same-frame observations" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "drag cadence is in-gesture and convergence meets both frame and time bounds" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "malformed shared drag evidence has a path error without passing criteria" },
+    ],
+    expected: "The evaluator validates shared evidence before independently reporting geometry, cadence, and convergence outcomes; malformed required evidence cannot produce a passing criterion.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-239",
+    implementation: [{ file: "e2e/hwp-startup.mjs", symbol: "export async function collectHwpStartupResourceEvidence(" }],
+    tests: [
+      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection stops before offline content verification and preserves evidence" },
+      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup read failure still stops tracing and retains offline verification" },
+      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection preserves start, stop, and offline verification errors" },
+      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection reports a recording copy failure" },
+    ],
+    expected: "HWP startup collection preserves the recording and resource evidence, stops tracing before offline content verification, and reports collection, stop, verification, and recording-copy failures.",
     levels: ["unit"],
   },
   {
@@ -4853,13 +4920,13 @@ const FEATURE_LINKS = [
   {
     id: "F184",
     implementation: [
-      { file: "packages/workbench/log-batch.js", symbol: "page = String(performance.timeOrigin)" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "page = String(performance.timeOrigin)" },
       { file: "packages/host/wailsv3/src/running_calls.go", symbol: "func ReloadTimeoutText" },
       { file: "packages/host/tauriv2/src/running_calls.rs", symbol: "pub fn reload_timeout_text" },
     ],
     tests: [
       { file: "packages/log-contract/test/audit.test.mjs", id: "an event of the layer page or plugin names the page that wrote it, and an event of another layer names none" },
-      { file: "packages/workbench/test/log-batch.test.mjs", id: "every event of a batch names the page that wrote it by its time origin, the anchor of its clock included" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "every event of a batch names the page that wrote it by its time origin, the anchor of its clock included" },
       { file: "packages/host/wailsv3/tests/running_calls_test.go", id: "TestAReloadThatTimesOutNamesTheHostCallsOfItsWindowThatStillRun" },
       { file: "packages/host/tauriv2/tests/running_calls_test.rs", id: "a_reload_that_times_out_names_the_host_calls_of_its_window_that_still_run" },
     ],
@@ -4899,7 +4966,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "const GATED_REPORT_INTERVAL" },
       { file: "packages/sok/wailsv3/src/event_log.go", symbol: "const gatedReportInterval" },
-      { file: "packages/workbench/log-batch.js", symbol: "const GATED_REPORT_MS" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "const GATED_REPORT_MS" },
       { file: "native/darwin/src/event_ring.m", symbol: "static const uint64_t GATED_REPORT_NS" },
     ],
     tests: [
@@ -5212,7 +5279,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/sok/tauriv2/src/event_bounds.rs", symbol: "pub fn bounded_serialize" },
       { file: "packages/sok/wailsv3/src/event_bounds.go", symbol: "func BoundedMarshal" },
-      { file: "packages/workbench/log-batch.js", symbol: "export function createEventBatcher" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "export function createEventBatcher" },
     ],
     tests: [
       { file: "packages/host/tauriv2/tests/producer_bounds_test.rs", id: "the_fields_of_a_host_event_are_cut_while_they_are_serialized" },

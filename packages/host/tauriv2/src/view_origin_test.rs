@@ -51,7 +51,7 @@ mod view_decode {
             json!({"reply": 1, "result": {"items": [1, 2, 3]}}),
             json!({"id": 2, "command": "probe.run", "params": {"items": [1, 2, 3]}}),
             json!({"event": "declared-ui.snapshot", "plugin": "probe", "status": "state", "seq": 1, "skipped": 0, "value": {"items": [1, 2, 3]}}),
-            json!({"event": "view.ready", "plugin": "probe", "document": "doc-1"}),
+            json!({"event": "view.ready", "plugin": "probe", "document": "doc-1", "page": "1791948729050"}),
         ] {
             let channels = ViewChannels::default();
             channels.register("surface", "probe", 1);
@@ -69,6 +69,7 @@ mod view_decode {
             match result.unwrap() {
                 ViewDispatch::Reply(payload) => assert_eq!(payload["result"], message["result"]),
                 ViewDispatch::Call(payload) => assert_eq!(payload["params"], message["params"]),
+                ViewDispatch::Log(_) => panic!("the probe command is not a log request"),
                 ViewDispatch::Snapshot(payload) => assert_eq!(payload["value"], message["value"]),
                 ViewDispatch::Ready(ready) => assert_eq!(ready, Ok(true)),
             }
@@ -93,7 +94,7 @@ mod view_decode {
             )
             .unwrap();
         assert!(matches!(canceled, ViewDispatch::Call(value) if value["cancel"] == true));
-        let ready = channels.dispatch("surface", r#"{"message":{"command":null,"cancel":null,"event":"view.ready","plugin":"probe","document":"doc-1"}}"#);
+        let ready = channels.dispatch("surface", r#"{"message":{"command":null,"cancel":null,"event":"view.ready","plugin":"probe","document":"doc-1","page":"1791948729050"}}"#);
         assert_eq!(ready, Ok(ViewDispatch::Ready(Ok(true))));
         let invalid = channels
             .dispatch(
@@ -185,6 +186,155 @@ fn a_current_view_callback_enters_dispatch() {
         &current,
         r#"{"message":{"sok":1,"id":7,"command":"probe.run","params":{}}}"#,
     ));
+}
+
+// contract: view.log.uses-direct-writer
+#[test]
+fn a_runtime_log_call_is_not_forwarded_to_the_workbench() {
+    let channels = ViewChannels::default();
+    channels.register_origin("surface", "probe", 1);
+    channels.dispatch(
+        "surface",
+        r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1791948729050"}}"#,
+    ).expect("the view page is ready");
+    let before = buffered_fields("host.view.call").len();
+
+    let result = channels.dispatch(
+        "surface",
+        r#"{"message":{"sok":1,"id":17,"command":"runtime.log","params":{"action":"clock"}}}"#,
+    );
+
+    assert!(
+        matches!(result, Ok(super::ViewDispatch::Log(_))),
+        "runtime.log must use the direct writer path, not the workbench relay: {result:?}"
+    );
+    assert_eq!(
+        buffered_fields("host.view.call").len(),
+        before,
+        "runtime.log must not emit a synthetic host.view.call"
+    );
+    for (message, expected) in [
+        (
+            r#"{"message":{"sok":1,"id":18,"command":"runtime.log","cancel":true,"params":{"action":"clock"}}}"#,
+            "cancel must be true and name no command",
+        ),
+        (
+            r#"{"message":{"sok":1,"id":19,"command":"runtime.log","cids":["cause-1"],"params":{"action":"clock"}}}"#,
+            "log events carry their own cids",
+        ),
+    ] {
+        let call = match channels.dispatch("surface", message) {
+            Ok(super::ViewDispatch::Log(call)) => call,
+            other => panic!("invalid runtime.log envelope lost its reply identity: {other:?}"),
+        };
+        assert!(
+            call.request_error
+                .as_deref()
+                .is_some_and(|error| error.contains(expected)),
+            "{call:?}"
+        );
+    }
+}
+
+// contract: view.log.retired-generation-cannot-write-as-replacement
+#[test]
+fn a_retired_log_request_does_not_match_the_replacement_page() {
+    let channels = ViewChannels::default();
+    let old_origin = channels.register_origin("surface", "probe", 1);
+    channels
+        .dispatch(
+            "surface",
+            r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-old","page":"1791948729050"}}"#,
+        )
+        .expect("the old page is ready");
+    let result = channels.dispatch(
+        "surface",
+        r#"{"message":{"sok":1,"id":17,"command":"runtime.log","params":{"action":"clock"}}}"#,
+    );
+    let call = match result {
+        Ok(super::ViewDispatch::Log(call)) => call,
+        other => panic!("runtime.log did not select the direct writer: {other:?}"),
+    };
+    assert!(channels.is_current_log_source(&call, &old_origin));
+
+    let replacement = channels.register_origin("surface", "probe", 2);
+    channels
+        .dispatch(
+            "surface",
+            r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-new","page":"1791948729051"}}"#,
+        )
+        .expect("the replacement page is ready");
+    assert!(
+        !channels.is_current_log_source(&call, &replacement),
+        "the old call must not use the replacement generation or page"
+    );
+}
+
+// contract: view.log-navigation-clears-ready-page
+#[test]
+fn a_view_log_request_is_refused_after_a_new_navigation_starts() {
+    let channels = ViewChannels::default();
+    channels.register("surface", "probe", 1);
+    channels
+        .dispatch(
+            "surface",
+            r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1791948729050"}}"#,
+        )
+        .expect("the view page is ready");
+    channels
+        .state("surface", r#"{"loading":true,"navigations":1}"#)
+        .expect("the new navigation is recorded");
+    let result = channels.dispatch(
+        "surface",
+        r#"{"message":{"sok":1,"id":18,"command":"runtime.log","params":{"action":"clock"}}}"#,
+    );
+    let call = match result {
+        Ok(super::ViewDispatch::Log(call)) => call,
+        other => panic!("the not-ready page call lost its same-id reply: {other:?}"),
+    };
+    assert_eq!(call.id, 18);
+    assert_eq!(
+        call.request_error.as_deref(),
+        Some("surface: runtime.log call has no ready page")
+    );
+}
+
+// contract: view.log.same-id-replies
+#[test]
+fn a_view_writer_reply_keeps_the_call_id_for_results_and_errors() {
+    let success =
+        super::view_log_reply_message(17, &Ok(serde_json::json!({"ts_us": 1, "mono_ns": 2})));
+    assert_eq!(
+        success,
+        serde_json::json!({"sok": 1, "id": 17, "result": {"ts_us": 1, "mono_ns": 2}})
+    );
+    let failure = super::view_log_reply_message(18, &Err("bad action".into()));
+    assert_eq!(
+        failure,
+        serde_json::json!({"sok": 1, "id": 18, "error": {"code": -32000, "message": "bad action"}})
+    );
+}
+
+// contract: view.ready.binds-writer-page-to-positive-time-origin
+#[test]
+fn view_ready_requires_a_positive_numeric_page_identity() {
+    let channels = ViewChannels::default();
+    channels.register("surface", "probe", 1);
+    for page in ["", "0", "NaN", "Infinity", "not-a-page"] {
+        let message = serde_json::json!({
+            "message": {"event": "view.ready", "plugin": "probe", "document": "doc-1", "page": page}
+        })
+        .to_string();
+        let result = channels.dispatch("surface", &message).unwrap();
+        assert!(
+            matches!(result, super::ViewDispatch::Ready(Err(_))),
+            "invalid page identity {page:?} was accepted: {result:?}"
+        );
+        assert_eq!(
+            channels.check_post("surface"),
+            Err("surface has no ready document".into())
+        );
+    }
 }
 
 // contract: view.origin.retired-producer-error-is-preserved

@@ -1,7 +1,7 @@
 // The progress of the host calls that the page sent. It makes every call sent before the page reloads itself receive a reply
 // (docs/spec/native-host.md#page-reload). The runtimes of both applications wrap their own calls with it.
 // A call that holds a number JSON cannot carry (NaN, Infinity) is rejected without being sent (docs/spec/native-host.md#host-calls).
-import { boundedJson } from "./bounded-json.js";
+import { boundedJson } from "@soksak/plugin-api/bounded-json.js";
 
 /** The path and value of the first non-finite number in arg. It is null when there is none. */
 function nonFinite(value, path) {

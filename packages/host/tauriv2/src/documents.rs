@@ -673,11 +673,12 @@ pub(crate) fn view_channel() -> Result<&'static str, String> {
         .ok_or_else(|| "the view channel script is not loaded".to_string())
 }
 
-/// The view channel of one view surface: the plugin of its view and its ready document. An empty document means that no ready
-/// document is recorded (docs/spec/plugin-processes.md, rule 4).
+/// The view channel of one view surface: the plugin, ready document and page identity. Empty document and page values mean that no
+/// ready document is recorded (docs/spec/plugin-processes.md, rule 4).
 struct ViewChannel {
     plugin: String,
     document: String,
+    page: String,
     origin: ViewOrigin,
     /// Set by the first ready message of the view, which writes host.trace.view.process-ready once.
     process_ready: bool,
@@ -842,6 +843,8 @@ struct ViewEvent {
     #[serde(default)]
     document: String,
     #[serde(default)]
+    page: String,
+    #[serde(default)]
     reason: String,
 }
 
@@ -858,8 +861,21 @@ struct ViewState {
 enum ViewDispatch {
     Reply(Value),
     Call(Value),
+    Log(ViewLogCall),
     Snapshot(Value),
     Ready(Result<bool, String>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct ViewLogCall {
+    id: u64,
+    plugin: String,
+    surface: String,
+    generation: u64,
+    document: String,
+    page: String,
+    request: Value,
+    request_error: Option<String>,
 }
 
 impl ViewChannels {
@@ -889,6 +905,11 @@ impl ViewChannels {
                 .filter(|value| !value.is_null())
         };
         if field("command").is_some() || field("cancel").is_some() {
+            if field("command").and_then(Value::as_str) == Some("runtime.log") {
+                return self
+                    .log_call_received(surface, received)
+                    .map(ViewDispatch::Log);
+            }
             return self.call_received(surface, received).map(|payload| {
                 ViewDispatch::Call(payload.expect("a command or cancel selected the call handler"))
             });
@@ -907,6 +928,69 @@ impl ViewChannels {
         Ok(ViewDispatch::Ready(
             self.message_received(surface, received),
         ))
+    }
+
+    fn log_call_received(
+        &self,
+        surface: &str,
+        received: ViewReceived,
+    ) -> Result<ViewLogCall, String> {
+        let message = received
+            .message
+            .ok_or_else(|| format!("{surface}: view message has neither message nor error"))?;
+        let id = message
+            .get("id")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| format!("{surface}: runtime.log call has no integer id"))?;
+        let mut request_error = if message
+            .get("cancel")
+            .is_some_and(|cancel| !cancel.is_null())
+        {
+            Some(format!(
+                "view call {id} cancel must be true and name no command"
+            ))
+        } else if let Some(cids) = message.get("cids") {
+            match cause_cids_of(Some(cids)) {
+                Err(refusal) => Some(format!("runtime.log call {id} {refusal}")),
+                Ok(cids) if !cids.is_empty() => Some(format!(
+                    "runtime.log call {id} carries cids; log events carry their own cids"
+                )),
+                Ok(_) => None,
+            }
+        } else {
+            None
+        };
+        let request = message.get("params").cloned().unwrap_or(Value::Null);
+        let channels = self.lock();
+        let channel = channels.get(surface).ok_or_else(|| {
+            format!("{surface}: view channel message of a surface without a view")
+        })?;
+        if (channel.document.is_empty() || channel.page.is_empty()) && request_error.is_none() {
+            request_error = Some(format!("{surface}: runtime.log call has no ready page"));
+        }
+        Ok(ViewLogCall {
+            id,
+            plugin: channel.plugin.clone(),
+            surface: surface.to_string(),
+            generation: channel.origin.generation,
+            document: channel.document.clone(),
+            page: channel.page.clone(),
+            request,
+            request_error,
+        })
+    }
+
+    fn is_current_log_source(&self, call: &ViewLogCall, origin: &ViewOrigin) -> bool {
+        if call.generation != origin.generation {
+            return false;
+        }
+        self.lock().get(&call.surface).is_some_and(|channel| {
+            channel.origin.generation == origin.generation
+                && std::sync::Arc::ptr_eq(&channel.origin.instance, &origin.instance)
+                && channel.plugin == call.plugin
+                && channel.document == call.document
+                && channel.page == call.page
+        })
     }
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, ViewChannel>> {
         self.0
@@ -932,6 +1016,7 @@ impl ViewChannels {
             ViewChannel {
                 plugin: plugin.to_string(),
                 document: String::new(),
+                page: String::new(),
                 origin: origin.clone(),
                 process_ready: false,
                 navigations: 0,
@@ -1101,14 +1186,19 @@ impl ViewChannels {
             })?;
         match event.event.as_str() {
             "view.ready" => {
-                if event.plugin != plugin || event.document.is_empty() {
+                let time_origin = event.page.parse::<f64>().ok();
+                if event.plugin != plugin
+                    || event.document.is_empty()
+                    || time_origin.is_none_or(|value| !value.is_finite() || value <= 0.0)
+                {
                     return Err(format!(
-                        "{surface}: view.ready names plugin {:?} and document {:?}, want plugin {plugin:?}",
-                        event.plugin, event.document
+                        "{surface}: view.ready names plugin {:?}, document {:?}, and page {:?}, want plugin {plugin:?} and a positive page time origin",
+                        event.plugin, event.document, event.page
                     ));
                 }
                 if let Some(channel) = self.lock().get_mut(surface) {
                     channel.document = event.document;
+                    channel.page = event.page;
                 }
                 Ok(true)
             }
@@ -1373,6 +1463,7 @@ impl ViewChannels {
         if navigations > channel.navigations {
             channel.navigations = navigations;
             channel.document.clear();
+            channel.page.clear();
         }
         Ok(())
     }
@@ -1765,6 +1856,10 @@ fn view_message(
             }
             return;
         }
+        Ok(ViewDispatch::Log(call)) => {
+            view_log_message(window, platform, surface, origin, document, call);
+            return;
+        }
         Ok(ViewDispatch::Call(payload)) => {
             let payload = tag_view_generation(payload, origin.generation);
             if let Err(error) =
@@ -1815,6 +1910,92 @@ fn view_message(
                 view_failed(window, platform, surface, plugin, origin, document);
             }
         }
+    }
+}
+
+/// Processes a view writer request against its registered page and posts the same-id reply directly to the native document.
+fn view_log_message(
+    window: &Window,
+    platform: &'static dyn Platform,
+    surface: &str,
+    origin: &ViewOrigin,
+    document: Handle,
+    call: ViewLogCall,
+) {
+    let data = match window_data(window) {
+        Ok(data) => data,
+        Err(error) => {
+            log_error("view channel", error);
+            return;
+        }
+    };
+    if !data.documents.views().is_current_log_source(&call, origin) {
+        record_view_message_cancelled(surface, "retired-origin");
+        return;
+    }
+    let log = window.state::<std::sync::Arc<crate::event_log::EventLog>>();
+    let result = match &call.request_error {
+        Some(error) => Err(error.clone()),
+        None => crate::event_relay::view_log_command(
+            &log,
+            call.request.clone(),
+            &call.plugin,
+            &call.surface,
+            &call.page,
+        ),
+    };
+    if !data.documents.views().is_current_log_source(&call, origin) {
+        record_view_message_cancelled(surface, "retired-origin");
+        return;
+    }
+    let response = view_log_reply_message(call.id, &result).to_string();
+    let reply_window = window.clone();
+    let reply_surface = call.surface.clone();
+    let reply_origin = origin.clone();
+    let reply_call = call.clone();
+    let posted = on_main(window, move || {
+        let current = window_data(&reply_window)?;
+        if current.declared_source_origins.current_view(&reply_surface)
+            != Some(reply_origin.generation)
+            || !current
+                .documents
+                .views()
+                .is_current_log_source(&reply_call, &reply_origin)
+            || current
+                .documents
+                .get(&(reply_surface.clone(), VIEW_NAME.to_string()))?
+                != document
+        {
+            return Ok(None);
+        }
+        platform.post_document(document, &response).map(Some)
+    });
+    match posted {
+        Ok(Some(true)) => {}
+        Ok(Some(false)) => log_view_log_delivery_error(
+            surface,
+            result.err(),
+            "the native document refused the runtime.log reply".to_string(),
+        ),
+        Ok(None) => record_view_message_cancelled(surface, "retired-origin"),
+        Err(error) => log_view_log_delivery_error(surface, result.err(), error),
+    }
+}
+
+fn log_view_log_delivery_error(surface: &str, request_error: Option<String>, post_error: String) {
+    let error = match request_error {
+        Some(request_error) => {
+            format!("{request_error}; posting its view reply failed: {post_error}")
+        }
+        None => format!("posting the view runtime.log reply failed: {post_error}"),
+    };
+    log_error(&format!("view channel {surface}"), error);
+}
+
+fn view_log_reply_message(id: u64, result: &Result<Value, String>) -> Value {
+    match result {
+        Ok(value) => json!({"sok": 1, "id": id, "result": value}),
+        Err(error) => json!({"sok": 1, "id": id, "error": {"code": -32000, "message": error}}),
     }
 }
 

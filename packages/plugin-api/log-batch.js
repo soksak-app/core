@@ -1,8 +1,6 @@
 // The page side of the event writer (docs/spec/logging.md#writers). An event is queued without waiting; the events of
 // one turn travel to the host in one call, and one call is in flight at a time so the host receives them in order.
 import { boundedJson, byteLength, cutBytes } from "./bounded-json.js";
-import { classOf } from "./event-classes.js";
-import { logGate } from "./log-gate.js";
 
 const LEVELS = new Set(["error", "warn", "info", "debug", "trace"]);
 const DEFAULT_MAX_EVENTS = 4096;
@@ -56,7 +54,8 @@ const UNGATED = new Set(["page.start"]);
  * that round trip as the moment of the answer. Every event then has the wall clock `ts_us` and the monotonic clock `mono_ns` of
  * the host at its own reading, so the layers of one input compare (docs/spec/logging.md#limits).
  */
-export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES, now = () => performance.now(), gate = logGate, page = String(performance.timeOrigin) }) {
+export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES,
+  now = () => performance.now(), classify = () => undefined, gate = null, page = String(performance.timeOrigin) }) {
   let queue = [];
   let queueBytes = 0;
   // The refused events by the bound that refused them: {count, bytes} for each reason.
@@ -193,7 +192,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   // The question of a producer before it builds the fields of an event: whether an event of the class and the level is stored. A closed
   // gate counts the event, which the producer then does not build.
   const open = (klass, level) => {
-    if (gate.enabled(klass, level)) return true;
+    if (gate === null || gate.enabled(klass, level)) return true;
     // default: the first refusal of a class and a level starts its count at zero.
     const held = gated.get(`${klass}/${level}`) ?? { class: klass, level, count: 0 };
     gated.set(`${klass}/${level}`, { ...held, count: held.count + 1 });
@@ -204,7 +203,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   // `fields` is the object of the event or a function that builds it; the function runs only for an event that the gate stores.
   const emit = (level, event, fields = {}, cids = undefined) => {
     if (!LEVELS.has(level)) throw new TypeError(`event level ${JSON.stringify(level)} is not one of ${[...LEVELS].join(", ")}`);
-    const klass = classOf(event);
+    const klass = classify(event);
     if (klass !== undefined && !UNGATED.has(event) && !open(klass, level)) return false;
     const { stored, bytes } = boundFields(typeof fields === "function" ? fields() : fields);
     const charge = bytes + event.length + EVENT_OVERHEAD_BYTES;

@@ -242,16 +242,13 @@ test("tab.notify and tab.keep refuse params that are not the recorded objects an
   assert.deepEqual(ran.reports, []);
 });
 
-test("runtime.log sends the record of the level through the writer of the page and replies null", async () => {
+test("runtime.log writer batches are not handled by the workbench view-call relay", async () => {
   const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 } } }, options), null);
-  assert.deepEqual(ran.log, [{ level: "info", event: "saved", fields: { n: 1 } }]);
-});
-
-test("runtime.log passes the cids of the record to the writer of the page", async () => {
-  const { ran, options } = fakes();
-  await answerViewCall({ id: 1, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 }, cids: ["b.1"] } }, options);
-  assert.deepEqual(ran.log, [{ level: "info", event: "saved", fields: { n: 1 }, options: { cids: ["b.1"] } }]);
+  await assert.rejects(
+    answerViewCall({ id: 1, command: "runtime.log", params: { action: "batch", events: [] } }, options),
+    /^Error: view call runtime\.log is not served$/,
+  );
+  assert.deepEqual(ran.log, []);
 });
 
 test("a view call runtime.log.levels is refused as not served and runs no subscription", async () => {
@@ -264,13 +261,12 @@ test("a view call runtime.log.levels is refused as not served and runs no subscr
   assert.deepEqual(ran.subscribed, []);
 });
 
-test("runtime.log refuses a level that the writer does not serve and writes nothing", async () => {
+test("the workbench does not accept the earlier single-record runtime.log payload", async () => {
   const { ran, options } = fakes();
   await assert.rejects(
-    answerViewCall({ id: 1, command: "runtime.log", params: { level: "loud", event: "saved", fields: {} } }, options),
-    /log level must be one of error, warn, info, debug, trace/,
+    answerViewCall({ id: 1, command: "runtime.log", params: { level: "info", event: "saved", fields: {} } }, options),
+    /^Error: view call runtime\.log is not served$/,
   );
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.log", params: "info" }, options), /requires an object/);
   assert.deepEqual(ran.log, []);
 });
 

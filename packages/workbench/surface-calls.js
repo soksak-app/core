@@ -1,10 +1,11 @@
 // The host calls of a surface document (docs/spec/logging.md#automatic-entrances). A surface is a separate webview without
 // the page log of the main page, so the runtime of each application sends the calls of its `page` object through this wrapper.
 // Every call is the event `page.call`, and the events of one turn travel to the host in one call `log`, like the events of
-// the main page (log-batch.js). The records of the document (`page.report`) are queued behind the same batcher so that the
+// the main page (`@soksak/plugin-api/log-batch.js`). The records of the document (`page.report`) are queued behind the same batcher so that the
 // events of one document reach the host in the order they happened.
 import { callEvent, failureOf } from "./host-calls.js";
-import { createEventBatcher } from "./log-batch.js";
+import { createEventBatcher } from "@soksak/plugin-api/log-batch.js";
+import { classOf } from "./event-classes.js";
 import { logGate } from "./log-gate.js";
 
 /**
@@ -20,7 +21,7 @@ import { logGate } from "./log-gate.js";
  */
 export function surfaceCalls({ send, log, listen }) {
   const report = (error) => console.error(error.message);
-  const batcher = createEventBatcher({ call: log, report });
+  const batcher = createEventBatcher({ call: log, report, classify: classOf, gate: logGate });
   const apply = (classes) => {
     try {
       logGate.set(classes);

@@ -3,10 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEventBatcher } from "../log-batch.js";
-import { withoutClock } from "./support/records.mjs";
-import { logGate } from "../log-gate.js";
-
-logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
+import { withoutClock } from "./support/logging.mjs";
 
 const hostClock = { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
 const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve(hostClock) : inner(withoutClock(request)));

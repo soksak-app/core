@@ -4,9 +4,11 @@
 // application host (the browser example) writes to its console.
 import { LOG_LEVELS } from "@soksak/plugin-api";
 import { host } from "@soksak/runtime";
-import { boundedJson, byteLength, cutBytes } from "./bounded-json.js";
+import { boundedJson, byteLength, cutBytes } from "@soksak/plugin-api/bounded-json.js";
 import { callEvent, observeHostCalls } from "./host-calls.js";
-import { createEventBatcher } from "./log-batch.js";
+import { createEventBatcher } from "@soksak/plugin-api/log-batch.js";
+import { classOf } from "./event-classes.js";
+import { logGate } from "./log-gate.js";
 import { installOperationSink } from "./operations.js";
 import { recordOf } from "./report-record.js";
 
@@ -22,7 +24,7 @@ export const rawConsole = {
 };
 
 const batcher = host
-  ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => rawConsole.error(error.message) })
+  ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => rawConsole.error(error.message), classify: classOf, gate: logGate })
   : null;
 
 // The longest place and text of a record in an event, in bytes; a longer one is cut on a character boundary and the event says
