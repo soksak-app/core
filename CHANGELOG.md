@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-221-2: Remove the extra per-source native readback ordering requirement from drag cadence and one-shot evaluation. Keep captured pixel alignment independent and verify final presentation, source size, capture ordering and unchanged convergence limits. Reject a later competing target while accepting identical repeated readbacks. All six affected owner files, documentation and inventory checks pass after controlled Reds. Application measurements remain separate.
+
 - F239-229: Keep each decoded OCR crop in an OS temporary directory only while its recognizer call consumes it. Tracked success and failure cases reproduce retained crops, and a cleanup fault case verifies both errors are reported. All five crop/OCR owner cases pass; recording frames and OCR evidence remain preserved without crop files.
 
 - F239-221-1: Replace diagnostic log correlation of source clocks with native monotonic clock reads before and after the successful observer-start command. Red: the unchanged owner requires a logged native request and fails without a clock bracket. Green: the shared collection source-frame and trace cases pass 12/12, four HWP layout cases pass, and the Browser, Editor and Terminal descriptor cases pass. The collector preserves the raw clock receipts and same-session host/PID/window/surface identity, removes the event-log argument parser, and keeps the declared source precision and measurement thresholds. Application acceptance remains under F212.14-5-5.

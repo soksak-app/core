@@ -118,18 +118,23 @@ test("terminal drag geometry keeps four measured card and raster edges from the 
   });
 });
 
-test("terminal source content mapping retains actual placement and projected viewport evidence", { timeout: 5000 }, () => {
-  const source = { sequence: 4, timeRange: { lowerMs: 147, upperMs: 149 }, width: 198, height: 120,
+test("terminal source content mapping retains source interval and capture time without placement association", { timeout: 5000 }, () => {
+  const source = { sequence: 4, frameIndex: 7, timeRange: { lowerMs: 147, upperMs: 149 }, width: 198, height: 120,
     firstResizeAtMs: 31, resizeAtMs: 31, resizeCount: 1, frameTimeMs: 33,
     source: { documentTimeOriginMs: 1000, eventTsUs: 1_200_000, eventMonoNs: 148_000_000 } };
-  const nativePlacement = { surface: "terminal-1", phase: "placed", visible: true, timeMs: 146,
-    framePt: { x: 10.5, y: 20, width: 198.5, height: 120.5 }, webKitViewport: { width: 198, height: 120 } };
-  assert.deepEqual(terminalSourceContentFrame(source, 7, { time: 150 }, nativePlacement), {
-    sourceSequence: 4, frameIndex: 7, frameTimeMs: 33, timeRange: { lowerMs: 147, upperMs: 149 },
-    width: 198, height: 120, nativePlacement,
+  assert.deepEqual(terminalSourceContentFrame(source, { time: 150 }), {
+    sourceSequence: 4, frameIndex: 7, frameTimeMs: 33, captureTimeMs: 150,
+    displayCapture: null, timeRange: { lowerMs: 147, upperMs: 149 }, width: 198, height: 120,
     source: { sequence: 4, firstResizeAtMs: 31, resizeAtMs: 31, resizeCount: 1, frameTimeMs: 33, documentTimeOriginMs: 1000,
       eventTsUs: 1_200_000, eventMonoNs: 148_000_000 },
     displayTimeMs: 150,
+  });
+  assert.deepEqual(terminalSourceContentFrame({ ...source, frameIndex: null }, null), {
+    sourceSequence: 4, frameIndex: null, frameTimeMs: 33, captureTimeMs: null,
+    displayCapture: null, timeRange: { lowerMs: 147, upperMs: 149 }, width: 198, height: 120,
+    source: { sequence: 4, firstResizeAtMs: 31, resizeAtMs: 31, resizeCount: 1, frameTimeMs: 33, documentTimeOriginMs: 1000,
+      eventTsUs: 1_200_000, eventMonoNs: 148_000_000 },
+    displayTimeMs: null,
   });
 });
 

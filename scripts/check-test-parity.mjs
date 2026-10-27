@@ -198,6 +198,71 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F239-221-2",
+  "implementation": [
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "function evaluateLayoutDisplay("
+    },
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "function evaluateDrag("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export function rootNativePlacementBeforeCapture("
+    },
+    {
+      "file": "e2e/benchmark/cases/browser.mjs",
+      "symbol": "async function dragObservation("
+    },
+    {
+      "file": "e2e/benchmark/cases/editor.mjs",
+      "symbol": "async function editorDragObservation("
+    },
+    {
+      "file": "e2e/benchmark/cases/hwp.mjs",
+      "symbol": "async function dragObservation("
+    },
+    {
+      "file": "e2e/benchmark/cases/terminal.mjs",
+      "symbol": "async function terminalDragObservation("
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "layout source accepts an overlapping placement readback when display covers both clocks"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag cadence ignores an overlapping placement readback and converges against the presented viewport"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag cadence is in-gesture and convergence meets both frame and time bounds"
+    },
+    {
+      "file": "e2e/test/editor-view-metrics-case.test.mjs",
+      "id": "editor motion evidence keeps source timing and mapped capture without per-source placement"
+    },
+    {
+      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
+      "id": "terminal source content mapping retains source interval and capture time without placement association"
+    },
+    {
+      "file": "e2e/test/hwp-view-metrics-case.test.mjs",
+      "id": "HWP layout recording covers the full display deadline after presentation"
+    },
+    {
+      "file": "e2e/test/browser-view-metrics-case.test.mjs",
+      "id": "browser pixel geometry matches the independently declared document slot"
+    }
+  ],
+  "expected": "Native placement readback timestamps are retained as evidence but are not treated as setter times for individual source rows. Drag cadence and capture coverage use source intervals; each captured gesture frame keeps its independent pixel geometry proof. One-shot and final convergence retain the final viewport, successful presentation, post-request/input source and capture after both displayed and source bounds without changing thresholds.",
+  "levels": ["unit"]
+},
+  {
     id: "F239-229",
     implementation: [{ file: "e2e/view-content.mjs", symbol: "export async function recognizeViewFrame(" }],
     tests: [

@@ -243,11 +243,6 @@ export function selectOneShotViewSourceFrame(contentFrames, { requestAtMs, nativ
   };
 }
 
-/** Selects the actual root WebView placement active throughout a mapped source-frame interval. */
-export function rootNativePlacementForSource(events, surface, sourceTimeRange, { baseline, afterMs } = {}) {
-  return rootNativePlacementInWindow(events, surface, sourceTimeRange, { baseline, afterMs });
-}
-
 /** Selects the final applied root placement before an exact recorded display time. */
 export function rootNativePlacementBeforeCapture(events, surface, displayedAtMs, { afterMs } = {}) {
   assert.ok(Number.isFinite(displayedAtMs) && displayedAtMs >= 0,

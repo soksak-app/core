@@ -271,6 +271,7 @@ function evaluateLayoutDisplay(value) {
     const width = numberAt(entry.contentFrame.width, `${path}.contentFrame.width`, { minimum: Number.MIN_VALUE });
     const height = numberAt(entry.contentFrame.height, `${path}.contentFrame.height`, { minimum: Number.MIN_VALUE });
     const requestAtMs = numberAt(entry.contentFrame.requestAtMs, `${path}.contentFrame.requestAtMs`);
+    const displayedAtMs = numberAt(entry.contentFrame.displayedAtMs, `${path}.contentFrame.displayedAtMs`);
     const sourceTimeRange = timeRangeAt(entry.contentFrame.sourceTimeRange, `${path}.contentFrame.sourceTimeRange`);
     if (sourceTimeRange.lowerMs < requestAtMs) {
       fail(`${path}.contentFrame.sourceTimeRange.lowerMs`, `>= requestAtMs ${requestAtMs}`, sourceTimeRange.lowerMs);
@@ -279,11 +280,12 @@ function evaluateLayoutDisplay(value) {
     if (nativePlacement.phase !== "placed" || nativePlacement.timeMs <= requestAtMs) {
       fail(`${path}.contentFrame.nativePlacement`, `an applied placement after request ${requestAtMs} ms`, nativePlacement);
     }
-    if (nativePlacement.timeMs > sourceTimeRange.lowerMs) {
-      fail(`${path}.contentFrame.nativePlacement.timeMs`, `<= source interval lower bound ${sourceTimeRange.lowerMs} ms`, nativePlacement.timeMs);
+    if (nativePlacement.timeMs >= displayedAtMs) {
+      fail(`${path}.contentFrame.nativePlacement.timeMs`, `before displayed presentation ${displayedAtMs} ms`, nativePlacement.timeMs);
     }
-    if (sourceTimeRange.upperMs > contentFrame.timeMs) {
-      fail(`${path}.contentFrame.sourceTimeRange.upperMs`, `<= captured content frame time ${contentFrame.timeMs} ms`, sourceTimeRange.upperMs);
+    const captureLowerBound = Math.max(displayedAtMs, sourceTimeRange.upperMs);
+    if (contentFrame.timeMs < captureLowerBound) {
+      fail(`${path}.contentFrame.timeMs`, `>= displayed/source bound ${captureLowerBound} ms`, contentFrame.timeMs);
     }
     const { width: viewportWidth, height: viewportHeight } = nativePlacement.webKitViewport;
     if (width !== viewportWidth || height !== viewportHeight) {
@@ -291,10 +293,47 @@ function evaluateLayoutDisplay(value) {
         width, height, nativeFramePt: nativePlacement.framePt, webKitViewport: nativePlacement.webKitViewport,
       });
     }
+    assertStablePlacementThroughCapture(entry.contentFrame.surfaceEvents, nativePlacement, contentFrame.timeMs,
+      `${path}.contentFrame.surfaceEvents`);
     assert.ok(measuredMs <= LAYOUT_DISPLAY_LIMIT_MS,
       `view measurement ${path} measured ${measuredMs} ms, exceeding ${LAYOUT_DISPLAY_LIMIT_MS} ms`);
-    return { changeFrame, contentFrame, measuredMs, passed: true };
+    return { changeFrame, contentFrame, measuredMs, displayedAtMs, passed: true };
   });
+}
+
+function assertStablePlacementThroughCapture(eventsValue, selected, capturedAtMs, path) {
+  const events = arrayAt(eventsValue, path, { minimum: 1 });
+  const selectedSequence = numberAt(selected.placement.seq, `${path}.selected.seq`, { minimum: 0, integer: true });
+  let priorSequence = -1;
+  let priorTimeMs = -Infinity;
+  let selectedFound = false;
+  for (const [index, event] of events.entries()) {
+    const eventPath = `${path}[${index}]`;
+    objectAt(event, eventPath);
+    sameValue(event.event, "host.trace.surface", `${eventPath}.event`);
+    const sequence = numberAt(event.seq, `${eventPath}.seq`, { minimum: 0, integer: true });
+    if (sequence <= priorSequence) fail(`${eventPath}.seq`, `greater than prior surface event sequence ${priorSequence}`, sequence);
+    priorSequence = sequence;
+    const monoNs = numberAt(event.mono_ns, `${eventPath}.mono_ns`, { minimum: 1, integer: true });
+    const timeMs = monoNs / 1_000_000;
+    if (timeMs < priorTimeMs) fail(`${eventPath}.mono_ns`, "nondecreasing surface event times", monoNs);
+    priorTimeMs = timeMs;
+    const fields = objectAt(event.fields, `${eventPath}.fields`);
+    sameValue(fields.surface, selected.surface, `${eventPath}.fields.surface`);
+    const phase = textAt(fields.phase, `${eventPath}.fields.phase`);
+    if (!["created", "placed", "destroyed"].includes(phase)) {
+      fail(`${eventPath}.fields.phase`, "created, placed or destroyed", phase);
+    }
+    if (sequence === selectedSequence && monoNs === selected.placement.mono_ns) selectedFound = true;
+    const followsSelected = timeMs > selected.timeMs || (timeMs === selected.timeMs && sequence > selectedSequence);
+    if (!followsSelected || timeMs > capturedAtMs) continue;
+    if (phase !== "placed" || fields.visible !== true
+        || fields.x !== selected.framePt.x || fields.y !== selected.framePt.y
+        || fields.w !== selected.framePt.width || fields.h !== selected.framePt.height) {
+      fail(eventPath, `no later competing placement or lifecycle event through capture at ${capturedAtMs} ms`, event);
+    }
+  }
+  if (!selectedFound) fail(`${path}.selected`, "the selected applied placement in the retained surface trace", selected.placement);
 }
 
 function nativePlacementAt(value, path) {
@@ -409,6 +448,11 @@ function evaluateDrag(value) {
     `view measurement drag geometry differs by ${maxGeometryErrorPt} pt, exceeding ${DRAG_GEOMETRY_LIMIT_PT} pt`);
   arrayAt(drag.layouts, "drag.layouts", { minimum: 1 });
   arrayAt(drag.ticks, "drag.ticks", { minimum: 1 });
+  const finalPresentation = objectAt(drag.finalPresentation, "drag.finalPresentation");
+  const displayedAtMs = numberAt(finalPresentation.displayedAtMs, "drag.finalPresentation.displayedAtMs");
+  const targetViewport = objectAt(finalPresentation.targetViewport, "drag.finalPresentation.targetViewport");
+  const targetWidth = numberAt(targetViewport.width, "drag.finalPresentation.targetViewport.width", { minimum: 1, integer: true });
+  const targetHeight = numberAt(targetViewport.height, "drag.finalPresentation.targetViewport.height", { minimum: 1, integer: true });
 
   let previousSequence = -1;
   let previousFrameTime = -Infinity;
@@ -439,20 +483,43 @@ function evaluateDrag(value) {
       if (frameIndex < previousFrameIndex) fail(`${path}.frameIndex`, `>= prior mapped capture index ${previousFrameIndex}`, frameIndex);
       previousFrameIndex = frameIndex;
     }
+    const captureTimeMs = frame.captureTimeMs === null || frame.captureTimeMs === undefined
+      ? null : numberAt(frame.captureTimeMs, `${path}.captureTimeMs`);
+    if ((frameIndex === null) !== (captureTimeMs === null)) {
+      fail(`${path}.captureTimeMs`, "a capture timestamp exactly when frameIndex is present", captureTimeMs);
+    }
+    if (captureTimeMs !== null && captureTimeMs < timeRange.upperMs) {
+      fail(`${path}.captureTimeMs`, `at or after source interval upper bound ${timeRange.upperMs} ms`, captureTimeMs);
+    }
+    let displayCapture = null;
+    if (frame.displayCapture !== null && frame.displayCapture !== undefined) {
+      objectAt(frame.displayCapture, `${path}.displayCapture`);
+      displayCapture = {
+        frameIndex: numberAt(frame.displayCapture.frameIndex, `${path}.displayCapture.frameIndex`, { integer: true }),
+        timeMs: numberAt(frame.displayCapture.timeMs, `${path}.displayCapture.timeMs`),
+      };
+      if (displayCapture.frameIndex >= recordedFrameCount) {
+        fail(`${path}.displayCapture.frameIndex`, `less than recordedFrameCount ${recordedFrameCount}`, displayCapture.frameIndex);
+      }
+      if (frameIndex === null || displayCapture.frameIndex < frameIndex) {
+        fail(`${path}.displayCapture.frameIndex`, "a capture at or after the mapped source capture", displayCapture.frameIndex);
+      }
+      const lowerDisplayBound = Math.max(displayedAtMs, timeRange.upperMs);
+      if (displayCapture.timeMs < lowerDisplayBound) {
+        fail(`${path}.displayCapture.timeMs`, `at or after displayed/source bound ${lowerDisplayBound} ms`, displayCapture.timeMs);
+      }
+    }
     const width = numberAt(frame.width, `${path}.width`, { minimum: Number.MIN_VALUE });
     const height = numberAt(frame.height, `${path}.height`, { minimum: Number.MIN_VALUE });
-    const nativePlacement = nativePlacementAt(frame.nativePlacement, `${path}.nativePlacement`);
-    if (nativePlacement.timeMs >= timeRange.lowerMs) {
-      fail(`${path}.nativePlacement.timeMs`, `before source interval lower bound ${timeRange.lowerMs} ms`, nativePlacement.timeMs);
-    }
     return {
       sourceSequence,
       frameIndex,
+      captureTimeMs,
+      displayCapture,
       frameTimeMs,
       timeRange,
       width,
       height,
-      nativePlacement,
     };
   });
   const possiblyInGestureFrames = contentFrames.filter(({ timeRange }) =>
@@ -491,18 +558,20 @@ function evaluateDrag(value) {
 
   const atEnd = definitelyInGestureFrames.at(-1);
   if (!atEnd) fail("drag.contentFrames", "a content frame at or before gesture end", contentFrames.map(({ frameIndex }) => frameIndex));
-  const mismatchedAtEnd = atEnd.width !== atEnd.nativePlacement.webKitViewport.width
-    || atEnd.height !== atEnd.nativePlacement.webKitViewport.height;
+  const mismatchedAtEnd = atEnd.width !== targetWidth || atEnd.height !== targetHeight;
   let convergedFrame = 0;
   let convergenceMs = 0;
   if (mismatchedAtEnd) {
     const postGestureFrames = contentFrames.filter(({ timeRange }) => timeRange.lowerMs > gestureEndedAtMs);
-    const converged = postGestureFrames.find(({ frameIndex, width, height, nativePlacement }) =>
-      frameIndex !== null && frameIndex > gestureEndedFrameIndex
-      && width === nativePlacement.webKitViewport.width && height === nativePlacement.webKitViewport.height);
-    if (!converged) fail("drag.contentFrames", "content size convergence after gesture end", postGestureFrames);
-    convergedFrame = converged.frameIndex - gestureEndedFrameIndex;
-    convergenceMs = converged.timeRange.upperMs - gestureEndedAtMs;
+    const converged = postGestureFrames.find(({ displayCapture, width, height }) =>
+      displayCapture !== null && displayCapture.frameIndex > gestureEndedFrameIndex
+      && width === targetWidth && height === targetHeight
+    );
+    if (!converged) fail("drag.contentFrames", "a post-input source frame matching the presented viewport and captured after presentation and source time", {
+      displayedAtMs, targetViewport: { width: targetWidth, height: targetHeight }, postGestureFrames,
+    });
+    convergedFrame = converged.displayCapture.frameIndex - gestureEndedFrameIndex;
+    convergenceMs = Math.max(displayedAtMs, converged.timeRange.upperMs) - gestureEndedAtMs;
     if (convergedFrame > DRAG_SETTLE_FRAME_LIMIT) {
       fail("drag.contentFrames", `convergence within ${DRAG_SETTLE_FRAME_LIMIT} post-gesture frames`, convergedFrame);
     }
@@ -515,6 +584,8 @@ function evaluateDrag(value) {
     geometryLimitPt: DRAG_GEOMETRY_LIMIT_PT,
     maxContentFrameIntervalMs,
     contentFrameIntervalLimitMs: DRAG_CONTENT_INTERVAL_LIMIT_MS,
+    displayedAtMs,
+    targetViewport: { width: targetWidth, height: targetHeight },
     convergedFrame,
     convergenceMs,
     convergenceFrameLimit: DRAG_SETTLE_FRAME_LIMIT,
@@ -523,9 +594,9 @@ function evaluateDrag(value) {
 }
 
 /**
- * Checks collected plugin-view measurements against plugin-processes.md. Request and frame timestamps share the
- * recording display clock; collectors convert source event mono_ns values to milliseconds and retain the original
- * event ts_us and mono_ns values with their measurements.
+ * Checks collected plugin-view measurements against plugin-processes.md. Drag input, successful display, source-frame
+ * intervals and capture times use the host monotonic clock; native placement readbacks remain raw event evidence and
+ * are not assigned to individual source frames.
  */
 export function assertViewMeasurements(measurements, { plugin, host, baselineMs, measureEditorFootprint = false } = {}) {
   objectAt(measurements, "measurements");

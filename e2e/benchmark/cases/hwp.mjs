@@ -7,7 +7,7 @@ import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE } from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture,
-  monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementBeforeCapture, rootNativePlacementForSource,
+  monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
   selectOneShotViewSourceFrame,
   withViewContentTrace }
   from "../../view-metrics-collection.mjs";
@@ -380,8 +380,9 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
   assert.ok(lastFrame.time >= contentDeadlineMs,
     `HWP layout recording ended at ${lastFrame.time} ms before the ${LAYOUT_DISPLAY_LIMIT_MS} ms content deadline `
       + `at ${contentDeadlineMs} ms after its first changed frame`);
-  const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= source.timeRange.upperMs);
-  assert.ok(candidates.length > 0, "HWP layout has no declared-slot pixel match after its source resize event");
+  const captureAfter = Math.max(displayed, source.timeRange.upperMs);
+  const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= captureAfter);
+  assert.ok(candidates.length > 0, `HWP layout has no declared-slot pixel match at or after ${captureAfter} ms`);
   const localProof = await hwpFirstContentFrame({ captured: candidates.map((index) => captured[index]),
     rect: { x: studio.frame.x, y: studio.frame.y, w: studio.frame.width, h: studio.frame.height },
     directory: result.frames, recognizeFrame });
@@ -393,8 +394,10 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: captured.length,
       timeMs: captured[transition.changeFrameIndex].time },
     contentFrame: { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].time,
-      requestAtMs: beforeChangeTimeMs, sourceTimeRange: source.timeRange,
-      width: source.width, height: source.height, nativePlacement, proof },
+      requestAtMs: beforeChangeTimeMs, displayedAtMs: displayed, sourceTimeRange: source.timeRange,
+      width: source.width, height: source.height, nativePlacement,
+      surfaceEvents: traced.events.filter((event) => event?.event === "host.trace.surface" && event.fields?.surface === surface),
+      proof },
     sourceFrame: source,
     slotInsetsPt,
     initialGeometry: { frameIndex, timeMs: captured[frameIndex].time, cardRectPt: geometry.cardRectPt,
@@ -416,11 +419,6 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
   const slotInsetsPt = declaredSlotInsets({ grid, surfaces, card, surface,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
   await s.presented();
-  const nativeRootBefore = documentRow(await s.get("host.window"), surface, "");
-  const baselineClock = await monotonicTimeMs(s);
-  const baselineTimeMs = baselineClock.timeMs;
-  const baseline = { surface, timeMs: baselineTimeMs, monoNs: baselineClock.monoNs, visible: nativeRootBefore.visible,
-    framePt: nativeRootBefore.frame };
   const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
     assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
     return withHwpNativeMarker(s, surface, async () => ({
@@ -436,6 +434,7 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
   assert.ok(firstGestureFrameIndex >= 0 && gestureEndedFrameIndex >= firstGestureFrameIndex,
     "HWP drag capture does not cover the complete requested gesture");
   const host = await s.get("host.window");
+  const root = documentRow(host, surface, "");
   const studio = documentRow(host, surface, "studio");
   const gridAfter = await s.get("core.grid");
   const targetRect = cardTargetRect(gridAfter, card);
@@ -448,17 +447,17 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt,
       errorPt: measured.errorPt, geometryEvidence: measured.geometryEvidence, nativeMarker: measured.nativeMarker });
   }
-  const contentFrames = [];
   const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
     gestureStartedAtMs: run.ticks[0], gestureEndedAtMs: run.ticks.at(-1),
   });
-  for (const source of mapped) {
-    if (source.frameIndex === null) continue;
-    const nativePlacement = rootNativePlacementForSource(traced.events, surface, source.timeRange, { baseline });
-    contentFrames.push({ sourceSequence: source.sourceSequence, frameIndex: source.frameIndex,
-      frameTimeMs: source.frameTimeMs, timeRange: source.timeRange, width: source.width, height: source.height,
-      nativePlacement, source });
-  }
+  const contentFrames = mapped.map((source) => {
+    const displayCaptureIndex = captured.findIndex((frame) => frame.time >= Math.max(run.displayed, source.timeRange.upperMs));
+    return { sourceSequence: source.sourceSequence, frameIndex: source.frameIndex,
+      captureTimeMs: source.frameIndex === null ? null : captured[source.frameIndex].time,
+      displayCapture: displayCaptureIndex < 0 ? null : { frameIndex: displayCaptureIndex,
+        timeMs: captured[displayCaptureIndex].time },
+      frameTimeMs: source.frameTimeMs, timeRange: source.timeRange, width: source.width, height: source.height, source };
+  });
   return {
     recordedFrameCount: captured.length,
     firstGestureFrameIndex,
@@ -466,6 +465,8 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
     gestureEndedFrameIndex,
     gestureStartedAtMs: run.ticks[0],
     gestureEndedAtMs: run.ticks.at(-1),
+    finalPresentation: { displayedAtMs: run.displayed,
+      targetViewport: { width: Math.trunc(root.frame.width), height: Math.trunc(root.frame.height) } },
     geometryFrames,
     contentFrames,
     sourceContentFrames: traced.contentFrames,

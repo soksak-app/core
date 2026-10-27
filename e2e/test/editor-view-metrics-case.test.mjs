@@ -217,14 +217,17 @@ test("editor slot insets come from declared composition and card geometry", () =
     /missing declared composition geometry/);
 });
 
-test("editor motion evidence retains applied fractional native frame and WebKit viewport projection", { timeout: 1000 }, () => {
+test("editor motion evidence keeps source timing and mapped capture without per-source placement", { timeout: 1000 }, () => {
   const source = { sourceSequence: 4, frameIndex: 7, frameTimeMs: 148, timeRange: { lowerMs: 147, upperMs: 149 }, width: 785, height: 286 };
-  const nativePlacement = { surface: "editor-1", phase: "placed", visible: true, timeMs: 146,
-    framePt: { x: 10.5, y: 20, width: 785.5, height: 286.5 },
-    webKitViewport: { width: 785, height: 286 } };
-  assert.deepEqual(editorSourceContentFrame(source, nativePlacement), {
-    sourceSequence: 4, frameIndex: 7, frameTimeMs: 148, timeRange: { lowerMs: 147, upperMs: 149 },
-    width: 785, height: 286, nativePlacement, source,
+  assert.deepEqual(editorSourceContentFrame(source, 151), {
+    sourceSequence: 4, frameIndex: 7, frameTimeMs: 148, captureTimeMs: 151,
+    displayCapture: null, timeRange: { lowerMs: 147, upperMs: 149 }, width: 785, height: 286, source,
   });
-  assert.throws(() => editorSourceContentFrame({ ...source, width: 0 }, nativePlacement), /invalid dimensions/);
+  assert.throws(() => editorSourceContentFrame({ ...source, width: 0 }, 151), /invalid dimensions/);
+  assert.throws(() => editorSourceContentFrame(source, 148), /at or after its source interval/);
+  assert.deepEqual(editorSourceContentFrame({ ...source, frameIndex: null }, null), {
+    sourceSequence: 4, frameIndex: null, frameTimeMs: 148, captureTimeMs: null,
+    displayCapture: null, timeRange: { lowerMs: 147, upperMs: 149 }, width: 785, height: 286,
+    source: { ...source, frameIndex: null },
+  });
 });

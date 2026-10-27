@@ -269,47 +269,13 @@ test("generic source-frame mapping preserves multiple events per capture frame",
   ]);
 });
 
-test("root source frames use the latest actual surface placement, not capture geometry", { timeout: 5000 }, () => {
-  assert.equal(typeof viewMetrics.rootNativePlacementForSource, "function",
-    "the shared collector does not expose source-time native placement selection");
-  if (typeof viewMetrics.rootNativePlacementForSource !== "function") return;
+test("one-shot capture selects the latest applied root placement before display", { timeout: 5000 }, () => {
   const baseline = { surface: "view-1", timeMs: 5, monoNs: "5000000", visible: true,
     framePt: { x: 12.5, y: 20, width: 700.5, height: 286.5 } };
   const placed = { event: "host.trace.surface", ts_us: 10_000, mono_ns: 10_000_000,
     fields: { phase: "placed", surface: "view-1", x: 14.5, y: 20, w: 785.5, h: 286.5, visible: true } };
-  const selected = viewMetrics.rootNativePlacementForSource([placed], "view-1", { lowerMs: 15, upperMs: 16 }, { baseline });
-  assert.deepEqual(selected.framePt, { x: 14.5, y: 20, width: 785.5, height: 286.5 });
-  assert.deepEqual(selected.webKitViewport, { width: 785, height: 286 });
-  assert.equal(selected.placement.fields.phase, "placed");
-  assert.equal(selected.placement.mono_ns, placed.mono_ns);
-
-  const settled = viewMetrics.rootNativePlacementForSource([], "view-1", { lowerMs: 6, upperMs: 7 }, { baseline });
-  assert.equal(settled.phase, "settled");
-  assert.deepEqual(settled.framePt, baseline.framePt);
-  assert.deepEqual(settled.webKitViewport, { width: 700, height: 286 });
-
   const later = { ...placed, ts_us: 12_000, mono_ns: 12_000_000,
     fields: { ...placed.fields, x: 18.5, w: 800.5 } };
-  const latest = viewMetrics.rootNativePlacementForSource([placed, later], "view-1", { lowerMs: 15, upperMs: 16 }, { baseline });
-  assert.deepEqual(latest.framePt, { x: 18.5, y: 20, width: 800.5, height: 286.5 });
-  assert.deepEqual(latest.webKitViewport, { width: 800, height: 286 });
-
-  const hidden = { ...placed, ts_us: 20_000, mono_ns: 20_000_000,
-    fields: { ...placed.fields, x: 14.5, w: 785.5, h: 286.5, visible: false } };
-  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed, hidden], "view-1", { lowerMs: 25, upperMs: 26 },
-    { baseline }), /latest.*placement.*not visible/);
-  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed], "view-1", { lowerMs: 15, upperMs: 16 },
-    { baseline, afterMs: 15 }), /no applied native placement after/);
-  const destroyed = { ...placed, ts_us: 20_000, mono_ns: 20_000_000,
-    fields: { phase: "destroyed", surface: "view-1" } };
-  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed, destroyed], "view-1", { lowerMs: 25, upperMs: 26 },
-    { baseline }), /latest native placement state.*destroyed/);
-  const conflicting = { ...placed, ts_us: 10_000, mono_ns: 10_000_000,
-    fields: { ...placed.fields, w: 786.5 } };
-  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed, conflicting], "view-1", { lowerMs: 15, upperMs: 16 },
-    { baseline }), /ambiguous native placement state/);
-  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed], "view-1", { lowerMs: 9, upperMs: 11 },
-    { baseline }), /overlaps source-frame interval/);
   const afterDisplay = { ...later, mono_ns: 20_000_000, fields: { ...later.fields, w: 900.5 } };
   const displayedPlacement = viewMetrics.rootNativePlacementBeforeCapture([placed, afterDisplay], "view-1", 15,
     { afterMs: 8, baseline });

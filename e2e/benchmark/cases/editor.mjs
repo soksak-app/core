@@ -7,7 +7,7 @@ import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFr
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture, monotonicTimeMs,
   selectOneShotViewSourceFrame, viewCardWithDifferentPluginTab, viewFootprints,
-  requireViewContentFrameCoverage, rootNativePlacementBeforeCapture, rootNativePlacementForSource,
+  requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
   withViewContentTrace } from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
 import { viewProcessGroup } from "../../view-process-footprint.mjs";
@@ -148,8 +148,8 @@ function editorDocumentRow(host, surface) {
   return row;
 }
 
-/** Preserves source dimensions beside the actual applied root placement and its WebKit projection. */
-export function editorSourceContentFrame(source, nativePlacement) {
+/** Preserves source dimensions and the capture frame that proves its display. */
+export function editorSourceContentFrame(source, captureTimeMs, displayCapture = null) {
   assert.ok(Number.isSafeInteger(source?.sourceSequence) && source.sourceSequence >= 0,
     "editor source frame has an invalid sequence");
   assert.ok(Number.isFinite(source?.frameTimeMs) && source.frameTimeMs >= 0
@@ -157,10 +157,16 @@ export function editorSourceContentFrame(source, nativePlacement) {
     && source.timeRange.lowerMs <= source.timeRange.upperMs, "editor source frame has invalid timing evidence");
   assert.ok(Number.isFinite(source?.width) && source.width > 0
     && Number.isFinite(source?.height) && source.height > 0, "editor source frame has invalid dimensions");
-  assert.ok(nativePlacement?.surface && nativePlacement.framePt && nativePlacement.webKitViewport,
-    "editor source frame has no actual native placement projection");
+  if (source.frameIndex === null) {
+    assert.equal(captureTimeMs, null, "uncaptured editor source frame must not have a capture timestamp");
+  } else {
+    assert.ok(Number.isSafeInteger(source.frameIndex) && source.frameIndex >= 0,
+      "editor source frame has an invalid capture index");
+    assert.ok(Number.isFinite(captureTimeMs) && captureTimeMs >= source.timeRange.upperMs,
+      "editor source frame capture must be at or after its source interval");
+  }
   return { sourceSequence: source.sourceSequence, frameIndex: source.frameIndex, frameTimeMs: source.frameTimeMs,
-    timeRange: source.timeRange, width: source.width, height: source.height, nativePlacement, source };
+    captureTimeMs, displayCapture, timeRange: source.timeRange, width: source.width, height: source.height, source };
 }
 
 async function editorLayoutObservation(t, s, descriptor, surface, card, theme, cornerRadiusPt) {
@@ -197,8 +203,9 @@ async function editorLayoutObservation(t, s, descriptor, surface, card, theme, c
   const slotInsetsPt = editorSlotInsets(grid, surfaces, card, surface);
   const measured = captured.map((frame) => editorFrameGeometry(frame, palette, targetRect));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
-  const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= source.timeRange.upperMs);
-  assert.ok(candidates.length > 0, "editor layout has no declared-slot pixel match after its source resize event");
+  const captureAfter = Math.max(displayed, source.timeRange.upperMs);
+  const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= captureAfter);
+  assert.ok(candidates.length > 0, `editor layout has no declared-slot pixel match at or after ${captureAfter} ms`);
   const localProof = await firstContentFrame({ captured: candidates.map((index) => captured[index]),
     rect: { x: root.frame.x, y: root.frame.y, w: root.frame.width, h: root.frame.height },
     expected: descriptor.expectedContent, language: descriptor.language, directory: result.frames });
@@ -208,8 +215,9 @@ async function editorLayoutObservation(t, s, descriptor, surface, card, theme, c
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: captured.length,
       timeMs: captured[transition.changeFrameIndex].time },
     contentFrame: { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].time,
-      requestAtMs: beforeChangeTimeMs, sourceTimeRange: source.timeRange,
+      requestAtMs: beforeChangeTimeMs, displayedAtMs: displayed, sourceTimeRange: source.timeRange,
       width: source.width, height: source.height, nativePlacement,
+      surfaceEvents: traced.events.filter((event) => event?.event === "host.trace.surface" && event.fields?.surface === surface),
       proof: localProof.proof },
     sourceFrame: source,
     slotInsetsPt,
@@ -223,11 +231,6 @@ async function editorLayoutObservation(t, s, descriptor, surface, card, theme, c
 
 async function editorDragObservation(t, s, descriptor, surface, card, palette) {
   await s.presented();
-  const baselineDocument = editorDocumentRow(await s.get("host.window"), surface);
-  const baselineClock = await monotonicTimeMs(s);
-  const baselineTimeMs = baselineClock.timeMs;
-  const baseline = { surface, timeMs: baselineTimeMs, monoNs: baselineClock.monoNs, visible: baselineDocument.visible,
-    framePt: baselineDocument.frame };
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
     drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }));
   const run = traced.action;
@@ -253,15 +256,15 @@ async function editorDragObservation(t, s, descriptor, surface, card, palette) {
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
   }
-  const contentFrames = [];
   const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
     gestureStartedAtMs: run.ticks[0], gestureEndedAtMs: run.ticks.at(-1),
   });
-  for (const source of mapped) {
-    if (source.frameIndex === null) continue;
-    const nativePlacement = rootNativePlacementForSource(traced.events, surface, source.timeRange, { baseline });
-    contentFrames.push(editorSourceContentFrame(source, nativePlacement));
-  }
+  const contentFrames = mapped.map((source) => {
+    const displayCaptureIndex = captured.findIndex((frame) => frame.time >= Math.max(run.displayed, source.timeRange.upperMs));
+    return editorSourceContentFrame(source, source.frameIndex === null ? null : captured[source.frameIndex].time,
+      displayCaptureIndex < 0 ? null : { frameIndex: displayCaptureIndex, timeMs: captured[displayCaptureIndex].time });
+  });
+  const finalRoot = editorDocumentRow(await s.get("host.window"), surface);
   return {
     recordedFrameCount: captured.length,
     firstGestureFrameIndex,
@@ -269,6 +272,8 @@ async function editorDragObservation(t, s, descriptor, surface, card, palette) {
     gestureEndedFrameIndex,
     gestureStartedAtMs: run.ticks[0],
     gestureEndedAtMs: run.ticks.at(-1),
+    finalPresentation: { displayedAtMs: run.displayed,
+      targetViewport: { width: Math.trunc(finalRoot.frame.width), height: Math.trunc(finalRoot.frame.height) } },
     geometryFrames,
     contentFrames,
     sourceContentFrames: traced.contentFrames,

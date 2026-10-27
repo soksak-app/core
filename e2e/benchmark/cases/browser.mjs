@@ -8,7 +8,6 @@ import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFr
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, rootNativePlacementBeforeCapture,
-  rootNativePlacementForSource,
   selectOneShotViewSourceFrame, waitForViewReadiness, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 
@@ -141,8 +140,9 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
   const measured = decoded.map((frame) => measureBrowserFrameGeometry(frame, { cornerRadiusPt, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
-  const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= source.timeRange.upperMs);
-  assert.ok(candidates.length > 0, "browser layout has no declared-slot pixel match after its source resize event");
+  const captureAfter = Math.max(displayed, source.timeRange.upperMs);
+  const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= captureAfter);
+  assert.ok(candidates.length > 0, `browser layout has no declared-slot pixel match at or after ${captureAfter} ms`);
   const localProof = await firstContentFrame({ captured: candidates.map((index) => decoded[index]),
     rect: { x: page.frame.x, y: page.frame.y, w: page.frame.width, h: page.frame.height },
     expected: CONTENT, language: "en-US", directory: result.frames });
@@ -154,8 +154,10 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: decoded.length,
       timeMs: decoded[transition.changeFrameIndex].time },
     contentFrame: { frameIndex, frameCount: decoded.length, timeMs: decoded[frameIndex].time,
-      requestAtMs: beforeChangeTimeMs, sourceTimeRange: source.timeRange,
-      width: source.width, height: source.height, nativePlacement, proof },
+      requestAtMs: beforeChangeTimeMs, displayedAtMs: displayed, sourceTimeRange: source.timeRange,
+      width: source.width, height: source.height, nativePlacement,
+      surfaceEvents: traced.events.filter((event) => event?.event === "host.trace.surface" && event.fields?.surface === surface),
+      proof },
     sourceFrame: source,
     slotInsetsPt,
     initialGeometry: { frameIndex, timeMs: decoded[frameIndex].time, cardRectPt: initialGeometry.cardRectPt,
@@ -171,11 +173,6 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
   assert.ok(pane, `browser measurement card ${card} is absent before drag`);
   const plan = rightEdgeWidthDragPlan(beforeGrid, pane);
   await s.presented();
-  const baselineDocument = documentRow(await s.get("host.window"), surface, "");
-  const baselineClock = await monotonicTimeMs(s);
-  const baselineTimeMs = baselineClock.timeMs;
-  const baseline = { surface, timeMs: baselineTimeMs, monoNs: baselineClock.monoNs, visible: baselineDocument.visible,
-    framePt: baselineDocument.frame };
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
     drag(t, s, plan, { capture: true }));
   const run = traced.action;
@@ -199,18 +196,19 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
   }
-  const contentFrames = [];
   const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
     gestureStartedAtMs: run.ticks[0], gestureEndedAtMs: run.ticks.at(-1),
   });
-  for (const source of mapped) {
-    if (source.frameIndex === null) continue;
-    const nativePlacement = rootNativePlacementForSource(traced.events, surface, source.timeRange, { baseline });
-    contentFrames.push({ sourceSequence: source.sourceSequence, frameIndex: source.frameIndex,
-      frameTimeMs: source.frameTimeMs, timeRange: source.timeRange, width: source.width, height: source.height,
-      nativePlacement, source });
-  }
+  const contentFrames = mapped.map((source) => {
+    const displayCaptureIndex = captured.findIndex((frame) => frame.time >= Math.max(run.displayed, source.timeRange.upperMs));
+    return { sourceSequence: source.sourceSequence, frameIndex: source.frameIndex,
+      captureTimeMs: source.frameIndex === null ? null : captured[source.frameIndex].time,
+      displayCapture: displayCaptureIndex < 0 ? null : { frameIndex: displayCaptureIndex,
+        timeMs: captured[displayCaptureIndex].time },
+      frameTimeMs: source.frameTimeMs, timeRange: source.timeRange, width: source.width, height: source.height, source };
+  });
   const recordedFrameCount = captured.length;
+  const root = documentRow(await s.get("host.window"), surface, "");
   return {
     recordedFrameCount,
     firstGestureFrameIndex,
@@ -218,6 +216,8 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
     gestureEndedFrameIndex,
     gestureStartedAtMs: run.ticks[0],
     gestureEndedAtMs: run.ticks.at(-1),
+    finalPresentation: { displayedAtMs: run.displayed,
+      targetViewport: { width: Math.trunc(root.frame.width), height: Math.trunc(root.frame.height) } },
     geometryFrames,
     contentFrames,
     sourceContentFrames: traced.contentFrames,

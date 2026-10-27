@@ -17,12 +17,15 @@ function nativePlacement(width, height, timeMs, surface = "fixture-surface") {
   return { surface, phase: "placed", visible: true, timeMs,
     framePt,
     webKitViewport: { width: Math.trunc(width), height: Math.trunc(height) },
-    placement: { event: "host.trace.surface", ts_us: timeMs * 1000, mono_ns: monoNs,
+    placement: { event: "host.trace.surface", seq: timeMs * 1000, ts_us: timeMs * 1000, mono_ns: monoNs,
       fields: { surface, phase: "placed", visible: true, x: framePt.x, y: framePt.y, w: width, h: height } } };
 }
 
 function contentFrame(sourceSequence, frameIndex, frameTimeMs, lowerMs, upperMs, width, nativeWidth) {
-  return { sourceSequence, frameIndex, frameTimeMs, timeRange: { lowerMs, upperMs }, width, height: 80,
+  return { sourceSequence, frameIndex, captureTimeMs: frameIndex === null ? null : Math.max(frameTimeMs, upperMs),
+    displayCapture: frameIndex === null ? null : { frameIndex: Math.max(frameIndex, 6),
+      timeMs: Math.max(128, frameTimeMs, upperMs) },
+    frameTimeMs, timeRange: { lowerMs, upperMs }, width, height: 80,
     nativePlacement: nativePlacement(nativeWidth, 80, lowerMs - 1) };
 }
 
@@ -74,7 +77,8 @@ function metrics() {
     layoutDisplay: [{
       changeFrame: { frameIndex: 2, frameCount: 8, timeMs: 10 },
       contentFrame: { frameIndex: 4, frameCount: 8, timeMs: 110, sourceTimeRange: { lowerMs: 104, upperMs: 109 }, requestAtMs: 50, width: 120, height: 80,
-        nativePlacement: nativePlacement(120, 80, 100),
+        displayedAtMs: 109, nativePlacement: nativePlacement(120, 80, 100),
+        surfaceEvents: [nativePlacement(120, 80, 100).placement],
         proof: { expected: "fixture text", actual: "fixture text", lines: ["fixture text"] } },
     }],
     drag: {
@@ -102,6 +106,8 @@ function metrics() {
         contentFrame(3, 6, 128, 127, 129, 120, 120),
         contentFrame(4, 9, 250, 249, 251, 120, 120),
       ],
+      events: [],
+      finalPresentation: { displayedAtMs: 128, targetViewport: { width: 120, height: 80 } },
       layouts: [{ ticket: 1, begun: 60, requested: 70, presented: 75, committed: 80 }],
       ticks: [70, 90],
     },
@@ -118,7 +124,7 @@ test("view metrics accept exact thresholds and preserve frame and process eviden
   assert.deepEqual(report.evaluation.newProcess.adjustedDisplayMs, [310, 310, 310]);
   assert.equal(report.evaluation.layoutDisplay[0].measuredMs, 100);
   assert.equal(report.evaluation.drag.maxGeometryErrorPt, 1);
-  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 32);
+  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 8);
   assert.equal(report.evaluation.drag.convergedFrame, 2);
   assert.strictEqual(report.measurements, raw);
 });
@@ -151,6 +157,7 @@ test("layout source matches the WebKit viewport projected from a fractional nati
     height: 286,
     nativePlacement: nativePlacement(785.5, 286.5, 100),
   };
+  raw.layoutDisplay[0].contentFrame.surfaceEvents = [raw.layoutDisplay[0].contentFrame.nativePlacement.placement];
   assert.doesNotThrow(() => assertViewMeasurements(raw, options));
   assert.deepEqual(raw.layoutDisplay[0].contentFrame.nativePlacement.framePt,
     { x: 0.5, y: 1.5, width: 785.5, height: 286.5 });
@@ -160,6 +167,7 @@ test("layout source matches the WebKit viewport projected from a fractional nati
 
   const wrongProjection = metrics();
   wrongProjection.layoutDisplay[0].contentFrame.nativePlacement = nativePlacement(785.5, 286.5, 100);
+  wrongProjection.layoutDisplay[0].contentFrame.surfaceEvents = [wrongProjection.layoutDisplay[0].contentFrame.nativePlacement.placement];
   wrongProjection.layoutDisplay[0].contentFrame.width = 785;
   wrongProjection.layoutDisplay[0].contentFrame.height = 286;
   wrongProjection.layoutDisplay[0].contentFrame.nativePlacement.webKitViewport.width = 786;
@@ -175,22 +183,59 @@ test("layout source matches the WebKit viewport projected from a fractional nati
   futurePlacement.layoutDisplay[0].contentFrame.nativePlacement.timeMs = 111;
   futurePlacement.layoutDisplay[0].contentFrame.nativePlacement.placement.mono_ns = 111_000_000;
   futurePlacement.layoutDisplay[0].contentFrame.nativePlacement.placement.ts_us = 111_000;
-  assert.throws(() => assertViewMeasurements(futurePlacement, options), /<= source interval lower bound 104 ms/);
+  assert.throws(() => assertViewMeasurements(futurePlacement, options), /before displayed presentation 109 ms/);
 });
 
-test("drag source rows retain fractional native frames and use their explicit viewport projection", { timeout: 1000 }, () => {
+test("layout source accepts an overlapping placement readback when display covers both clocks", { timeout: 1000 }, () => {
+  const raw = metrics();
+  const content = raw.layoutDisplay[0].contentFrame;
+  content.nativePlacement.timeMs = 108;
+  content.nativePlacement.placement.mono_ns = 108_000_000;
+  content.nativePlacement.placement.ts_us = 108_000;
+  content.displayedAtMs = 109;
+  content.surfaceEvents = [content.nativePlacement.placement];
+
+  const report = assertViewMeasurements(raw, options);
+
+  assert.equal(report.measurements.layoutDisplay[0].contentFrame.nativePlacement.timeMs, 108);
+  assert.equal(report.evaluation.layoutDisplay[0].contentFrame.timeMs, 110,
+    "the captured source frame is after both the actual displayed presentation and source interval");
+});
+
+test("layout proof rejects a later competing placement but accepts an identical readback", { timeout: 1000 }, () => {
+  const changed = metrics();
+  const selected = changed.layoutDisplay[0].contentFrame.nativePlacement.placement;
+  changed.layoutDisplay[0].contentFrame.nativePlacement.timeMs = 108;
+  selected.mono_ns = 108_000_000;
+  selected.ts_us = 108_000;
+  changed.layoutDisplay[0].contentFrame.displayedAtMs = 109;
+  const competing = structuredClone(selected);
+  competing.seq = selected.seq + 1;
+  competing.mono_ns = 109_500_000;
+  competing.ts_us = 109_500;
+  competing.fields.w = 130;
+  changed.layoutDisplay[0].contentFrame.surfaceEvents = [selected, competing];
+
+  assert.throws(() => assertViewMeasurements(changed, options), /later competing placement/);
+
+  const unchanged = structuredClone(changed);
+  unchanged.layoutDisplay[0].contentFrame.surfaceEvents[1].fields.w = selected.fields.w;
+  assert.doesNotThrow(() => assertViewMeasurements(unchanged, options),
+    "a repeated readback of the same target does not invalidate the capture");
+});
+
+test("drag source rows keep content dimensions without associating a native placement readback", { timeout: 1000 }, () => {
   const raw = metrics();
   raw.drag.contentFrames[0] = {
     ...raw.drag.contentFrames[0],
     width: 785,
     height: 286,
-    nativePlacement: nativePlacement(785.5, 286.5, 78),
   };
+  delete raw.drag.contentFrames[0].nativePlacement;
   const report = assertViewMeasurements(raw, options);
-  assert.deepEqual(report.measurements.drag.contentFrames[0].nativePlacement.framePt,
-    { x: 0.5, y: 1.5, width: 785.5, height: 286.5 });
-  assert.deepEqual(report.measurements.drag.contentFrames[0].nativePlacement.webKitViewport,
-    { width: 785, height: 286 });
+  assert.equal(report.measurements.drag.contentFrames[0].width, 785);
+  assert.equal(Object.hasOwn(report.measurements.drag.contentFrames[0], "nativePlacement"), false,
+    "drag source dimensions do not require a per-source native placement association");
 });
 
 test("total footprint rejects one byte over the SI 10 MB margin", { timeout: 1000 }, () => {
@@ -304,31 +349,56 @@ test("drag cadence is in-gesture and convergence meets both frame and time bound
   const cadence = metrics();
   cadence.drag.contentFrames[1].frameTimeMs = 114;
   cadence.drag.contentFrames[1].timeRange = { lowerMs: 113, upperMs: 115 };
+  cadence.drag.contentFrames[1].captureTimeMs = 115;
   cadence.drag.contentFrames[2].frameTimeMs = 120;
   cadence.drag.contentFrames[2].timeRange = { lowerMs: 119, upperMs: 121 };
+  cadence.drag.contentFrames[2].captureTimeMs = 121;
   cadence.drag.contentFrames[3].frameTimeMs = 140;
   cadence.drag.contentFrames[3].timeRange = { lowerMs: 139, upperMs: 141 };
+  cadence.drag.contentFrames[3].captureTimeMs = 141;
+  cadence.drag.contentFrames[3].displayCapture = { frameIndex: 6, timeMs: 141 };
   cadence.drag.gestureEndedAtMs = 130;
   assert.throws(() => assertViewMeasurements(cadence, options), /in-gesture content-frame interval 34 ms/);
 
   const tooManyFrames = metrics();
   tooManyFrames.drag.contentFrames[3].frameIndex = 7;
+  tooManyFrames.drag.contentFrames[3].displayCapture.frameIndex = 7;
   assert.throws(() => assertViewMeasurements(tooManyFrames, options), /within 2 post-gesture frames/);
 
   const tooLate = metrics();
+  tooLate.drag.gestureEndedAtMs = 130;
   tooLate.drag.contentFrames[3].frameIndex = 5;
-  tooLate.drag.contentFrames[3].nativePlacement = nativePlacement(110, 80, 126);
+  tooLate.drag.finalPresentation.targetViewport = { width: 130, height: 80 };
   tooLate.drag.contentFrames.splice(4, 0,
     contentFrame(4, 6, 145, 144, 146, 120, 110),
-    contentFrame(5, 6, 165, 164, 166, 120, 120));
+    contentFrame(5, 6, 165, 164, 166, 130, 130));
+  tooLate.drag.contentFrames[5].displayCapture = { frameIndex: 6, timeMs: 166 };
   tooLate.drag.contentFrames[6].sourceSequence = 6;
   assert.throws(() => assertViewMeasurements(tooLate, options), /within 33 ms after gesture end/);
 
   const alreadyMatched = metrics();
-  alreadyMatched.drag.contentFrames[2].nativePlacement = nativePlacement(100, 80, 87);
   alreadyMatched.drag.contentFrames.splice(3);
+  alreadyMatched.drag.finalPresentation.targetViewport = { width: 100, height: 80 };
   const report = assertViewMeasurements(alreadyMatched, options);
   assert.equal(report.evaluation.drag.convergedFrame, 0);
+});
+
+test("drag cadence ignores an overlapping placement readback and converges against the presented viewport", { timeout: 1000 }, () => {
+  const raw = metrics();
+  const readback = nativePlacement(110, 80, 88);
+  raw.drag.events = [readback.placement];
+  raw.drag.contentFrames[1].nativePlacement = readback;
+  raw.drag.finalPresentation = { displayedAtMs: 128, targetViewport: { width: 120, height: 80 } };
+  raw.drag.contentFrames[3].captureTimeMs = 130;
+
+  const report = assertViewMeasurements(raw, options);
+
+  assert.equal(report.evaluation.drag.convergedFrame, 2,
+    "the source frame after the last input matches the successfully presented final viewport");
+  assert.equal(report.evaluation.drag.convergenceMs, 29,
+    "the captured frame is at or after both the presentation and source-frame upper bound");
+  assert.deepEqual(report.measurements.drag.events, [readback.placement],
+    "the ambiguous native readback remains raw evidence without a per-source placement association");
 });
 
 test("drag cadence preserves distinct source frames that map to the same capture frame", { timeout: 1000 }, () => {
@@ -342,6 +412,7 @@ test("drag cadence preserves distinct source frames that map to the same capture
     contentFrame(4, 3, 96, 95, 97, 103, 120),
     contentFrame(5, 5, 112, 111, 113, 120, 120),
   ];
+  raw.drag.contentFrames[4].displayCapture = { frameIndex: 5, timeMs: 128 };
   const report = assertViewMeasurements(raw, options);
   assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 11);
   assert.equal(report.evaluation.drag.convergedFrame, 1);
@@ -365,6 +436,8 @@ test("drag cadence keeps captured boundary frames and their neighboring cadence 
 
   const missingBoundaryCapture = structuredClone(boundary);
   missingBoundaryCapture.drag.contentFrames[1].frameIndex = null;
+  missingBoundaryCapture.drag.contentFrames[1].captureTimeMs = null;
+  missingBoundaryCapture.drag.contentFrames[1].displayCapture = null;
   assert.throws(() => assertViewMeasurements(missingBoundaryCapture, options), /capture frame for every possibly in-gesture/);
 });
 
@@ -372,6 +445,7 @@ test("drag cadence excludes observer idle time outside the recorded gesture", { 
   const idle = metrics();
   idle.drag.gestureStartedAtMs = 11000;
   idle.drag.gestureEndedAtMs = 11030;
+  idle.drag.finalPresentation.displayedAtMs = 11025;
   idle.drag.contentFrames = [
     contentFrame(0, null, 10000, 9999, 10001, 100, 100),
     contentFrame(1, 2, 11008, 11007, 11009, 100, 100),
@@ -379,6 +453,10 @@ test("drag cadence excludes observer idle time outside the recorded gesture", { 
     contentFrame(3, 4, 11024, 11023, 11025, 120, 120),
     contentFrame(4, null, 20000, 19999, 20001, 120, 120),
   ];
+  for (const frame of idle.drag.contentFrames) {
+    if (frame.displayCapture) frame.displayCapture.timeMs = Math.max(idle.drag.finalPresentation.displayedAtMs,
+      frame.timeRange.upperMs);
+  }
 
   const report = assertViewMeasurements(idle, options);
   assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 9,

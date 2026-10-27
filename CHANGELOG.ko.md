@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-221-2: Drag cadence와 one-shot 평가에서 source별 native readback 순서를 강제한 추가 요구를 제거한다. 실제 capture pixel alignment를 별도로 유지하고 최종 presentation·source 크기·capture 순서·기존 convergence 한도를 검증한다. 이후 다른 target의 개입을 거부하고 동일한 반복 readback은 허용한다. 통제된 Red 후 영향받은 소유 파일 여섯 개와 문서·inventory 검사가 통과한다. 앱 측정은 별도로 남긴다.
+
 - F239-229: Decode한 OCR crop은 인식 호출이 소비하는 동안만 OS 임시 디렉터리에 둔다. 추적한 성공·실패 case는 남은 crop을 재현하며 cleanup fault case는 두 오류가 모두 보고됨을 확인한다. crop/OCR 소유 case 다섯 개가 통과하고 crop 파일 없이 recording frame과 OCR 증거를 보존한다.
 
 - F239-221-1: source clock의 diagnostic log 상관을 성공한 observer-start command 전후의 native monotonic clock 읽기로 교체한다. Red: 변경 전 owner가 로그에 있는 native request를 요구해 clock bracket 없이 실패한다. Green: shared collection의 source-frame·trace 집중 case 12/12, HWP layout case 네 개와 Browser·Editor·Terminal descriptor case가 통과한다. Collector는 raw clock receipt와 동일 session host/PID/window/surface identity를 보존하고 event-log argument parser를 제거하며 선언된 source 정밀도와 측정 기준을 유지한다. Application acceptance는 F212.14-5-5에 남는다.
