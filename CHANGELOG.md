@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.10-core-3-16: Pin both Wails modules and checksums to the published callback-lifetime correction. Preserve event filtering and single-window event routing from the pinned base. Eleven framework owner cases and independent review pass; both core modules resolve the public replacement, and focused event-binding, window-event and runtime-listener checks pass. Application rebuild and project-close acceptance remain pending.
+
 - F239-239: Preserve the complete HWP startup recording in the measurement artifact directory before offline OCR and successful-check cleanup. Share the post-open collector with the actual window check and test it through fake session boundaries. A fresh archive assertion fails without the copy and passes with it; all five owner cases and e2e-check pass. Preserve source/archive identities and report copy, read and OCR failures. Three earlier comparison recordings were removed by normal successful-check cleanup; their saved JSON does not replace raw frames.
 
 - F239-239: Combine the existing HWP first-content recording with startup resource snapshots and defer OCR until after live collection. Preserve request and process identities, recording paths and raw clocks. Both optimized macOS arm64 candidate cases pass collection, log audits, focus restoration and normal shutdown; the preceding baseline fails Tauri focus cleanup. Candidate first content is slower while its font responses also finish later, so no performance improvement or fork adoption is established. Existing helper coverage passes 18/18; no pre-change Red was recorded for the combined collector. Acceptance remains open.

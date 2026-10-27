@@ -18,6 +18,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 )
 
-// Wails 의 HTTP transport 는 page 에 돌려주는 오류를 로그에도 써서 실패 한 번을 두 번 기록한다. fork 의
-// soksak/http-error-log 가 그 기록을 지운다(docs/features.md F70).
-replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3 v3.0.0-20261018201303-338ee14d5ba5
+// The replacement avoids duplicate transport-error records and rejects
+// callbacks from retired windows while preserving window event routing.
+replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3 v3.0.0-20261027083005-8dd1dcfcc3aa

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.10-core-3-16: 양 Wails module과 checksum을 공개된 callback-lifetime 수정으로 고정한다. 고정한 base의 event filtering과 single-window event routing을 유지한다. Framework owner case 11개와 독립 검토가 통과하고 양 core module이 공개 replacement를 받아오며 집중 event-binding, window-event 및 runtime-listener 검사가 통과한다. 애플리케이션 재빌드와 project-close acceptance는 미완료다.
+
 - F239-239: Offline OCR과 성공한 check의 cleanup 전에 HWP startup recording 전체를 측정 artifact directory에 보존한다. Open 이후 collector를 실제 window check와 공유하고 fake session 경계로 검증한다. 새 archive assertion은 copy가 없으면 실패하고 copy 뒤 통과하며 owner case 5개와 e2e-check도 통과한다. 원본/archive identity를 남기고 copy, read 및 OCR 실패를 보고한다. 앞선 비교 recording 세 건은 성공한 check의 일반 cleanup에서 제거됐으며 저장된 JSON이 원본 frame을 대체하지 않는다.
 
 - F239-239: 기존 HWP first-content recording과 startup resource snapshot을 결합하고 live 수집 뒤로 OCR을 옮긴다. Request와 process identity, recording 경로와 원본 clock을 보존한다. Optimized macOS arm64 candidate case 양쪽은 수집, log 감사, focus 복원과 정상 종료를 통과하며 앞선 baseline은 Tauri focus cleanup에서 실패한다. Candidate first content와 font 응답 모두 늦어 성능 개선이나 fork 채택을 입증하지 않는다. 기존 helper 검사는 18/18 통과하며 결합 collector의 변경 전 Red는 기록되지 않았다. Acceptance는 열린 상태를 유지한다.
