@@ -724,6 +724,34 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// recorded frames.
     fn capture_stop(&self, after: f64) -> Result<i32, String>;
     #[cfg(feature = "diagnostics")]
+    /// Starts the document-frame identity producer for an attached view root on the UI thread.
+    fn document_frame_identity_start(
+        &self,
+        _document: Handle,
+        _generation: u64,
+        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        Err("not implemented on this platform".into())
+    }
+    #[cfg(feature = "diagnostics")]
+    /// Freezes the document-frame identity producer. Completion runs once on the UI thread.
+    fn document_frame_identity_freeze(
+        &self,
+        _generation: u64,
+        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        Err("not implemented on this platform".into())
+    }
+    #[cfg(feature = "diagnostics")]
+    /// Removes the exact document-frame identity marker. Completion runs once on the UI thread.
+    fn document_frame_identity_remove(
+        &self,
+        _generation: u64,
+        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        Err("not implemented on this platform".into())
+    }
+    #[cfg(feature = "diagnostics")]
     /// Returns whether the last recording reached the finite frame limit and stopped automatically.
     fn capture_limited(&self) -> Result<bool, String>;
     #[cfg(feature = "diagnostics")]

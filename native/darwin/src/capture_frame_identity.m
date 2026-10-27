@@ -2,12 +2,15 @@
 #import <CommonCrypto/CommonDigest.h>
 #import <CoreImage/CoreImage.h>
 #import <ZXing/ZXingC.h>
+#import <ImageIO/ImageIO.h>
 #include <limits.h>
 #include <math.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static const size_t kFrameIdentityAtlasByteLimit = 48 * 1024 * 1024;
 
 #ifdef SOKSAK_DIAGNOSTIC
 static bool (*captureFrameIdentityDecodeTestHook)(void);
@@ -203,6 +206,110 @@ bool sp_capture_frame_identity_encode(const uint8_t *bgra, size_t width, size_t 
     }
     *instrumented_bgra = immutablePixels;
     *payload = [issued copy];
+    return true;
+}
+
+bool sp_capture_frame_identity_atlas(NSArray<NSString *> *payloads, size_t cell_pixels, size_t columns,
+    NSData **png, NSString **error) {
+    if (png) *png = nil;
+    if (error) *error = nil;
+    if (!png || !error || !payloads.count || !cell_pixels || !columns || cell_pixels > 512
+        || columns > 64 || payloads.count > SIZE_MAX - (columns - 1)) {
+        if (error) *error = [@"frame identity atlas arguments are invalid" copy];
+        return false;
+    }
+    size_t rows = (payloads.count + columns - 1) / columns;
+    if (!rows || columns > SIZE_MAX / cell_pixels || rows > SIZE_MAX / cell_pixels) {
+        *error = [@"frame identity atlas dimensions overflow" copy];
+        return false;
+    }
+    size_t width = columns * cell_pixels, height = rows * cell_pixels;
+    if (width > SIZE_MAX / 4 || height > SIZE_MAX / (width * 4) || width > INT_MAX || height > INT_MAX
+        || width * height > kFrameIdentityAtlasByteLimit / 4) {
+        *error = [@"frame identity atlas exceeds the pixel buffer bound" copy];
+        return false;
+    }
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = colorSpace
+        ? CGBitmapContextCreate(NULL, width, height, 8, width * 4, colorSpace,
+            kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst)
+        : NULL;
+    if (colorSpace) CGColorSpaceRelease(colorSpace);
+    if (!context) {
+        *error = [@"frame identity atlas bitmap context creation failed" copy];
+        return false;
+    }
+    CGContextSetRGBFillColor(context, 1, 1, 1, 1);
+    CGContextFillRect(context, CGRectMake(0, 0, width, height));
+    CGContextSetBlendMode(context, kCGBlendModeCopy);
+    CGContextSetInterpolationQuality(context, kCGInterpolationNone);
+    CIContext *ciContext = [CIContext contextWithOptions:nil];
+    NSString *failure = nil;
+    for (NSUInteger index = 0; index < payloads.count && !failure; index++) {
+        NSString *payload = payloads[index];
+        NSData *message = [payload isKindOfClass:[NSString class]] ? [payload dataUsingEncoding:NSUTF8StringEncoding] : nil;
+        CIFilter *filter = [CIFilter filterWithName:@"CIQRCodeGenerator"];
+        if (!message || !filter) {
+            failure = [@"frame identity atlas QR generator is unavailable" copy];
+            break;
+        }
+        [filter setValue:message forKey:@"inputMessage"];
+        [filter setValue:@"H" forKey:@"inputCorrectionLevel"];
+        CIImage *qr = filter.outputImage;
+        CGImageRef image = qr ? [ciContext createCGImage:qr fromRect:qr.extent] : NULL;
+        if (!image) {
+            failure = [@"frame identity atlas QR rasterization failed" copy];
+            break;
+        }
+        size_t moduleWidth = CGImageGetWidth(image);
+        size_t moduleHeight = CGImageGetHeight(image);
+        const size_t quietModules = 4;
+        size_t totalModules = moduleWidth + quietModules * 2;
+        size_t scale = moduleWidth && moduleWidth == moduleHeight && totalModules >= moduleWidth
+            ? cell_pixels / totalModules : 0;
+        if (!scale) {
+            failure = [@"frame identity atlas cell cannot fit QR modules and quiet zone" copy];
+            CGImageRelease(image);
+            break;
+        }
+        size_t tileX = (index % columns) * cell_pixels;
+        size_t tileY = height - ((index / columns) + 1) * cell_pixels;
+        size_t totalSide = totalModules * scale;
+        CGFloat left = (CGFloat)(tileX + (cell_pixels - totalSide) / 2);
+        CGFloat bottom = (CGFloat)(tileY + (cell_pixels - totalSide) / 2);
+        CGRect codeRect = CGRectMake(left + (CGFloat)(quietModules * scale),
+            bottom + (CGFloat)(quietModules * scale), (CGFloat)(moduleWidth * scale), (CGFloat)(moduleHeight * scale));
+        CGContextDrawImage(context, codeRect, image);
+        CGImageRelease(image);
+    }
+    CGImageRef atlasImage = failure ? NULL : CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    if (failure || !atlasImage) {
+        if (failure) *error = failure;
+        else *error = [@"frame identity atlas image creation failed" copy];
+        return false;
+    }
+    NSMutableData *encoded = [NSMutableData data];
+    CGImageDestinationRef destination = CGImageDestinationCreateWithData((CFMutableDataRef)encoded,
+        CFSTR("public.png"), 1, NULL);
+    if (!destination) {
+        CGImageRelease(atlasImage);
+        *error = [@"frame identity atlas PNG destination creation failed" copy];
+        return false;
+    }
+    CGImageDestinationAddImage(destination, atlasImage, NULL);
+    BOOL finalized = CGImageDestinationFinalize(destination);
+    CFRelease(destination);
+    CGImageRelease(atlasImage);
+    if (!finalized || !encoded.length) {
+        *error = [@"frame identity atlas PNG encoding failed" copy];
+        return false;
+    }
+    *png = [encoded copy];
+    if (!*png) {
+        *error = [@"frame identity atlas PNG allocation failed" copy];
+        return false;
+    }
     return true;
 }
 

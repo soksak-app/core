@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-234: Diagnostic capture에 opt-in WebKit root-document QR identity를 추가한다. Generated·issued count와 실제 decoded sample pixel·displayTime을 보존하고 unissued identity를 거부하며 capture nonce로 늦은 callback을 분리한다. Callback 대기를 제한하고 recording·trace 초기화를 직렬화하며 기존 capture mode를 보존하고 멱등 marker cleanup을 검증한다. 추적된 Red 이후 native matcher·atlas·실제 WebKit lifecycle·양 host·E2E consumer owner가 통과한다. 양 host application capture는 남으며 desktop visibility·독립적인 source-presentation time·과거 cadence gap의 원인을 증명하지 않는다.
+
 - F239-235: Offline frame decode·OCR 전에 clock 구간을 기록한 one-view 및 N-view footprint를 수집한다. Capture finalization·process identity·원본 pixel proof와 직접 consumer의 eager 동작을 보존하며 새로 여는 반복 reclaim도 분석 전에 sample을 수집한다. 추적된 실패 조건 네 개가 Green으로 바뀌고 소유 검사 33개가 모두 통과한다. N배+10 MB 기준과 기존 application 실패를 유지하며 이 collector 수정으로 HWP memory 개선을 주장하지 않는다.
 
 - F239-233: 늦은 presentation query와 독립적으로 기존 capture tail의 gesture 종료 후 paint를 측정한다. 조건을 충족하는 가장 이른 capture를 고르고 source가 이미 target 크기여도 최종 native target geometry를 요구하며 source·pixel tail의 안정성을 유지한다. Browser와 Terminal은 렌더링된 fill을 사용하고 Editor는 선언한 marker color를 사용하며 HWP는 HTML paint와 native bounds를 별도로 측정한다. 기존 2-frame·33 ms·2 pt 한도에서 소유 Red/Green case와 모든 관련 consumer가 통과했으며 application acceptance는 남는다.

@@ -476,6 +476,31 @@ impl Platform for Windows {
         unsupported::capture_stop(after)
     }
     #[cfg(feature = "diagnostics")]
+    fn document_frame_identity_start(
+        &self,
+        _document: Handle,
+        _generation: u64,
+        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        Err("not implemented on windows".into())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn document_frame_identity_freeze(
+        &self,
+        _generation: u64,
+        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        Err("not implemented on windows".into())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn document_frame_identity_remove(
+        &self,
+        _generation: u64,
+        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        Err("not implemented on windows".into())
+    }
+    #[cfg(feature = "diagnostics")]
     fn capture_limited(&self) -> Result<bool, String> {
         unsupported::capture_limited()
     }

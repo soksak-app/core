@@ -9,6 +9,7 @@
 #import "document_view.h"
 #import "webview_geometry.h"
 #import "surface_layout.h"
+#import "image_capture_match.h"
 
 static int failures = 0;
 
@@ -26,6 +27,24 @@ static void until(NSString *what, BOOL (^done)(void)) {
 }
 
 static NSDictionary *latest;
+static NSString *frameIdentityReplyJSON;
+static NSString *frameIdentityReplyError;
+static int frameIdentityReplyCount;
+
+static void frameIdentityReply(void *context, const char *json, const char *error) {
+    (void)context;
+    [frameIdentityReplyJSON release];
+    [frameIdentityReplyError release];
+    frameIdentityReplyJSON = json ? [[NSString alloc] initWithUTF8String:json] : nil;
+    frameIdentityReplyError = error ? [[NSString alloc] initWithUTF8String:error] : nil;
+    frameIdentityReplyCount++;
+}
+
+static void clearFrameIdentityReply(void) {
+    [frameIdentityReplyJSON release]; frameIdentityReplyJSON = nil;
+    [frameIdentityReplyError release]; frameIdentityReplyError = nil;
+    frameIdentityReplyCount = 0;
+}
 
 static void changed(void *context, const char *text) {
     (void)context;
@@ -124,6 +143,61 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"a served core response has the header that a fetch of the view reads: %@", steps]);
         check([steps[@"refusedFetch"] isEqual:@"fail"],
             [NSString stringWithFormat:@"a refused core response carries no Access-Control-Allow-Origin and the fetch fails: %@", steps]);
+
+        sp_image_capture_match_begin(NULL, NULL);
+        char *identitySessionError = NULL;
+        BOOL identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
+        check(identitySession && identitySessionError == NULL,
+            @"the document identity producer owner starts an opt-in capture identity session");
+        free(identitySessionError);
+        clearFrameIdentityReply();
+        BOOL identityScheduled = sp_document_frame_identity_start(view, 41, frameIdentityReply, NULL);
+        check(identityScheduled, @"the current visible plugin root accepts the diagnostic QR producer");
+        until(@"the visible root reports its first QR draw", ^BOOL { return frameIdentityReplyCount == 1; });
+        NSDictionary *identityStart = frameIdentityReplyJSON
+            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
+                options:0 error:nil] : nil;
+        check(frameIdentityReplyError == nil && [identityStart[@"generation"] unsignedLongLongValue] == 41
+            && [identityStart[@"atlasSlots"] unsignedIntegerValue] == 512
+            && [identityStart[@"roi"] isKindOfClass:NSDictionary.class],
+            [NSString stringWithFormat:@"the asynchronous start reply follows initial marker draw with measured ROI: %@ %@",
+                identityStart, frameIdentityReplyError ?: @""]);
+        clearFrameIdentityReply();
+        BOOL freezeScheduled = sp_document_frame_identity_freeze(41, frameIdentityReply, NULL);
+        check(freezeScheduled, @"freezing the producer schedules on the main thread");
+        until(@"the producer reports its final issued slots", ^BOOL { return frameIdentityReplyCount == 1; });
+        NSDictionary *identityFreeze = frameIdentityReplyJSON
+            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
+                options:0 error:nil] : nil;
+        NSUInteger issuedSlots = [identityFreeze[@"issuedSlots"] unsignedIntegerValue];
+        check(frameIdentityReplyError == nil && [identityFreeze[@"generation"] unsignedLongLongValue] == 41
+            && [identityFreeze[@"atlasSlots"] unsignedIntegerValue] == 512 && issuedSlots >= 1 && issuedSlots <= 512,
+            [NSString stringWithFormat:@"freeze reports the bounded count of distinct atlas cells drawn: %@ %@",
+                identityFreeze, frameIdentityReplyError ?: @""]);
+        clearFrameIdentityReply();
+        BOOL removeScheduled = sp_document_frame_identity_remove(41, frameIdentityReply, NULL);
+        check(removeScheduled, @"marker removal schedules after capture intake stops");
+        until(@"the marker removal completes", ^BOOL { return frameIdentityReplyCount == 1; });
+        NSDictionary *identityRemove = frameIdentityReplyJSON
+            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
+                options:0 error:nil] : nil;
+        check(frameIdentityReplyError == nil && [identityRemove[@"generation"] unsignedLongLongValue] == 41
+            && [identityRemove[@"removed"] boolValue],
+            [NSString stringWithFormat:@"the matching generation marker is removed: %@ %@",
+                identityRemove, frameIdentityReplyError ?: @""]);
+        clearFrameIdentityReply();
+        BOOL retryRemoveScheduled = sp_document_frame_identity_remove(41, frameIdentityReply, NULL);
+        check(retryRemoveScheduled, @"a retry after an earlier removal callback schedules cleanup confirmation");
+        until(@"the idempotent removal retry completes", ^BOOL { return frameIdentityReplyCount == 1; });
+        NSDictionary *retryRemove = frameIdentityReplyJSON
+            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
+                options:0 error:nil] : nil;
+        check(frameIdentityReplyError == nil && [retryRemove[@"generation"] unsignedLongLongValue] == 41
+            && [retryRemove[@"removed"] boolValue],
+            [NSString stringWithFormat:@"a repeated removal confirms the already removed generation: %@ %@",
+                retryRemove, frameIdentityReplyError ?: @""]);
+        sp_image_capture_match_end();
+        clearFrameIdentityReply();
         sp_document_close(view);
 
         // A region gets no core root grant: its core requests fail and the resolver is not called for them.

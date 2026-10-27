@@ -93,6 +93,15 @@ type InputReference interface {
 	InputReference(window unsafe.Pointer, action string, document *string, done func(json.RawMessage, error))
 }
 
+// DocumentFrameIdentityCapture manages the diagnostic identity marker in one live view root.
+// The start method runs synchronously on the UI thread. Freeze and remove must be initiated on
+// the UI thread and complete asynchronously on that thread.
+type DocumentFrameIdentityCapture interface {
+	StartDocumentFrameIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error
+	FreezeDocumentFrameIdentity(generation uint64, done func(json.RawMessage, error)) error
+	RemoveDocumentFrameIdentity(generation uint64, done func(json.RawMessage, error)) error
+}
+
 // InputSources are the keyboard input source operations. Only the platform implementation of a diagnostic build (tag diagnostics) provides them, and
 // diagnostic code uses them by checking the value of Current() against this interface. Selection and key-view adoption are one main-thread operation.
 type InputSources interface {

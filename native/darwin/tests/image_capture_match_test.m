@@ -1,5 +1,6 @@
 #import "../src/image_capture_match.h"
 #import "../src/capture_frame_identity.h"
+#import <ImageIO/ImageIO.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +34,189 @@ static bool failIdentityDecode(void) { return false; }
 static bool throwIdentityDecode(void) {
     @throw [NSException exceptionWithName:@"F239146InjectedDecoderException"
         reason:@"controlled QR decoder exception" userInfo:nil];
+}
+
+static NSData *bgraPixelsForImage(CGImageRef image) {
+    if (!image) return nil;
+    size_t width = CGImageGetWidth(image), height = CGImageGetHeight(image);
+    if (!width || !height || width > SIZE_MAX / 4 || height > SIZE_MAX / (width * 4)) return nil;
+    NSMutableData *pixels = [NSMutableData dataWithLength:width * height * 4];
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = colorSpace ? CGBitmapContextCreate(pixels.mutableBytes, width, height, 8,
+        width * 4, colorSpace, kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst) : NULL;
+    if (colorSpace) CGColorSpaceRelease(colorSpace);
+    if (!context) return nil;
+    CGContextTranslateCTM(context, 0, height);
+    CGContextScaleCTM(context, 1, -1);
+    CGContextSetInterpolationQuality(context, kCGInterpolationNone);
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), image);
+    CGContextRelease(context);
+    return pixels;
+}
+
+static void frameIdentityDocumentChecks(void) {
+    char directoryTemplate[] = "/tmp/soksak-document-frame-identity-XXXXXX";
+    char *directory = mkdtemp(directoryTemplate);
+    dispatch_queue_t writer = dispatch_queue_create("test.document-frame-identity.writer", DISPATCH_QUEUE_SERIAL);
+    check(directory != NULL && writer != NULL, @"the document frame identity matcher fixture allocates its capture resources");
+    if (!directory || !writer) return;
+    sp_image_capture_match_begin(directory, writer);
+    char *error = NULL;
+    BOOL session = sp_image_capture_match_identity_session_begin(&error) && error == NULL;
+    check(session, @"the document frame identity matcher fixture starts a capture session");
+    free(error); error = NULL;
+    const uint8_t documentRegion[16] = { 8, 6, 7, 5, 3, 0, 9 };
+    NSArray<NSString *> *payloads = nil;
+    NSData *sessionNonce = nil;
+    BOOL generated = session && sp_image_capture_match_identity_document_begin(documentRegion, 53,
+        CGRectMake(0, 0, 128, 128), 512, &payloads, &sessionNonce, &error);
+    check(generated && payloads.count == 512 && error == NULL,
+        @"the document atlas generates 512 identities without entering the native-image issued set");
+    free(error); error = NULL;
+
+    const uint8_t imageRegion[16] = { 1, 3, 3, 7, 9, 2, 4 };
+    BOOL imageCapacityRemains = generated;
+    for (int sequence = 1; sequence <= 512 && imageCapacityRemains; sequence++) {
+        NSString *payload = nil;
+        imageCapacityRemains = sp_image_capture_match_identity_issue(imageRegion,
+            (sp_image_capture_identity){ 79, 1, sequence }, &payload, &error) && error == NULL;
+        [payload release]; free(error); error = NULL;
+    }
+    check(imageCapacityRemains,
+        @"document atlas generation leaves the complete shared 512-entry native-image identity bound available");
+
+    NSData *atlasPNG = nil;
+    NSString *atlasError = nil;
+    BOOL atlasMade = generated && sp_capture_frame_identity_atlas(payloads, 128, 8, &atlasPNG, &atlasError);
+    check(atlasMade && atlasPNG.length > 0 && atlasError == nil, @"the document identities encode into a bounded atlas");
+    BOOL frozen = atlasMade && sp_image_capture_match_identity_document_finish(sessionNonce, atlasPNG, 1, &error);
+    check(frozen && error == NULL, @"the document matcher records the one-based final issued slot count");
+    free(error); error = NULL; [atlasError release]; [payloads release]; [sessionNonce release];
+
+    CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)atlasPNG, NULL);
+    CGImageRef atlas = source ? CGImageSourceCreateImageAtIndex(source, 0, NULL) : NULL;
+    CGImageRef firstCell = atlas ? CGImageCreateWithImageInRect(atlas, CGRectMake(0, 0, 128, 128)) : NULL;
+    CGImageRef secondCell = atlas ? CGImageCreateWithImageInRect(atlas, CGRectMake(128, 0, 128, 128)) : NULL;
+    NSData *firstPixels = bgraPixelsForImage(firstCell), *secondPixels = bgraPixelsForImage(secondCell);
+    [atlasPNG release];
+    check(firstPixels.length == 128 * 128 * 4 && secondPixels.length == 128 * 128 * 4,
+        @"the matcher fixture extracts exact 128-pixel QR cells from the immutable atlas");
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    BOOL firstAccepted = frozen && firstPixels && colorSpace && sp_image_capture_match_identity_enqueue_frame(
+        firstPixels.bytes, 128, 128, 128 * 4, colorSpace, CGRectMake(0, 0, 128, 128),
+        CGRectMake(0, 0, 128, 128), 1, 1, 1, 111, &error);
+    check(firstAccepted && error == NULL, @"a complete captured sample admits its exact first document atlas cell");
+    free(error); error = NULL;
+    BOOL secondAccepted = frozen && secondPixels && colorSpace && sp_image_capture_match_identity_enqueue_frame(
+        secondPixels.bytes, 128, 128, 128 * 4, colorSpace, CGRectMake(0, 0, 128, 128),
+        CGRectMake(0, 0, 128, 128), 1, 1, 2, 222, &error);
+    check(secondAccepted && error == NULL, @"a second complete sample admits the next generated document atlas cell");
+    free(error); error = NULL;
+    if (colorSpace) CGColorSpaceRelease(colorSpace);
+    if (firstCell) CGImageRelease(firstCell); if (secondCell) CGImageRelease(secondCell);
+    if (atlas) CGImageRelease(atlas); if (source) CFRelease(source);
+
+    BOOL finalized = sp_image_capture_match_write_manifest(directory);
+    char *manifestError = sp_image_capture_match_identity_session_error_copy();
+    check(finalized, [NSString stringWithFormat:@"the document QR source rows and final issued bound write a complete matcher manifest (%s)",
+        manifestError ?: ""]);
+    free(manifestError);
+    NSString *rowsPath = [NSString stringWithFormat:@"%s/frame-identities/decoded-frames.jsonl", directory];
+    NSArray<NSString *> *lines = [[NSString stringWithContentsOfFile:rowsPath encoding:NSUTF8StringEncoding error:nil]
+        componentsSeparatedByString:@"\n"];
+    NSMutableArray<NSDictionary *> *rows = [NSMutableArray array];
+    for (NSString *line in lines) {
+        if (!line.length) continue;
+        NSDictionary *row = [NSJSONSerialization JSONObjectWithData:[line dataUsingEncoding:NSUTF8StringEncoding]
+            options:0 error:nil];
+        if (row) [rows addObject:row];
+    }
+    check(rows.count == 2 && [rows[0][@"sourceKind"] isEqual:@"document"]
+        && [rows[0][@"status"] isEqual:@"matched"]
+        && [rows[0][@"identity"][@"generation"] isEqual:@"53"]
+        && [rows[0][@"identity"][@"raster"] isEqual:@"18446744073709551615"]
+        && [rows[0][@"identity"][@"sequence"] unsignedIntegerValue] == 1
+        && [rows[0][@"displayTime"] isEqual:@"111"],
+        @"the exact issued document QR is recorded as matched with its SCK displayTime and document tuple");
+    check(rows.count == 2 && [rows[1][@"sourceKind"] isEqual:@"document"]
+        && [rows[1][@"status"] isEqual:@"unknown"] && [rows[1][@"reason"] isEqual:@"unissued"]
+        && [rows[1][@"identity"] isEqual:NSNull.null] && [rows[1][@"displayTime"] isEqual:@"222"],
+        @"a generated atlas cell above the final issued count remains unknown instead of being credited");
+    NSString *manifestPath = [NSString stringWithFormat:@"%s/frame-identities/manifest.json", directory];
+    NSDictionary *manifest = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:manifestPath]
+        options:0 error:nil];
+    NSDictionary *document = manifest[@"documentFrameIdentity"];
+    check([document[@"atlasSlots"] unsignedIntegerValue] == 512 && [document[@"issuedSlots"] unsignedIntegerValue] == 1
+        && [document[@"generatedIdentities"] count] == 512 && [document[@"matchedRecords"] unsignedIntegerValue] == 1
+        && [document[@"unknownRecords"] unsignedIntegerValue] == 1
+        && [document[@"incompleteSamples"] unsignedIntegerValue] == 0,
+        @"the manifest distinguishes generated atlas capacity, actually issued slots, decoded rows, and incomplete samples");
+    sp_image_capture_match_end();
+    NSError *removeError = nil;
+    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory]
+        error:&removeError], [NSString stringWithFormat:@"the document QR matcher fixture is removed (%@)",
+            removeError.localizedDescription ?: @"no removal error"]);
+    dispatch_release(writer);
+}
+
+static void staleDocumentFrameIdentitySessionChecks(void) {
+    char directoryTemplate[] = "/tmp/soksak-document-frame-identity-session-XXXXXX";
+    char *directory = mkdtemp(directoryTemplate);
+    dispatch_queue_t writer = dispatch_queue_create("test.document-frame-identity-session.writer", DISPATCH_QUEUE_SERIAL);
+    check(directory != NULL && writer != NULL, @"the document identity session fixture allocates capture resources");
+    if (!directory || !writer) return;
+    sp_image_capture_match_begin(directory, writer);
+    char *error = NULL;
+    BOOL oldStarted = sp_image_capture_match_identity_session_begin(&error) && error == NULL;
+    check(oldStarted, @"the stale producer fixture starts its original capture session");
+    free(error); error = NULL;
+    const uint8_t oldRegion[16] = { 2, 4, 6, 8, 10, 12, 14 };
+    NSArray<NSString *> *oldPayloads = nil;
+    NSData *oldNonce = nil;
+    BOOL oldDocumentStarted = oldStarted && sp_image_capture_match_identity_document_begin(oldRegion, 901,
+        CGRectMake(0, 0, 128, 128), 2, &oldPayloads, &oldNonce, &error);
+    check(oldDocumentStarted && oldNonce.length == 32,
+        @"the retired document producer retains its capture-specific failure token");
+    free(error); error = NULL;
+    [oldPayloads release];
+    sp_image_capture_match_identity_session_end();
+    BOOL currentStarted = sp_image_capture_match_identity_session_begin(&error) && error == NULL;
+    check(currentStarted, @"the stale producer fixture starts a replacement capture session");
+    free(error); error = NULL;
+    const uint8_t currentRegion[16] = { 3, 5, 7, 9, 11, 13, 15 };
+    NSArray<NSString *> *currentPayloads = nil;
+    NSData *currentNonce = nil;
+    BOOL currentDocumentStarted = currentStarted && sp_image_capture_match_identity_document_begin(currentRegion, 902,
+        CGRectMake(0, 0, 128, 128), 2, &currentPayloads, &currentNonce, &error);
+    check(currentDocumentStarted && currentNonce.length == 32,
+        @"the replacement document producer receives its own capture-specific failure token");
+    free(error); error = NULL;
+    BOOL staleFailureReturned = !sp_image_capture_match_identity_session_fail_for_nonce(oldNonce,
+        "old document producer closed", &error);
+    BOOL currentSurvived = staleFailureReturned && error == NULL
+        && sp_image_capture_match_identity_session_active();
+    check(currentSurvived,
+        @"a late failure from a retired document producer cannot fail a replacement capture session");
+    free(error); error = NULL;
+    NSData *lateAtlas = [@"old atlas" dataUsingEncoding:NSUTF8StringEncoding];
+    BOOL staleFinishRejected = !sp_image_capture_match_identity_document_finish(oldNonce, lateAtlas, 1, &error);
+    BOOL currentFinishUntouched = staleFinishRejected && error != NULL
+        && sp_image_capture_match_identity_session_active();
+    check(currentFinishUntouched,
+        @"a late finish from a retired document producer cannot commit into a replacement matcher session");
+    free(error); error = NULL;
+    BOOL currentFailureRecorded = sp_image_capture_match_identity_session_fail_for_nonce(currentNonce,
+        "current document producer closed", &error);
+    check(currentFailureRecorded && error == NULL && !sp_image_capture_match_identity_session_active(),
+        @"the current document producer can fail only its own active capture session");
+    free(error);
+    [currentPayloads release]; [currentNonce release]; [oldNonce release];
+    sp_image_capture_match_end();
+    NSError *removeError = nil;
+    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory]
+        error:&removeError], [NSString stringWithFormat:@"the document identity session fixture is removed (%@)",
+            removeError.localizedDescription ?: @"no removal error"]);
+    dispatch_release(writer);
 }
 
 static void frameIdentitySessionChecks(void) {
@@ -818,6 +1002,8 @@ int main(void) { @autoreleasepool {
     sp_image_capture_match_begin(NULL, NULL);
     frameIdentitySessionChecks();
     sp_image_capture_match_end();
+    staleDocumentFrameIdentitySessionChecks();
+    frameIdentityDocumentChecks();
     frameIdentityArtifactChecks();
     frameIdentityCropByteBoundChecks();
     frameIdentityDecodeDoesNotBlockSampleQueue();

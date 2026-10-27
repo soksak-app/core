@@ -536,6 +536,58 @@ int main(void) { @autoreleasepool {
         "invalid nonce input returns an explicit error and no partial owned outputs");
     CGColorSpaceRelease(color_space);
     [error release];
+
+    NSMutableArray<NSString *> *atlasPayloads = [NSMutableArray array];
+    NSString *atlasNonce = @"0123456789abcdef0123456789abcdef";
+    for (uint64_t sequence = 1; sequence <= 4; sequence++) {
+        NSString *issued = nil, *payloadError = nil;
+        SPCaptureFrameIdentity identity = { 19, 1, (int)sequence };
+        BOOL issuedOK = sp_capture_frame_identity_payload(atlasNonce, identity, &issued, &payloadError);
+        check(issuedOK && issued != nil && payloadError == nil, "the QR atlas receives a canonical issued payload");
+        if (issuedOK) [atlasPayloads addObject:issued];
+        [issued release]; [payloadError release];
+    }
+    NSData *atlasPNG = nil;
+    NSString *atlasError = nil;
+    BOOL atlasMade = sp_capture_frame_identity_atlas(atlasPayloads, 128, 2, &atlasPNG, &atlasError);
+    check(atlasMade && atlasPNG.length > 0 && atlasError == nil, "issued identities encode into one bounded QR atlas PNG");
+    CGImageSourceRef atlasSource = atlasPNG ? CGImageSourceCreateWithData((__bridge CFDataRef)atlasPNG, NULL) : NULL;
+    CGImageRef atlasImage = atlasSource ? CGImageSourceCreateImageAtIndex(atlasSource, 0, NULL) : NULL;
+    check(atlasImage && CGImageGetWidth(atlasImage) == 256 && CGImageGetHeight(atlasImage) == 256,
+        "the QR atlas has the declared row-major cell geometry");
+    NSMutableSet<NSString *> *decodedAtlasPayloads = [NSMutableSet set];
+    for (size_t row = 0; atlasImage && row < 2; row++) for (size_t column = 0; column < 2; column++) {
+        CGRect cell = CGRectMake(column * 128, row * 128, 128, 128);
+        CGImageRef cellImage = CGImageCreateWithImageInRect(atlasImage, cell);
+        SPCaptureFrameIdentity decoded = {0};
+        NSString *unknownReason = nil, *decodeError = nil;
+        BOOL decodedOK = cellImage && testDecodeImage(cellImage, CGRectMake(0, 0, 128, 128),
+            [NSSet setWithArray:atlasPayloads], &decoded, &unknownReason, &decodeError);
+        uint64_t expectedSequence = row * 2 + column + 1;
+        check(decodedOK && decoded.generation == 19 && decoded.raster == 1
+            && decoded.sequence == expectedSequence,
+            "each row-major atlas cell decodes its exact generated identity");
+        if (decodedOK) {
+            NSString *key = [NSString stringWithFormat:@"%llu-%llu-%llu",
+                (unsigned long long)decoded.generation, (unsigned long long)decoded.raster,
+                (unsigned long long)decoded.sequence];
+            [decodedAtlasPayloads addObject:key];
+        }
+        check(decodedOK, "each atlas cell decodes as one exact issued identity");
+        [unknownReason release]; [decodeError release]; if (cellImage) CGImageRelease(cellImage);
+    }
+    check(decodedAtlasPayloads.count == 4, "atlas cells retain four distinct source sequences without reuse");
+    if (atlasImage) CGImageRelease(atlasImage);
+    if (atlasSource) CFRelease(atlasSource);
+    [atlasError release];
+
+    NSData *oversizedAtlas = nil;
+    NSString *oversizedAtlasError = nil;
+    BOOL oversizedAtlasMade = sp_capture_frame_identity_atlas(atlasPayloads, 512, 64,
+        &oversizedAtlas, &oversizedAtlasError);
+    check(!oversizedAtlasMade && oversizedAtlas == nil && oversizedAtlasError != nil,
+        "atlas allocation rejects an oversized intermediate before creating its bitmap");
+    [oversizedAtlasError release];
     fprintf(stderr, "%s: native capture frame identity\n", failures ? "FAIL" : "PASS");
     return failures ? 1 : 0;
 } }

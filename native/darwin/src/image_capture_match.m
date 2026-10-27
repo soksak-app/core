@@ -116,7 +116,13 @@ static size_t identityArtifactCleanupFailures;
 static NSMutableArray<NSDictionary *> *identityArtifactCleanupErrors;
 static size_t identityDecodedFrameCount;
 static size_t identityDecodedRecordCount;
+static size_t identityDocumentDecodedRecords;
+static size_t identityDocumentMatchedRecords;
+static size_t identityDocumentUnknownRecords;
+static size_t identityDocumentCompleteSamples;
+static uint64_t identityDocumentMaxMatchedSequence;
 static size_t identityDecodedWriteFailures;
+static NSDictionary *identityDocumentFrame;
 static dispatch_queue_t identityDecodeQueue;
 static NSOperationQueue *identityDecodeWorkerQueue;
 static NSUInteger identityDecodePendingJobs;
@@ -187,7 +193,14 @@ static void clearIdentitySessionLocked(void) {
     [identityArtifactCleanupErrors removeAllObjects];
     identityDecodedFrameCount = 0;
     identityDecodedRecordCount = 0;
+    identityDocumentDecodedRecords = 0;
+    identityDocumentMatchedRecords = 0;
+    identityDocumentUnknownRecords = 0;
+    identityDocumentCompleteSamples = 0;
+    identityDocumentMaxMatchedSequence = 0;
     identityDecodedWriteFailures = 0;
+    [identityDocumentFrame release];
+    identityDocumentFrame = nil;
     identitySessionActive = false;
     atomic_store(&identitySessionEnabled, false);
 }
@@ -645,6 +658,12 @@ bool sp_image_capture_match_write_manifest(const char *capture_directory) {
     }
 
     [historyLock lock];
+    if ([identityDocumentFrame[@"issuedSlots"] isKindOfClass:NSNumber.class]
+        && identityDocumentMaxMatchedSequence > [identityDocumentFrame[@"issuedSlots"] unsignedLongLongValue]
+        && !identitySessionFailure) {
+        identitySessionFailure = [@"document frame identity matched a sequence above its final issued count" copy];
+        atomic_store(&identitySessionEnabled, false);
+    }
     if (artifactDirectory && ![artifactDirectory isEqualToString:directory]) {
         [historyLock unlock];
         return false;
@@ -672,6 +691,11 @@ bool sp_image_capture_match_write_manifest(const char *capture_directory) {
     size_t identityCleanupFailures = identityArtifactCleanupFailures;
     size_t decodedFrameCount = identityDecodedFrameCount;
     size_t decodedRecordCount = identityDecodedRecordCount;
+    NSDictionary *documentFrame = [identityDocumentFrame copy];
+    size_t documentCompleteSamples = identityDocumentCompleteSamples;
+    size_t documentDecodedRecords = identityDocumentDecodedRecords;
+    size_t documentMatchedRecords = identityDocumentMatchedRecords;
+    size_t documentUnknownRecords = identityDocumentUnknownRecords;
     size_t decodedWriteFailures = identityDecodedWriteFailures;
     [historyLock unlock];
     NSString *sourceDirectory = [directory stringByAppendingPathComponent:@"sources"];
@@ -690,7 +714,7 @@ bool sp_image_capture_match_write_manifest(const char *capture_directory) {
     BOOL sourceManifestWritten = data && [data writeToFile:path options:NSDataWritingAtomic error:&error];
     BOOL identityManifestWritten = YES;
     if (identityStarted) {
-        NSDictionary *identityManifest = @{
+        NSMutableDictionary *identityManifest = [@{
             @"format": @1, @"pixelFormat": @"BGRA8",
             @"limits": @{ @"issuedIdentities": @(kImageCaptureHistoryCountLimit),
                 @"pendingArtifactBytes": @(kImageCaptureArtifactPendingLimit) },
@@ -701,19 +725,42 @@ bool sp_image_capture_match_write_manifest(const char *capture_directory) {
             @"decodedFramesFile": @"decoded-frames.jsonl", @"decodedFrames": @(decodedFrameCount),
             @"decodedRecords": @(decodedRecordCount), @"decodedWriteFailures": @(decodedWriteFailures),
             @"identityFailure": identityFailure ?: (id)NSNull.null,
-        };
+        } mutableCopy];
         NSString *identityDirectory = [directory stringByAppendingPathComponent:@"frame-identities"];
         NSError *identityError = nil;
         identityManifestWritten = [NSFileManager.defaultManager createDirectoryAtPath:identityDirectory
             withIntermediateDirectories:YES attributes:nil error:&identityError];
+        if (identityManifestWritten && documentFrame) {
+            NSData *atlas = [documentFrame[@"atlasPNG"] isKindOfClass:[NSData class]] ? documentFrame[@"atlasPNG"] : nil;
+            id issuedValue = documentFrame[@"issuedSlots"];
+            identityManifestWritten = atlas.length > 0 && issuedValue != NSNull.null;
+            NSString *atlasFile = @"document-atlas.png";
+            NSString *atlasPath = [identityDirectory stringByAppendingPathComponent:atlasFile];
+            if (identityManifestWritten)
+                identityManifestWritten = [atlas writeToFile:atlasPath options:NSDataWritingAtomic error:&identityError];
+            NSUInteger slots = [documentFrame[@"atlasSlots"] unsignedIntegerValue];
+            NSUInteger issued = [issuedValue respondsToSelector:@selector(unsignedIntegerValue)]
+                ? [issuedValue unsignedIntegerValue] : 0;
+            NSUInteger incomplete = documentCompleteSamples > documentDecodedRecords
+                ? (NSUInteger)(documentCompleteSamples - documentDecodedRecords) : 0;
+            identityManifest[@"documentFrameIdentity"] = @{
+                @"generation": documentFrame[@"generation"], @"raster": documentFrame[@"raster"],
+                @"regionToken": documentFrame[@"region"], @"screenROI": documentFrame[@"screenROI"],
+                @"atlasFile": atlasFile, @"atlasSlots": @(slots), @"issuedSlots": @(issued),
+                @"generatedIdentities": documentFrame[@"sourceIdentities"],
+                @"decodedRecords": @(documentDecodedRecords), @"matchedRecords": @(documentMatchedRecords),
+                @"unknownRecords": @(documentUnknownRecords), @"incompleteSamples": @(incomplete),
+            };
+        }
         NSData *identityData = identityManifestWritten
             ? [NSJSONSerialization dataWithJSONObject:identityManifest options:NSJSONWritingPrettyPrinted error:&identityError]
             : nil;
         NSString *identityManifestPath = [identityDirectory stringByAppendingPathComponent:@"manifest.json"];
         identityManifestWritten = identityData
             && [identityData writeToFile:identityManifestPath options:NSDataWritingAtomic error:&identityError];
+        [identityManifest release];
     }
-    [identityRecords release]; [identityCleanupErrors release]; [identityFailure release];
+    [identityRecords release]; [identityCleanupErrors release]; [identityFailure release]; [documentFrame release];
     return sourceManifestWritten && noWriteFailures && identityManifestWritten
         && identityFailure == nil && identityWriteFailures == 0;
 }
@@ -782,6 +829,27 @@ static BOOL mapSourceCrop(const SPImageCaptureSource *source, CGRect content_rec
     return YES;
 }
 
+static BOOL mapScreenROI(CGRect bounds, CGRect content_rect, CGRect screen_rect, double pixels_per_point,
+    size_t frame_width, size_t frame_height, CGRect *crop) {
+    if (CGRectIsEmpty(bounds) || CGRectIsNull(bounds)
+        || CGRectGetMinX(bounds) < CGRectGetMinX(screen_rect)
+        || CGRectGetMaxX(bounds) > CGRectGetMaxX(screen_rect)
+        || CGRectGetMinY(bounds) < CGRectGetMinY(screen_rect)
+        || CGRectGetMaxY(bounds) > CGRectGetMaxY(screen_rect)) return NO;
+    double left = CGRectGetMinX(content_rect) + (CGRectGetMinX(bounds) - CGRectGetMinX(screen_rect)) * pixels_per_point;
+    double top = CGRectGetMinY(content_rect) + (CGRectGetMinY(bounds) - CGRectGetMinY(screen_rect)) * pixels_per_point;
+    double width = CGRectGetWidth(bounds) * pixels_per_point;
+    double height = CGRectGetHeight(bounds) * pixels_per_point;
+    double rounded_left = nearbyint(left), rounded_top = nearbyint(top);
+    double rounded_width = nearbyint(width), rounded_height = nearbyint(height);
+    if (fabs(left - rounded_left) > 0.000001 || fabs(top - rounded_top) > 0.000001
+        || fabs(width - rounded_width) > 0.000001 || fabs(height - rounded_height) > 0.000001
+        || rounded_left < 0 || rounded_top < 0 || rounded_width <= 0 || rounded_height <= 0
+        || rounded_left + rounded_width > frame_width || rounded_top + rounded_height > frame_height) return NO;
+    *crop = CGRectMake(rounded_left, rounded_top, rounded_width, rounded_height);
+    return YES;
+}
+
 static NSDictionary *identityTupleRecord(sp_image_capture_identity identity) {
     return @{ @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)identity.generation],
         @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)identity.raster],
@@ -789,13 +857,14 @@ static NSDictionary *identityTupleRecord(sp_image_capture_identity identity) {
 }
 
 static NSDictionary *identityDecodeRecord(uint64_t frame, uint64_t display_time, NSString *region,
-    CGRect roi, NSString *status, NSString *reason, sp_image_capture_identity identity, BOOL has_identity) {
+    CGRect roi, NSString *status, NSString *reason, sp_image_capture_identity identity, BOOL has_identity,
+    NSString *source_kind) {
     return @{ @"frame": @(frame), @"displayTime": [NSString stringWithFormat:@"%llu", (unsigned long long)display_time],
         @"region": region ?: (id)NSNull.null,
         @"roi": CGRectIsNull(roi) ? (id)NSNull.null : @{ @"x": @(CGRectGetMinX(roi)), @"y": @(CGRectGetMinY(roi)),
             @"width": @(CGRectGetWidth(roi)), @"height": @(CGRectGetHeight(roi)) },
         @"status": status, @"identity": has_identity ? identityTupleRecord(identity) : (id)NSNull.null,
-        @"reason": reason ?: (id)NSNull.null };
+        @"reason": reason ?: (id)NSNull.null, @"sourceKind": source_kind ?: (id)NSNull.null };
 }
 
 static NSString *identityDecodeReason(NSString *helperReason) {
@@ -844,6 +913,17 @@ static BOOL appendIdentityDecodeRecords(NSArray<NSDictionary *> *records, uint64
     if (written) {
         identityDecodedFrameCount++;
         identityDecodedRecordCount += records.count;
+        for (NSDictionary *record in records) {
+            id sourceKind = record[@"sourceKind"];
+            if (![sourceKind isKindOfClass:NSString.class] || ![sourceKind isEqualToString:@"document"]) continue;
+            identityDocumentDecodedRecords++;
+            if ([record[@"status"] isEqualToString:@"matched"]) {
+                identityDocumentMatchedRecords++;
+                uint64_t sequence = [record[@"identity"][@"sequence"] unsignedLongLongValue];
+                identityDocumentMaxMatchedSequence = MAX(identityDocumentMaxMatchedSequence, sequence);
+            }
+            else identityDocumentUnknownRecords++;
+        }
     } else {
         identityDecodedWriteFailures++;
     }
@@ -1088,7 +1168,11 @@ static void decodeIdentityJob(SPIdentityDecodeJob *job) {
                     NSString *sourceKey = identitySourceKey(identity);
                     BOOL known = [group[@"sourceKeys"] containsObject:sourceKey];
                     BOOL retired = known && [group[@"retiredSourceKeys"] containsObject:sourceKey];
-                    if (known && !retired && [group[@"eligibleSourceKeys"] containsObject:sourceKey]) {
+                    id finalIssuedValue = group[@"finalIssuedSlots"];
+                    BOOL aboveFinalIssued = [finalIssuedValue isKindOfClass:NSNumber.class]
+                        && decoded.sequence > [finalIssuedValue unsignedLongLongValue];
+                    if (known && !retired && !aboveFinalIssued
+                        && [group[@"eligibleSourceKeys"] containsObject:sourceKey]) {
                         status = @"matched";
                         hasIdentity = YES;
                     } else {
@@ -1100,7 +1184,7 @@ static void decodeIdentityJob(SPIdentityDecodeJob *job) {
                 [activeUnknownReason release]; activeUnknownReason = nil;
             }
             NSMutableDictionary *record = [identityDecodeRecord(job.frame, job.displayTime, region, roi,
-                status, reason, identity, hasIdentity) mutableCopy];
+                status, reason, identity, hasIdentity, group[@"sourceKind"]) mutableCopy];
             record[@"decodeEnqueuedTime"] = decoderRan
                 ? [NSString stringWithFormat:@"%llu", (unsigned long long)job.enqueuedTime] : (id)NSNull.null;
             record[@"decodeStartTime"] = decoderRan
@@ -1112,11 +1196,11 @@ static void decodeIdentityJob(SPIdentityDecodeJob *job) {
         }
         if (!decodeFailure && job.groups.count == 0) {
             [records addObject:identityDecodeRecord(job.frame, job.displayTime, nil, CGRectNull,
-                @"unknown", job.unknownReason ?: @"unknown-geometry", (sp_image_capture_identity){0}, NO)];
+                @"unknown", job.unknownReason ?: @"unknown-geometry", (sp_image_capture_identity){0}, NO, nil)];
         } else if (!decodeFailure && job.coverageMarker) {
             [records addObject:identityDecodeRecord(job.frame, job.displayTime, nil, CGRectNull,
                 @"unknown", job.retentionMarker ? @"unknown-retention" : @"unknown-geometry",
-                (sp_image_capture_identity){0}, NO)];
+                (sp_image_capture_identity){0}, NO, nil)];
         }
         if (!decodeFailure) {
             for (NSUInteger index = 0; index < records.count; index++) {
@@ -1208,6 +1292,7 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
         [sessionFailure release];
         return failed;
     }
+    if (identityDocumentFrame && identityDocumentCompleteSamples < SIZE_MAX) identityDocumentCompleteSamples++;
     hadHistoryDrops = historyDrops != 0;
     onlyHistoryEvictions = hadHistoryDrops && historyDrops == historyEvictions;
     coverageComplete = !hadHistoryDrops || onlyHistoryEvictions;
@@ -1243,6 +1328,29 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
         addIdentityArtifactPairLocked(tagArtifact, sources, groups, content_rect, screen_rect,
             pixelsPerPoint, frame_width, frame_height, seenPairs, &coverageComplete);
 
+    NSDictionary *documentFrame = identityDocumentFrame;
+    if (documentFrame) {
+        NSDictionary *screenROI = documentFrame[@"screenROI"];
+        CGRect bounds = CGRectMake([screenROI[@"x"] doubleValue], [screenROI[@"y"] doubleValue],
+            [screenROI[@"width"] doubleValue], [screenROI[@"height"] doubleValue]);
+        CGRect roi = CGRectNull;
+        BOOL mapped = mapScreenROI(bounds, content_rect, screen_rect, pixelsPerPoint,
+            frame_width, frame_height, &roi);
+        NSString *region = documentFrame[@"region"];
+        NSString *roiKey = mapped ? [NSString stringWithFormat:@"%.0f:%.0f:%.0f:%.0f",
+            CGRectGetMinX(roi), CGRectGetMinY(roi), CGRectGetWidth(roi), CGRectGetHeight(roi)] : @"unknown";
+        NSString *groupKey = [NSString stringWithFormat:@"document:%@:%@", region, roiKey];
+        NSMutableDictionary *group = [@{
+            @"region": region, @"roi": [NSValue value:&roi withObjCType:@encode(CGRect)],
+            @"payloads": documentFrame[@"payloads"], @"sourceKeys": documentFrame[@"sourceKeys"],
+            @"eligibleSourceKeys": documentFrame[@"sourceKeys"],
+                @"finalIssuedSlots": documentFrame[@"issuedSlots"],
+            @"retiredSourceKeys": [NSSet set], @"mapped": @(mapped), @"sourceKind": @"document",
+        } mutableCopy];
+        groups[groupKey] = group;
+        [group release];
+    }
+
     NSMutableSet<NSString *> *overlappingGroups = [NSMutableSet set];
     NSArray<NSString *> *keys = [[groups allKeys] sortedArrayUsingSelector:@selector(compare:)];
     for (NSUInteger left = 0; left < keys.count; left++) {
@@ -1271,7 +1379,9 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
             @"payloads": [NSSet setWithSet:group[@"payloads"]],
             @"sourceKeys": [NSSet setWithSet:group[@"sourceKeys"]],
             @"eligibleSourceKeys": [NSSet setWithSet:group[@"eligibleSourceKeys"]],
+            @"finalIssuedSlots": group[@"finalIssuedSlots"] ?: (id)NSNull.null,
             @"retiredSourceKeys": [NSSet setWithSet:group[@"retiredSourceKeys"]],
+            @"sourceKind": group[@"sourceKind"] ?: @"image",
         } mutableCopy];
         if (mapped && ![overlappingGroups containsObject:key]) {
             size_t roiWidth = (size_t)CGRectGetWidth(roi), roiHeight = (size_t)CGRectGetHeight(roi);
@@ -1764,6 +1874,146 @@ bool sp_image_capture_match_identity_issue(const uint8_t region_token[16], sp_im
     return true;
 }
 
+bool sp_image_capture_match_identity_document_begin(const uint8_t region_token[16], uint64_t generation,
+    CGRect screen_roi, NSUInteger atlas_slots, NSArray<NSString *> **payloads, NSData **session_nonce, char **error) {
+    if (payloads) *payloads = nil;
+    if (session_nonce) *session_nonce = nil;
+    if (error) *error = NULL;
+    if (!region_token || !generation || !atlas_slots || atlas_slots > kImageCaptureHistoryCountLimit
+        || !payloads || !session_nonce || !error || !isfinite(screen_roi.origin.x) || !isfinite(screen_roi.origin.y)
+        || !isfinite(screen_roi.size.width) || !isfinite(screen_roi.size.height)
+        || screen_roi.size.width <= 0 || screen_roi.size.height <= 0) {
+        return identityFailure(error, "document frame identity source arguments are invalid");
+    }
+    initializeHistory();
+    [historyLock lock];
+    BOOL available = identitySessionActive && !identitySessionFailure && !identityDocumentFrame;
+    NSString *sessionFailure = [identitySessionFailure copy];
+    NSData *sessionNonce = available ? [identityCaptureNonce copy] : nil;
+    [historyLock unlock];
+    if (!available) {
+        bool failed = identityFailure(error, sessionFailure.UTF8String
+            ?: "document frame identity requires one active frame identity capture");
+        [sessionFailure release];
+        return failed;
+    }
+    [sessionFailure release];
+    if (!sessionNonce) return identityFailure(error, "document frame identity capture nonce is unavailable");
+
+    NSString *region = identityRegionKey(region_token);
+    NSString *nonce = nil;
+    [historyLock lock];
+    if (identitySessionActive && [identityCaptureNonce isEqualToData:sessionNonce])
+        nonce = [identityNonceLocked(region_token) copy];
+    [historyLock unlock];
+    if (!nonce) {
+        [sessionNonce release];
+        return identityFailure(error, "document frame identity capture session changed before registration");
+    }
+    NSMutableArray<NSString *> *issuedPayloads = [NSMutableArray arrayWithCapacity:atlas_slots];
+    NSMutableSet<NSString *> *sourceKeys = [NSMutableSet setWithCapacity:atlas_slots];
+    NSMutableArray<NSDictionary *> *sourceIdentities = [NSMutableArray arrayWithCapacity:atlas_slots];
+    for (NSUInteger index = 0; index < atlas_slots; index++) {
+        if (index >= INT_MAX) {
+            [nonce release];
+            [sessionNonce release];
+            return identityFailure(error, "document frame identity atlas sequence exceeds its bound");
+        }
+        sp_image_capture_identity identity = { generation, UINT64_MAX, (int)index + 1 };
+        SPCaptureFrameIdentity frameIdentity = { generation, UINT64_MAX, (uint64_t)identity.sequence };
+        NSString *payload = nil, *payloadError = nil;
+        if (!sp_capture_frame_identity_payload(nonce, frameIdentity, &payload, &payloadError)) {
+            const char *message = payloadError.UTF8String ?: "document frame identity payload generation failed";
+            BOOL failed = identityFailure(error, message);
+            [payloadError release];
+            [nonce release];
+            [sessionNonce release];
+            return failed;
+        }
+        NSString *sourceKey = identitySourceKey(identity);
+        if (!sourceKey || !payload) {
+            [payload release];
+            [nonce release];
+            [sessionNonce release];
+            return identityFailure(error, "document frame identity atlas payload is invalid");
+        }
+        [issuedPayloads addObject:payload];
+        [sourceKeys addObject:sourceKey];
+        [sourceIdentities addObject:@{
+            @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)identity.generation],
+            @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)identity.raster],
+            @"sequence": @(identity.sequence), @"payload": payload,
+        }];
+        [payload release];
+    }
+    [nonce release];
+    NSDictionary *screenROI = @{
+        @"x": @(CGRectGetMinX(screen_roi)), @"y": @(CGRectGetMinY(screen_roi)),
+        @"width": @(CGRectGetWidth(screen_roi)), @"height": @(CGRectGetHeight(screen_roi)),
+    };
+    NSDictionary *state = @{
+        @"region": region, @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)generation],
+        @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)UINT64_MAX],
+        @"screenROI": screenROI, @"atlasSlots": @(atlas_slots),
+        @"issuedSlots": [NSNull null], @"sourceIdentities": sourceIdentities,
+        @"payloads": [NSSet setWithArray:issuedPayloads], @"sourceKeys": sourceKeys,
+    };
+    [historyLock lock];
+    if (!identitySessionActive || identitySessionFailure || identityDocumentFrame
+        || ![identityCaptureNonce isEqualToData:sessionNonce]) {
+        [historyLock unlock];
+        [sessionNonce release];
+        return identityFailure(error, "document frame identity registration lost its capture session");
+    }
+    NSArray *returnedPayloads = [issuedPayloads copy];
+    NSData *returnedSessionNonce = [sessionNonce copy];
+    if (!returnedPayloads || !returnedSessionNonce) {
+        [returnedPayloads release];
+        [returnedSessionNonce release];
+        [historyLock unlock];
+        [sessionNonce release];
+        return identityFailure(error, "document frame identity registration outputs could not be allocated");
+    }
+    identityDocumentFrame = [state copy];
+    *payloads = returnedPayloads;
+    *session_nonce = returnedSessionNonce;
+    [historyLock unlock];
+    [sessionNonce release];
+    return true;
+}
+
+bool sp_image_capture_match_identity_document_finish(NSData *session_nonce, NSData *atlas_png,
+    NSUInteger issued_slots, char **error) {
+    if (error) *error = NULL;
+    if (!error || !session_nonce.length || !atlas_png || !atlas_png.length) {
+        return identityFailure(error, "document frame identity session nonce, final atlas, or error output is invalid");
+    }
+    initializeHistory();
+    [historyLock lock];
+    NSDictionary *state = identityDocumentFrame;
+    NSUInteger atlas_slots = [state[@"atlasSlots"] unsignedIntegerValue];
+    if (!identitySessionActive || ![identityCaptureNonce isEqualToData:session_nonce] || !state || issued_slots > atlas_slots
+        || identityDocumentMaxMatchedSequence > issued_slots) {
+        if (identitySessionActive && [identityCaptureNonce isEqualToData:session_nonce]
+            && state && identityDocumentMaxMatchedSequence > issued_slots && !identitySessionFailure) {
+            identitySessionFailure = [@"document frame identity matched a sequence above its final issued count" copy];
+            atomic_store(&identitySessionEnabled, false);
+        }
+        [historyLock unlock];
+        return identityFailure(error, "document frame identity final count does not match observed source identities");
+    }
+    NSMutableDictionary *finished = [state mutableCopy];
+    finished[@"issuedSlots"] = @(issued_slots);
+    NSData *ownedAtlas = [atlas_png copy];
+    finished[@"atlasPNG"] = ownedAtlas;
+    [ownedAtlas release];
+    [identityDocumentFrame release];
+    identityDocumentFrame = [finished copy];
+    [finished release];
+    [historyLock unlock];
+    return true;
+}
+
 bool sp_image_capture_match_identity_evict(const uint8_t region_token[16], sp_image_capture_identity identity,
     char **error) {
     if (error) *error = NULL;
@@ -1852,6 +2102,24 @@ bool sp_image_capture_match_identity_session_fail(const char *reason, char **err
     if (!identitySessionActive) {
         [historyLock unlock];
         return identityFailure(error, "frame identity session is not active");
+    }
+    if (!identitySessionFailure) identitySessionFailure = [message copy];
+    atomic_store(&identitySessionEnabled, false);
+    [historyLock unlock];
+    return true;
+}
+
+bool sp_image_capture_match_identity_session_fail_for_nonce(NSData *session_nonce, const char *reason, char **error) {
+    if (error) *error = NULL;
+    if (!error || session_nonce.length != 32 || !reason || !reason[0])
+        return identityFailure(error, "capture nonce, failure reason, and error output are required");
+    NSString *message = [NSString stringWithUTF8String:reason];
+    if (!message) return identityFailure(error, "frame identity failure reason is not valid UTF-8");
+    initializeHistory();
+    [historyLock lock];
+    if (!identitySessionActive || ![identityCaptureNonce isEqualToData:session_nonce]) {
+        [historyLock unlock];
+        return false;
     }
     if (!identitySessionFailure) identitySessionFailure = [message copy];
     atomic_store(&identitySessionEnabled, false);

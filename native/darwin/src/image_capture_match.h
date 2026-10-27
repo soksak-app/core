@@ -81,6 +81,13 @@ bool sp_image_capture_match_identity_region_nonce(const uint8_t region_token[16]
 // Adds the canonical source identity payload to this region's issued set. Success returns caller-owned payload; free error with free().
 bool sp_image_capture_match_identity_issue(const uint8_t region_token[16], sp_image_capture_identity identity,
     NSString **payload, char **error);
+// Issues a bounded QR atlas for one plugin root document and registers its measured screen ROI for captured-sample
+// decoding. The returned payloads are in atlas order; success returns caller-owned array and error remains NULL.
+bool sp_image_capture_match_identity_document_begin(const uint8_t region_token[16], uint64_t generation,
+    CGRect screen_roi, NSUInteger atlas_slots, NSArray<NSString *> **payloads, NSData **session_nonce, char **error);
+// Stores the immutable atlas image and final producer-issued count before capture identity finalization.
+bool sp_image_capture_match_identity_document_finish(NSData *session_nonce, NSData *atlas_png,
+    NSUInteger issued_slots, char **error);
 // Removes one issued tuple idempotently. Success sets error to NULL; failure returns a caller-owned strdup error.
 bool sp_image_capture_match_identity_evict(const uint8_t region_token[16], sp_image_capture_identity identity,
     char **error);
@@ -93,6 +100,8 @@ void sp_image_capture_match_identity_session_end(void);
 bool sp_image_capture_match_identity_session_active(void);
 // Records the first tag construction or queue-admission failure for this session. Repeated failures keep the first reason.
 bool sp_image_capture_match_identity_session_fail(const char *reason, char **error);
+// Records a failure only when the active capture nonce matches. A stale nonce returns false with no error and does not mutate the current session.
+bool sp_image_capture_match_identity_session_fail_for_nonce(NSData *session_nonce, const char *reason, char **error);
 // Returns a caller-owned UTF-8 error string or NULL when the identity session has not failed.
 char *sp_image_capture_match_identity_session_error_copy(void);
 // Persists an issued tagged raster and metadata separately from the raw source artifacts. Caller owns error with free().

@@ -198,6 +198,119 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
 {
+  "id": "F239-234",
+  "implementation": [
+    {
+      "file": "native/darwin/src/capture_frame_identity.m",
+      "symbol": "bool sp_capture_frame_identity_atlas("
+    },
+    {
+      "file": "native/darwin/src/image_capture_match.m",
+      "symbol": "bool sp_image_capture_match_identity_document_begin("
+    },
+    {
+      "file": "native/darwin/src/document_view.m",
+      "symbol": "bool sp_document_frame_identity_start("
+    },
+    {
+      "file": "native/darwin/src/document_view.m",
+      "symbol": "bool sp_document_frame_identity_freeze("
+    },
+    {
+      "file": "native/darwin/src/document_view.m",
+      "symbol": "bool sp_document_frame_identity_remove("
+    },
+    {
+      "file": "packages/host/wailsv3/src/diagnostics.go",
+      "symbol": "func diagnosticCaptureDocumentIdentityStart("
+    },
+    {
+      "file": "packages/host/tauriv2/src/diagnostics.rs",
+      "symbol": "fn capture_document_identity_start("
+    },
+    {
+      "file": "e2e/document-frame-identity.mjs",
+      "symbol": "export function verifyDocumentFrameIdentityCapture("
+    },
+    {
+      "file": "e2e/document-frame-identity.mjs",
+      "symbol": "export function viewGenerationForSurface("
+    },
+    {
+      "file": "native/darwin/src/image_capture_match.m",
+      "symbol": "bool sp_image_capture_match_identity_session_fail_for_nonce("
+    }
+  ],
+  "tests": [
+    {
+      "file": "native/darwin/tests/document_core_root_test.m",
+      "id": "freeze reports the bounded count of distinct atlas cells drawn"
+    },
+    {
+      "file": "packages/host/wailsv3/src/diagnostics_test.go",
+      "id": "TestCaptureDocumentIdentityStartIsRegistered"
+    },
+    {
+      "file": "packages/host/wailsv3/src/diagnostics_test.go",
+      "id": "TestCaptureStopPreservesCaptureModesWithoutDocumentSource"
+    },
+    {
+      "file": "packages/host/tauriv2/src/endpoint.rs",
+      "id": "document_frame_identity_start_method_is_declared"
+    },
+    {
+      "file": "packages/host/tauriv2/src/diagnostics_test.rs",
+      "id": "capture_stop_continues_cleanup_after_freeze_failure_without_issued_count"
+    },
+    {
+      "file": "e2e/test/capture-document-frame-identity.test.mjs",
+      "id": "document identity capture validates complete accounting and a decoded issued pixel identity"
+    },
+    {
+      "file": "e2e/test/capture-document-frame-identity.test.mjs",
+      "id": "document identity capture rejects missing accounting and unissued decoded identities"
+    },
+    {
+      "file": "e2e/test/capture-document-frame-identity.test.mjs",
+      "id": "view identity generation comes from one successful current-surface presentation join"
+    },
+    {
+      "file": "e2e/capture-document-frame-identity.test.mjs",
+      "id": "document-frame identity matches captured WebKit root pixels"
+    },
+    {
+      "file": "native/darwin/tests/image_capture_match_test.m",
+      "id": "a late failure from a retired document producer cannot fail a replacement capture session"
+    },
+    {
+      "file": "native/darwin/tests/document_core_root_test.m",
+      "id": "a repeated removal confirms the already removed generation"
+    },
+    {
+      "file": "packages/host/wailsv3/src/diagnostics_test.go",
+      "id": "TestCaptureStartWaitsForPriorIdentityRemoval"
+    },
+    {
+      "file": "packages/host/tauriv2/src/diagnostics_test.rs",
+      "id": "capture_start_waits_for_prior_identity_removal"
+    },
+    {
+      "file": "packages/host/tauriv2/src/diagnostics_test.rs",
+      "id": "document_frame_identity_callback_wait_is_bounded"
+    },
+    {
+      "file": "packages/host/tauriv2/src/diagnostics_test.rs",
+      "id": "late_document_frame_identity_callback_errors_are_logged_as_errors"
+    }
+  ],
+  "expected": "An opt-in current WebKit root document issues bounded non-repeating QR identities whose actual captured pixels and exact ScreenCaptureKit displayTime are retained with complete generated, issued and decoded accounting; stale and unmatched states remain unknown and cleanup preserves existing capture modes.",
+  "levels": [
+    "unit",
+    "native",
+    "application"
+  ]
+},
+{
   "id": "F239-235",
   "implementation": [
     {

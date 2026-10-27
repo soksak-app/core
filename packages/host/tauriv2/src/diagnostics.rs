@@ -35,6 +35,17 @@ const FRAME: Duration = Duration::from_millis(16);
 
 /// A recording in progress.
 static RECORDING: Recording = Recording::new();
+static DOCUMENT_FRAME_IDENTITY: Mutex<()> = Mutex::new(());
+type PendingDocumentFrameIdentityStart = std::sync::mpsc::Receiver<Result<String, String>>;
+static PENDING_DOCUMENT_FRAME_IDENTITY_START: Mutex<Option<PendingDocumentFrameIdentityStart>> =
+    Mutex::new(None);
+
+fn with_document_frame_identity_lifecycle<T>(operation: impl FnOnce() -> T) -> T {
+    let _guard = DOCUMENT_FRAME_IDENTITY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    operation()
+}
 
 /// The window recording operation of the platform. The second value is the last presentation time (ms) to include in
 /// the record when it stops.
@@ -90,23 +101,29 @@ pub(crate) fn call(
         "diagnostics.capture.start" => {
             let options = parse_capture_start_options(&params)?;
             let display = options.display;
-            let frames = capture_start(window, display, options.frame_identity)?;
-            let traced = (|| -> Result<(), Failure> {
-                let platform = platform::current().map_err(internal)?;
-                on_main(window, move || platform.layout_trace_start()).map_err(internal)
-            })();
-            if let Err(error) = traced {
-                if let Err(cleanup) =
-                    recorder().and_then(|capture| RECORDING.abort(&capture).map_err(internal))
-                {
-                    return Err(internal(format!(
-                        "{}; abort capture: {}",
-                        error.message, cleanup.message
-                    )));
+            let frames = with_document_frame_identity_lifecycle(|| {
+                let frames = capture_start(window, display, options.frame_identity, true)?;
+                let traced = (|| -> Result<(), Failure> {
+                    let platform = platform::current().map_err(internal)?;
+                    on_main(window, move || platform.layout_trace_start()).map_err(internal)
+                })();
+                if let Err(error) = traced {
+                    if let Err(cleanup) =
+                        recorder().and_then(|capture| RECORDING.abort(&capture).map_err(internal))
+                    {
+                        return Err(internal(format!(
+                            "{}; abort capture: {}",
+                            error.message, cleanup.message
+                        )));
+                    }
+                    return Err(error);
                 }
-                return Err(error);
-            }
+                Ok(frames)
+            })?;
             Ok(json!({"frames": frames.to_string_lossy()}))
+        }
+        "diagnostics.capture.document-identity.start" => {
+            capture_document_identity_start(window, &params)
         }
         "diagnostics.capture.stop" => {
             let after = match params.get("after") {
@@ -266,6 +283,236 @@ fn document_viewport_marker(
 struct CaptureStartOptions {
     display: bool,
     frame_identity: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CaptureDocumentIdentityRequest {
+    surface: String,
+    generation: u64,
+}
+
+fn parse_capture_document_identity_request(
+    params: &Map<String, Value>,
+) -> Result<CaptureDocumentIdentityRequest, Failure> {
+    let surface = params
+        .get("surface")
+        .and_then(Value::as_str)
+        .filter(|surface| !surface.is_empty())
+        .ok_or_else(|| Failure::params("surface must be a non-empty string"))?;
+    let generation = params
+        .get("generation")
+        .and_then(Value::as_u64)
+        .filter(|generation| *generation > 0 && *generation <= (1u64 << 53) - 1)
+        .ok_or_else(|| Failure::params("generation must be a positive JavaScript safe integer"))?;
+    Ok(CaptureDocumentIdentityRequest {
+        surface: surface.to_string(),
+        generation,
+    })
+}
+
+fn capture_document_identity_start(
+    window: &Window,
+    params: &Map<String, Value>,
+) -> Result<Value, Failure> {
+    let request = parse_capture_document_identity_request(params)?;
+    let _guard = DOCUMENT_FRAME_IDENTITY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let (active, selected) = RECORDING.frame_identity_state();
+    if !active {
+        return Err(internal(
+            "document frame identity requires an active frameIdentity capture",
+        ));
+    }
+    if selected.is_some() {
+        return Err(internal(
+            "identity capture already selected a document source",
+        ));
+    }
+    let platform = platform::current().map_err(internal)?;
+    {
+        let pending = PENDING_DOCUMENT_FRAME_IDENTITY_START
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if pending.is_some() {
+            return Err(internal(
+                "a previous document frame identity start is still pending",
+            ));
+        }
+    }
+    RECORDING
+        .select_frame_identity_source(&request.surface, request.generation)
+        .map_err(internal)?;
+
+    let scheduled_window = window.clone();
+    let operation_window = window.clone();
+    let operation_request = request.clone();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    *PENDING_DOCUMENT_FRAME_IDENTITY_START
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner) = Some(receiver);
+    let scheduled = on_main(&scheduled_window, move || {
+        let data = crate::windows::window_data(&operation_window)?;
+        if data
+            .declared_source_origins
+            .current_view(&operation_request.surface)
+            != Some(operation_request.generation)
+        {
+            return Err(format!(
+                "view surface {:?} generation {} is not current",
+                operation_request.surface, operation_request.generation
+            ));
+        }
+        let document = resolve_document_frame_identity_root(
+            &data.documents,
+            data.declared_source_origins
+                .current_view(&operation_request.surface),
+            &operation_request,
+        )?;
+        platform.document_frame_identity_start(
+            document,
+            operation_request.generation,
+            Box::new(move |result| {
+                if let Err(error) = sender.send(result) {
+                    log_late_document_frame_identity_result(error.0);
+                }
+            }),
+        )
+    });
+    match scheduled {
+        Ok(()) => {}
+        Err(error) => {
+            PENDING_DOCUMENT_FRAME_IDENTITY_START
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take();
+            RECORDING.clear_frame_identity_source(&request.surface, request.generation);
+            return Err(internal(error));
+        }
+    }
+    let native = match receive_pending_document_frame_identity_start() {
+        Ok(Some(value)) => value,
+        Ok(None) => {
+            return Err(internal(
+                "document frame identity start callback was not retained",
+            ));
+        }
+        Err(error) => return Err(internal(error)),
+    };
+    let mut reply = validate_document_frame_identity_start_reply(&native, request.generation)?;
+    let fields = reply
+        .as_object_mut()
+        .expect("object reply was checked above");
+    fields.insert("surface".into(), json!(request.surface));
+    fields.insert("generation".into(), json!(request.generation));
+    Ok(reply)
+}
+
+fn resolve_document_frame_identity_root(
+    documents: &Documents,
+    current_generation: Option<u64>,
+    request: &CaptureDocumentIdentityRequest,
+) -> Result<Handle, String> {
+    if current_generation != Some(request.generation) {
+        return Err(format!(
+            "view surface {:?} generation {} is not current",
+            request.surface, request.generation
+        ));
+    }
+    if documents.views().generation(&request.surface) != Some(request.generation) {
+        return Err(format!(
+            "view surface {:?} generation {} has no matching root channel",
+            request.surface, request.generation
+        ));
+    }
+    documents.get(&(request.surface.clone(), String::new()))
+}
+
+fn validate_document_frame_identity_start_reply(
+    raw: &str,
+    generation: u64,
+) -> Result<Value, Failure> {
+    let invalid =
+        || internal("native document frame identity start returned invalid JSON metadata");
+    let mut value: Value = serde_json::from_str(raw).map_err(|_| invalid())?;
+    let Some(fields) = value.as_object_mut() else {
+        return Err(invalid());
+    };
+    let actual_generation = fields.get("generation").and_then(Value::as_u64);
+    let atlas_slots = fields.get("atlasSlots").and_then(Value::as_u64);
+    let roi = fields.get("roi").and_then(Value::as_object);
+    let finite = |name: &str| {
+        roi.and_then(|roi| roi.get(name))
+            .and_then(Value::as_f64)
+            .filter(|value| value.is_finite())
+    };
+    let valid = actual_generation == Some(generation)
+        && atlas_slots.is_some_and(|slots| (1..=512).contains(&slots))
+        && finite("x").is_some()
+        && finite("y").is_some()
+        && finite("width").is_some_and(|width| width > 0.0)
+        && finite("height").is_some_and(|height| height > 0.0)
+        && finite("scale").is_some_and(|scale| scale > 0.0);
+    if !valid {
+        return Err(invalid());
+    }
+    Ok(value)
+}
+
+fn receive_pending_document_frame_identity_start() -> Result<Option<String>, String> {
+    let mut pending = PENDING_DOCUMENT_FRAME_IDENTITY_START
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let Some(receiver) = pending.as_ref() else {
+        return Ok(None);
+    };
+    match receiver.recv_timeout(TIMEOUT) {
+        Ok(Ok(reply)) => {
+            pending.take();
+            Ok(Some(reply))
+        }
+        Ok(Err(error)) => {
+            pending.take();
+            Err(error)
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(
+            "document frame identity start did not complete within the diagnostic timeout; its generation remains selected for capture cleanup".into(),
+        ),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            pending.take();
+            Err("document frame identity start callback ended before replying".into())
+        }
+    }
+}
+
+fn detach_pending_document_frame_identity_start() {
+    PENDING_DOCUMENT_FRAME_IDENTITY_START
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take();
+}
+
+fn log_late_document_frame_identity_result(result: Result<String, String>) {
+    late_document_frame_identity_entry(result).log();
+}
+
+fn late_document_frame_identity_entry(
+    result: Result<String, String>,
+) -> crate::application_log::Entry {
+    match result {
+        Ok(_) => crate::application_log::Entry::new(
+            "info",
+            "host",
+            "diagnostics",
+            "document frame identity callback arrived after its request ended",
+        ),
+        Err(error) => crate::application_log::Entry::new(
+            "error",
+            "host",
+            "diagnostics",
+            format!("document frame identity callback failed after its request ended: {error}"),
+        ),
+    }
 }
 
 fn parse_capture_start_options(
@@ -774,18 +1021,15 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     let steps = per * 2 * times;
 
     let frames = if capture_options.capture {
-        Some(capture_start(
-            window,
-            false,
-            capture_options.frame_identity,
-        )?)
+        Some(with_document_frame_identity_lifecycle(|| {
+            let frames = capture_start(window, false, capture_options.frame_identity, false)?;
+            let platform = platform::current().map_err(internal)?;
+            on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
+            Ok::<_, Failure>(frames)
+        })?)
     } else {
         None
     };
-    if capture_options.capture {
-        let platform = platform::current().map_err(internal)?;
-        on_main(window, move || platform.layout_trace_start()).map_err(internal)?;
-    }
 
     exposure::note(
         window,
@@ -926,7 +1170,12 @@ fn tick(
 
 /// Starts the window record and returns the record directory. When display is set, it records the windows of this
 /// application on the display that holds the window.
-fn capture_start(window: &Window, display: bool, frame_identity: bool) -> Result<PathBuf, Failure> {
+fn capture_start(
+    window: &Window,
+    display: bool,
+    frame_identity: bool,
+    document_identity_allowed: bool,
+) -> Result<PathBuf, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
     let numbers = on_main(window, move || platform.window_numbers(&held)).map_err(internal)?;
@@ -948,7 +1197,7 @@ fn capture_start(window: &Window, display: bool, frame_identity: bool) -> Result
         ));
     let recorder = recorder()?;
     RECORDING
-        .start(
+        .start_with_document_identity(
             &recorder,
             Target {
                 window: number,
@@ -956,6 +1205,7 @@ fn capture_start(window: &Window, display: bool, frame_identity: bool) -> Result
             },
             &directory,
             frame_identity,
+            document_identity_allowed,
             &|path| recorder.0.private_directory(path),
         )
         .map_err(internal)?;
@@ -966,14 +1216,190 @@ fn capture_start(window: &Window, display: bool, frame_identity: bool) -> Result
 /// frames.
 fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
     let recorder = PlatformCapture(recorder()?.0, after);
-    let (directory, count, frame_identity) = RECORDING.finish(&recorder).map_err(internal)?;
-    finish_capture_stop(&directory, count, frame_identity, || {
+    let _guard = DOCUMENT_FRAME_IDENTITY
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let (frame_identity, source) = RECORDING.frame_identity_state();
+    let platform = recorder.0;
+    let prior_start_error = if PENDING_DOCUMENT_FRAME_IDENTITY_START
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .is_some()
+    {
+        receive_pending_document_frame_identity_start()
+            .err()
+            .map(|error| format!("wait for document frame identity start: {error}"))
+    } else {
+        None
+    };
+    let mut finished = None;
+    let (issued_slots, removed, sequence_error) = document_identity_stop_sequence(
+        frame_identity,
+        source.as_ref(),
+        prior_start_error,
+        |generation| {
+            await_document_frame_identity(window, move |done| {
+                platform.document_frame_identity_freeze(generation, done)
+            })
+        },
+        || {
+            let result = RECORDING.finish(&recorder);
+            if let Ok(value) = &result {
+                finished = Some(value.clone());
+            }
+            result.map(|_| ())
+        },
+        |generation| {
+            await_document_frame_identity(window, move |done| {
+                platform.document_frame_identity_remove(generation, done)
+            })
+        },
+    );
+    if let Some((surface, generation)) = &source {
+        if removed {
+            RECORDING.clear_frame_identity_source(surface, *generation);
+        }
+    }
+    detach_pending_document_frame_identity_start();
+    if let Some(error) = sequence_error {
+        let mut failures = vec![error];
+        if let Err(layout_error) = on_main(window, move || platform.layout_trace_stop()) {
+            failures.push(format!("stop layout trace: {layout_error}"));
+        }
+        return Err(internal(failures.join("; ")));
+    }
+    let (directory, count, frame_identity) =
+        finished.ok_or_else(|| internal("capture stop completed without a recording result"))?;
+    let mut result = finish_capture_stop(&directory, count, frame_identity, || {
         let platform = recorder.0;
         let layouts = on_main(window, move || platform.layout_trace_stop()).map_err(internal)?;
         let limited = recorder.0.capture_limited().map_err(internal)?;
         let gap = recorder.0.capture_longest_gap().map_err(internal)?;
         Ok((layouts, limited, gap))
-    })
+    })?;
+    if let Some(issued_slots) = issued_slots {
+        result["frameIdentity"]["issuedSlots"] = json!(issued_slots);
+    }
+    Ok(result)
+}
+
+fn document_identity_stop_sequence(
+    _frame_identity: bool,
+    source: Option<&(String, u64)>,
+    prior_start_error: Option<String>,
+    freeze: impl FnOnce(u64) -> Result<String, String>,
+    stop: impl FnOnce() -> Result<(), String>,
+    remove: impl FnOnce(u64) -> Result<String, String>,
+) -> (Option<u64>, bool, Option<String>) {
+    let mut failures = Vec::new();
+    if let Some(error) = prior_start_error {
+        failures.push(error);
+    }
+    let frozen = source.map(|(_, generation)| freeze(*generation));
+    if let Some(Err(error)) = &frozen {
+        failures.push(format!("freeze document frame identity: {error}"));
+    }
+    if let Err(error) = stop() {
+        failures.push(format!("stop capture: {error}"));
+    }
+    let removed = if let Some((_, generation)) = source {
+        match remove(*generation) {
+            Ok(reply) => match document_frame_identity_removed(&reply, *generation) {
+                Ok(()) => true,
+                Err(error) => {
+                    failures.push(error);
+                    false
+                }
+            },
+            Err(error) => {
+                failures.push(format!("remove document frame identity: {error}"));
+                false
+            }
+        }
+    } else {
+        true
+    };
+    if !failures.is_empty() {
+        return (None, removed, Some(failures.join("; ")));
+    }
+    let Some((_, generation)) = source else {
+        return (None, true, None);
+    };
+    let Some(Ok(reply)) = frozen else {
+        return (
+            None,
+            removed,
+            Some("document frame identity freeze returned no result".into()),
+        );
+    };
+    match document_frame_identity_issued_slots(&reply, *generation) {
+        Ok(issued) => (Some(issued), removed, None),
+        Err(error) => (None, removed, Some(error.message)),
+    }
+}
+
+fn document_frame_identity_removed(reply: &str, generation: u64) -> Result<(), String> {
+    let value: Value = serde_json::from_str(reply)
+        .map_err(|error| format!("invalid document frame identity remove JSON: {error}"))?;
+    let actual_generation = value.get("generation").and_then(Value::as_u64);
+    let removed = value.get("removed").and_then(Value::as_bool);
+    if actual_generation == Some(generation) && removed == Some(true) {
+        Ok(())
+    } else {
+        Err(format!(
+            "native document frame identity remove returned invalid metadata for generation {generation}: {reply}"
+        ))
+    }
+}
+
+fn await_document_frame_identity(
+    window: &Window,
+    schedule: impl FnOnce(Box<dyn FnOnce(Result<String, String>) + Send>) -> Result<(), String>
+    + Send
+    + 'static,
+) -> Result<String, String> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    on_main(window, move || {
+        schedule(Box::new(move |result| {
+            if let Err(error) = sender.send(result) {
+                log_late_document_frame_identity_result(error.0);
+            }
+        }))
+    })?;
+    await_document_frame_identity_reply(receiver, TIMEOUT)
+}
+
+fn await_document_frame_identity_reply(
+    receiver: std::sync::mpsc::Receiver<Result<String, String>>,
+    timeout: Duration,
+) -> Result<String, String> {
+    match receiver.recv_timeout(timeout) {
+        Ok(result) => result,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(format!(
+            "document frame identity callback timed out after {timeout:?}"
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            Err("document frame identity callback ended before replying".into())
+        }
+    }
+}
+
+fn document_frame_identity_issued_slots(reply: &str, generation: u64) -> Result<u64, Failure> {
+    let value: Value = serde_json::from_str(reply)
+        .map_err(|error| internal(format!("invalid frame identity freeze JSON: {error}")))?;
+    let actual_generation = value.get("generation").and_then(Value::as_u64);
+    let atlas_slots = value.get("atlasSlots").and_then(Value::as_u64);
+    let issued_slots = value.get("issuedSlots").and_then(Value::as_u64);
+    match (actual_generation, atlas_slots, issued_slots) {
+        (Some(actual), Some(atlas), Some(issued))
+            if actual == generation && atlas > 0 && atlas <= 512 && issued <= atlas =>
+        {
+            Ok(issued)
+        }
+        _ => Err(internal(format!(
+            "native document frame identity freeze returned invalid metadata for generation {generation}: {reply}"
+        ))),
+    }
 }
 
 fn finish_capture_stop(

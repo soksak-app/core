@@ -78,6 +78,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.drag",
     "diagnostics.capture.start",
     "diagnostics.capture.stop",
+    "diagnostics.capture.document-identity.start",
     "diagnostics.capture.still",
     "diagnostics.modal.hold",
     "diagnostics.modal.held",
@@ -1444,5 +1445,14 @@ mod document_viewport_marker_declaration_test {
     #[test]
     fn document_viewport_marker_method_is_declared() {
         assert!(super::declared("diagnostics.document.viewport-marker"));
+    }
+}
+
+#[cfg(all(test, feature = "diagnostics"))]
+mod document_frame_identity_declaration_test {
+    // contract: diagnostics.capture.document-identity.start.is-declared
+    #[test]
+    fn document_frame_identity_start_method_is_declared() {
+        assert!(super::declared("diagnostics.capture.document-identity.start"));
     }
 }

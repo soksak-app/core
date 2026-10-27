@@ -77,6 +77,8 @@ pub trait Capture {
 struct State {
     directory: Option<PathBuf>,
     frame_identity: bool,
+    document_identity_allowed: bool,
+    identity_source: Option<(String, u64)>,
 }
 
 /// The folder of the recording in progress.
@@ -96,6 +98,8 @@ impl Recording {
             state: Mutex::new(State {
                 directory: None,
                 frame_identity: false,
+                document_identity_allowed: false,
+                identity_source: None,
             }),
         }
     }
@@ -110,11 +114,29 @@ impl Recording {
         frame_identity: bool,
         make: &dyn Fn(&Path) -> Result<(), String>,
     ) -> Result<(), String> {
+        self.start_with_document_identity(capture, target, directory, frame_identity, false, make)
+    }
+
+    /// Starts a diagnostics.capture.start recording that can select one plugin-root document source.
+    pub fn start_with_document_identity(
+        &self,
+        capture: &dyn Capture,
+        target: Target,
+        directory: &Path,
+        frame_identity: bool,
+        document_identity_allowed: bool,
+        make: &dyn Fn(&Path) -> Result<(), String>,
+    ) -> Result<(), String> {
         // default: a lock that a panicking thread poisoned still holds the recording state, which the start reads and
         // amends; the panic hook records the panic.
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(running) = &state.directory {
             return Err(format!("a capture into {} is running", running.display()));
+        }
+        if let Some((surface, generation)) = &state.identity_source {
+            return Err(format!(
+                "document frame identity cleanup for surface {surface:?} generation {generation} is incomplete"
+            ));
         }
         make(directory)?;
         let started = (|| -> Result<(), String> {
@@ -140,6 +162,8 @@ impl Recording {
             Ok(()) => {
                 state.directory = Some(directory.to_path_buf());
                 state.frame_identity = frame_identity;
+                state.document_identity_allowed = document_identity_allowed;
+                state.identity_source = None;
                 Ok(())
             }
             Err(error) => match std::fs::remove_dir_all(directory) {
@@ -161,6 +185,8 @@ impl Recording {
                 // panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             state.frame_identity = false;
+            state.document_identity_allowed = false;
+            state.identity_source = None;
             state.directory.take()
         };
         if let Some(directory) = directory {
@@ -191,10 +217,12 @@ impl Recording {
                 // default: a lock that a panicking thread poisoned still holds the recording state, which the stop amends;
                 // the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
-            (
-                state.directory.take(),
-                std::mem::replace(&mut state.frame_identity, false),
-            )
+            let directory = state.directory.take();
+            let frame_identity = std::mem::replace(&mut state.frame_identity, false);
+            if state.identity_source.is_none() {
+                state.document_identity_allowed = false;
+            }
+            (directory, frame_identity)
         };
         let directory = directory.ok_or_else(|| "no capture is running".to_string())?;
         let count = match capture.stop() {
@@ -202,6 +230,52 @@ impl Recording {
             Err(error) => return Err(error),
         };
         Ok((directory, count, frame_identity))
+    }
+
+    /// Returns the active identity-capture flag and its selected view root.
+    pub fn frame_identity_state(&self) -> (bool, Option<(String, u64)>) {
+        let state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+        (
+            state.directory.is_some() && state.frame_identity && state.document_identity_allowed,
+            state.identity_source.clone(),
+        )
+    }
+
+    /// Selects the one current view root for the active identity capture.
+    pub fn select_frame_identity_source(
+        &self,
+        surface: &str,
+        generation: u64,
+    ) -> Result<(), String> {
+        if surface.is_empty() || generation == 0 {
+            return Err("document frame identity source requires a surface and generation".into());
+        }
+        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+        if state.directory.is_none() || !state.frame_identity || !state.document_identity_allowed {
+            return Err("document frame identity requires an active frameIdentity capture".into());
+        }
+        if let Some((selected_surface, selected_generation)) = &state.identity_source {
+            return Err(format!(
+                "identity capture already selected surface {selected_surface:?} generation {selected_generation}"
+            ));
+        }
+        state.identity_source = Some((surface.to_string(), generation));
+        Ok(())
+    }
+
+    /// Clears the selected source after native marker cleanup completes.
+    pub fn clear_frame_identity_source(&self, surface: &str, generation: u64) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+        if state
+            .identity_source
+            .as_ref()
+            .is_none_or(|(selected, current)| selected != surface || *current != generation)
+        {
+            return false;
+        }
+        state.identity_source = None;
+        state.document_identity_allowed = false;
+        true
     }
 
     /// The folder of the recording in progress.

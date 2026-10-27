@@ -188,6 +188,12 @@
       "allowed": []
     },
     {
+      "term": "document frame identity",
+      "definition": "A diagnostic nonce and source generation and sequence encoded in a visible QR code rendered by a plugin view document, used to identify that code in a ScreenCaptureKit WindowServer output sample.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "viewport marker",
       "definition": "An explicitly started diagnostic fixed overlay with a transparent background and a unique opaque border whose captured pixels identify the visual viewport edges without changing document layout or input.",
       "rejected": [],

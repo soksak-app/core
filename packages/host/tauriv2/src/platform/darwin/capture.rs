@@ -1,6 +1,8 @@
 //! The window capture calls of native/darwin.
 
-use std::ffi::{CStr, CString, c_char, c_int};
+use std::ffi::{CStr, CString, c_char, c_int, c_void};
+
+use crate::platform::Handle;
 
 unsafe extern "C" {
     fn sp_capture_open(window_number: isize, display: bool, error: *mut *mut c_char) -> bool;
@@ -12,6 +14,22 @@ unsafe extern "C" {
     fn sp_capture_error() -> *const c_char;
     fn sp_capture_wait() -> c_int;
     fn sp_capture_stop(after: f64) -> c_int;
+    fn sp_document_frame_identity_start(
+        document: *mut c_void,
+        generation: u64,
+        reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
+        context: *mut c_void,
+    ) -> bool;
+    fn sp_document_frame_identity_freeze(
+        generation: u64,
+        reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
+        context: *mut c_void,
+    ) -> bool;
+    fn sp_document_frame_identity_remove(
+        generation: u64,
+        reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
+        context: *mut c_void,
+    ) -> bool;
     fn sp_capture_limited() -> bool;
     fn sp_capture_longest_gap() -> f64;
     fn sp_capture_clock() -> f64;
@@ -23,6 +41,89 @@ unsafe extern "C" {
     );
     fn surfaceLayoutTraceStart();
     fn surfaceLayoutTraceStop(out: *mut f64, capacity: usize) -> usize;
+}
+
+type IdentityDone = Box<dyn FnOnce(Result<String, String>) + Send>;
+
+extern "C" fn document_frame_identity_reply(
+    context: *mut c_void,
+    json: *const c_char,
+    error: *const c_char,
+) {
+    let done = unsafe { Box::from_raw(context.cast::<IdentityDone>()) };
+    if !error.is_null() {
+        done(Err(unsafe { CStr::from_ptr(error) }
+            .to_string_lossy()
+            .into_owned()));
+    } else if json.is_null() {
+        done(Err(
+            "document frame identity callback returned no JSON".into()
+        ));
+    } else {
+        done(Ok(unsafe { CStr::from_ptr(json) }
+            .to_string_lossy()
+            .into_owned()));
+    }
+}
+
+pub fn document_frame_identity_start(
+    document: Handle,
+    generation: u64,
+    done: IdentityDone,
+) -> Result<(), String> {
+    let context = Box::into_raw(Box::new(done)).cast::<c_void>();
+    if unsafe {
+        sp_document_frame_identity_start(
+            document as *mut c_void,
+            generation,
+            document_frame_identity_reply,
+            context,
+        )
+    } {
+        Ok(())
+    } else {
+        unsafe { drop(Box::from_raw(context.cast::<IdentityDone>())) };
+        Err("start document frame identity was not scheduled".into())
+    }
+}
+
+fn schedule_document_frame_identity(
+    operation: &str,
+    generation: u64,
+    done: IdentityDone,
+    schedule: unsafe extern "C" fn(
+        u64,
+        extern "C" fn(*mut c_void, *const c_char, *const c_char),
+        *mut c_void,
+    ) -> bool,
+) -> Result<(), String> {
+    let context = Box::into_raw(Box::new(done)).cast::<c_void>();
+    if unsafe { schedule(generation, document_frame_identity_reply, context) } {
+        Ok(())
+    } else {
+        unsafe { drop(Box::from_raw(context.cast::<IdentityDone>())) };
+        Err(format!(
+            "{operation} document frame identity was not scheduled"
+        ))
+    }
+}
+
+pub fn document_frame_identity_freeze(generation: u64, done: IdentityDone) -> Result<(), String> {
+    schedule_document_frame_identity(
+        "freeze",
+        generation,
+        done,
+        sp_document_frame_identity_freeze,
+    )
+}
+
+pub fn document_frame_identity_remove(generation: u64, done: IdentityDone) -> Result<(), String> {
+    schedule_document_frame_identity(
+        "remove",
+        generation,
+        done,
+        sp_document_frame_identity_remove,
+    )
 }
 
 extern "C" fn delivered(context: *mut std::ffi::c_void, json: *const c_char) {

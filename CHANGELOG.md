@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-234: Add opt-in WebKit root-document QR identities to diagnostic capture. Preserve generated/issued counts and exact decoded sample pixels/displayTime, reject unissued identities, and fence late callbacks by capture nonce. Bound callback waits, serialize recording and trace initialization, preserve existing capture modes, and verify idempotent marker cleanup. Native matcher, atlas, actual WebKit lifecycle, paired host and E2E consumer owners pass after the tracked Reds. Two-host application capture remains pending; this channel does not prove desktop visibility, independent source-presentation time or the cause of the historical cadence gap.
+
 - F239-235: Collect clock-bracketed one-view and N-view footprints before offline frame decoding and OCR. Preserve capture finalization, process identities, original pixel proofs and eager direct consumers; fresh repeated reclaim likewise samples before analysis. Four tracked failure conditions become Green and all 33 owner cases pass. Keep the N-times-plus-10-MB limit and all prior application failures; this collector correction does not establish a HWP memory improvement.
 
 - F239-233: Measure post-gesture paint in the existing capture tail independently of the later presentation query. Select the earliest eligible capture, require final native target geometry even when the source is already target-sized, and preserve stable source/pixel tails. Browser and Terminal use their rendered fill, Editor consumes its declared marker color, and HWP measures HTML paint separately from native bounds. The owning Red/Green cases and all affected consumers pass with unchanged 2-frame, 33 ms and 2 pt limits; application acceptance remains pending.

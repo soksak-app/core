@@ -154,6 +154,21 @@ void sp_document_place(void *document, double left, double top, double right, do
 // Adds or removes a diagnostic viewport marker on the document view. The marker is a cyan 2-point layer border.
 // All three output pointers are required. On failure, error receives an allocated UTF-8 message for the caller to free.
 bool sp_document_viewport_marker(void *document, bool enabled, uint8_t *rgb3, double *borderWidthPt, char **error);
+
+// Completion runs exactly once on the main thread; JSON and error are borrowed until the callback returns. The caller
+// keeps context alive until completion, including when the awaiting RPC reaches its own deadline.
+typedef void (*sp_document_frame_identity_reply)(void *context, const char *json, const char *error);
+// Starts a capture-scoped visible QR producer in the current plugin root document. The caller supplies the active
+// host view generation. Call start on the main thread because document is owned by the native window registry.
+// Completion reports installation and initial draw acceptance, not presentation. Freeze and remove accept calls from
+// any thread and schedule WebKit work on the main thread; false means no callback will follow.
+bool sp_document_frame_identity_start(void *document, uint64_t generation,
+    sp_document_frame_identity_reply reply, void *context);
+// Freezes the producer without removing its last marker. Completion reports generated and actually advanced slot counts.
+bool sp_document_frame_identity_freeze(uint64_t generation, sp_document_frame_identity_reply reply, void *context);
+// Removes only the matching capture-session marker after capture intake has stopped. Completion runs exactly once on
+// the main thread; stale generations are reported as errors and cannot remove a replacement marker.
+bool sp_document_frame_identity_remove(uint64_t generation, sp_document_frame_identity_reply reply, void *context);
 #endif
 
 // Writes the region in window coordinates and the visibility {x, y, width, height, visible} to out[0..4].

@@ -627,6 +627,31 @@ impl Platform for Darwin {
         capture::stop(after)
     }
     #[cfg(feature = "diagnostics")]
+    fn document_frame_identity_start(
+        &self,
+        document: Handle,
+        generation: u64,
+        done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        capture::document_frame_identity_start(document, generation, done)
+    }
+    #[cfg(feature = "diagnostics")]
+    fn document_frame_identity_freeze(
+        &self,
+        generation: u64,
+        done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        capture::document_frame_identity_freeze(generation, done)
+    }
+    #[cfg(feature = "diagnostics")]
+    fn document_frame_identity_remove(
+        &self,
+        generation: u64,
+        done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        capture::document_frame_identity_remove(generation, done)
+    }
+    #[cfg(feature = "diagnostics")]
     fn capture_limited(&self) -> Result<bool, String> {
         Ok(capture::limited())
     }

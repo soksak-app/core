@@ -48,6 +48,7 @@ func init() {
 	diagnosticMethods["diagnostics.drag"] = diagnosticDrag
 	diagnosticMethods["diagnostics.capture.start"] = diagnosticCaptureStart
 	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
+	diagnosticMethods["diagnostics.capture.document-identity.start"] = diagnosticCaptureDocumentIdentityStart
 	diagnosticMethods["diagnostics.modal.hold"] = diagnosticModalHold
 	diagnosticMethods["diagnostics.modal.held"] = diagnosticModalHeld
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
@@ -303,6 +304,22 @@ func (p dragPlan) steps() int {
 // recording is a recording in progress.
 var recording Recording
 
+// documentFrameIdentityMu serializes marker setup and capture-stop cleanup around the single active recording.
+var documentFrameIdentityMu sync.Mutex
+
+func withDocumentFrameIdentityLifecycle(operation func() error) error {
+	documentFrameIdentityMu.Lock()
+	defer documentFrameIdentityMu.Unlock()
+	return operation()
+}
+
+var pendingDocumentFrameIdentityStart chan documentFrameIdentityResult
+
+type documentFrameIdentityResult struct {
+	reply json.RawMessage
+	err   error
+}
+
 // platformCapture is the window recording operation of the platform. after is the last display time to include in the recording when it stops.
 type platformCapture struct {
 	platform.Capturer
@@ -384,16 +401,23 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	// When recording, the time at which the step was sent is recorded on the same clock as the frames. This allows measuring the delay from a step to the screen.
 	var clock func() float64
 	if captureOptions.capture {
-		frames, err = startCapture(h, s, false, captureOptions.frameIdentity)
+		err = withDocumentFrameIdentityLifecycle(func() error {
+			var startErr error
+			frames, startErr = startCapture(h, s, false, captureOptions.frameIdentity, false)
+			if startErr != nil {
+				return startErr
+			}
+			capture, captureErr := recorder()
+			if captureErr != nil {
+				return captureErr
+			}
+			clock = capture.CaptureClock
+			application.InvokeSync(capture.LayoutTraceStart)
+			return nil
+		})
 		if err != nil {
 			return nil, err
 		}
-		capture, err := recorder()
-		if err != nil {
-			return nil, err
-		}
-		clock = capture.CaptureClock
-		application.InvokeSync(capture.LayoutTraceStart)
 	}
 	var tickMu sync.Mutex
 	sent := []float64{}
@@ -498,7 +522,7 @@ func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
 
 // startCapture starts the recording of window s in a new folder under the configuration directory and waits for the first frame.
 // With display, it records the windows of this application on the display that holds the window.
-func startCapture(h *Host, s *Surfaces, display bool, frameIdentity bool) (string, error) {
+func startCapture(h *Host, s *Surfaces, display bool, frameIdentity, documentIdentityAllowed bool) (string, error) {
 	capture, err := recorder()
 	if err != nil {
 		return "", err
@@ -513,7 +537,7 @@ func startCapture(h *Host, s *Surfaces, display bool, frameIdentity bool) (strin
 		return "", errors.New("the window has no window server number")
 	}
 	directory := filepath.Join(h.workspace.directory, "logs", "captures", fmt.Sprintf("%s-%d", s.name, time.Now().UnixNano()))
-	if err := recording.Start(capture, CaptureTarget{Window: numbers[0], Display: display}, directory, frameIdentity); err != nil {
+	if err := recording.StartWithDocumentIdentity(capture, CaptureTarget{Window: numbers[0], Display: display}, directory, frameIdentity, documentIdentityAllowed); err != nil {
 		return "", err
 	}
 	return directory, nil
@@ -597,12 +621,161 @@ func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage
 	if err != nil {
 		return nil, err
 	}
-	directory, err := startCapture(h, s, p.Display, p.FrameIdentity)
+	var directory string
+	err = withDocumentFrameIdentityLifecycle(func() error {
+		var startErr error
+		directory, startErr = startCapture(h, s, p.Display, p.FrameIdentity, true)
+		if startErr != nil {
+			return startErr
+		}
+		application.InvokeSync(capture.LayoutTraceStart)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	application.InvokeSync(capture.LayoutTraceStart)
 	return map[string]any{"frames": directory}, nil
+}
+
+func diagnosticCaptureDocumentIdentityStart(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	request, err := parseCaptureDocumentIdentityRequest(params)
+	if err != nil {
+		return nil, err
+	}
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	documentFrameIdentityMu.Lock()
+	defer documentFrameIdentityMu.Unlock()
+	active, selected := recording.FrameIdentityState()
+	if !active {
+		return nil, errors.New("document frame identity requires an active frameIdentity capture")
+	}
+	if selected != nil {
+		return nil, fmt.Errorf("identity capture already selected surface %q generation %d", selected.surface, selected.generation)
+	}
+	if pendingDocumentFrameIdentityStart != nil {
+		select {
+		case <-pendingDocumentFrameIdentityStart:
+			pendingDocumentFrameIdentityStart = nil
+		default:
+			return nil, errors.New("a previous document frame identity start is still pending")
+		}
+	}
+	identity, ok := system.(platform.DocumentFrameIdentityCapture)
+	if !ok {
+		return nil, errors.New("document frame identity is not implemented on this platform")
+	}
+	if s.invoke == nil {
+		return nil, errors.New("document frame identity has no UI-thread dispatcher")
+	}
+	if err := recording.SelectFrameIdentitySource(request.Surface, request.Generation); err != nil {
+		return nil, err
+	}
+	pending := make(chan documentFrameIdentityResult, 1)
+	pendingDocumentFrameIdentityStart = pending
+	var dispatchErr error
+	s.invoke(func() {
+		document, resolveErr := s.documentFrameIdentityRoot(request.Surface, request.Generation)
+		if resolveErr != nil {
+			dispatchErr = resolveErr
+			return
+		}
+		dispatchErr = identity.StartDocumentFrameIdentity(document, request.Generation, func(reply json.RawMessage, err error) {
+			pending <- documentFrameIdentityResult{reply: reply, err: err}
+		})
+	})
+	if dispatchErr != nil {
+		pendingDocumentFrameIdentityStart = nil
+		recording.ClearFrameIdentitySource(request.Surface, request.Generation)
+		return nil, dispatchErr
+	}
+	var nativeReply json.RawMessage
+	select {
+	case result := <-pending:
+		pendingDocumentFrameIdentityStart = nil
+		nativeReply, err = result.reply, result.err
+	case <-time.After(pageTimeout):
+		return nil, errors.New("document frame identity start did not complete within the diagnostic timeout; its generation remains selected for capture cleanup")
+	}
+	if err != nil {
+		return nil, err
+	}
+	var reply map[string]any
+	if err := validateDocumentFrameIdentityStartReply(nativeReply, request.Generation, &reply); err != nil {
+		return nil, fmt.Errorf("native document frame identity start returned invalid JSON metadata: %s", nativeReply)
+	}
+	reply["surface"] = request.Surface
+	reply["generation"] = request.Generation
+	return reply, nil
+}
+
+type captureDocumentIdentityRequest struct {
+	Surface    string
+	Generation uint64
+}
+
+func parseCaptureDocumentIdentityRequest(params json.RawMessage) (captureDocumentIdentityRequest, error) {
+	var request struct {
+		Surface    *string `json:"surface"`
+		Generation *uint64 `json:"generation"`
+	}
+	if err := decode(params, &request); err != nil {
+		return captureDocumentIdentityRequest{}, err
+	}
+	if request.Surface == nil || *request.Surface == "" {
+		return captureDocumentIdentityRequest{}, rpcError(codeInvalidParams, "surface is required and must be non-empty")
+	}
+	if request.Generation == nil || *request.Generation == 0 || *request.Generation > maxSourceGeneration {
+		return captureDocumentIdentityRequest{}, rpcError(codeInvalidParams, "generation must be a positive JavaScript safe integer")
+	}
+	return captureDocumentIdentityRequest{Surface: *request.Surface, Generation: *request.Generation}, nil
+}
+
+func (s *Surfaces) documentFrameIdentityRoot(surface string, generation uint64) (unsafe.Pointer, error) {
+	if surface == "" || generation == 0 {
+		return nil, errors.New("document frame identity requires a surface and generation")
+	}
+	if !s.currentViewGeneration(surface, generation) {
+		return nil, fmt.Errorf("view surface %q generation %d is not current", surface, generation)
+	}
+	document, err := s.documents.Get(DocumentKey{Surface: surface, Name: ""})
+	if err != nil {
+		return nil, err
+	}
+	channel, exists := s.documents.view(surface)
+	if !exists || channel.generation != generation || channel.handle != document {
+		return nil, fmt.Errorf("view surface %q generation %d has no matching root document", surface, generation)
+	}
+	return document, nil
+}
+
+func validateDocumentFrameIdentityStartReply(raw json.RawMessage, generation uint64, reply *map[string]any) error {
+	var metadata struct {
+		Generation uint64 `json:"generation"`
+		AtlasSlots uint64 `json:"atlasSlots"`
+		ROI        struct {
+			X      *float64 `json:"x"`
+			Y      *float64 `json:"y"`
+			Width  float64  `json:"width"`
+			Height float64  `json:"height"`
+			Scale  float64  `json:"scale"`
+		} `json:"roi"`
+	}
+	if err := json.Unmarshal(raw, &metadata); err != nil || metadata.Generation != generation || metadata.AtlasSlots == 0 || metadata.AtlasSlots > 512 ||
+		metadata.ROI.X == nil || metadata.ROI.Y == nil || math.IsNaN(*metadata.ROI.X) || math.IsInf(*metadata.ROI.X, 0) || math.IsNaN(*metadata.ROI.Y) || math.IsInf(*metadata.ROI.Y, 0) ||
+		!frameIdentityFinitePositive(metadata.ROI.Width) || !frameIdentityFinitePositive(metadata.ROI.Height) || !frameIdentityFinitePositive(metadata.ROI.Scale) {
+		return errors.New("invalid native document frame identity metadata")
+	}
+	if err := json.Unmarshal(raw, reply); err != nil || *reply == nil {
+		return errors.New("native document frame identity metadata is not an object")
+	}
+	return nil
+}
+
+func frameIdentityFinitePositive(value float64) bool {
+	return value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 type captureStartOptions struct {
@@ -633,7 +806,8 @@ func parseCaptureStartOptions(params json.RawMessage) (captureStartOptions, erro
 // diagnosticCaptureStop records up to the display time of after, ends the recording, and returns the frame folder and the number of
 // frames.
 func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
-	if _, _, err := diagnosticHost(e, params); err != nil {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
 		return nil, err
 	}
 	var p struct {
@@ -652,15 +826,166 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage)
 		}
 		capture.after = *p.After
 	}
-	directory, count, frameIdentity, err := recording.Finish(capture)
+	documentFrameIdentityMu.Lock()
+	defer documentFrameIdentityMu.Unlock()
+	frameIdentity, source := recording.FrameIdentityState()
+	var priorStartErr error
+	if pendingDocumentFrameIdentityStart != nil {
+		select {
+		case result := <-pendingDocumentFrameIdentityStart:
+			pendingDocumentFrameIdentityStart = nil
+			priorStartErr = result.err
+		case <-time.After(pageTimeout):
+			priorStartErr = errors.New("document frame identity start is still pending at capture stop")
+		}
+	}
+	identity, hasIdentity := system.(platform.DocumentFrameIdentityCapture)
+	var directory string
+	var count int
+	var stoppedWithIdentity bool
+	issuedSlots, removed, stopErr := documentIdentityStopSequence(frameIdentity, source, priorStartErr,
+		func(generation uint64) (json.RawMessage, error) {
+			if !hasIdentity {
+				return nil, errors.New("document frame identity is not implemented on this platform")
+			}
+			return awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+				return identity.FreezeDocumentFrameIdentity(generation, done)
+			})
+		},
+		func() error {
+			var finishErr error
+			directory, count, stoppedWithIdentity, finishErr = recording.Finish(capture)
+			return finishErr
+		},
+		func(generation uint64) (json.RawMessage, error) {
+			if !hasIdentity {
+				return nil, errors.New("document frame identity is not implemented on this platform")
+			}
+			return awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+				return identity.RemoveDocumentFrameIdentity(generation, done)
+			})
+		})
+	// Native callbacks own their cgo handles until completion; detach the timed-out channel so a late result
+	// cannot be mistaken for the next capture session. Native generation fencing rejects its stale producer.
+	pendingDocumentFrameIdentityStart = nil
+	if source != nil && removed {
+		recording.ClearFrameIdentitySource(source.surface, source.generation)
+	}
+	var records [][5]float64
+	var layoutErr error
+	application.InvokeSync(func() { records, layoutErr = capture.LayoutTraceStop() })
+	if stopErr != nil {
+		return nil, errors.Join(stopErr, layoutErr)
+	}
+	if layoutErr != nil {
+		return nil, layoutErr
+	}
+	payload, err := finishCaptureStop(captureStatusAdapter{capture}, directory, count, stoppedWithIdentity, func() ([][5]float64, error) { return records, nil })
 	if err != nil {
 		return nil, err
 	}
-	return finishCaptureStop(captureStatusAdapter{capture}, directory, count, frameIdentity, func() ([][5]float64, error) {
-		var records [][5]float64
-		application.InvokeSync(func() { records, err = capture.LayoutTraceStop() })
-		return records, err
+	if issuedSlots != nil {
+		payload.(map[string]any)["frameIdentity"].(map[string]any)["issuedSlots"] = *issuedSlots
+	}
+	return payload, nil
+}
+
+func documentIdentityStopSequence(
+	frameIdentity bool,
+	source *documentFrameIdentitySource,
+	priorStartErr error,
+	freeze func(uint64) (json.RawMessage, error),
+	stop func() error,
+	remove func(uint64) (json.RawMessage, error),
+) (*uint64, bool, error) {
+	var failures []error
+	if priorStartErr != nil {
+		failures = append(failures, priorStartErr)
+	}
+	var frozen json.RawMessage
+	if source != nil {
+		var err error
+		frozen, err = freeze(source.generation)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("freeze document frame identity: %w", err))
+		}
+	}
+	if err := stop(); err != nil {
+		failures = append(failures, fmt.Errorf("stop capture: %w", err))
+	}
+	removed := source == nil
+	if source != nil {
+		removedJSON, err := remove(source.generation)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("remove document frame identity: %w", err))
+		} else if err := documentFrameIdentityRemoved(removedJSON, source.generation); err != nil {
+			failures = append(failures, err)
+		} else {
+			removed = true
+		}
+	}
+	if len(failures) != 0 {
+		return nil, removed, errors.Join(failures...)
+	}
+	if source == nil {
+		return nil, true, nil
+	}
+	issued, err := documentFrameIdentityIssuedSlots(frozen, source.generation)
+	if err != nil {
+		return nil, removed, err
+	}
+	return &issued, removed, nil
+}
+
+func documentFrameIdentityRemoved(raw json.RawMessage, generation uint64) error {
+	var reply struct {
+		Generation uint64 `json:"generation"`
+		Removed    bool   `json:"removed"`
+	}
+	if err := json.Unmarshal(raw, &reply); err != nil || reply.Generation != generation || !reply.Removed {
+		return fmt.Errorf("native document frame identity remove returned invalid metadata for generation %d: %s", generation, raw)
+	}
+	return nil
+}
+
+func awaitDocumentFrameIdentity(s *Surfaces, schedule func(func(json.RawMessage, error)) error) (json.RawMessage, error) {
+	if s.invoke == nil {
+		return nil, errors.New("document frame identity has no UI-thread dispatcher")
+	}
+	done := make(chan struct {
+		reply json.RawMessage
+		err   error
+	}, 1)
+	var scheduleErr error
+	s.invoke(func() {
+		scheduleErr = schedule(func(reply json.RawMessage, err error) {
+			done <- struct {
+				reply json.RawMessage
+				err   error
+			}{reply: reply, err: err}
+		})
 	})
+	if scheduleErr != nil {
+		return nil, scheduleErr
+	}
+	select {
+	case result := <-done:
+		return result.reply, result.err
+	case <-time.After(pageTimeout):
+		return nil, errors.New("document frame identity native operation did not complete within the diagnostic timeout")
+	}
+}
+
+func documentFrameIdentityIssuedSlots(raw json.RawMessage, generation uint64) (uint64, error) {
+	var reply struct {
+		Generation  uint64  `json:"generation"`
+		AtlasSlots  uint64  `json:"atlasSlots"`
+		IssuedSlots *uint64 `json:"issuedSlots"`
+	}
+	if err := json.Unmarshal(raw, &reply); err != nil || reply.Generation != generation || reply.AtlasSlots == 0 || reply.AtlasSlots > 512 || reply.IssuedSlots == nil || *reply.IssuedSlots > reply.AtlasSlots {
+		return 0, fmt.Errorf("native document frame identity freeze returned invalid metadata for generation %d: %s", generation, raw)
+	}
+	return *reply.IssuedSlots, nil
 }
 
 func finishCaptureStop(c captureStatus, directory string, count int, frameIdentity bool, layoutTrace func() ([][5]float64, error)) (any, error) {

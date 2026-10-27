@@ -38,18 +38,33 @@ type Capture interface {
 
 // Recording is the folder of the recording in progress. The zero value is used.
 type Recording struct {
-	mu            sync.Mutex
-	directory     string
-	frameIdentity bool
+	mu                      sync.Mutex
+	directory               string
+	frameIdentity           bool
+	documentIdentityAllowed bool
+	identitySource          *documentFrameIdentitySource
+}
+
+type documentFrameIdentitySource struct {
+	surface    string
+	generation uint64
 }
 
 // Start creates directory and starts recording target into that folder. It returns after the first frame is recorded.
 // When it fails, the recording stops and the folder is deleted.
 func (r *Recording) Start(capture Capture, target CaptureTarget, directory string, frameIdentity bool) error {
+	return r.StartWithDocumentIdentity(capture, target, directory, frameIdentity, false)
+}
+
+// StartWithDocumentIdentity marks diagnostics.capture.start recordings as eligible for one document source.
+func (r *Recording) StartWithDocumentIdentity(capture Capture, target CaptureTarget, directory string, frameIdentity, documentIdentityAllowed bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.directory != "" {
 		return fmt.Errorf("a capture into %s is running", r.directory)
+	}
+	if r.identitySource != nil {
+		return fmt.Errorf("document frame identity cleanup for surface %q generation %d is incomplete", r.identitySource.surface, r.identitySource.generation)
 	}
 	system, err := platform.Current()
 	if err != nil {
@@ -66,7 +81,49 @@ func (r *Recording) Start(capture Capture, target CaptureTarget, directory strin
 	}
 	r.directory = directory
 	r.frameIdentity = frameIdentity
+	r.documentIdentityAllowed = documentIdentityAllowed
+	r.identitySource = nil
 	return nil
+}
+
+// FrameIdentityState reports whether the running capture requested identity matching and its selected view root.
+func (r *Recording) FrameIdentityState() (bool, *documentFrameIdentitySource) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.identitySource == nil {
+		return r.directory != "" && r.frameIdentity && r.documentIdentityAllowed, nil
+	}
+	source := *r.identitySource
+	return r.directory != "" && r.frameIdentity && r.documentIdentityAllowed, &source
+}
+
+// SelectFrameIdentitySource binds one current view root to the running identity capture.
+func (r *Recording) SelectFrameIdentitySource(surface string, generation uint64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.directory == "" || !r.frameIdentity || !r.documentIdentityAllowed {
+		return errors.New("document frame identity requires an active identity capture")
+	}
+	if surface == "" || generation == 0 {
+		return errors.New("document frame identity source requires a surface and generation")
+	}
+	if r.identitySource != nil {
+		return fmt.Errorf("identity capture already selected surface %q generation %d", r.identitySource.surface, r.identitySource.generation)
+	}
+	r.identitySource = &documentFrameIdentitySource{surface: surface, generation: generation}
+	return nil
+}
+
+// ClearFrameIdentitySource clears the selected view after its native marker has been removed.
+func (r *Recording) ClearFrameIdentitySource(surface string, generation uint64) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.identitySource == nil || r.identitySource.surface != surface || r.identitySource.generation != generation {
+		return false
+	}
+	r.identitySource = nil
+	r.documentIdentityAllowed = false
+	return true
 }
 
 func (r *Recording) begin(capture Capture, target CaptureTarget, directory string, frameIdentity bool) error {
@@ -96,6 +153,8 @@ func (r *Recording) Abort(capture Capture) error {
 	directory := r.directory
 	r.directory = ""
 	r.frameIdentity = false
+	r.documentIdentityAllowed = false
+	r.identitySource = nil
 	r.mu.Unlock()
 	if directory == "" {
 		return nil
@@ -117,6 +176,9 @@ func (r *Recording) Finish(capture Capture) (string, int, bool, error) {
 	frameIdentity := r.frameIdentity
 	r.directory = ""
 	r.frameIdentity = false
+	if r.identitySource == nil {
+		r.documentIdentityAllowed = false
+	}
 	r.mu.Unlock()
 	if directory == "" {
 		return "", 0, false, errors.New("no capture is running")
