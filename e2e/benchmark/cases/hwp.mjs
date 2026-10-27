@@ -14,6 +14,7 @@ import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewConte
 import { viewContentCases } from "../../view-content.mjs";
 
 const HWP_CONTENT = "속삭한글문서확인";
+export const HWP_VIEW_BASELINES_MS = Object.freeze({ wailsv3: 701, tauriv2: 813 });
 const GEOMETRY_LIMIT_PT = 2;
 const NATIVE_MARKER_COLOR = [0, 255, 255];
 const NATIVE_MARKER_WIDTH_PT = 2;

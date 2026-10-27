@@ -10,9 +10,9 @@ import { join } from "node:path";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { monotonicTimeMs, viewCardWithDifferentPluginTab } from "./view-metrics-collection.mjs";
-import { viewContentCases } from "./view-content.mjs";
+import { monotonicTimeMs, openRecordedView, viewCardWithDifferentPluginTab } from "./view-metrics-collection.mjs";
 import { openHwp, studio } from "./hwp-support.mjs";
+import { hwpViewDescriptor, HWP_VIEW_BASELINES_MS } from "./benchmark/cases/hwp.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an hwp file opens from the tree, draws its pages and takes the keyboard focus on a press`, { timeout: 180000 }, async (t) => {
@@ -34,10 +34,11 @@ for (const app of Object.values(APPS)) {
     mkdirSync(runFolder, { recursive: true });
     const evidencePath = join(runFolder, `hwp-resource-timing-${app.name}.json`);
     t.diagnostic(`HWP resource timing evidence ${evidencePath}`);
-    const evidence = { app: app.name, format: 1, errors: [] };
+    const evidence = { app: app.name, format: 2, errors: [] };
     const persist = () => writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
     const failures = [];
     let startAttempted = false;
+    let opened;
     const recordFailure = (step, error) => {
       failures.push({ step, error });
       evidence.errors.push({ step, message: String(error?.message ?? error) });
@@ -55,26 +56,21 @@ for (const app of Object.values(APPS)) {
           "plugin.hwp.request",
         ],
       });
-      const content = (await viewContentCases(s, (message) => t.diagnostic(message))).get("hwp");
-      assert.ok(content?.params?.path, "HWP resource timing fixture has no document path");
+      const descriptor = await hwpViewDescriptor(s, (message) => t.diagnostic(message),
+        HWP_VIEW_BASELINES_MS[app.name] + 300);
+      assert.ok(descriptor.params?.path, "HWP resource timing fixture has no document path");
       const grid = await s.get("core.grid");
       const card = viewCardWithDifferentPluginTab(grid, "hwp", grid.cards.find((item) => item.active)?.id);
-      const { tab } = await s.run("core.card.add-tab", { card, plugin: "hwp", params: content.params });
-      s.cleanup(async () => {
-        const surfaces = await s.get("core.surfaces");
-        if (!surfaces.some((item) => item.surface === tab)) return;
-        const result = await s.run("core.tab.close", { tab });
-        assert.equal(result?.closed, true, `HWP resource timing view ${tab} did not close`);
-        await s.until("core.surfaces", (items) => !items.some((item) => item.surface === tab),
-          `HWP resource timing view ${tab} remained registered`);
-      });
-      evidence.surface = tab;
-      evidence.path = content.params.path;
+      opened = await openRecordedView(t, s, { card, ...descriptor, deferContentVerification: true });
+      evidence.surface = opened.surface;
+      evidence.path = descriptor.params.path;
+      evidence.requestAtMs = opened.requestAtMs;
+      evidence.processStart = opened.processStart;
+      evidence.recording = { directory: opened.recording.directory, frameCount: opened.recording.frameCount };
       persist();
-      await content.ready(s, { tab });
 
       startAttempted = true;
-      evidence.start = await s.run("hwp.diagnostics.frames.start", {}, tab);
+      evidence.start = await s.run("hwp.diagnostics.frames.start", {}, opened.surface);
       persist();
 
       try {
@@ -84,7 +80,7 @@ for (const app of Object.values(APPS)) {
         recordFailure("read clock before", error);
       }
       try {
-        evidence.read = await s.run("hwp.diagnostics.frames.read", {}, evidence.surface);
+        evidence.read = await s.run("hwp.diagnostics.frames.read", {}, opened.surface);
         persist();
       } catch (error) {
         recordFailure("read", error);
@@ -105,6 +101,19 @@ for (const app of Object.values(APPS)) {
         } catch (error) {
           recordFailure("stop", error);
         }
+      }
+    }
+
+    if (opened) {
+      try {
+        const content = await opened.verifyContent();
+        const elapsedMs = content.contentFrame.timeMs - opened.requestAtMs;
+        assert.ok(Number.isFinite(elapsedMs) && elapsedMs >= 0,
+          `HWP first-content elapsed time is invalid: ${JSON.stringify(elapsedMs)}`);
+        evidence.firstContent = { ...content.contentFrame, elapsedMs };
+        persist();
+      } catch (error) {
+        recordFailure("offline first-content verification", error);
       }
     }
 

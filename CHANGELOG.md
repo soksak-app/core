@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-239: Combine the existing HWP first-content recording with startup resource snapshots and defer OCR until after live collection. Preserve request and process identities, recording paths and raw clocks. Both optimized macOS arm64 candidate cases pass collection, log audits, focus restoration and normal shutdown; the preceding baseline fails Tauri focus cleanup. Candidate first content is slower while its font responses also finish later, so no performance improvement or fork adoption is established. Existing helper coverage passes 18/18; no pre-change Red was recorded for the combined collector. Acceptance remains open.
+
 - F239-238: Judge drag geometry, cadence and convergence independently from complete shared evidence and retain all outcomes in successful results and serialized failures. Missing or malformed data remains an explicit validation error. The new owner cases change from four failures to five passes, and the full owning file passes 38/38 after aligning a boundary fixture's capture timestamp with its declared source capture. No 2 pt, 33 ms or two-frame criterion changes.
 
 - F239-237: Read structured diagnostics from the installed TypeScript compiler API for activation unbound-name checks. The unchanged multiline TS2322 case fails before correction; all seven owner cases and e2e-check pass afterward. Preserve selected lexical diagnostic codes and explicit compiler failures, and retain analysis plus cleanup errors without leaking compiler sessions or temporary configuration. Supplemental cleanup fault tests are post-change coverage, not original pre-change Red evidence.

@@ -7,9 +7,8 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { evaluateReclaim, runViewMeasurements } from "@soksak/window-check/view-metrics.mjs";
 import { fresh } from "../fixture.mjs";
 import { openRecordedView, viewCardWithDifferentPluginTab } from "../view-metrics-collection.mjs";
-import { collectHwpReclaimAfterMotion, collectHwpViewMeasurements, hwpViewDescriptor } from "./cases/hwp.mjs";
-
-const BASELINES_MS = Object.freeze({ wailsv3: 701, tauriv2: 813 });
+import { collectHwpReclaimAfterMotion, collectHwpViewMeasurements, hwpViewDescriptor,
+  HWP_VIEW_BASELINES_MS } from "./cases/hwp.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: HWP process, history, layout, and drag measurements meet the declared contract`,
@@ -26,8 +25,8 @@ for (const app of Object.values(APPS)) {
       });
       const result = await runViewMeasurements(t, s, {
         plugin: "hwp",
-        baselinesMs: BASELINES_MS,
-        collect: async () => collectHwpViewMeasurements(t, s, { baselineMs: BASELINES_MS[app.name] }),
+        baselinesMs: HWP_VIEW_BASELINES_MS,
+        collect: async () => collectHwpViewMeasurements(t, s, { baselineMs: HWP_VIEW_BASELINES_MS[app.name] }),
       });
       const directory = join(app.configDir, "logs", "hwp-view-metrics");
       mkdirSync(directory, { recursive: true });
@@ -50,7 +49,8 @@ for (const app of Object.values(APPS)) {
           "plugin.hwp.view.content_frame",
         ],
       });
-      const descriptor = await hwpViewDescriptor(s, (message) => t.diagnostic(message), BASELINES_MS[app.name] + 300);
+      const descriptor = await hwpViewDescriptor(s, (message) => t.diagnostic(message),
+        HWP_VIEW_BASELINES_MS[app.name] + 300);
       const grid = await s.get("core.grid");
       const activeCard = grid.cards.find((item) => item.active);
       const card = viewCardWithDifferentPluginTab(grid, descriptor.plugin, activeCard?.id);
