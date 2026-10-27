@@ -198,6 +198,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-229",
+    implementation: [{ file: "e2e/view-content.mjs", symbol: "export async function recognizeViewFrame(" }],
+    tests: [
+      { file: "e2e/test/view-content.test.mjs", id: "view OCR consumes the exact crop without retaining it in the recording" },
+      { file: "e2e/test/view-content.test.mjs", id: "view OCR removes a crop after a recognizer error and preserves that error" },
+      { file: "e2e/test/view-content.test.mjs", id: "view OCR reports both recognition and scratch cleanup errors" },
+    ],
+    expected: "Each OCR crop exists only during its recognition call, is removed on success and failure, and preserves both recognition and cleanup errors when cleanup fails.",
+    levels: ["unit"],
+  },
+  {
   "id": "F239-221-1",
   "implementation": [
     {

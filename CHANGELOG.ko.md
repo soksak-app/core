@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-229: Decode한 OCR crop은 인식 호출이 소비하는 동안만 OS 임시 디렉터리에 둔다. 추적한 성공·실패 case는 남은 crop을 재현하며 cleanup fault case는 두 오류가 모두 보고됨을 확인한다. crop/OCR 소유 case 다섯 개가 통과하고 crop 파일 없이 recording frame과 OCR 증거를 보존한다.
+
 - F239-221-1: source clock의 diagnostic log 상관을 성공한 observer-start command 전후의 native monotonic clock 읽기로 교체한다. Red: 변경 전 owner가 로그에 있는 native request를 요구해 clock bracket 없이 실패한다. Green: shared collection의 source-frame·trace 집중 case 12/12, HWP layout case 네 개와 Browser·Editor·Terminal descriptor case가 통과한다. Collector는 raw clock receipt와 동일 session host/PID/window/surface identity를 보존하고 event-log argument parser를 제거하며 선언된 source 정밀도와 측정 기준을 유지한다. Application acceptance는 F212.14-5-5에 남는다.
 
 - F239-221: 성공한 `frames.start` result와 대응 native request/reply로 각 view document의 source-frame clock을 native monotonic time에 매핑한다. Red: 변경 전 mapper가 view clock과 main-page event batcher timestamp를 결합하고 source frame 뒤에 시작한 capture를 찾지 못한다. Cadence evaluator는 gesture 밖 observer idle 8,976 ms를 계산했으며 실제 경계 부분은 최대 9 ms였다. Green: collection owner 27/27, window metric evaluator 21/21, 네 plugin consumer owner case와 집중 drag-cadence case 네 개가 통과한다. 모호한 interval은 보존한다. One-shot 선택은 요청 이후가 확정된 frame을 요구하고 drag cadence는 gesture 안에 있을 수 있는 경계 부분만 계산한다. `make docs-check`가 통과한다. Application acceptance는 F212.14-5-5에 남는다.
