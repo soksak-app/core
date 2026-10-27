@@ -35,6 +35,8 @@ A plugin view's WebContent process uses the display label `soksak://plugin/<plug
 
 Each value is judged by the measurement named in its row, on a recording and not by a timer that runs in the application. Memory values use SI megabytes: 1 MB is 1,000,000 bytes. A reclaim measurement records the complete process-sharing group and its physical footprints immediately before closing all views in that group. It compares the same process identities after closure, counting ended processes as zero; it does not subtract a pre-view baseline. The group includes the root view and every attached native document-region process, and expands to every surface that shares any included process. The record establishes that the root and each attached document region of every closed view hold only their initial document in session history.
 
+The total-footprint measurement keeps exactly N workload views open when it samples their process groups. Additional views required for independent five-sample process-start timing open only after that N-view total is recorded.
+
 | criterion | pass condition |
 |---|---|
 | (i) total | The summed footprint of N views of one plugin is at most N times the footprint of one view, plus 10 MB. |

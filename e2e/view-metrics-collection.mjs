@@ -484,7 +484,34 @@ export async function viewFootprints(host, surfaces, measureFootprint) {
   return measureProcessGroup(viewProcessPids(host, surfaces), measureFootprint);
 }
 
-/** Opens five traced view lifecycles, measures one and three views, and records a conditional warm reuse. */
+/** Opens the requested view set, measures its process groups, and collects independent start samples. */
+export async function collectViewProcessGroups({ openView, readFootprints, viewCount, processStartCount }) {
+  assert.equal(typeof openView, "function", "view process collection requires an open callback");
+  assert.equal(typeof readFootprints, "function", "view process collection requires a footprint callback");
+  assert.ok(Number.isSafeInteger(viewCount) && viewCount >= 2, "view count must be at least two");
+  assert.ok(Number.isSafeInteger(processStartCount) && processStartCount >= 1,
+    "process start sample count must be positive");
+  const opened = [];
+  const events = [];
+  const open = async () => {
+    const value = await openView();
+    assert.ok(typeof value?.surface === "string" && value.surface.length > 0,
+      "opened view must have a surface identity");
+    assert.ok(Array.isArray(value.events), "opened view must retain its process events");
+    opened.push(value);
+    events.push(...value.events);
+    return value;
+  };
+  const first = await open();
+  const oneViewProcesses = await readFootprints([first.surface]);
+  while (opened.length < viewCount) await open();
+  const measuredViews = opened.slice(0, viewCount);
+  const allViewProcesses = await readFootprints(measuredViews.map(({ surface }) => surface));
+  while (opened.length < Math.max(viewCount, processStartCount)) await open();
+  return { opened, events, oneViewProcesses, allViewProcesses, openView: open };
+}
+
+/** Measures one view and the declared view count before collecting five process-start samples and warm reuse. */
 export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 3, processStartCount = 5 } = {}) {
   assert.ok(Number.isSafeInteger(viewCount) && viewCount >= 2, "view count must be at least two");
   assert.equal(processStartCount, 5, "the view-process contract requires exactly five start samples");
@@ -492,19 +519,13 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
   const activeCard = grid.cards.find((item) => item.active);
   const card = viewCardWithDifferentPluginTab(grid, descriptor.plugin, activeCard?.id);
 
-  const opened = [];
-  const events = [];
-  const open = async () => {
-    const value = await openRecordedView(t, s, { card, ...descriptor });
-    opened.push(value);
-    events.push(...value.events);
-    return value;
-  };
-  const first = await open();
-  const oneViewProcesses = await viewFootprints(await s.get("host.window"), [first.surface]);
-  while (opened.length < Math.max(viewCount, processStartCount)) await open();
-  const measuredViews = opened.slice(0, viewCount);
-  const allViewProcesses = await viewFootprints(await s.get("host.window"), measuredViews.map(({ surface }) => surface));
+  const groups = await collectViewProcessGroups({
+    openView: () => openRecordedView(t, s, { card, ...descriptor }),
+    readFootprints: async (surfaces) => viewFootprints(await s.get("host.window"), surfaces),
+    viewCount,
+    processStartCount,
+  });
+  const { opened, events, oneViewProcesses, allViewProcesses, openView } = groups;
   const starts = processStartSamples(events, opened.slice(0, processStartCount).map(({ surface }) => surface), descriptor.plugin);
   const startBySurface = new Map(opened.slice(0, processStartCount).map(({ surface }, index) => [surface, starts[index]]));
   const firstDisplays = opened.slice(0, 3).map(({ surface, contentFrame }) => ({
@@ -515,7 +536,7 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
 
   const beforePids = allViewRootProcessPids(await s.get("host.window"));
   const beforePidsAt = await monotonicTimeMs(s);
-  const warm = await open();
+  const warm = await openView();
   const warmDisplay = {
     surface: warm.surface,
     beforePidsAtMs: beforePidsAt.timeMs,

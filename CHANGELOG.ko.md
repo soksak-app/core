@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-222: 다섯 process-start 표본에 필요한 추가 view를 열기 전에 선언된
+
 - F239-224: 독립 view-measurement category를 모두 평가하고 모든 실패를 `AggregateError`와 `error.json`에 보존한다. 추적한 Red case 두 개는 기존 첫 오류 처리에서 동시 total·warm-display 위반을 재현한다. 수정 후 두 case가 통과하고 단일 오류 artifact 및 정상 측정 case도 통과한다. 기준과 window 결과는 바꾸지 않았다.
 
 - F212.9a-2: Cadence 기준이나 production telemetry 추가 없이 실제 plugin-host RAF·footprint benchmark를 추가한다. Registry 항목·page-clock identity·callback 0·cleanup 근거를 보존한다. 실제 오류는 browser error hook으로 보내고 정상 알림은 console record로 남긴다. 추적된 Red 후 소유 검사 열세 개와 실제 fixture package build가 통과한다. 앱 측정은 아직 남아 있다.

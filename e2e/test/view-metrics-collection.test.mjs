@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { readFrame } from "@soksak/window-check/frame.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
-import { closeViewGroup, collectViewStartAndMemory, openRecordedView, processStartSamples, viewContentFrameEvents,
+import { closeViewGroup, collectViewProcessGroups, collectViewStartAndMemory, openRecordedView, processStartSamples, viewContentFrameEvents,
   mapViewContentFramesToCapture, viewCardWithDifferentPluginTab, waitForViewReadiness,
   withViewContentTrace } from "../view-metrics-collection.mjs";
 
@@ -100,6 +100,36 @@ test("the exported lifecycle collector forwards the selected card ID to its firs
     expectedContent: "target text", language: "en-US",
   }), (error) => error === sentinel);
   assert.equal(recordCalls, 1, "the selected card ID did not reach openRecordedView before recording");
+});
+
+test("view totals are sampled at their declared count before extra process-start views open", { timeout: 5000 }, async () => {
+  let openedCount = 0;
+  const footprintReads = [];
+  const collected = await collectViewProcessGroups({
+    viewCount: 3,
+    processStartCount: 5,
+    async openView() {
+      const surface = `view-${++openedCount}`;
+      const base = openedCount * 10;
+      return { surface, events: [
+        { event: "host.trace.view.process-request", ts_us: base, mono_ns: base * 1_000_000,
+          fields: { plugin: "fixture", surface } },
+        { event: "host.trace.view.process-ready", ts_us: base + 1, mono_ns: (base + 1) * 1_000_000,
+          fields: { plugin: "fixture", surface } },
+      ] };
+    },
+    async readFootprints(surfaces) {
+      footprintReads.push({ openedCount, surfaces });
+      return surfaces.map((surface, index) => ({ pid: index + 1, footprintBytes: 100 }));
+    },
+  });
+
+  assert.deepEqual(footprintReads.map(({ openedCount: count }) => count), [1, 3],
+    "the three-view total must be sampled before views four and five are opened");
+  assert.deepEqual(footprintReads[1].surfaces, ["view-1", "view-2", "view-3"]);
+  assert.equal(collected.opened.length, 5, "the collector must retain all five process-start samples");
+  assert.equal(processStartSamples(collected.events, collected.opened.map(({ surface }) => surface), "fixture").length, 5,
+    "the extra views must still provide all five process-start samples");
 });
 
 test("view content-frame events preserve coalesced resize provenance", { timeout: 5000 }, () => {

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-222: Measure the declared view groups before opening the extra views
+
 - F239-224: Evaluate every independent view-measurement category and preserve all failures in `AggregateError` and `error.json`. Tracked Red cases reproduce simultaneous total and warm-display failures against the previous first-error behavior. Both cases pass after correction; the single-error artifact and valid-measurement cases also pass. Criteria and window results are unchanged.
 
 - F212.9a-2: Add the built plugin-host RAF and footprint benchmark without a cadence threshold or production telemetry. Preserve registry entries, page-clock identity, zero-callback results and cleanup evidence. Actual errors use the browser error hook while normal notifications remain console records. Thirteen owning checks pass after tracked Reds, and the actual fixture package builds. Application measurements remain outstanding.

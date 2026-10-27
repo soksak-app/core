@@ -198,6 +198,14 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-222",
+    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function collectViewProcessGroups(" }],
+    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "view totals are sampled at their declared count before extra process-start views open" }],
+    expected: "The one-view group is sampled after one view; the declared N-view workload is sampled while exactly N views are open; extra views for five process-start samples open afterward.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F239-224",
     implementation: [{ file: "packages/window-check/view-metrics.mjs", symbol: "export function assertViewMeasurements(" }],
     tests: [
