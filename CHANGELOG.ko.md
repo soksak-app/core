@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-241: 재빌드한 macOS arm64 plugin-host channel을 양 Files 창 case 통과, app log finding 0, 정상 host 종료, endpoint 제거 및 foreground baseline 복원으로 확인한다. 별도 Terminal drag 실행은 Wails/Tauri source 간격 73/65 ms와 convergence 미달로 실패하며 수정 전 plugin-host 회귀와 source 보관 capacity 오류 29개를 기록했다. 해당 증거를 보존하며 channel 수정으로 성능 acceptance를 추론하지 않는다.
+
 - F239-241: Surface view가 직접 batch writer를 쓰는 동안 공유 SDK bridge의 개별 plugin-host log 요청을 유지한다. Plugin-host 소유 검사는 수정 전에 잘못된 batch 요청을 재현하며 선언된 start context로 routing한 뒤 bridge 소유 case 52개가 통과한다. Operation identifier와 명시적인 거절 보고를 유지한다.
 
 - F239-240: 기존 bounded batcher로 view event batch와 clock 요청을 native event writer에 직접 전달한다. 단일 record의 Workbench 전달을 제거하고 ready document generation과 page에 record를 연결하며 호출자가 지정한 surface identity를 거부하고 field 크기를 제한할 때도 신뢰할 수 있는 identity를 보존한다. SDK, Workbench와 양 native host 소유 검사는 직접 경로 누락을 재현하고 수정 후 통과한다. 애플리케이션 지연 acceptance는 별도로 유지한다.

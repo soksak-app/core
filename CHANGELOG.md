@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-241: Accept the rebuilt macOS arm64 plugin-host channel with both Files window cases passing, zero application-log findings, normal host exit, endpoint removal and restored foreground baseline. The separate Terminal drag run remains failed at 73/65 ms source intervals and convergence on Wails/Tauri, with 29 source-retention capacity errors and the plugin-host regression recorded before correction. Preserve its evidence and do not infer performance acceptance from the channel fix.
+
 - F239-241: Preserve individual plugin-host log requests in the shared SDK bridge while surface views use the direct batch writer. The plugin-host owner reproduces the incorrectly batched request before correction; all 52 bridge owner cases pass after routing by the declared start context. Keep operation identifiers and explicit refusal reporting.
 
 - F239-240: Send view event batches and clock requests directly to the native event writer through the existing bounded batcher. Remove single-record Workbench forwarding, bind records to the ready document generation and page, reject caller-supplied surface identity, and preserve trusted identity when bounding fields. SDK, Workbench and both native host owner tests reproduce the missing direct path and pass after correction. Application latency acceptance remains separate.
