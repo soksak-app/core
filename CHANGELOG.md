@@ -6,6 +6,7 @@
 
 - F239-237: Read structured diagnostics from the installed TypeScript compiler API for activation unbound-name checks. The unchanged multiline TS2322 case fails before correction; all seven owner cases and e2e-check pass afterward. Preserve selected lexical diagnostic codes and explicit compiler failures, and retain analysis plus cleanup errors without leaking compiler sessions or temporary configuration. Supplemental cleanup fault tests are post-change coverage, not original pre-change Red evidence.
 
+- F239-236: Preserve HWP resource snapshots and native-clock brackets through the existing diagnostic commands, opening the fixture directly through core.card.add-tab. Both optimized diagnostic hosts pass the focused H23.11 integration cases, application-log audit, frontmost restoration and normal shutdown. Earlier log-policy and baseline failures remain separate records. The evidence does not establish WASM compilation cost or startup performance improvement.
 
 - F239-223-3: Add an explicit native resize-cadence reproduction target outside the default suite. Observe a stable 300×200 baseline, apply all 48 one-point pulses, retain predicted refresh and actual setter times, and gate only consecutive pulse response rows at 33 ms. An unoccluded inactive run records 34 ms source cadence with setter gaps at most 16.741 ms; a separate run passes. This establishes a standalone measurement path, not an application correction or performance acceptance. Initial fixture failures did not reach cadence measurement.
 

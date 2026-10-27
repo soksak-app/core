@@ -92,6 +92,7 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 `make e2e-check`는 설치된 TypeScript compiler API로 activation fixture의 unresolved name을 감사하고 선언된 source의 TS2304, TS18004 및 TS2552를 판정한다. 관련 없는 semantic type diagnostic은 lexical 감사를 중단하지 않는다. Compiler configuration, global 및 syntax 오류는 명시적으로 실패하며 유효한 source metadata가 없는 diagnostic을 거부하고 external-library 제외에는 compiler metadata를 요구한다. Compiler session과 임시 configuration cleanup 오류는 분석 오류와 함께 보고한다. 이 source 검사는 입력을 보내거나 application을 활성화하지 않는다.
 
+`e2e/hwp.test.mjs`의 집중 `HWP startup resource timing snapshot is preserved` case는 비활성 host별 document 하나를 `core.card.add-tab`으로 열고 선언된 diagnostic frame start/read/stop command를 호출한다. 부분 응답과 cleanup 실패를 포함해 각 응답과 read native-clock bracket을 run folder에 즉시 기록한다. Lifecycle info 정책이 선언된 phase read를 저장한다. Resource 항목은 read 시점에 확인 가능한 browser snapshot뿐이며 항목 부재가 fetch 부재를 입증하지 않고 fetch duration도 WASM compilation을 측정하지 않는다. Query 성공은 frontmost-baseline, error 감사 또는 cleanup 실패를 무효화하지 않는다.
 
 Focused `e2e/view-restart.test.mjs` case는 노출된 browser view process를 네 번 종료하고 각 전체 fault/recovery 단계를 녹화하며 replacement마다 저장 주소, 호출 가능한 reload command 및 view/document의 보이는 배치를 검증하고 네 번째 실패의 stop reason을 확인한다. 같은 tab을 숨기고 unload한 뒤 다시 열어 stopped error 없이 상태가 복원돼야 한다. 의도한 process-end 진단과 네 번째 실패 표시만 선언하고 정확한 개수를 확인하며 예상하지 않은 등록 또는 lifecycle 오류는 실행을 실패시킨다. 일반적인 실행 중 diagnostic host와 run metadata를 사용한다.
 
