@@ -208,20 +208,28 @@ function chainFindings(entries, catalog) {
   // A chain crosses processes, so the time and not the seq places a policy against it.
   // The page puts the policy of the setting `diagnostics.log` in its gate when the setting changes, and the host records
   // `log.policy` after it, so the policy that follows such a change is in force from the change.
+  const byProcess = new Map();
+  for (const entry of entries) {
+    const process = processOf(entry.file);
+    if (!byProcess.has(process)) byProcess.set(process, []);
+    byProcess.get(process).push(entry);
+  }
   const policies = new Map();
-  const changes = new Map();
-  for (const { file, event } of [...entries].sort((a, b) => a.event.ts_us - b.event.ts_us)) {
-    const process = processOf(file);
-    // The catalog declares `keys` a required string, and the line check refuses a line without it.
-    if (event.event === "page.settings.change" && event.fields.keys.split(",").includes("diagnostics.log")) {
-      if (!changes.has(process)) changes.set(process, event.ts_us);
-      continue;
+  for (const [process, processEntries] of byProcess) {
+    // `seq` orders a process across its main, debug and rotated files. Page timestamps are estimates and can fall after the
+    // host timestamp of the policy event that follows the settings change, so pair those events in process order.
+    const changes = [];
+    for (const { event } of processEntries.sort((a, b) => a.event.seq - b.event.seq)) {
+      // The catalog declares `keys` a required string, and the line check refuses a line without it.
+      if (event.event === "page.settings.change" && event.fields.keys.split(",").includes("diagnostics.log")) {
+        changes.push(event.ts_us);
+        continue;
+      }
+      if (event.event !== "log.policy") continue;
+      // default: a policy without a preceding change of the setting is in force from its own timestamp.
+      const ts = changes.length > 0 ? changes.shift() : event.ts_us;
+      policies.set(process, [...(policies.get(process) ?? []), { ts, classes: event.fields.classes }]);
     }
-    if (event.event !== "log.policy") continue;
-    // default: the first policy of a process starts its list, and a policy without a change of the setting before it is in
-    // force from its own time.
-    policies.set(process, [...(policies.get(process) ?? []), { ts: changes.get(process) ?? event.ts_us, classes: event.fields.classes }]);
-    changes.delete(process);
   }
   // Whether every policy in force in the process of the first event, from the first to the last event of the chain,
   // stores the hop.

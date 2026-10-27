@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-225: Pair each `diagnostics.log` settings change with the next same-process `log.policy` by `seq`, including across rotated files, and retain the settings event timestamp as the effective time. Owner Red reproduced a false chain finding and a suppressed real missing hop when page and host timestamps reversed sequence order; Green passes the rotated transition, cross-process same-sequence isolation, and real missing-hop cases (4/4 with the existing policy case). Reauditing preserved run34 removes the chain finding and retains the separate invalid plugin error. Documentation checks pass.
+
 - F239-227: Replace fabricated pointer identities in the Wails viewport-marker fixture with an allocated object address. The exact Windows/ARM64 diagnostics vet command reports both invalid conversions before the change and passes afterward; all six viewport-marker owner cases pass. Endpoint ownership and UI-thread assertions remain intact.
 
 - F239-222: Measure the declared view groups before opening the extra views

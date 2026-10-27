@@ -198,6 +198,18 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-225",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "const byProcess = new Map();" }],
+    tests: [
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a diagnostics.log transition follows same-process seq across rotated files when page time is later" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "same seq in another process cannot hide a missing page.call" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a missing call remains a finding when the next same-process policy stores it" },
+    ],
+    expected: "The audit pairs each diagnostics.log change with the next policy in the same process by seq, retains the setting timestamp as the effective time, and still reports a missing call when that policy stores it.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F239-222",
     implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function collectViewProcessGroups(" }],
     tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "view totals are sampled at their declared count before extra process-start views open" }],

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-225: `diagnostics.log` settings change를 rotated file을 포함해 같은 process의 다음 `log.policy`와 `seq`로 짝짓고 settings event timestamp를 유효 시각으로 유지한다. Owner Red는 page와 host timestamp가 sequence와 역전될 때 잘못된 chain finding과 실제 missing hop 은폐를 재현한다. Green은 rotated transition, 다른 process의 동일 sequence 분리, 실제 missing-hop 사례와 기존 policy 사례를 통과한다(4/4). 보존된 run34 재감사에서 chain finding은 사라지고 별도의 잘못된 plugin error는 남는다. Documentation check가 통과한다.
+
 - F239-227: Wails viewport-marker fixture에서 임의 정수 pointer 대신 할당한 객체 주소를 사용한다. 변경 전 정확한 Windows/ARM64 diagnostics vet 명령이 잘못된 변환 두 개를 보고하고, 변경 후 같은 명령이 통과한다. viewport-marker owner case 여섯 개도 통과한다. Endpoint 소유권과 UI-thread assertion은 유지된다.
 
 - F239-222: 다섯 process-start 표본에 필요한 추가 view를 열기 전에 선언된

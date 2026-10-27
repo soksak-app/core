@@ -248,6 +248,92 @@ test("the policy that a change of diagnostics.log brings is in force from the ch
   assert.deepEqual(auditLogs([{ file: "host-b1.jsonl", text }], gated), []);
 });
 
+test("a diagnostics.log transition follows same-process seq across rotated files when page time is later", () => {
+  const callChain = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      "page.settings.change": { layer: "page", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
+      "page.call": { layer: "page", class: "call", level: ["debug", "warn"], fields: objectFields() },
+      "host.binding.call": { layer: "host", class: "call", level: ["debug", "warn"], fields: objectFields() },
+      "log.policy": catalog.events["log.policy"],
+    },
+    chains: { settings: ["page.settings.change", "page.call", "host.binding.call"] },
+  };
+  const debug = { lifecycle: "info", input: "error", call: "debug", io: "error", frame: "error" };
+  const error = { lifecycle: "info", input: "error", call: "error", io: "error", frame: "error" };
+  const firstGeneration = lines(
+    line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }, { ts_us: 1001 }),
+    line(2, "log.policy", { source: "file", classes: debug }, { ts_us: 2000 }),
+    line(3, "page.settings.change", { actor: "core.settings.set", keys: "diagnostics.log" }, { layer: "page", class: "call", cids: ["p1.1"], ts_us: 5000 }),
+  );
+  const currentGeneration = lines(
+    line(4, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }, { ts_us: 3000 }),
+    line(5, "log.policy", { source: "file", classes: error }, { ts_us: 4000 }),
+    line(6, "log.policy", { source: "file", classes: debug }, { ts_us: 6000 }),
+  );
+  assert.deepEqual(auditLogs([
+    { file: "host-7-b1.jsonl.1", text: firstGeneration },
+    { file: "host-7-b1.jsonl", text: currentGeneration },
+  ], callChain), []);
+});
+
+test("same seq in another process cannot hide a missing page.call", () => {
+  const callChain = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      "page.settings.change": { layer: "page", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
+      "page.call": { layer: "page", class: "call", level: "debug", fields: objectFields() },
+      "host.binding.call": { layer: "host", class: "call", level: "debug", fields: objectFields() },
+      "log.policy": catalog.events["log.policy"],
+    },
+    chains: { settings: ["page.settings.change", "page.call", "host.binding.call"] },
+  };
+  const debug = { lifecycle: "info", input: "error", call: "debug", io: "error", frame: "error" };
+  const error = { lifecycle: "info", input: "error", call: "error", io: "error", frame: "error" };
+  const host = lines(
+    line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }),
+    line(2, "log.policy", { source: "file", classes: debug }),
+    line(3, "page.settings.change", { actor: "core.settings.set", keys: "diagnostics.log" }, { layer: "page", class: "call", cids: ["p1.1"] }),
+  );
+  const other = lines(
+    line(1, "log.open", { schema: 2, pid: 8, role: "host", boot: "b2" }, { ts_us: 1001 }),
+    line(2, "native.input.key_down", { keyCode: 1 }),
+    line(3, "log.policy", { source: "file", classes: error }, { ts_us: 1003 }),
+  );
+  assert.deepEqual(auditLogs([
+    { file: "host-7-b1.jsonl", text: host },
+    { file: "host-8-b2.jsonl", text: other },
+  ], callChain).map(({ line, message }) => [line, message]), [[3, "chain settings of p1.1 lacks page.call"]]);
+});
+
+test("a missing call remains a finding when the next same-process policy stores it", () => {
+  const callChain = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      "page.settings.change": { layer: "page", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
+      "page.call": { layer: "page", class: "call", level: "debug", fields: objectFields() },
+      "host.binding.call": { layer: "host", class: "call", level: "debug", fields: objectFields() },
+      "log.policy": catalog.events["log.policy"],
+    },
+    chains: { settings: ["page.settings.change", "page.call", "host.binding.call"] },
+  };
+  const debug = { lifecycle: "info", input: "error", call: "debug", io: "error", frame: "error" };
+  const error = { lifecycle: "info", input: "error", call: "error", io: "error", frame: "error" };
+  const text = lines(
+    line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }, { ts_us: 1001 }),
+    line(2, "log.policy", { source: "file", classes: error }, { ts_us: 2000 }),
+    line(3, "page.settings.change", { actor: "core.settings.set", keys: "diagnostics.log" }, { layer: "page", class: "call", cids: ["p1.1"], ts_us: 5000 }),
+    line(4, "log.policy", { source: "file", classes: debug }, { ts_us: 4000 }),
+    line(5, "log.policy", { source: "file", classes: error }, { ts_us: 6000 }),
+  );
+  assert.deepEqual(auditLogs([{ file: "host-7-b1.jsonl", text }], callChain).map(({ line, message }) => [line, message]), [
+    [3, "chain settings of p1.1 lacks page.call"],
+  ]);
+});
+
 test("an event of the layer page or plugin names the page that wrote it, and an event of another layer names none", () => {
   const text = [
     open,
