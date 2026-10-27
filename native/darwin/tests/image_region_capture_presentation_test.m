@@ -11,7 +11,6 @@
 #import "capture.h"
 #import "image_region.h"
 #import "webview_geometry.h"
-#import "support/scaled_window.h"
 #import "support/capture_frame.m"
 
 static const size_t sourceWidth = 96;
@@ -155,9 +154,8 @@ static NSData *cropFrame(NSData *decoded, uint32_t width, uint32_t height, uint3
 
 int main(int argc, const char **argv) { @autoreleasepool {
     signal(SIGALRM, expired); alarm(30);
-    BOOL reproductionMode = argc == 2 && strcmp(argv[1], "--p86-2x") == 0;
-    check(argc == 1 || reproductionMode, @"the test receives only the optional --p86-2x reproduction argument");
-    if (argc != 1 && !reproductionMode) return 1;
+    check(argc == 1, @"the test receives no reproduction-mode argument");
+    if (argc != 1) return 1;
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
@@ -165,16 +163,8 @@ int main(int argc, const char **argv) { @autoreleasepool {
     BOOL directoryReady = mkdtemp(directory) != NULL;
     check(directoryReady, @"a private capture-artifact directory is created");
 
-    NSWindow *window = nil;
-    if (reproductionMode) {
-        SPScaledWindow *scaled = [[SPScaledWindow alloc] initWithContentRect:NSMakeRect(120, 120, 240, 160)
-            styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
-        SPSetScaledWindowResolution(scaled, 2);
-        window = scaled;
-    } else {
-        window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 240, 160)
-            styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
-    }
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 240, 160)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     window.releasedWhenClosed = NO; window.animationBehavior = NSWindowAnimationBehaviorNone;
     NSView *content = [[NSView alloc] initWithFrame:window.contentView.bounds];
     window.contentView = content;
@@ -206,19 +196,6 @@ int main(int argc, const char **argv) { @autoreleasepool {
         sourceWidth, sourceHeight, raster[2], 2, 1, 1);
     check(presented, @"sp_region_present accepts the exact opaque fixture");
     check(!NSApp.isActive, @"the fixture remains inactive before recording");
-    if (reproductionMode && (!rasterReady || fabs(window.backingScaleFactor - 2) > 0.000001
-        || fabs(raster[2] - 2) > 0.000001)) {
-        check(false, [NSString stringWithFormat:@"the P86 reproduction requires actual 2x window and region backing scales before capture (window %.3f, region %.3f)",
-            window.backingScaleFactor, raster[2]]);
-        if (source) CFRelease(source);
-        [sourceBytes release];
-        sp_region_close(region);
-        if (surfaceHost) sp_surface_close(surfaceHost);
-        [surface release]; [main release]; [window close]; [content release]; [window release];
-        [[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:NULL];
-        return 1;
-    }
-
     // Match the capture owner’s settled-window path so the first sample is a complete recorded frame.
     NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
     while (settled.timeIntervalSinceNow > 0)
@@ -273,10 +250,6 @@ int main(int argc, const char **argv) { @autoreleasepool {
     NSData *capturedCrop = captureFacts && fabs(cropXValue - cropX) < 0.000001
         && fabs(cropYValue - cropY) < 0.000001 && fabs(pixelsPerPoint - raster[2]) < 0.000001
         ? cropFrame(decoded, dimensions[0], dimensions[1], dimensions[2], cropX, cropY, sourceWidth, sourceHeight) : nil;
-    BOOL originalGeometry = rasterReady && window.backingScaleFactor == 2 && raster[2] == 2
-        && [captureFacts[@"scaleFactor"] doubleValue] == 2
-        && [captureFacts[@"contentScale"] doubleValue] == 1
-        && dimensions[0] == 480 && dimensions[1] == 320;
     BOOL actualGeometry = rasterReady && raster[2] == backingScale
         && [captureFacts[@"scaleFactor"] doubleValue] == backingScale
         && [captureFacts[@"contentScale"] doubleValue] == 1
@@ -322,8 +295,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
         @"callbackTimeMach": statusRow[@"callbackTime"] ?: NSNull.null,
         @"captureHeaderContentRect": @{@"x": @(captureInfo[0]), @"y": @(captureInfo[1]),
             @"width": @(captureInfo[2]), @"height": @(captureInfo[3])},
-        @"requestedMode": reproductionMode ? @"p86-original-2x" : @"actual-backing-scale",
-        @"actualGeometry": @(actualGeometry), @"originalGeometry": @(originalGeometry),
+        @"actualGeometry": @(actualGeometry),
         @"exact": @(sourceBytes && capturedCrop && [sourceBytes isEqualToData:capturedCrop]),
         @"differenceCount": @(differences.count), @"differences": differences,
         @"windowActive": @(NSApp.isActive),
@@ -334,9 +306,8 @@ int main(int argc, const char **argv) { @autoreleasepool {
     BOOL exact = sourceBytes && capturedCrop && [sourceBytes isEqualToData:capturedCrop];
     check(!NSApp.isActive, @"recording and comparison do not activate the application");
     check(sourceLayerExact, @"the image-layer CGImage provider bytes equal the opaque IOSurface source bytes");
-    check(reproductionMode ? originalGeometry : actualGeometry,
-        [NSString stringWithFormat:@"%@ (region %.0fx%.0f pixels at scale %.0f; capture %ux%u, factor %.0f)",
-            reproductionMode ? @"the original P86 2x geometry is available" : @"the source and capture match actual backing geometry",
+    check(actualGeometry,
+        [NSString stringWithFormat:@"the source and capture match actual backing geometry (region %.0fx%.0f pixels at scale %.0f; capture %ux%u, factor %.0f)",
             raster[0], raster[1], raster[2], dimensions[0], dimensions[1], [captureFacts[@"scaleFactor"] doubleValue]]);
     check(exact, [NSString stringWithFormat:@"the captured image-region crop equals the source bytes (%lu differences)",
         (unsigned long)differences.count]);

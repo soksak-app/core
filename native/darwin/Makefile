@@ -343,9 +343,6 @@ test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 test-capture-frame-identity: $(BUILD)/capture_frame_identity_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_frame_identity_test
 
-test-image-region-p86-reproduction: $(BUILD)/image_region_capture_presentation_test
-	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) image_region_capture_presentation_test,--p86-2x
-
 test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_stop_intake_test
 

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-47-30: Close historical P86 cause attribution as evidence unavailable after independent review. Remove the unsupported fake-window 2× comparator mode and its target: AppKit backing overrides do not establish ScreenCaptureKit output scale. Keep the actual-scale exact-byte comparator, which passes once at 1× with zero differing pixels. Historical cause and original 2× reproduction remain unverified; genuine display-scale support and exact-match criteria are unchanged.
+
 - F239-223, F239-233, F239-235: Record the optimized two-host measurement cohort with seven measured failures and one active-window refusal. HWP footprint passes on both hosts; HWP first display and measured drag source cadence remain outside their criteria. Preserve the distinction between observer cadence, input-to-display latency and unaccepted convergence. Both host error audits and normal shutdown pass.
 
 - F239-234: Wait for the actual root WebKit update after the first QR canvas draw before acknowledging diagnostic setup. The controlled target-update Red becomes Green, and held-update cancellation completes once. Both optimized macOS arm64 hosts now pass the real pixel capture check: Wails has 1 matched and 39 unknown document rows; Tauri has 3 matched and 37 unknown, with four issued slots each. Both report zero incomplete samples and identity/write/cleanup errors, pass log audits, restore the same foreground baseline and exit normally. Preserve unknown observations and leave independent source timing and historical cadence attribution open.
