@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.9a: macOS 26.6.2 arm64 diagnostic host 양쪽에서 빌드된 plugin-host footprint와 background RAF 측정을 완료한다. Wails는 footprint 12096 KB와 8533 ms 동안 callback 0회, Tauri는 12080 KB와 8888 ms 동안 0회를 기록한다. 연결된 owner 수정 후 양 검사는 fixture 제거, registry·settings와 frontmost 복원, error 감사 및 정상 종료를 통과한다. 이 측정값으로 footprint threshold나 active-rendering rate를 주장하지 않는다.
+
 - F239-231: sourceClock field를 거부하지 않고 현재 성공한 Terminal observer-start 응답을 받는다. 공유 source-clock 검증을 유지하고 폐기된 owner mock을 바꾼다. 같은 owner case가 수정 전 실패하고 수정 후 통과한다.
 
 - F239-78: 독립 리뷰 후 과거 startup 지연의 원인 분류만 근거 복구 불가로 닫는다. 실패한 recording과 callback·target 사실을 복구할 수 없다. 완료된 lifecycle 진단 owner와 양 host runtime 결과 및 실행 가능한 capture 검사를 모두 유지한다. 원래 원인은 미검증이며 lifecycle 증거를 보존한 재발은 연결된 비교 항목을 연다.

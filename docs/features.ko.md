@@ -11,11 +11,11 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 5개와 waiting 34개인 39개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 5개와 waiting 33개인 38개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
 - **현재 측정과 검사 수정: 1** — F239-223
 - **보고된 실패와 과거 종료 감사: 18** — F239-47-30; F212.1-2-2; F212.10-hwp-2, F212.10-core-3/-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
-- **성능 측정: 6** — F212.1, F212.7a, F212.9a, F212.14/-5/-5-5
+- **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 8** — F212.12-1-10-6g; F212.15/-1; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
 - **집계 요구사항과 미완료 작업 register: 6** — F160, F160.29, F161, F212, F212.10, F240
 
@@ -1596,7 +1596,7 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
   - [o] F229-6 — P0: 멈춤 해제의 joint 규칙: 멈춤 기록마다 해제 트리거는 사람의 표면 열기 하나이며 docs/spec/sidecars.ko.md에 한 번만 적는다. plugin host 멈춤과 그 세션의 사이드카 멈춤은 같은 단계에서 풀린다. 사람이 plugin을 사용하면 같은 멈춤이 풀린다(`plugin-host.restart.enable-clears-stops`). 그래서 host는 있고 표면이 없는 plugin은 더 이상 명시된 한계가 아니다. 결정은 docs/plans/plugin-host-routes.ko.md(F229-6 상태), 계약 `plugin-host.restart.stop-clear-joint`.
   - [o] F229-8 — P0: `state:<plugin>:<project>` 세션은 그 창에서 project가 해제되면 끝난다. 결정은 docs/plans/plugin-host-routes.ko.md(F229-8 상태), 계약 `plugin-host.sidecar.release-state-session`.
   - [o] F230 — P0: 가로 사이드바 섹션의 선언된 tree는 거절된다. 가로 tree는 한 줄을 모두 차지하고 상자 안에서 스크롤하며, tree 노드는 선택적 `detail` 필드를 가진다. 방향 검사와 방향 pull은 없앴다(docs/plans/horizontal-tree.ko.md). Red: 변경 전 코드에서 가로 tree가 거절되고, `.declared-tree`의 계산된 `overflow-x`가 `visible`이다(기대값 `auto`). Green: 담당 workbench 테스트가 통과한다(85개 중 85개). CSS 테스트도 통과한다. F230은 이제 F229에 의존하지 않는다: 이 지시가 이전 재시도 조건("재시도 조건: F229가 정해질 때.")을 대체한다.
-  - [ ] F212.9a — P0: 만들어진 plugin host의 footprint와 throttle 측정. F212.10 전에. Retry 조건: plugin이 `host`를 선언하고 F212.9가 그 host를 만들 때.
+  - [o] F212.9a — P0: 빌드된 plugin host의 physical footprint와 background throttle을 측정한다. F239-220, F239-226과 F239-230 수정 후 현재 application 측정이 macOS 26.6.2 arm64 diagnostic host 양쪽에서 통과한다. 각 host는 정확한 fixture process의 native sampler row 두 개와 같은 document clock sample 두 개를 보존한다. Wails는 8533 ms 동안 RAF callback 0회와 footprint 12096 KB, Tauri는 8888 ms 동안 callback 0회와 footprint 12080 KB를 관측한다. 이는 측정값이며 memory나 active-rendering threshold가 아니다. 양 검사는 fixture를 제거하고 원래 registry와 settings 및 공유 frontmost baseline을 복원하며 application error 감사를 통과하고 정상 종료한다. 소유 controlled Red와 Green은 연결된 수정에 기록돼 있다.
     - [o] F212.9a-1 — P1: Native window facts와 등록된 handle을 대조해 양 host의 기존 memory sampler에 plugin-host WebContent process를 추가한다. Plugin, window, PID, RSS와 physical footprint 또는 명시적 오류를 기록한다. PID 0은 시작 전 상태로 명시하며 무관한 WebView는 제외하고 반복 PID는 합계에서 같은 물리 process를 뜻한다. Red: 변경 전 Go/Rust sampler owner는 등록된 plugin-host 행을 누락한다. Green: 양 adapter owner가 각각 두 사례, 양 sampler owner가 각각 한 사례를 통과한다. Event·format·문서 검사도 통과한다. 앱 footprint와 RAF throttle 측정은 F212.9a에 남는다.
     - [o] F212.9a-2 — P1: 선언된 command/status와 기존 memory sampler 알림으로 실제 plugin-host RAF 측정 fixture를 구현한다. 안정된 plugin/window/PID identity·physical footprint·callback 0을 보존하고 유한한 양수 performance.timeOrigin을 대조해 같은 page clock에서만 경과 시간을 계산한다. Registry 항목을 유지하고 잘못된 값·window-level sampler 오류를 보고하며 제거·복원을 확인한 뒤에만 임시 근거를 삭제한다. 정상 bridge 알림은 console record로 남기고 실제 실패는 browser error hook으로 보낸다. Red owner가 수정 전에 누락 수집·오류 손실·안전하지 않은 cleanup·지원하지 않는 schema·잘못된 reporter 오류·섞인 page clock을 재현한다. 소유 사례 열세 개와 실제 fixture package build가 통과하고 독립 collector·cleanup 리뷰에 남은 이의가 없다. 구현만 완료하며 앱 측정은 F212.9a에 남는다.
   - [ ] F212.10 — P0: Plugin의 view migration 구현은 소유 browser P27.3, editor E24, terminal P49 및 HWP H22에서 완료했다. 측정 collector와 diagnostic interface 구현도 F212.14-5에서 완료했다. Browser P27.4, editor E25, terminal P49.2 및 HWP H23의 실제 view 측정 acceptance는 남아 있다. Browser P29/P31, editor E26-1, terminal P68-1 및 HWP H29-1의 publication은 별도이며 release를 명시한 작업이 아니면 개발 완료 범위에 포함하지 않는다.

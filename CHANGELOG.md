@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.9a: Complete built plugin-host footprint and background RAF measurement on both macOS 26.6.2 arm64 diagnostic hosts. Wails records 12096 KB footprint and 0 callbacks over 8533 ms; Tauri records 12080 KB and 0 over 8888 ms. Both checks pass fixture removal, registry/settings and frontmost restoration, error audit and normal shutdown after the linked owner corrections. These readings do not assert a footprint threshold or an active-rendering rate.
+
 - F239-231: Accept the current successful Terminal observer-start reply without rejecting sourceClock fields. Keep shared source-clock validation and replace the obsolete owner mock. The same owner case fails before correction and passes afterward.
 
 - F239-78: Close only historical startup-delay cause attribution as evidence unavailable after independent review. The failed recording and callback/target facts cannot be recovered. Preserve the completed lifecycle diagnostic owner and two-host runtime results and all executable capture checks. The original cause remains unverified; recurrence with retained lifecycle evidence opens a linked comparison.

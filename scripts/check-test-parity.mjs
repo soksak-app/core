@@ -198,6 +198,30 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
 {
+  "id": "F212.9a",
+  "implementation": [
+    {
+      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
+      "symbol": "export function reducePluginHostRafMeasurement("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/benchmark/plugin-host-throttle.test.mjs",
+      "id": "a built plugin host reports its observed RAF rate"
+    },
+    {
+      "file": "e2e/test/plugin-host-throttle.test.mjs",
+      "id": "plugin-host RAF measurement reports window-facts errors before missing plugin rows"
+    }
+  ],
+  "expected": "A built plugin host has same-document callback deltas, exact process physical-footprint samples and verified fixture and registry cleanup on both hosts.",
+  "levels": [
+    "unit",
+    "application"
+  ]
+},
+{
   "id": "F239-231",
   "implementation": [
     {
