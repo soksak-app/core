@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-223-2: Cache the lazy Wails framework-module import promise for calls and listener registration. The actual consumer changes from four loader resolutions to one; all seven runtime owner tests pass, including native-call bypass and shared import failure without retry. Rebuilt-host timing acceptance remains pending; no cadence improvement is inferred from the owner test.
+
 - F239-232: Share one NFC and whitespace normalization rule for OCR frame selection and acceptance. Preserve rejection of missing text and exact document/status checks. The tracked spaced-Hangul case changes from Red to Green; the first-content owner passes 4/4. The original console Red was not saved; a later unchanged-comparison replay retains its assertion failure. HWP memory and cadence acceptance remains open.
 
 - F212.9a: Complete built plugin-host footprint and background RAF measurement on both macOS 26.6.2 arm64 diagnostic hosts. Wails records 12096 KB footprint and 0 callbacks over 8533 ms; Tauri records 12080 KB and 0 over 8888 ms. Both checks pass fixture removal, registry/settings and frontmost restoration, error audit and normal shutdown after the linked owner corrections. These readings do not assert a footprint threshold or an active-rendering rate.

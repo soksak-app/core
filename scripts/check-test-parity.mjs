@@ -198,6 +198,29 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
 {
+  "id": "F239-223-2",
+  "implementation": [
+    {
+      "file": "apps/wailsv3/runtime/index.js",
+      "symbol": "const runtime ="
+    }
+  ],
+  "tests": [
+    {
+      "file": "apps/wailsv3/test/runtime.test.mjs",
+      "id": "Wails host calls and listeners share one lazy runtime module resolution"
+    },
+    {
+      "file": "apps/wailsv3/test/runtime.test.mjs",
+      "id": "Wails runtime import failure is shared and is not retried"
+    }
+  ],
+  "expected": "Wails framework consumers share one lazy module-import result while native bridge calls bypass the import and all consumers retain its original rejection.",
+  "levels": [
+    "unit"
+  ]
+},
+{
   "id": "F239-232",
   "implementation": [
     {

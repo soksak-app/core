@@ -64,6 +64,8 @@ WebKit은 window가 화면에 있는 동안에만 web view를 그리고, window�
 
 ## host 호출
 
+Wails page runtime은 document별로 framework module을 한 번 lazy import하고 bound call과 listener 등록이 그 import promise를 공유한다. 기존 native bridge를 통한 호출은 framework import를 요청하지 않는다. 모든 framework consumer는 같은 import 실패를 받으며 runtime은 실패한 import를 재시도하거나 다른 transport로 대체하지 않는다. Promise 재사용은 module 평가 후 module-loader 진입을 반복하지 않게 한다.
+
 두 애플리케이션에서 main page는 모든 host 호출을 하나의 호출 경로(`packages/workbench/host-calls.js`)로 보낸다. JSON은 NaN, Infinity, -Infinity를 `null`로 쓰고, host는 숫자 field의 `null`을 page가 가졌던 수를 밝히지 않고 거부하므로, page는 인자에 그런 수가 든 호출을 보내기 전에 거부한다. 호출은 `TypeError`로 실패하며 message는 `host call <name>: <path> is <value>, which JSON sends as null`이다. `<path>`는 field를 가리키거나(예: `surfaces[0].y`) 인자 자체가 그 수이면 `the argument`다.
 
 각 host는 host 호출과 surface 페이지가 page runtime으로 보내는 호출의 모든 인자를 호출이 실행되기 전에 자기 인자 decoder로 해석한다. framework 자체의 인자 해석은 인자를 raw JSON으로 받아 아무것도 거부하지 않으므로, 두 host는 같은 인자를 같은 문장으로 거부한다. field는 선언이 그렇게 말할 때 선택 사항이다: Tauri host에서는 `Option` field나 `#[serde(default)]` field, Wails host에서는 pointer field나 `json` tag에 `omitempty`가 있는 field다. 값이 `null`인 field는 빠진 field로 보므로, 선택 field는 빠지거나 `null`일 수 있다. decoder는 인자를 `argument <path> <problem>` message로 거부한다:
