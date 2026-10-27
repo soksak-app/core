@@ -198,6 +198,27 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F239-220",
+  "implementation": [
+    {
+      "file": "packages/host/wailsv3/src/bindings.go",
+      "symbol": "func (h *Host) PluginHostSidecarClose(ctx context.Context, requestJSON json.RawMessage) error"
+    },
+    {
+      "file": "packages/host/wailsv3/src/plugin_host_sidecar.go",
+      "symbol": "type PluginHostSidecarCloseRequest struct {"
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/host/wailsv3/src/plugin_host_sidecar_test.go",
+      "id": "TestPluginHostSidecarCloseBindingAcceptsTheDeclaredRequestObject"
+    }
+  ],
+  "expected": "Wails decodes the declared plugin-host close request object and retains strict field validation.",
+  "levels": ["unit"]
+},
+  {
   "id": "F239-226",
   "implementation": [
     {
