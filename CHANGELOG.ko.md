@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-223, F239-233, F239-235: Optimized 양 host 측정 묶음의 측정 실패 7개와 active-window 거부 1개를 기록한다. HWP footprint는 양 host에서 통과하고 HWP first display와 측정된 drag source cadence는 기준을 벗어난다. Observer cadence, 입력부터 표시까지의 latency, 미통과 convergence를 구분한다. 양 host error 감사와 정상 종료는 통과한다.
+
 - F239-234: Diagnostic setup을 응답하기 전에 첫 QR canvas draw 뒤 실제 root WebKit update를 기다린다. 통제한 target-update Red가 Green으로 바뀌며 held-update cancellation은 한 번 완료된다. Optimized macOS arm64 host 둘 다 실제 pixel capture 검사를 통과한다. Wails는 matched 1개와 unknown document row 39개, Tauri는 matched 3개와 unknown 37개이며 각각 slot 4개를 발급한다. 양쪽 모두 incomplete sample과 identity/write/cleanup 오류가 0이며 log audit을 통과하고 같은 foreground baseline을 복원한 뒤 정상 종료한다. Unknown 관측을 보존하며 독립적인 source timing과 과거 cadence 원인 규명은 남긴다.
 
 - F239-234: Document-identity fixture를 편집 가능한 pane card로 제한한다. Core.grid의 fixed sidebar row는 add-tab 대상이 아니며 양 application 실행이 capture 전 준비 단계에서 중단됐다. 소유 selector가 실제 pane을 유지하고 sidebar ID를 제외하도록 Red에서 Green으로 바뀐다. Application acceptance는 남는다.
