@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-78: Close only historical startup-delay cause attribution as evidence unavailable after independent review. The failed recording and callback/target facts cannot be recovered. Preserve the completed lifecycle diagnostic owner and two-host runtime results and all executable capture checks. The original cause remains unverified; recurrence with retained lifecycle evidence opens a linked comparison.
+
 - F239-230: Verify removed plugin-host fixtures using installed:null in core.plugins instead of a boolean. Preserve registry restoration and retain temporary evidence when cleanup is unconfirmed. The targeted Red becomes Green and all 14 owner cases pass.
 
 - F239-221-2: Remove the extra per-source native readback ordering requirement from drag cadence and one-shot evaluation. Keep captured pixel alignment independent and verify final presentation, source size, capture ordering and unchanged convergence limits. Reject a later competing target while accepting identical repeated readbacks. All six affected owner files, documentation and inventory checks pass after controlled Reds. Application measurements remain separate.

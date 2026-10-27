@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-78: 독립 리뷰 후 과거 startup 지연의 원인 분류만 근거 복구 불가로 닫는다. 실패한 recording과 callback·target 사실을 복구할 수 없다. 완료된 lifecycle 진단 owner와 양 host runtime 결과 및 실행 가능한 capture 검사를 모두 유지한다. 원래 원인은 미검증이며 lifecycle 증거를 보존한 재발은 연결된 비교 항목을 연다.
+
 - F239-230: core.plugins의 boolean 대신 installed:null로 제거된 plugin-host fixture를 검증한다. Registry 복원을 유지하고 cleanup이 확인되지 않으면 임시 증거를 보존한다. 대상 Red가 Green으로 전환되고 owner case 14개가 모두 통과한다.
 
 - F239-221-2: Drag cadence와 one-shot 평가에서 source별 native readback 순서를 강제한 추가 요구를 제거한다. 실제 capture pixel alignment를 별도로 유지하고 최종 presentation·source 크기·capture 순서·기존 convergence 한도를 검증한다. 이후 다른 target의 개입을 거부하고 동일한 반복 readback은 허용한다. 통제된 Red 후 영향받은 소유 파일 여섯 개와 문서·inventory 검사가 통과한다. 앱 측정은 별도로 남긴다.
