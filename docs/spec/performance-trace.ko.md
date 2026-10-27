@@ -10,6 +10,10 @@
 
 수신 timestamp는 envelope decoding 및 owner routing 이후에 기록한다. Image 응답 trace는 outbox 전달 전에 기록한다. 이 구간에는 socket-read 대기, decoding, owner 조회 및 응답 transport가 포함되지 않는다.
 
+## Surface dispatch 측정
+
+trace가 켜져 있으면 surface `sync`와 `present` 경로에서 이미 존재하는 UI admission과 비동기 callback마다 `host.trace.surface.dispatch`를 기록한다. 기록에는 window, operation, host별 stage, 선택적 layout ticket이 들어간다. `queued_ns`는 기존 dispatch 또는 native callback 등록 직전, `entered_ns`는 UI closure 또는 callback 진입 시점, `returned_ns`는 종료 시점에 샘플링한다. 이 십진 나노초 값은 `mono_ns`와 같은 host event clock(macOS에서는 CLOCK_UPTIME_RAW)을 사용한다. Callback이 등록 호출의 반환보다 먼저 inline으로 실행될 수 있다. 기록은 동기 dispatch 뒤 caller가 재개되는 시간을 포함하지 않고, dispatch나 대기를 추가하지 않는다. Root-view join 등록과 완료의 근거로 기존 `host.trace.view.presentation-join` 기록을 계속 사용한다.
+
 ## 출력
 
 trace의 모든 event는 [event 계약](logging.ko.md)의 event다. page는 `page.trace.<event>`, host는 `host.trace.<event>`, 표본 추출은 `host.sampler.<event>`를 event log `logs/host-<boot>.jsonl`에 모두 level `debug`로 저장하고, event 이름은 필드가 아니라 event 이름에 둔다. sidecar는 `sidecar.<name>.<event>`를 `logs/` 아래 자기 event 파일에 저장한다([sidecars](sidecars.ko.md)). [debug 화면](debug.ko.md)의 타임라인 하나가 이 파일들을 함께 읽는다. 스위치가 켜질 때 host는 event `host.trace.on`을, 꺼지기 전에 `host.trace.off`를 저장한다. trace 파일도, 표식 줄도, 자체 회전도 없다. event 파일은 계약의 규칙대로 회전한다.

@@ -798,6 +798,27 @@
       },
       "description": "The host records the request and result of joining a changed root view to a layout ticket, the view's native presentation callback, and a wait that ended without presentation. The ticket and generation identify the exact wait. A presented phase records callback observation, not layout commit; it can follow an abandoned phase when a late callback arrives."
     },
+    "host.trace.surface.dispatch": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {"type": "string", "minLength": 1},
+          "ticket": {"type": "integer", "minimum": 1},
+          "operation": {"enum": ["sync", "present"]},
+          "stage": {"type": "string", "minLength": 1},
+          "queued_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+          "entered_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+          "returned_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"}
+        },
+        "required": ["window", "operation", "stage", "queued_ns", "entered_ns", "returned_ns"],
+        "additionalProperties": false
+      },
+      "description": "The performance trace of an existing surface-layout UI admission or native callback. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The record does not include the caller's resume time after a synchronous dispatch."
+    },
     "host.trace.view.callback-cancelled": {
       "layer": "host",
       "class": "call",

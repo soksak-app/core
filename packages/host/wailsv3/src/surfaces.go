@@ -13,6 +13,7 @@ import (
 	"math"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -727,43 +728,46 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	}
 	done := make(chan applyResult, 1)
 	var began error
-	application.InvokeSync(func() {
+	began = runSurfaceDispatch(application.InvokeSync, win.Name(), &prepared.Ticket, "sync", "sync-layout-ui", func() error {
 		main, err := system.MainWebview(win.NativeWindow())
 		if err != nil {
-			began = err
-			return
+			return err
 		}
 		began = RunLayout(func() error {
 			return system.SetWindowOverlays(main, windowOverlays)
 		}, func() error {
 			s.lastPreparation++
 			prepared.Ticket = s.lastPreparation
+			queued, trace := surfaceDispatchClock()
 			return system.BeginLayout(win.NativeWindow(), prepared.Ticket, func(allowed bool) {
-				if !allowed {
-					done <- applyResult{err: errNoWindow}
-					return
-				}
-				var chrome Chrome
-				var restore func() error
-				var gone []string
-				var placements []Placement
-				err := ApplyOrCancel(func() (func() error, error) {
-					var err error
-					chrome, restore, err = titlebarChrome(win.NativeWindow(), req.Titlebar)
-					return restore, err
-				}, func() error {
-					var err error
-					gone, placements, err = s.apply(win, req)
-					return err
-				}, func() error { return s.cancelLayoutPresentation(win.NativeWindow(), prepared.Ticket) })
-				if err == nil {
-					s.watch.Do(func() { s.watchInput(win) })
-				} else if !req.Settled {
-					s.run(false)
-				}
-				done <- applyResult{chrome: chrome, restore: restore, gone: gone, placements: placements, err: err}
+				observeSurfaceCallback(win.Name(), &prepared.Ticket, "sync", "sync-layout-ready-callback", queued, trace, func() {
+					if !allowed {
+						done <- applyResult{err: errNoWindow}
+						return
+					}
+					var chrome Chrome
+					var restore func() error
+					var gone []string
+					var placements []Placement
+					err := ApplyOrCancel(func() (func() error, error) {
+						var err error
+						chrome, restore, err = titlebarChrome(win.NativeWindow(), req.Titlebar)
+						return restore, err
+					}, func() error {
+						var err error
+						gone, placements, err = s.apply(win, req)
+						return err
+					}, func() error { return s.cancelLayoutPresentation(win.NativeWindow(), prepared.Ticket) })
+					if err == nil {
+						s.watch.Do(func() { s.watchInput(win) })
+					} else if !req.Settled {
+						s.run(false)
+					}
+					done <- applyResult{chrome: chrome, restore: restore, gone: gone, placements: placements, err: err}
+				})
 			})
 		})
+		return began
 	})
 	if began != nil {
 		return prepared, began
@@ -880,6 +884,73 @@ func completeLayoutPresentation(prepareViews, awaitDOM, awaitRasters func() erro
 	commit(err)
 }
 
+func recordSurfaceDispatch(window string, ticket *uint64, operation, stage string, queued, entered, returned uint64) {
+	fields := map[string]any{
+		"event": "surface.dispatch", "window": window, "operation": operation, "stage": stage,
+		"queued_ns": strconv.FormatUint(queued, 10), "entered_ns": strconv.FormatUint(entered, 10),
+		"returned_ns": strconv.FormatUint(returned, 10),
+	}
+	if ticket != nil && *ticket != 0 {
+		fields["ticket"] = *ticket
+	}
+	PerformanceObserve("host", func() map[string]any { return fields })
+}
+
+func surfaceDispatchClock() (uint64, bool) {
+	if !PerformanceEnabled() || !GateEvent(ClassCall, LevelDebug) {
+		return 0, false
+	}
+	if system == nil {
+		LogError("surface dispatch clock", "the platform is unavailable")
+		return 0, false
+	}
+	value, err := system.MonotonicNanos()
+	if err != nil {
+		LogError("surface dispatch clock", err)
+		return 0, false
+	}
+	if value == 0 {
+		LogError("surface dispatch clock", "the host monotonic clock returned 0")
+		return 0, false
+	}
+	return value, true
+}
+
+func runSurfaceDispatch(dispatch func(func()), window string, ticket *uint64, operation, stage string, work func() error) error {
+	queued, trace := surfaceDispatchClock()
+	var entered, returned uint64
+	var enteredAvailable, returnedAvailable bool
+	var workErr error
+	dispatch(func() {
+		if trace {
+			entered, enteredAvailable = surfaceDispatchClock()
+		}
+		workErr = work()
+		if trace {
+			returned, returnedAvailable = surfaceDispatchClock()
+		}
+	})
+	if trace && enteredAvailable && returnedAvailable {
+		recordSurfaceDispatch(window, ticket, operation, stage, queued, entered, returned)
+	}
+	return workErr
+}
+
+func observeSurfaceCallback(window string, ticket *uint64, operation, stage string, queued uint64, trace bool, work func()) {
+	var entered, returned uint64
+	var enteredAvailable, returnedAvailable bool
+	if trace {
+		entered, enteredAvailable = surfaceDispatchClock()
+	}
+	work()
+	if trace {
+		returned, returnedAvailable = surfaceDispatchClock()
+		if enteredAvailable && returnedAvailable {
+			recordSurfaceDispatch(window, ticket, operation, stage, queued, entered, returned)
+		}
+	}
+}
+
 func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	win, ok := s.window, s.window != nil
 	if !ok {
@@ -893,23 +964,26 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	routine.Go("layout-prepare", func() {
 		completeLayoutPresentation(func() error {
 			var prepareErr error
-			application.InvokeSync(func() {
+			prepareErr = runSurfaceDispatch(application.InvokeSync, win.Name(), &req.Ticket, "present", "present-prepare-ui", func() error {
 				for _, p := range req.Placements {
 					view := s.views[p.ID]
 					if view == nil {
-						prepareErr = fmt.Errorf("surface %q closed before presentation", p.ID)
-						return
+						return fmt.Errorf("surface %q closed before presentation", p.ID)
 					}
 					view.SetHidden(!p.Visible)
 				}
-				prepareErr = s.joinViewsForPresentRequest(win.NativeWindow(), req, req.Placements)
+				return s.joinViewsForPresentRequest(win.NativeWindow(), req, req.Placements)
 			})
 			return prepareErr
 		}, func() error {
 			domReady := make(chan struct{})
 			var waiting error
-			application.InvokeSync(func() {
-				waiting = system.AfterPresentation(win.NativeWindow(), func() { close(domReady) })
+			waiting = runSurfaceDispatch(application.InvokeSync, win.Name(), &req.Ticket, "present", "present-dom-register-ui", func() error {
+				queued, trace := surfaceDispatchClock()
+				waiting = system.AfterPresentation(win.NativeWindow(), func() {
+					observeSurfaceCallback(win.Name(), &req.Ticket, "present", "present-dom-callback", queued, trace, func() { close(domReady) })
+				})
+				return waiting
 			})
 			if waiting != nil {
 				return waiting
@@ -939,7 +1013,21 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			return nil
 		}, func(waiting error) {
 			// The commit and the cancel run outside the framework event lock.
+			queued, trace := surfaceDispatchClock()
 			if err := system.EnqueueUI(func() {
+				var entered uint64
+				var enteredAvailable bool
+				if trace {
+					entered, enteredAvailable = surfaceDispatchClock()
+				}
+				defer func() {
+					if trace {
+						returned, returnedAvailable := surfaceDispatchClock()
+						if enteredAvailable && returnedAvailable {
+							recordSurfaceDispatch(win.Name(), &req.Ticket, "present", "present-commit-ui", queued, entered, returned)
+						}
+					}
+				}()
 				if waiting != nil {
 					if err := s.cancelLayoutPresentation(win.NativeWindow(), req.Ticket); err != nil {
 						waiting = fmt.Errorf("%w; cancelling layout: %v", waiting, err)

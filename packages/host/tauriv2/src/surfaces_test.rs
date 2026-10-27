@@ -10,8 +10,97 @@ use super::{
     Running, SurfaceComposition, cancel_layout_after_setup_error, clear_page_compositions,
     close_registered_surface, commit_layout_after_root_joins, committed_view_updates,
     complete_layout_presentation, create_registered_surface, mark_first_commit,
-    prepare_surface_visibility, pressed_surface, removed_surfaces,
+    prepare_surface_visibility, pressed_surface, removed_surfaces, surface_dispatch_clock_from,
+    surface_dispatch_context_with, surface_dispatch_fields, surface_dispatch_result_with,
 };
+
+// contract: performance.surface.dispatch-records-existing-boundaries
+#[test]
+fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
+    let mut clock_values = [Some(120), Some(140)].into_iter();
+    let mut observed = Vec::new();
+    let mut phases = Vec::new();
+    let fake_ui_dispatch = |work: Box<dyn FnOnce() + '_>| work();
+    let dispatch = surface_dispatch_context_with(
+        || Some(100),
+        || "main".to_owned(),
+        Some(41),
+        "present",
+        "present-prepare-ui",
+    )
+    .expect("enabled trace captures its dispatch context");
+    let dispatch_for_run = dispatch.clone();
+    fake_ui_dispatch(Box::new(|| {
+        let result = surface_dispatch_result_with(
+            Some(dispatch_for_run.clone()),
+            || clock_values.next().flatten(),
+            |window, ticket, operation, stage, queued, entered, returned| {
+                observed.push(surface_dispatch_fields(
+                    window, ticket, operation, stage, queued, entered, returned,
+                ));
+            },
+            || {
+                phases.push("work");
+                7
+            },
+        );
+        assert_eq!(result, 7);
+    }));
+    assert_eq!(phases, ["work"]);
+    assert_eq!(
+        observed,
+        [serde_json::json!({
+            "event": "surface.dispatch",
+            "window": "main",
+            "ticket": 41,
+            "operation": "present",
+            "stage": "present-prepare-ui",
+            "queued_ns": "100",
+            "entered_ns": "120",
+            "returned_ns": "140"
+        })],
+    );
+
+    let mut off_label_reads = 0;
+    let mut off_clock_reads = 0;
+    let mut off_observations = 0;
+    let off_dispatch = surface_dispatch_context_with(
+        || None,
+        || {
+            off_label_reads += 1;
+            "main".to_owned()
+        },
+        None,
+        "sync",
+        "sync-layout-ui",
+    );
+    assert!(off_dispatch.is_none());
+    let value = surface_dispatch_result_with(
+        off_dispatch,
+        || {
+            off_clock_reads += 1;
+            Some(1)
+        },
+        |_, _, _, _, _, _, _| off_observations += 1,
+        || 9,
+    );
+    assert_eq!(value, 9);
+    assert_eq!(off_label_reads, 0, "disabled trace built a window label");
+    assert_eq!(off_clock_reads, 0, "disabled trace read the host clock");
+    assert_eq!(
+        off_observations, 0,
+        "disabled trace emitted a dispatch record"
+    );
+    let mut monotonic_reads = 0;
+    assert_eq!(
+        surface_dispatch_clock_from(false, || {
+            monotonic_reads += 1;
+            1
+        }),
+        None
+    );
+    assert_eq!(monotonic_reads, 0, "disabled trace read the event clock");
+}
 
 // contract: surface-layout.setup-failure-cancels-open-transaction
 #[test]

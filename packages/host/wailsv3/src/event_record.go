@@ -226,7 +226,7 @@ func emitTrace(layer string, fields map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("the fields of %s cannot be serialized: %w", event, err)
 	}
-	// events: host.trace.<event>, host.sampler.<event>
+	// events: host.trace.<event>, host.sampler.<event>, host.trace.surface.dispatch
 	storeEvent(LevelDebug, "host", "host."+kind+"."+event, event, nil, text, produced)
 	return nil
 }

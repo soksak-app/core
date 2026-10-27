@@ -60,6 +60,7 @@ var eventClasses = map[string]Class{
 	"host.trace.sidecar.ready":                ClassCall,
 	"host.trace.sidecar.restart-reset":        ClassCall,
 	"host.trace.status.notify":                ClassCall,
+	"host.trace.surface.dispatch":             ClassCall,
 	"host.trace.view.callback-cancelled":      ClassCall,
 	"host.trace.view.presentation-abandoned":  ClassCall,
 	"host.trace.view.presentation-join":       ClassCall,

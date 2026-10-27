@@ -198,6 +198,31 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F239-223-1",
+  "implementation": [
+    {
+      "file": "packages/host/wailsv3/src/surfaces.go",
+      "symbol": "func runSurfaceDispatch("
+    },
+    {
+      "file": "packages/host/tauriv2/src/surfaces.rs",
+      "symbol": "fn surface_dispatch_result_with<T>("
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/host/wailsv3/src/surfaces_test.go",
+      "id": "TestSurfaceDispatchRecordKeepsTicketAndClockBoundaries"
+    },
+    {
+      "file": "packages/host/tauriv2/src/surfaces_test.rs",
+      "id": "surface_dispatch_wrapper_records_queue_entry_and_return_boundaries"
+    }
+  ],
+  "expected": "Gated host traces expose exact UI enqueue and return clock boundaries, while disabled diagnostics add no clock label.",
+  "levels": ["unit"]
+},
+  {
     id: "F239-219",
     implementation: [
       { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference(" },

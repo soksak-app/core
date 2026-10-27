@@ -102,6 +102,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.trace.sidecar.ready" => Some(Class::Call),
         "host.trace.sidecar.restart-reset" => Some(Class::Call),
         "host.trace.status.notify" => Some(Class::Call),
+        "host.trace.surface.dispatch" => Some(Class::Call),
         "host.trace.view.callback-cancelled" => Some(Class::Call),
         "host.trace.view.presentation-abandoned" => Some(Class::Call),
         "host.trace.view.presentation-join" => Some(Class::Call),

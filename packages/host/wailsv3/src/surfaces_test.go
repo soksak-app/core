@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -125,6 +126,92 @@ func TestLayoutRegistersRootViewsBeforeWaitingForApplicationDOM(t *testing.T) {
 	if !reflect.DeepEqual(phases, want) {
 		t.Fatalf("layout presentation phases = %v, want %v", phases, want)
 	}
+}
+
+// contract: performance.surface.dispatch-records-existing-boundaries
+func TestSurfaceDispatchRecordKeepsTicketAndClockBoundaries(t *testing.T) {
+	isolateTraceRecords(t)
+	wasOn := performanceOn.Swap(true)
+	t.Cleanup(func() { performanceOn.Store(wasOn) })
+	oldSystem := system
+	clock := &surfaceDispatchClockPlatform{Platform: oldSystem, times: []uint64{100, 120, 140, 200, 220, 240, 300, 320}}
+	system = clock
+	t.Cleanup(func() { system = oldSystem })
+	ticket := uint64(41)
+	var phases []string
+	dispatch := func(task func()) {
+		phases = append(phases, "entered")
+		task()
+		phases = append(phases, "returned")
+	}
+	if err := runSurfaceDispatch(dispatch, "main", &ticket, "present", "present-prepare-ui", func() error {
+		phases = append(phases, "prepare")
+		return nil
+	}); err != nil {
+		t.Fatalf("run ticketed dispatch: %v", err)
+	}
+	if err := runSurfaceDispatch(dispatch, "main", nil, "sync", "sync-layout-ui", func() error {
+		phases = append(phases, "sync")
+		return nil
+	}); err != nil {
+		t.Fatalf("run unassigned-ticket dispatch: %v", err)
+	}
+	observeSurfaceCallback("main", &ticket, "present", "present-dom-callback", 280, true, func() {
+		phases = append(phases, "callback")
+	})
+	if want := []string{"entered", "prepare", "returned", "entered", "sync", "returned", "callback"}; !reflect.DeepEqual(phases, want) {
+		t.Fatalf("dispatch order = %v, want %v", phases, want)
+	}
+
+	got := bufferedTraces(t, "host.trace.surface.dispatch")
+	if len(got) != 3 {
+		t.Fatalf("surface dispatch records = %#v, want two dispatch and one callback record", got)
+	}
+	wantFirst := map[string]any{
+		"window": "main", "ticket": float64(ticket), "operation": "present", "stage": "present-prepare-ui",
+		"queued_ns": "100", "entered_ns": "120", "returned_ns": "140",
+	}
+	if !reflect.DeepEqual(got[0], wantFirst) {
+		t.Fatalf("ticketed dispatch record = %#v, want %#v", got[0], wantFirst)
+	}
+	wantSecond := map[string]any{
+		"window": "main", "operation": "sync", "stage": "sync-layout-ui",
+		"queued_ns": "200", "entered_ns": "220", "returned_ns": "240",
+	}
+	if !reflect.DeepEqual(got[1], wantSecond) {
+		t.Fatalf("unassigned-ticket dispatch record = %#v, want %#v", got[1], wantSecond)
+	}
+	wantCallback := map[string]any{
+		"window": "main", "ticket": float64(ticket), "operation": "present", "stage": "present-dom-callback",
+		"queued_ns": "280", "entered_ns": "300", "returned_ns": "320",
+	}
+	if !reflect.DeepEqual(got[2], wantCallback) {
+		t.Fatalf("callback record = %#v, want %#v", got[2], wantCallback)
+	}
+	if clock.reads != 8 {
+		t.Fatalf("monotonic clock reads = %d, want eight reads for two dispatches and one callback", clock.reads)
+	}
+	performanceOn.Store(false)
+	if err := runSurfaceDispatch(dispatch, "main", nil, "sync", "sync-layout-ui", func() error { return nil }); err != nil {
+		t.Fatalf("run untraced dispatch: %v", err)
+	}
+	if clock.reads != 8 || len(bufferedTraces(t, "host.trace.surface.dispatch")) != 3 {
+		t.Fatalf("disabled trace read clock or emitted a record: clock reads=%d records=%d", clock.reads, len(bufferedTraces(t, "host.trace.surface.dispatch")))
+	}
+}
+
+type surfaceDispatchClockPlatform struct {
+	platform.Platform
+	times []uint64
+	reads int
+}
+
+func (p *surfaceDispatchClockPlatform) MonotonicNanos() (uint64, error) {
+	p.reads++
+	if p.reads > len(p.times) {
+		return 0, fmt.Errorf("unexpected monotonic clock read %d", p.reads)
+	}
+	return p.times[p.reads-1], nil
 }
 
 // contract: exposure.host-window.reads-during-surface-close

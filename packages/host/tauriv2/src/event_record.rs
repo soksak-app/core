@@ -218,7 +218,7 @@ pub fn emit_trace(layer: &str, fields: serde_json::Value) -> Result<(), String> 
     };
     let text = Fields::of(&fields)
         .map_err(|error| format!("the fields of {event} cannot be serialized: {error}"))?;
-    // events: host.trace.<event>, host.sampler.<event>
+    // events: host.trace.<event>, host.sampler.<event>, host.trace.surface.dispatch
     store_event(
         Level::Debug,
         "host",

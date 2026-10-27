@@ -47,6 +47,7 @@ const EXACT = new Map([
   ["host.trace.sidecar.ready", "call"],
   ["host.trace.sidecar.restart-reset", "call"],
   ["host.trace.status.notify", "call"],
+  ["host.trace.surface.dispatch", "call"],
   ["host.trace.view.callback-cancelled", "call"],
   ["host.trace.view.presentation-abandoned", "call"],
   ["host.trace.view.presentation-join", "call"],

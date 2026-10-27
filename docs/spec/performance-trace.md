@@ -10,6 +10,10 @@ For each received body addressed to an active owner, both transports emit the ex
 
 The receive timestamp follows envelope decoding and owner routing. The image response trace precedes outbox delivery. Their interval does not include socket-read waiting, decoding, owner lookup or return transport.
 
+## Surface dispatch measurements
+
+While the trace is on, each existing UI admission and asynchronous callback on the surface `sync` and `present` paths writes `host.trace.surface.dispatch`. A record names the window, operation, host-specific stage and optional layout ticket. `queued_ns` is sampled immediately before the existing dispatch or native callback registration, `entered_ns` at the UI closure or callback entry, and `returned_ns` at its end. These decimal nanosecond values use the same host event clock as `mono_ns` (CLOCK_UPTIME_RAW on macOS). A callback may run inline before its registration call returns. The record excludes the caller's resumption after a synchronous dispatch and adds no dispatch or wait. The existing `host.trace.view.presentation-join` records remain the source for root-view join registration and completion.
+
 ## Output
 
 Every event of the trace is an event of the [event contract](logging.md): the page stores `page.trace.<event>`, the host `host.trace.<event>` and the sampler `host.sampler.<event>` in the event log `logs/host-<boot>.jsonl`, all of level `debug`, with the name of the event in the event name and not in the fields, and a sidecar stores `sidecar.<name>.<event>` in its own event file under `logs/` ([sidecars](sidecars.md)). One timeline, the [debug view](debug.md), reads the files together. When the switch turns on the host stores the event `host.trace.on`, and before it turns off the event `host.trace.off`. There is no trace file, no marker line and no rotation of its own: the event files rotate by the rules of the contract.

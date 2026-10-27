@@ -6,7 +6,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use tauri::{Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
@@ -477,6 +477,139 @@ fn complete_layout_presentation<T>(
     Ok(prepared)
 }
 
+fn surface_dispatch_clock() -> Option<u64> {
+    let enabled = crate::performance::enabled()
+        && crate::log_policy::gate_event(
+            crate::log_policy::Class::Call,
+            crate::event_log::Level::Debug,
+        );
+    surface_dispatch_clock_from(enabled, crate::event_log::monotonic_ns)
+}
+
+fn surface_dispatch_clock_from(enabled: bool, read: impl FnOnce() -> u64) -> Option<u64> {
+    if !enabled {
+        return None;
+    }
+    let value = read();
+    (value != 0).then_some(value)
+}
+
+#[derive(Clone)]
+struct SurfaceDispatch {
+    window: String,
+    ticket: Option<u64>,
+    operation: &'static str,
+    stage: &'static str,
+    queued: u64,
+}
+
+fn surface_dispatch(
+    window: &Window,
+    ticket: Option<u64>,
+    operation: &'static str,
+    stage: &'static str,
+) -> Option<SurfaceDispatch> {
+    surface_dispatch_context_with(
+        surface_dispatch_clock,
+        || window.label().to_string(),
+        ticket,
+        operation,
+        stage,
+    )
+}
+
+fn surface_dispatch_context_with(
+    clock: impl FnOnce() -> Option<u64>,
+    window: impl FnOnce() -> String,
+    ticket: Option<u64>,
+    operation: &'static str,
+    stage: &'static str,
+) -> Option<SurfaceDispatch> {
+    clock().map(|queued| SurfaceDispatch {
+        window: window(),
+        ticket,
+        operation,
+        stage,
+        queued,
+    })
+}
+
+fn record_surface_dispatch(
+    window: &str,
+    ticket: Option<u64>,
+    operation: &str,
+    stage: &str,
+    queued: u64,
+    entered: u64,
+    returned: u64,
+) {
+    crate::performance::observe("host", || {
+        surface_dispatch_fields(window, ticket, operation, stage, queued, entered, returned)
+    });
+}
+
+fn surface_dispatch_fields(
+    window: &str,
+    ticket: Option<u64>,
+    operation: &str,
+    stage: &str,
+    queued: u64,
+    entered: u64,
+    returned: u64,
+) -> Value {
+    let mut fields = serde_json::Map::from_iter([
+        ("event".into(), json!("surface.dispatch")),
+        ("window".into(), json!(window)),
+        ("operation".into(), json!(operation)),
+        ("stage".into(), json!(stage)),
+        ("queued_ns".into(), json!(queued.to_string())),
+        ("entered_ns".into(), json!(entered.to_string())),
+        ("returned_ns".into(), json!(returned.to_string())),
+    ]);
+    if let Some(ticket) = ticket {
+        fields.insert("ticket".into(), json!(ticket));
+    }
+    Value::Object(fields)
+}
+
+fn surface_dispatch_result<T>(
+    dispatch: Option<SurfaceDispatch>,
+    work: impl FnOnce() -> T,
+) -> T {
+    surface_dispatch_result_with(
+        dispatch,
+        surface_dispatch_clock,
+        record_surface_dispatch,
+        work,
+    )
+}
+
+fn surface_dispatch_result_with<T>(
+    dispatch: Option<SurfaceDispatch>,
+    mut clock: impl FnMut() -> Option<u64>,
+    mut observe: impl FnMut(&str, Option<u64>, &str, &str, u64, u64, u64),
+    work: impl FnOnce() -> T,
+) -> T {
+    let Some(dispatch) = dispatch else {
+        return work();
+    };
+    let entered = clock();
+    let result = work();
+    let returned = clock();
+    if let (Some(entered), Some(returned)) = (entered, returned) {
+        observe(
+            &dispatch.window,
+            dispatch.ticket,
+            dispatch.operation,
+            dispatch.stage,
+            dispatch.queued,
+            entered,
+            returned,
+        );
+    }
+    result
+}
+
 fn root_placements_without_join(
     placed: &[Placement],
     joined: &[(String, u64)],
@@ -928,17 +1061,29 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     }
     watch_presses(window, views, watching)?;
     let scale_window = window.clone();
+    let dispatch = surface_dispatch(window, None, "sync", "sync-scale-ui");
     let scale = exposure::on_main(window, move || {
-        scale_window.scale_factor().map_err(|e| e.to_string())
+        surface_dispatch_result(dispatch, || {
+            scale_window.scale_factor().map_err(|e| e.to_string())
+        })
     })?;
     let platform = platform::current()?;
 
-    let main = exposure::root_view_on_main(window)?;
+    let root_window = window.clone();
+    let dispatch = surface_dispatch(window, None, "sync", "sync-root-view-ui");
+    let main = exposure::on_main(window, move || {
+        surface_dispatch_result(dispatch, || {
+            crate::windows::root_view(&root_window)
+                .ok_or_else(|| "the main webview is gone".into())
+        })
+    })?;
     let ticket = running.prepared.fetch_add(1, Ordering::Relaxed) + 1;
     let main_handle = {
         let (tx, rx) = mpsc::channel::<Result<Handle, String>>();
+        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-main-handle-ui");
         main.with_webview(move |webview| {
-            match tx.send(platform.view_id(&webview)) {
+            let result = surface_dispatch_result(dispatch, || platform.view_id(&webview));
+            match tx.send(result) {
                 Ok(()) => {}
                 // A failure after the request ended was not reported by that request, so it is left as an error line.
                 Err(mpsc::SendError(Err(error))) => log_error("main webview handle", error),
@@ -953,19 +1098,31 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     };
     let begin = || -> Result<(), String> {
         let (tx, rx) = mpsc::channel::<bool>();
+        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-layout-begin-ui");
+        let callback_window = window.clone();
         with_native_owner(window, move |owner| {
-            platform.begin_layout(
-                owner,
-                ticket,
-                Box::new(move |allowed| {
-                    if tx.send(allowed).is_err() {
-                        crate::application_log::log_info(
-                            "surface",
-                            "surface preparation result arrived after its request ended",
-                        );
-                    }
-                }),
-            )
+            let result = surface_dispatch_result(dispatch, || {
+                let callback_dispatch = surface_dispatch(
+                    &callback_window,
+                    Some(ticket),
+                    "sync",
+                    "sync-layout-ready-callback",
+                );
+                platform.begin_layout(
+                    owner,
+                    ticket,
+                    Box::new(move |allowed| {
+                        let sent = surface_dispatch_result(callback_dispatch.clone(), || tx.send(allowed));
+                        if sent.is_err() {
+                            crate::application_log::log_info(
+                                "surface",
+                                "surface preparation result arrived after its request ended",
+                            );
+                        }
+                    }),
+                )
+            });
+            result
         })
         .map_err(|e| e.to_string())?;
         if !rx.recv().map_err(|e| e.to_string())? {
@@ -974,18 +1131,25 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         Ok(())
     };
     let place_overlays = || {
+        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-overlays-ui");
         exposure::on_main(window, move || {
-            platform.set_window_overlays(main_handle, &overlays)
+            surface_dispatch_result(dispatch, || {
+                platform.set_window_overlays(main_handle, &overlays)
+            })
         })
     };
     let titlebar = request.titlebar;
     let set_titlebar = || {
-        with_native_owner(window, move |owner| titlebar_chrome(owner, titlebar))
-            .map_err(|e| e.to_string())
+        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-titlebar-ui");
+        with_native_owner(window, move |owner| {
+            surface_dispatch_result(dispatch, || titlebar_chrome(owner, titlebar))
+        })
+        .map_err(|e| e.to_string())
     };
     let restore = |change: TitlebarChange| {
+        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-titlebar-restore-ui");
         with_native_owner(window, move |owner| {
-            restore_titlebar(owner, change.previous)
+            surface_dispatch_result(dispatch, || restore_titlebar(owner, change.previous))
         })
         .or_else(|failure| match failure {
             // A window that closed before the restore step has no title bar to restore (#F161.35).
@@ -1030,24 +1194,30 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 let names = Arc::clone(&views.0);
                 let hosts = Arc::clone(&context);
                 let id = s.id.clone();
+                let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-surface-create-ui");
                 let handle = exposure::on_main(window, move || {
-                    create_registered_surface(&names, &hosts.surface_hosts, &id, || {
-                        platform.create_surface(main_handle)
+                    surface_dispatch_result(dispatch, || {
+                        create_registered_surface(&names, &hosts.surface_hosts, &id, || {
+                            platform.create_surface(main_handle)
+                        })
                     })
                 })?;
                 crate::performance::surface("created", &s.id, None);
                 handle
             };
+            let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-surface-prepare-ui");
             exposure::on_main(window, move || {
-                // Visible surfaces keep their current visibility until present applies the transaction; invisible surfaces hide now.
-                prepare_surface_visibility(visible, |hidden| {
-                    platform.set_surface_hidden_handle(handle, hidden)
-                })?;
-                platform.set_surface_alpha_handle(handle, solid)?;
-                if visible {
-                    platform.place_surface(handle, ax, ay, aw, ah)?;
-                }
-                Ok(())
+                surface_dispatch_result(dispatch, || {
+                    // Visible surfaces keep their current visibility until present applies the transaction; invisible surfaces hide now.
+                    prepare_surface_visibility(visible, |hidden| {
+                        platform.set_surface_hidden_handle(handle, hidden)
+                    })?;
+                    platform.set_surface_alpha_handle(handle, solid)?;
+                    if visible {
+                        platform.place_surface(handle, ax, ay, aw, ah)?;
+                    }
+                    Ok(())
+                })
             })?;
             // The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
             let view_window = window.clone();
@@ -1057,17 +1227,20 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             // default: a view surface without start values has no origin; documents::sync_view refuses it when it
             // builds the start values script, and CheckSyncRequest refuses it first.
             let start = s.start.clone().unwrap_or_default();
+            let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-view-ui");
             exposure::on_main(window, move || {
-                documents::sync_view(
-                    &view_window,
-                    platform,
-                    handle,
-                    &surface,
-                    &plugin,
-                    &page,
-                    visible,
-                    start,
-                )
+                surface_dispatch_result(dispatch, || {
+                    documents::sync_view(
+                        &view_window,
+                        platform,
+                        handle,
+                        &surface,
+                        &plugin,
+                        &page,
+                        visible,
+                        start,
+                    )
+                })
             })?;
         }
 
@@ -1087,9 +1260,16 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             let names = Arc::clone(&views.0);
             let hosts = Arc::clone(&context);
             let closing = id.clone();
+            let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-surface-close-ui");
             if let Err(error) = exposure::on_main(window, move || {
-                close_registered_surface(&names, &hosts.surface_hosts, &closing, handle, |handle| {
-                    platform.close_surface(handle)
+                surface_dispatch_result(dispatch, || {
+                    close_registered_surface(
+                        &names,
+                        &hosts.surface_hosts,
+                        &closing,
+                        handle,
+                        |handle| platform.close_surface(handle),
+                    )
                 })
             }) {
                 close_failures.push(format!("surface {id}: {error}"));
@@ -1145,13 +1325,16 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             targets.push((handle, s.id.clone(), visible));
         }
         let placed = read_surface_placements(targets, |targets| {
+            let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-placement-read-ui");
             exposure::on_main(window, move || {
-                targets
-                    .into_iter()
-                    .map(|(handle, id, visible)| {
-                        surface_handle_placement(platform, handle, &id, visible)
-                    })
-                    .collect()
+                surface_dispatch_result(dispatch, || {
+                    targets
+                        .into_iter()
+                        .map(|(handle, id, visible)| {
+                            surface_handle_placement(platform, handle, &id, visible)
+                        })
+                        .collect()
+                })
             })
         })?;
         // Before it waits for the DOM presentation, it starts the image preparation of the size that was applied.
@@ -1163,11 +1346,14 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     };
     let cancel = || {
         let target = window.clone();
+        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-cancel-ui");
         if let Err(error) = platform.enqueue_ui(Box::new(move || {
-            log_failure(
-                "surface layout cancel",
-                cancel_layout_with_waits(&target, ticket),
-            );
+            surface_dispatch_result(dispatch, || {
+                log_failure(
+                    "surface layout cancel",
+                    cancel_layout_with_waits(&target, ticket),
+                );
+            });
         })) {
             log_error("surface layout cancel", error);
         }
@@ -1227,12 +1413,21 @@ pub(crate) async fn present(
     window: Window,
     request: PresentRequest,
 ) -> Result<Vec<Placement>, String> {
-    let main = exposure::root_view_on_main(&window)?;
+    let root_window = window.clone();
+    let root_dispatch = surface_dispatch(&window, Some(request.ticket), "present", "present-root-view-ui");
+    let main = exposure::on_main(&window, move || {
+        surface_dispatch_result(root_dispatch, || {
+            crate::windows::root_view(&root_window)
+                .ok_or_else(|| "the main webview is gone".into())
+        })
+    })?;
     let ticket = request.ticket;
     let finished = window.clone();
     let context = window_data(&window)?;
     let images = context.images.clone();
     let presentation_window = finished.clone();
+    let commit_window = presentation_window.clone();
+    let presentation_work_window = presentation_window.clone();
     let placements = request.placements;
     let presentation_settled = request.settled;
     let (dom_tx, dom_rx) = mpsc::channel();
@@ -1245,28 +1440,48 @@ pub(crate) async fn present(
         tauri::async_runtime::spawn_blocking(move || -> Result<Vec<(String, u64)>, String> {
             complete_layout_presentation(
                 || {
+                    let dom_window = presentation_work_window.clone();
+                    let dom_dispatch = surface_dispatch(
+                        &dom_window,
+                        Some(ticket),
+                        "present",
+                        "present-dom-register-ui",
+                    );
+                    let callback_window = dom_window.clone();
                     dom_main
                         .with_webview(move |view| {
-                            let outcome = platform::current().and_then(|platform| {
-                                let ready = dom_tx.clone();
-                                platform.after_presentation(
-                                    &view,
-                                    Box::new(move || {
-                                        if ready.send(Ok(())).is_err() {
-                                            crate::application_log::log_info(
-                                                "surface",
-                                                "surface readiness arrived after its request ended",
+                            surface_dispatch_result(dom_dispatch, || {
+                                let outcome = platform::current().and_then(|platform| {
+                                    let ready = dom_tx.clone();
+                                    let callback_dispatch = surface_dispatch(
+                                        &callback_window,
+                                        Some(ticket),
+                                        "present",
+                                        "present-dom-callback",
+                                    );
+                                    platform.after_presentation(
+                                        &view,
+                                        Box::new(move || {
+                                            let sent = surface_dispatch_result(
+                                                callback_dispatch.clone(),
+                                                || ready.send(Ok(())),
                                             );
-                                        }
-                                    }),
-                                )
-                            });
-                            if let Err(error) = outcome {
-                                // A failure after the request ended was not reported by that request, so it is left as an error line.
-                                if let Err(mpsc::SendError(Err(error))) = dom_tx.send(Err(error)) {
-                                    log_error("DOM presentation", error);
+                                            if sent.is_err() {
+                                                crate::application_log::log_info(
+                                                    "surface",
+                                                    "surface readiness arrived after its request ended",
+                                                );
+                                            }
+                                        }),
+                                    )
+                                });
+                                if let Err(error) = outcome {
+                                    // A failure after the request ended was not reported by that request, so it is left as an error line.
+                                    if let Err(mpsc::SendError(Err(error))) = dom_tx.send(Err(error)) {
+                                        log_error("DOM presentation", error);
+                                    }
                                 }
-                            }
+                            })
                         })
                         .map_err(|error| error.to_string())
                 },
@@ -1295,52 +1510,62 @@ pub(crate) async fn present(
                     let target = preparation_window.clone();
                     let context = preparation_context.clone();
                     let placements = preparation_placements.clone();
+                    let dispatch = surface_dispatch(
+                        &preparation_window,
+                        Some(ticket),
+                        "present",
+                        "present-prepare-ui",
+                    );
                     platform::current()?.enqueue_ui(Box::new(move || {
-                        let prepared = (|| -> Result<Vec<(String, u64)>, String> {
-                            let platform = platform::current()?;
-                            let placed = placements
-                                .iter()
-                                .map(|placement| {
-                                    let handle = context
-                                        .surface_hosts
-                                        .lock()
-                                        // default: a lock that a panicking thread poisoned still holds the surface registrations,
-                                        // which are only read; the panic hook records the panic.
-                                        .unwrap_or_else(PoisonError::into_inner)
-                                        .get(&placement.id)
-                                        .copied()
-                                        .ok_or_else(|| {
-                                            format!(
-                                                "surface {:?} closed before presentation",
-                                                placement.id
-                                            )
-                                        })?;
-                                    platform
-                                        .set_surface_hidden_handle(handle, !placement.visible)?;
-                                    let [x, y, w, h] = platform.surface_frame(handle)?;
-                                    Ok(Placement {
-                                        id: placement.id.clone(),
-                                        x,
-                                        y,
-                                        w,
-                                        h,
-                                        visible: placement.visible,
+                        surface_dispatch_result(dispatch, || {
+                            let prepared = (|| -> Result<Vec<(String, u64)>, String> {
+                                let platform = platform::current()?;
+                                let placed = placements
+                                    .iter()
+                                    .map(|placement| {
+                                        let handle = context
+                                            .surface_hosts
+                                            .lock()
+                                            // default: a lock that a panicking thread poisoned still holds the surface registrations,
+                                            // which are only read; the panic hook records the panic.
+                                            .unwrap_or_else(PoisonError::into_inner)
+                                            .get(&placement.id)
+                                            .copied()
+                                            .ok_or_else(|| {
+                                                format!(
+                                                    "surface {:?} closed before presentation",
+                                                    placement.id
+                                                )
+                                            })?;
+                                        platform.set_surface_hidden_handle(
+                                            handle,
+                                            !placement.visible,
+                                        )?;
+                                        let [x, y, w, h] = platform.surface_frame(handle)?;
+                                        Ok(Placement {
+                                            id: placement.id.clone(),
+                                            x,
+                                            y,
+                                            w,
+                                            h,
+                                            visible: placement.visible,
+                                        })
                                     })
-                                })
-                                .collect::<Result<Vec<_>, String>>()?;
-                            documents::join_shown_views(&target, platform, ticket, &placed)
-                                .map(|outcome| outcome.joined)
-                        })();
-                        match prepared_tx.send(prepared) {
-                            Ok(()) => {}
-                            Err(mpsc::SendError(Err(error))) => {
-                                log_error("surface placement", error);
+                                    .collect::<Result<Vec<_>, String>>()?;
+                                documents::join_shown_views(&target, platform, ticket, &placed)
+                                    .map(|outcome| outcome.joined)
+                            })();
+                            match prepared_tx.send(prepared) {
+                                Ok(()) => {}
+                                Err(mpsc::SendError(Err(error))) => {
+                                    log_error("surface placement", error);
+                                }
+                                Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
+                                    "surface",
+                                    "root-view presentation setup arrived after its request ended",
+                                ),
                             }
-                            Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
-                                "surface",
-                                "root-view presentation setup arrived after its request ended",
-                            ),
-                        }
+                        });
                     }))?;
                     prepared_rx
                         .recv_timeout(exposure::TIMEOUT)
@@ -1359,121 +1584,136 @@ pub(crate) async fn present(
             // returning so that the next split does not wait forever behind the failed owner.
             return Err(cancel_layout_after_setup_error(error, || {
                 let target = window.clone();
+                let dispatch = surface_dispatch(&target, Some(ticket), "present", "present-cancel-setup-ui");
                 platform::current()?.enqueue_ui(Box::new(move || {
-                    log_failure(
-                        "surface layout cancel",
-                        cancel_layout_with_waits(&target, ticket),
-                    );
+                    surface_dispatch_result(dispatch, || {
+                        log_failure(
+                            "surface layout cancel",
+                            cancel_layout_with_waits(&target, ticket),
+                        );
+                    });
                 }))
             }));
         }
     };
     let (ui_tx, mut ui_rx) = tauri::async_runtime::channel(1);
     // A commit can call an AppKit redraw, so it runs outside the Tao event lock.
+    let commit_dispatch = surface_dispatch(&commit_window, Some(ticket), "present", "present-commit-ui");
     platform::current()?.enqueue_ui(Box::new(move || {
-        let result = (|| -> Result<Vec<Placement>, String> {
-            let platform = platform::current()?;
-            let placed = match placements
-                .iter()
-                .map(|p| {
-                    let handle = context
-                        .surface_hosts
-                        .lock()
-                        // default: a lock that a panicking thread poisoned still holds the surface registrations,
-                        // which are only read; the panic hook records the panic.
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .get(&p.id)
-                        .copied()
-                        .ok_or_else(|| format!("surface {:?} closed before presentation", p.id))?;
-                    let [x, y, w, h] = platform.surface_frame(handle)?;
-                    Ok(Placement {
-                        id: p.id.clone(),
-                        x,
-                        y,
-                        w,
-                        h,
-                        visible: p.visible,
+        surface_dispatch_result(commit_dispatch, || {
+            let result = (|| -> Result<Vec<Placement>, String> {
+                let platform = platform::current()?;
+                let placed = match placements
+                    .iter()
+                    .map(|p| {
+                        let handle = context
+                            .surface_hosts
+                            .lock()
+                            // default: a lock that a panicking thread poisoned still holds the surface registrations,
+                            // which are only read; the panic hook records the panic.
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .get(&p.id)
+                            .copied()
+                            .ok_or_else(|| {
+                                format!("surface {:?} closed before presentation", p.id)
+                            })?;
+                        let [x, y, w, h] = platform.surface_frame(handle)?;
+                        Ok(Placement {
+                            id: p.id.clone(),
+                            x,
+                            y,
+                            w,
+                            h,
+                            visible: p.visible,
+                        })
                     })
-                })
-                .collect::<Result<Vec<_>, String>>()
-            {
-                Ok(placed) => placed,
-                Err(error) => {
-                    cancel_layout_with_waits(&presentation_window, ticket)
-                        .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
-                    return Err(error);
-                }
-            };
-            let (committed, joined_generations) = match commit_layout_after_root_joins(
-                &placed,
-                std::mem::take(&mut joined_generations),
-                ticket,
-                |surface| context.documents.views().generation(surface),
-                |surface, generation, placement| {
-                    context
-                        .documents
-                        .presentation()
-                        .needs_join(surface, generation, placement)
-                },
-                |missing| {
-                    documents::join_shown_views(&presentation_window, platform, ticket, missing)
-                },
-                || {
-                    with_native_owner(&presentation_window, move |owner| {
-                        platform.commit_layout(owner, ticket)
-                    })
-                    .map_err(|error| error.to_string())
-                },
-            ) {
-                Ok(result) => result,
-                Err(error) => {
-                    cancel_layout_with_waits(&presentation_window, ticket)
-                        .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
-                    return Err(error);
-                }
-            };
-            if !committed {
-                let error = format!("surface preparation {ticket} is no longer current");
-                return match documents::abandon_layout_presentation_waits(
-                    &presentation_window,
-                    ticket,
-                ) {
-                    Ok(()) => Err(error),
-                    Err(abandon) => Err(format!("{error}; {abandon}")),
+                    .collect::<Result<Vec<_>, String>>()
+                {
+                    Ok(placed) => placed,
+                    Err(error) => {
+                        cancel_layout_with_waits(&presentation_window, ticket)
+                            .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
+                        return Err(error);
+                    }
                 };
+                let (committed, joined_generations) = match commit_layout_after_root_joins(
+                    &placed,
+                    std::mem::take(&mut joined_generations),
+                    ticket,
+                    |surface| context.documents.views().generation(surface),
+                    |surface, generation, placement| {
+                        context
+                            .documents
+                            .presentation()
+                            .needs_join(surface, generation, placement)
+                    },
+                    |missing| {
+                        documents::join_shown_views(
+                            &presentation_window,
+                            platform,
+                            ticket,
+                            missing,
+                        )
+                    },
+                    || {
+                        let dispatch = surface_dispatch(&presentation_window, Some(ticket), "present", "present-native-commit-ui");
+                        with_native_owner(&presentation_window, move |owner| {
+                            surface_dispatch_result(dispatch, || platform.commit_layout(owner, ticket))
+                        })
+                        .map_err(|error| error.to_string())
+                    },
+                ) {
+                    Ok(result) => result,
+                    Err(error) => {
+                        cancel_layout_with_waits(&presentation_window, ticket)
+                            .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
+                        return Err(error);
+                    }
+                };
+                if !committed {
+                    let error = format!("surface preparation {ticket} is no longer current");
+                    return match documents::abandon_layout_presentation_waits(
+                        &presentation_window,
+                        ticket,
+                    ) {
+                        Ok(()) => Err(error),
+                        Err(abandon) => Err(format!("{error}; {abandon}")),
+                    };
+                }
+                let committed_views =
+                    committed_view_updates(&placed, &joined_generations, |surface| {
+                        context.documents.views().generation(surface)
+                    });
+                context.documents.presentation().commit(committed_views);
+                // The preparation update and the end decision run in order on the same UI thread.
+                if committed
+                    && presentation_settled
+                    && context.running.prepared.load(Ordering::Relaxed) == ticket
+                {
+                    announce_run(&presentation_window, &context.running, false)?;
+                }
+                exposure::window_changed(&presentation_window);
+                Ok(placed)
+            })();
+            if let Err(failure) = ui_tx.try_send(result) {
+                // Only the receiving side can close the channel, so if it is not closed now, the channel was full when the
+                // result was sent. The channel receives only this one result, so a full channel is a failure that discarded
+                // the result.
+                let closed = ui_tx.is_closed();
+                match (closed, failure.into_inner()) {
+                    (false, _) => log_error(
+                        "surface placement",
+                        "the result channel is full and the result was dropped",
+                    ),
+                    // A failure after the request ended was not reported by that request, so it is left as an error line.
+                    (true, Err(error)) => log_error("surface placement", error),
+                    (true, Ok(_)) => crate::application_log::log_info(
+                        "surface",
+                        "surface placement result arrived after its request ended",
+                    ),
+                }
             }
-            let committed_views = committed_view_updates(&placed, &joined_generations, |surface| {
-                context.documents.views().generation(surface)
-            });
-            context.documents.presentation().commit(committed_views);
-            // The preparation update and the end decision run in order on the same UI thread.
-            if committed
-                && presentation_settled
-                && context.running.prepared.load(Ordering::Relaxed) == ticket
-            {
-                announce_run(&presentation_window, &context.running, false)?;
-            }
-            exposure::window_changed(&presentation_window);
-            Ok(placed)
-        })();
-        if let Err(failure) = ui_tx.try_send(result) {
-            // Only the receiving side can close the channel, so if it is not closed now, the channel was full when the
-            // result was sent. The channel receives only this one result, so a full channel is a failure that discarded
-            // the result.
-            let closed = ui_tx.is_closed();
-            match (closed, failure.into_inner()) {
-                (false, _) => log_error(
-                    "surface placement",
-                    "the result channel is full and the result was dropped",
-                ),
-                // A failure after the request ended was not reported by that request, so it is left as an error line.
-                (true, Err(error)) => log_error("surface placement", error),
-                (true, Ok(_)) => crate::application_log::log_info(
-                    "surface",
-                    "surface placement result arrived after its request ended",
-                ),
-            }
-        }
+        });
     }))?;
     ui_rx
         .recv()
