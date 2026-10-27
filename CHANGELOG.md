@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F239-237: Read structured diagnostics from the installed TypeScript compiler API for activation unbound-name checks. The unchanged multiline TS2322 case fails before correction; all seven owner cases and e2e-check pass afterward. Preserve selected lexical diagnostic codes and explicit compiler failures, and retain analysis plus cleanup errors without leaking compiler sessions or temporary configuration. Supplemental cleanup fault tests are post-change coverage, not original pre-change Red evidence.
+
+
 - F239-223-3: Add an explicit native resize-cadence reproduction target outside the default suite. Observe a stable 300×200 baseline, apply all 48 one-point pulses, retain predicted refresh and actual setter times, and gate only consecutive pulse response rows at 33 ms. An unoccluded inactive run records 34 ms source cadence with setter gaps at most 16.741 ms; a separate run passes. This establishes a standalone measurement path, not an application correction or performance acceptance. Initial fixture failures did not reach cadence measurement.
 
 - F239-47-30: Close historical P86 cause attribution as evidence unavailable after independent review. Remove the unsupported fake-window 2× comparator mode and its target: AppKit backing overrides do not establish ScreenCaptureKit output scale. Keep the actual-scale exact-byte comparator, which passes once at 1× with zero differing pixels. Historical cause and original 2× reproduction remain unverified; genuine display-scale support and exact-match criteria are unchanged.

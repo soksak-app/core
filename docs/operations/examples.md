@@ -90,6 +90,9 @@ Run `SOKSAK_NATIVE_TEST_RUN_FOLDER=<unique-dir> make -C native/darwin benchmark-
 
 ## Window checks
 
+`make e2e-check` audits unresolved activation-fixture names through the installed TypeScript compiler API, filtering TS2304, TS18004 and TS2552 for the declared sources. Unrelated semantic type diagnostics do not stop that lexical audit. Compiler configuration, global and syntax errors remain explicit failures; diagnostics without valid source metadata are rejected, and external-library exclusion requires compiler metadata. Compiler-session and temporary-configuration cleanup errors are reported together with analysis errors. This source check sends no input and activates no application.
+
+
 The focused `e2e/view-restart.test.mjs` case ends the exposed browser view process four times, records each complete fault/recovery phase, verifies the saved address, callable reload command and visible view/document placement after each replacement, and checks the fourth-failure stop reason. It hides and unloads that same tab, then opens it again and requires restored state without the stopped error. It declares only the deliberate process-end diagnostics and the fourth-failure display, checks their exact counts, and leaves unexpected registration or lifecycle errors failing the run. It uses the normal running diagnostic hosts and run metadata.
 
 The view display check enumerates installed enabled view plugins from `core.plugins`, including plugins with no open tab. It identifies the surface by the tab returned by `core.card.add-tab`, checks its document, and measures only its applied surface rectangle using the capture content offset and scale. Colour variation in that rectangle is a blank-area check, not evidence of the first content frame of that plugin.

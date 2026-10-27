@@ -10,18 +10,18 @@
 // Checks every .mjs file under e2e and the window check harness (packages/window-check) (node_modules excluded).
 //
 //   node scripts/check-e2e.mjs
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, relative, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { parse } from "acorn";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 const DIRS = [join(ROOT, "e2e"), join(ROOT, "packages", "window-check")];
-const TYPESCRIPT_PACKAGE = createRequire(join(ROOT, "packages", "soksak", "package.json"))
-  .resolve("typescript/package.json");
-const TYPESCRIPT_TSC = join(resolve(TYPESCRIPT_PACKAGE, ".."), "bin", "tsc");
+const TYPESCRIPT_API_PATH = createRequire(join(ROOT, "packages", "soksak", "package.json"))
+  .resolve("typescript/unstable/sync");
+const TYPESCRIPT_API = await import(pathToFileURL(TYPESCRIPT_API_PATH).href);
 const ACTIVATION_ROOT = join(ROOT, "e2e", "activation");
 
 const RULES = [
@@ -289,37 +289,100 @@ function* sources(dir) {
   }
 }
 
-export function auditActivationUnboundNames(paths = [...sources(ACTIVATION_ROOT)]) {
+export function auditActivationUnboundNames(paths = [...sources(ACTIVATION_ROOT)], {
+  createAPI = (options) => new TYPESCRIPT_API.API(options),
+} = {}) {
   // Activation fixtures can send OS input; catch lexical name mistakes without
   // imposing the unrelated type and import diagnostics of a JavaScript project.
   const sourceNames = new Map(paths.map((path) => [resolve(ROOT, relative(ROOT, path)), relative(ROOT, path)]));
   if (sourceNames.size === 0) throw new Error("TypeScript unbound-name check received no activation sources");
-  const result = spawnSync(process.execPath, [TYPESCRIPT_TSC,
-    "--allowJs", "--checkJs", "--noEmit", "--noResolve", "--target", "ESNext",
-    "--module", "NodeNext", "--moduleResolution", "NodeNext", "--skipLibCheck", "--pretty", "false",
-    ...[...sourceNames.keys()].map((path) => relative(ROOT, path))], { cwd: ROOT, encoding: "utf8" });
-  if (result.error) throw result.error;
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-  if (result.signal || result.status === null) {
-    throw new Error(`TypeScript unbound-name check did not finish: ${result.signal ?? output.trim()}`);
+  const formatDiagnostic = (diagnostic) => {
+    const name = diagnostic.fileName && sourceNames.get(resolve(diagnostic.fileName));
+    const location = diagnostic.fileName
+      ? `${name ?? diagnostic.fileName}${name && diagnostic.pos >= 0
+        ? `:${readFileSync(diagnostic.fileName, "utf8").slice(0, diagnostic.pos).split(/\r?\n/).length}`
+        : ""}`
+      : "compiler";
+    const message = diagnostic.text ?? "diagnostic message unavailable";
+    return `${location}: error TS${diagnostic.code}: ${message}`;
+  };
+  let configDirectory;
+  let api;
+  let snapshot;
+  const errors = [];
+  let result = [];
+  try {
+    configDirectory = mkdtempSync(join(tmpdir(), "soksak-activation-typescript-"));
+    const configPath = join(configDirectory, "tsconfig.json");
+    // TypeScript 7 exposes compiler diagnostics through its project API; keep the
+    // prior command-line options and root working directory for this file set.
+    writeFileSync(configPath, JSON.stringify({
+      compilerOptions: {
+        allowJs: true,
+        checkJs: true,
+        noEmit: true,
+        noResolve: true,
+        target: "ESNext",
+        module: "NodeNext",
+        moduleResolution: "NodeNext",
+        skipLibCheck: true,
+      },
+      files: [...sourceNames.keys()],
+    }));
+    api = createAPI({ cwd: ROOT });
+    snapshot = api.updateSnapshot({ openProjects: [configPath] });
+    const project = snapshot.getProject(configPath);
+    if (!project) throw new Error(`TypeScript did not load compiler project ${configPath}`);
+    const program = project.program;
+    const compilerErrors = [
+      ...program.getProgramDiagnostics(),
+      ...program.getGlobalDiagnostics(),
+      ...program.getSyntacticDiagnostics(),
+    ].filter((diagnostic) => diagnostic.category === TYPESCRIPT_API.DiagnosticCategory.Error);
+    if (compilerErrors.length > 0) throw new Error(compilerErrors.map(formatDiagnostic).join("\n"));
+    const diagnostics = program.getSemanticDiagnostics();
+    const unboundNameCodes = new Set([2304, 18004, 2552]);
+    result = diagnostics.flatMap((diagnostic) => {
+      if (!unboundNameCodes.has(diagnostic.code)) return [];
+      if (!diagnostic.fileName || !Number.isSafeInteger(diagnostic.pos) || diagnostic.pos < 0) {
+        throw new Error(`TypeScript unbound-name diagnostic TS${diagnostic.code} has no valid source file and position`);
+      }
+      const name = sourceNames.get(resolve(diagnostic.fileName));
+      if (!name) {
+        const metadata = program.getSourceFileMetadata(diagnostic.fileName);
+        if (metadata?.isDefaultLibrary || metadata?.isFromExternalLibrary) return [];
+        throw new Error(`TypeScript unbound-name diagnostic TS${diagnostic.code} came from an unaudited source file: ${diagnostic.fileName}`);
+      }
+      const line = readFileSync(diagnostic.fileName, "utf8").slice(0, diagnostic.pos).split(/\r?\n/).length;
+      return [`${name}:${line}: ${diagnostic.text}`];
+    });
+  } catch (error) {
+    errors.push(new Error(`TypeScript unbound-name check could not analyze activation sources: ${error.message}`, { cause: error }));
   }
-  const diagnostics = [];
-  for (const line of output.split(/\r?\n/)) {
-    const match = /^(.*)\((\d+),(\d+)\): error TS(2304|18004|2552): (.*)$/.exec(line);
-    if (!match) continue;
-    const name = sourceNames.get(resolve(ROOT, match[1]));
-    if (name) diagnostics.push(`${name}:${match[2]}: ${match[5]}`);
-  }
-  if (result.status !== 0) {
-    const unexpected = output.split(/\r?\n/).find((line) => line.trim()
-      && !/^(?:.*\(\d+,\d+\): )?error TS\d+:/.test(line)
-      && !/^ {2}\S/.test(line)
-      && !/^Found \d+ errors? in \d+ files?\.?$/.test(line));
-    if (unexpected) {
-      throw new Error(`TypeScript unbound-name check could not analyze activation sources: ${unexpected}`);
+  if (snapshot) {
+    try {
+      snapshot.dispose();
+    } catch (error) {
+      errors.push(new Error(`TypeScript snapshot cleanup failed: ${error.message}`, { cause: error }));
     }
   }
-  return diagnostics;
+  if (api) {
+    try {
+      api.close();
+    } catch (error) {
+      errors.push(new Error(`TypeScript API cleanup failed: ${error.message}`, { cause: error }));
+    }
+  }
+  if (configDirectory) {
+    try {
+      rmSync(configDirectory, { recursive: true, force: true });
+    } catch (error) {
+      errors.push(new Error(`TypeScript temporary config cleanup failed: ${error.message}`, { cause: error }));
+    }
+  }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, "TypeScript unbound-name analysis and cleanup failed");
+  return result;
 }
 
 export function auditE2ESource(text, file) {
