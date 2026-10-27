@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-227: Wails viewport-marker fixture에서 임의 정수 pointer 대신 할당한 객체 주소를 사용한다. 변경 전 정확한 Windows/ARM64 diagnostics vet 명령이 잘못된 변환 두 개를 보고하고, 변경 후 같은 명령이 통과한다. viewport-marker owner case 여섯 개도 통과한다. Endpoint 소유권과 UI-thread assertion은 유지된다.
+
 - F239-222: 다섯 process-start 표본에 필요한 추가 view를 열기 전에 선언된
 
 - F239-224: 독립 view-measurement category를 모두 평가하고 모든 실패를 `AggregateError`와 `error.json`에 보존한다. 추적한 Red case 두 개는 기존 첫 오류 처리에서 동시 total·warm-display 위반을 재현한다. 수정 후 두 case가 통과하고 단일 오류 artifact 및 정상 측정 case도 통과한다. 기준과 window 결과는 바꾸지 않았다.

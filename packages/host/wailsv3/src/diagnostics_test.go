@@ -292,17 +292,19 @@ func (p *viewportMarkerPlatform) SetDocumentViewportMarker(document unsafe.Point
 	return p.color, p.width, p.err
 }
 
-func viewportMarkerEndpoint(t *testing.T, marker *viewportMarkerPlatform, attached bool) (*Endpoint, *Surfaces) {
+func viewportMarkerEndpoint(t *testing.T, marker *viewportMarkerPlatform, attached bool) (*Endpoint, *Surfaces, *byte) {
 	t.Helper()
 	h := &Host{windows: map[uint]*Surfaces{}}
 	s := &Surfaces{name: "window-a", documents: NewDocuments()}
 	h.windows[1] = s
+	var document *byte
 	if attached {
 		key := DocumentKey{Surface: "surface-a", Name: "document-a"}
 		if err := s.documents.Reserve(key); err != nil {
 			t.Fatal(err)
 		}
-		if !s.documents.Set(key, unsafe.Pointer(uintptr(0x1234))) {
+		document = new(byte)
+		if !s.documents.Set(key, unsafe.Pointer(document)) {
 			t.Fatal("document reservation disappeared")
 		}
 	}
@@ -316,7 +318,7 @@ func viewportMarkerEndpoint(t *testing.T, marker *viewportMarkerPlatform, attach
 	oldSystem := system
 	system = marker
 	t.Cleanup(func() { system = oldSystem })
-	return &Endpoint{backend: hostBackend{h: h}}, s
+	return &Endpoint{backend: hostBackend{h: h}}, s, document
 }
 
 func runViewportMarker(t *testing.T, e *Endpoint, params string) (any, error) {
@@ -331,12 +333,12 @@ func runViewportMarker(t *testing.T, e *Endpoint, params string) (any, error) {
 // contract: diagnostics.document.viewport-marker.validates-owned-region-and-runs-on-ui
 func TestDiagnosticViewportMarkerValidatesAndRunsOnUI(t *testing.T) {
 	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
-	e, _ := viewportMarkerEndpoint(t, marker, true)
+	e, _, document := viewportMarkerEndpoint(t, marker, true)
 	result, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":true}`)
 	if err != nil {
 		t.Fatalf("diagnostics.document.viewport-marker: %v", err)
 	}
-	if marker.calls != 1 || marker.document != unsafe.Pointer(uintptr(0x1234)) || !marker.enabled {
+	if marker.calls != 1 || marker.document != unsafe.Pointer(document) || !marker.enabled {
 		t.Fatalf("native request = calls:%d document:%p enabled:%t", marker.calls, marker.document, marker.enabled)
 	}
 	encoded, err := json.Marshal(result)
@@ -372,7 +374,7 @@ func TestDiagnosticViewportMarkerRejectsInvalidAndUnownedTargets(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
-			e, _ := viewportMarkerEndpoint(t, marker, true)
+			e, _, _ := viewportMarkerEndpoint(t, marker, true)
 			if _, err := runViewportMarker(t, e, test.params); err == nil {
 				t.Fatalf("accepted invalid request %s", test.params)
 			}
@@ -386,7 +388,7 @@ func TestDiagnosticViewportMarkerRejectsInvalidAndUnownedTargets(t *testing.T) {
 // contract: diagnostics.document.viewport-marker.requires-existing-region-to-start
 func TestDiagnosticViewportMarkerStartRequiresAttachedRegion(t *testing.T) {
 	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
-	e, _ := viewportMarkerEndpoint(t, marker, false)
+	e, _, _ := viewportMarkerEndpoint(t, marker, false)
 	_, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":true}`)
 	if err == nil || !strings.Contains(err.Error(), "not attached") {
 		t.Fatalf("start without region error = %v", err)
@@ -399,7 +401,7 @@ func TestDiagnosticViewportMarkerStartRequiresAttachedRegion(t *testing.T) {
 // contract: diagnostics.document.viewport-marker.stop-is-idempotent-after-region-removal
 func TestDiagnosticViewportMarkerStopAfterRegionRemoval(t *testing.T) {
 	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
-	e, _ := viewportMarkerEndpoint(t, marker, false)
+	e, _, _ := viewportMarkerEndpoint(t, marker, false)
 	result, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":false}`)
 	if err != nil {
 		t.Fatalf("stop after region removal: %v", err)
@@ -415,7 +417,7 @@ func TestDiagnosticViewportMarkerStopAfterRegionRemoval(t *testing.T) {
 // contract: diagnostics.document.viewport-marker.propagates-native-failures
 func TestDiagnosticViewportMarkerPropagatesNativeFailure(t *testing.T) {
 	marker := &viewportMarkerPlatform{err: errors.New("native marker failed")}
-	e, _ := viewportMarkerEndpoint(t, marker, true)
+	e, _, _ := viewportMarkerEndpoint(t, marker, true)
 	_, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":true}`)
 	if err == nil || err.Error() != "native marker failed" {
 		t.Fatalf("native error = %v", err)

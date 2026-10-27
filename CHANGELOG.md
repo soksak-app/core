@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-227: Replace fabricated pointer identities in the Wails viewport-marker fixture with an allocated object address. The exact Windows/ARM64 diagnostics vet command reports both invalid conversions before the change and passes afterward; all six viewport-marker owner cases pass. Endpoint ownership and UI-thread assertions remain intact.
+
 - F239-222: Measure the declared view groups before opening the extra views
 
 - F239-224: Evaluate every independent view-measurement category and preserve all failures in `AggregateError` and `error.json`. Tracked Red cases reproduce simultaneous total and warm-display failures against the previous first-error behavior. Both cases pass after correction; the single-error artifact and valid-measurement cases also pass. Criteria and window results are unchanged.
