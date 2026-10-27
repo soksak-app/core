@@ -46,7 +46,7 @@
 
 - F238-b-3: Host마다 독립 선택 가능한 시험 열 개로 macOS keyboard-routing 탐침을 추가한다. Run 32에서 13개가 통과하고 7개가 실패했으며, 그 7개만 run 33에서 재실행해 모두 통과했다. Run 32에서는 hidden-library command assertion으로 catalog 감사 항목 두 개가 나왔다. 통과한 13개 사례의 개별 판정은 깨끗하다. Run 33의 감사 오류는 0개이며 양 host는 두 실행 모두 정상 종료했다. 탐침은 native input과 registry command 결과, picker/modal 소유권, native menu shortcut, 표시된 library의 검색 focus, 숨겨진 library에서의 key 소유, 같은 window AppKit document에 대한 IME Escape를 확인한다. 한 번의 run을 20/20 통과로 기록하지 않는다.
 
-- F239-212: Input-source 선택이 current가 아닌 context를 거절할 때 captured/current window, responder, text context 및 context-client 사실을 보고한다. 제어된 진단 소유 검사는 빠진 사실을 재현한 뒤 통과한다. 선택 정책은 유지하며 실제 원인은 미해결이다.
+- F239-212: Input-source 선택이 current가 아닌 context를 거절할 때 captured/current window, responder, text context 및 context-client 사실을 보고한다. 제어된 진단 소유 검사는 빠진 사실을 재현한 뒤 통과한다. 선택 정책은 유지하며 실제 원인은 미해결이다. 보존된 일반 오류로 과거 identity를 재구성할 수 없어 근거 복구 불가 감사로 원래 identity 비교만 닫으며 원래 조건은 미검증으로 남긴다. 현재 입력 수정·acceptance는 별도로 유지하고 진단 사실과 함께 같은 거부가 재발하면 연결된 비교 항목을 연다.
 
 - F239-213: Equal과 Minus native input 문자를 Carbon ANSI 물리 key code에 매핑한다. 공개 native input 검사는 수정 전에 실패하고 뒤에는 WebKit key/code 일치로 통과하며 미지원 문자는 명시적 오류로 유지한다.
 
