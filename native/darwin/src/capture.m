@@ -42,6 +42,7 @@ static int captureBefore;
 static long captureWindowNumber;
 // The serial queue that writes frames to disk, and the upper limit of frames that wait to be written.
 static dispatch_queue_t captureWriter;
+static dispatch_queue_t captureSourceWriter;
 static dispatch_semaphore_t capturePending;
 static const long kCapturePending = 64;
 // ScreenCaptureKit can deliver idle and incomplete callbacks between recorded images. Keep a bounded timeline so a display-time gap
@@ -70,6 +71,26 @@ static void (*captureDisplayLinkAfterWindowLookup)(NSWindow *window);
 static char captureAttemptAssociationKey;
 static uint64_t captureAttemptSequence;
 static SPCaptureAttempt* captureAttempt = nil;
+
+// Starts diagnostic source artifact retention on its own serial writer.
+static void endCaptureSourceArtifacts(void);
+
+static bool beginCaptureSourceArtifacts(NSString *directory) {
+    if (directory == nil || captureWriter == NULL) return false;
+    if (captureSourceWriter != NULL) endCaptureSourceArtifacts();
+    captureSourceWriter = dispatch_queue_create("sp.capture.source-writer", DISPATCH_QUEUE_SERIAL);
+    if (captureSourceWriter == NULL) return false;
+    sp_image_capture_match_begin(directory.fileSystemRepresentation, captureSourceWriter);
+    return true;
+}
+
+static void endCaptureSourceArtifacts(void) {
+    sp_image_capture_match_end();
+    if (captureSourceWriter != NULL) {
+        dispatch_release(captureSourceWriter);
+        captureSourceWriter = NULL;
+    }
+}
 
 @interface SPCaptureAttempt : NSObject
 @property (nonatomic, copy) NSString *session;
@@ -1191,7 +1212,7 @@ void sp_capture_test_report_error(const char *message) {
 }
 
 void sp_capture_test_report_startup_failure(const char *message) {
-    sp_image_capture_match_end();
+    endCaptureSourceArtifacts();
     sp_capture_test_report_error(message);
 }
 #endif
@@ -1305,7 +1326,7 @@ static bool finalizeCaptureArtifacts(SPCapture *sink) {
         setCaptureError(@"capture callback status trace failed without a reason");
     }
     bool displayLinkWritten = writeCaptureDisplayLinkTrace(sink);
-    sp_image_capture_match_end();
+    endCaptureSourceArtifacts();
     return sourceManifestWritten && identityReason == nil && callbackStatusWritten && displayLinkWritten;
 }
 
@@ -1552,13 +1573,17 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         [attempt release];
         return captureOperationFailure(errorOut, @"capture directory is not valid UTF-8");
     }
-    sp_image_capture_match_begin(captureSink.directory.fileSystemRepresentation, captureWriter);
+    if (!beginCaptureSourceArtifacts(captureSink.directory)) {
+        setCaptureError(@"diagnostic source artifact writer could not start");
+        [attempt release];
+        return captureOperationFailure(errorOut, @"diagnostic source artifact writer could not start");
+    }
     if (frameIdentity) {
         char *identityError = NULL;
         if (!sp_image_capture_match_identity_session_begin(&identityError)) {
             NSString *reason = [NSString stringWithUTF8String:identityError ?: "identity session could not start"];
             free(identityError);
-            sp_image_capture_match_end();
+            endCaptureSourceArtifacts();
             setCaptureError(reason);
             [attempt release];
             return captureOperationFailure(errorOut, reason);
@@ -1567,7 +1592,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
             NSString *reason = [NSString stringWithUTF8String:identityError ?: "frame identity Vision readiness failed"];
             free(identityError);
             sp_image_capture_match_identity_session_end();
-            sp_image_capture_match_end();
+            endCaptureSourceArtifacts();
             setCaptureError(reason);
             [attempt release];
             return captureOperationFailure(errorOut, reason);
@@ -1577,7 +1602,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
                                        configuration:captureConfig
                                             delegate:captureSink];
     if (!stream) {
-        sp_image_capture_match_end();
+        endCaptureSourceArtifacts();
         setCaptureError(@"capture stream allocation failed");
         [attempt release];
         return captureOperationFailure(errorOut, @"capture stream allocation failed");
@@ -1602,7 +1627,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
             captureStream = nil;
         }
         [stream release];
-        sp_image_capture_match_end();
+        endCaptureSourceArtifacts();
         [attempt release];
         return captureOperationFailure(errorOut,
             [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);

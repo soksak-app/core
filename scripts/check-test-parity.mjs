@@ -177,7 +177,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin process identity", "objective-c", ["native/darwin/process-identity/src/process_identity.m"], ["native/darwin/process-identity/tests/**/*.m", "native/darwin/process-identity/tests/**/*.sh"], { testExtensions: new Set([".m", ".sh"]) }),
   lane("Darwin process identity Node test entrypoint", "js-ts", ["native/darwin/process-identity/tests/package.test.mjs"], ["native/darwin/process-identity/tests/package.test.mjs"]),
   lane("Darwin webview navigation", "objective-c", ["native/darwin/src/webview_navigation.m"], ["native/darwin/tests/webview_navigation_test.m"], { sharedTests: true }),
-  lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_lifecycle_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m", "native/darwin/tests/capture_callback_test.m"], { sharedTests: true }),
+  lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_lifecycle_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m", "native/darwin/tests/capture_callback_test.m", "native/darwin/tests/capture_source_writer_test.m"], { sharedTests: true }),
   lane("Darwin capture frame identity", "objective-c", ["native/darwin/src/capture_frame_identity.m"], ["native/darwin/tests/capture_frame_identity_test.m"], { sharedTests: true }),
   lane("Darwin dock menu", "objective-c", ["native/darwin/src/dock_menu.m"], ["native/darwin/tests/dock_menu_test.m"], { sharedTests: true }),
   lane("Darwin appearance", "objective-c", ["native/darwin/src/appearance.m"], ["native/darwin/tests/appearance_test.m"], { sharedTests: true }),
@@ -4420,6 +4420,13 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/view_call_record_test.go", id: "TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay" },
     ],
     expected: "The public runtime.log API carries its cids through the SDK direct writer, and host relays retain the supplied cids while storing page events.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-242",
+    implementation: [{ file: "native/darwin/src/capture.m", symbol: "static bool beginCaptureSourceArtifacts(" }],
+    tests: [{ file: "native/darwin/tests/capture_source_writer_test.m", id: "source artifacts and their manifest finish before the held frame writer is released" }],
+    expected: "Accepted diagnostic source artifacts progress independently of a held frame writer and both owned writers drain before recording state is released.",
     levels: ["unit"],
   },
   {

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-242: Diagnostic source artifact에 captured-frame 압축 및 쓰기와 독립적인 serial writer를 둔다. 기존 pending-byte 및 history bound를 유지한다. Frame writer를 제어해 대기시키는 소유 검사는 수정 전에 실패하고 source record와 manifest가 독립적으로 진행한 뒤 통과한다. Queue retirement를 수정한 뒤 replacement setup과 stop-intake 소유 검사도 통과하며 finalization은 양 writer를 drain하고 해제한다. 애플리케이션 capacity와 latency acceptance는 아직 미완료다.
+
 - F239-241: 재빌드한 macOS arm64 plugin-host channel을 양 Files 창 case 통과, app log finding 0, 정상 host 종료, endpoint 제거 및 foreground baseline 복원으로 확인한다. 별도 Terminal drag 실행은 Wails/Tauri source 간격 73/65 ms와 convergence 미달로 실패하며 수정 전 plugin-host 회귀와 source 보관 capacity 오류 29개를 기록했다. 해당 증거를 보존하며 channel 수정으로 성능 acceptance를 추론하지 않는다.
 
 - F239-241: Surface view가 직접 batch writer를 쓰는 동안 공유 SDK bridge의 개별 plugin-host log 요청을 유지한다. Plugin-host 소유 검사는 수정 전에 잘못된 batch 요청을 재현하며 선언된 start context로 routing한 뒤 bridge 소유 case 52개가 통과한다. Operation identifier와 명시적인 거절 보고를 유지한다.

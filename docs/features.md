@@ -11,9 +11,9 @@
 The source audits use the matching current SDK's public commands. Older installed SDK readers reject schema 3; their default command is not reported as passing. These are local development results. Publication and historical failure-closure tasks retain their own checklist states.
 
 
-The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 39 rows: 9 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
+The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 40 rows: 10 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
 
-- **Current measurement and check corrections: 3** — F239-223, F239-223-3, F239-233
+- **Current measurement and check corrections: 4** — F239-223, F239-223-3, F239-233, F239-242
 - **Reported failures and historical closure audits: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1 through F266.3, F266.5 through F266.7 and F266.9 through F266.13
 - **Performance measurements: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package installation and publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -22,6 +22,8 @@ The five functional cohorts above do not constitute completion of the full check
 These rows retain their individual requirements and states. A passing functional cohort does not establish a historical failure's cause, a performance target, or publication. Package installation rows can still contain development work; publication is not inferred from a local installation.
 
 The latest macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains seven measured failures and one refused collection. Browser source-frame gaps are 51/34 ms on Wails/Tauri, Editor 50/34 ms, HWP 34/34 ms, and Wails Terminal 71 ms. Tauri Terminal refuses synthetic drag because its window is active and establishes no drag result. HWP footprint passes on both hosts: 571,791,024 bytes against 581,004,760 allowed on Wails, and 568,760,032 against 569,847,184 on Tauri. HWP adjusted first display still fails at 1616.594/1755.235 ms against 1001/1113 ms. Source gaps are observer intervals, not measured input-to-display latency. The independent F239-238 evaluator reports convergence passes for Browser and Editor on both hosts and failures for HWP on both hosts and Wails Terminal in a diagnostic replay of retained measurements. Tauri Terminal has no convergence result. This replay is not a new application acceptance run. Both hosts exit normally, error-log audits pass, and the original frontmost baseline is restored. F239-223 and F239-233 remain open; no product memory optimization or common latency cause is inferred.
+
+- [~] F239-242 — P1, linked to F239-223: Isolate source artifact writes so diagnostic frame-writer backlog cannot hold the independent source pending budget. Preserve the 64 MiB pending/history bounds and explicit drop reports. Reproduce cross-writer blocking with a controlled held-writer owner Red; verify independent source progress and both writers draining at shutdown in Green. Retain the measured 29 capacity drops and maximum 1.26-second writer wait without adding runtime history.
 
 - [o] F239-241 — P1, linked to F239-240: Preserve individual log requests on the declared plugin-host channel in the shared SDK bridge. The owner fails on the incorrectly delivered clock request before correction and all 52 bridge cases pass afterward. The rebuilt macOS arm64 hosts pass both Files window cases, with zero application-log findings, normal host exit, removed endpoints and restored shared foreground baseline. Preserve operation identifiers and explicit refusal reporting.
 

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-242: Give diagnostic source artifacts a serial writer independent of captured-frame compression and writes. Keep the existing pending-byte and history bounds. The controlled held-frame-writer owner fails before correction and passes after source records and their manifest progress independently. Replacement setup and stop-intake owners pass after correcting queue retirement; finalization drains and releases both owned writers. Application capacity and latency acceptance remain pending.
+
 - F239-241: Accept the rebuilt macOS arm64 plugin-host channel with both Files window cases passing, zero application-log findings, normal host exit, endpoint removal and restored foreground baseline. The separate Terminal drag run remains failed at 73/65 ms source intervals and convergence on Wails/Tauri, with 29 source-retention capacity errors and the plugin-host regression recorded before correction. Preserve its evidence and do not infer performance acceptance from the channel fix.
 
 - F239-241: Preserve individual plugin-host log requests in the shared SDK bridge while surface views use the direct batch writer. The plugin-host owner reproduces the incorrectly batched request before correction; all 52 bridge owner cases pass after routing by the declared start context. Keep operation identifiers and explicit refusal reporting.

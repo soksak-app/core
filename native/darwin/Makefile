@@ -223,6 +223,8 @@ $(BUILD)/capture_storage_test: src/capture.m
 
 $(BUILD)/capture_metadata_test: src/capture.m
 
+$(BUILD)/capture_source_writer_test: src/capture.m
+
 $(BUILD)/capture_resize_test: src/capture.m
 
 $(BUILD)/capture_presentation_test: tests/capture_presentation_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
@@ -327,6 +329,7 @@ NATIVE_TESTS = observe_test \
   image_capture_match_test \
   capture_frame_identity_test \
   capture_frame_identity_capture_test \
+  capture_source_writer_test \
   capture_resize_test \
   capture_frame_test \
   capture_text_test \
