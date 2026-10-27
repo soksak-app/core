@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-226: Keep qualified plugin-host exposure names and publish the RAF snapshot under its plugin-local key. The benchmark waits for declared registration trace rows, then reads through the command and `status.get` instead of unsupported `status.watch`. Red: the owner fixture test found the qualified snapshot key. Green: fixture and collector owner tests pass 16/16, the fixture pack command succeeds, and documentation checks pass. Application measurements remain outside this unit.
+
 - F239-228: Align the paired performance exposure test filenames and inventory paths. The host structure audit fails before the rename and passes afterward; both retained Wails owner cases pass. Test bodies and runtime behavior are unchanged.
 
 - F239-220: Decode Wails `pluginHostSidecarClose` as the declared request object. Red: the unchanged binding rejects `{plugin: "probe"}` before window lookup. Green: the same owner test reaches window lookup for valid input and rejects missing, null and non-string plugin values under the existing argument rules. The focused Go owner test and documentation checks pass.

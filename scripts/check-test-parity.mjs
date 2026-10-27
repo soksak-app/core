@@ -198,6 +198,39 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F239-226",
+  "implementation": [
+    {
+      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
+      "symbol": "export async function waitForPluginHostRegistrations("
+    },
+    {
+      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
+      "symbol": "export async function readPluginHostSample("
+    },
+    {
+      "file": "e2e/fixtures/plugin-host-throttle/raf-probe/ui/raf-probe.js",
+      "symbol": "export async function startRafProbe("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/plugin-host-throttle.test.mjs",
+      "id": "plugin-host readiness waits for its declared status and command registrations"
+    },
+    {
+      "file": "e2e/test/plugin-host-throttle.test.mjs",
+      "id": "plugin-host sample reads use the command and status.get snapshot pull"
+    },
+    {
+      "file": "e2e/test/plugin-host-throttle-fixture.test.mjs",
+      "id": "plugin-host RAF fixture registers a qualified status and pushes its local snapshot key"
+    }
+  ],
+  "expected": "The RAF benchmark waits for declared plugin-host registrations, reads through command.run and status.get, and publishes snapshots under the local key.",
+  "levels": ["unit"]
+},
+  {
     id: "F239-225",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "const byProcess = new Map();" }],
     tests: [

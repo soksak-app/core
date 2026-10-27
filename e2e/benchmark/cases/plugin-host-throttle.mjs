@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+
 const text = (value, path) => {
   if (typeof value !== "string" || value === "") throw new Error(`${path} must be nonempty text`);
   return value;
@@ -17,6 +19,56 @@ function pageSample(value, path) {
     throw new Error(`${path}.timeOrigin must be finite and positive`);
   }
   return { frames: value.frames, performanceNow: value.performanceNow, timeOrigin: value.timeOrigin };
+}
+
+/** Waits for the plugin host's declared command and status registration trace rows. */
+export async function waitForPluginHostRegistrations({ session, plugin, registrations, since, readRows }) {
+  text(plugin, "plugin");
+  if (!Array.isArray(registrations) || registrations.length === 0 || typeof readRows !== "function") {
+    throw new TypeError("plugin-host readiness requires registrations and a row reader");
+  }
+  const expected = new Set(registrations.map(({ kind, name }) => {
+    if (kind !== "command" && kind !== "status") throw new TypeError(`unsupported plugin-host registration kind ${kind}`);
+    text(name, "registration.name");
+    return `${kind}:${name}`;
+  }));
+  const surface = `plugin:${plugin}`;
+  let observed = new Set();
+  const find = async () => {
+    const rows = await readRows(since);
+    observed = new Set(rows.flatMap((row) => {
+      const event = row?.event;
+      const fields = event?.fields;
+      if (event?.event !== "page.trace.surface.registration" || fields?.phase !== "registered" ||
+          fields.surface !== surface || (fields.kind !== "command" && fields.kind !== "status") ||
+          typeof fields.name !== "string") return [];
+      return [`${fields.kind}:${fields.name}`];
+    }));
+    return [...expected].every((entry) => observed.has(entry));
+  };
+
+  for (;;) {
+    const before = await session.get("host.log");
+    if (!Number.isSafeInteger(before?.notices) || before.notices < 0) {
+      throw new Error("host.log readiness notice count is invalid");
+    }
+    if (await find()) return;
+    const missing = [...expected].filter((entry) => !observed.has(entry));
+    await session.until("host.log", (value) => value.notices > before.notices,
+      `plugin host ${plugin} did not register ${missing.join(", ")}`, { timeout: 15000 });
+  }
+}
+
+/** Reads one host command result and verifies that status.get pulls the same published snapshot. */
+export async function readPluginHostSample(session, command, status) {
+  text(command, "command");
+  text(status, "status");
+  const result = await session.run(command);
+  const snapshot = await session.get(status);
+  if (!snapshot || typeof snapshot !== "object" || !isDeepStrictEqual(snapshot.value, result)) {
+    throw new Error(`plugin host status ${status} did not pull the sample returned by ${command}`);
+  }
+  return result;
 }
 
 /** Selects the measured host rows and reports a window-facts error before callers wait for a missing host row. */

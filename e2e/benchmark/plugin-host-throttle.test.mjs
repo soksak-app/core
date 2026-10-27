@@ -11,7 +11,8 @@ import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { pluginEntry } from "../../scripts/workspace-registry.mjs";
 import { allRows, tailOf } from "../chains.mjs";
 import { fresh, pluginChangeApplied } from "../fixture.mjs";
-import { cleanupPluginHostFixture, reducePluginHostRafMeasurement, selectPluginHostSamplerRows } from "./cases/plugin-host-throttle.mjs";
+import { cleanupPluginHostFixture, readPluginHostSample, reducePluginHostRafMeasurement,
+  selectPluginHostSamplerRows, waitForPluginHostRegistrations } from "./cases/plugin-host-throttle.mjs";
 
 const PROBE = fileURLToPath(new URL("../fixtures/plugin-host-throttle/raf-probe/", import.meta.url));
 const PLUGIN = "probehostraf";
@@ -70,15 +71,6 @@ async function waitForSamplerRows(session, since, count) {
   }
 }
 
-async function readHostSample(session) {
-  const result = await session.run(READ_COMMAND);
-  const status = await session.until(SAMPLE_STATUS,
-    (value) => value?.frames === result?.frames && value?.performanceNow === result?.performanceNow,
-    `${PLUGIN} did not publish its requested sample`);
-  assert.deepEqual(status, result, `${PLUGIN} command and status returned different samples`);
-  return result;
-}
-
 async function pluginChange(session, action, run) {
   const offsets = currentEventOffsets(session.app.configDir);
   await run();
@@ -106,14 +98,20 @@ for (const app of Object.values(APPS)) {
     await session.run("core.plugins.registry", { index: pathToFileURL(join(registry, "index.json")).href });
     await session.until("core.plugins", (value) => value.plugins.some((row) => row.id === PLUGIN),
       "the plugin-host RAF fixture registry was not loaded");
+    const registrationStart = await tailOf(session);
     await pluginChange(session, `install ${PLUGIN}`, () => session.run("core.plugins.install", { plugin: PLUGIN }));
-    await session.until(SAMPLE_STATUS, (value) => Number.isSafeInteger(value?.frames)
-      && Number.isFinite(value?.performanceNow), "the plugin-host RAF fixture did not publish its initial sample");
+    await waitForPluginHostRegistrations({
+      session,
+      plugin: PLUGIN,
+      registrations: [{ kind: "status", name: SAMPLE_STATUS }, { kind: "command", name: READ_COMMAND }],
+      since: registrationStart,
+      readRows: (since) => allRows(session, { channel: "all", event: "page.trace.surface.registration", since }),
+    });
 
-    const start = await readHostSample(session);
+    const start = await readPluginHostSample(session, READ_COMMAND, SAMPLE_STATUS);
     const since = await tailOf(session);
     const samplerRows = await waitForSamplerRows(session, since, 2);
-    const end = await readHostSample(session);
+    const end = await readPluginHostSample(session, READ_COMMAND, SAMPLE_STATUS);
     const measurement = reducePluginHostRafMeasurement({
       plugin: PLUGIN, window: session.window, start, end, samplerRows,
     });

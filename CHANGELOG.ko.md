@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-226: qualified plugin-host exposure 이름은 유지하고 RAF snapshot은 plugin-local key로 publish한다. Benchmark는 등록 trace row를 기다린 다음 지원하지 않는 `status.watch` 대신 command와 `status.get`으로 읽는다. Red: owner fixture test가 qualified snapshot key를 찾았다. Green: fixture·collector owner test 16/16, fixture pack command 및 문서 검사가 통과한다. Application measurement는 이 단위에 포함하지 않는다.
+
 - F239-228: 대응하는 performance exposure 시험 파일명과 inventory 경로를 맞춘다. 이름 변경 전 host 구조 감사가 실패하고 변경 후 통과하며 보존된 Wails 소유 사례 두 개가 통과한다. 시험 본문과 runtime 동작은 바꾸지 않는다.
 
 - F239-220: Wails `pluginHostSidecarClose`를 선언된 request object로 decode한다. Red: 변경 전 binding이 `{plugin: "probe"}`를 window lookup 전에 거부한다. Green: 같은 owner test가 유효 입력을 window lookup까지 보내고 누락·null·문자열 아닌 plugin 값을 기존 argument 규칙으로 거부한다. 집중 Go owner test와 문서 검사가 통과한다.

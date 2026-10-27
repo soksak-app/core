@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cleanupPluginHostFixture, reducePluginHostRafMeasurement } from "../benchmark/cases/plugin-host-throttle.mjs";
+import { cleanupPluginHostFixture, readPluginHostSample, reducePluginHostRafMeasurement,
+  waitForPluginHostRegistrations } from "../benchmark/cases/plugin-host-throttle.mjs";
 
 const sample = (frames, performanceNow, timeOrigin = 1000) => ({ frames, performanceNow, timeOrigin });
 const sampler = (seq, monoNs, pid = 701) => ({
@@ -11,6 +12,77 @@ const sampler = (seq, monoNs, pid = 701) => ({
     mono_ns: monoNs,
     fields: { role: "plugin-host", plugin: "probehostraf", window: "main", pid, rss_kb: 10, footprint_kb: 12 },
   },
+});
+
+const registration = (plugin, phase, kind, name) => ({ event: {
+  event: "page.trace.surface.registration",
+  fields: { phase, surface: `plugin:${plugin}`, kind, name },
+} });
+
+test("plugin-host readiness waits for its declared status and command registrations", { timeout: 1000 }, async () => {
+  const rows = [
+    registration("other", "registered", "command", "probehostraf.read"),
+    registration("probehostraf", "pending", "status", "probehostraf.sample"),
+  ];
+  let notices = 0;
+  let waits = 0;
+  const session = {
+    async get(name) {
+      assert.equal(name, "host.log");
+      return { notices };
+    },
+    async until(name, predicate, message, options) {
+      assert.equal(name, "host.log");
+      assert.ok(message.includes("probehostraf"));
+      assert.equal(options.timeout, 15000);
+      waits++;
+      notices++;
+      rows.push(waits === 1
+        ? registration("probehostraf", "registered", "status", "probehostraf.sample")
+        : registration("probehostraf", "registered", "command", "probehostraf.read"));
+      assert.equal(predicate({ notices }), true);
+    },
+  };
+  let reads = 0;
+  await waitForPluginHostRegistrations({
+    session,
+    plugin: "probehostraf",
+    registrations: [
+      { kind: "status", name: "probehostraf.sample" },
+      { kind: "command", name: "probehostraf.read" },
+    ],
+    since: "registration-tail",
+    readRows: async (since) => {
+      assert.equal(since, "registration-tail");
+      reads++;
+      return rows;
+    },
+  });
+  assert.equal(waits, 2);
+  assert.equal(reads, 3);
+});
+
+test("plugin-host sample reads use the command and status.get snapshot pull", { timeout: 1000 }, async () => {
+  const calls = [];
+  const result = { frames: 12, performanceNow: 130, timeOrigin: 1000 };
+  const session = {
+    async run(name) {
+      calls.push(["command.run", name]);
+      return result;
+    },
+    async get(name) {
+      calls.push(["status.get", name]);
+      return { value: result, version: 3 };
+    },
+    async until() {
+      throw new Error("plugin-host statuses do not use status.watch");
+    },
+  };
+  assert.deepEqual(await readPluginHostSample(session, "probehostraf.read", "probehostraf.sample"), result);
+  assert.deepEqual(calls, [
+    ["command.run", "probehostraf.read"],
+    ["status.get", "probehostraf.sample"],
+  ]);
 });
 
 test("plugin-host RAF measurement records a valid zero-callback result without a rate threshold", { timeout: 1000 }, () => {
