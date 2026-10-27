@@ -198,6 +198,67 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F239-221",
+  "implementation": [
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export function viewStartExposure("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export function viewContentFrameEvents("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export function requireViewContentFrameCoverage("
+    },
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "function evaluateDrag("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "view content-frame mapping uses its successful start anchor and native request-reply interval"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "view start exposure requires one successful exact-surface request and reply"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "one-shot layout preserves a boundary interval and selects a later guaranteed post-request frame"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag cadence keeps captured boundary frames and their neighboring cadence evidence"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag cadence excludes observer idle time outside the recorded gesture"
+    },
+    {
+      "file": "e2e/test/browser-view-metrics-case.test.mjs",
+      "id": "browser diagnostic callbacks use the declared measurement actions"
+    },
+    {
+      "file": "e2e/test/editor-view-metrics-case.test.mjs",
+      "id": "editor view descriptor calls the declared hyphenated content-trace command"
+    },
+    {
+      "file": "e2e/test/hwp-view-metrics-case.test.mjs",
+      "id": "HWP descriptor waits for its declared document status exposure"
+    },
+    {
+      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
+      "id": "terminal view descriptor reads browser history and controls only the diagnostic frame observer"
+    }
+  ],
+  "expected": "View source frames map to conservative native monotonic intervals from their successful start command; ambiguous rows are preserved while one-shot and drag evidence require guaranteed ordering and coverage.",
+  "levels": ["unit"]
+},
+  {
   "id": "F239-223-1",
   "implementation": [
     {

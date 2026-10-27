@@ -7,7 +7,8 @@ import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE } from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture,
-  monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementForSource, selectOneShotViewSourceFrame,
+  monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementBeforeCapture, rootNativePlacementForSource,
+  selectOneShotViewSourceFrame,
   withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
@@ -148,6 +149,9 @@ export async function hwpViewDescriptor(s, diagnostic = () => {}, captureObserva
     await session.run("hwp.diagnostics.frames.read", {}, surface));
   return Object.freeze({
     plugin: "hwp",
+    startMethod: "command.run",
+    startCommand: "hwp.diagnostics.frames.start",
+    startParams: {},
     params: content.params,
     expectedContent: HWP_CONTENT,
     language: "ko-KR",
@@ -298,13 +302,13 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
   const { beforeChangeTimeMs, displayed, captured, result, nativeDocumentBefore } = action;
   const host = await s.get("host.window");
   const studio = documentRow(host, surface, "studio");
-  const nativePlacement = rootNativePlacementForSource(traced.events, surface, displayed,
+  const nativePlacement = rootNativePlacementBeforeCapture(traced.events, surface, displayed,
     { afterMs: beforeChangeTimeMs });
   const sourceSelection = selectOneShotViewSourceFrame(traced.contentFrames,
     { requestAtMs: beforeChangeTimeMs, nativePlacement });
   const source = sourceSelection.frame;
   assert.ok(source, `HWP root trace has no source frame matching its final post-request native placement projection: ${JSON.stringify(sourceSelection.failure)}`);
-  const previousSource = traced.contentFrames.filter((frame) => frame.timeMs < source.timeMs).at(-1);
+  const previousSource = traced.contentFrames.filter((frame) => frame.sequence < source.sequence).at(-1);
   const grid = await s.get("core.grid");
   const surfaces = await s.get("core.surfaces");
   const region = await s.rect("hwp.studio", undefined, surface);
@@ -352,14 +356,16 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
       return { frameIndex, timeMs: captured[frameIndex].time, actualEdgesPt: actual, expectedEdgesPt,
         residualPt, slotInsetsPt };
     });
-    const afterSource = rows.filter((row) => row.timeMs >= source.timeMs);
+    const afterSource = rows.filter((row) => row.timeMs >= source.timeRange.upperMs);
     const closest = afterSource.sort((left, right) => Math.max(...Object.values(left.residualPt).map(Math.abs))
       - Math.max(...Object.values(right.residualPt).map(Math.abs)))[0];
     throw new Error(`${error.message}; HWP pixel geometry evidence ${JSON.stringify({
       tolerancePt: 2,
-      previousSourceFrame: previousSource && { timeMs: previousSource.timeMs,
+      previousSourceFrame: previousSource && { frameTimeMs: previousSource.frameTimeMs,
+        timeRange: previousSource.timeRange,
         width: previousSource.width, height: previousSource.height },
-      sourceFrame: { timeMs: source.timeMs, width: source.width, height: source.height },
+      sourceFrame: { frameTimeMs: source.frameTimeMs, timeRange: source.timeRange,
+        width: source.width, height: source.height },
       rootNativeFrame: nativePlacement.framePt,
       nativeDocumentBefore,
       nativeDocumentAfter: studio.frame,
@@ -377,7 +383,7 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
   assert.ok(lastFrame.time >= contentDeadlineMs,
     `HWP layout recording ended at ${lastFrame.time} ms before the ${LAYOUT_DISPLAY_LIMIT_MS} ms content deadline `
       + `at ${contentDeadlineMs} ms after its first changed frame`);
-  const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= source.timeMs);
+  const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= source.timeRange.upperMs);
   assert.ok(candidates.length > 0, "HWP layout has no declared-slot pixel match after its source resize event");
   const localProof = await hwpFirstContentFrame({ captured: candidates.map((index) => captured[index]),
     rect: { x: studio.frame.x, y: studio.frame.y, w: studio.frame.width, h: studio.frame.height },
@@ -390,7 +396,7 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: captured.length,
       timeMs: captured[transition.changeFrameIndex].time },
     contentFrame: { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].time,
-      requestAtMs: beforeChangeTimeMs, sourceTimeMs: source.timeMs,
+      requestAtMs: beforeChangeTimeMs, sourceTimeRange: source.timeRange,
       width: source.width, height: source.height, nativePlacement, proof },
     sourceFrame: source,
     slotInsetsPt,
@@ -451,9 +457,9 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
   });
   for (const source of mapped) {
     if (source.frameIndex === null) continue;
-    const nativePlacement = rootNativePlacementForSource(traced.events, surface, source.timeMs, { baseline });
+    const nativePlacement = rootNativePlacementForSource(traced.events, surface, source.timeRange, { baseline });
     contentFrames.push({ sourceSequence: source.sourceSequence, frameIndex: source.frameIndex,
-      timeMs: source.timeMs, width: source.width, height: source.height,
+      frameTimeMs: source.frameTimeMs, timeRange: source.timeRange, width: source.width, height: source.height,
       nativePlacement, source });
   }
   return {

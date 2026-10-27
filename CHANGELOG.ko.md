@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-221: 성공한 `frames.start` result와 대응 native request/reply로 각 view document의 source-frame clock을 native monotonic time에 매핑한다. Red: 변경 전 mapper가 view clock과 main-page event batcher timestamp를 결합하고 source frame 뒤에 시작한 capture를 찾지 못한다. Cadence evaluator는 gesture 밖 observer idle 8,976 ms를 계산했으며 실제 경계 부분은 최대 9 ms였다. Green: collection owner 27/27, window metric evaluator 21/21, 네 plugin consumer owner case와 집중 drag-cadence case 네 개가 통과한다. 모호한 interval은 보존한다. One-shot 선택은 요청 이후가 확정된 frame을 요구하고 drag cadence는 gesture 안에 있을 수 있는 경계 부분만 계산한다. `make docs-check`가 통과한다. Application acceptance는 F212.14-5-5에 남는다.
+
 - F239-223-1: 양 host의 기존 sync·present 경계에서 native-clock admission·UI 진입·closure 반환 시각을 추적한다. Dispatch 순서를 유지하고 trace가 꺼지면 clock 읽기와 label 생성을 생략한다. Assertion Red 후 양 wrapper 소유 검사와 생성된 event class의 소유 검사 네 개가 통과한다. 진단 근거를 추가하며 cadence 수정을 입증하지 않는다.
 
 - F239-219: 비동기 key dispatch 뒤 예상한 AppKit reference text를 기다린다. `wait-document`는 text notification을 사용하며 marked composition이 남아도 일치하는 중간 text를 받아들인다. 최종 `wait`는 여전히 marked text가 없어야 완료된다. Native Red/Green은 marked text와 missing-document 오류를 확인하고 두 host parser는 추적된 Red 뒤 새 action을 받아들인다. 집중 owner test가 통과한다. 승인된 readiness activation은 Korean 2-Set을 명시적으로 선택해 ㅎ를 입력하고 원래 input source와 frontmost application을 복원한다. Run 34의 즉시 snapshot은 routing defect를 입증하지 않는다. 첫 activation 시도는 비동기 callback을 너무 일찍 읽었으며 수정된 target은 callback을 기다린다. Deferred consumer 사례는 변경 후 Green만 있고 개별 timeout 및 close를 확인한다. 보존된 activation log에는 assertion 통과에도 OS IMK mach-port diagnostic `error messaging the mach port for IMKCFRunLoopWakeUpReliable`가 있으며 이는 input routing 증거가 아니다.

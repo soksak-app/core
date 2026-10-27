@@ -21,9 +21,9 @@ function nativePlacement(width, height, timeMs, surface = "fixture-surface") {
       fields: { surface, phase: "placed", visible: true, x: framePt.x, y: framePt.y, w: width, h: height } } };
 }
 
-function contentFrame(sourceSequence, frameIndex, timeMs, width, nativeWidth) {
-  return { sourceSequence, frameIndex, timeMs, width, height: 80,
-    nativePlacement: nativePlacement(nativeWidth, 80, timeMs - 1) };
+function contentFrame(sourceSequence, frameIndex, frameTimeMs, lowerMs, upperMs, width, nativeWidth) {
+  return { sourceSequence, frameIndex, frameTimeMs, timeRange: { lowerMs, upperMs }, width, height: 80,
+    nativePlacement: nativePlacement(nativeWidth, 80, lowerMs - 1) };
 }
 
 function metrics() {
@@ -73,7 +73,7 @@ function metrics() {
     },
     layoutDisplay: [{
       changeFrame: { frameIndex: 2, frameCount: 8, timeMs: 10 },
-      contentFrame: { frameIndex: 4, frameCount: 8, timeMs: 110, sourceTimeMs: 109, requestAtMs: 50, width: 120, height: 80,
+      contentFrame: { frameIndex: 4, frameCount: 8, timeMs: 110, sourceTimeRange: { lowerMs: 104, upperMs: 109 }, requestAtMs: 50, width: 120, height: 80,
         nativePlacement: nativePlacement(120, 80, 100),
         proof: { expected: "fixture text", actual: "fixture text", lines: ["fixture text"] } },
     }],
@@ -96,11 +96,11 @@ function metrics() {
           slotInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 } },
       ],
       contentFrames: [
-        contentFrame(0, 2, 80, 100, 100),
-        contentFrame(1, 3, 88, 100, 110),
-        contentFrame(2, 4, 96, 100, 120),
-        contentFrame(3, 6, 128, 120, 120),
-        contentFrame(4, 9, 250, 120, 120),
+        contentFrame(0, 2, 80, 79, 81, 100, 100),
+        contentFrame(1, 3, 88, 87, 89, 100, 110),
+        contentFrame(2, 4, 96, 95, 97, 100, 120),
+        contentFrame(3, 6, 128, 127, 129, 120, 120),
+        contentFrame(4, 9, 250, 249, 251, 120, 120),
       ],
       layouts: [{ ticket: 1, begun: 60, requested: 70, presented: 75, committed: 80 }],
       ticks: [70, 90],
@@ -118,7 +118,7 @@ test("view metrics accept exact thresholds and preserve frame and process eviden
   assert.deepEqual(report.evaluation.newProcess.adjustedDisplayMs, [310, 310, 310]);
   assert.equal(report.evaluation.layoutDisplay[0].measuredMs, 100);
   assert.equal(report.evaluation.drag.maxGeometryErrorPt, 1);
-  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 8);
+  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 32);
   assert.equal(report.evaluation.drag.convergedFrame, 2);
   assert.strictEqual(report.measurements, raw);
 });
@@ -175,7 +175,7 @@ test("layout source matches the WebKit viewport projected from a fractional nati
   futurePlacement.layoutDisplay[0].contentFrame.nativePlacement.timeMs = 111;
   futurePlacement.layoutDisplay[0].contentFrame.nativePlacement.placement.mono_ns = 111_000_000;
   futurePlacement.layoutDisplay[0].contentFrame.nativePlacement.placement.ts_us = 111_000;
-  assert.throws(() => assertViewMeasurements(futurePlacement, options), /<= source frame time 109 ms/);
+  assert.throws(() => assertViewMeasurements(futurePlacement, options), /<= source interval lower bound 104 ms/);
 });
 
 test("drag source rows retain fractional native frames and use their explicit viewport projection", { timeout: 1000 }, () => {
@@ -184,7 +184,7 @@ test("drag source rows retain fractional native frames and use their explicit vi
     ...raw.drag.contentFrames[0],
     width: 785,
     height: 286,
-    nativePlacement: nativePlacement(785.5, 286.5, 79),
+    nativePlacement: nativePlacement(785.5, 286.5, 78),
   };
   const report = assertViewMeasurements(raw, options);
   assert.deepEqual(report.measurements.drag.contentFrames[0].nativePlacement.framePt,
@@ -302,9 +302,12 @@ test("drag geometry compares the native rectangle with its declared card slot", 
 
 test("drag cadence is in-gesture and convergence meets both frame and time bounds", { timeout: 1000 }, () => {
   const cadence = metrics();
-  cadence.drag.contentFrames[1].timeMs = 114;
-  cadence.drag.contentFrames[2].timeMs = 120;
-  cadence.drag.contentFrames[3].timeMs = 140;
+  cadence.drag.contentFrames[1].frameTimeMs = 114;
+  cadence.drag.contentFrames[1].timeRange = { lowerMs: 113, upperMs: 115 };
+  cadence.drag.contentFrames[2].frameTimeMs = 120;
+  cadence.drag.contentFrames[2].timeRange = { lowerMs: 119, upperMs: 121 };
+  cadence.drag.contentFrames[3].frameTimeMs = 140;
+  cadence.drag.contentFrames[3].timeRange = { lowerMs: 139, upperMs: 141 };
   cadence.drag.gestureEndedAtMs = 130;
   assert.throws(() => assertViewMeasurements(cadence, options), /in-gesture content-frame interval 34 ms/);
 
@@ -313,7 +316,12 @@ test("drag cadence is in-gesture and convergence meets both frame and time bound
   assert.throws(() => assertViewMeasurements(tooManyFrames, options), /within 2 post-gesture frames/);
 
   const tooLate = metrics();
-  tooLate.drag.contentFrames[3].timeMs = 134;
+  tooLate.drag.contentFrames[3].frameIndex = 5;
+  tooLate.drag.contentFrames[3].nativePlacement = nativePlacement(110, 80, 126);
+  tooLate.drag.contentFrames.splice(4, 0,
+    contentFrame(4, 6, 145, 144, 146, 120, 110),
+    contentFrame(5, 6, 165, 164, 166, 120, 120));
+  tooLate.drag.contentFrames[6].sourceSequence = 6;
   assert.throws(() => assertViewMeasurements(tooLate, options), /within 33 ms after gesture end/);
 
   const alreadyMatched = metrics();
@@ -328,15 +336,53 @@ test("drag cadence preserves distinct source frames that map to the same capture
   raw.drag.gestureStartedAtMs = 70;
   raw.drag.gestureEndedAtMs = 100;
   raw.drag.contentFrames = [
-    contentFrame(1, 2, 68, 100, 100),
-    contentFrame(2, 2, 80, 101, 110),
-    contentFrame(3, 2, 88, 102, 110),
-    contentFrame(4, 3, 96, 103, 120),
-    contentFrame(5, 5, 112, 120, 120),
+    contentFrame(1, 2, 68, 67, 69, 100, 100),
+    contentFrame(2, 2, 80, 79, 81, 101, 110),
+    contentFrame(3, 2, 88, 87, 89, 102, 110),
+    contentFrame(4, 3, 96, 95, 97, 103, 120),
+    contentFrame(5, 5, 112, 111, 113, 120, 120),
   ];
   const report = assertViewMeasurements(raw, options);
-  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 8);
+  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 11);
   assert.equal(report.evaluation.drag.convergedFrame, 1);
+});
+
+test("drag cadence keeps captured boundary frames and their neighboring cadence evidence", { timeout: 1000 }, () => {
+  const boundary = metrics();
+  boundary.drag.contentFrames = [
+    contentFrame(0, 1, 64, 63, 65, 100, 100),
+    contentFrame(1, 2, 70, 69, 71, 100, 100),
+    contentFrame(2, 3, 80, 79, 81, 100, 110),
+    contentFrame(3, 4, 88, 87, 89, 100, 110),
+    contentFrame(4, 4, 96, 95, 97, 100, 120),
+    contentFrame(5, 5, 100, 99, 101, 120, 120),
+    contentFrame(6, 6, 108, 107, 109, 120, 120),
+    contentFrame(7, 8, 250, 249, 251, 120, 120),
+  ];
+  const result = assertViewMeasurements(boundary, options);
+  assert.equal(result.evaluation.drag.maxContentFrameIntervalMs, 10,
+    "the possible start/end rows, nearest outside rows and all in-gesture rows bound cadence");
+
+  const missingBoundaryCapture = structuredClone(boundary);
+  missingBoundaryCapture.drag.contentFrames[1].frameIndex = null;
+  assert.throws(() => assertViewMeasurements(missingBoundaryCapture, options), /capture frame for every possibly in-gesture/);
+});
+
+test("drag cadence excludes observer idle time outside the recorded gesture", { timeout: 1000 }, () => {
+  const idle = metrics();
+  idle.drag.gestureStartedAtMs = 11000;
+  idle.drag.gestureEndedAtMs = 11030;
+  idle.drag.contentFrames = [
+    contentFrame(0, null, 10000, 9999, 10001, 100, 100),
+    contentFrame(1, 2, 11008, 11007, 11009, 100, 100),
+    contentFrame(2, 3, 11016, 11015, 11017, 110, 110),
+    contentFrame(3, 4, 11024, 11023, 11025, 120, 120),
+    contentFrame(4, null, 20000, 19999, 20001, 120, 120),
+  ];
+
+  const report = assertViewMeasurements(idle, options);
+  assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 9,
+    "cadence includes the in-gesture parts of both boundary gaps and the exact in-gesture RAF gaps");
 });
 
 test("layout display measures the first pixel frame at the changed size", { timeout: 1000 }, () => {

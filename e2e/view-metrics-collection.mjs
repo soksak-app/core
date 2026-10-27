@@ -9,6 +9,9 @@ import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, pr
 
 const PROCESS_REQUEST = "host.trace.view.process-request";
 const PROCESS_READY = "host.trace.view.process-ready";
+const EXPOSURE_REQUEST = "host.trace.exposure.request";
+const EXPOSURE_REPLY = "host.trace.exposure.reply";
+const SOURCE_CLOCK_RESOLUTION_MS = 1;
 
 /** Plans a horizontal width resize at the measured card's interior right boundary. */
 export function rightEdgeWidthDragPlan(grid, card) {
@@ -76,11 +79,95 @@ export function processStartSamples(events, surfaces, plugin) {
   });
 }
 
-/** Correlates a plugin document's ResizeObserver→rAF rows with both clocks of the host event log. */
-export function viewContentFrameEvents(events, plugin, surface) {
+function parseLoggedArgs(event, label) {
+  assert.equal(event.fields?.truncated, false, `${label} arguments were truncated`);
+  assert.equal(typeof event.fields?.args, "string", `${label} has no serialized arguments`);
+  let parsed;
+  try {
+    parsed = JSON.parse(event.fields.args);
+    if (Array.isArray(parsed) && typeof parsed[0] === "string") parsed = JSON.parse(parsed[0]);
+  } catch (error) {
+    throw new Error(`${label} arguments are not valid JSON: ${error.message}`, { cause: error });
+  }
+  return parsed;
+}
+
+/** Matches one successful diagnostic command result to its native request, response and view generation. */
+export function viewStartExposure(events, surface, method, commandName, commandParams, startResult) {
+  assert.ok(Array.isArray(events), "view start exposure events must be an array");
+  assert.ok(typeof surface === "string" && surface.length > 0, "view start exposure requires a surface");
+  assert.ok(typeof method === "string" && method.length > 0, "view start exposure requires a command method");
+  const sourceClock = startResult?.sourceClock;
+  assert.ok(sourceClock && typeof sourceClock === "object" && !Array.isArray(sourceClock),
+    "successful view start reply has no sourceClock anchor");
+  const clockKeys = Object.keys(sourceClock).sort();
+  assert.deepEqual(clockKeys, ["documentTimeOriginMs", "sourceNowMs", "sourceResolutionMs"],
+    "view sourceClock must have exactly the declared anchor fields");
+  assert.ok(Number.isFinite(sourceClock.documentTimeOriginMs) && sourceClock.documentTimeOriginMs > 0,
+    "view sourceClock has an invalid documentTimeOriginMs");
+  assert.ok(Number.isFinite(sourceClock.sourceNowMs) && sourceClock.sourceNowMs >= 0,
+    "view sourceClock has an invalid sourceNowMs");
+  assert.equal(sourceClock.sourceResolutionMs, SOURCE_CLOCK_RESOLUTION_MS,
+    `view sourceClock resolution must equal the declared ${SOURCE_CLOCK_RESOLUTION_MS} ms WebKit bound`);
+
+  assert.ok(typeof commandName === "string" && commandName.length > 0,
+    "view start exposure requires its declared diagnostic command name");
+  assert.ok(commandParams && typeof commandParams === "object" && !Array.isArray(commandParams),
+    "view start exposure requires the declared diagnostic command parameters");
+  const requests = events.filter((event) => event?.event === EXPOSURE_REQUEST && event.fields?.surface === surface
+    && event.fields?.method === method);
+  assert.equal(requests.length, 1, `${surface} ${method} start must have exactly one native exposure request`);
+  const request = requests[0];
+  const id = request.fields?.id;
+  assert.ok(Number.isSafeInteger(id) && id > 0, `${surface} ${method} start has an invalid exposure request id`);
+  assert.ok(Number.isSafeInteger(request.mono_ns) && request.mono_ns > 0,
+    `${surface} ${method} start request has an invalid native monotonic timestamp`);
+  const replies = events.filter((event) => event?.event === EXPOSURE_REPLY && event.fields?.id === id);
+  assert.equal(replies.length, 1, `${surface} ${method} start request ${id} must have exactly one native exposure reply`);
+  const reply = replies[0];
+  assert.ok(typeof reply.fields?.from === "string" && reply.fields.from.length > 0,
+    `${surface} ${method} start reply ${id} has no native route`);
+  assert.ok(Number.isSafeInteger(reply.mono_ns) && reply.mono_ns > request.mono_ns,
+    `${surface} ${method} start reply ${id} has an invalid or reversed native monotonic timestamp`);
+
+  const successfulReplies = events.filter((event) => event?.event === "host.binding.call"
+    && event.fields?.name === "exposure_reply").map((event) => ({ event, value: parseLoggedArgs(event, "exposure_reply") }))
+    .filter(({ value }) => value?.id === id);
+  assert.equal(successfulReplies.length, 1, `${surface} ${method} start request ${id} must have one logged exposure result`);
+  const loggedReply = successfulReplies[0];
+  assert.equal(loggedReply.event.fields?.ok, true, `${surface} ${method} start request ${id} exposure reply failed`);
+  assert.equal(loggedReply.value.surface, surface, `${surface} ${method} start reply ${id} names another surface`);
+  assert.deepEqual(loggedReply.value.result, startResult,
+    `${surface} ${method} start reply ${id} differs from the successful command result`);
+
+  const commandCalls = events.filter((event) => event?.event === "host.endpoint.call"
+    && event.fields?.name === method).map((event) => ({ event, args: parseLoggedArgs(event, "command.run") }))
+    .filter(({ args }) => args?.window && args.name === commandName && args.surface === surface
+      && JSON.stringify(args.params) === JSON.stringify(commandParams));
+  const matchingCalls = commandCalls.filter(({ event }) => {
+    const durationUs = event.fields?.micros;
+    if (!Number.isSafeInteger(event.mono_ns) || !Number.isSafeInteger(durationUs) || durationUs < 0) return false;
+    const earliestStartedAtNs = event.mono_ns - (durationUs + 1) * 1_000;
+    return earliestStartedAtNs <= request.mono_ns && event.mono_ns >= reply.mono_ns;
+  });
+  assert.equal(matchingCalls.length, 1,
+    `${surface} ${commandName} must have one successful command.run enclosing its exposure request and reply`);
+  const commandCall = matchingCalls[0];
+  assert.equal(commandCall.event.fields?.ok, true, `${surface} ${commandName} command.run failed`);
+  return { sourceClock: { ...sourceClock }, request, reply, requestId: id, method, commandName, surface,
+    commandCall: commandCall.event };
+}
+
+/** Maps a view document's ResizeObserver→rAF rows into conservative native monotonic intervals. */
+export function viewContentFrameEvents(events, plugin, surface, startExposure) {
   assert.ok(Array.isArray(events), "view content-frame events must be an array");
   assert.ok(typeof plugin === "string" && plugin.length > 0, "view content-frame plugin must be nonempty text");
   assert.ok(typeof surface === "string" && surface.length > 0, "view content-frame surface must be nonempty text");
+  assert.ok(startExposure && startExposure.surface === surface && typeof startExposure.method === "string"
+    && startExposure.request && startExposure.reply && startExposure.sourceClock,
+  `${surface} content-frame mapping requires its successful start exposure anchor`);
+  assert.ok(Number.isSafeInteger(startExposure.requestId) && startExposure.requestId > 0,
+    `${surface} content-frame mapping has an invalid start exposure request id`);
   const name = `plugin.${plugin}.view.content_frame`;
   const selected = events.filter((event) => event?.event === name && (event.surface ?? event.fields?.surface) === surface);
   let priorSequence = -1;
@@ -94,6 +181,8 @@ export function viewContentFrameEvents(events, plugin, surface) {
     assert.ok(Number.isInteger(event.mono_ns) && event.mono_ns > 0, `${name} has invalid host mono_ns`);
     assert.ok(Number.isFinite(documentTimeOriginMs) && documentTimeOriginMs > 0,
       `${name} has invalid documentTimeOriginMs`);
+    assert.equal(documentTimeOriginMs, startExposure.sourceClock.documentTimeOriginMs,
+      `${name} documentTimeOriginMs does not match the successful start document`);
     assert.ok(Number.isFinite(resizeAtMs) && resizeAtMs >= 0, `${name} has invalid resizeAtMs`);
     assert.ok(Number.isFinite(firstResizeAtMs) && firstResizeAtMs >= 0 && firstResizeAtMs <= resizeAtMs,
       `${name} firstResizeAtMs must be at or before resizeAtMs`);
@@ -104,18 +193,27 @@ export function viewContentFrameEvents(events, plugin, surface) {
       `${name} frameTimeMs must be at or after resizeAtMs`);
     assert.ok(Number.isFinite(width) && width > 0, `${name} has invalid width`);
     assert.ok(Number.isFinite(height) && height > 0, `${name} has invalid height`);
-    const sourceTimeMs = documentTimeOriginMs + frameTimeMs;
-    const hostWallMs = event.ts_us / 1000;
-    const wallCorrelationMs = hostWallMs - sourceTimeMs;
-    const hostArrivalTimeMs = event.mono_ns / 1_000_000;
-    const mappedTimeMs = hostArrivalTimeMs - wallCorrelationMs;
+    const deltaMs = frameTimeMs - startExposure.sourceClock.sourceNowMs;
+    const resolutionMs = startExposure.sourceClock.sourceResolutionMs;
+    const requestMonoMs = Number(BigInt(startExposure.request.mono_ns)) / 1_000_000;
+    const replyMonoMs = Number(BigInt(startExposure.reply.mono_ns)) / 1_000_000;
+    const timeRange = {
+      lowerMs: requestMonoMs + deltaMs - 2 * resolutionMs,
+      upperMs: replyMonoMs + deltaMs + 2 * resolutionMs,
+    };
+    assert.ok(Number.isFinite(timeRange.lowerMs) && Number.isFinite(timeRange.upperMs)
+      && timeRange.lowerMs <= timeRange.upperMs, `${name} has an invalid mapped source interval`);
     return {
       sequence, width, height, firstResizeAtMs, resizeAtMs, resizeCount, frameTimeMs,
-      sourceTimeMs,
-      timeMs: mappedTimeMs,
-      hostArrivalTimeMs,
-      wallCorrelationMs,
-      source: { documentTimeOriginMs, ts_us: event.ts_us, mono_ns: event.mono_ns },
+      timeRange,
+      source: {
+        documentTimeOriginMs, frameTimeMs, sourceNowMs: startExposure.sourceClock.sourceNowMs,
+        sourceResolutionMs: resolutionMs, requestMonoNs: startExposure.request.mono_ns,
+        replyMonoNs: startExposure.reply.mono_ns, requestId: startExposure.requestId,
+        method: startExposure.method, surface,
+        eventTsUs: event.ts_us, eventMonoNs: event.mono_ns,
+        ...(event.page === undefined ? {} : { eventPage: event.page }),
+      },
     };
   });
 }
@@ -125,7 +223,8 @@ export function mapViewContentFramesToCapture(contentFrames, captured) {
   assert.ok(Array.isArray(contentFrames), "view content frames must be an array");
   assert.ok(Array.isArray(captured) && captured.length > 0, "view capture frames must be a nonempty array");
   let priorSequence = -1;
-  let priorSourceTime = -Infinity;
+  let priorSourceLower = -Infinity;
+  let priorSourceUpper = -Infinity;
   let priorCaptureTime = -Infinity;
   for (const [index, frame] of captured.entries()) {
     assert.ok(Number.isFinite(frame?.time) && frame.time >= 0,
@@ -136,12 +235,15 @@ export function mapViewContentFramesToCapture(contentFrames, captured) {
   return contentFrames.map((source, index) => {
     assert.ok(Number.isSafeInteger(source?.sequence) && source.sequence >= 0 && source.sequence > priorSequence,
       `source content frame ${index} sequence must be nonnegative and strictly increasing`);
-    assert.ok(Number.isFinite(source.timeMs) && source.timeMs >= 0 && source.timeMs > priorSourceTime,
-      `source content frame ${index} time must be finite and strictly increasing`);
+    const { lowerMs, upperMs } = source.timeRange ?? {};
+    assert.ok(Number.isFinite(lowerMs) && Number.isFinite(upperMs) && lowerMs <= upperMs
+      && lowerMs > priorSourceLower && upperMs > priorSourceUpper,
+    `source content frame ${index} time interval must be finite, ordered and strictly increasing`);
     priorSequence = source.sequence;
-    priorSourceTime = source.timeMs;
-    const frameIndex = source.timeMs < captured[0].time || source.timeMs > captured.at(-1).time
-      ? -1 : captured.findIndex((frame) => frame.time >= source.timeMs);
+    priorSourceLower = lowerMs;
+    priorSourceUpper = upperMs;
+    const frameIndex = lowerMs > captured.at(-1).time
+      ? -1 : captured.findIndex((frame) => frame.time >= upperMs);
     return { ...source, sourceSequence: source.sequence, frameIndex: frameIndex < 0 ? null : frameIndex };
   });
 }
@@ -158,17 +260,23 @@ export function selectOneShotViewSourceFrame(contentFrames, { requestAtMs, nativ
     && nativePlacement.webKitViewport.width > 0 && Number.isInteger(nativePlacement.webKitViewport.height)
     && nativePlacement.webKitViewport.height > 0, "one-shot source selection requires the projected viewport");
 
-  const postRequestCandidates = contentFrames.filter((frame) => frame?.timeMs >= requestAtMs).map((frame) => ({
-    sequence: frame.sequence,
-    timeMs: frame.timeMs,
-    width: frame.width,
-    height: frame.height,
+  for (const candidate of contentFrames) {
+    const lowerMs = candidate?.timeRange?.lowerMs;
+    const upperMs = candidate?.timeRange?.upperMs;
+    assert.ok(Number.isFinite(lowerMs) && Number.isFinite(upperMs) && lowerMs <= upperMs,
+      "one-shot source frame has an invalid mapped time interval");
+  }
+  const candidates = contentFrames.map((frame) => ({
+    sequence: frame.sequence, timeRange: frame.timeRange, width: frame.width, height: frame.height,
+    requestRelation: frame.timeRange.lowerMs >= requestAtMs ? "post-request"
+      : frame.timeRange.upperMs < requestAtMs ? "pre-request" : "ambiguous",
   }));
-  const frame = contentFrames.find((candidate) => candidate?.timeMs >= requestAtMs
+  const frame = contentFrames.find((candidate) => candidate.timeRange.lowerMs >= requestAtMs
     && candidate.width === nativePlacement.webKitViewport.width
     && candidate.height === nativePlacement.webKitViewport.height);
   return {
     frame: frame ?? null,
+    candidates,
     failure: frame ? null : {
       requestAtMs,
       target: {
@@ -177,16 +285,29 @@ export function selectOneShotViewSourceFrame(contentFrames, { requestAtMs, nativ
         framePt: nativePlacement.framePt,
         webKitViewport: nativePlacement.webKitViewport,
       },
-      postRequestCandidates,
+      candidates,
     },
   };
 }
 
-/** Selects the actual root WebView placement that was active when a source frame was produced. */
-export function rootNativePlacementForSource(events, surface, sourceTimeMs, { baseline, afterMs } = {}) {
+/** Selects the actual root WebView placement active throughout a mapped source-frame interval. */
+export function rootNativePlacementForSource(events, surface, sourceTimeRange, { baseline, afterMs } = {}) {
+  return rootNativePlacementInWindow(events, surface, sourceTimeRange, { baseline, afterMs });
+}
+
+/** Selects the final applied root placement before an exact recorded display time. */
+export function rootNativePlacementBeforeCapture(events, surface, displayedAtMs, { afterMs } = {}) {
+  assert.ok(Number.isFinite(displayedAtMs) && displayedAtMs >= 0,
+    "root placement capture bound has an invalid display timestamp");
+  return rootNativePlacementInWindow(events, surface, { lowerMs: displayedAtMs, upperMs: displayedAtMs }, { afterMs });
+}
+
+function rootNativePlacementInWindow(events, surface, sourceTimeRange, { baseline, afterMs } = {}) {
   assert.ok(Array.isArray(events), "root native placement events must be an array");
   assert.ok(typeof surface === "string" && surface.length > 0, "root native placement requires a surface");
-  assert.ok(Number.isFinite(sourceTimeMs) && sourceTimeMs >= 0, "root source frame has an invalid timestamp");
+  const { lowerMs, upperMs } = sourceTimeRange ?? {};
+  assert.ok(Number.isFinite(lowerMs) && Number.isFinite(upperMs) && lowerMs >= 0 && lowerMs <= upperMs,
+    "root placement boundary has an invalid monotonic time interval");
   if (afterMs !== undefined) {
     assert.ok(Number.isFinite(afterMs) && afterMs >= 0, "root placement request has an invalid timestamp");
   }
@@ -235,13 +356,17 @@ export function rootNativePlacementForSource(events, surface, sourceTimeMs, { ba
     rows.push(row);
   }
 
-  const eligible = rows.filter((row) => row.timeMs <= sourceTimeMs
+  const ambiguous = rows.filter((row) => row.timeMs >= lowerMs && row.timeMs <= upperMs);
+  if (ambiguous.length > 0) {
+    assert.fail(`native placement for ${surface} overlaps source-frame interval [${lowerMs}, ${upperMs}] ms`);
+  }
+  const eligible = rows.filter((row) => row.timeMs < lowerMs
     && (afterMs === undefined || row.timeMs > afterMs));
   if (eligible.length === 0) {
     if (afterMs !== undefined) {
-      assert.fail(`no applied native placement after ${afterMs} ms and at or before source frame ${sourceTimeMs} ms for ${surface}`);
+      assert.fail(`no applied native placement after ${afterMs} ms and before source-frame interval [${lowerMs}, ${upperMs}] ms for ${surface}`);
     }
-    assert.fail(`no native placement at or before source frame ${sourceTimeMs} ms for ${surface}`);
+    assert.fail(`no native placement before source-frame interval [${lowerMs}, ${upperMs}] ms for ${surface}`);
   }
   eligible.sort((left, right) => left.timeMs - right.timeMs
     || placementSequence(left.placement) - placementSequence(right.placement));
@@ -289,13 +414,30 @@ export function requireViewContentFrameCoverage(mappedFrames, { gestureStartedAt
   assert.ok(Number.isFinite(gestureStartedAtMs) && Number.isFinite(gestureEndedAtMs)
     && gestureStartedAtMs <= gestureEndedAtMs, "view gesture source interval is invalid");
   assert.ok(Array.isArray(mappedFrames), "mapped view content frames must be an array");
-  return mappedFrames.filter((frame) => {
-    if (frame.frameIndex !== null) return true;
-    if (frame.timeMs >= gestureStartedAtMs && frame.timeMs <= gestureEndedAtMs) {
+  const possiblyInGesture = [];
+  const definitelyBefore = [];
+  const definitelyAfter = [];
+  for (const [index, frame] of mappedFrames.entries()) {
+    const lowerMs = frame?.timeRange?.lowerMs;
+    const upperMs = frame?.timeRange?.upperMs;
+    assert.ok(Number.isFinite(lowerMs) && Number.isFinite(upperMs) && lowerMs <= upperMs,
+      `source content frame ${frame?.sourceSequence} has an invalid mapped time interval`);
+    if (lowerMs <= gestureEndedAtMs && upperMs >= gestureStartedAtMs) {
+      possiblyInGesture.push(frame);
+    } else if (upperMs < gestureStartedAtMs) {
+      definitelyBefore.push(frame);
+    } else if (lowerMs > gestureEndedAtMs) {
+      definitelyAfter.push(frame);
+    }
+    if (lowerMs <= gestureEndedAtMs && upperMs >= gestureStartedAtMs && frame.frameIndex === null) {
       assert.fail(`source content frame ${frame.sourceSequence} inside the gesture has no capture frame`);
     }
-    return false;
-  });
+  }
+  assert.ok(possiblyInGesture.length > 0, "source frames do not cover any possible part of the recorded gesture");
+  const included = new Set(possiblyInGesture);
+  if (definitelyBefore.length > 0) included.add(definitelyBefore.at(-1));
+  if (definitelyAfter.length > 0) included.add(definitelyAfter[0]);
+  return mappedFrames.filter((frame) => included.has(frame));
 }
 
 /** Runs a gesture or layout operation between explicit source-frame observer start and stop callbacks. */
@@ -304,9 +446,32 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
     "content trace descriptor must name its plugin");
   assert.equal(typeof descriptor.startContentTrace, "function", "content trace start callback is required");
   assert.equal(typeof descriptor.stopContentTrace, "function", "content trace stop callback is required");
+  assert.ok(typeof descriptor.startMethod === "string" && descriptor.startMethod.length > 0,
+    "content trace start exposure method is required");
+  assert.ok(typeof descriptor.startCommand === "string" && descriptor.startCommand.length > 0,
+    "content trace start command is required");
+  assert.ok(descriptor.startParams && typeof descriptor.startParams === "object" && !Array.isArray(descriptor.startParams),
+    "content trace start parameters are required");
   assert.equal(typeof action, "function", "content trace action is required");
   const offsets = currentEventOffsets(s.app.configDir);
   const start = await descriptor.startContentTrace(s, surface);
+  let startEvents;
+  let startExposure;
+  let contentOffsets;
+  try {
+    await s.flushLog();
+    startEvents = readEvents(s.app.configDir, offsets).events;
+    startExposure = viewStartExposure(startEvents, surface, descriptor.startMethod, descriptor.startCommand,
+      descriptor.startParams, start);
+    contentOffsets = currentEventOffsets(s.app.configDir);
+  } catch (error) {
+    try {
+      await descriptor.stopContentTrace(s, surface);
+    } catch (stopError) {
+      throw new AggregateError([error, stopError], `content trace start evidence and cleanup failed for ${surface}`);
+    }
+    throw error;
+  }
   let actionResult;
   let actionError;
   try {
@@ -326,7 +491,7 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
   let eventError;
   try {
     await s.flushLog();
-    events = readEvents(s.app.configDir, offsets).events;
+    events = readEvents(s.app.configDir, contentOffsets).events;
   } catch (error) {
     eventError = error;
     t.diagnostic(`content-frame events could not be read for ${surface}: ${error.stack ?? error}`);
@@ -339,8 +504,9 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
   if (stopError && eventError) throw new AggregateError([stopError, eventError], `content trace finalization failed for ${surface}`);
   if (stopError) throw stopError;
   if (eventError) throw eventError;
-  const contentFrames = viewContentFrameEvents(events, descriptor.plugin, surface);
-  return { action: actionResult, start, stop: stopResult, events, contentFrames };
+  const allEvents = [...startEvents, ...events];
+  const contentFrames = viewContentFrameEvents(allEvents, descriptor.plugin, surface, startExposure);
+  return { action: actionResult, start, startEvents, startExposure, stop: stopResult, events: allEvents, contentFrames };
 }
 
 /** Reads the shared monotonic host clock in the same domain as recorded frame display times. */

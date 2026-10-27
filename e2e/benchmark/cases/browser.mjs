@@ -7,13 +7,17 @@ import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
-  mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, rootNativePlacementForSource,
+  mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, rootNativePlacementBeforeCapture,
+  rootNativePlacementForSource,
   selectOneShotViewSourceFrame, waitForViewReadiness, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
 
 /** Browser-specific inputs for the shared view lifecycle measurement collector. */
 export const browserViewDescriptor = Object.freeze({
   plugin: "browser",
+  startMethod: "command.run",
+  startCommand: "browser.view.measure",
+  startParams: { action: "start" },
   params: undefined,
   expectedContent: "주소를 입력하세요",
   language: "ko-KR",
@@ -125,7 +129,7 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
   const { decoded, result, beforeChangeTimeMs, displayed } = traced.action;
   const host = await s.get("host.window");
   const page = documentRow(host, surface, "page");
-  const nativePlacement = rootNativePlacementForSource(traced.events, surface, displayed,
+  const nativePlacement = rootNativePlacementBeforeCapture(traced.events, surface, displayed,
     { afterMs: beforeChangeTimeMs });
   const sourceSelection = selectOneShotViewSourceFrame(traced.contentFrames,
     { requestAtMs: beforeChangeTimeMs, nativePlacement });
@@ -140,7 +144,7 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
     regionRect: { x: region.x, y: region.y, w: region.width, h: region.height } });
   const measured = decoded.map((frame) => measureBrowserFrameGeometry(frame, { cornerRadiusPt, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
-  const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= source.timeMs);
+  const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= source.timeRange.upperMs);
   assert.ok(candidates.length > 0, "browser layout has no declared-slot pixel match after its source resize event");
   const localProof = await firstContentFrame({ captured: candidates.map((index) => decoded[index]),
     rect: { x: page.frame.x, y: page.frame.y, w: page.frame.width, h: page.frame.height },
@@ -153,7 +157,7 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: decoded.length,
       timeMs: decoded[transition.changeFrameIndex].time },
     contentFrame: { frameIndex, frameCount: decoded.length, timeMs: decoded[frameIndex].time,
-      requestAtMs: beforeChangeTimeMs, sourceTimeMs: source.timeMs,
+      requestAtMs: beforeChangeTimeMs, sourceTimeRange: source.timeRange,
       width: source.width, height: source.height, nativePlacement, proof },
     sourceFrame: source,
     slotInsetsPt,
@@ -204,9 +208,9 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
   });
   for (const source of mapped) {
     if (source.frameIndex === null) continue;
-    const nativePlacement = rootNativePlacementForSource(traced.events, surface, source.timeMs, { baseline });
+    const nativePlacement = rootNativePlacementForSource(traced.events, surface, source.timeRange, { baseline });
     contentFrames.push({ sourceSequence: source.sourceSequence, frameIndex: source.frameIndex,
-      timeMs: source.timeMs, width: source.width, height: source.height,
+      frameTimeMs: source.frameTimeMs, timeRange: source.timeRange, width: source.width, height: source.height,
       nativePlacement, source });
   }
   const recordedFrameCount = captured.length;

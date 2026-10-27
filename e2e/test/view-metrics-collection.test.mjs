@@ -8,11 +8,46 @@ import test from "node:test";
 import { readFrame } from "@soksak/window-check/frame.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
 import { closeViewGroup, collectViewProcessGroups, collectViewStartAndMemory, openRecordedView, processStartSamples, viewContentFrameEvents,
-  mapViewContentFramesToCapture, viewCardWithDifferentPluginTab, waitForViewReadiness,
+  mapViewContentFramesToCapture, viewCardWithDifferentPluginTab, viewStartExposure, waitForViewReadiness,
   withViewContentTrace } from "../view-metrics-collection.mjs";
 
 const event = (name, surface, ts_us, mono_ns) => ({ event: name, ts_us, mono_ns,
   fields: { plugin: "fixture", surface } });
+
+function sourceResult(documentTimeOriginMs = 1999, sourceNowMs = 0.2) {
+  return { enabled: true, sourceClock: { documentTimeOriginMs, sourceNowMs, sourceResolutionMs: 1 } };
+}
+
+function nativeStartEvidence({ surface = "view-1", commandName = "fixture.measure", commandParams = { action: "start" },
+  documentTimeOriginMs = 1999, sourceNowMs = 0.2, requestMonoNs = 1_000_000_000,
+  replyMonoNs = 1_001_000_000, startResult } = {}) {
+  const id = 7;
+  const result = startResult ?? sourceResult(documentTimeOriginMs, sourceNowMs);
+  const endpointAtNs = replyMonoNs + 2_000_000;
+  return [
+    { event: "host.trace.exposure.request", mono_ns: requestMonoNs, fields: { id, method: "command.run", surface } },
+    { event: "host.trace.exposure.reply", mono_ns: replyMonoNs, fields: { id, from: `surface-main-${surface}` } },
+    { event: "host.binding.call", mono_ns: replyMonoNs + 10_000, fields: { name: "exposure_reply", ok: true,
+      truncated: false, args: JSON.stringify([JSON.stringify({ id, result, surface })]) } },
+    { event: "host.endpoint.call", mono_ns: endpointAtNs, fields: { name: "command.run", ok: true, truncated: false,
+      micros: Math.ceil((endpointAtNs - requestMonoNs) / 1_000),
+      args: JSON.stringify({ window: "main", name: commandName, params: commandParams, surface }) } },
+  ];
+}
+
+function startExposure({ surface = "view-1", commandName = "fixture.measure", commandParams = { action: "start" }, documentTimeOriginMs = 1999,
+  sourceNowMs = 0.2, requestMonoNs = 1_000_000_000, replyMonoNs = 1_001_000_000, startResult } = {}) {
+  const result = startResult ?? sourceResult(documentTimeOriginMs, sourceNowMs);
+  return viewStartExposure(nativeStartEvidence({ surface, commandName, commandParams, documentTimeOriginMs, sourceNowMs,
+    requestMonoNs, replyMonoNs, startResult: result }), surface, "command.run", commandName, commandParams, result);
+}
+
+function appendStartExposure(logDirectory, { surface = "view-1", commandName = "fixture.measure",
+  commandParams = { action: "start" }, startResult } = {}) {
+  appendFileSync(join(logDirectory, "host-1-1.jsonl"), nativeStartEvidence({ surface, commandName, commandParams,
+    startResult: startResult ?? sourceResult(1999, 0.2) }).map((row, index) => JSON.stringify({ level: "debug", ts_us: 2_000_000 + index,
+    seq: index + 1, ...row })).join("\n") + "\n");
+}
 
 function writeCapturedFrame(directory, index, time) {
   const pixels = Buffer.from([1, 2, 3, 255]);
@@ -134,9 +169,10 @@ test("view totals are sampled at their declared count before extra process-start
 
 test("view content-frame events preserve coalesced resize provenance", { timeout: 5000 }, () => {
   const row = { event: "plugin.fixture.view.content_frame", ts_us: 2_000_000,
-    mono_ns: 3_000_000, surface: "view-1", fields: { sequence: 0, documentTimeOriginMs: 1999,
+    mono_ns: 3_000_000, page: "view-document-opaque", surface: "view-1", fields: { sequence: 0, documentTimeOriginMs: 1999,
       firstResizeAtMs: 0.1, resizeAtMs: 0.2, resizeCount: 2, frameTimeMs: 0.5, width: 300, height: 200 } };
-  const [frame] = viewContentFrameEvents([row], "fixture", "view-1");
+  const anchor = startExposure();
+  const [frame] = viewContentFrameEvents([row], "fixture", "view-1", anchor);
   assert.deepEqual({ firstResizeAtMs: frame.firstResizeAtMs, resizeAtMs: frame.resizeAtMs,
     resizeCount: frame.resizeCount }, { firstResizeAtMs: 0.1, resizeAtMs: 0.2, resizeCount: 2 });
   for (const fields of [
@@ -146,54 +182,103 @@ test("view content-frame events preserve coalesced resize provenance", { timeout
     { ...row.fields, resizeCount: 1.5 },
     { ...row.fields, resizeCount: 1 },
   ]) {
-    assert.throws(() => viewContentFrameEvents([{ ...row, fields }], "fixture", "view-1"),
+    assert.throws(() => viewContentFrameEvents([{ ...row, fields }], "fixture", "view-1", anchor),
       /firstResizeAtMs|resizeCount/);
   }
 });
 
-test("generic view content-frame events correlate page frames with the host clocks", { timeout: 5000 }, () => {
+test("generic view content-frame events use the start source clock and preserve its interval", { timeout: 5000 }, () => {
   const row = { event: "plugin.fixture.view.content_frame", ts_us: 2_000_000,
-    mono_ns: 3_000_000, surface: "view-1", fields: { sequence: 4, documentTimeOriginMs: 1999,
+    mono_ns: 3_000_000, page: "view-document-opaque", surface: "view-1", fields: { sequence: 4, documentTimeOriginMs: 1999,
       firstResizeAtMs: 0.2, resizeAtMs: 0.2, resizeCount: 1, frameTimeMs: 0.5, width: 300, height: 200 } };
-  assert.deepEqual(viewContentFrameEvents([row], "fixture", "view-1"), [{
+  assert.deepEqual(viewContentFrameEvents([row], "fixture", "view-1", startExposure()), [{
     sequence: 4, width: 300, height: 200, firstResizeAtMs: 0.2, resizeAtMs: 0.2, resizeCount: 1, frameTimeMs: 0.5,
-    sourceTimeMs: 1999.5, timeMs: 2.5, hostArrivalTimeMs: 3, wallCorrelationMs: 0.5,
-    source: { documentTimeOriginMs: 1999, ts_us: 2_000_000, mono_ns: 3_000_000 },
+    timeRange: { lowerMs: 998.3, upperMs: 1003.3 },
+    source: { documentTimeOriginMs: 1999, frameTimeMs: 0.5, sourceNowMs: 0.2, sourceResolutionMs: 1,
+      requestMonoNs: 1_000_000_000, replyMonoNs: 1_001_000_000, requestId: 7,
+      method: "command.run", surface: "view-1", eventTsUs: 2_000_000, eventMonoNs: 3_000_000,
+      eventPage: "view-document-opaque" },
   }]);
-  assert.throws(() => viewContentFrameEvents([{ ...row, mono_ns: 0 }], "fixture", "view-1"), /mono_ns/);
-  assert.throws(() => viewContentFrameEvents([{ ...row, fields: { ...row.fields, width: 0 } }], "fixture", "view-1"), /width/);
+  assert.throws(() => viewContentFrameEvents([{ ...row, mono_ns: 0 }], "fixture", "view-1", startExposure()), /mono_ns/);
+  assert.throws(() => viewContentFrameEvents([{ ...row, fields: { ...row.fields, width: 0 } }], "fixture", "view-1", startExposure()), /width/);
+});
+
+test("view content-frame mapping uses its successful start anchor and native request-reply interval", { timeout: 5000 }, () => {
+  const row = { event: "plugin.fixture.view.content_frame", ts_us: 9_000_000,
+    mono_ns: 99_000_000_000, page: "view-document-opaque", surface: "view-1", fields: { sequence: 0, documentTimeOriginMs: 1000,
+      firstResizeAtMs: 10, resizeAtMs: 10, resizeCount: 1, frameTimeMs: 30, width: 300, height: 200 } };
+  const exposure = startExposure({ documentTimeOriginMs: 1000, sourceNowMs: 20, replyMonoNs: 1_002_000_000 });
+  assert.deepEqual(viewContentFrameEvents([row], "fixture", "view-1", exposure), [{
+    sequence: 0, width: 300, height: 200, firstResizeAtMs: 10, resizeAtMs: 10, resizeCount: 1, frameTimeMs: 30,
+    timeRange: { lowerMs: 1008, upperMs: 1014 },
+    source: { documentTimeOriginMs: 1000, frameTimeMs: 30, sourceNowMs: 20, sourceResolutionMs: 1,
+      requestMonoNs: 1_000_000_000, replyMonoNs: 1_002_000_000, requestId: 7, method: "command.run", surface: "view-1",
+      eventTsUs: 9_000_000, eventMonoNs: 99_000_000_000, eventPage: "view-document-opaque" },
+  }]);
+});
+
+test("view start exposure requires one successful exact-surface request and reply", { timeout: 5000 }, () => {
+  const result = sourceResult();
+  const rows = nativeStartEvidence({ commandName: "fixture.measure", startResult: result });
+  assert.equal(viewStartExposure(rows, "view-1", "command.run", "fixture.measure", { action: "start" }, result).requestId, 7);
+  const hwpRows = nativeStartEvidence({ commandName: "hwp.diagnostics.frames.start", commandParams: {}, startResult: result });
+  assert.equal(viewStartExposure(hwpRows, "view-1", "command.run", "hwp.diagnostics.frames.start", {}, result).requestId, 7,
+    "a declared start command with empty parameters must match its actual endpoint arguments");
+  assert.throws(() => viewStartExposure(rows.slice(1), "view-1", "command.run", "fixture.measure", { action: "start" }, result),
+    /exactly one native exposure request/);
+  assert.throws(() => viewStartExposure([...rows, rows[0]], "view-1", "command.run", "fixture.measure", { action: "start" }, result),
+    /exactly one native exposure request/);
+  assert.throws(() => viewStartExposure(rows, "view-1", "command.run", "other.method", { action: "start" }, result),
+    /one successful command.run enclosing/);
+  const badResult = structuredClone(rows);
+  badResult[2].fields.args = JSON.stringify([JSON.stringify({ id: 7, result: { enabled: false }, surface: "view-1" })]);
+  assert.throws(() => viewStartExposure(badResult, "view-1", "command.run", "fixture.measure", { action: "start" }, result),
+    /differs from the successful command result/);
+  const truncated = structuredClone(rows);
+  truncated[2].fields.truncated = true;
+  assert.throws(() => viewStartExposure(truncated, "view-1", "command.run", "fixture.measure", { action: "start" }, result), /truncated/);
+  const ambiguous = [...rows, ...nativeStartEvidence({ surface: "view-1", commandName: "fixture.measure",
+    requestMonoNs: 1_000_500_000, replyMonoNs: 1_001_500_000, startResult: result })];
+  assert.throws(() => viewStartExposure(ambiguous, "view-1", "command.run", "fixture.measure", { action: "start" }, result),
+    /exactly one native exposure request/);
+  assert.throws(() => viewStartExposure(rows, "view-1", "command.run", "fixture.measure", { action: "start" }, {
+    sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 2 },
+  }), /declared 1 ms WebKit bound/);
+  assert.throws(() => viewStartExposure(rows, "view-1", "command.run", "fixture.measure", { action: "start" }, {
+    sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1, unexpected: true },
+  }), /exactly the declared anchor fields/);
 });
 
 test("generic view content-frame events accept the SDK's initial zero sequence", { timeout: 5000 }, () => {
   const rows = [0, 1].map((sequence, index) => ({ event: "plugin.fixture.view.content_frame",
-    ts_us: 2_000_000 + index, mono_ns: 3_000_000 + index, surface: "view-1",
+    ts_us: 2_000_000 + index, mono_ns: 3_000_000 + index, page: "view-document-opaque", surface: "view-1",
     fields: { sequence, documentTimeOriginMs: 1999, firstResizeAtMs: 0.2 + index, resizeAtMs: 0.2 + index, resizeCount: 1,
       frameTimeMs: 0.5 + index, width: 300, height: 200 } }));
-  assert.deepEqual(viewContentFrameEvents(rows, "fixture", "view-1").map(({ sequence }) => sequence), [0, 1]);
+  assert.deepEqual(viewContentFrameEvents(rows, "fixture", "view-1", startExposure()).map(({ sequence }) => sequence), [0, 1]);
 });
 
 test("view cadence uses source frame times instead of variable host IPC arrival intervals", { timeout: 5000 }, () => {
-  const rows = [1, 2].map((sequence, index) => ({ event: "plugin.fixture.view.content_frame",
+  const rows = [1, 2].map((sequence, index) => ({ event: "plugin.fixture.view.content_frame", page: "view-document-opaque",
     ts_us: 2_100_000 + index * 100_000, mono_ns: 1_100_000_000 + index * 100_000_000,
     surface: "view-1", fields: { sequence, documentTimeOriginMs: 1999,
       firstResizeAtMs: 1 + index * 16, resizeAtMs: 1 + index * 16, resizeCount: 1, frameTimeMs: 1 + index * 16, width: 300, height: 200 } }));
-  const frames = viewContentFrameEvents(rows, "fixture", "view-1");
-  assert.equal(frames[1].timeMs - frames[0].timeMs, 16);
-  assert.equal(frames[1].hostArrivalTimeMs - frames[0].hostArrivalTimeMs, 100);
-  assert.equal(frames[1].source.mono_ns - frames[0].source.mono_ns, 100_000_000);
+  const frames = viewContentFrameEvents(rows, "fixture", "view-1", startExposure({ sourceNowMs: 0.2 }));
+  assert.equal(frames[1].frameTimeMs - frames[0].frameTimeMs, 16);
+  assert.equal(frames[1].timeRange.lowerMs - frames[0].timeRange.lowerMs, 16);
+  assert.equal(frames[1].source.eventMonoNs - frames[0].source.eventMonoNs, 100_000_000);
 });
 
 test("generic source-frame mapping preserves multiple events per capture frame", { timeout: 5000 }, () => {
   const source = [
-    { sequence: 0, timeMs: 8, width: 299, height: 200 },
-    { sequence: 1, timeMs: 10, width: 300, height: 200 },
-    { sequence: 2, timeMs: 11, width: 301, height: 200 },
-    { sequence: 3, timeMs: 12, width: 302, height: 200 },
-    { sequence: 4, timeMs: 21, width: 303, height: 200 },
+    { sequence: 0, timeRange: { lowerMs: 7, upperMs: 8 }, width: 299, height: 200 },
+    { sequence: 1, timeRange: { lowerMs: 9, upperMs: 10 }, width: 300, height: 200 },
+    { sequence: 2, timeRange: { lowerMs: 10, upperMs: 11 }, width: 301, height: 200 },
+    { sequence: 3, timeRange: { lowerMs: 11, upperMs: 12 }, width: 302, height: 200 },
+    { sequence: 4, timeRange: { lowerMs: 20, upperMs: 21 }, width: 303, height: 200 },
   ];
   const captured = [{ time: 9 }, { time: 15 }, { time: 20 }];
   assert.deepEqual(mapViewContentFramesToCapture(source, captured), [
-    { ...source[0], sourceSequence: 0, frameIndex: null },
+    { ...source[0], sourceSequence: 0, frameIndex: 0 },
     { ...source[1], sourceSequence: 1, frameIndex: 1 },
     { ...source[2], sourceSequence: 2, frameIndex: 1 },
     { ...source[3], sourceSequence: 3, frameIndex: 1 },
@@ -209,43 +294,53 @@ test("root source frames use the latest actual surface placement, not capture ge
     framePt: { x: 12.5, y: 20, width: 700.5, height: 286.5 } };
   const placed = { event: "host.trace.surface", ts_us: 10_000, mono_ns: 10_000_000,
     fields: { phase: "placed", surface: "view-1", x: 14.5, y: 20, w: 785.5, h: 286.5, visible: true } };
-  const selected = viewMetrics.rootNativePlacementForSource([placed], "view-1", 15, { baseline });
+  const selected = viewMetrics.rootNativePlacementForSource([placed], "view-1", { lowerMs: 15, upperMs: 16 }, { baseline });
   assert.deepEqual(selected.framePt, { x: 14.5, y: 20, width: 785.5, height: 286.5 });
   assert.deepEqual(selected.webKitViewport, { width: 785, height: 286 });
   assert.equal(selected.placement.fields.phase, "placed");
   assert.equal(selected.placement.mono_ns, placed.mono_ns);
 
-  const settled = viewMetrics.rootNativePlacementForSource([], "view-1", 6, { baseline });
+  const settled = viewMetrics.rootNativePlacementForSource([], "view-1", { lowerMs: 6, upperMs: 7 }, { baseline });
   assert.equal(settled.phase, "settled");
   assert.deepEqual(settled.framePt, baseline.framePt);
   assert.deepEqual(settled.webKitViewport, { width: 700, height: 286 });
 
   const later = { ...placed, ts_us: 12_000, mono_ns: 12_000_000,
     fields: { ...placed.fields, x: 18.5, w: 800.5 } };
-  const latest = viewMetrics.rootNativePlacementForSource([placed, later], "view-1", 15, { baseline });
+  const latest = viewMetrics.rootNativePlacementForSource([placed, later], "view-1", { lowerMs: 15, upperMs: 16 }, { baseline });
   assert.deepEqual(latest.framePt, { x: 18.5, y: 20, width: 800.5, height: 286.5 });
   assert.deepEqual(latest.webKitViewport, { width: 800, height: 286 });
 
   const hidden = { ...placed, ts_us: 20_000, mono_ns: 20_000_000,
     fields: { ...placed.fields, x: 14.5, w: 785.5, h: 286.5, visible: false } };
-  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed, hidden], "view-1", 25,
+  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed, hidden], "view-1", { lowerMs: 25, upperMs: 26 },
     { baseline }), /latest.*placement.*not visible/);
-  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed], "view-1", 15,
+  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed], "view-1", { lowerMs: 15, upperMs: 16 },
     { baseline, afterMs: 15 }), /no applied native placement after/);
   const destroyed = { ...placed, ts_us: 20_000, mono_ns: 20_000_000,
     fields: { phase: "destroyed", surface: "view-1" } };
-  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed, destroyed], "view-1", 25,
+  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed, destroyed], "view-1", { lowerMs: 25, upperMs: 26 },
     { baseline }), /latest native placement state.*destroyed/);
   const conflicting = { ...placed, ts_us: 10_000, mono_ns: 10_000_000,
     fields: { ...placed.fields, w: 786.5 } };
-  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed, conflicting], "view-1", 15,
+  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed, conflicting], "view-1", { lowerMs: 15, upperMs: 16 },
     { baseline }), /ambiguous native placement state/);
+  assert.throws(() => viewMetrics.rootNativePlacementForSource([placed], "view-1", { lowerMs: 9, upperMs: 11 },
+    { baseline }), /overlaps source-frame interval/);
+  const afterDisplay = { ...later, mono_ns: 20_000_000, fields: { ...later.fields, w: 900.5 } };
+  const displayedPlacement = viewMetrics.rootNativePlacementBeforeCapture([placed, afterDisplay], "view-1", 15,
+    { afterMs: 8, baseline });
+  assert.equal(displayedPlacement.timeMs, 10,
+    "one-shot layout selects the final applied placement before the recorded display time");
+  assert.deepEqual(displayedPlacement.webKitViewport, { width: 785, height: 286 });
+  assert.throws(() => viewMetrics.rootNativePlacementBeforeCapture([placed], "view-1", 15, { afterMs: 10 }),
+    /no applied native placement after/);
 });
 
 test("one-shot layout selects the exact-size source after request and before later placement readback", { timeout: 5000 }, () => {
-  const beforeRequest = { sequence: 0, timeMs: 99, width: 453, height: 286 };
-  const requestedFrame = { sequence: 1, timeMs: 108, width: 453, height: 286 };
-  const afterReadbackWrongSize = { sequence: 2, timeMs: 116, width: 454, height: 286 };
+  const beforeRequest = { sequence: 0, timeRange: { lowerMs: 97, upperMs: 99 }, width: 453, height: 286 };
+  const requestedFrame = { sequence: 1, timeRange: { lowerMs: 103, upperMs: 105 }, width: 453, height: 286 };
+  const afterReadbackWrongSize = { sequence: 2, timeRange: { lowerMs: 116, upperMs: 118 }, width: 454, height: 286 };
   const nativePlacement = { surface: "view-1", timeMs: 112,
     framePt: { x: 500, y: 100, width: 453, height: 286.5 },
     webKitViewport: { width: 453, height: 286 } };
@@ -257,14 +352,29 @@ test("one-shot layout selects the exact-size source after request and before lat
   assert.equal(selection.failure, null);
 });
 
+test("one-shot layout preserves a boundary interval and selects a later guaranteed post-request frame", { timeout: 5000 }, () => {
+  const nativePlacement = { surface: "view-1", timeMs: 112,
+    framePt: { x: 500, y: 100, width: 453, height: 286.5 },
+    webKitViewport: { width: 453, height: 286 } };
+  const ambiguous = { sequence: 1, timeRange: { lowerMs: 99, upperMs: 101 }, width: 453, height: 286 };
+  const guaranteed = { sequence: 2, timeRange: { lowerMs: 102, upperMs: 104 }, width: 453, height: 286 };
+  const selection = viewMetrics.selectOneShotViewSourceFrame([ambiguous, guaranteed],
+    { requestAtMs: 100, nativePlacement });
+  assert.equal(selection.frame, guaranteed);
+  assert.deepEqual(selection.candidates.map(({ sequence, requestRelation }) => ({ sequence, requestRelation })), [
+    { sequence: 1, requestRelation: "ambiguous" },
+    { sequence: 2, requestRelation: "post-request" },
+  ]);
+});
+
 test("one-shot layout retains the target and every post-request candidate when no frame matches", { timeout: 5000 }, () => {
   const nativePlacement = { surface: "view-1", timeMs: 112,
     framePt: { x: 500, y: 100, width: 453, height: 286.5 },
     webKitViewport: { width: 453, height: 286 } };
   const selection = viewMetrics.selectOneShotViewSourceFrame([
-    { sequence: 0, timeMs: 99, width: 453, height: 286 },
-    { sequence: 1, timeMs: 108, width: 454, height: 286 },
-    { sequence: 2, timeMs: 116, width: 453, height: 287 },
+    { sequence: 0, timeRange: { lowerMs: 97, upperMs: 99 }, width: 453, height: 286 },
+    { sequence: 1, timeRange: { lowerMs: 108, upperMs: 110 }, width: 454, height: 286 },
+    { sequence: 2, timeRange: { lowerMs: 116, upperMs: 118 }, width: 453, height: 287 },
   ], { requestAtMs: 100, nativePlacement });
 
   assert.equal(selection.frame, null);
@@ -275,9 +385,10 @@ test("one-shot layout retains the target and every post-request candidate when n
       framePt: { x: 500, y: 100, width: 453, height: 286.5 },
       webKitViewport: { width: 453, height: 286 },
     },
-    postRequestCandidates: [
-      { sequence: 1, timeMs: 108, width: 454, height: 286 },
-      { sequence: 2, timeMs: 116, width: 453, height: 287 },
+    candidates: [
+      { sequence: 0, timeRange: { lowerMs: 97, upperMs: 99 }, width: 453, height: 286, requestRelation: "pre-request" },
+      { sequence: 1, timeRange: { lowerMs: 108, upperMs: 110 }, width: 454, height: 286, requestRelation: "post-request" },
+      { sequence: 2, timeRange: { lowerMs: 116, upperMs: 118 }, width: 453, height: 287, requestRelation: "post-request" },
     ],
   });
 });
@@ -292,21 +403,31 @@ test("generic content trace starts before an action and returns only scoped sour
   const s = { app: { configDir: root }, async flushLog() {} };
   const descriptor = {
     plugin: "fixture",
-    async startContentTrace(session, surface) { calls.push(["start", session, surface]); return { marker: { color: [255, 0, 255] } }; },
+    startMethod: "command.run",
+    startCommand: "fixture.measure",
+    startParams: { action: "start" },
+    async startContentTrace(session, surface) {
+      calls.push(["start", session, surface]);
+      const result = { marker: { color: [255, 0, 255] }, sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } };
+      appendStartExposure(logs, { startResult: result });
+      return result;
+    },
     async stopContentTrace(session, surface) { calls.push(["stop", session, surface]); return { sequence: 1 }; },
   };
   const result = await withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async (start) => {
-    assert.deepEqual(start, { marker: { color: [255, 0, 255] } });
+    assert.deepEqual(start, { marker: { color: [255, 0, 255] },
+      sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } });
     calls.push(["action"]);
     appendFileSync(join(logs, "host-1-1.jsonl"), `${JSON.stringify({ level: "debug", event:
-      "plugin.fixture.view.content_frame", ts_us: 2_000_000, mono_ns: 3_000_000, seq: 1,
+      "plugin.fixture.view.content_frame", ts_us: 2_000_000, mono_ns: 3_000_000, page: "view-document-opaque", seq: 1,
       surface: "view-1", fields: { sequence: 1, documentTimeOriginMs: 1999, firstResizeAtMs: 0.2, resizeAtMs: 0.2, resizeCount: 1,
         frameTimeMs: 0.5, width: 300, height: 200 } })}\n`);
     return { gestureEndedAtMs: 2 };
   });
   assert.deepEqual(calls.map(([name]) => name), ["start", "action", "stop"]);
   assert.deepEqual(result.action, { gestureEndedAtMs: 2 });
-  assert.deepEqual(result.start, { marker: { color: [255, 0, 255] } });
+  assert.deepEqual(result.start, { marker: { color: [255, 0, 255] },
+    sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } });
   assert.deepEqual(result.contentFrames.map(({ sequence, width, height }) => ({ sequence, width, height })),
     [{ sequence: 1, width: 300, height: 200 }]);
   assert.deepEqual(result.stop, { sequence: 1 });
@@ -322,7 +443,15 @@ test("content trace stops its diagnostic marker when the recorded action fails",
   const s = { app: { configDir: root }, async flushLog() {} };
   const descriptor = {
     plugin: "fixture",
-    async startContentTrace() { calls.push("start"); return { marker: "active" }; },
+    startMethod: "command.run",
+    startCommand: "fixture.measure",
+    startParams: { action: "start" },
+    async startContentTrace() {
+      calls.push("start");
+      const result = { marker: "active", sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } };
+      appendStartExposure(logs, { startResult: result });
+      return result;
+    },
     async stopContentTrace() { calls.push("stop"); return { marker: null }; },
   };
   await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
@@ -342,7 +471,15 @@ test("content trace stops after a successful start returns invalid marker eviden
   const s = { app: { configDir: root }, async flushLog() {} };
   const descriptor = {
     plugin: "fixture",
-    async startContentTrace() { calls.push("start"); return { marker: null }; },
+    startMethod: "command.run",
+    startCommand: "fixture.measure",
+    startParams: { action: "start" },
+    async startContentTrace() {
+      calls.push("start");
+      const result = { marker: null, sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } };
+      appendStartExposure(logs, { startResult: result });
+      return result;
+    },
     async stopContentTrace() { calls.push("stop"); return { marker: null }; },
   };
   await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async (start) => {
@@ -350,6 +487,31 @@ test("content trace stops after a successful start returns invalid marker eviden
     assert.ok(start.marker, "marker reply is invalid");
   }), /marker reply is invalid/);
   assert.deepEqual(calls, ["start", "action", "stop"]);
+});
+
+test("content trace stops when a successful start reply has no valid source clock anchor", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "view-content-trace-invalid-clock-"));
+  const logs = join(root, "logs");
+  mkdirSync(logs);
+  writeFileSync(join(logs, "host-1-1.jsonl"), "");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const calls = [];
+  const s = { app: { configDir: root }, async flushLog() {} };
+  const descriptor = {
+    plugin: "fixture",
+    startMethod: "command.run",
+    startCommand: "fixture.measure",
+    startParams: { action: "start" },
+    async startContentTrace() {
+      calls.push("start");
+      return { enabled: true };
+    },
+    async stopContentTrace() { calls.push("stop"); return { enabled: false }; },
+  };
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
+    calls.push("action");
+  }), /no sourceClock anchor/);
+  assert.deepEqual(calls, ["start", "stop"]);
 });
 
 test("shared readiness wrapper waits for the declared status exposure before reading it", { timeout: 5000 }, async () => {
@@ -630,13 +792,22 @@ test("view process-group close records observed history and every original PID",
 test("source events inside the gesture require a recorded capture frame", { timeout: 5000 }, async () => {
   const { requireViewContentFrameCoverage } = await import("../view-metrics-collection.mjs");
   assert.deepEqual(requireViewContentFrameCoverage([
-    { sequence: 0, sourceSequence: 0, timeMs: 8, frameIndex: null },
-    { sequence: 1, sourceSequence: 1, timeMs: 10, frameIndex: 1 },
-    { sequence: 2, sourceSequence: 2, timeMs: 21, frameIndex: null },
+    { sequence: 0, sourceSequence: 0, timeRange: { lowerMs: 7, upperMs: 8 }, frameIndex: null },
+    { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 10, upperMs: 11 }, frameIndex: 1 },
+    { sequence: 2, sourceSequence: 2, timeRange: { lowerMs: 21, upperMs: 22 }, frameIndex: null },
   ], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }), [
-    { sequence: 1, sourceSequence: 1, timeMs: 10, frameIndex: 1 },
+    { sequence: 0, sourceSequence: 0, timeRange: { lowerMs: 7, upperMs: 8 }, frameIndex: null },
+    { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 10, upperMs: 11 }, frameIndex: 1 },
+    { sequence: 2, sourceSequence: 2, timeRange: { lowerMs: 21, upperMs: 22 }, frameIndex: null },
   ]);
   assert.throws(() => requireViewContentFrameCoverage([
-    { sequence: 1, sourceSequence: 1, timeMs: 10, frameIndex: null },
+    { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 10, upperMs: 11 }, frameIndex: null },
   ], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }), /inside the gesture has no capture frame/);
+  assert.throws(() => requireViewContentFrameCoverage([
+    { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 8, upperMs: 10 }, frameIndex: null },
+  ], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }), /inside the gesture has no capture frame/);
+  const boundary = { sequence: 1, sourceSequence: 1, timeRange: { lowerMs: 8, upperMs: 10 }, frameIndex: 1 };
+  const next = { sequence: 2, sourceSequence: 2, timeRange: { lowerMs: 11, upperMs: 12 }, frameIndex: 2 };
+  assert.deepEqual(requireViewContentFrameCoverage([boundary, next], { gestureStartedAtMs: 9, gestureEndedAtMs: 20 }),
+    [boundary, next], "a captured source row that may be inside the gesture is retained without false rejection");
 });

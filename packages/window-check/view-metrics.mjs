@@ -89,6 +89,14 @@ function frameAt(value, path, { recordedFrameCount, requireProof = false } = {})
   return { frameIndex, timeMs };
 }
 
+function timeRangeAt(value, path) {
+  objectAt(value, path);
+  const lowerMs = numberAt(value.lowerMs, `${path}.lowerMs`);
+  const upperMs = numberAt(value.upperMs, `${path}.upperMs`);
+  if (upperMs < lowerMs) fail(`${path}.upperMs`, `>= lowerMs ${lowerMs}`, upperMs);
+  return { lowerMs, upperMs };
+}
+
 function contentProofAt(value, path) {
   objectAt(value, path);
   const expected = textAt(value.expected, `${path}.expected`).trim();
@@ -263,16 +271,19 @@ function evaluateLayoutDisplay(value) {
     const width = numberAt(entry.contentFrame.width, `${path}.contentFrame.width`, { minimum: Number.MIN_VALUE });
     const height = numberAt(entry.contentFrame.height, `${path}.contentFrame.height`, { minimum: Number.MIN_VALUE });
     const requestAtMs = numberAt(entry.contentFrame.requestAtMs, `${path}.contentFrame.requestAtMs`);
-    const sourceTimeMs = numberAt(entry.contentFrame.sourceTimeMs, `${path}.contentFrame.sourceTimeMs`);
+    const sourceTimeRange = timeRangeAt(entry.contentFrame.sourceTimeRange, `${path}.contentFrame.sourceTimeRange`);
+    if (sourceTimeRange.lowerMs < requestAtMs) {
+      fail(`${path}.contentFrame.sourceTimeRange.lowerMs`, `>= requestAtMs ${requestAtMs}`, sourceTimeRange.lowerMs);
+    }
     const nativePlacement = nativePlacementAt(entry.contentFrame.nativePlacement, `${path}.contentFrame.nativePlacement`);
     if (nativePlacement.phase !== "placed" || nativePlacement.timeMs <= requestAtMs) {
       fail(`${path}.contentFrame.nativePlacement`, `an applied placement after request ${requestAtMs} ms`, nativePlacement);
     }
-    if (nativePlacement.timeMs > sourceTimeMs) {
-      fail(`${path}.contentFrame.nativePlacement.timeMs`, `<= source frame time ${sourceTimeMs} ms`, nativePlacement.timeMs);
+    if (nativePlacement.timeMs > sourceTimeRange.lowerMs) {
+      fail(`${path}.contentFrame.nativePlacement.timeMs`, `<= source interval lower bound ${sourceTimeRange.lowerMs} ms`, nativePlacement.timeMs);
     }
-    if (sourceTimeMs > contentFrame.timeMs) {
-      fail(`${path}.contentFrame.sourceTimeMs`, `<= captured content frame time ${contentFrame.timeMs} ms`, sourceTimeMs);
+    if (sourceTimeRange.upperMs > contentFrame.timeMs) {
+      fail(`${path}.contentFrame.sourceTimeRange.upperMs`, `<= captured content frame time ${contentFrame.timeMs} ms`, sourceTimeRange.upperMs);
     }
     const { width: viewportWidth, height: viewportHeight } = nativePlacement.webKitViewport;
     if (width !== viewportWidth || height !== viewportHeight) {
@@ -400,7 +411,9 @@ function evaluateDrag(value) {
   arrayAt(drag.ticks, "drag.ticks", { minimum: 1 });
 
   let previousSequence = -1;
-  let previousTime = -Infinity;
+  let previousFrameTime = -Infinity;
+  let previousRangeLower = -Infinity;
+  let previousRangeUpper = -Infinity;
   let previousFrameIndex = -1;
   const contentFrames = arrayAt(drag.contentFrames, "drag.contentFrames", { minimum: 1 }).map((frame, index) => {
     const path = `drag.contentFrames[${index}]`;
@@ -410,9 +423,15 @@ function evaluateDrag(value) {
       fail(`${path}.sourceSequence`, `greater than prior source sequence ${previousSequence}`, sourceSequence);
     }
     previousSequence = sourceSequence;
-    const timeMs = numberAt(frame.timeMs, `${path}.timeMs`);
-    if (timeMs <= previousTime) fail(`${path}.timeMs`, "strictly increasing source timestamps", timeMs);
-    previousTime = timeMs;
+    const frameTimeMs = numberAt(frame.frameTimeMs, `${path}.frameTimeMs`);
+    if (frameTimeMs <= previousFrameTime) fail(`${path}.frameTimeMs`, "strictly increasing same-document source timestamps", frameTimeMs);
+    previousFrameTime = frameTimeMs;
+    const timeRange = timeRangeAt(frame.timeRange, `${path}.timeRange`);
+    if (timeRange.lowerMs <= previousRangeLower || timeRange.upperMs <= previousRangeUpper) {
+      fail(`${path}.timeRange`, "strictly increasing mapped source intervals", timeRange);
+    }
+    previousRangeLower = timeRange.lowerMs;
+    previousRangeUpper = timeRange.upperMs;
     let frameIndex = null;
     if (frame.frameIndex !== null && frame.frameIndex !== undefined) {
       frameIndex = numberAt(frame.frameIndex, `${path}.frameIndex`, { integer: true });
@@ -423,48 +442,67 @@ function evaluateDrag(value) {
     const width = numberAt(frame.width, `${path}.width`, { minimum: Number.MIN_VALUE });
     const height = numberAt(frame.height, `${path}.height`, { minimum: Number.MIN_VALUE });
     const nativePlacement = nativePlacementAt(frame.nativePlacement, `${path}.nativePlacement`);
-    if (nativePlacement.timeMs > timeMs) {
-      fail(`${path}.nativePlacement.timeMs`, `<= source frame time ${timeMs} ms`, nativePlacement.timeMs);
+    if (nativePlacement.timeMs >= timeRange.lowerMs) {
+      fail(`${path}.nativePlacement.timeMs`, `before source interval lower bound ${timeRange.lowerMs} ms`, nativePlacement.timeMs);
     }
     return {
       sourceSequence,
       frameIndex,
-      timeMs,
+      frameTimeMs,
+      timeRange,
       width,
       height,
       nativePlacement,
     };
   });
-  const inGestureFrames = contentFrames.filter(({ timeMs }) =>
-    timeMs >= gestureStartedAtMs && timeMs <= gestureEndedAtMs);
-  if (inGestureFrames.length < 2) fail("drag.contentFrames", "at least two content frames during the gesture", inGestureFrames.length);
-  for (const [index, frame] of inGestureFrames.entries()) {
+  const possiblyInGestureFrames = contentFrames.filter(({ timeRange }) =>
+    timeRange.lowerMs <= gestureEndedAtMs && timeRange.upperMs >= gestureStartedAtMs);
+  if (possiblyInGestureFrames.length === 0) {
+    fail("drag.contentFrames", "source-frame intervals that cover the recorded gesture", contentFrames.map(({ timeRange }) => timeRange));
+  }
+  for (const frame of possiblyInGestureFrames) {
     if (frame.frameIndex === null) {
-      fail(`drag.contentFrames source sequence ${frame.sourceSequence}`, "a recorded capture frame at or after its source timestamp", null);
+      fail(`drag.contentFrames source sequence ${frame.sourceSequence}`, "a capture frame for every possibly in-gesture source frame", null);
     }
     if (frame.frameIndex < firstGestureFrameIndex || frame.frameIndex >= recordedFrameCount) {
       fail(`drag.contentFrames source sequence ${frame.sourceSequence}`, "a capture frame in the recorded gesture interval or its tail", frame.frameIndex);
     }
   }
-  const intervalsMs = inGestureFrames.slice(1).map((frame, index) => frame.timeMs - inGestureFrames[index].timeMs);
+  const definitelyInGestureFrames = contentFrames.filter(({ timeRange }) =>
+    timeRange.lowerMs >= gestureStartedAtMs && timeRange.upperMs <= gestureEndedAtMs);
+  if (definitelyInGestureFrames.length < 2) {
+    fail("drag.contentFrames", "at least two content frames wholly during the gesture", definitelyInGestureFrames.length);
+  }
+  const predecessor = contentFrames.filter(({ timeRange }) => timeRange.upperMs < gestureStartedAtMs).at(-1);
+  const successor = contentFrames.find(({ timeRange }) => timeRange.lowerMs > gestureEndedAtMs);
+  const cadenceFrames = [...new Set([predecessor, ...possiblyInGestureFrames, successor].filter(Boolean))]
+    .sort((left, right) => left.sourceSequence - right.sourceSequence);
+  const intervalsMs = cadenceFrames.slice(1).map((frame, index) => {
+    const previous = cadenceFrames[index];
+    const sourceGapMs = frame.frameTimeMs - previous.frameTimeMs;
+    const possibleGestureGapMs = Math.max(0,
+      Math.min(gestureEndedAtMs, frame.timeRange.upperMs)
+        - Math.max(gestureStartedAtMs, previous.timeRange.lowerMs));
+    return Math.min(sourceGapMs, possibleGestureGapMs);
+  });
   const maxContentFrameIntervalMs = Math.max(...intervalsMs);
   assert.ok(maxContentFrameIntervalMs <= DRAG_CONTENT_INTERVAL_LIMIT_MS,
     `view measurement drag in-gesture content-frame interval ${maxContentFrameIntervalMs} ms exceeds ${DRAG_CONTENT_INTERVAL_LIMIT_MS} ms`);
 
-  const atEnd = inGestureFrames.at(-1);
+  const atEnd = definitelyInGestureFrames.at(-1);
   if (!atEnd) fail("drag.contentFrames", "a content frame at or before gesture end", contentFrames.map(({ frameIndex }) => frameIndex));
   const mismatchedAtEnd = atEnd.width !== atEnd.nativePlacement.webKitViewport.width
     || atEnd.height !== atEnd.nativePlacement.webKitViewport.height;
   let convergedFrame = 0;
   let convergenceMs = 0;
   if (mismatchedAtEnd) {
-    const postGestureFrames = contentFrames.filter(({ timeMs }) => timeMs > gestureEndedAtMs);
+    const postGestureFrames = contentFrames.filter(({ timeRange }) => timeRange.lowerMs > gestureEndedAtMs);
     const converged = postGestureFrames.find(({ frameIndex, width, height, nativePlacement }) =>
       frameIndex !== null && frameIndex > gestureEndedFrameIndex
       && width === nativePlacement.webKitViewport.width && height === nativePlacement.webKitViewport.height);
     if (!converged) fail("drag.contentFrames", "content size convergence after gesture end", postGestureFrames);
     convergedFrame = converged.frameIndex - gestureEndedFrameIndex;
-    convergenceMs = converged.timeMs - gestureEndedAtMs;
+    convergenceMs = converged.timeRange.upperMs - gestureEndedAtMs;
     if (convergedFrame > DRAG_SETTLE_FRAME_LIMIT) {
       fail("drag.contentFrames", `convergence within ${DRAG_SETTLE_FRAME_LIMIT} post-gesture frames`, convergedFrame);
     }

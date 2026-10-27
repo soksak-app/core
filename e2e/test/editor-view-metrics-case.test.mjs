@@ -218,12 +218,13 @@ test("editor slot insets come from declared composition and card geometry", () =
 });
 
 test("editor motion evidence retains applied fractional native frame and WebKit viewport projection", { timeout: 1000 }, () => {
-  const source = { sourceSequence: 4, frameIndex: 7, timeMs: 148, width: 785, height: 286 };
-  const nativePlacement = { surface: "editor-1", phase: "placed", visible: true, timeMs: 147,
+  const source = { sourceSequence: 4, frameIndex: 7, frameTimeMs: 148, timeRange: { lowerMs: 147, upperMs: 149 }, width: 785, height: 286 };
+  const nativePlacement = { surface: "editor-1", phase: "placed", visible: true, timeMs: 146,
     framePt: { x: 10.5, y: 20, width: 785.5, height: 286.5 },
     webKitViewport: { width: 785, height: 286 } };
   assert.deepEqual(editorSourceContentFrame(source, nativePlacement), {
-    sourceSequence: 4, frameIndex: 7, timeMs: 148, width: 785, height: 286, nativePlacement, source,
+    sourceSequence: 4, frameIndex: 7, frameTimeMs: 148, timeRange: { lowerMs: 147, upperMs: 149 },
+    width: 785, height: 286, nativePlacement, source,
   });
   assert.throws(() => editorSourceContentFrame({ ...source, width: 0 }, nativePlacement), /invalid dimensions/);
 });
