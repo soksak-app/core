@@ -4,6 +4,7 @@ package host
 // The fixtures use the names probe and fixture-* only: core names no real plugin or sidecar.
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -381,6 +382,33 @@ func TestPluginHostSidecarCloseClosesOnlyTheCallersSessionsOfThePlugin(t *testin
 		if _, ok := c.owners[kept]; !ok {
 			t.Fatalf("the session %s was closed, want it kept", kept)
 		}
+	}
+}
+
+func TestPluginHostSidecarCloseBindingAcceptsTheDeclaredRequestObject(t *testing.T) {
+	var host Host
+	err := host.PluginHostSidecarClose(context.Background(), json.RawMessage(`{"plugin":"probe"}`))
+	if err == nil || err.Error() != "host call has no window" {
+		t.Fatalf("pluginHostSidecarClose decoded the declared request as %v, want it to reach window lookup", err)
+	}
+
+	tests := []struct {
+		name string
+		json string
+		want string
+	}{
+		{name: "missing", json: `{}`, want: "argument request.plugin is missing"},
+		{name: "null", json: `{"plugin":null}`, want: "argument request.plugin is missing"},
+		{name: "object", json: `{"plugin":{}}`, want: "argument request.plugin must be a string, not an object"},
+		{name: "number", json: `{"plugin":1}`, want: "argument request.plugin must be a string, not a number"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := host.PluginHostSidecarClose(context.Background(), json.RawMessage(test.json))
+			if err == nil || err.Error() != test.want {
+				t.Fatalf("pluginHostSidecarClose error = %v, want %q", err, test.want)
+			}
+		})
 	}
 }
 

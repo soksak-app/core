@@ -10,6 +10,11 @@ import (
 	"strings"
 )
 
+// PluginHostSidecarCloseRequest names the plugin whose host ended in this window.
+type PluginHostSidecarCloseRequest struct {
+	Plugin string `json:"plugin"`
+}
+
 // PluginHostSidecarSendRequest is a sidecar request of the host of Plugin: the sidecar, the session id and the body and
 // the correlation identifiers of the request.
 type PluginHostSidecarSendRequest struct {
