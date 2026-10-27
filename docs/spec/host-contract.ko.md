@@ -116,7 +116,7 @@ fn invalid_json_closes_connection() {
 | `notifications.request.rejects-invalid-fields` | 비었거나 너무 길거나 제어 문자가 있는 표면, 제목, 본문은 그 필드를 적은 오류로 거부한다. | both |
 | `notifications.event.records-each-event-and-failure` | host가 해석하는 알림 센터의 사건마다 `type`, 상태의 `authorization`, 알림의 `window`와 `surface`를 가진 event `host.notification.event`가 있고, 실패(읽을 수 없거나 알 수 없는 종류의 사건, 창과 표면이 없는 알림, 닫힌 창, 알림 센터가 알린 실패)마다 장소 `notification`의 `error` 기록이 있다. Go 시험은 전체 경로를, Rust 시험은 이벤트를 읽는 부분까지를 다룬다. 창 조회에는 application handle이 필요하기 때문이다. | both |
 | `diagnostics.input-reference.declared` | Diagnostic endpoint는 같은 window의 input reference method를 선언한다. | both |
-| `diagnostics.input-reference.validates-document` | Input reference action은 wait에서만 빈 문자열을 포함한 document 문자열을 받으며 없거나 잘못된 값을 거부한다. | both |
+| `diagnostics.input-reference.validates-document` | Input reference action은 wait-document와 wait에서만 빈 문자열을 포함한 document 문자열을 받으며 없거나 잘못된 값을 거부한다. | both |
 | `diagnostics.input-reference.rejects-nul` | Native input reference adapter는 action이나 document의 NUL을 거부하고 오류로 한 번 완료한다. | both |
 | `endpoint.diagnostics-clock.real-jsonrpc-returns-monotonic-decimal` | diagnostics build에서 `{window}`을 담은 실제 endpoint JSON-RPC `diagnostics.clock` 요청은 host event-record clock의 `{mono_ns}`를 양수 canonical uint64 십진 문자열로 반환하고, 같은 연결의 두 번째 요청은 첫 값보다 작지 않은 값을 반환한다. | both |
 | `endpoint.diagnostics-clock.absent-without-diagnostics` | diagnostics build 옵션이 없으면 endpoint는 `diagnostics.clock`을 선언하지 않으며 해당 요청의 연결을 닫는다. | both |

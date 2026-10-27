@@ -597,20 +597,31 @@ fn parse_input_reference(params: &Map<String, Value>) -> Result<(String, Option<
     let action = params
         .get("action")
         .and_then(Value::as_str)
-        .filter(|value| matches!(*value, "open" | "read" | "focus" | "wait" | "close"))
+        .filter(|value| {
+            matches!(
+                *value,
+                "open" | "read" | "focus" | "wait-document" | "wait" | "close"
+            )
+        })
         .ok_or_else(|| {
-            Failure::params("input reference action must be open, read, focus, wait or close")
+            Failure::params(
+                "input reference action must be open, read, focus, wait-document, wait or close",
+            )
         })?;
-    if action != "wait" {
+    if action != "wait" && action != "wait-document" {
         if params.contains_key("document") {
-            return Err(Failure::params("input reference document is only for wait"));
+            return Err(Failure::params(
+                "input reference document is only for wait-document and wait",
+            ));
         }
         return Ok((action.into(), None));
     }
     let document = params
         .get("document")
         .and_then(Value::as_str)
-        .ok_or_else(|| Failure::params("input reference wait requires a document string"))?;
+        .ok_or_else(|| {
+            Failure::params("input reference wait-document and wait require a document string")
+        })?;
     Ok((action.into(), Some(document.into())))
 }
 

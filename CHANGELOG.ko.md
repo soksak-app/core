@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-219: 비동기 key dispatch 뒤 예상한 AppKit reference text를 기다린다. `wait-document`는 text notification을 사용하며 marked composition이 남아도 일치하는 중간 text를 받아들인다. 최종 `wait`는 여전히 marked text가 없어야 완료된다. Native Red/Green은 marked text와 missing-document 오류를 확인하고 두 host parser는 추적된 Red 뒤 새 action을 받아들인다. 집중 owner test가 통과한다. 승인된 readiness activation은 Korean 2-Set을 명시적으로 선택해 ㅎ를 입력하고 원래 input source와 frontmost application을 복원한다. Run 34의 즉시 snapshot은 routing defect를 입증하지 않는다. 첫 activation 시도는 비동기 callback을 너무 일찍 읽었으며 수정된 target은 callback을 기다린다. Deferred consumer 사례는 변경 후 Green만 있고 개별 timeout 및 close를 확인한다. 보존된 activation log에는 assertion 통과에도 OS IMK mach-port diagnostic `error messaging the mach port for IMKCFRunLoopWakeUpReliable`가 있으며 이는 input routing 증거가 아니다.
+
 - F239-190: capture summary assertion의 과거 귀속을 바로잡는다. 보존된 F239-189 Red 로그에서 통제된 handoff 사례 안에서 originating-failure assertion 두 개가 통과하고 최초 handoff Red는 새 assertion 세 개만 실패한다. 앞선 summary predicate 실패는 startup-delay 원인이 열린 F239-78에 기록한다. 이 변경은 기록 정정이며 product fix나 not-reproduced 판정을 주장하지 않는다.
 
 - F239-226: qualified plugin-host exposure 이름은 유지하고 RAF snapshot은 plugin-local key로 publish한다. Benchmark는 등록 trace row를 기다린 다음 지원하지 않는 `status.watch` 대신 command와 `status.get`으로 읽는다. Red: owner fixture test가 qualified snapshot key를 찾았다. Green: fixture·collector owner test 16/16, fixture pack command 및 문서 검사가 통과한다. Application measurement는 이 단위에 포함하지 않는다.

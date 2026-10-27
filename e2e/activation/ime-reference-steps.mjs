@@ -18,6 +18,14 @@ export async function compareAppKitReference(s, keys, expected, expectedDocument
   await s.request("diagnostics.input.reference", { window, action: "open" });
   s.cleanup(() => s.request("diagnostics.input.reference", { window, action: "close" }));
   await s.request("diagnostics.input.reference", { window, action: "focus" });
+  const source = await s.request("diagnostics.input.source", { window });
+  assert.equal(typeof source.current, "string", "the active keyboard input source is unavailable after reference focus");
+  assert.ok(source.current.length > 0, "the active keyboard input source is empty after reference focus");
+  await s.selectInputSource(source.current);
+  const focused = await s.request("diagnostics.input.reference", { window, action: "read" });
+  assert.equal(focused.focused, true, "the AppKit reference lost focus while adopting its input source");
+  assert.equal(focused.inputContextCurrent, true,
+    "the AppKit reference input context is not current after input-source adoption");
   await runReferenceSteps(keys, {
     async press(step) {
       if (typeof step === "string") await s.press(step);
@@ -25,7 +33,9 @@ export async function compareAppKitReference(s, keys, expected, expectedDocument
         assert.equal((await s.request("diagnostics.input.source", { select: step.source })).current, step.source);
       } else await s.press(step.key);
     },
-    read: () => s.request("diagnostics.input.reference", { window, action: "read" }),
+    read: (_key, index) => s.request("diagnostics.input.reference", {
+      window, action: "wait-document", document: expectedDocuments[index],
+    }),
     verify(state, key, index) {
       console.info(`reference input ${index + 1}: ${JSON.stringify({ key, state, expected: expectedDocuments[index] })}`);
       assert.equal(state.open, true, "the same-window AppKit reference closed during input");

@@ -746,19 +746,19 @@ func parseInputReference(params json.RawMessage) (string, *string, error) {
 		return "", nil, rpcError(codeInvalidParams, "input reference params must be an object")
 	}
 	var action string
-	if err := json.Unmarshal(values["action"], &action); err != nil || (action != "open" && action != "read" && action != "focus" && action != "wait" && action != "close") {
-		return "", nil, rpcError(codeInvalidParams, "input reference action must be open, read, focus, wait or close")
+	if err := json.Unmarshal(values["action"], &action); err != nil || (action != "open" && action != "read" && action != "focus" && action != "wait-document" && action != "wait" && action != "close") {
+		return "", nil, rpcError(codeInvalidParams, "input reference action must be open, read, focus, wait-document, wait or close")
 	}
 	raw, hasDocument := values["document"]
-	if action != "wait" {
+	if action != "wait" && action != "wait-document" {
 		if hasDocument {
-			return "", nil, rpcError(codeInvalidParams, "input reference document is only for wait")
+			return "", nil, rpcError(codeInvalidParams, "input reference document is only for wait-document and wait")
 		}
 		return action, nil, nil
 	}
 	var document *string
 	if !hasDocument || json.Unmarshal(raw, &document) != nil || document == nil {
-		return "", nil, rpcError(codeInvalidParams, "input reference wait requires a document string")
+		return "", nil, rpcError(codeInvalidParams, "input reference wait-document and wait require a document string")
 	}
 	return action, document, nil
 }

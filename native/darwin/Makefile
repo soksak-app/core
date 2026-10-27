@@ -100,7 +100,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: all capture-text-path test test-capture-frame-identity test-capture-stop-intake test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all capture-text-path test test-capture-frame-identity test-capture-stop-intake test-activation test-input-reference-readiness test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -354,6 +354,10 @@ test-pressure: $(BUILD)/document_pressure_test
 
 test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test $(BUILD)/view_focus_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) input_activate_test webview_inspector_test window_fullscreen_test webview_input_test,--baseline webview_input_test document_view_test,--activation image_region_test,--activation image_region_ime_test view_focus_test,--activation
+
+# Runs only the focused AppKit reference input-context readiness case and restores the outer input source and application.
+test-input-reference-readiness: $(BUILD)/input_reference_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) input_reference_test,--activation-readiness
 
 test-view-focus-restore: $(BUILD)/view_focus_test
 	@$(BUILD)/view_focus_test --frontmost-restore-test

@@ -37,3 +37,57 @@ fn input_reference_validates_document() {
         );
     }
 }
+
+// contract: diagnostics.input-reference.validates-document
+#[test]
+fn input_reference_wait_document_accepts_expected_document() {
+    for document in ["", "a😀"] {
+        assert_eq!(
+            parse_input_reference(
+                json!({"action":"wait-document", "document":document})
+                    .as_object()
+                    .unwrap()
+            )
+            .unwrap(),
+            ("wait-document".into(), Some(document.into()))
+        );
+    }
+}
+
+// contract: diagnostics.input-reference.validates-document
+#[test]
+fn input_reference_wait_document_requires_a_string() {
+    for params in [
+        json!({"action":"wait-document"}),
+        json!({"action":"wait-document", "document":Value::Null}),
+        json!({"action":"wait-document", "document":3}),
+    ] {
+        let error = parse_input_reference(params.as_object().unwrap()).unwrap_err();
+        assert_eq!(
+            error.message, "input reference wait-document and wait require a document string",
+            "params {params}"
+        );
+    }
+}
+
+// contract: diagnostics.input-reference.validates-document
+#[test]
+fn input_reference_wait_document_boundary_errors_name_both_actions() {
+    let invalid_action =
+        parse_input_reference(json!({"action":"invalid"}).as_object().unwrap()).unwrap_err();
+    assert_eq!(
+        invalid_action.message,
+        "input reference action must be open, read, focus, wait-document, wait or close"
+    );
+
+    let document_scope = parse_input_reference(
+        json!({"action":"read", "document":"text"})
+            .as_object()
+            .unwrap(),
+    )
+    .unwrap_err();
+    assert_eq!(
+        document_scope.message,
+        "input reference document is only for wait-document and wait"
+    );
+}

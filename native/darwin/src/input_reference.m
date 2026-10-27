@@ -32,6 +32,7 @@ static void reply(sp_input_reference_done done, void *context, NSDictionary *val
 @property sp_input_reference_done completion;
 @property void *context;
 @property BOOL checkScheduled;
+@property BOOL waitRequiresUnmarked;
 @property(retain) SPInputReferenceCheck *check;
 - (NSDictionary *)snapshot;
 - (void)checkDocument;
@@ -45,10 +46,12 @@ static void reply(sp_input_reference_done done, void *context, NSDictionary *val
     NSView *content = self.window.contentView;
     NSRect rect = [self.view convertRect:self.view.bounds toView:content];
     CGFloat y = content.isFlipped ? rect.origin.y : NSHeight(content.bounds) - NSMaxY(rect);
+    NSTextInputContext *context = self.view.inputContext;
     return @{ @"open": @YES, @"document": self.view.string,
         @"selected": rangeValue(self.view.selectedRange),
         @"marked": self.view.hasMarkedText ? rangeValue(self.view.markedRange) : NSNull.null,
         @"focused": self.window.firstResponder == self.view ? @YES : @NO,
+        @"inputContextCurrent": context && NSTextInputContext.currentInputContext == context ? @YES : @NO,
         @"frame": @{ @"x": @(rect.origin.x), @"y": @(y), @"w": @(rect.size.width), @"h": @(rect.size.height) } };
 }
 - (void)finish:(NSString *)failure {
@@ -63,7 +66,8 @@ static void reply(sp_input_reference_done done, void *context, NSDictionary *val
     reply(done, context, failure ? nil : [self snapshot], failure);
 }
 - (void)checkDocument {
-    if (self.completion && [self.view.string isEqual:self.expected] && !self.view.hasMarkedText) [self finish:nil];
+    if (self.completion && [self.view.string isEqual:self.expected]
+        && (!self.waitRequiresUnmarked || !self.view.hasMarkedText)) [self finish:nil];
 }
 - (void)changed:(NSNotification *)notification {
     sp_observe_delivered("input.reference.change");
@@ -124,13 +128,14 @@ void sp_input_reference(void *pointer, const char *action, const char *expected,
         if (!done) { NSLog(@"error: input reference: completion callback is required"); return; }
         if (!NSThread.isMainThread) { reply(done, context, nil, @"input reference requires the main thread"); return; }
         NSString *operation = action ? [NSString stringWithUTF8String:action] : nil;
-        if (![@[@"open", @"read", @"focus", @"wait", @"close"] containsObject:operation ?: @""]) {
-            reply(done, context, nil, @"input reference action must be open, read, focus, wait or close"); return;
+        if (![@[@"open", @"read", @"focus", @"wait-document", @"wait", @"close"] containsObject:operation ?: @""]) {
+            reply(done, context, nil, @"input reference action must be open, read, focus, wait-document, wait or close"); return;
         }
-        BOOL waits = [operation isEqual:@"wait"];
+        BOOL waits = [operation isEqual:@"wait"] || [operation isEqual:@"wait-document"];
+        BOOL waitRequiresUnmarked = [operation isEqual:@"wait"];
         NSString *document = expected ? [NSString stringWithUTF8String:expected] : nil;
         if ((waits && !document) || (!waits && expected)) {
-            reply(done, context, nil, @"input reference document is required only for wait and must be valid UTF-8"); return;
+            reply(done, context, nil, @"input reference document is required only for wait-document and wait and must be valid UTF-8"); return;
         }
         NSWindow *window = pointer;
         if (!window || !window.contentView) { reply(done, context, nil, @"input reference requires a window with a content view"); return; }
@@ -173,12 +178,13 @@ void sp_input_reference(void *pointer, const char *action, const char *expected,
             if (!reference) { reply(done, context, nil, @"input reference is closed"); return; }
             if (reference.completion) { reply(done, context, nil, @"input reference already has a pending wait"); return; }
             reference.expected = document;
+            reference.waitRequiresUnmarked = waitRequiresUnmarked;
             reference.completion = done;
             reference.context = context;
             __block SPInputReference *timerReference = reference;
             reference.timer = sp_observe_timer("input.reference.timeout", SP_OBSERVE_RECORD, 5, NO,
                 @"input reference document wait", ^(NSTimer *timer) {
-                [timerReference finish:[NSString stringWithFormat:@"input reference did not reach the expected unmarked document within 5 seconds: %@", [timerReference snapshot]]];
+                [timerReference finish:[NSString stringWithFormat:@"input reference did not reach the expected document within 5 seconds: %@", [timerReference snapshot]]];
             });
             if (!reference.timer) [reference finish:@"input reference timeout registration failed"];
             [reference checkDocument];

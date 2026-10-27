@@ -198,6 +198,33 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-219",
+    implementation: [
+      { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference(" },
+      { file: "e2e/activation/ime-reference-steps.mjs", symbol: "export async function compareAppKitReference(" },
+      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func parseInputReference(" },
+      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn parse_input_reference(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_reference_test.m", id: "wait-document completes at the expected document while marked text remains" },
+      { file: "native/darwin/tests/input_reference_test.m", id: "the ready AppKit reference composes ㅎ" },
+      { file: "e2e/activation/ime-reference-steps.test.mjs", id: "reference keys wait for selected-source readiness on the newly focused client" },
+      { file: "e2e/activation/ime-reference-steps.test.mjs", id: "reference steps await a delayed document update while marked text remains" },
+      { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceValidatesDocument" },
+      { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentAcceptsExpectedDocument" },
+      { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentRequiresAString" },
+      { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentActionErrorNamesAction" },
+      { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceDocumentErrorNamesBothWaitActions" },
+      { file: "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", id: "input_reference_validates_document" },
+      { file: "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_accepts_expected_document" },
+      { file: "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_requires_a_string" },
+      { file: "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", id: "input_reference_wait_document_boundary_errors_name_both_actions" },
+    ],
+    expected: "Reference input-source readiness is checked after focus; each dispatched key waits for matching document text while composition may remain marked, and final completion still requires unmarked text.",
+    levels: ["native", "unit"],
+  },
+
+  {
   "id": "F239-220",
   "implementation": [
     {
