@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-234: Wait for the actual root WebKit update after the first QR canvas draw before acknowledging diagnostic setup. The controlled target-update Red becomes Green, and held-update cancellation completes once. Both optimized macOS arm64 hosts now pass the real pixel capture check: Wails has 1 matched and 39 unknown document rows; Tauri has 3 matched and 37 unknown, with four issued slots each. Both report zero incomplete samples and identity/write/cleanup errors, pass log audits, restore the same foreground baseline and exit normally. Preserve unknown observations and leave independent source timing and historical cadence attribution open.
+
 - F239-234: Restrict the document-identity fixture to editable pane cards. Fixed sidebar rows in core.grid are not add-tab targets; both application attempts stopped during preparation before capture. The owning selector changes from Red to Green while retaining the actual pane and excluding sidebar IDs. Application acceptance remains pending.
 
 - F239-234: Add opt-in WebKit root-document QR identities to diagnostic capture. Preserve generated/issued counts and exact decoded sample pixels/displayTime, reject unissued identities, and fence late callbacks by capture nonce. Bound callback waits, serialize recording and trace initialization, preserve existing capture modes, and verify idempotent marker cleanup. Native matcher, atlas, actual WebKit lifecycle, paired host and E2E consumer owners pass after the tracked Reds. Two-host application capture remains pending; this channel does not prove desktop visibility, independent source-presentation time or the cause of the historical cadence gap.

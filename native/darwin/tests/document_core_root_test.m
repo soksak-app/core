@@ -10,6 +10,7 @@
 #import "webview_geometry.h"
 #import "surface_layout.h"
 #import "image_capture_match.h"
+#import "private/webkit.h"
 
 static int failures = 0;
 
@@ -30,6 +31,57 @@ static NSDictionary *latest;
 static NSString *frameIdentityReplyJSON;
 static NSString *frameIdentityReplyError;
 static int frameIdentityReplyCount;
+static WKWebView *frameIdentityPresentationView;
+static BOOL frameIdentityPresentationCallbackArrived;
+static BOOL releaseFrameIdentityPresentationCallback;
+static NSUInteger frameIdentityPresentationRequests;
+static void (^heldFrameIdentityPresentationCompletion)(void);
+static NSUInteger cancelledFrameIdentityStartReplies;
+static NSString *cancelledFrameIdentityStartError;
+
+static void cancelledFrameIdentityStartReply(void *context, const char *json, const char *error) {
+    (void)context;
+    (void)json;
+    cancelledFrameIdentityStartReplies++;
+    [cancelledFrameIdentityStartError release];
+    cancelledFrameIdentityStartError = error ? [[NSString alloc] initWithUTF8String:error] : nil;
+}
+
+static void controlledFrameIdentityAfterUpdate(void *document, void (^completion)(void)) {
+    WKWebView *view = (WKWebView *)document;
+    if (view != frameIdentityPresentationView) return;
+    frameIdentityPresentationRequests++;
+    [view _doAfterNextPresentationUpdate:^{
+        frameIdentityPresentationCallbackArrived = YES;
+        if (releaseFrameIdentityPresentationCallback) {
+            completion();
+        } else {
+            [heldFrameIdentityPresentationCompletion release];
+            heldFrameIdentityPresentationCompletion = [completion copy];
+        }
+    }];
+}
+
+static void controlFrameIdentityPresentation(WKWebView *view) {
+    frameIdentityPresentationView = view;
+    frameIdentityPresentationCallbackArrived = NO;
+    releaseFrameIdentityPresentationCallback = NO;
+    frameIdentityPresentationRequests = 0;
+    sp_document_frame_identity_test_set_after_update_hook(controlledFrameIdentityAfterUpdate);
+}
+
+static void releaseControlledFrameIdentityPresentation(void) {
+    releaseFrameIdentityPresentationCallback = YES;
+    void (^completion)(void) = [heldFrameIdentityPresentationCompletion retain];
+    [heldFrameIdentityPresentationCompletion release];
+    heldFrameIdentityPresentationCompletion = nil;
+    if (completion) {
+        completion();
+        [completion release];
+    }
+    sp_document_frame_identity_test_set_after_update_hook(NULL);
+    frameIdentityPresentationView = nil;
+}
 
 static void frameIdentityReply(void *context, const char *json, const char *error) {
     (void)context;
@@ -151,8 +203,22 @@ int main(void) { @autoreleasepool {
             @"the document identity producer owner starts an opt-in capture identity session");
         free(identitySessionError);
         clearFrameIdentityReply();
+        controlFrameIdentityPresentation((WKWebView *)view);
         BOOL identityScheduled = sp_document_frame_identity_start(view, 41, frameIdentityReply, NULL);
         check(identityScheduled, @"the current visible plugin root accepts the diagnostic QR producer");
+        NSDate *presentationDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
+        while (frameIdentityReplyCount == 0 && !frameIdentityPresentationCallbackArrived
+            && presentationDeadline.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        }
+        check(frameIdentityPresentationRequests == 1 && frameIdentityPresentationCallbackArrived,
+            [NSString stringWithFormat:@"the start waits for the target root WebKit presentation callback before replying (requests=%lu callback=%d reply=%d)",
+                (unsigned long)frameIdentityPresentationRequests, frameIdentityPresentationCallbackArrived,
+                frameIdentityReplyCount]);
+        check(frameIdentityReplyCount == 0,
+            @"the start reply remains pending while the target root presentation callback is held");
+        releaseControlledFrameIdentityPresentation();
         until(@"the visible root reports its first QR draw", ^BOOL { return frameIdentityReplyCount == 1; });
         NSDictionary *identityStart = frameIdentityReplyJSON
             ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
@@ -196,6 +262,41 @@ int main(void) { @autoreleasepool {
             && [retryRemove[@"removed"] boolValue],
             [NSString stringWithFormat:@"a repeated removal confirms the already removed generation: %@ %@",
                 retryRemove, frameIdentityReplyError ?: @""]);
+        sp_image_capture_match_end();
+        clearFrameIdentityReply();
+
+        sp_image_capture_match_begin(NULL, NULL);
+        identitySessionError = NULL;
+        identitySession = sp_image_capture_match_identity_session_begin(&identitySessionError);
+        check(identitySession && identitySessionError == NULL,
+            @"the pending-start cancellation case begins a separate identity session");
+        free(identitySessionError);
+        cancelledFrameIdentityStartReplies = 0;
+        [cancelledFrameIdentityStartError release]; cancelledFrameIdentityStartError = nil;
+        controlFrameIdentityPresentation((WKWebView *)view);
+        BOOL pendingIdentityScheduled = sp_document_frame_identity_start(view, 42,
+            cancelledFrameIdentityStartReply, NULL);
+        check(pendingIdentityScheduled, @"a second generation accepts a diagnostic QR producer");
+        until(@"WebKit reaches the held target update for the second generation",
+            ^BOOL { return frameIdentityPresentationCallbackArrived; });
+        check(cancelledFrameIdentityStartReplies == 0,
+            @"the second generation start remains pending before its target update completion");
+        BOOL pendingRemoveScheduled = sp_document_frame_identity_remove(42, frameIdentityReply, NULL);
+        check(pendingRemoveScheduled, @"removing a generation cancels its pending target update reply");
+        until(@"the pending start error and generation removal complete",
+            ^BOOL { return cancelledFrameIdentityStartReplies == 1 && frameIdentityReplyCount == 1; });
+        check(cancelledFrameIdentityStartError != nil,
+            @"removal reports one explicit error to the pending start callback");
+        NSDictionary *pendingRemove = frameIdentityReplyJSON
+            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding]
+                options:0 error:nil] : nil;
+        check(frameIdentityReplyError == nil && [pendingRemove[@"generation"] unsignedLongLongValue] == 42
+            && [pendingRemove[@"removed"] boolValue],
+            [NSString stringWithFormat:@"the pending generation is removed before its update callback is released: %@ %@",
+                pendingRemove, frameIdentityReplyError ?: @""]);
+        releaseControlledFrameIdentityPresentation();
+        check(cancelledFrameIdentityStartReplies == 1,
+            @"the late target update callback cannot reply again after generation removal");
         sp_image_capture_match_end();
         clearFrameIdentityReply();
         sp_document_close(view);

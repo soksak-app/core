@@ -320,7 +320,23 @@ static BOOL isBinaryIdentifier(NSString *text) {
 @end
 
 static SPDocumentFrameIdentity *activeDocumentFrameIdentity;
+static sp_document_frame_identity_after_update frameIdentityAfterUpdateTestHook;
+void sp_document_frame_identity_test_set_after_update_hook(sp_document_frame_identity_after_update hook) {
+    frameIdentityAfterUpdateTestHook = hook;
+}
+
+void sp_document_frame_identity_after_target_update(void *document, void (^completion)(void)) {
+    SPDocumentView *view = (SPDocumentView *)document;
+    if (!view || !completion) return;
+    if (frameIdentityAfterUpdateTestHook) {
+        frameIdentityAfterUpdateTestHook(view, completion);
+    } else {
+        [view _doAfterNextPresentationUpdate:completion];
+    }
+}
+
 static void frameIdentityStartFailed(SPDocumentFrameIdentity *identity, NSString *reason);
+static void frameIdentityStartReply(SPDocumentFrameIdentity *identity, NSString *json, NSString *error);
 static void frameIdentityFailSession(SPDocumentFrameIdentity *identity, NSString *reason);
 static void frameIdentityClose(SPDocumentView *view);
 #endif
@@ -501,12 +517,19 @@ static void frameIdentityClose(SPDocumentView *view);
         @"{\"generation\":%llu,\"atlasSlots\":%lu,\"roi\":{\"x\":%.6f,\"y\":%.6f,\"width\":%.6f,\"height\":%.6f,\"scale\":%.6f}}",
         (unsigned long long)identity->generation, (unsigned long)identity->atlasSlots,
         screen.origin.x, screen.origin.y, screen.size.width, screen.size.height, zoom];
-    sp_document_frame_identity_reply reply = identity->startReply;
-    void *context = identity->startContext;
-    identity->startReply = NULL;
-    identity->startContext = NULL;
-    identity->startPending = NO;
-    if (reply) reply(context, json.UTF8String, NULL);
+    SPDocumentFrameIdentity *retainedIdentity = [identity retain];
+    NSString *retainedJSON = [json copy];
+    sp_document_frame_identity_after_target_update(document, ^{
+        if (retainedIdentity->invalidated || retainedIdentity->removed || retainedIdentity->view != document
+            || activeDocumentFrameIdentity != retainedIdentity || !retainedIdentity->startPending) {
+            [retainedJSON release];
+            [retainedIdentity release];
+            return;
+        }
+        frameIdentityStartReply(retainedIdentity, retainedJSON, nil);
+        [retainedJSON release];
+        [retainedIdentity release];
+    });
 }
 @end
 #endif

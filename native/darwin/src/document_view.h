@@ -155,6 +155,13 @@ void sp_document_place(void *document, double left, double top, double right, do
 // All three output pointers are required. On failure, error receives an allocated UTF-8 message for the caller to free.
 bool sp_document_viewport_marker(void *document, bool enabled, uint8_t *rgb3, double *borderWidthPt, char **error);
 
+// Replaces only the document identity producer's target-view update completion for its owning test. The production
+// default calls WKWebView's existing next-presentation-update API. The test keeps the real API call and controls only
+// when its completion is delivered.
+typedef void (*sp_document_frame_identity_after_update)(void *document, void (^completion)(void));
+void sp_document_frame_identity_test_set_after_update_hook(sp_document_frame_identity_after_update hook);
+void sp_document_frame_identity_after_target_update(void *document, void (^completion)(void));
+
 // Completion runs exactly once on the main thread; JSON and error are borrowed until the callback returns. The caller
 // keeps context alive until completion, including when the awaiting RPC reaches its own deadline.
 typedef void (*sp_document_frame_identity_reply)(void *context, const char *json, const char *error);
