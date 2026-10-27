@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-230: Verify removed plugin-host fixtures using installed:null in core.plugins instead of a boolean. Preserve registry restoration and retain temporary evidence when cleanup is unconfirmed. The targeted Red becomes Green and all 14 owner cases pass.
+
 - F239-221-2: Remove the extra per-source native readback ordering requirement from drag cadence and one-shot evaluation. Keep captured pixel alignment independent and verify final presentation, source size, capture ordering and unchanged convergence limits. Reject a later competing target while accepting identical repeated readbacks. All six affected owner files, documentation and inventory checks pass after controlled Reds. Application measurements remain separate.
 
 - F239-229: Keep each decoded OCR crop in an OS temporary directory only while its recognizer call consumes it. Tracked success and failure cases reproduce retained crops, and a cleanup fault case verifies both errors are reported. All five crop/OCR owner cases pass; recording frames and OCR evidence remain preserved without crop files.

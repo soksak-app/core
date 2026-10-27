@@ -174,14 +174,19 @@ test("plugin-host RAF measurement reports window-facts errors before missing plu
 
 test("plugin-host cleanup restores the registry after earlier cleanup failures and retains its directory", { timeout: 1000 }, async () => {
   const attempts = [];
-  let state = { registry: "fixture-index", plugins: [{ id: "probehostraf", installed: true }] };
+  let state = { registry: "fixture-index", plugins: [{ id: "probehostraf", state: "loaded",
+    installed: { version: "0.0.21", enabled: true } }] };
   let directoryRemoved = false;
   await assert.rejects(cleanupPluginHostFixture({
     ensureWindow: async () => { attempts.push("window"); throw new Error("window readiness failed"); },
     readState: async () => { attempts.push("read"); return state; },
     plugin: "probehostraf",
     previousRegistry: "previous-index",
-    removePlugin: async () => { attempts.push("remove"); state = { ...state, plugins: [{ id: "probehostraf", installed: false }] }; throw new Error("plugin removal reply failed"); },
+    removePlugin: async () => {
+      attempts.push("remove");
+      state = { ...state, plugins: [{ id: "probehostraf", state: "available", installed: null }] };
+      throw new Error("plugin removal reply failed");
+    },
     restoreRegistry: async (index) => { attempts.push(`restore:${index}`); state = { ...state, registry: index }; },
     removeDirectory: async () => { attempts.push("delete"); directoryRemoved = true; },
     directory: "/tmp/probe-registry",
@@ -199,11 +204,34 @@ test("plugin-host cleanup restores the registry after earlier cleanup failures a
   assert.equal(directoryRemoved, false, "the temporary registry directory was removed before cleanup was confirmed");
 });
 
+test("plugin-host cleanup accepts an available registry row after successful removal", { timeout: 1000 }, async () => {
+  const attempts = [];
+  let state = { registry: "fixture-index", plugins: [{ id: "probehostraf", state: "loaded",
+    installed: { version: "0.0.21", enabled: true } }] };
+  let directoryRemoved = false;
+  await cleanupPluginHostFixture({
+    ensureWindow: async () => { attempts.push("window"); },
+    readState: async () => { attempts.push("read"); return state; },
+    plugin: "probehostraf",
+    previousRegistry: "previous-index",
+    removePlugin: async () => {
+      attempts.push("remove");
+      state = { ...state, plugins: [{ id: "probehostraf", state: "available", installed: null }] };
+    },
+    restoreRegistry: async (index) => { attempts.push(`restore:${index}`); state = { ...state, registry: index }; },
+    removeDirectory: async () => { attempts.push("delete"); directoryRemoved = true; },
+    directory: "/tmp/probe-registry",
+  });
+
+  assert.equal(directoryRemoved, true, "the temporary registry was retained after the plugin became available");
+  assert.deepEqual(attempts, ["window", "read", "remove", "read", "restore:previous-index", "read", "delete"]);
+});
+
 test("plugin-host cleanup retains its directory when registry restoration cannot be confirmed", { timeout: 1000 }, async () => {
   let directoryRemoved = false;
   await assert.rejects(cleanupPluginHostFixture({
     ensureWindow: async () => {},
-    readState: async () => ({ registry: "fixture-index", plugins: [{ id: "probehostraf", installed: false }] }),
+    readState: async () => ({ registry: "fixture-index", plugins: [{ id: "probehostraf", state: "available", installed: null }] }),
     plugin: "probehostraf",
     previousRegistry: "previous-index",
     removePlugin: async () => {},
@@ -225,7 +253,8 @@ test("plugin-host cleanup retains its directory when failed removal leaves the f
   await assert.rejects(cleanupPluginHostFixture({
     ensureWindow: async () => {},
     readState: async () => ({ registry: attempts.includes("restored") ? "previous-index" : "fixture-index",
-      plugins: attempts.includes("restored") ? [] : [{ id: "probehostraf", installed: true }] }),
+      plugins: attempts.includes("restored") ? [] : [{ id: "probehostraf", state: "loaded",
+        installed: { version: "0.0.21", enabled: true } }] }),
     plugin: "probehostraf",
     previousRegistry: "previous-index",
     removePlugin: async () => { attempts.push("remove"); throw new Error("plugin removal failed"); },

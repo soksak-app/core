@@ -118,7 +118,15 @@ export async function cleanupPluginHostFixture({ ensureWindow, readState, plugin
   try {
     const state = await readState();
     const fixture = state.plugins.find((row) => row.id === plugin);
-    if (fixture?.installed) {
+    if (!fixture) {
+      throw new Error(`fixture plugin ${plugin} is unavailable in the active registry`);
+    }
+    if (fixture.installed !== null && (!fixture.installed || typeof fixture.installed !== "object" || Array.isArray(fixture.installed) ||
+        typeof fixture.installed.version !== "string" || fixture.installed.version === "" ||
+        typeof fixture.installed.enabled !== "boolean")) {
+      throw new Error(`fixture plugin ${plugin} has an invalid installed record`);
+    }
+    if (fixture.installed !== null) {
       try {
         await removePlugin();
       } catch (error) {
@@ -128,7 +136,7 @@ export async function cleanupPluginHostFixture({ ensureWindow, readState, plugin
 
     const afterRemoval = await readState();
     const fixtureAfterRemoval = afterRemoval.plugins.find((row) => row.id === plugin);
-    pluginAbsent = fixtureAfterRemoval !== undefined && fixtureAfterRemoval.installed === false;
+    pluginAbsent = fixtureAfterRemoval?.state === "available" && fixtureAfterRemoval.installed === null;
     if (!pluginAbsent) {
       record(new Error(`fixture plugin ${plugin} is still installed or its removal state is unavailable`));
     }

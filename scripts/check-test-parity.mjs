@@ -197,6 +197,29 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // the expected result, and the verification level of one feature.
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
+{
+  "id": "F239-230",
+  "implementation": [
+    {
+      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
+      "symbol": "export async function cleanupPluginHostFixture("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/plugin-host-throttle.test.mjs",
+      "id": "plugin-host cleanup accepts an available registry row after successful removal"
+    },
+    {
+      "file": "e2e/test/plugin-host-throttle.test.mjs",
+      "id": "plugin-host cleanup retains its directory when failed removal leaves the fixture installed"
+    }
+  ],
+  "expected": "Fixture cleanup confirms removal only from the current null installed record while the fixture registry is active, restores the original registry and retains evidence on unconfirmed cleanup.",
+  "levels": [
+    "unit"
+  ]
+},
   {
   "id": "F239-221-2",
   "implementation": [

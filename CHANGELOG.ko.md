@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-230: core.plugins의 boolean 대신 installed:null로 제거된 plugin-host fixture를 검증한다. Registry 복원을 유지하고 cleanup이 확인되지 않으면 임시 증거를 보존한다. 대상 Red가 Green으로 전환되고 owner case 14개가 모두 통과한다.
+
 - F239-221-2: Drag cadence와 one-shot 평가에서 source별 native readback 순서를 강제한 추가 요구를 제거한다. 실제 capture pixel alignment를 별도로 유지하고 최종 presentation·source 크기·capture 순서·기존 convergence 한도를 검증한다. 이후 다른 target의 개입을 거부하고 동일한 반복 readback은 허용한다. 통제된 Red 후 영향받은 소유 파일 여섯 개와 문서·inventory 검사가 통과한다. 앱 측정은 별도로 남긴다.
 
 - F239-229: Decode한 OCR crop은 인식 호출이 소비하는 동안만 OS 임시 디렉터리에 둔다. 추적한 성공·실패 case는 남은 crop을 재현하며 cleanup fault case는 두 오류가 모두 보고됨을 확인한다. crop/OCR 소유 case 다섯 개가 통과하고 crop 파일 없이 recording frame과 OCR 증거를 보존한다.
