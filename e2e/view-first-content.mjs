@@ -1,6 +1,7 @@
 // Finds the first recorded view frame whose decoded pixels contain declared plugin content.
 import assert from "node:assert/strict";
-import { normalizeViewText, recognizeViewFrame } from "./view-content.mjs";
+import { normalizeViewText } from "@soksak/window-check/view-metrics.mjs";
+import { recognizeViewFrame } from "./view-content.mjs";
 
 /** Returns the earliest timestamped frame whose pixels contain expected text, with OCR proof for that frame. */
 export async function firstContentFrame({ captured, rect, expected, language, directory, recognizeFrame, startFrameIndex = 0 }) {

@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { normalizeViewText } from "@soksak/window-check/view-metrics.mjs";
 import { FIXTURE } from "./hwp-support.mjs";
 
 const run = promisify(execFile);
@@ -31,8 +32,6 @@ export function cropViewPixels(frame, rect) {
   }
   return { width, height, data };
 }
-
-export const normalizeViewText = text => text.normalize("NFC").replace(/\s/gu, "");
 
 /** Reads text from one captured view frame without treating readiness as pixel evidence. */
 export async function recognizeViewFrame({ frame, rect, language, directory, artifactName = "view-content",

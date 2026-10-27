@@ -198,6 +198,33 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
 {
+  "id": "F239-232",
+  "implementation": [
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "function contentProofAt("
+    },
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "export const normalizeViewText"
+    },
+    {
+      "file": "e2e/view-first-content.mjs",
+      "symbol": "normalizeViewText"
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "view OCR proof normalizes Unicode and whitespace but still rejects missing text"
+    }
+  ],
+  "expected": "Captured text selection and acceptance share NFC and OCR whitespace normalization without accepting genuinely absent expected text.",
+  "levels": [
+    "unit"
+  ]
+},
+{
   "id": "F212.9a",
   "implementation": [
     {

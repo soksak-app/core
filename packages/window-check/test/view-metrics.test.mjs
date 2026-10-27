@@ -283,6 +283,21 @@ test("warm display requires OCR proof tied to a recorded frame identity", { time
   assert.throws(() => assertViewMeasurements(mismatched, options), /does not contain the expected text/);
 });
 
+test("view OCR proof normalizes Unicode and whitespace but still rejects missing text", { timeout: 1000 }, () => {
+  const spacedHangul = metrics();
+  spacedHangul.warmDisplay.contentFrame.proof = {
+    expected: "속삭한글문서확인",
+    actual: "속삭 한글 문서 확인",
+    lines: ["속삭 한글 문서 확인"],
+  };
+  assert.doesNotThrow(() => assertViewMeasurements(spacedHangul, options));
+
+  const missingHangul = structuredClone(spacedHangul);
+  missingHangul.warmDisplay.contentFrame.proof.actual = "속삭 한글 문서 누락";
+  missingHangul.warmDisplay.contentFrame.proof.lines = ["속삭 한글 문서 누락"];
+  assert.throws(() => assertViewMeasurements(missingHangul, options), /does not contain the expected text/);
+});
+
 test("warm display is explicitly not applicable when the opened view did not reuse a prior process", { timeout: 1000 }, () => {
   const raw = metrics();
   raw.warmDisplay.openedPid = 82;

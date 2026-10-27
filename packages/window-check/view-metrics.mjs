@@ -14,6 +14,8 @@ const DRAG_CONTENT_INTERVAL_LIMIT_MS = 33;
 const DRAG_SETTLE_FRAME_LIMIT = 2;
 const EDITOR_SIDECAR_THRESHOLD_BYTES = 50_000_000;
 
+export const normalizeViewText = text => text.normalize("NFC").replace(/\s/gu, "");
+
 function fail(path, expected, found) {
   throw new Error(`view measurement ${path}: expected ${expected}, found ${JSON.stringify(found)}`);
 }
@@ -103,7 +105,7 @@ function contentProofAt(value, path) {
   const actual = textAt(value.actual, `${path}.actual`);
   const lines = arrayAt(value.lines, `${path}.lines`, { minimum: 1 });
   for (const [index, line] of lines.entries()) textAt(line, `${path}.lines[${index}]`);
-  assert.ok(actual.toLowerCase().includes(expected.toLowerCase()),
+  assert.ok(normalizeViewText(actual).toLowerCase().includes(normalizeViewText(expected).toLowerCase()),
     `view measurement ${path}.actual does not contain the expected text ${JSON.stringify(expected)}`);
 }
 

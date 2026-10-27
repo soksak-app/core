@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-232: OCR frame 선택과 acceptance가 NFC·공백 정규화 규칙 하나를 공유한다. 누락 문구 거부와 정확한 document·status 검사를 유지한다. 공백이 있는 Hangul tracked case가 Red에서 Green으로 바뀌고 first-content owner는 4/4 통과한다. 원래 console Red는 저장하지 않았고 이후 변경 전 비교 replay가 assertion 실패를 보존한다. HWP memory와 cadence acceptance는 남는다.
+
 - F212.9a: macOS 26.6.2 arm64 diagnostic host 양쪽에서 빌드된 plugin-host footprint와 background RAF 측정을 완료한다. Wails는 footprint 12096 KB와 8533 ms 동안 callback 0회, Tauri는 12080 KB와 8888 ms 동안 0회를 기록한다. 연결된 owner 수정 후 양 검사는 fixture 제거, registry·settings와 frontmost 복원, error 감사 및 정상 종료를 통과한다. 이 측정값으로 footprint threshold나 active-rendering rate를 주장하지 않는다.
 
 - F239-231: sourceClock field를 거부하지 않고 현재 성공한 Terminal observer-start 응답을 받는다. 공유 source-clock 검증을 유지하고 폐기된 owner mock을 바꾼다. 같은 owner case가 수정 전 실패하고 수정 후 통과한다.
