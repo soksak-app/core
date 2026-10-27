@@ -7,7 +7,7 @@ import test from "node:test";
 import { findFirstChangedSlotFrame } from "../view-frame-geometry.mjs";
 import { terminalDragGeometryFrame, terminalFirstContentFrame, terminalSourceContentFrame,
   terminalViewDescriptor, writeTerminalDragLayouts, measureTerminalLayoutFrame,
-  setTerminalGeometryBackground, TERMINAL_GEOMETRY_BACKGROUND }
+  setTerminalGeometryBackground, terminalRasterTargetRectPt, TERMINAL_GEOMETRY_BACKGROUND }
   from "../benchmark/cases/terminal.mjs";
 
 function terminalLayoutFrame({ cardLeft, rootLeft, time, contentColor = TERMINAL_GEOMETRY_BACKGROUND }) {
@@ -114,7 +114,9 @@ test("terminal drag geometry keeps four measured card and raster edges from the 
     timeMs: 148,
     cardRectPt: { left: 10, top: 20, right: 209.5, bottom: 180 },
     nativeRectPt: { left: 11, top: 21, right: 208.5, bottom: 179 },
+    contentRectPt: { left: 11, top: 21, right: 208.5, bottom: 179 },
     slotInsetsPt: { left: 1, top: 1, right: 1, bottom: 1 },
+    contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
   });
 });
 
@@ -163,6 +165,19 @@ test("terminal view descriptor reads browser history and controls only the diagn
     { name: "terminal.view.frames", params: { action: "start" }, surface: "surface-a" },
     { name: "terminal.view.frames", params: { action: "stop" }, surface: "surface-a" },
   ]);
+});
+
+test("terminal convergence target comes from the visible native raster region", { timeout: 1000 }, () => {
+  const host = { regions: [
+    { surface: "surface-a", name: "view", visible: true,
+      frame: { x: 8, y: 12, width: 700, height: 420 } },
+    { surface: "surface-a", name: "toolbar", visible: true,
+      frame: { x: 0, y: 0, width: 700, height: 30 } },
+  ] };
+  assert.deepEqual(terminalRasterTargetRectPt(host, "surface-a"), {
+    left: 8, top: 12, right: 708, bottom: 432,
+  });
+  assert.throws(() => terminalRasterTargetRectPt({ regions: [] }, "surface-a"), /exactly one native raster region/);
 });
 
 test("terminal first-content evidence requires the fixed initial shell prompt in captured pixels", { timeout: 5000 }, async () => {

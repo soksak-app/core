@@ -198,6 +198,66 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
 {
+  "id": "F239-233",
+  "implementation": [
+    {
+      "file": "packages/window-check/view-metrics.mjs",
+      "symbol": "function evaluateDrag("
+    },
+    {
+      "file": "e2e/benchmark/cases/browser.mjs",
+      "symbol": "async function dragObservation("
+    },
+    {
+      "file": "e2e/benchmark/cases/editor.mjs",
+      "symbol": "async function editorDragObservation("
+    },
+    {
+      "file": "e2e/benchmark/cases/hwp.mjs",
+      "symbol": "export function measureHwpPaintFrame("
+    },
+    {
+      "file": "e2e/benchmark/cases/terminal.mjs",
+      "symbol": "export function terminalRasterTargetRectPt("
+    }
+  ],
+  "tests": [
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag convergence selects a later qualifying paint capture when the first capture is stale"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag convergence requires a captured final paint when source dimensions already match"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag convergence rejects internally aligned paint at a different final target rectangle"
+    },
+    {
+      "file": "packages/window-check/test/view-metrics.test.mjs",
+      "id": "drag convergence accepts a final-size source interval that overlaps gesture end when later pixels prove it"
+    },
+    {
+      "file": "e2e/test/editor-view-metrics-case.test.mjs",
+      "id": "editor drag geometry uses the declared diagnostic CSS paint color rather than a sampled dominant color"
+    },
+    {
+      "file": "e2e/test/hwp-view-metrics-case.test.mjs",
+      "id": "HWP paint geometry measures the magenta HTML marker separately from cyan native bounds"
+    },
+    {
+      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
+      "id": "terminal convergence target comes from the visible native raster region"
+    }
+  ],
+  "expected": "The earliest source-backed captured final paint meets two-frame, 33 ms and 2 pt convergence limits independently of eventual presentation, with exact target identity and stable later paint.",
+  "levels": [
+    "unit",
+    "application"
+  ]
+},
+{
   "id": "F239-223-2",
   "implementation": [
     {

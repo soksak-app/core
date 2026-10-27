@@ -99,6 +99,15 @@ function metrics() {
           nativeRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
           slotInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 } },
       ],
+      tailGeometryFrames: [5, 6, 7, 8, 9].map((frameIndex, index) => ({
+        frameIndex,
+        timeMs: [120, 129, 150, 200, 251][index],
+        cardRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+        nativeRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+        contentRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+        slotInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
+        contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
+      })),
       contentFrames: [
         contentFrame(0, 2, 80, 79, 81, 100, 100),
         contentFrame(1, 3, 88, 87, 89, 100, 110),
@@ -107,7 +116,8 @@ function metrics() {
         contentFrame(4, 9, 250, 249, 251, 120, 120),
       ],
       events: [],
-      finalPresentation: { displayedAtMs: 128, targetViewport: { width: 120, height: 80 } },
+      finalPresentation: { displayedAtMs: 128, targetViewport: { width: 120, height: 80 },
+        targetRectPt: { left: 0, top: 0, right: 120, bottom: 80 } },
       layouts: [{ ticket: 1, begun: 60, requested: 70, presented: 75, committed: 80 }],
       ticks: [70, 90],
     },
@@ -373,29 +383,195 @@ test("drag cadence is in-gesture and convergence meets both frame and time bound
   cadence.drag.contentFrames[3].captureTimeMs = 141;
   cadence.drag.contentFrames[3].displayCapture = { frameIndex: 6, timeMs: 141 };
   cadence.drag.gestureEndedAtMs = 130;
+  cadence.drag.tailGeometryFrames[1].timeMs = 141;
   assert.throws(() => assertViewMeasurements(cadence, options), /in-gesture content-frame interval 34 ms/);
 
   const tooManyFrames = metrics();
   tooManyFrames.drag.contentFrames[3].frameIndex = 7;
   tooManyFrames.drag.contentFrames[3].displayCapture.frameIndex = 7;
-  assert.throws(() => assertViewMeasurements(tooManyFrames, options), /within 2 post-gesture frames/);
+  tooManyFrames.drag.contentFrames[3].displayCapture.timeMs = 150;
+  tooManyFrames.drag.tailGeometryFrames[1].contentRectPt.right = 117;
+  assert.throws(() => assertViewMeasurements(tooManyFrames, options), /source-backed final-target paint capture/);
 
   const tooLate = metrics();
   tooLate.drag.gestureEndedAtMs = 130;
   tooLate.drag.contentFrames[3].frameIndex = 5;
   tooLate.drag.finalPresentation.targetViewport = { width: 130, height: 80 };
+  tooLate.drag.finalPresentation.targetRectPt.right = 130;
   tooLate.drag.contentFrames.splice(4, 0,
     contentFrame(4, 6, 145, 144, 146, 120, 110),
     contentFrame(5, 6, 165, 164, 166, 130, 130));
   tooLate.drag.contentFrames[5].displayCapture = { frameIndex: 6, timeMs: 166 };
   tooLate.drag.contentFrames[6].sourceSequence = 6;
-  assert.throws(() => assertViewMeasurements(tooLate, options), /within 33 ms after gesture end/);
+  assert.throws(() => assertViewMeasurements(tooLate, options), /source-backed final-target paint capture/);
 
   const alreadyMatched = metrics();
   alreadyMatched.drag.contentFrames.splice(3);
   alreadyMatched.drag.finalPresentation.targetViewport = { width: 100, height: 80 };
+  alreadyMatched.drag.finalPresentation.targetRectPt.right = 100;
+  alreadyMatched.drag.contentFrames[2].displayCapture = { frameIndex: 6, timeMs: 129 };
+  for (const frame of alreadyMatched.drag.contentFrames) {
+    frame.displayCapture = { frameIndex: 6, timeMs: 129 };
+  }
+  alreadyMatched.drag.tailGeometryFrames = alreadyMatched.drag.tailGeometryFrames.map((frame) => ({
+    ...frame,
+    cardRectPt: { left: 0, top: 0, right: 100, bottom: 80 },
+    nativeRectPt: { left: 0, top: 0, right: 100, bottom: 80 },
+    contentRectPt: { left: 0, top: 0, right: 100, bottom: 80 },
+  }));
   const report = assertViewMeasurements(alreadyMatched, options);
-  assert.equal(report.evaluation.drag.convergedFrame, 0);
+  assert.equal(report.evaluation.drag.convergedFrame, 1,
+    "already matching source dimensions still need a post-gesture target paint capture");
+  assert.equal(report.evaluation.drag.paintCaptureFrameIndex, 5);
+});
+
+test("drag convergence uses the early source-backed paint capture instead of the late presentation barrier", { timeout: 1000 }, () => {
+  const raw = metrics();
+  raw.drag.finalPresentation.displayedAtMs = 200;
+  for (const frame of raw.drag.contentFrames) {
+    if (frame.displayCapture) {
+      frame.displayCapture = { frameIndex: 9, timeMs: Math.max(251, frame.timeRange.upperMs) };
+    }
+  }
+  const report = assertViewMeasurements(raw, options);
+
+  assert.equal(report.evaluation.drag.convergedFrame, 2,
+    "the first target-size source frame was captured two frames after gesture end");
+  assert.equal(report.evaluation.drag.convergenceMs, 29,
+    "the source-backed paint capture, rather than the later presentation barrier, is within 33 ms");
+  assert.equal(report.evaluation.drag.paintCaptureFrameIndex, 6);
+  assert.equal(report.evaluation.drag.paintCaptureTimeMs, 129);
+  assert.equal(report.evaluation.drag.paintSourceSequence, 3);
+  assert.equal(report.evaluation.drag.eventualPresentationCaptureFrameIndex, 9,
+    "the later presentation proof remains separate from the convergence capture");
+});
+
+test("drag convergence rejects absent or misaligned same-frame paint evidence", { timeout: 1000 }, () => {
+  const missingPaint = metrics();
+  missingPaint.drag.contentFrames[3].displayCapture = { frameIndex: 6, timeMs: 129 };
+  missingPaint.drag.tailGeometryFrames[1].contentRectPt = null;
+  assert.throws(() => assertViewMeasurements(missingPaint, options), /tailGeometryFrames\[1\]\.contentRectPt/);
+
+  const stalePaint = metrics();
+  stalePaint.drag.contentFrames[3].displayCapture = { frameIndex: 6, timeMs: 129 };
+  stalePaint.drag.tailGeometryFrames.find(({ frameIndex }) => frameIndex === 6).contentRectPt.right = 117;
+  assert.throws(() => assertViewMeasurements(stalePaint, options), /source-backed final-target paint capture/);
+});
+
+test("drag convergence selects a later qualifying paint capture when the first capture is stale", { timeout: 1000 }, () => {
+  const raw = metrics();
+  raw.drag.contentFrames = [
+    contentFrame(0, 2, 80, 79, 81, 100, 100),
+    contentFrame(1, 3, 88, 87, 89, 100, 110),
+    contentFrame(2, 4, 96, 95, 97, 100, 120),
+    contentFrame(3, 5, 128, 127, 129, 120, 120),
+    contentFrame(4, 6, 130, 129, 131, 120, 120),
+  ];
+  raw.drag.contentFrames[3].captureTimeMs = 129;
+  raw.drag.contentFrames[4].captureTimeMs = 131;
+  for (const frame of raw.drag.contentFrames.slice(3)) {
+    frame.displayCapture = { frameIndex: 9, timeMs: 251 };
+  }
+  raw.drag.tailGeometryFrames[0].timeMs = 129;
+  raw.drag.tailGeometryFrames[0].contentRectPt.right = 117;
+  raw.drag.tailGeometryFrames[1].timeMs = 131;
+  raw.drag.finalPresentation.targetRectPt = { left: 0, top: 0, right: 120, bottom: 80 };
+
+  const report = assertViewMeasurements(raw, options);
+
+  assert.equal(report.evaluation.drag.paintCaptureFrameIndex, 6,
+    "a later matching capture within both deadline limits qualifies after the first capture is stale");
+});
+
+test("drag convergence accepts a final-size source interval that overlaps gesture end when later pixels prove it", { timeout: 1000 }, () => {
+  const raw = metrics();
+  raw.drag.contentFrames = [
+    contentFrame(0, 2, 80, 79, 81, 100, 100),
+    contentFrame(1, 3, 88, 87, 89, 100, 110),
+    contentFrame(2, 4, 96, 95, 97, 100, 120),
+    contentFrame(3, 5, 100, 99, 101, 120, 120),
+  ];
+  raw.drag.contentFrames[3].captureTimeMs = 108;
+  raw.drag.contentFrames[3].displayCapture = { frameIndex: 6, timeMs: 129 };
+  raw.drag.tailGeometryFrames[0].timeMs = 108;
+  raw.drag.finalPresentation.targetRectPt = { left: 0, top: 0, right: 120, bottom: 80 };
+
+  const report = assertViewMeasurements(raw, options);
+
+  assert.equal(report.evaluation.drag.convergedFrame, 1,
+    "the actual final-size pixels are captured eight milliseconds after gesture end");
+  assert.equal(report.evaluation.drag.paintSourceSequence, 3);
+});
+
+test("drag convergence requires a captured final paint when source dimensions already match", { timeout: 1000 }, () => {
+  const raw = metrics();
+  raw.drag.contentFrames.splice(3);
+  raw.drag.contentFrames[2].displayCapture = { frameIndex: 6, timeMs: 129 };
+  for (const frame of raw.drag.contentFrames) {
+    frame.displayCapture = { frameIndex: 6, timeMs: 129 };
+  }
+  raw.drag.finalPresentation.targetViewport = { width: 100, height: 80 };
+  raw.drag.finalPresentation.targetRectPt = { left: 0, top: 0, right: 100, bottom: 80 };
+  raw.drag.tailGeometryFrames = raw.drag.tailGeometryFrames.map((frame) => ({
+    ...frame,
+    cardRectPt: { left: 0, top: 0, right: 100, bottom: 80 },
+    nativeRectPt: { left: 0, top: 0, right: 100, bottom: 80 },
+    contentRectPt: { left: 0, top: 0, right: 100, bottom: 80 },
+  }));
+
+  const report = assertViewMeasurements(raw, options);
+
+  assert.equal(report.evaluation.drag.paintCaptureFrameIndex, 5,
+    "the already-final source state still needs actual captured paint evidence");
+});
+
+test("drag convergence rejects internally aligned paint at a different final target rectangle", { timeout: 1000 }, () => {
+  const raw = metrics();
+  raw.drag.finalPresentation.targetRectPt = { left: 0, top: 0, right: 120, bottom: 80 };
+  raw.drag.tailGeometryFrames = raw.drag.tailGeometryFrames.map((frame) => ({
+    ...frame,
+    cardRectPt: { left: 0, top: 0, right: 100, bottom: 80 },
+    nativeRectPt: { left: 0, top: 0, right: 100, bottom: 80 },
+    contentRectPt: { left: 0, top: 0, right: 100, bottom: 80 },
+  }));
+
+  assert.throws(() => assertViewMeasurements(raw, options), /source-backed final-target paint capture/);
+});
+
+test("drag convergence rejects a source-backed capture at 34.888 ms even when presentation was earlier", { timeout: 1000 }, () => {
+  const raw = metrics();
+  raw.drag.recordedFrameCount = 67;
+  raw.drag.firstGestureFrameIndex = 58;
+  raw.drag.lastGestureFrameIndex = 60;
+  raw.drag.gestureEndedFrameIndex = 60;
+  raw.drag.geometryFrames = [58, 59, 60].map((frameIndex) => ({
+    frameIndex,
+    timeMs: 70 + frameIndex,
+    cardRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    nativeRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    slotInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
+  }));
+  raw.drag.tailGeometryFrames = Array.from({ length: 6 }, (_, index) => ({
+    frameIndex: 61 + index,
+    timeMs: [120, 134.888, 150, 200, 251, 252][index],
+    cardRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    nativeRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    contentRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    slotInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
+    contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
+  }));
+  raw.drag.contentFrames = [
+    contentFrame(0, 58, 80, 79, 81, 100, 100),
+    contentFrame(1, 59, 90, 89, 91, 110, 110),
+    contentFrame(2, 60, 96, 95, 97, 100, 100),
+    contentFrame(3, 62, 124, 123, 125, 120, 120),
+  ];
+  raw.drag.contentFrames[3].captureTimeMs = 134.888;
+  raw.drag.contentFrames[3].displayCapture = { frameIndex: 62, timeMs: 134.888 };
+  raw.drag.finalPresentation = { displayedAtMs: 125, targetViewport: { width: 120, height: 80 },
+    targetRectPt: { left: 0, top: 0, right: 120, bottom: 80 } };
+
+  assert.throws(() => assertViewMeasurements(raw, options), /source-backed final-target paint capture/);
 });
 
 test("drag cadence ignores an overlapping placement readback and converges against the presented viewport", { timeout: 1000 }, () => {
@@ -403,15 +579,18 @@ test("drag cadence ignores an overlapping placement readback and converges again
   const readback = nativePlacement(110, 80, 88);
   raw.drag.events = [readback.placement];
   raw.drag.contentFrames[1].nativePlacement = readback;
-  raw.drag.finalPresentation = { displayedAtMs: 128, targetViewport: { width: 120, height: 80 } };
+  raw.drag.finalPresentation = { displayedAtMs: 128, targetViewport: { width: 120, height: 80 },
+    targetRectPt: { left: 0, top: 0, right: 120, bottom: 80 } };
   raw.drag.contentFrames[3].captureTimeMs = 130;
+  raw.drag.contentFrames[3].displayCapture = { frameIndex: 6, timeMs: 130 };
+  raw.drag.tailGeometryFrames[1].timeMs = 130;
 
   const report = assertViewMeasurements(raw, options);
 
   assert.equal(report.evaluation.drag.convergedFrame, 2,
     "the source frame after the last input matches the successfully presented final viewport");
-  assert.equal(report.evaluation.drag.convergenceMs, 29,
-    "the captured frame is at or after both the presentation and source-frame upper bound");
+  assert.equal(report.evaluation.drag.convergenceMs, 30,
+    "convergence uses the actual source-backed pixel-capture time");
   assert.deepEqual(report.measurements.drag.events, [readback.placement],
     "the ambiguous native readback remains raw evidence without a per-source placement association");
 });
@@ -427,7 +606,16 @@ test("drag cadence preserves distinct source frames that map to the same capture
     contentFrame(4, 3, 96, 95, 97, 103, 120),
     contentFrame(5, 5, 112, 111, 113, 120, 120),
   ];
-  raw.drag.contentFrames[4].displayCapture = { frameIndex: 5, timeMs: 128 };
+  raw.drag.contentFrames[4].displayCapture = { frameIndex: 6, timeMs: 128 };
+  raw.drag.tailGeometryFrames = [5, 6, 7, 8, 9].map((frameIndex, index) => ({
+    frameIndex,
+    timeMs: [113, 128, 150, 200, 251][index],
+    cardRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    nativeRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    contentRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    slotInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
+    contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
+  }));
   const report = assertViewMeasurements(raw, options);
   assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 11);
   assert.equal(report.evaluation.drag.convergedFrame, 1);
@@ -445,6 +633,17 @@ test("drag cadence keeps captured boundary frames and their neighboring cadence 
     contentFrame(6, 6, 108, 107, 109, 120, 120),
     contentFrame(7, 8, 250, 249, 251, 120, 120),
   ];
+  boundary.drag.contentFrames[6].displayCapture = { frameIndex: 9, timeMs: 260 };
+  boundary.drag.contentFrames[7].displayCapture = { frameIndex: 9, timeMs: 260 };
+  boundary.drag.tailGeometryFrames = [5, 6, 7, 8, 9].map((frameIndex, index) => ({
+    frameIndex,
+    timeMs: [100, 109, 150, 251, 260][index],
+    cardRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    nativeRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    contentRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
+    slotInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
+    contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
+  }));
   const result = assertViewMeasurements(boundary, options);
   assert.equal(result.evaluation.drag.maxContentFrameIntervalMs, 10,
     "the possible start/end rows, nearest outside rows and all in-gesture rows bound cadence");
@@ -472,6 +671,10 @@ test("drag cadence excludes observer idle time outside the recorded gesture", { 
     if (frame.displayCapture) frame.displayCapture.timeMs = Math.max(idle.drag.finalPresentation.displayedAtMs,
       frame.timeRange.upperMs);
   }
+  idle.drag.contentFrames[3].displayCapture = { frameIndex: 6, timeMs: 11032 };
+  idle.drag.tailGeometryFrames = idle.drag.tailGeometryFrames.map((frame, index) => ({
+    ...frame, timeMs: [11031, 11032, 11040, 11050, 11060][index],
+  }));
 
   const report = assertViewMeasurements(idle, options);
   assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 9,

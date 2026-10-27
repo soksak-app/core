@@ -455,6 +455,7 @@ function evaluateDrag(value) {
   const targetViewport = objectAt(finalPresentation.targetViewport, "drag.finalPresentation.targetViewport");
   const targetWidth = numberAt(targetViewport.width, "drag.finalPresentation.targetViewport.width", { minimum: 1, integer: true });
   const targetHeight = numberAt(targetViewport.height, "drag.finalPresentation.targetViewport.height", { minimum: 1, integer: true });
+  const finalTargetRectPt = rectAt(finalPresentation.targetRectPt, "drag.finalPresentation.targetRectPt", { allowNegative: true });
 
   let previousSequence = -1;
   let previousFrameTime = -Infinity;
@@ -563,24 +564,121 @@ function evaluateDrag(value) {
   const mismatchedAtEnd = atEnd.width !== targetWidth || atEnd.height !== targetHeight;
   let convergedFrame = 0;
   let convergenceMs = 0;
-  if (mismatchedAtEnd) {
-    const postGestureFrames = contentFrames.filter(({ timeRange }) => timeRange.lowerMs > gestureEndedAtMs);
-    const converged = postGestureFrames.find(({ displayCapture, width, height }) =>
-      displayCapture !== null && displayCapture.frameIndex > gestureEndedFrameIndex
-      && width === targetWidth && height === targetHeight
-    );
-    if (!converged) fail("drag.contentFrames", "a post-input source frame matching the presented viewport and captured after presentation and source time", {
-      displayedAtMs, targetViewport: { width: targetWidth, height: targetHeight }, postGestureFrames,
-    });
-    convergedFrame = converged.displayCapture.frameIndex - gestureEndedFrameIndex;
-    convergenceMs = Math.max(displayedAtMs, converged.timeRange.upperMs) - gestureEndedAtMs;
-    if (convergedFrame > DRAG_SETTLE_FRAME_LIMIT) {
-      fail("drag.contentFrames", `convergence within ${DRAG_SETTLE_FRAME_LIMIT} post-gesture frames`, convergedFrame);
+  let paintCaptureFrameIndex = null;
+  let paintCaptureTimeMs = null;
+  let paintSourceSequence = null;
+  let eventualPresentationCaptureFrameIndex = null;
+  const tailGeometryFrames = arrayAt(drag.tailGeometryFrames, "drag.tailGeometryFrames", {
+    length: recordedFrameCount - gestureEndedFrameIndex - 1,
+  });
+  const tailGeometryByIndex = new Map();
+  let previousTailTime = -Infinity;
+  for (const [index, frame] of tailGeometryFrames.entries()) {
+    const path = `drag.tailGeometryFrames[${index}]`;
+    const frameIndex = numberAt(frame.frameIndex, `${path}.frameIndex`, { integer: true });
+    const expectedIndex = gestureEndedFrameIndex + index + 1;
+    if (frameIndex !== expectedIndex) fail(`${path}.frameIndex`, `contiguous captured frame index ${expectedIndex}`, frameIndex);
+    const timeMs = numberAt(frame.timeMs, `${path}.timeMs`);
+    if (timeMs <= previousTailTime) fail(`${path}.timeMs`, "strictly increasing captured tail timestamps", timeMs);
+    previousTailTime = timeMs;
+    const cardRect = rectAt(frame.cardRectPt, `${path}.cardRectPt`, { allowNegative: true });
+    const nativeRect = rectAt(frame.nativeRectPt, `${path}.nativeRectPt`, { allowNegative: true });
+    const contentRect = rectAt(frame.contentRectPt, `${path}.contentRectPt`, { allowNegative: true });
+    const slotInsets = slotInsetsAt(frame.slotInsetsPt, `${path}.slotInsetsPt`);
+    const contentInsets = slotInsetsAt(frame.contentInsetsPt, `${path}.contentInsetsPt`);
+    const expectedNative = {
+      left: cardRect.left + slotInsets.left,
+      top: cardRect.top + slotInsets.top,
+      right: cardRect.right - slotInsets.right,
+      bottom: cardRect.bottom - slotInsets.bottom,
+    };
+    const expectedContent = {
+      left: expectedNative.left + contentInsets.left,
+      top: expectedNative.top + contentInsets.top,
+      right: expectedNative.right - contentInsets.right,
+      bottom: expectedNative.bottom - contentInsets.bottom,
+    };
+    if (expectedContent.right <= expectedContent.left || expectedContent.bottom <= expectedContent.top) {
+      fail(`${path}.contentInsetsPt`, "insets that leave a positive expected content rectangle", contentInsets);
     }
-    if (convergenceMs < 0 || convergenceMs > DRAG_CONTENT_INTERVAL_LIMIT_MS) {
-      fail("drag.contentFrames", `convergence within ${DRAG_CONTENT_INTERVAL_LIMIT_MS} ms after gesture end`, convergenceMs);
+    const nativeGeometryErrorPt = Math.max(...["left", "top", "right", "bottom"]
+      .map((edge) => Math.abs(expectedNative[edge] - nativeRect[edge])));
+    const contentGeometryErrorPt = Math.max(...["left", "top", "right", "bottom"]
+      .map((edge) => Math.abs(expectedContent[edge] - contentRect[edge])));
+    const finalTargetErrorPt = Math.max(...["left", "top", "right", "bottom"]
+      .map((edge) => Math.abs(finalTargetRectPt[edge] - nativeRect[edge])));
+    tailGeometryByIndex.set(frameIndex, { frameIndex, timeMs, nativeGeometryErrorPt, contentGeometryErrorPt, finalTargetErrorPt });
+  }
+
+  const targetSourceFrames = contentFrames.filter(({ width, height }) =>
+    width === targetWidth && height === targetHeight);
+  if (targetSourceFrames.length === 0) {
+    fail("drag.contentFrames", mismatchedAtEnd
+      ? "a post-input source frame matching the presented viewport"
+      : "a source frame matching the final viewport",
+    { displayedAtMs, targetViewport: { width: targetWidth, height: targetHeight }, contentFrames });
+  }
+
+  const paintCandidates = [];
+  for (const source of targetSourceFrames) {
+    for (const capture of tailGeometryFrames) {
+      if (capture.timeMs < source.timeRange.upperMs) continue;
+      if (capture.frameIndex - gestureEndedFrameIndex > DRAG_SETTLE_FRAME_LIMIT) continue;
+      const convergence = capture.timeMs - gestureEndedAtMs;
+      if (convergence < 0 || convergence > DRAG_CONTENT_INTERVAL_LIMIT_MS) continue;
+      const laterSources = contentFrames.filter(({ sourceSequence }) => sourceSequence >= source.sourceSequence);
+      if (laterSources.some(({ width, height }) => width !== targetWidth || height !== targetHeight)) continue;
+      const possibleBeforeCapture = contentFrames.filter(({ sourceSequence, timeRange }) =>
+        sourceSequence >= source.sourceSequence && timeRange.lowerMs <= capture.timeMs);
+      if (possibleBeforeCapture.some(({ width, height }) => width !== targetWidth || height !== targetHeight)) continue;
+      const paint = tailGeometryByIndex.get(capture.frameIndex);
+      if (paint.nativeGeometryErrorPt > DRAG_GEOMETRY_LIMIT_PT
+          || paint.contentGeometryErrorPt > DRAG_GEOMETRY_LIMIT_PT
+          || paint.finalTargetErrorPt > DRAG_GEOMETRY_LIMIT_PT) continue;
+      if (!source.displayCapture) continue;
+      paintCandidates.push({ source, capture, paint, laterSources });
     }
   }
+  paintCandidates.sort((left, right) => left.capture.frameIndex - right.capture.frameIndex
+    || left.source.sourceSequence - right.source.sourceSequence);
+  const selectedPaint = paintCandidates[0];
+  if (!selectedPaint) {
+    fail("drag.contentFrames", "a source-backed final-target paint capture within two frames and 33 ms after gesture end", {
+      mismatchedAtEnd, targetViewport: { width: targetWidth, height: targetHeight },
+      finalTargetRectPt, targetSourceFrames, tailGeometryFrames: [...tailGeometryByIndex.values()],
+    });
+  }
+
+  const { source: converged, capture, laterSources } = selectedPaint;
+  convergedFrame = capture.frameIndex - gestureEndedFrameIndex;
+  convergenceMs = capture.timeMs - gestureEndedAtMs;
+  for (const frame of laterSources) {
+    if (frame.width !== targetWidth || frame.height !== targetHeight) {
+      fail(`drag.contentFrames source sequence ${frame.sourceSequence}`, "stable final viewport dimensions after paint convergence",
+        { width: frame.width, height: frame.height, targetWidth, targetHeight });
+    }
+  }
+  for (const frame of tailGeometryFrames) {
+    if (frame.frameIndex < capture.frameIndex) continue;
+    const measured = tailGeometryByIndex.get(frame.frameIndex);
+    if (measured.nativeGeometryErrorPt > DRAG_GEOMETRY_LIMIT_PT
+        || measured.contentGeometryErrorPt > DRAG_GEOMETRY_LIMIT_PT
+        || measured.finalTargetErrorPt > DRAG_GEOMETRY_LIMIT_PT) {
+      fail(`drag.tailGeometryFrames frame ${frame.frameIndex}`,
+        `stable native target and paint geometry within ${DRAG_GEOMETRY_LIMIT_PT} pt through the recorded tail`, measured);
+    }
+  }
+  const eventualPaint = tailGeometryByIndex.get(converged.displayCapture.frameIndex);
+  if (!eventualPaint || eventualPaint.timeMs !== converged.displayCapture.timeMs
+      || eventualPaint.finalTargetErrorPt > DRAG_GEOMETRY_LIMIT_PT) {
+    fail(`drag.contentFrames source sequence ${converged.sourceSequence}`, "measured final-target geometry at the eventual presentation capture", {
+      displayCapture: converged.displayCapture, eventualPaint,
+    });
+  }
+  paintCaptureFrameIndex = capture.frameIndex;
+  paintCaptureTimeMs = capture.timeMs;
+  paintSourceSequence = converged.sourceSequence;
+  eventualPresentationCaptureFrameIndex = converged.displayCapture.frameIndex;
   return {
     maxGeometryErrorPt,
     geometryLimitPt: DRAG_GEOMETRY_LIMIT_PT,
@@ -590,6 +688,10 @@ function evaluateDrag(value) {
     targetViewport: { width: targetWidth, height: targetHeight },
     convergedFrame,
     convergenceMs,
+    paintCaptureFrameIndex,
+    paintCaptureTimeMs,
+    paintSourceSequence,
+    eventualPresentationCaptureFrameIndex,
     convergenceFrameLimit: DRAG_SETTLE_FRAME_LIMIT,
     passed: true,
   };

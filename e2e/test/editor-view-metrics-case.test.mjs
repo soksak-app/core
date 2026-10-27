@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { collectEditorProcessFootprint, collectHiddenEditorFootprint, editorFootprintEvidence, editorGeometryPalette,
-  editorSourceContentFrame, editorViewDescriptor }
+  editorDragTailGeometryFrame, editorPaletteWithMarkerColor, editorSourceContentFrame, editorViewDescriptor }
   from "../benchmark/cases/editor.mjs";
 import { editorSlotInsets } from "../benchmark/cases/editor.mjs";
 import { measureViewFrameGeometry } from "../view-frame-geometry.mjs";
@@ -21,7 +21,7 @@ test("editor view descriptor calls the declared hyphenated content-trace command
     async run(name, params, surface) {
       calls.push({ name, params, surface });
       return params.action === "read" ? { historyEntries: 1, regionHistoryEntries: 0 }
-        : { enabled: params.action === "start" };
+        : { enabled: params.action === "start", ...(params.action === "start" ? { markerColor: [17, 193, 231] } : {}) };
     },
   };
   await descriptor.readiness(session, "surface-a");
@@ -152,7 +152,7 @@ test("hidden-only editor measurement preserves the primary read error while remo
 });
 
 
-test("editor geometry palette samples a dominant opaque interior fill distinct from core geometry colors", () => {
+test("editor drag geometry uses the declared diagnostic CSS paint color rather than a sampled dominant color", () => {
   const width = 40, height = 30, stride = width * 4;
   const data = Buffer.alloc(stride * height);
   for (let index = 0; index < width * height; index++) {
@@ -161,15 +161,16 @@ test("editor geometry palette samples a dominant opaque interior fill distinct f
     data[index * 4 + 2] = 255;
     data[index * 4 + 3] = 255;
   }
+  const markerColor = [20, 70, 210];
   const measured = editorGeometryPalette({ width, height, stride, data, scale: 1, contentScale: 1,
     content: { x: 0, y: 0 } }, { x: 2, y: 2, width: 36, height: 26 },
-  { card: "#191b24", bg: "#101117", edge: "#2b2e3d", rule: "#22242f", focus: "#ffb36b" }, 0);
-  assert.deepEqual(measured, { contentColor: [255, 255, 255], cardColor: [25, 27, 36], planeColor: [16, 17, 23],
-    borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]], cornerRadiusPt: 0,
-    sampleCount: 88, dominantCount: 88 });
+  { card: "#191b24", bg: "#101117", edge: "#2b2e3d", rule: "#22242f", focus: "#ffb36b" }, 0, markerColor);
+  assert.deepEqual(measured, { contentColor: markerColor, cardColor: [25, 27, 36], planeColor: [16, 17, 23],
+    borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]], cornerRadiusPt: 0 });
+  assert.throws(() => editorPaletteWithMarkerColor(measured, undefined), /three-channel RGB paint marker color/);
   assert.throws(() => editorGeometryPalette({ width, height, stride, data, scale: 1, contentScale: 1,
     content: { x: 0, y: 0 } }, { x: 2, y: 2, width: 36, height: 26 },
-  { card: "#ffffff", bg: "#101117", edge: "#2b2e3d" }, 0), /conflicts with core card geometry/);
+  { card: "#1446d2", bg: "#101117", edge: "#2b2e3d" }, 0, markerColor), /conflicts with core card geometry/);
 });
 
 test("editor geometry finds the card boundary beyond a plane-colored slot gutter", { timeout: 1000 }, () => {
@@ -200,11 +201,17 @@ test("editor geometry finds the card boundary beyond a plane-colored slot gutter
   for (let y = 22; y < 64; y++) for (let x = 14; x < 86; x++) paint(x, y, [17, 193, 231]);
 
   const frame = { width, height, stride, data, scale: 1, contentScale: 1, content: { x: 0, y: 0 }, time: 12.5 };
-  const palette = editorGeometryPalette(frame, { x: 14, y: 22, width: 72, height: 42 }, theme, 0);
+  const palette = editorGeometryPalette(frame, { x: 14, y: 22, width: 72, height: 42 }, theme, 0, [17, 193, 231]);
   const measured = measureViewFrameGeometry(frame, { ...palette,
     targetRect: { x: 14, y: 22, width: 72, height: 42 } });
   assert.deepEqual(measured.cardRectPx, { left: 10, top: 8, right: 90, bottom: 72 });
   assert.deepEqual(measured.nativeRectPx, { left: 14, top: 22, right: 86, bottom: 64 });
+  const tail = editorDragTailGeometryFrame(7, { ...measured, timeMs: frame.time },
+    { left: 4, top: 14, right: 4, bottom: 8 });
+  assert.deepEqual(tail, { frameIndex: 7, timeMs: frame.time, cardRectPt: measured.cardRectPt,
+    nativeRectPt: measured.nativeRectPt, contentRectPt: measured.nativeRectPt,
+    slotInsetsPt: { left: 4, top: 14, right: 4, bottom: 8 },
+    contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 } });
 });
 
 test("editor slot insets come from declared composition and card geometry", () => {

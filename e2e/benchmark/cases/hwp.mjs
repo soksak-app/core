@@ -17,6 +17,7 @@ const HWP_CONTENT = "속삭한글문서확인";
 const GEOMETRY_LIMIT_PT = 2;
 const NATIVE_MARKER_COLOR = [0, 255, 255];
 const NATIVE_MARKER_WIDTH_PT = 2;
+const HTML_PAINT_MARKER_COLOR = [255, 0, 255];
 
 /** Requires the current view and studio document histories from the HWP diagnostic reply. */
 export function hwpDocumentHistoryEvidence(value) {
@@ -174,6 +175,13 @@ export async function hwpViewDescriptor(s, diagnostic = () => {}, captureObserva
   });
 }
 
+/** Reads the current HTML paint marker while the explicit observer start is still active. */
+export async function readHwpPaintViewport(s, surface) {
+  const result = await s.run("hwp.diagnostics.frames.read", {}, surface);
+  assert.ok(result?.studioViewport, `HWP view ${surface} has no active HTML viewport paint marker`);
+  return result.studioViewport;
+}
+
 /** Finds the earliest HWP view recording frame that contains its fixture document text. */
 export async function hwpFirstContentFrame({ captured, rect, directory, recognizeFrame }) {
   return firstContentFrame({ captured, rect, expected: HWP_CONTENT, language: "ko-KR", directory, recognizeFrame });
@@ -266,6 +274,44 @@ function measureHwpCaptureFrame(frame, frameIndex, markerReply, { targetRect, th
   geometry.timeMs = frame.time;
   geometry.errorPt = assertHwpFrameMatchesSlot(geometry, slotInsetsPt);
   return geometry;
+}
+
+/** Measures the magenta HTML viewport border separately from the native cyan region-bound marker. */
+export function measureHwpPaintFrame(frame, frameIndex, viewport, { targetRect, themeGeometry, studioFrame } = {}) {
+  assert.ok(Number.isSafeInteger(frameIndex) && frameIndex >= 0, "HWP paint frame index is invalid");
+  assert.ok(viewport && typeof viewport === "object" && !Array.isArray(viewport),
+    "HWP paint measurement requires the current studio viewport marker evidence");
+  assert.deepEqual(viewport.markerColor, HTML_PAINT_MARKER_COLOR,
+    "HWP HTML viewport paint marker color differs from its magenta RGB token");
+  assert.equal(viewport.borderWidth, 2, "HWP HTML viewport paint marker border must be exactly 2 CSS px");
+  assert.ok(Number.isFinite(viewport.innerWidth) && viewport.innerWidth > 8
+    && Number.isFinite(viewport.innerHeight) && viewport.innerHeight > 8
+    && viewport.rect && [viewport.rect.left, viewport.rect.top, viewport.rect.right, viewport.rect.bottom]
+      .every(Number.isFinite), "HWP paint measurement requires finite current viewport dimensions and marker edges");
+  assert.deepEqual(viewport.rect, { left: 4, top: 4,
+    right: viewport.innerWidth - 4, bottom: viewport.innerHeight - 4 },
+  "HWP HTML viewport marker must remain inset by 4 CSS px on every edge");
+  assert.ok(studioFrame && Number.isFinite(studioFrame.width) && studioFrame.width > 0
+    && Number.isFinite(studioFrame.height) && studioFrame.height > 0,
+  "HWP paint measurement requires the current native studio frame");
+  const geometry = measureViewFrameGeometry(frame, { ...themeGeometry, contentColor: HTML_PAINT_MARKER_COLOR,
+    targetRect, colorTolerance: VIEW_GEOMETRY_COLOR_TOLERANCE });
+  const scaleX = studioFrame.width / viewport.innerWidth;
+  const scaleY = studioFrame.height / viewport.innerHeight;
+  return {
+    frameIndex,
+    timeMs: frame.time,
+    cardRectPt: geometry.cardRectPt,
+    contentRectPt: geometry.nativeRectPt,
+    contentInsetsPt: {
+      left: viewport.rect.left * scaleX,
+      top: viewport.rect.top * scaleY,
+      right: (viewport.innerWidth - viewport.rect.right) * scaleX,
+      bottom: (viewport.innerHeight - viewport.rect.bottom) * scaleY,
+    },
+    paintMarker: { color: [...viewport.markerColor], borderWidthCss: viewport.borderWidth,
+      rect: { ...viewport.rect }, innerWidth: viewport.innerWidth, innerHeight: viewport.innerHeight },
+  };
 }
 
 function cardTargetRect(grid, cardId) {
@@ -421,12 +467,15 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
   await s.presented();
   const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
     assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
-    return withHwpNativeMarker(s, surface, async () => ({
-      run: await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }),
-    }));
+    return withHwpNativeMarker(s, surface, async () => {
+      const run = await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true });
+      const studioViewport = await readHwpPaintViewport(s, surface);
+      return { run, studioViewport };
+    });
   });
   const { marker, result: action } = traced.action;
   const run = action.run;
+  const paintViewport = action.studioViewport;
   const captured = captureFrames(run, "drag");
   assert.ok(captured.length > 2, "HWP drag recording contains too few frames");
   const firstGestureFrameIndex = captured.findIndex((frame) => frame.time >= run.ticks[0]);
@@ -447,6 +496,19 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt,
       errorPt: measured.errorPt, geometryEvidence: measured.geometryEvidence, nativeMarker: measured.nativeMarker });
   }
+  const tailGeometryFrames = [];
+  for (let frameIndex = gestureEndedFrameIndex + 1; frameIndex < captured.length; frameIndex++) {
+    const nativeMeasured = measureHwpCaptureFrame(captured[frameIndex], frameIndex, marker,
+      { targetRect, themeGeometry, slotInsetsPt });
+    const paintMeasured = measureHwpPaintFrame(captured[frameIndex], frameIndex, paintViewport,
+      { targetRect, themeGeometry, studioFrame: studio.frame });
+    assert.deepEqual(paintMeasured.cardRectPt, nativeMeasured.cardRectPt,
+      `HWP paint and native marker selected different card geometry in capture frame ${frameIndex}`);
+    tailGeometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
+      cardRectPt: nativeMeasured.cardRectPt, nativeRectPt: nativeMeasured.nativeRectPt,
+      contentRectPt: paintMeasured.contentRectPt, slotInsetsPt, contentInsetsPt: paintMeasured.contentInsetsPt,
+      nativeMarker: nativeMeasured.nativeMarker, paintMarker: paintMeasured.paintMarker });
+  }
   const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
     gestureStartedAtMs: run.ticks[0], gestureEndedAtMs: run.ticks.at(-1),
   });
@@ -466,11 +528,15 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
     gestureStartedAtMs: run.ticks[0],
     gestureEndedAtMs: run.ticks.at(-1),
     finalPresentation: { displayedAtMs: run.displayed,
-      targetViewport: { width: Math.trunc(root.frame.width), height: Math.trunc(root.frame.height) } },
+      targetViewport: { width: Math.trunc(root.frame.width), height: Math.trunc(root.frame.height) },
+      targetRectPt: { left: studio.frame.x, top: studio.frame.y,
+        right: studio.frame.x + studio.frame.width, bottom: studio.frame.y + studio.frame.height } },
     geometryFrames,
+    tailGeometryFrames,
     contentFrames,
     sourceContentFrames: traced.contentFrames,
     htmlViewportEvidence: traced.start?.studioViewport,
+    paintViewportEvidence: paintViewport,
     markerGeometry: { color: [...marker.markerColor], borderWidthPt: marker.borderWidthPt,
       geometryEvidence: "native region bounds alignment" },
     rootSlotInsetsPt,

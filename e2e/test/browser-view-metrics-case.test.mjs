@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertBrowserFrameMatchesSlot, BROWSER_FIXTURE_CONTENT_COLOR, browserViewDescriptor,
-  measureBrowserFrameGeometry } from "../benchmark/cases/browser.mjs";
+import { assertBrowserFrameMatchesSlot, BROWSER_FIXTURE_CONTENT_COLOR, browserDragTailGeometryFrame,
+  browserViewDescriptor, measureBrowserFrameGeometry } from "../benchmark/cases/browser.mjs";
 
 test("browser pixel geometry matches the independently declared document slot", { timeout: 5000 }, () => {
   const geometry = { cardRectPt: { left: 0, top: 0, right: 100, bottom: 100 },
@@ -43,6 +43,13 @@ test("browser fixture color does not include unrelated chrome pixels in the docu
     targetRect: { x: 150, y: 120, width: 1, height: 1 } });
   assert.equal(assertBrowserFrameMatchesSlot(geometry,
     { left: 10, top: 30, right: 10, bottom: 20 }), 0);
+  assert.deepEqual(browserDragTailGeometryFrame(3, { ...geometry, timeMs: frame.time },
+    { left: 10, top: 30, right: 10, bottom: 20 }), {
+    frameIndex: 3, timeMs: frame.time,
+    cardRectPt: geometry.cardRectPt, nativeRectPt: geometry.nativeRectPt, contentRectPt: geometry.nativeRectPt,
+    slotInsetsPt: { left: 10, top: 30, right: 10, bottom: 20 },
+    contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
+  }, "the post-gesture row retains measured source pixels from that exact capture frame");
 });
 
 test("browser metrics descriptor waits for the initial empty state and its visible content area", { timeout: 5000 }, async () => {

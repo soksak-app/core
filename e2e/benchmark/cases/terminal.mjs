@@ -82,7 +82,9 @@ export function terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt) {
     timeMs: measured.timeMs,
     cardRectPt: measured.cardRectPt,
     nativeRectPt: measured.nativeRectPt,
+    contentRectPt: measured.nativeRectPt,
     slotInsetsPt,
+    contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 },
   };
 }
 
@@ -149,6 +151,18 @@ function terminalDocument(host, surface) {
   assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
     `terminal view ${surface} has no visible root document frame`);
   return row;
+}
+
+/** Returns the declared native raster region rectangle from host.window. */
+export function terminalRasterTargetRectPt(host, surface) {
+  const regions = host?.regions?.filter((region) => region.surface === surface && region.name === "view") ?? [];
+  assert.equal(regions.length, 1, `terminal view ${surface} must have exactly one native raster region`);
+  const region = regions[0];
+  const frame = region.frame;
+  assert.ok(region.visible && frame && [frame.x, frame.y, frame.width, frame.height].every(Number.isFinite)
+    && frame.width > 0 && frame.height > 0,
+  `terminal view ${surface} has no visible native raster region frame`);
+  return { left: frame.x, top: frame.y, right: frame.x + frame.width, bottom: frame.y + frame.height };
 }
 
 async function terminalSlotInsets(s, card, surface) {
@@ -260,6 +274,11 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
     const measured = measureTerminalLayoutFrame(captured[frameIndex], { cornerRadiusPt, targetRect });
     geometryFrames.push(terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt));
   }
+  const tailGeometryFrames = [];
+  for (let frameIndex = gestureEndedFrameIndex + 1; frameIndex < captured.length; frameIndex++) {
+    const measured = measureTerminalLayoutFrame(captured[frameIndex], { cornerRadiusPt, targetRect });
+    tailGeometryFrames.push(terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt));
+  }
 
   const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
     gestureStartedAtMs: run.ticks[0], gestureEndedAtMs: run.ticks.at(-1),
@@ -273,7 +292,8 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
     frames: sourceFrames, rawEvents: traced.events, contentFrames: traced.contentFrames,
     frameFiles: files, capturedFrameTimes: captured.map(({ time }) => time), frameIdentity: run.frameIdentity ?? null,
   }, null, 2) + "\n");
-  const finalRoot = terminalDocument(await s.get("host.window"), surface);
+  const finalHost = await s.get("host.window");
+  const finalRoot = terminalDocument(finalHost, surface);
   return {
     recordedFrameCount: captured.length,
     firstGestureFrameIndex,
@@ -282,8 +302,10 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
     gestureStartedAtMs: run.ticks[0],
     gestureEndedAtMs: run.ticks.at(-1),
     finalPresentation: { displayedAtMs: run.displayed,
-      targetViewport: { width: Math.trunc(finalRoot.frame.width), height: Math.trunc(finalRoot.frame.height) } },
+      targetViewport: { width: Math.trunc(finalRoot.frame.width), height: Math.trunc(finalRoot.frame.height) },
+      targetRectPt: terminalRasterTargetRectPt(finalHost, surface) },
     geometryFrames,
+    tailGeometryFrames,
     contentFrames: sourceFrames,
     sourceContentFrames: traced.contentFrames,
     rootSlotInsetsPt,

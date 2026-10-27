@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-233: 늦은 presentation query와 독립적으로 기존 capture tail의 gesture 종료 후 paint를 측정한다. 조건을 충족하는 가장 이른 capture를 고르고 source가 이미 target 크기여도 최종 native target geometry를 요구하며 source·pixel tail의 안정성을 유지한다. Browser와 Terminal은 렌더링된 fill을 사용하고 Editor는 선언한 marker color를 사용하며 HWP는 HTML paint와 native bounds를 별도로 측정한다. 기존 2-frame·33 ms·2 pt 한도에서 소유 Red/Green case와 모든 관련 consumer가 통과했으며 application acceptance는 남는다.
+
 - F239-223-2: call과 listener 등록이 lazy Wails framework-module import promise를 재사용한다. 실제 consumer의 loader resolution이 네 번에서 한 번으로 바뀌며 native-call 우회와 재시도 없는 import 실패 공유를 포함해 runtime owner test 7개가 모두 통과한다. 다시 빌드한 host의 timing acceptance는 남으며 owner test로 cadence 개선을 추정하지 않는다.
 
 - F239-232: OCR frame 선택과 acceptance가 NFC·공백 정규화 규칙 하나를 공유한다. 누락 문구 거부와 정확한 document·status 검사를 유지한다. 공백이 있는 Hangul tracked case가 Red에서 Green으로 바뀌고 first-content owner는 4/4 통과한다. 원래 console Red는 저장하지 않았고 이후 변경 전 비교 replay가 assertion 실패를 보존한다. HWP memory와 cadence acceptance는 남는다.

@@ -7,7 +7,7 @@ import test from "node:test";
 
 import * as hwpCase from "../benchmark/cases/hwp.mjs";
 import { assertHwpFrameMatchesSlot, hwpDocumentHistoryEvidence, hwpFirstContentFrame,
-  hwpViewDescriptor, layoutObservation }
+  hwpViewDescriptor, layoutObservation, measureHwpPaintFrame, readHwpPaintViewport }
   from "../benchmark/cases/hwp.mjs";
 import { processStartSamples } from "../view-metrics-collection.mjs";
 import { viewProcessPids } from "../view-process-footprint.mjs";
@@ -177,7 +177,7 @@ function layoutFailureSession(root, captureDirectory) {
 }
 
 function viewportMarkerDeclarationForLayout() {
-  return { markerColor: viewportMarker, borderWidth: 2, rect: { left: 0, top: 0, right: 70, bottom: 42 },
+  return { markerColor: viewportMarker, borderWidth: 2, rect: { left: 4, top: 4, right: 66, bottom: 38 },
     innerWidth: 70, innerHeight: 42, clientWidth: 70, clientHeight: 42,
     visualViewport: { width: 70, height: 42, offsetLeft: 0, offsetTop: 0, scale: 1 },
     fixedContainingBlock: { transform: "none", perspective: "none", filter: "none", contain: "none",
@@ -274,6 +274,29 @@ test("HWP unmatched layout geometry reports captured native document frames", { 
     "native marker must bracket the capture and stop after recording finalizes");
 });
 
+test("HWP paint geometry measures the magenta HTML marker separately from cyan native bounds", { timeout: 5000 }, () => {
+  const frame = viewportMarkerFrame({ markerTop: 36, markerWidthCss: 52, markerColor: viewportMarker });
+  const viewport = { ...viewportMarkerDeclarationForLayout(), innerWidth: 60, innerHeight: 102,
+    clientWidth: 60, clientHeight: 102, visualViewport: { width: 60, height: 102, offsetLeft: 0, offsetTop: 0, scale: 1 },
+    rect: { left: 4, top: 4, right: 56, bottom: 98 } };
+  const measured = measureHwpPaintFrame(frame, 7, viewport, {
+    targetRect: { x: 30, y: 36, width: 52, height: 94 },
+    themeGeometry: { cardColor: geometryColors.card, planeColor: geometryColors.plane,
+      borderColors: [geometryColors.border], cornerRadiusPt: 0 },
+    studioFrame: { width: 60, height: 102 },
+  });
+  assert.equal(measured.frameIndex, 7);
+  assert.deepEqual(measured.contentRectPt, { left: 30, top: 36, right: 82, bottom: 130 });
+  assert.deepEqual(measured.contentInsetsPt, { left: 4, top: 4, right: 4, bottom: 4 });
+  assert.deepEqual(measured.paintMarker.color, viewportMarker);
+  assert.throws(() => measureHwpPaintFrame(frame, 8, { ...viewport, rect: { ...viewport.rect, left: 0 } }, {
+    targetRect: { x: 30, y: 36, width: 52, height: 94 },
+    themeGeometry: { cardColor: geometryColors.card, planeColor: geometryColors.plane,
+      borderColors: [geometryColors.border], cornerRadiusPt: 0 },
+    studioFrame: { width: 60, height: 102 },
+  }), /inset by 4 CSS px/);
+});
+
 test("HWP layout recording covers the full display deadline after presentation", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "hwp-layout-deadline-"));
   const captureDirectory = join(root, "capture");
@@ -332,6 +355,17 @@ test("HWP descriptor waits for its declared document status exposure", { timeout
     if (previous === undefined) delete process.env.SOKSAK_CAPTURE_TEXT;
     else process.env.SOKSAK_CAPTURE_TEXT = previous;
   }
+});
+
+test("HWP drag reads the active paint marker with the existing diagnostic read command", { timeout: 1000 }, async () => {
+  const expected = viewportMarkerDeclarationForLayout();
+  const calls = [];
+  const session = { async run(name, params, surface) {
+    calls.push({ name, params, surface });
+    return { studioViewport: expected };
+  } };
+  assert.deepEqual(await readHwpPaintViewport(session, "surface-a"), expected);
+  assert.deepEqual(calls, [{ name: "hwp.diagnostics.frames.read", params: {}, surface: "surface-a" }]);
 });
 
 test("HWP reclaim evidence reads exact root and studio histories from the diagnostic reply", () => {

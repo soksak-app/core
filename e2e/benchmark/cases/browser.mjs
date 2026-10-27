@@ -50,6 +50,18 @@ export function measureBrowserFrameGeometry(frame, { cornerRadiusPt, targetRect 
   return measureViewFrameGeometry(frame, { ...GEOMETRY, cornerRadiusPt, targetRect });
 }
 
+/** Records same-frame measured HTML content geometry for one post-gesture capture. */
+export function browserDragTailGeometryFrame(frameIndex, measured, slotInsetsPt) {
+  assert.ok(Number.isSafeInteger(frameIndex) && frameIndex >= 0, "browser drag tail frame index is invalid");
+  assert.ok(Number.isFinite(measured?.timeMs) && measured.timeMs >= 0,
+    "browser drag tail frame time is invalid");
+  assert.ok(measured?.cardRectPt && measured?.nativeRectPt,
+    "browser drag tail requires measured card and content rectangles");
+  return { frameIndex, timeMs: measured.timeMs, cardRectPt: measured.cardRectPt,
+    nativeRectPt: measured.nativeRectPt, contentRectPt: measured.nativeRectPt, slotInsetsPt,
+    contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 } };
+}
+
 /** Compares captured content with the slot declared by the card and browser document DOM. */
 export function assertBrowserFrameMatchesSlot(geometry, slotInsetsPt) {
   assert.ok(geometry?.cardRectPt && geometry?.nativeRectPt,
@@ -196,6 +208,11 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
   }
+  const tailGeometryFrames = [];
+  for (let frameIndex = gestureEndedFrameIndex + 1; frameIndex < captured.length; frameIndex++) {
+    const measured = measureBrowserFrameGeometry(captured[frameIndex], { cornerRadiusPt, targetRect });
+    tailGeometryFrames.push(browserDragTailGeometryFrame(frameIndex, { ...measured, timeMs: captured[frameIndex].time }, slotInsetsPt));
+  }
   const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
     gestureStartedAtMs: run.ticks[0], gestureEndedAtMs: run.ticks.at(-1),
   });
@@ -217,8 +234,11 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
     gestureStartedAtMs: run.ticks[0],
     gestureEndedAtMs: run.ticks.at(-1),
     finalPresentation: { displayedAtMs: run.displayed,
-      targetViewport: { width: Math.trunc(root.frame.width), height: Math.trunc(root.frame.height) } },
+      targetViewport: { width: Math.trunc(root.frame.width), height: Math.trunc(root.frame.height) },
+      targetRectPt: { left: page.frame.x, top: page.frame.y,
+        right: page.frame.x + page.frame.width, bottom: page.frame.y + page.frame.height } },
     geometryFrames,
+    tailGeometryFrames,
     contentFrames,
     sourceContentFrames: traced.contentFrames,
     rootSlotInsetsPt,

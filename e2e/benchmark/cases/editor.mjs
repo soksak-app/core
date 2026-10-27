@@ -141,6 +141,31 @@ function editorFrameGeometry(frame, palette, targetRect) {
   return measureViewFrameGeometry(frame, { ...palette, targetRect });
 }
 
+/** Validates and applies the RGB paint color declared by the successful Editor trace start. */
+export function editorPaletteWithMarkerColor(palette, markerColor) {
+  assert.ok(Array.isArray(markerColor) && markerColor.length === 3
+    && markerColor.every((channel) => Number.isInteger(channel) && channel >= 0 && channel <= 255),
+  "editor trace start must declare a three-channel RGB paint marker color");
+  const geometryColors = [palette?.cardColor, palette?.planeColor, ...(palette?.borderColors ?? [])];
+  const conflicts = geometryColors.some((color) => Array.isArray(color) && color.length === 3
+    && color.every((channel, index) => Math.abs(channel - markerColor[index]) <= 4));
+  assert.equal(conflicts, false,
+    `editor diagnostic paint color ${JSON.stringify(markerColor)} conflicts with core card geometry colors`);
+  return { ...palette, contentColor: [...markerColor] };
+}
+
+/** Records same-frame measured Editor content geometry for one post-gesture capture. */
+export function editorDragTailGeometryFrame(frameIndex, measured, slotInsetsPt) {
+  assert.ok(Number.isSafeInteger(frameIndex) && frameIndex >= 0, "editor drag tail frame index is invalid");
+  assert.ok(Number.isFinite(measured?.timeMs) && measured.timeMs >= 0,
+    "editor drag tail frame time is invalid");
+  assert.ok(measured?.cardRectPt && measured?.nativeRectPt,
+    "editor drag tail requires measured card and content rectangles");
+  return { frameIndex, timeMs: measured.timeMs, cardRectPt: measured.cardRectPt,
+    nativeRectPt: measured.nativeRectPt, contentRectPt: measured.nativeRectPt, slotInsetsPt,
+    contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 } };
+}
+
 function editorDocumentRow(host, surface) {
   const row = host.documents.find((item) => item.surface === surface && item.document === "");
   assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
@@ -189,7 +214,7 @@ async function editorLayoutObservation(t, s, descriptor, surface, card, theme, c
   const { beforeChangeTimeMs, displayed, result, captured, paletteRect } = traced.action;
   const host = await s.get("host.window");
   const root = editorDocumentRow(host, surface);
-  const palette = editorGeometryPalette(captured[0], paletteRect, theme, cornerRadiusPt);
+  const palette = editorGeometryPalette(captured[0], paletteRect, theme, cornerRadiusPt, traced.start?.markerColor);
   const nativePlacement = rootNativePlacementBeforeCapture(traced.events, surface, displayed,
     { afterMs: beforeChangeTimeMs });
   const sourceSelection = selectOneShotViewSourceFrame(traced.contentFrames,
@@ -233,6 +258,7 @@ async function editorDragObservation(t, s, descriptor, surface, card, palette) {
   await s.presented();
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
     drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }));
+  const dragPalette = editorPaletteWithMarkerColor(palette, traced.start?.markerColor);
   const run = traced.action;
   const files = frames(run.frames);
   assert.equal(files.length, run.count, "editor drag recording omitted finalized frame files");
@@ -252,9 +278,15 @@ async function editorDragObservation(t, s, descriptor, surface, card, palette) {
   const rootSlotInsetsPt = slotInsetsPt;
   const geometryFrames = [];
   for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = editorFrameGeometry(captured[frameIndex], palette, contentRect);
+    const measured = editorFrameGeometry(captured[frameIndex], dragPalette, contentRect);
     geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
       cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
+  }
+  const tailGeometryFrames = [];
+  for (let frameIndex = gestureEndedFrameIndex + 1; frameIndex < captured.length; frameIndex++) {
+    const measured = editorFrameGeometry(captured[frameIndex], dragPalette, contentRect);
+    tailGeometryFrames.push(editorDragTailGeometryFrame(frameIndex, { ...measured,
+      timeMs: captured[frameIndex].time }, slotInsetsPt));
   }
   const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
     gestureStartedAtMs: run.ticks[0], gestureEndedAtMs: run.ticks.at(-1),
@@ -273,8 +305,11 @@ async function editorDragObservation(t, s, descriptor, surface, card, palette) {
     gestureStartedAtMs: run.ticks[0],
     gestureEndedAtMs: run.ticks.at(-1),
     finalPresentation: { displayedAtMs: run.displayed,
-      targetViewport: { width: Math.trunc(finalRoot.frame.width), height: Math.trunc(finalRoot.frame.height) } },
+      targetViewport: { width: Math.trunc(finalRoot.frame.width), height: Math.trunc(finalRoot.frame.height) },
+      targetRectPt: { left: finalRoot.frame.x, top: finalRoot.frame.y,
+        right: finalRoot.frame.x + finalRoot.frame.width, bottom: finalRoot.frame.y + finalRoot.frame.height } },
     geometryFrames,
+    tailGeometryFrames,
     contentFrames,
     sourceContentFrames: traced.contentFrames,
     rootSlotInsetsPt,
@@ -298,8 +333,8 @@ export async function collectEditorMotionMeasurements(t, s, prepared) {
       pixelPalette: layoutDisplay.pixelPalette } };
 }
 
-/** Derives an opaque editor-fill palette from the interior, rejecting core geometry colors. */
-export function editorGeometryPalette(frame, rect, theme, cornerRadiusPt) {
+/** Uses the exact opaque CSS paint color set by the Editor content-frame diagnostic. */
+export function editorGeometryPalette(frame, rect, theme, cornerRadiusPt, markerColor) {
   assert.ok(frame && frame.data instanceof Uint8Array && frame.data.length === frame.stride * frame.height,
     "editor palette requires a complete decoded frame");
   assert.ok(rect && [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
@@ -307,26 +342,6 @@ export function editorGeometryPalette(frame, rect, theme, cornerRadiusPt) {
   assert.ok(theme && typeof theme === "object", "editor palette requires the active core theme");
   assert.ok(Number.isFinite(cornerRadiusPt) && cornerRadiusPt >= 0,
     "editor palette requires the effective core card radius");
-  const ratio = frame.scale * frame.contentScale;
-  const left = Math.floor(frame.content.x * frame.scale + (rect.x + rect.width * 0.2) * ratio);
-  const top = Math.floor(frame.content.y * frame.scale + (rect.y + rect.height * 0.2) * ratio);
-  const right = Math.ceil(frame.content.x * frame.scale + (rect.x + rect.width * 0.8) * ratio);
-  const bottom = Math.ceil(frame.content.y * frame.scale + (rect.y + rect.height * 0.8) * ratio);
-  assert.ok(left >= 0 && top >= 0 && right <= frame.width && bottom <= frame.height && right > left && bottom > top,
-    "editor palette sampling rectangle lies outside the decoded frame");
-  const counts = new Map();
-  let sampled = 0;
-  for (let y = top; y < bottom; y += 2) for (let x = left; x < right; x += 2) {
-    const offset = y * frame.stride + x * 4;
-    if (frame.data[offset + 3] !== 255) continue;
-    const color = [frame.data[offset + 2], frame.data[offset + 1], frame.data[offset]];
-    const key = color.join(",");
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-    sampled++;
-  }
-  assert.ok(sampled > 0, "editor palette interior contains no opaque pixels");
-  const [contentColor, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  assert.ok(count / sampled >= 0.35, `editor interior has no dominant opaque fill color: ${count}/${sampled} pixels`);
   const parse = (name, token) => {
     assert.ok(typeof token === "string" && /^#[0-9a-f]{6}$/iu.test(token), `theme ${name} is not an RGB hex token`);
     return [1, 3, 5].map((index) => Number.parseInt(token.slice(index, index + 2), 16));
@@ -336,12 +351,7 @@ export function editorGeometryPalette(frame, rect, theme, cornerRadiusPt) {
   const borderColors = [theme.edge, theme.rule, theme.focus].filter((value) => value !== undefined).map((value, index) =>
     parse(`border ${index}`, value));
   assert.ok(borderColors.length > 0, "theme has no declared border or focus color");
-  const rgb = contentColor.split(",").map(Number);
-  const conflicts = [cardColor, planeColor, ...borderColors].some((color) =>
-    color.every((channel, index) => Math.abs(channel - rgb[index]) <= 4));
-  assert.equal(conflicts, false, `editor fill color ${JSON.stringify(rgb)} conflicts with core card geometry colors`);
-  return { contentColor: rgb, cardColor, planeColor, borderColors, cornerRadiusPt,
-    sampleCount: sampled, dominantCount: count };
+  return editorPaletteWithMarkerColor({ cardColor, planeColor, borderColors, cornerRadiusPt }, markerColor);
 }
 
 async function editorDescriptor(s, diagnostic) {
