@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-231: Accept the current successful Terminal observer-start reply without rejecting sourceClock fields. Keep shared source-clock validation and replace the obsolete owner mock. The same owner case fails before correction and passes afterward.
+
 - F239-78: Close only historical startup-delay cause attribution as evidence unavailable after independent review. The failed recording and callback/target facts cannot be recovered. Preserve the completed lifecycle diagnostic owner and two-host runtime results and all executable capture checks. The original cause remains unverified; recurrence with retained lifecycle evidence opens a linked comparison.
 
 - F239-230: Verify removed plugin-host fixtures using installed:null in core.plugins instead of a boolean. Preserve registry restoration and retain temporary evidence when cleanup is unconfirmed. The targeted Red becomes Green and all 14 owner cases pass.

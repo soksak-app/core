@@ -198,6 +198,25 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
 {
+  "id": "F239-231",
+  "implementation": [
+    {
+      "file": "e2e/benchmark/cases/terminal.mjs",
+      "symbol": "startContentTrace:"
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
+      "id": "terminal view descriptor reads browser history and controls only the diagnostic frame observer"
+    }
+  ],
+  "expected": "The terminal observer-start consumer accepts the current successful source-clock reply and leaves clock validation to the shared bracket owner.",
+  "levels": [
+    "unit"
+  ]
+},
+{
   "id": "F239-230",
   "implementation": [
     {

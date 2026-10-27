@@ -48,7 +48,7 @@ export const terminalViewDescriptor = Object.freeze({
   },
   startContentTrace: async (s, surface) => {
     const result = await s.run("terminal.view.frames", { action: "start" }, surface);
-    assert.deepEqual(result, { enabled: true }, `terminal view ${surface} content-frame observer did not start`);
+    assert.equal(result?.enabled, true, `terminal view ${surface} content-frame observer did not start`);
     return result;
   },
   stopContentTrace: async (s, surface) => {

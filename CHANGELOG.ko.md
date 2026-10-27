@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-231: sourceClock field를 거부하지 않고 현재 성공한 Terminal observer-start 응답을 받는다. 공유 source-clock 검증을 유지하고 폐기된 owner mock을 바꾼다. 같은 owner case가 수정 전 실패하고 수정 후 통과한다.
+
 - F239-78: 독립 리뷰 후 과거 startup 지연의 원인 분류만 근거 복구 불가로 닫는다. 실패한 recording과 callback·target 사실을 복구할 수 없다. 완료된 lifecycle 진단 owner와 양 host runtime 결과 및 실행 가능한 capture 검사를 모두 유지한다. 원래 원인은 미검증이며 lifecycle 증거를 보존한 재발은 연결된 비교 항목을 연다.
 
 - F239-230: core.plugins의 boolean 대신 installed:null로 제거된 plugin-host fixture를 검증한다. Registry 복원을 유지하고 cleanup이 확인되지 않으면 임시 증거를 보존한다. 대상 Red가 Green으로 전환되고 owner case 14개가 모두 통과한다.

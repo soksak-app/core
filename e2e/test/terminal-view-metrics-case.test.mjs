@@ -145,14 +145,18 @@ test("terminal view descriptor reads browser history and controls only the diagn
     async run(name, params, surface) {
       calls.push({ name, params, surface });
       if (name === "terminal.view.history") return { length: 1 };
-      if (name === "terminal.view.frames") return { enabled: params.action === "start" };
+      if (name === "terminal.view.frames") return params.action === "start"
+        ? { enabled: true, sourceClock: { documentTimeOriginMs: 1000, sourceNowMs: 20, sourceResolutionMs: 1 } }
+        : { enabled: false };
       throw new Error(`unexpected command ${name}`);
     },
   };
   assert.deepEqual(await terminalViewDescriptor.readDocument(session, "surface-a"), {
     historyEntries: 1, regionHistoryEntries: 0,
   });
-  assert.deepEqual(await terminalViewDescriptor.startContentTrace(session, "surface-a"), { enabled: true });
+  assert.deepEqual(await terminalViewDescriptor.startContentTrace(session, "surface-a"), {
+    enabled: true, sourceClock: { documentTimeOriginMs: 1000, sourceNowMs: 20, sourceResolutionMs: 1 },
+  });
   assert.deepEqual(await terminalViewDescriptor.stopContentTrace(session, "surface-a"), { enabled: false });
   assert.deepEqual(calls, [
     { name: "terminal.view.history", params: {}, surface: "surface-a" },
