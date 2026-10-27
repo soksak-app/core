@@ -497,13 +497,32 @@ export function assertViewMeasurements(measurements, { plugin, host, baselineMs,
   sameValue(plugin, textAt(measurements.plugin, "measurements.plugin"), "measurements.plugin");
   sameValue(host, textAt(measurements.host, "measurements.host"), "measurements.host");
 
-  const total = evaluateTotal(measurements.total);
-  const reclaim = evaluateReclaim(measurements.reclaim);
-  const warmDisplay = evaluateWarmDisplay(measurements.warmDisplay, baselineMs);
-  const newProcess = evaluateNewProcess(measurements.newProcess, baselineMs);
-  const layoutDisplay = evaluateLayoutDisplay(measurements.layoutDisplay);
-  const editorFootprint = evaluateEditorFootprint(measurements.editorFootprint, measureEditorFootprint);
-  const drag = evaluateDrag(measurements.drag);
+  const evaluations = {};
+  const failures = [];
+  const evaluate = (category, operation) => {
+    try {
+      evaluations[category] = operation();
+    } catch (error) {
+      failures.push({ category, error });
+    }
+  };
+  evaluate("total", () => evaluateTotal(measurements.total));
+  evaluate("reclaim", () => evaluateReclaim(measurements.reclaim));
+  evaluate("warmDisplay", () => evaluateWarmDisplay(measurements.warmDisplay, baselineMs));
+  evaluate("newProcess", () => evaluateNewProcess(measurements.newProcess, baselineMs));
+  evaluate("layoutDisplay", () => evaluateLayoutDisplay(measurements.layoutDisplay));
+  evaluate("editorFootprint", () => evaluateEditorFootprint(measurements.editorFootprint, measureEditorFootprint));
+  evaluate("drag", () => evaluateDrag(measurements.drag));
+  if (failures.length === 1) throw failures[0].error;
+  if (failures.length > 1) {
+    const errors = failures.map(({ category, error }) => {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Error(`${category}: ${message}`, { cause: error });
+    });
+    throw new AggregateError(errors, `view measurement criteria failed: ${failures.map(({ category }) => category).join(", ")}`);
+  }
+
+  const { total, reclaim, warmDisplay, newProcess, layoutDisplay, editorFootprint, drag } = evaluations;
   return {
     measurements,
     evaluation: {
@@ -522,10 +541,20 @@ export function assertViewMeasurements(measurements, { plugin, host, baselineMs,
 }
 
 function errorDocument(error) {
-  if (error instanceof Error) {
-    return JSON.stringify({ name: error.name, message: error.message, stack: error.stack ?? null }, null, 2) + "\n";
-  }
-  return JSON.stringify({ name: typeof error, message: String(error) }, null, 2) + "\n";
+  const seen = new WeakSet();
+  const record = (value) => {
+    if (!(value instanceof Error)) return { name: typeof value, message: String(value) };
+    if (seen.has(value)) return { name: value.name, message: value.message, circular: true };
+    seen.add(value);
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack ?? null,
+      ...(value instanceof AggregateError ? { errors: [...value.errors].map(record) } : {}),
+      ...(value.cause === undefined ? {} : { cause: record(value.cause) }),
+    };
+  };
+  return `${JSON.stringify(record(error), null, 2)}\n`;
 }
 
 /** Collects one plugin's window measurements and evaluates them with the current host's fixed baseline. */

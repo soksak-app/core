@@ -123,6 +123,26 @@ test("view metrics accept exact thresholds and preserve frame and process eviden
   assert.strictEqual(report.measurements, raw);
 });
 
+test("view metrics report independent failures together", { timeout: 1000 }, () => {
+  const raw = metrics();
+  raw.total.allViewProcesses[2].footprintBytes += 1;
+  raw.warmDisplay.contentFrame.proof.actual = "unrelated pixels";
+
+  let failure;
+  try {
+    assertViewMeasurements(raw, options);
+  } catch (error) {
+    failure = error;
+  }
+
+  assert.ok(failure instanceof AggregateError);
+  assert.equal(failure.errors.length, 2);
+  assert.match(failure.errors[0].message, /^total:/u);
+  assert.match(failure.errors[0].cause.message, /total\.allViewProcesses sums/u);
+  assert.match(failure.errors[1].message, /^warmDisplay:/u);
+  assert.match(failure.errors[1].cause.message, /proof\.actual/u);
+});
+
 test("layout source matches the WebKit viewport projected from a fractional native frame", { timeout: 1000 }, () => {
   const raw = metrics();
   raw.layoutDisplay[0].contentFrame = {
@@ -383,6 +403,32 @@ test("view metric runner retains raw measurements and an error artifact when eva
   const error = JSON.parse(readFileSync(join(directory, "error.json"), "utf8"));
   assert.match(error.message, /total\.allViewProcesses sums .* exceeding/);
   assert.deepEqual(readdirSync(directory).sort(), ["error.json", "measurements.json"]);
+});
+
+test("view metric runner preserves independent failures in the error artifact", { timeout: 1000 }, async (t) => {
+  const raw = metrics();
+  raw.total.allViewProcesses[2].footprintBytes += 1;
+  raw.warmDisplay.contentFrame.proof.actual = "unrelated pixels";
+  const diagnostics = [];
+  await assert.rejects(runViewMeasurements({ diagnostic: (message) => diagnostics.push(message) }, {
+    app: { name: "wailsv3", configDir: configDir(t) },
+  }, {
+    plugin: "fixture-view",
+    baselinesMs: { wailsv3: 10, tauriv2: 20 },
+    collect: async () => raw,
+  }), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors.length, 2);
+    return true;
+  });
+
+  const directory = diagnostics[0].replace("view measurement artifacts: ", "");
+  const error = JSON.parse(readFileSync(join(directory, "error.json"), "utf8"));
+  assert.deepEqual(error.errors.map(({ message }) => message.split(":", 1)[0]), ["total", "warmDisplay"]);
+  assert.match(error.errors[0].cause.message, /total\.allViewProcesses sums/u);
+  assert.match(error.errors[1].cause.message, /proof\.actual/u);
+  assert.equal(error.errors[0].cause.name, "AssertionError");
+  assert.equal(error.errors[1].cause.name, "AssertionError");
 });
 
 test("view metrics allow an observed view with no attached child documents", { timeout: 1000 }, () => {

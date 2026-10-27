@@ -46,6 +46,8 @@ Each value is judged by the measurement named in its row, on a recording and not
 | (iv) editor measurement | The footprint of the editor view and the footprint of a hidden DOM editor are measured. When the view footprint exceeds 50 MB, the editor buffer and its analysis move to a sidecar. This is a measurement rule, not a pass condition. |
 | (viii) drag | During a gesture: (a) the difference between the native content boundary and the expected composition slot boundary derived from the card and independently declared DOM insets in each frame is at most 2 pt, with the same commit and an expected value of 0; (b) the interval between consecutive content frames (frames that the view draws into its own document, shown after the view's ResizeObserver and the next requestAnimationFrame) is at most 33 ms; (c) a state where the content frame size differs from the native frame size ends within 2 frames (33 ms) after the gesture ends. |
 
+The measurement evaluator checks every independent criterion that has collected input, even when another criterion fails. One failure retains its category-specific error. Multiple failures are reported as an `AggregateError`; `error.json` records each nested error and its cause so the artifact preserves all failed criteria.
+
 Every plugin view meets (i), (ii), (iii), (iii-b), (v) and (viii), and the restart window check meets (vi); (iv) is measured. A failure of a mechanism value ((v), (vi), (viii)) stops the work that depends on that mechanism. A failure of a plugin value ((i), (ii), (iii), (iii-b)) stops only that plugin, and its layer or view count is reopened in a revision of this specification that goes to adversarial review; the owner decides the revision.
 
 ### Main-page process measurement

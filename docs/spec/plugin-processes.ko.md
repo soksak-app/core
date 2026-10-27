@@ -46,6 +46,8 @@ Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름
 | (iv) editor 측정 | editor view의 footprint와 숨긴 DOM editor의 footprint를 잰다. view 쪽 footprint가 50 MB를 넘으면 editor의 buffer와 분석을 sidecar로 옮긴다. 이것은 통과 조건이 아니라 측정 규칙이다. |
 | (viii) 끌기 | gesture 동안 (a) 매 frame에서 native content 경계와 card 및 독립적으로 선언된 DOM inset으로 구한 예상 composition slot 경계의 차이가 2 pt 이하다(같은 commit, 기대값 0). (b) 내용 frame(view가 자기 document에 그린 frame이며, view의 ResizeObserver 다음 requestAnimationFrame이 내는 표시)의 연속 간격이 33 ms 이하다. (c) 내용 frame 크기가 native frame 크기와 다른 상태가 gesture 끝난 뒤 2 frame(33 ms) 안에 사라진다. |
 
+측정 evaluator는 다른 기준이 실패해도 입력을 수집한 모든 독립 기준을 검사한다. 실패가 하나면 해당 category의 기존 오류를 유지한다. 여러 기준이 실패하면 `AggregateError`로 보고하고, `error.json`에 각 중첩 오류와 원인을 기록해 실패한 모든 기준을 보존한다.
+
 모든 plugin view는 (i), (ii), (iii), (iii-b), (v), (viii)을 만족하고, 재시작 창 검사는 (vi)을 만족한다. (iv)는 잰다. 기구 값 (v), (vi), (viii)이 실패하면 그 기구에 기대는 일을 멈춘다. plugin 값 (i), (ii), (iii), (iii-b)가 실패하면 그 plugin만 멈추고, 그 plugin의 층이나 view 수는 adversarial review에 올리는 이 명세의 개정판에서 다시 연다. 개정 결정은 소유자가 한다.
 
 ### Main-page process 측정

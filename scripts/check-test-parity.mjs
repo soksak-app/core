@@ -198,6 +198,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-224",
+    implementation: [{ file: "packages/window-check/view-metrics.mjs", symbol: "export function assertViewMeasurements(" }],
+    tests: [
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metrics report independent failures together" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metric runner preserves independent failures in the error artifact" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metric runner retains raw measurements and an error artifact when evaluation fails" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metrics accept exact thresholds and preserve frame and process evidence" },
+    ],
+    expected: "All independent view-measurement categories are evaluated, with one failure retaining its original error and multiple failures preserving each cause in the AggregateError and error artifact.",
+    levels: ["unit"],
+  },
+
+  {
   "id": "F239-216",
   "implementation": [
     {
