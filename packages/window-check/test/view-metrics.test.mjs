@@ -124,6 +124,28 @@ function metrics() {
   };
 }
 
+function cadenceFailureWithPaintOutcome({ wrongTailPaint = false, wrongGestureGeometry = false } = {}) {
+  const raw = metrics();
+  const drag = raw.drag;
+  drag.gestureEndedAtMs = 150;
+  drag.geometryFrames[2].timeMs = 150;
+  drag.finalPresentation.displayedAtMs = 150;
+  drag.contentFrames[2].frameTimeMs = 94;
+  drag.contentFrames[2].timeRange = { lowerMs: 93, upperMs: 95 };
+  drag.contentFrames[2].captureTimeMs = 95;
+  drag.contentFrames[2].displayCapture = { frameIndex: 7, timeMs: 175 };
+  drag.contentFrames[3].displayCapture = { frameIndex: 7, timeMs: 175 };
+  for (const frame of drag.contentFrames.slice(0, 2)) {
+    frame.displayCapture = { frameIndex: 7, timeMs: 175 };
+  }
+  [155, 160, 175, 200, 251].forEach((timeMs, index) => {
+    drag.tailGeometryFrames[index].timeMs = timeMs;
+  });
+  if (wrongTailPaint) drag.tailGeometryFrames[1].contentRectPt.right = 117;
+  if (wrongGestureGeometry) drag.geometryFrames[1].nativeRectPt.right = 113;
+  return raw;
+}
+
 test("view metrics accept exact thresholds and preserve frame and process evidence", { timeout: 1000 }, () => {
   const raw = metrics();
   const report = assertViewMeasurements(raw, options);
@@ -136,6 +158,9 @@ test("view metrics accept exact thresholds and preserve frame and process eviden
   assert.equal(report.evaluation.drag.maxGeometryErrorPt, 1);
   assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 8);
   assert.equal(report.evaluation.drag.convergedFrame, 2);
+  assert.deepEqual(Object.values(report.evaluation.drag.criteria).map(({ passed }) => passed), [true, true, true]);
+  assert.equal(report.evaluation.drag.criteria.geometry.limitPt, 2);
+  assert.equal(report.evaluation.drag.criteria.cadence.limitMs, 33);
   assert.strictEqual(report.measurements, raw);
 });
 
@@ -633,11 +658,12 @@ test("drag cadence keeps captured boundary frames and their neighboring cadence 
     contentFrame(6, 6, 108, 107, 109, 120, 120),
     contentFrame(7, 8, 250, 249, 251, 120, 120),
   ];
+  boundary.drag.contentFrames[5].displayCapture = { frameIndex: 6, timeMs: 128 };
   boundary.drag.contentFrames[6].displayCapture = { frameIndex: 9, timeMs: 260 };
   boundary.drag.contentFrames[7].displayCapture = { frameIndex: 9, timeMs: 260 };
   boundary.drag.tailGeometryFrames = [5, 6, 7, 8, 9].map((frameIndex, index) => ({
     frameIndex,
-    timeMs: [100, 109, 150, 251, 260][index],
+    timeMs: [100, 128, 150, 251, 260][index],
     cardRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
     nativeRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
     contentRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
@@ -679,6 +705,49 @@ test("drag cadence excludes observer idle time outside the recorded gesture", { 
   const report = assertViewMeasurements(idle, options);
   assert.equal(report.evaluation.drag.maxContentFrameIntervalMs, 9,
     "cadence includes the in-gesture parts of both boundary gaps and the exact in-gesture RAF gaps");
+});
+
+test("drag criteria report cadence failure while retaining passing convergence", { timeout: 1000 }, () => {
+  assert.throws(() => assertViewMeasurements(cadenceFailureWithPaintOutcome(), options), (error) => {
+    assert.ok(error.criteria, error.stack);
+    assert.equal(error.criteria.cadence.passed, false);
+    assert.equal(error.criteria.convergence.passed, true);
+    assert.equal(error.criteria.geometry.passed, true);
+    assert.ok(error instanceof Error);
+    return true;
+  });
+});
+
+test("drag criteria report simultaneous cadence and convergence failures", { timeout: 1000 }, () => {
+  assert.throws(() => assertViewMeasurements(cadenceFailureWithPaintOutcome({ wrongTailPaint: true }), options), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.criteria.cadence.passed, false);
+    assert.equal(error.criteria.convergence.passed, false);
+    assert.equal(error.criteria.geometry.passed, true);
+    assert.equal(error.errors.length, 2);
+    return true;
+  });
+});
+
+test("drag criteria report geometry failure without skipping cadence or convergence", { timeout: 1000 }, () => {
+  assert.throws(() => assertViewMeasurements(cadenceFailureWithPaintOutcome({ wrongGestureGeometry: true }), options), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.criteria.geometry.passed, false);
+    assert.equal(error.criteria.cadence.passed, false);
+    assert.equal(error.criteria.convergence.passed, true);
+    assert.equal(error.errors.length, 2);
+    return true;
+  });
+});
+
+test("malformed shared drag evidence has a path error without passing criteria", { timeout: 1000 }, () => {
+  const malformed = cadenceFailureWithPaintOutcome();
+  malformed.drag.contentFrames[2].sourceSequence = malformed.drag.contentFrames[1].sourceSequence;
+  assert.throws(() => assertViewMeasurements(malformed, options), (error) => {
+    assert.match(error.message, /drag\.contentFrames\[2\]\.sourceSequence/);
+    assert.equal(error.criteria, undefined);
+    return true;
+  });
 });
 
 test("layout display measures the first pixel frame at the changed size", { timeout: 1000 }, () => {
@@ -745,6 +814,33 @@ test("view metric runner retains raw measurements and an error artifact when eva
   const error = JSON.parse(readFileSync(join(directory, "error.json"), "utf8"));
   assert.match(error.message, /total\.allViewProcesses sums .* exceeding/);
   assert.deepEqual(readdirSync(directory).sort(), ["error.json", "measurements.json"]);
+});
+
+test("drag criterion outcomes survive in the persisted error artifact", { timeout: 1000 }, async (t) => {
+  const raw = cadenceFailureWithPaintOutcome();
+  const diagnostics = [];
+  let thrown;
+  try {
+    await runViewMeasurements({ diagnostic: (message) => diagnostics.push(message) }, {
+      app: { name: "wailsv3", configDir: configDir(t) },
+    }, {
+      plugin: "fixture-view",
+      baselinesMs: { wailsv3: 10, tauriv2: 20 },
+      collect: async () => raw,
+    });
+    assert.fail("the cadence criterion should fail");
+  } catch (error) {
+    thrown = error;
+  }
+
+  assert.ok(thrown.criteria, thrown.stack);
+  assert.equal(diagnostics.length, 1);
+  const directory = diagnostics[0].replace("view measurement artifacts: ", "");
+  assert.deepEqual(JSON.parse(readFileSync(join(directory, "measurements.json"), "utf8")), raw);
+  const error = JSON.parse(readFileSync(join(directory, "error.json"), "utf8"));
+  assert.deepEqual(error.criteria, thrown.criteria);
+  assert.equal(error.criteria.cadence.passed, false);
+  assert.equal(error.criteria.convergence.passed, true);
 });
 
 test("view metric runner preserves independent failures in the error artifact", { timeout: 1000 }, async (t) => {

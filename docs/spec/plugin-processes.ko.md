@@ -76,6 +76,8 @@ Drag 중에는 source content-frame 구간이 cadence와 capture coverage를 입
 
 Native region bounds alignment는 명시적으로 시작한 `diagnostics.document.viewport-marker`를 사용할 수 있다. 불투명 border는 실제 document-region view layer에 붙고 implicit animation을 끈 상태에서 해당 view의 bounds, clipping, visibility 및 transform을 따른다. 배경이나 pointer 처리가 없고 frame이나 document 크기를 바꾸지 않는다. 캡처한 border pixel로 네 native view 경계를 독립적으로 선언된 slot 및 기존 2 pt 기준과 비교하며 보고된 host·DOM rectangle로 pixel을 대체하지 않는다. Border는 native bounds 안에 그리며 width를 AppKit point로 보고한다. Stop은 이전 border style을 복원하고 dispose 및 시작 실패 시 marker를 제거한다. 근거는 native region bounds alignment로 표시하며 CSS viewport paint, 자연 content 범위, source-frame identity 또는 정상 paint cadence를 입증하지 않는다. HTML fixed border는 WebKit viewport paint를 관측하므로 독립적으로 렌더링하는 document region의 native bounds 근거를 대신할 수 없다. HWP convergence는 inset HTML viewport paint marker를 native region bounds marker와 별도로 측정하며 한 측정값을 다른 근거로 사용하지 않는다.
 
+Drag evaluator는 공통 recording 증거를 검증한 뒤 geometry, source cadence 및 final-paint convergence를 독립적으로 판정한다. 한 criterion의 실패가 다른 criterion 평가를 중단하지 않는다. 성공 결과와 직렬화한 오류 모두 개별 결과와 측정값을 보존한다. 유효하지 않은 공통 증거는 통과 criterion 없이 명시적으로 실패한다. 이 보고 규칙은 geometry, cadence 또는 convergence 기준을 변경하지 않는다.
+
 ## 규칙
 
 1. workbench 페이지에서는 plugin 코드를 실행하지 않는다.

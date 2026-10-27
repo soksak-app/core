@@ -406,6 +406,7 @@ function evaluateEditorFootprint(value, requested) {
 }
 
 function evaluateDrag(value) {
+  const criterionFailures = [];
   const drag = objectAt(value, "drag");
   const recordedFrameCount = numberAt(drag.recordedFrameCount, "drag.recordedFrameCount", { minimum: 1, integer: true });
   const firstGestureFrameIndex = numberAt(drag.firstGestureFrameIndex, "drag.firstGestureFrameIndex", { integer: true });
@@ -446,8 +447,15 @@ function evaluateDrag(value) {
       maxGeometryErrorPt = Math.max(maxGeometryErrorPt, Math.abs(expectedSlot[edge] - nativeRect[edge]));
     }
   }
-  assert.ok(maxGeometryErrorPt <= DRAG_GEOMETRY_LIMIT_PT,
-    `view measurement drag geometry differs by ${maxGeometryErrorPt} pt, exceeding ${DRAG_GEOMETRY_LIMIT_PT} pt`);
+  const geometry = {
+    passed: maxGeometryErrorPt <= DRAG_GEOMETRY_LIMIT_PT,
+    maxErrorPt: maxGeometryErrorPt,
+    limitPt: DRAG_GEOMETRY_LIMIT_PT,
+  };
+  if (!geometry.passed) {
+    criterionFailures.push({ criterion: "geometry", error: new Error(
+      `view measurement drag geometry differs by ${maxGeometryErrorPt} pt, exceeding ${DRAG_GEOMETRY_LIMIT_PT} pt`) });
+  }
   arrayAt(drag.layouts, "drag.layouts", { minimum: 1 });
   arrayAt(drag.ticks, "drag.ticks", { minimum: 1 });
   const finalPresentation = objectAt(drag.finalPresentation, "drag.finalPresentation");
@@ -556,8 +564,15 @@ function evaluateDrag(value) {
     return Math.min(sourceGapMs, possibleGestureGapMs);
   });
   const maxContentFrameIntervalMs = Math.max(...intervalsMs);
-  assert.ok(maxContentFrameIntervalMs <= DRAG_CONTENT_INTERVAL_LIMIT_MS,
-    `view measurement drag in-gesture content-frame interval ${maxContentFrameIntervalMs} ms exceeds ${DRAG_CONTENT_INTERVAL_LIMIT_MS} ms`);
+  const cadence = {
+    passed: maxContentFrameIntervalMs <= DRAG_CONTENT_INTERVAL_LIMIT_MS,
+    maxIntervalMs: maxContentFrameIntervalMs,
+    limitMs: DRAG_CONTENT_INTERVAL_LIMIT_MS,
+  };
+  if (!cadence.passed) {
+    criterionFailures.push({ criterion: "cadence", error: new Error(
+      `view measurement drag in-gesture content-frame interval ${maxContentFrameIntervalMs} ms exceeds ${DRAG_CONTENT_INTERVAL_LIMIT_MS} ms`) });
+  }
 
   const atEnd = definitelyInGestureFrames.at(-1);
   if (!atEnd) fail("drag.contentFrames", "a content frame at or before gesture end", contentFrames.map(({ frameIndex }) => frameIndex));
@@ -568,6 +583,7 @@ function evaluateDrag(value) {
   let paintCaptureTimeMs = null;
   let paintSourceSequence = null;
   let eventualPresentationCaptureFrameIndex = null;
+  let convergence = null;
   const tailGeometryFrames = arrayAt(drag.tailGeometryFrames, "drag.tailGeometryFrames", {
     length: recordedFrameCount - gestureEndedFrameIndex - 1,
   });
@@ -613,10 +629,12 @@ function evaluateDrag(value) {
   const targetSourceFrames = contentFrames.filter(({ width, height }) =>
     width === targetWidth && height === targetHeight);
   if (targetSourceFrames.length === 0) {
-    fail("drag.contentFrames", mismatchedAtEnd
-      ? "a post-input source frame matching the presented viewport"
-      : "a source frame matching the final viewport",
-    { displayedAtMs, targetViewport: { width: targetWidth, height: targetHeight }, contentFrames });
+    criterionFailures.push({ criterion: "convergence", error: new Error(
+      `drag.contentFrames: expected ${mismatchedAtEnd
+        ? "a post-input source frame matching the presented viewport"
+        : "a source frame matching the final viewport"}; received ${JSON.stringify({
+        displayedAtMs, targetViewport: { width: targetWidth, height: targetHeight }, contentFrames,
+      })}`) });
   }
 
   const paintCandidates = [];
@@ -642,43 +660,90 @@ function evaluateDrag(value) {
   paintCandidates.sort((left, right) => left.capture.frameIndex - right.capture.frameIndex
     || left.source.sourceSequence - right.source.sourceSequence);
   const selectedPaint = paintCandidates[0];
-  if (!selectedPaint) {
-    fail("drag.contentFrames", "a source-backed final-target paint capture within two frames and 33 ms after gesture end", {
-      mismatchedAtEnd, targetViewport: { width: targetWidth, height: targetHeight },
-      finalTargetRectPt, targetSourceFrames, tailGeometryFrames: [...tailGeometryByIndex.values()],
-    });
+  if (!selectedPaint && targetSourceFrames.length > 0) {
+    criterionFailures.push({ criterion: "convergence", error: new Error(
+      `drag.contentFrames: expected a source-backed final-target paint capture within two frames and 33 ms after gesture end; received ${JSON.stringify({
+        mismatchedAtEnd, targetViewport: { width: targetWidth, height: targetHeight },
+        finalTargetRectPt, targetSourceFrames, tailGeometryFrames: [...tailGeometryByIndex.values()],
+      })}`) });
   }
 
-  const { source: converged, capture, laterSources } = selectedPaint;
-  convergedFrame = capture.frameIndex - gestureEndedFrameIndex;
-  convergenceMs = capture.timeMs - gestureEndedAtMs;
-  for (const frame of laterSources) {
-    if (frame.width !== targetWidth || frame.height !== targetHeight) {
-      fail(`drag.contentFrames source sequence ${frame.sourceSequence}`, "stable final viewport dimensions after paint convergence",
-        { width: frame.width, height: frame.height, targetWidth, targetHeight });
+  if (selectedPaint) {
+    const { source: converged, capture, laterSources } = selectedPaint;
+    convergedFrame = capture.frameIndex - gestureEndedFrameIndex;
+    convergenceMs = capture.timeMs - gestureEndedAtMs;
+    convergence = {
+      passed: true,
+      convergedFrame,
+      convergenceMs,
+      paintCaptureFrameIndex: capture.frameIndex,
+      paintCaptureTimeMs: capture.timeMs,
+      paintSourceSequence: converged.sourceSequence,
+      eventualPresentationCaptureFrameIndex: converged.displayCapture.frameIndex,
+      frameLimit: DRAG_SETTLE_FRAME_LIMIT,
+      timeLimitMs: DRAG_CONTENT_INTERVAL_LIMIT_MS,
+    };
+    paintCaptureFrameIndex = capture.frameIndex;
+    paintCaptureTimeMs = capture.timeMs;
+    paintSourceSequence = converged.sourceSequence;
+    eventualPresentationCaptureFrameIndex = converged.displayCapture.frameIndex;
+    let convergenceError;
+    for (const frame of laterSources) {
+      if (frame.width !== targetWidth || frame.height !== targetHeight) {
+        convergenceError ??= new Error(
+          `drag.contentFrames source sequence ${frame.sourceSequence}: expected stable final viewport dimensions after paint convergence; received ${JSON.stringify({
+            width: frame.width, height: frame.height, targetWidth, targetHeight,
+          })}`);
+      }
+    }
+    for (const frame of tailGeometryFrames) {
+      if (frame.frameIndex < capture.frameIndex) continue;
+      const measured = tailGeometryByIndex.get(frame.frameIndex);
+      if (measured.nativeGeometryErrorPt > DRAG_GEOMETRY_LIMIT_PT
+          || measured.contentGeometryErrorPt > DRAG_GEOMETRY_LIMIT_PT
+          || measured.finalTargetErrorPt > DRAG_GEOMETRY_LIMIT_PT) {
+        convergenceError ??= new Error(
+          `drag.tailGeometryFrames frame ${frame.frameIndex}: expected stable native target and paint geometry within ${DRAG_GEOMETRY_LIMIT_PT} pt through the recorded tail; received ${JSON.stringify(measured)}`);
+      }
+    }
+    const eventualPaint = tailGeometryByIndex.get(converged.displayCapture.frameIndex);
+    if (!eventualPaint || eventualPaint.timeMs !== converged.displayCapture.timeMs
+        || eventualPaint.finalTargetErrorPt > DRAG_GEOMETRY_LIMIT_PT) {
+      convergenceError ??= new Error(
+        `drag.contentFrames source sequence ${converged.sourceSequence}: expected measured final-target geometry at the eventual presentation capture; received ${JSON.stringify({
+          displayCapture: converged.displayCapture, eventualPaint,
+        })}`);
+    }
+    if (convergenceError) {
+      convergence.passed = false;
+      criterionFailures.push({ criterion: "convergence", error: convergenceError });
     }
   }
-  for (const frame of tailGeometryFrames) {
-    if (frame.frameIndex < capture.frameIndex) continue;
-    const measured = tailGeometryByIndex.get(frame.frameIndex);
-    if (measured.nativeGeometryErrorPt > DRAG_GEOMETRY_LIMIT_PT
-        || measured.contentGeometryErrorPt > DRAG_GEOMETRY_LIMIT_PT
-        || measured.finalTargetErrorPt > DRAG_GEOMETRY_LIMIT_PT) {
-      fail(`drag.tailGeometryFrames frame ${frame.frameIndex}`,
-        `stable native target and paint geometry within ${DRAG_GEOMETRY_LIMIT_PT} pt through the recorded tail`, measured);
-    }
+  if (!convergence) {
+    convergence = {
+      passed: false,
+      convergedFrame: null,
+      convergenceMs: null,
+      paintCaptureFrameIndex: null,
+      paintCaptureTimeMs: null,
+      paintSourceSequence: null,
+      eventualPresentationCaptureFrameIndex: null,
+      frameLimit: DRAG_SETTLE_FRAME_LIMIT,
+      timeLimitMs: DRAG_CONTENT_INTERVAL_LIMIT_MS,
+    };
   }
-  const eventualPaint = tailGeometryByIndex.get(converged.displayCapture.frameIndex);
-  if (!eventualPaint || eventualPaint.timeMs !== converged.displayCapture.timeMs
-      || eventualPaint.finalTargetErrorPt > DRAG_GEOMETRY_LIMIT_PT) {
-    fail(`drag.contentFrames source sequence ${converged.sourceSequence}`, "measured final-target geometry at the eventual presentation capture", {
-      displayCapture: converged.displayCapture, eventualPaint,
-    });
+  const criteria = { geometry, cadence, convergence };
+  if (criterionFailures.length === 1) {
+    const [failure] = criterionFailures;
+    failure.error.criteria = criteria;
+    throw failure.error;
   }
-  paintCaptureFrameIndex = capture.frameIndex;
-  paintCaptureTimeMs = capture.timeMs;
-  paintSourceSequence = converged.sourceSequence;
-  eventualPresentationCaptureFrameIndex = converged.displayCapture.frameIndex;
+  if (criterionFailures.length > 1) {
+    const errors = criterionFailures.map(({ criterion, error }) => new Error(`${criterion}: ${error.message}`, { cause: error }));
+    const aggregate = new AggregateError(errors, `view measurement drag criteria failed: ${criterionFailures.map(({ criterion }) => criterion).join(", ")}`);
+    aggregate.criteria = criteria;
+    throw aggregate;
+  }
   return {
     maxGeometryErrorPt,
     geometryLimitPt: DRAG_GEOMETRY_LIMIT_PT,
@@ -693,6 +758,7 @@ function evaluateDrag(value) {
     paintSourceSequence,
     eventualPresentationCaptureFrameIndex,
     convergenceFrameLimit: DRAG_SETTLE_FRAME_LIMIT,
+    criteria,
     passed: true,
   };
 }
@@ -763,6 +829,7 @@ function errorDocument(error) {
       name: value.name,
       message: value.message,
       stack: value.stack ?? null,
+      ...(value.criteria === undefined ? {} : { criteria: value.criteria }),
       ...(value instanceof AggregateError ? { errors: [...value.errors].map(record) } : {}),
       ...(value.cause === undefined ? {} : { cause: record(value.cause) }),
     };

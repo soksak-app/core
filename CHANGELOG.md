@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-238: Judge drag geometry, cadence and convergence independently from complete shared evidence and retain all outcomes in successful results and serialized failures. Missing or malformed data remains an explicit validation error. The new owner cases change from four failures to five passes, and the full owning file passes 38/38 after aligning a boundary fixture's capture timestamp with its declared source capture. No 2 pt, 33 ms or two-frame criterion changes.
+
 - F239-237: Read structured diagnostics from the installed TypeScript compiler API for activation unbound-name checks. The unchanged multiline TS2322 case fails before correction; all seven owner cases and e2e-check pass afterward. Preserve selected lexical diagnostic codes and explicit compiler failures, and retain analysis plus cleanup errors without leaking compiler sessions or temporary configuration. Supplemental cleanup fault tests are post-change coverage, not original pre-change Red evidence.
 
 - F239-236: Preserve HWP resource snapshots and native-clock brackets through the existing diagnostic commands, opening the fixture directly through core.card.add-tab. Both optimized diagnostic hosts pass the focused H23.11 integration cases, application-log audit, frontmost restoration and normal shutdown. Earlier log-policy and baseline failures remain separate records. The evidence does not establish WASM compilation cost or startup performance improvement.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-238: 완전한 공통 증거로 drag geometry, cadence 및 convergence를 독립 판정하고 성공 결과와 직렬화한 실패에 모든 결과를 보존한다. 자료 누락과 malformed data는 명시적 검증 오류로 유지한다. 새 owner case는 네 개 실패에서 다섯 개 통과로 바뀌며 boundary fixture의 capture timestamp를 선언된 source capture와 일치시킨 뒤 소유 파일 전체가 38/38 통과한다. 2 pt, 33 ms 또는 두 frame 기준은 변경하지 않는다.
+
 - F239-237: Activation unbound-name 검사에서 설치된 TypeScript compiler API의 구조화 diagnostic을 읽는다. 여러 줄 TS2322 case는 변경 전 실패하고 수정 후 소유 case 7개와 e2e-check가 통과한다. 선택된 lexical diagnostic code와 명시적 compiler 실패를 유지하며 compiler session이나 임시 configuration을 남기지 않고 분석 오류와 cleanup 오류를 모두 보존한다. 추가 cleanup fault test는 변경 후 coverage이며 원래 변경 전 Red 근거가 아니다.
 
 - F239-236: core.card.add-tab으로 fixture를 직접 열고 기존 diagnostic command로 HWP resource snapshot과 native-clock bracket을 보존한다. 양 optimized diagnostic host에서 집중 H23.11 통합 case, application-log 감사, frontmost 복원 및 정상 종료를 통과한다. 이전 log-policy 및 baseline 실패는 별도 기록으로 유지한다. 이 증거는 WASM compilation 비용이나 startup 성능 개선을 입증하지 않는다.
