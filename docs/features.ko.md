@@ -11,10 +11,10 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 5개와 waiting 36개인 41개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 5개와 waiting 35개인 40개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
 - **입력/menu acceptance와 연결된 parent: 1** — F239-212
-- **보고된 실패와 과거 종료 감사: 20** — F239-47-30; F212.1-2-2; F212.10-hwp-2, F212.10-core-3/-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13; F239-78; F239-190
+- **보고된 실패와 과거 종료 감사: 19** — F239-47-30; F212.1-2-2; F212.10-hwp-2, F212.10-core-3/-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13; F239-78
 - **성능 측정: 6** — F212.1, F212.7a, F212.9a, F212.14/-5/-5-5
 - **Package 설치와 publication: 8** — F212.12-1-10-6g; F212.15/-1; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
 - **집계 요구사항과 미완료 작업 register: 6** — F160, F160.29, F161, F212, F212.10, F240
@@ -70,9 +70,9 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 - [o] F239-191 — P1: 기존 순차 per-test runner로 native activation target을 실행하고 호출하는 모든 executable을 prerequisite로 선언한다. 현재 target은 runner의 결과·경과 시간·timeout 계약 없이 binary를 직접 호출하며 image_region_test를 prerequisite 없이 실행한다. Recipe를 수정하기 전에 비활성화 build/command fixture로 target 계약을 재현한다. 정확한 activation 사례와 순서를 유지하며 compile 준비가 이를 실행하면 안 된다. Red: 비활성화 dry-run fixture는 native runner 명령을 찾지 못하고 직접 executable 호출 아홉 개를 드러낸다. Green: 기존 순차 runner를 한 번 사용하고 누락한 image-region prerequisite를 추가하면 같은 fixture가 14.7ms에 통과한다. Fixture는 이름 아홉 개, 인자와 순서, 필요한 image-region compile과 직접 activation 호출이 없음을 검증한다. 앞선 prerequisite noise fixture는 준비 실패이며 Red가 아니다. 이 항목에서 앱이나 activation 검사를 실행하지 않는다.
 
-- [ ] F239-190 — P1, F239-78 및 F239-189 연결: capture_callback_test의 기존 first-failure summary assertion이 간헐적으로 실패한 원인을 분류한다. 첫 controlled stop-handoff Red 실행에서 새 사례를 실행하기 전에 기존 aggregate assertion도 실패했다. 그대로인 predicate는 이후 Red 두 실행과 Green 두 실행에서 통과한다. 원래 event dump와 보강한 조건별 진단을 보존하며 원인이나 수정은 확인되지 않았다. 깨끗한 handoff Red는 별도 근거로 유지하며 이 관측을 수정 완료나 미재현으로 종료하지 않는다.
+- [o] F239-190 — P1, F239-78 및 F239-189 연결: 간헐적 first-failure summary assertion의 checklist 귀속을 바로잡는다. 보존된 F239-189 Red 로그는 통제된 handoff 사례 안에서 originating-failure assertion 두 개가 통과한 것을 보이며, 최초 handoff Red는 새 assertion 세 개만 실패한다. 이전 summary assertion 실패는 startup-delay 원인이 계속 열린 F239-78에 기록한다. Audit: 보존된 F239-189 로그가 이전 귀속과 모순되며 바로잡은 기록과 집중 parity mapping이 통과한다. 이는 기록 정정이며 product fix나 not-reproduced 종료가 아니다.
 
-- [o] F239-189 — P0, F239-78 연결 후속: start 완료로 성공을 확인한 뒤에만 각 capture stream을 중지한다. 현재 stop은 만료된 start 대기를 무시하고 완료 전에 stop을 요청하며 나중에 성공한 start를 정리하지 못한다. 정확히 한 번 정리하는 event-driven 소유권 전달을 구현하기 전에 native 소유 검사에서 지연, 경계 경합, 실패한 start 완료를 재현한다. 기존 호출자 대기 한도, 최초 timeout 오류, 닫힌 sample/source intake와 확정한 artifact를 유지하며 늦은 callback은 교체된 recording을 바꿀 수 없다. 과거 startup 지연의 원인을 특정하지 않는다. Red: controlled callback 소유 검사는 start 실패 뒤 stop, pending start 완료 전 이른 stop, 늦은 stop 누락과 늦은 stop 오류 보고 누락을 재현하며 깨끗한 Red는 이 네 실패만 포함한다. Green: macOS arm64에서 같은 callback 소유 검사 1/1, 15.578초, late-stop 격리 1/1, 6.376초, intake fence 1/1, 0.391초에 통과한다. Attempt lock이 한 번의 stop 소유권과 완료 semaphore를 가지며 inline, 대기 한도 안, 늦은 성공, start 실패 경로에서 기존 한도와 artifact를 유지한다. 반대 검토에서 남은 경합 또는 소유권 이의가 없다. 별도의 기존 summary-assertion 관측은 F239-190에서 열린 상태로 유지한다. macOS arm64에서 양 diagnostic host build가 성공한다.
+- [o] F239-189 — P0, F239-78 연결 후속: start 완료로 성공을 확인한 뒤에만 각 capture stream을 중지한다. 현재 stop은 만료된 start 대기를 무시하고 완료 전에 stop을 요청하며 나중에 성공한 start를 정리하지 못한다. 정확히 한 번 정리하는 event-driven 소유권 전달을 구현하기 전에 native 소유 검사에서 지연, 경계 경합, 실패한 start 완료를 재현한다. 기존 호출자 대기 한도, 최초 timeout 오류, 닫힌 sample/source intake와 확정한 artifact를 유지하며 늦은 callback은 교체된 recording을 바꿀 수 없다. 과거 startup 지연의 원인을 특정하지 않는다. Red: controlled callback 소유 검사는 start 실패 뒤 stop, pending start 완료 전 이른 stop, 늦은 stop 누락과 늦은 stop 오류 보고 누락을 재현하며 깨끗한 Red는 이 네 실패만 포함한다. Green: macOS arm64에서 같은 callback 소유 검사 1/1, 15.578초, late-stop 격리 1/1, 6.376초, intake fence 1/1, 0.391초에 통과한다. Attempt lock이 한 번의 stop 소유권과 완료 semaphore를 가지며 inline, 대기 한도 안, 늦은 성공, start 실패 경로에서 기존 한도와 artifact를 유지한다. 반대 검토에서 남은 경합 또는 소유권 이의가 없다. F239-189 Red는 이전 summary assertion을 통과하며, 앞선 summary 실패는 F239-78에 남긴다. macOS arm64에서 양 diagnostic host build가 성공한다.
 
 - [o] F239-188 — P0, F239-183 연결 후속: generation을 지정한 메시지 전달이 성공한 뒤 살아 있는 view를 유지한다. postViewGeneration의 성공 경로에 lifecycle 종료 기록이 남아 있다. 잘못된 종료 호출을 제거하기 전에 현재 generation의 view-ready 전달 소유 검사로 live-view record 손실을 재현한다. 오래된 generation 취소, 전달 실패 오류와 실제 view 종료 기록을 유지한다. Red: 올바른 envelope를 사용한 소유 검사는 초기 theme post를 확인한 뒤 성공한 전달이 live view를 제거해 실패한다. Green: 성공 경로의 잘못된 종료 호출만 제거하면 같은 소유 검사가 0.029초에 통과하고 host.view.killed record가 남지 않는다. 초기 package 탐색과 envelope 누락 시도는 대상 assertion에 도달하지 않아 Red 근거가 아니다. 실제 종료 소유 검사 두 개는 그대로 통과하며 native 수명이나 generation 정책은 바꾸지 않는다. 기존 host.view.killed 계약은 성공한 전달을 명시적으로 제외한다.
 

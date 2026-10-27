@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-190: capture summary assertion의 과거 귀속을 바로잡는다. 보존된 F239-189 Red 로그에서 통제된 handoff 사례 안에서 originating-failure assertion 두 개가 통과하고 최초 handoff Red는 새 assertion 세 개만 실패한다. 앞선 summary predicate 실패는 startup-delay 원인이 열린 F239-78에 기록한다. 이 변경은 기록 정정이며 product fix나 not-reproduced 판정을 주장하지 않는다.
+
 - F239-226: qualified plugin-host exposure 이름은 유지하고 RAF snapshot은 plugin-local key로 publish한다. Benchmark는 등록 trace row를 기다린 다음 지원하지 않는 `status.watch` 대신 command와 `status.get`으로 읽는다. Red: owner fixture test가 qualified snapshot key를 찾았다. Green: fixture·collector owner test 16/16, fixture pack command 및 문서 검사가 통과한다. Application measurement는 이 단위에 포함하지 않는다.
 
 - F239-228: 대응하는 performance exposure 시험 파일명과 inventory 경로를 맞춘다. 이름 변경 전 host 구조 감사가 실패하고 변경 후 통과하며 보존된 Wails 소유 사례 두 개가 통과한다. 시험 본문과 runtime 동작은 바꾸지 않는다.
@@ -185,7 +187,7 @@
 
 - F239-191: 기존 순차 runner로 native activation 사례를 실행해 test별 결과, 경과 시간과 timeout을 적용한다. image_region_test를 prerequisite로 선언하고 모든 아홉 사례와 인자를 유지한다. 비활성화 target fixture는 수정 전 실패하고 수정 후 native 앱을 실행하지 않고 통과한다.
 
-- F239-189: 기존 start 대기가 만료되면 정확히 한 번 capture stop 소유권을 나중에 성공하는 start callback으로 넘긴다. Start 실패 시 stop을 요청하지 않는다. 호출자 timeout, sample/source intake fence, 확정한 artifact와 교체된 recording 격리를 유지한다. 네 assertion의 controlled Red가 수정 후 통과하며 late-stop과 intake 소유 검사도 통과한다. 관련 없는 간헐적 summary assertion은 F239-190에서 유지하며 과거 startup 지연 원인은 미해결이다.
+- F239-189: 기존 start 대기가 만료되면 정확히 한 번 capture stop 소유권을 나중에 성공하는 start callback으로 넘긴다. Start 실패 시 stop을 요청하지 않는다. 호출자 timeout, sample/source intake fence, 확정한 artifact와 교체된 recording 격리를 유지한다. 네 assertion의 controlled Red가 수정 후 통과하며 late-stop과 intake 소유 검사도 통과한다. 보존된 Red는 이전 summary assertion도 통과한다. 과거 summary 실패는 원인이 미해결인 F239-78에 유지하며 startup 지연 원인은 해결되지 않았다.
 
 - F239-188: generation을 지정한 theme 전달이 성공한 뒤 살아 있는 Wails view를 유지한다. postViewGeneration에 남은 잘못된 lifecycle 종료 호출을 제거한다. 소유 ready-delivery 회귀 검사는 수정 전 실패하고 수정 후 거짓 종료 record 없이 통과하며 실제 종료 소유 검사도 통과한다. 오래된 generation 취소와 전달 오류 동작을 유지한다.
 

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-190: Correct the historical attribution of the capture summary assertion. The preserved F239-189 Red logs show both originating-failure assertions passing within the controlled handoff case; the initial handoff Red fails only its three new assertions. The earlier summary-predicate failures are recorded under F239-78, whose startup-delay cause remains open. This corrects the record only and makes no product-fix or not-reproduced claim.
+
 - F239-226: Keep qualified plugin-host exposure names and publish the RAF snapshot under its plugin-local key. The benchmark waits for declared registration trace rows, then reads through the command and `status.get` instead of unsupported `status.watch`. Red: the owner fixture test found the qualified snapshot key. Green: fixture and collector owner tests pass 16/16, the fixture pack command succeeds, and documentation checks pass. Application measurements remain outside this unit.
 
 - F239-228: Align the paired performance exposure test filenames and inventory paths. The host structure audit fails before the rename and passes afterward; both retained Wails owner cases pass. Test bodies and runtime behavior are unchanged.
@@ -188,7 +190,7 @@
 
 - F239-191: Run native activation cases through the existing sequential runner with per-test results, elapsed times and timeouts. Declare image_region_test as a prerequisite and preserve all nine cases and arguments. The non-activating target fixture fails before correction and passes afterward without running any native application.
 
-- F239-189: Transfer exactly-once capture stop ownership to a late successful start callback when the existing start wait expires. Failed starts request no stop. Preserve the caller timeout, sample/source intake fence, finalized artifacts and replacement-recording isolation. The four-assertion controlled Red passes after correction, and late-stop and intake owners pass. Keep the unrelated intermittent summary assertion under F239-190 and the historical startup-delay cause unresolved.
+- F239-189: Transfer exactly-once capture stop ownership to a late successful start callback when the existing start wait expires. Failed starts request no stop. Preserve the caller timeout, sample/source intake fence, finalized artifacts and replacement-recording isolation. The four-assertion controlled Red passes after correction, and late-stop and intake owners pass. Its preserved Red runs pass the earlier summary assertions; the prior summary failures remain classified under F239-78, whose startup-delay cause remains unresolved.
 
 - F239-188: Preserve the live Wails view after a successful generation-qualified theme delivery. Remove the remaining invalid lifecycle end call from postViewGeneration. The owning ready-delivery regression fails before correction and passes afterward with no false end record; actual end owners still pass. Keep stale-generation cancellation and delivery-error behavior unchanged.
 
