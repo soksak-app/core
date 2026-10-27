@@ -4423,6 +4423,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-241",
+    implementation: [{ file: "packages/plugin-api/view.js", symbol: "if (window.sokHost !== undefined)" }],
+    tests: [{ file: "packages/plugin-api/test/view.test.mjs", id: "a plugin-host page writes one record through the plugin-host log contract" }],
+    expected: "The SDK bridge preserves the declared plugin-host log request shape and operation identifiers while surface views use direct batches.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-240",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "const writeLog = (level, event, fields, cids) =>" },

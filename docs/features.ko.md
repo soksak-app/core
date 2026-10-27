@@ -11,9 +11,9 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 10개와 waiting 30개인 40개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 11개와 waiting 30개인 41개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 4** — F239-223, F239-223-3, F239-233, F239-240
+- **현재 측정과 검사 수정: 5** — F239-223, F239-223-3, F239-233, F239-240, F239-241
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -22,6 +22,8 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
 최신 macOS 26.6.2 arm64 optimized diagnostic 측정 묶음은 측정 실패 7개와 수집 거부 1개를 보존한다. Browser source-frame 간격은 Wails/Tauri에서 51/34 ms, Editor는 50/34 ms, HWP는 34/34 ms, Wails Terminal은 71 ms다. Tauri Terminal은 창이 active 상태여서 synthetic drag를 거부했으며 drag 결과를 입증하지 않는다. HWP footprint는 양 host에서 통과한다. Wails는 허용 581,004,760 bytes에 대해 571,791,024 bytes이고, Tauri는 허용 569,847,184 bytes에 대해 568,760,032 bytes다. HWP adjusted first display는 기준 1001/1113 ms에 대해 1616.594/1755.235 ms로 여전히 실패한다. Source 간격은 observer 간격이며 입력부터 표시까지 측정한 latency가 아니다. 독립 F239-238 evaluator로 보존된 측정을 진단 replay한 결과 Browser와 Editor는 양 host에서 convergence를 통과하고 HWP는 양 host, Terminal은 Wails에서 실패한다. Tauri Terminal에는 convergence 결과가 없다. 이 replay는 새로운 application acceptance 실행이 아니다. 양 host는 정상 종료하고 error-log 감사를 통과하며 원래 frontmost baseline을 복원한다. F239-223과 F239-233은 열린 상태를 유지하며 제품 memory 최적화나 공통 latency 원인을 추론하지 않는다.
+
+- [~] F239-241 — P1, F239-240 연결: 공유 SDK bridge가 view record를 batch로 보낼 때 plugin-host logging channel을 유지한다. Files host page는 같은 bridge를 쓰지만 선언된 native channel은 개별 plugin record를 받는다. Routing 수정 전에 SDK 소유 검사에서 거부되는 clock/batch 요청을 재현하고 오류와 operation identifier를 유지하며 현재 양 host 경로를 확인한다.
 
 - [~] F239-240 — P1, F239-223 연결: 기존 bounded event batcher로 view record를 host writer에 직접 보낸다. View page identity를 generation에 등록하고 clock 및 lifecycle record를 유지하며 source 소유권을 검증하고 writer의 gate, bound 및 오류 보고를 재사용한다. Workbench의 단일 record 중계와 Terminal 소유 중복 logger를 제거한다. 수정 전 owner Red는 record별 workbench 중계와 직접 writer 동작 누락을 재현해야 한다. 확인된 추가 transport 경로를 제거하며 애플리케이션 latency acceptance는 별도다.
 - [o] F239-239 — P1, F239-236 및 H38 연결: 기존 recorded-view collector로 최초의 완전한 HWP content frame과 startup resource timing을 함께 기록한다. Resource snapshot 전에 request/process identity와 원본 recording을 보존하고 이후 offline content recognition을 수행한다. 조건부 fork 성능 비교에는 같은 선언된 baseline observation window와 새로운 baseline/candidate configuration을 사용한다. Startup 기준, 예상 font source 또는 content 요구는 변경하지 않는다. Optimized macOS 26.6.2 arm64 candidate case 양쪽은 OCR로 확인한 first-content capture와 resource snapshot을 보존하고 log 감사와 frontmost 복원을 통과하며 정상 종료한다. Candidate first content는 Wails/Tauri에서 1531.573/1584.435 ms이며 앞선 baseline은 1411.514/1356.583 ms다. Baseline Tauri cleanup은 frontmost identity 변경으로 실행을 거부한다. Candidate의 font 응답도 늦어 이 비교는 startup 개선이나 fork 채택을 입증하지 않는다. 기존 helper case 18개는 통과하며 결합 collector의 변경 전 Red는 기록되지 않았다. 남은 owner coverage는 실제 window check와 fake-session test가 공유하는 open 이후 resource 수집 경계만 추출한다. 실패를 보존하고 offline content recognition 전에 diagnostics를 중지하며 잘못된 필수 증거를 거부해야 한다. 현재 성공한 check의 cleanup은 원본 recording을 제거하므로 경로 저장만으로 원본 증거를 보존하지 못한다. Cleanup 전에 capture 파일 전체를 측정 artifact 폴더로 복사하고 원본과 archive identity를 남기며 원본 cleanup 뒤에도 archive가 남는지 검증한다. 비교 실행의 원본 recording 세 건은 없으며 JSON/OCR 결과가 누락된 원본 frame을 대체하지 않는다. Archive 수정의 새 owner Red는 copy가 없는 동작보존 추출에서 `raw recording archive must exist before offline OCR` assertion으로 실패한다. Copy 수정 뒤 같은 test와 owner case 5개가 통과하고 e2e-check도 통과한다. 실제 window check는 같은 exported collector를 사용한다. 이 결과는 archive 소유 동작을 종결하며 과거 녹화를 복구하거나 startup 성능을 통과시키지 않는다.

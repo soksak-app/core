@@ -154,6 +154,13 @@ export function createViewBridge({ handler, report }) {
   const nextOperationCids = createOperationCids();
   let eventBatcher = null;
   const writeLog = (level, event, fields, cids) => {
+    // A plugin-host page uses the host's declared single-record runtime.log call; only surface pages use the view batch writer.
+    if (window.sokHost !== undefined) {
+      const prefix = `plugin.${plugin}.`;
+      calls.request("runtime.log", { level, event: event.slice(prefix.length), fields, ...(cids === undefined ? {} : { cids }) })
+        .catch(recordError(`log ${event}`));
+      return;
+    }
     if (eventBatcher === null) {
       eventBatcher = createEventBatcher({
         call: (request) => calls.request("runtime.log", request),

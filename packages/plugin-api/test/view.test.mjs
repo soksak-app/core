@@ -421,6 +421,35 @@ test("the view bridge keeps the public log API and batches source-clocked record
   assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), [], "a successful writer reply reported an error");
 });
 
+test("a plugin-host page writes one record through the plugin-host log contract", { timeout: 5000 }, async (t) => {
+  const { posted, host } = setup(t);
+  globalThis.window.sokHost = Object.freeze({ declarations: {} });
+  let clock = 0;
+  let receiveLogRequest;
+  const firstLogRequest = new Promise((resolve) => { receiveLogRequest = resolve; });
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => {
+    posted.push(plain(message));
+    if (message.command !== "runtime.log") return;
+    receiveLogRequest(plain(message));
+    if (message.params.action === "clock") {
+      clock += 1;
+      queueMicrotask(() => host({ sok: 1, id: message.id, result: { ts_us: 1_000_000 + clock, mono_ns: 2_000_000 + clock } }));
+    } else {
+      queueMicrotask(() => host({ sok: 1, id: message.id, result: null }));
+    }
+  } }, report: () => {} });
+  posted.splice(0);
+
+  runtime.log.info("host.report", { kind: "fixture" }, { cids: ["host.1"] });
+  const request = await firstLogRequest;
+
+  assert.deepEqual(request.params, {
+    level: "info", event: "host.report", fields: { kind: "fixture" }, cids: ["host.1"],
+  });
+  assert.equal(posted.some(({ command, params }) => command === "runtime.log" && params?.action), false,
+    "the plugin-host logger used the view batch wire format");
+});
+
 /** Dispatches a cancelable keydown on the window of the view and returns the event. */
 const keydown = (init) => {
   const event = new globalThis.window.KeyboardEvent("keydown", { cancelable: true, ...init });

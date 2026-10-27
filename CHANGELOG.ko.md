@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-241: Surface view가 직접 batch writer를 쓰는 동안 공유 SDK bridge의 개별 plugin-host log 요청을 유지한다. Plugin-host 소유 검사는 수정 전에 잘못된 batch 요청을 재현하며 선언된 start context로 routing한 뒤 bridge 소유 case 52개가 통과한다. Operation identifier와 명시적인 거절 보고를 유지한다.
+
 - F239-240: 기존 bounded batcher로 view event batch와 clock 요청을 native event writer에 직접 전달한다. 단일 record의 Workbench 전달을 제거하고 ready document generation과 page에 record를 연결하며 호출자가 지정한 surface identity를 거부하고 field 크기를 제한할 때도 신뢰할 수 있는 identity를 보존한다. SDK, Workbench와 양 native host 소유 검사는 직접 경로 누락을 재현하고 수정 후 통과한다. 애플리케이션 지연 acceptance는 별도로 유지한다.
 
 - F212.10-core-3: 재빌드한 양 host에서 retired-window callback 수정을 확인한다. Project-close 검사는 새 Wails missing-window 경고 0개, log 감사 finding 0, 정상 host/sidecar 종료와 foreground 복원으로 통과한다. Framework의 경고 경로 세 개 모두 소유 Red/Green을 갖추고 미할당 ID 경고는 유지한다. 독립 감사로 기능 결함을 종결하며 과거 호출자 아홉 개의 정확한 attribution은 미확인으로 유지한다.
