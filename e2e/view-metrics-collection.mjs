@@ -9,8 +9,6 @@ import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, pr
 
 const PROCESS_REQUEST = "host.trace.view.process-request";
 const PROCESS_READY = "host.trace.view.process-ready";
-const EXPOSURE_REQUEST = "host.trace.exposure.request";
-const EXPOSURE_REPLY = "host.trace.exposure.reply";
 const SOURCE_CLOCK_RESOLUTION_MS = 1;
 
 /** Plans a horizontal width resize at the measured card's interior right boundary. */
@@ -79,25 +77,8 @@ export function processStartSamples(events, surfaces, plugin) {
   });
 }
 
-function parseLoggedArgs(event, label) {
-  assert.equal(event.fields?.truncated, false, `${label} arguments were truncated`);
-  assert.equal(typeof event.fields?.args, "string", `${label} has no serialized arguments`);
-  let parsed;
-  try {
-    parsed = JSON.parse(event.fields.args);
-    if (Array.isArray(parsed) && typeof parsed[0] === "string") parsed = JSON.parse(parsed[0]);
-  } catch (error) {
-    throw new Error(`${label} arguments are not valid JSON: ${error.message}`, { cause: error });
-  }
-  return parsed;
-}
-
-/** Matches one successful diagnostic command result to its native request, response and view generation. */
-export function viewStartExposure(events, surface, method, commandName, commandParams, startResult) {
-  assert.ok(Array.isArray(events), "view start exposure events must be an array");
-  assert.ok(typeof surface === "string" && surface.length > 0, "view start exposure requires a surface");
-  assert.ok(typeof method === "string" && method.length > 0, "view start exposure requires a command method");
-  const sourceClock = startResult?.sourceClock;
+function sourceClockAt(value) {
+  const sourceClock = value?.sourceClock;
   assert.ok(sourceClock && typeof sourceClock === "object" && !Array.isArray(sourceClock),
     "successful view start reply has no sourceClock anchor");
   const clockKeys = Object.keys(sourceClock).sort();
@@ -109,65 +90,39 @@ export function viewStartExposure(events, surface, method, commandName, commandP
     "view sourceClock has an invalid sourceNowMs");
   assert.equal(sourceClock.sourceResolutionMs, SOURCE_CLOCK_RESOLUTION_MS,
     `view sourceClock resolution must equal the declared ${SOURCE_CLOCK_RESOLUTION_MS} ms WebKit bound`);
+  return { ...sourceClock };
+}
 
-  assert.ok(typeof commandName === "string" && commandName.length > 0,
-    "view start exposure requires its declared diagnostic command name");
-  assert.ok(commandParams && typeof commandParams === "object" && !Array.isArray(commandParams),
-    "view start exposure requires the declared diagnostic command parameters");
-  const requests = events.filter((event) => event?.event === EXPOSURE_REQUEST && event.fields?.surface === surface
-    && event.fields?.method === method);
-  assert.equal(requests.length, 1, `${surface} ${method} start must have exactly one native exposure request`);
-  const request = requests[0];
-  const id = request.fields?.id;
-  assert.ok(Number.isSafeInteger(id) && id > 0, `${surface} ${method} start has an invalid exposure request id`);
-  assert.ok(Number.isSafeInteger(request.mono_ns) && request.mono_ns > 0,
-    `${surface} ${method} start request has an invalid native monotonic timestamp`);
-  const replies = events.filter((event) => event?.event === EXPOSURE_REPLY && event.fields?.id === id);
-  assert.equal(replies.length, 1, `${surface} ${method} start request ${id} must have exactly one native exposure reply`);
-  const reply = replies[0];
-  assert.ok(typeof reply.fields?.from === "string" && reply.fields.from.length > 0,
-    `${surface} ${method} start reply ${id} has no native route`);
-  assert.ok(Number.isSafeInteger(reply.mono_ns) && reply.mono_ns > request.mono_ns,
-    `${surface} ${method} start reply ${id} has an invalid or reversed native monotonic timestamp`);
+function checkedClockReading(value, label) {
+  assert.ok(typeof value?.monoNs === "string" && /^[1-9]\d*$/u.test(value.monoNs),
+    `${label} has an invalid raw monotonic clock reading`);
+  const timeMs = Number(BigInt(value.monoNs)) / 1_000_000;
+  assert.ok(Number.isFinite(value.timeMs) && value.timeMs === timeMs,
+    `${label} timeMs does not match its raw monotonic reading`);
+  return { monoNs: value.monoNs, timeMs };
+}
 
-  const successfulReplies = events.filter((event) => event?.event === "host.binding.call"
-    && event.fields?.name === "exposure_reply").map((event) => ({ event, value: parseLoggedArgs(event, "exposure_reply") }))
-    .filter(({ value }) => value?.id === id);
-  assert.equal(successfulReplies.length, 1, `${surface} ${method} start request ${id} must have one logged exposure result`);
-  const loggedReply = successfulReplies[0];
-  assert.equal(loggedReply.event.fields?.ok, true, `${surface} ${method} start request ${id} exposure reply failed`);
-  assert.equal(loggedReply.value.surface, surface, `${surface} ${method} start reply ${id} names another surface`);
-  assert.deepEqual(loggedReply.value.result, startResult,
-    `${surface} ${method} start reply ${id} differs from the successful command result`);
-
-  const commandCalls = events.filter((event) => event?.event === "host.endpoint.call"
-    && event.fields?.name === method).map((event) => ({ event, args: parseLoggedArgs(event, "command.run") }))
-    .filter(({ args }) => args?.window && args.name === commandName && args.surface === surface
-      && JSON.stringify(args.params) === JSON.stringify(commandParams));
-  const matchingCalls = commandCalls.filter(({ event }) => {
-    const durationUs = event.fields?.micros;
-    if (!Number.isSafeInteger(event.mono_ns) || !Number.isSafeInteger(durationUs) || durationUs < 0) return false;
-    const earliestStartedAtNs = event.mono_ns - (durationUs + 1) * 1_000;
-    return earliestStartedAtNs <= request.mono_ns && event.mono_ns >= reply.mono_ns;
-  });
-  assert.equal(matchingCalls.length, 1,
-    `${surface} ${commandName} must have one successful command.run enclosing its exposure request and reply`);
-  const commandCall = matchingCalls[0];
-  assert.equal(commandCall.event.fields?.ok, true, `${surface} ${commandName} command.run failed`);
-  return { sourceClock: { ...sourceClock }, request, reply, requestId: id, method, commandName, surface,
-    commandCall: commandCall.event };
+/** Brackets one successful view observer start with the session's native monotonic clock. */
+export function viewStartClockBracket(surface, startResult, before, after, { hostPid, window }) {
+  assert.ok(typeof surface === "string" && surface.length > 0, "view start exposure requires a surface");
+  assert.ok(Number.isSafeInteger(hostPid) && hostPid > 0, "view start bracket requires the host process PID");
+  assert.ok(typeof window === "string" && window.length > 0, "view start bracket requires its target window");
+  const clockBefore = checkedClockReading(before, "view start pre-command clock");
+  const clockAfter = checkedClockReading(after, "view start post-command clock");
+  assert.ok(BigInt(clockAfter.monoNs) > BigInt(clockBefore.monoNs),
+    "view start post-command clock must be later than its pre-command clock");
+  return { surface, hostPid, window, sourceClock: sourceClockAt(startResult), before: clockBefore, after: clockAfter };
 }
 
 /** Maps a view document's ResizeObserver→rAF rows into conservative native monotonic intervals. */
-export function viewContentFrameEvents(events, plugin, surface, startExposure) {
+export function viewContentFrameEvents(events, plugin, surface, startBracket) {
   assert.ok(Array.isArray(events), "view content-frame events must be an array");
   assert.ok(typeof plugin === "string" && plugin.length > 0, "view content-frame plugin must be nonempty text");
   assert.ok(typeof surface === "string" && surface.length > 0, "view content-frame surface must be nonempty text");
-  assert.ok(startExposure && startExposure.surface === surface && typeof startExposure.method === "string"
-    && startExposure.request && startExposure.reply && startExposure.sourceClock,
-  `${surface} content-frame mapping requires its successful start exposure anchor`);
-  assert.ok(Number.isSafeInteger(startExposure.requestId) && startExposure.requestId > 0,
-    `${surface} content-frame mapping has an invalid start exposure request id`);
+  assert.ok(startBracket && startBracket.surface === surface && startBracket.before && startBracket.after
+    && startBracket.sourceClock && Number.isSafeInteger(startBracket.hostPid) && startBracket.hostPid > 0
+    && typeof startBracket.window === "string" && startBracket.window.length > 0,
+  `${surface} content-frame mapping requires its successful start clock bracket`);
   const name = `plugin.${plugin}.view.content_frame`;
   const selected = events.filter((event) => event?.event === name && (event.surface ?? event.fields?.surface) === surface);
   let priorSequence = -1;
@@ -181,7 +136,7 @@ export function viewContentFrameEvents(events, plugin, surface, startExposure) {
     assert.ok(Number.isInteger(event.mono_ns) && event.mono_ns > 0, `${name} has invalid host mono_ns`);
     assert.ok(Number.isFinite(documentTimeOriginMs) && documentTimeOriginMs > 0,
       `${name} has invalid documentTimeOriginMs`);
-    assert.equal(documentTimeOriginMs, startExposure.sourceClock.documentTimeOriginMs,
+    assert.equal(documentTimeOriginMs, startBracket.sourceClock.documentTimeOriginMs,
       `${name} documentTimeOriginMs does not match the successful start document`);
     assert.ok(Number.isFinite(resizeAtMs) && resizeAtMs >= 0, `${name} has invalid resizeAtMs`);
     assert.ok(Number.isFinite(firstResizeAtMs) && firstResizeAtMs >= 0 && firstResizeAtMs <= resizeAtMs,
@@ -193,13 +148,11 @@ export function viewContentFrameEvents(events, plugin, surface, startExposure) {
       `${name} frameTimeMs must be at or after resizeAtMs`);
     assert.ok(Number.isFinite(width) && width > 0, `${name} has invalid width`);
     assert.ok(Number.isFinite(height) && height > 0, `${name} has invalid height`);
-    const deltaMs = frameTimeMs - startExposure.sourceClock.sourceNowMs;
-    const resolutionMs = startExposure.sourceClock.sourceResolutionMs;
-    const requestMonoMs = Number(BigInt(startExposure.request.mono_ns)) / 1_000_000;
-    const replyMonoMs = Number(BigInt(startExposure.reply.mono_ns)) / 1_000_000;
+    const deltaMs = frameTimeMs - startBracket.sourceClock.sourceNowMs;
+    const resolutionMs = startBracket.sourceClock.sourceResolutionMs;
     const timeRange = {
-      lowerMs: requestMonoMs + deltaMs - 2 * resolutionMs,
-      upperMs: replyMonoMs + deltaMs + 2 * resolutionMs,
+      lowerMs: startBracket.before.timeMs + deltaMs - 2 * resolutionMs,
+      upperMs: startBracket.after.timeMs + deltaMs + 2 * resolutionMs,
     };
     assert.ok(Number.isFinite(timeRange.lowerMs) && Number.isFinite(timeRange.upperMs)
       && timeRange.lowerMs <= timeRange.upperMs, `${name} has an invalid mapped source interval`);
@@ -207,10 +160,10 @@ export function viewContentFrameEvents(events, plugin, surface, startExposure) {
       sequence, width, height, firstResizeAtMs, resizeAtMs, resizeCount, frameTimeMs,
       timeRange,
       source: {
-        documentTimeOriginMs, frameTimeMs, sourceNowMs: startExposure.sourceClock.sourceNowMs,
-        sourceResolutionMs: resolutionMs, requestMonoNs: startExposure.request.mono_ns,
-        replyMonoNs: startExposure.reply.mono_ns, requestId: startExposure.requestId,
-        method: startExposure.method, surface,
+        documentTimeOriginMs, frameTimeMs, sourceNowMs: startBracket.sourceClock.sourceNowMs,
+        sourceResolutionMs: resolutionMs, clockBeforeMonoNs: startBracket.before.monoNs,
+        clockAfterMonoNs: startBracket.after.monoNs, clockBeforeMs: startBracket.before.timeMs,
+        clockAfterMs: startBracket.after.timeMs, hostPid: startBracket.hostPid, window: startBracket.window, surface,
         eventTsUs: event.ts_us, eventMonoNs: event.mono_ns,
         ...(event.page === undefined ? {} : { eventPage: event.page }),
       },
@@ -446,29 +399,33 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
     "content trace descriptor must name its plugin");
   assert.equal(typeof descriptor.startContentTrace, "function", "content trace start callback is required");
   assert.equal(typeof descriptor.stopContentTrace, "function", "content trace stop callback is required");
-  assert.ok(typeof descriptor.startMethod === "string" && descriptor.startMethod.length > 0,
-    "content trace start exposure method is required");
-  assert.ok(typeof descriptor.startCommand === "string" && descriptor.startCommand.length > 0,
-    "content trace start command is required");
-  assert.ok(descriptor.startParams && typeof descriptor.startParams === "object" && !Array.isArray(descriptor.startParams),
-    "content trace start parameters are required");
   assert.equal(typeof action, "function", "content trace action is required");
+  const client = s.client;
+  const hostPid = client?.endpoint?.pid;
+  const window = s.window;
+  assert.ok(client && Number.isSafeInteger(hostPid) && hostPid > 0,
+    "content trace requires its connected host client and process PID");
+  assert.ok(typeof window === "string" && window.length > 0, "content trace requires its target window");
   const offsets = currentEventOffsets(s.app.configDir);
-  const start = await descriptor.startContentTrace(s, surface);
-  let startEvents;
-  let startExposure;
-  let contentOffsets;
+  const before = await monotonicTimeMs(s);
+  let start;
+  let started = false;
+  let startBracket;
   try {
-    await s.flushLog();
-    startEvents = readEvents(s.app.configDir, offsets).events;
-    startExposure = viewStartExposure(startEvents, surface, descriptor.startMethod, descriptor.startCommand,
-      descriptor.startParams, start);
-    contentOffsets = currentEventOffsets(s.app.configDir);
+    start = await descriptor.startContentTrace(s, surface);
+    started = true;
+    const after = await monotonicTimeMs(s);
+    assert.strictEqual(s.client, client, "content trace start changed the session host client");
+    assert.equal(s.client.endpoint.pid, hostPid, "content trace start changed the host process");
+    assert.equal(s.window, window, "content trace start changed the target window");
+    startBracket = viewStartClockBracket(surface, start, before, after, { hostPid, window });
   } catch (error) {
-    try {
-      await descriptor.stopContentTrace(s, surface);
-    } catch (stopError) {
-      throw new AggregateError([error, stopError], `content trace start evidence and cleanup failed for ${surface}`);
+    if (started) {
+      try {
+        await descriptor.stopContentTrace(s, surface);
+      } catch (stopError) {
+        throw new AggregateError([error, stopError], `content trace start clock bracket and cleanup failed for ${surface}`);
+      }
     }
     throw error;
   }
@@ -491,7 +448,7 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
   let eventError;
   try {
     await s.flushLog();
-    events = readEvents(s.app.configDir, contentOffsets).events;
+    events = readEvents(s.app.configDir, offsets).events;
   } catch (error) {
     eventError = error;
     t.diagnostic(`content-frame events could not be read for ${surface}: ${error.stack ?? error}`);
@@ -504,9 +461,8 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
   if (stopError && eventError) throw new AggregateError([stopError, eventError], `content trace finalization failed for ${surface}`);
   if (stopError) throw stopError;
   if (eventError) throw eventError;
-  const allEvents = [...startEvents, ...events];
-  const contentFrames = viewContentFrameEvents(allEvents, descriptor.plugin, surface, startExposure);
-  return { action: actionResult, start, startEvents, startExposure, stop: stopResult, events: allEvents, contentFrames };
+  const contentFrames = viewContentFrameEvents(events, descriptor.plugin, surface, startBracket);
+  return { action: actionResult, start, startBracket, stop: stopResult, events, contentFrames };
 }
 
 /** Reads the shared monotonic host clock in the same domain as recorded frame display times. */

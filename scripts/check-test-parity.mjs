@@ -198,11 +198,52 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+  "id": "F239-221-1",
+  "implementation": [
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export function viewStartClockBracket("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function withViewContentTrace("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function monotonicTimeMs("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "generic content trace brackets the successful start command with native clock reads"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "view start clock brackets require valid source identity and ordered native clock replies"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "content trace stops its observer when the post-start native clock read fails"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "content trace start failure does not read an after clock or stop an unstarted observer"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "content trace bracket rejects a replaced client, changed host process or target window"
+    }
+  ],
+  "expected": "The successful observer start is causally bracketed by monotonic clock reads from the same host client, PID and window; source-frame intervals retain both raw clock receipts and source identity.",
+  "levels": ["unit"]
+},
+  {
   "id": "F239-221",
   "implementation": [
     {
       "file": "e2e/view-metrics-collection.mjs",
-      "symbol": "export function viewStartExposure("
+      "symbol": "export function viewStartClockBracket("
     },
     {
       "file": "e2e/view-metrics-collection.mjs",
@@ -220,11 +261,11 @@ const FEATURE_LINKS = [
   "tests": [
     {
       "file": "e2e/test/view-metrics-collection.test.mjs",
-      "id": "view content-frame mapping uses its successful start anchor and native request-reply interval"
+      "id": "view content-frame mapping uses the successful start's native clock bracket"
     },
     {
       "file": "e2e/test/view-metrics-collection.test.mjs",
-      "id": "view start exposure requires one successful exact-surface request and reply"
+      "id": "view start clock brackets require valid source identity and ordered native clock replies"
     },
     {
       "file": "e2e/test/view-metrics-collection.test.mjs",
@@ -255,7 +296,7 @@ const FEATURE_LINKS = [
       "id": "terminal view descriptor reads browser history and controls only the diagnostic frame observer"
     }
   ],
-  "expected": "View source frames map to conservative native monotonic intervals from their successful start command; ambiguous rows are preserved while one-shot and drag evidence require guaranteed ordering and coverage.",
+  "expected": "View source frames map to conservative native monotonic intervals from the successful start command bracket; ambiguous rows are preserved while one-shot and drag evidence require guaranteed ordering and coverage.",
   "levels": ["unit"]
 },
   {

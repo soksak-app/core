@@ -8,7 +8,7 @@ import test from "node:test";
 import { readFrame } from "@soksak/window-check/frame.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
 import { closeViewGroup, collectViewProcessGroups, collectViewStartAndMemory, openRecordedView, processStartSamples, viewContentFrameEvents,
-  mapViewContentFramesToCapture, viewCardWithDifferentPluginTab, viewStartExposure, waitForViewReadiness,
+  mapViewContentFramesToCapture, viewCardWithDifferentPluginTab, viewStartClockBracket, waitForViewReadiness,
   withViewContentTrace } from "../view-metrics-collection.mjs";
 
 const event = (name, surface, ts_us, mono_ns) => ({ event: name, ts_us, mono_ns,
@@ -18,35 +18,31 @@ function sourceResult(documentTimeOriginMs = 1999, sourceNowMs = 0.2) {
   return { enabled: true, sourceClock: { documentTimeOriginMs, sourceNowMs, sourceResolutionMs: 1 } };
 }
 
-function nativeStartEvidence({ surface = "view-1", commandName = "fixture.measure", commandParams = { action: "start" },
-  documentTimeOriginMs = 1999, sourceNowMs = 0.2, requestMonoNs = 1_000_000_000,
-  replyMonoNs = 1_001_000_000, startResult } = {}) {
-  const id = 7;
-  const result = startResult ?? sourceResult(documentTimeOriginMs, sourceNowMs);
-  const endpointAtNs = replyMonoNs + 2_000_000;
-  return [
-    { event: "host.trace.exposure.request", mono_ns: requestMonoNs, fields: { id, method: "command.run", surface } },
-    { event: "host.trace.exposure.reply", mono_ns: replyMonoNs, fields: { id, from: `surface-main-${surface}` } },
-    { event: "host.binding.call", mono_ns: replyMonoNs + 10_000, fields: { name: "exposure_reply", ok: true,
-      truncated: false, args: JSON.stringify([JSON.stringify({ id, result, surface })]) } },
-    { event: "host.endpoint.call", mono_ns: endpointAtNs, fields: { name: "command.run", ok: true, truncated: false,
-      micros: Math.ceil((endpointAtNs - requestMonoNs) / 1_000),
-      args: JSON.stringify({ window: "main", name: commandName, params: commandParams, surface }) } },
-  ];
+function clockReading(monoNs) {
+  return { monoNs: String(monoNs), timeMs: Number(BigInt(monoNs)) / 1_000_000 };
 }
 
-function startExposure({ surface = "view-1", commandName = "fixture.measure", commandParams = { action: "start" }, documentTimeOriginMs = 1999,
-  sourceNowMs = 0.2, requestMonoNs = 1_000_000_000, replyMonoNs = 1_001_000_000, startResult } = {}) {
+function startBracket({ surface = "view-1", documentTimeOriginMs = 1999, sourceNowMs = 0.2,
+  beforeMonoNs = 1_000_000_000, afterMonoNs = 1_001_000_000, hostPid = 41, window = "main", startResult } = {}) {
   const result = startResult ?? sourceResult(documentTimeOriginMs, sourceNowMs);
-  return viewStartExposure(nativeStartEvidence({ surface, commandName, commandParams, documentTimeOriginMs, sourceNowMs,
-    requestMonoNs, replyMonoNs, startResult: result }), surface, "command.run", commandName, commandParams, result);
+  return viewStartClockBracket(surface, result, clockReading(beforeMonoNs), clockReading(afterMonoNs), { hostPid, window });
 }
 
-function appendStartExposure(logDirectory, { surface = "view-1", commandName = "fixture.measure",
-  commandParams = { action: "start" }, startResult } = {}) {
-  appendFileSync(join(logDirectory, "host-1-1.jsonl"), nativeStartEvidence({ surface, commandName, commandParams,
-    startResult: startResult ?? sourceResult(1999, 0.2) }).map((row, index) => JSON.stringify({ level: "debug", ts_us: 2_000_000 + index,
-    seq: index + 1, ...row })).join("\n") + "\n");
+function traceSession(root, calls, { clockValues = ["1000000000", "1010000000"], hostPid = 41, window = "main" } = {}) {
+  const client = { endpoint: { pid: hostPid } };
+  let nextClock = 0;
+  return {
+    app: { configDir: root }, client, window,
+    async request(method, params) {
+      calls.push("clock");
+      assert.equal(method, "diagnostics.clock");
+      assert.deepEqual(params, {});
+      const value = clockValues[nextClock++];
+      if (value instanceof Error) throw value;
+      return { mono_ns: value };
+    },
+    async flushLog() { calls.push("flush"); },
+  };
 }
 
 function writeCapturedFrame(directory, index, time) {
@@ -171,7 +167,7 @@ test("view content-frame events preserve coalesced resize provenance", { timeout
   const row = { event: "plugin.fixture.view.content_frame", ts_us: 2_000_000,
     mono_ns: 3_000_000, page: "view-document-opaque", surface: "view-1", fields: { sequence: 0, documentTimeOriginMs: 1999,
       firstResizeAtMs: 0.1, resizeAtMs: 0.2, resizeCount: 2, frameTimeMs: 0.5, width: 300, height: 200 } };
-  const anchor = startExposure();
+  const anchor = startBracket();
   const [frame] = viewContentFrameEvents([row], "fixture", "view-1", anchor);
   assert.deepEqual({ firstResizeAtMs: frame.firstResizeAtMs, resizeAtMs: frame.resizeAtMs,
     resizeCount: frame.resizeCount }, { firstResizeAtMs: 0.1, resizeAtMs: 0.2, resizeCount: 2 });
@@ -191,62 +187,49 @@ test("generic view content-frame events use the start source clock and preserve 
   const row = { event: "plugin.fixture.view.content_frame", ts_us: 2_000_000,
     mono_ns: 3_000_000, page: "view-document-opaque", surface: "view-1", fields: { sequence: 4, documentTimeOriginMs: 1999,
       firstResizeAtMs: 0.2, resizeAtMs: 0.2, resizeCount: 1, frameTimeMs: 0.5, width: 300, height: 200 } };
-  assert.deepEqual(viewContentFrameEvents([row], "fixture", "view-1", startExposure()), [{
+  assert.deepEqual(viewContentFrameEvents([row], "fixture", "view-1", startBracket()), [{
     sequence: 4, width: 300, height: 200, firstResizeAtMs: 0.2, resizeAtMs: 0.2, resizeCount: 1, frameTimeMs: 0.5,
     timeRange: { lowerMs: 998.3, upperMs: 1003.3 },
     source: { documentTimeOriginMs: 1999, frameTimeMs: 0.5, sourceNowMs: 0.2, sourceResolutionMs: 1,
-      requestMonoNs: 1_000_000_000, replyMonoNs: 1_001_000_000, requestId: 7,
-      method: "command.run", surface: "view-1", eventTsUs: 2_000_000, eventMonoNs: 3_000_000,
+      clockBeforeMonoNs: "1000000000", clockAfterMonoNs: "1001000000", clockBeforeMs: 1000, clockAfterMs: 1001,
+      hostPid: 41, window: "main", surface: "view-1", eventTsUs: 2_000_000, eventMonoNs: 3_000_000,
       eventPage: "view-document-opaque" },
   }]);
-  assert.throws(() => viewContentFrameEvents([{ ...row, mono_ns: 0 }], "fixture", "view-1", startExposure()), /mono_ns/);
-  assert.throws(() => viewContentFrameEvents([{ ...row, fields: { ...row.fields, width: 0 } }], "fixture", "view-1", startExposure()), /width/);
+  assert.throws(() => viewContentFrameEvents([{ ...row, mono_ns: 0 }], "fixture", "view-1", startBracket()), /mono_ns/);
+  assert.throws(() => viewContentFrameEvents([{ ...row, fields: { ...row.fields, width: 0 } }], "fixture", "view-1", startBracket()), /width/);
 });
 
-test("view content-frame mapping uses its successful start anchor and native request-reply interval", { timeout: 5000 }, () => {
+test("view content-frame mapping uses the successful start's native clock bracket", { timeout: 5000 }, () => {
   const row = { event: "plugin.fixture.view.content_frame", ts_us: 9_000_000,
     mono_ns: 99_000_000_000, page: "view-document-opaque", surface: "view-1", fields: { sequence: 0, documentTimeOriginMs: 1000,
       firstResizeAtMs: 10, resizeAtMs: 10, resizeCount: 1, frameTimeMs: 30, width: 300, height: 200 } };
-  const exposure = startExposure({ documentTimeOriginMs: 1000, sourceNowMs: 20, replyMonoNs: 1_002_000_000 });
-  assert.deepEqual(viewContentFrameEvents([row], "fixture", "view-1", exposure), [{
+  const bracket = startBracket({ documentTimeOriginMs: 1000, sourceNowMs: 20, afterMonoNs: 1_002_000_000 });
+  assert.deepEqual(viewContentFrameEvents([row], "fixture", "view-1", bracket), [{
     sequence: 0, width: 300, height: 200, firstResizeAtMs: 10, resizeAtMs: 10, resizeCount: 1, frameTimeMs: 30,
     timeRange: { lowerMs: 1008, upperMs: 1014 },
     source: { documentTimeOriginMs: 1000, frameTimeMs: 30, sourceNowMs: 20, sourceResolutionMs: 1,
-      requestMonoNs: 1_000_000_000, replyMonoNs: 1_002_000_000, requestId: 7, method: "command.run", surface: "view-1",
+      clockBeforeMonoNs: "1000000000", clockAfterMonoNs: "1002000000", clockBeforeMs: 1000, clockAfterMs: 1002,
+      hostPid: 41, window: "main", surface: "view-1",
       eventTsUs: 9_000_000, eventMonoNs: 99_000_000_000, eventPage: "view-document-opaque" },
   }]);
 });
 
-test("view start exposure requires one successful exact-surface request and reply", { timeout: 5000 }, () => {
+test("view start clock brackets require valid source identity and ordered native clock replies", { timeout: 5000 }, () => {
   const result = sourceResult();
-  const rows = nativeStartEvidence({ commandName: "fixture.measure", startResult: result });
-  assert.equal(viewStartExposure(rows, "view-1", "command.run", "fixture.measure", { action: "start" }, result).requestId, 7);
-  const hwpRows = nativeStartEvidence({ commandName: "hwp.diagnostics.frames.start", commandParams: {}, startResult: result });
-  assert.equal(viewStartExposure(hwpRows, "view-1", "command.run", "hwp.diagnostics.frames.start", {}, result).requestId, 7,
-    "a declared start command with empty parameters must match its actual endpoint arguments");
-  assert.throws(() => viewStartExposure(rows.slice(1), "view-1", "command.run", "fixture.measure", { action: "start" }, result),
-    /exactly one native exposure request/);
-  assert.throws(() => viewStartExposure([...rows, rows[0]], "view-1", "command.run", "fixture.measure", { action: "start" }, result),
-    /exactly one native exposure request/);
-  assert.throws(() => viewStartExposure(rows, "view-1", "command.run", "other.method", { action: "start" }, result),
-    /one successful command.run enclosing/);
-  const badResult = structuredClone(rows);
-  badResult[2].fields.args = JSON.stringify([JSON.stringify({ id: 7, result: { enabled: false }, surface: "view-1" })]);
-  assert.throws(() => viewStartExposure(badResult, "view-1", "command.run", "fixture.measure", { action: "start" }, result),
-    /differs from the successful command result/);
-  const truncated = structuredClone(rows);
-  truncated[2].fields.truncated = true;
-  assert.throws(() => viewStartExposure(truncated, "view-1", "command.run", "fixture.measure", { action: "start" }, result), /truncated/);
-  const ambiguous = [...rows, ...nativeStartEvidence({ surface: "view-1", commandName: "fixture.measure",
-    requestMonoNs: 1_000_500_000, replyMonoNs: 1_001_500_000, startResult: result })];
-  assert.throws(() => viewStartExposure(ambiguous, "view-1", "command.run", "fixture.measure", { action: "start" }, result),
-    /exactly one native exposure request/);
-  assert.throws(() => viewStartExposure(rows, "view-1", "command.run", "fixture.measure", { action: "start" }, {
-    sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 2 },
-  }), /declared 1 ms WebKit bound/);
-  assert.throws(() => viewStartExposure(rows, "view-1", "command.run", "fixture.measure", { action: "start" }, {
-    sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1, unexpected: true },
-  }), /exactly the declared anchor fields/);
+  const bracket = startBracket({ startResult: result });
+  assert.deepEqual(bracket, { surface: "view-1", hostPid: 41, window: "main", sourceClock: result.sourceClock,
+    before: { monoNs: "1000000000", timeMs: 1000 }, after: { monoNs: "1001000000", timeMs: 1001 } });
+  assert.throws(() => startBracket({ startResult: { enabled: true } }), /no sourceClock anchor/);
+  assert.throws(() => startBracket({ startResult: { sourceClock: { ...result.sourceClock, extra: true } } }), /exactly the declared anchor fields/);
+  assert.throws(() => startBracket({ startResult: { sourceClock: { ...result.sourceClock, sourceResolutionMs: 2 } } }), /declared 1 ms WebKit bound/);
+  assert.throws(() => viewStartClockBracket("view-1", result, clockReading(2_000_000), clockReading(1_000_000),
+    { hostPid: 41, window: "main" }), /must be later/);
+  assert.throws(() => viewStartClockBracket("view-1", result, { monoNs: "01000000", timeMs: 1 }, clockReading(2_000_000),
+    { hostPid: 41, window: "main" }), /invalid raw monotonic/);
+  assert.throws(() => viewStartClockBracket("view-1", result, clockReading(1_000_000), clockReading(2_000_000),
+    { hostPid: 0, window: "main" }), /process PID/);
+  assert.throws(() => viewStartClockBracket("view-1", result, clockReading(1_000_000), clockReading(2_000_000),
+    { hostPid: 41, window: "" }), /target window/);
 });
 
 test("generic view content-frame events accept the SDK's initial zero sequence", { timeout: 5000 }, () => {
@@ -254,7 +237,7 @@ test("generic view content-frame events accept the SDK's initial zero sequence",
     ts_us: 2_000_000 + index, mono_ns: 3_000_000 + index, page: "view-document-opaque", surface: "view-1",
     fields: { sequence, documentTimeOriginMs: 1999, firstResizeAtMs: 0.2 + index, resizeAtMs: 0.2 + index, resizeCount: 1,
       frameTimeMs: 0.5 + index, width: 300, height: 200 } }));
-  assert.deepEqual(viewContentFrameEvents(rows, "fixture", "view-1", startExposure()).map(({ sequence }) => sequence), [0, 1]);
+  assert.deepEqual(viewContentFrameEvents(rows, "fixture", "view-1", startBracket()).map(({ sequence }) => sequence), [0, 1]);
 });
 
 test("view cadence uses source frame times instead of variable host IPC arrival intervals", { timeout: 5000 }, () => {
@@ -262,7 +245,7 @@ test("view cadence uses source frame times instead of variable host IPC arrival 
     ts_us: 2_100_000 + index * 100_000, mono_ns: 1_100_000_000 + index * 100_000_000,
     surface: "view-1", fields: { sequence, documentTimeOriginMs: 1999,
       firstResizeAtMs: 1 + index * 16, resizeAtMs: 1 + index * 16, resizeCount: 1, frameTimeMs: 1 + index * 16, width: 300, height: 200 } }));
-  const frames = viewContentFrameEvents(rows, "fixture", "view-1", startExposure({ sourceNowMs: 0.2 }));
+  const frames = viewContentFrameEvents(rows, "fixture", "view-1", startBracket({ sourceNowMs: 0.2 }));
   assert.equal(frames[1].frameTimeMs - frames[0].frameTimeMs, 16);
   assert.equal(frames[1].timeRange.lowerMs - frames[0].timeRange.lowerMs, 16);
   assert.equal(frames[1].source.eventMonoNs - frames[0].source.eventMonoNs, 100_000_000);
@@ -393,23 +376,29 @@ test("one-shot layout retains the target and every post-request candidate when n
   });
 });
 
-test("generic content trace starts before an action and returns only scoped source events", { timeout: 5000 }, async (t) => {
+test("generic content trace brackets the successful start command with native clock reads", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "view-content-trace-"));
   const logs = join(root, "logs");
   mkdirSync(logs);
   writeFileSync(join(logs, "host-1-1.jsonl"), "");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const calls = [];
-  const s = { app: { configDir: root }, async flushLog() {} };
+  let clock = 1_000_000_000n;
+  const client = { endpoint: { pid: 41 } };
+  const s = { app: { configDir: root }, client, window: "main",
+    async request(method, params) {
+      assert.equal(method, "diagnostics.clock");
+      assert.deepEqual(params, {});
+      calls.push(["clock", client, s.window]);
+      const monoNs = String(clock);
+      clock += 10_000_000n;
+      return { mono_ns: monoNs };
+    }, async flushLog() { calls.push(["flush"]); } };
   const descriptor = {
     plugin: "fixture",
-    startMethod: "command.run",
-    startCommand: "fixture.measure",
-    startParams: { action: "start" },
     async startContentTrace(session, surface) {
       calls.push(["start", session, surface]);
       const result = { marker: { color: [255, 0, 255] }, sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } };
-      appendStartExposure(logs, { startResult: result });
       return result;
     },
     async stopContentTrace(session, surface) { calls.push(["stop", session, surface]); return { sequence: 1 }; },
@@ -424,7 +413,12 @@ test("generic content trace starts before an action and returns only scoped sour
         frameTimeMs: 0.5, width: 300, height: 200 } })}\n`);
     return { gestureEndedAtMs: 2 };
   });
-  assert.deepEqual(calls.map(([name]) => name), ["start", "action", "stop"]);
+  assert.deepEqual(calls.map(([name]) => name), ["clock", "start", "clock", "action", "stop", "flush"]);
+  assert.equal(result.startBracket.surface, "view-1");
+  assert.equal(result.startBracket.window, "main");
+  assert.equal(result.startBracket.hostPid, 41);
+  assert.deepEqual(result.startBracket.before, { monoNs: "1000000000", timeMs: 1000 });
+  assert.deepEqual(result.startBracket.after, { monoNs: "1010000000", timeMs: 1010 });
   assert.deepEqual(result.action, { gestureEndedAtMs: 2 });
   assert.deepEqual(result.start, { marker: { color: [255, 0, 255] },
     sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } });
@@ -440,16 +434,12 @@ test("content trace stops its diagnostic marker when the recorded action fails",
   writeFileSync(join(logs, "host-1-1.jsonl"), "");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const calls = [];
-  const s = { app: { configDir: root }, async flushLog() {} };
+  const s = traceSession(root, calls);
   const descriptor = {
     plugin: "fixture",
-    startMethod: "command.run",
-    startCommand: "fixture.measure",
-    startParams: { action: "start" },
     async startContentTrace() {
       calls.push("start");
       const result = { marker: "active", sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } };
-      appendStartExposure(logs, { startResult: result });
       return result;
     },
     async stopContentTrace() { calls.push("stop"); return { marker: null }; },
@@ -458,7 +448,7 @@ test("content trace stops its diagnostic marker when the recorded action fails",
     calls.push("action");
     throw new Error("controlled action failure");
   }), /controlled action failure/);
-  assert.deepEqual(calls, ["start", "action", "stop"]);
+  assert.deepEqual(calls, ["clock", "start", "clock", "action", "stop", "flush"]);
 });
 
 test("content trace stops after a successful start returns invalid marker evidence", { timeout: 5000 }, async (t) => {
@@ -468,16 +458,12 @@ test("content trace stops after a successful start returns invalid marker eviden
   writeFileSync(join(logs, "host-1-1.jsonl"), "");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const calls = [];
-  const s = { app: { configDir: root }, async flushLog() {} };
+  const s = traceSession(root, calls);
   const descriptor = {
     plugin: "fixture",
-    startMethod: "command.run",
-    startCommand: "fixture.measure",
-    startParams: { action: "start" },
     async startContentTrace() {
       calls.push("start");
       const result = { marker: null, sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } };
-      appendStartExposure(logs, { startResult: result });
       return result;
     },
     async stopContentTrace() { calls.push("stop"); return { marker: null }; },
@@ -486,7 +472,7 @@ test("content trace stops after a successful start returns invalid marker eviden
     calls.push("action");
     assert.ok(start.marker, "marker reply is invalid");
   }), /marker reply is invalid/);
-  assert.deepEqual(calls, ["start", "action", "stop"]);
+  assert.deepEqual(calls, ["clock", "start", "clock", "action", "stop", "flush"]);
 });
 
 test("content trace stops when a successful start reply has no valid source clock anchor", { timeout: 5000 }, async (t) => {
@@ -496,12 +482,9 @@ test("content trace stops when a successful start reply has no valid source cloc
   writeFileSync(join(logs, "host-1-1.jsonl"), "");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const calls = [];
-  const s = { app: { configDir: root }, async flushLog() {} };
+  const s = traceSession(root, calls);
   const descriptor = {
     plugin: "fixture",
-    startMethod: "command.run",
-    startCommand: "fixture.measure",
-    startParams: { action: "start" },
     async startContentTrace() {
       calls.push("start");
       return { enabled: true };
@@ -511,7 +494,82 @@ test("content trace stops when a successful start reply has no valid source cloc
   await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
     calls.push("action");
   }), /no sourceClock anchor/);
-  assert.deepEqual(calls, ["start", "stop"]);
+  assert.deepEqual(calls, ["clock", "start", "clock", "stop"]);
+});
+
+test("content trace stops its observer when the post-start native clock read fails", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "view-content-trace-clock-failure-"));
+  const logs = join(root, "logs");
+  mkdirSync(logs);
+  writeFileSync(join(logs, "host-1-1.jsonl"), "");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const calls = [];
+  const s = traceSession(root, calls, { clockValues: ["1000000000", new Error("controlled post-start clock failure")] });
+  const descriptor = {
+    plugin: "fixture",
+    async startContentTrace() {
+      calls.push("start");
+      return sourceResult();
+    },
+    async stopContentTrace() { calls.push("stop"); return { enabled: false }; },
+  };
+
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
+    calls.push("action");
+  }), /controlled post-start clock failure/);
+  assert.deepEqual(calls, ["clock", "start", "clock", "stop"]);
+});
+
+test("content trace start failure does not read an after clock or stop an unstarted observer", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "view-content-trace-start-failure-"));
+  const logs = join(root, "logs");
+  mkdirSync(logs);
+  writeFileSync(join(logs, "host-1-1.jsonl"), "");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const calls = [];
+  const s = traceSession(root, calls);
+  const descriptor = {
+    plugin: "fixture",
+    async startContentTrace() { calls.push("start"); throw new Error("controlled start failure"); },
+    async stopContentTrace() { calls.push("stop"); return { enabled: false }; },
+  };
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
+    calls.push("action");
+  }), /controlled start failure/);
+  assert.deepEqual(calls, ["clock", "start"]);
+});
+
+test("content trace bracket rejects a replaced client, changed host process or target window", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "view-content-trace-identity-change-"));
+  const logs = join(root, "logs");
+  mkdirSync(logs);
+  writeFileSync(join(logs, "host-1-1.jsonl"), "");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const changes = [
+    { name: "client", update(session) { session.client = { endpoint: { pid: 42 } }; }, error: /changed the session host client/ },
+    { name: "host PID", update(session) { session.client.endpoint.pid = 42; }, error: /changed the host process/ },
+    { name: "window", update(session) { session.window = "other-window"; }, error: /changed the target window/ },
+  ];
+  for (const { name, update, error } of changes) {
+    const calls = [];
+    const s = traceSession(root, calls);
+    const descriptor = {
+      plugin: "fixture",
+      async startContentTrace(session) {
+        calls.push("start");
+        update(session);
+        return sourceResult();
+      },
+      async stopContentTrace() { calls.push("stop"); return { enabled: false }; },
+    };
+    await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
+      calls.push("action");
+    }), (failure) => {
+      assert.match(failure.message, error, `${name} change must fail its bracket`);
+      return true;
+    });
+    assert.deepEqual(calls, ["clock", "start", "clock", "stop"], `${name} change cleans up the observer`);
+  }
 });
 
 test("shared readiness wrapper waits for the declared status exposure before reading it", { timeout: 5000 }, async () => {

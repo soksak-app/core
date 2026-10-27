@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-221-1: source clock의 diagnostic log 상관을 성공한 observer-start command 전후의 native monotonic clock 읽기로 교체한다. Red: 변경 전 owner가 로그에 있는 native request를 요구해 clock bracket 없이 실패한다. Green: shared collection의 source-frame·trace 집중 case 12/12, HWP layout case 네 개와 Browser·Editor·Terminal descriptor case가 통과한다. Collector는 raw clock receipt와 동일 session host/PID/window/surface identity를 보존하고 event-log argument parser를 제거하며 선언된 source 정밀도와 측정 기준을 유지한다. Application acceptance는 F212.14-5-5에 남는다.
+
 - F239-221: 성공한 `frames.start` result와 대응 native request/reply로 각 view document의 source-frame clock을 native monotonic time에 매핑한다. Red: 변경 전 mapper가 view clock과 main-page event batcher timestamp를 결합하고 source frame 뒤에 시작한 capture를 찾지 못한다. Cadence evaluator는 gesture 밖 observer idle 8,976 ms를 계산했으며 실제 경계 부분은 최대 9 ms였다. Green: collection owner 27/27, window metric evaluator 21/21, 네 plugin consumer owner case와 집중 drag-cadence case 네 개가 통과한다. 모호한 interval은 보존한다. One-shot 선택은 요청 이후가 확정된 frame을 요구하고 drag cadence는 gesture 안에 있을 수 있는 경계 부분만 계산한다. `make docs-check`가 통과한다. Application acceptance는 F212.14-5-5에 남는다.
 
 - F239-223-1: 양 host의 기존 sync·present 경계에서 native-clock admission·UI 진입·closure 반환 시각을 추적한다. Dispatch 순서를 유지하고 trace가 꺼지면 clock 읽기와 label 생성을 생략한다. Assertion Red 후 양 wrapper 소유 검사와 생성된 event class의 소유 검사 네 개가 통과한다. 진단 근거를 추가하며 cadence 수정을 입증하지 않는다.

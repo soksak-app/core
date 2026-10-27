@@ -351,9 +351,6 @@ export function editorViewDescriptor(content) {
   const expectedLength = "SOKSAK EDITOR CONTENT".length + 1;
   return {
     plugin: "editor",
-    startMethod: "command.run",
-    startCommand: "editor.diagnostics.content-trace",
-    startParams: { action: "start" },
     params: content.params,
     expectedContent: "SOKSAK EDITOR CONTENT",
     language: "en-US",

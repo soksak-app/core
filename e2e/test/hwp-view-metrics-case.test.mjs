@@ -16,27 +16,6 @@ const geometryColors = { content: [30, 30, 30], card: [25, 27, 36], plane: [16, 
 const viewportMarker = [255, 0, 255];
 const nativeMarker = [0, 255, 255];
 
-function appendHwpStartExposure(logs, surface, startResult) {
-  const id = 51;
-  const requestMonoNs = 8_000_000;
-  const replyMonoNs = 8_100_000;
-  const endpointMonoNs = 8_500_000;
-  const rows = [
-    { event: "host.trace.exposure.request", mono_ns: requestMonoNs,
-      fields: { id, method: "command.run", surface } },
-    { event: "host.trace.exposure.reply", mono_ns: replyMonoNs, fields: { id, from: surface } },
-    { event: "host.binding.call", mono_ns: replyMonoNs + 10_000,
-      fields: { name: "exposure_reply", ok: true, truncated: false,
-        args: JSON.stringify([JSON.stringify({ id, result: startResult, surface })]) } },
-    { event: "host.endpoint.call", mono_ns: endpointMonoNs,
-      fields: { name: "command.run", ok: true, truncated: false, micros: 500,
-        args: JSON.stringify({ window: "main", name: "hwp.diagnostics.frames.start", params: {}, surface }) } },
-  ];
-  appendFileSync(join(logs, "host-1-1.jsonl"), rows.map((row, index) => JSON.stringify({
-    level: "debug", seq: index + 1, ts_us: 2_000_000 + index, ...row,
-  })).join("\n") + "\n");
-}
-
 function hwpStartResult(width, height) {
   return { enabled: true, sequence: 0, historyEntries: 1, regionHistoryEntries: 1, width, height,
     studioViewport: viewportMarkerDeclarationForLayout(),
@@ -143,8 +122,12 @@ function layoutFailureSession(root, captureDirectory) {
     { surface: "view-a", document: "", visible: true, frame: { x: 0, y: 0, width: 50, height: 40 } },
     { surface: "view-a", document: "studio", visible: true, frame: { x: 7, y: 11, width: 36, height: 21 } },
   ] };
+  const client = { endpoint: { pid: 71 } };
+  let clock = 8_000_000n;
   const session = {
     app: { configDir: root },
+    client,
+    window: "main",
     sequence,
     cleanups: [],
     cleanup(callback) { this.cleanups.push(callback); },
@@ -161,7 +144,7 @@ function layoutFailureSession(root, captureDirectory) {
       assert.fail(`unexpected session read ${name}`);
     },
     async request(name, params = {}) {
-      if (name === "diagnostics.clock") return { mono_ns: "8000000" };
+      if (name === "diagnostics.clock") { const monoNs = String(clock); clock += 1_000_000n; return { mono_ns: monoNs }; }
       assert.equal(name, "diagnostics.document.viewport-marker");
       assert.deepEqual(params, { surface: "view-a", document: "studio", enabled: params.enabled });
       sequence.push(params.enabled);
@@ -184,11 +167,9 @@ function layoutFailureSession(root, captureDirectory) {
     },
     async flushLog() {},
   };
-  const descriptor = { plugin: "hwp", startMethod: "command.run", startCommand: "hwp.diagnostics.frames.start", startParams: {},
+  const descriptor = { plugin: "hwp",
     async startContentTrace() {
-      const result = hwpStartResult(50, 40);
-      appendHwpStartExposure(logs, "view-a", result);
-      return result;
+      return hwpStartResult(50, 40);
     },
     async stopContentTrace() { return { enabled: false, studioViewport: null }; } };
   const theme = { card: "#191b24", bg: "#101117", edge: "#2b2e3d", focus: "#ff0000" };
@@ -220,8 +201,12 @@ function layoutDeadlineSession(root, captureDirectory, lastFrameTimeMs) {
   ] });
   let gridReads = 0;
   let hostReads = 0;
+  const client = { endpoint: { pid: 72 } };
+  let clock = 8_000_000n;
   const session = {
     app: { configDir: root },
+    client,
+    window: "main",
     cleanups: [],
     cleanup(callback) { this.cleanups.push(callback); },
     stopAfter: undefined,
@@ -236,7 +221,7 @@ function layoutDeadlineSession(root, captureDirectory, lastFrameTimeMs) {
       assert.fail(`unexpected session read ${name}`);
     },
     async request(name, params = {}) {
-      if (name === "diagnostics.clock") return { mono_ns: "8000000" };
+      if (name === "diagnostics.clock") { const monoNs = String(clock); clock += 1_000_000n; return { mono_ns: monoNs }; }
       assert.equal(name, "diagnostics.document.viewport-marker");
       assert.deepEqual(params, { surface: "view-a", document: "studio", enabled: params.enabled });
       return nativeMarkerDeclaration(params.enabled);
@@ -259,11 +244,9 @@ function layoutDeadlineSession(root, captureDirectory, lastFrameTimeMs) {
     async flushLog() {},
   };
   const descriptor = {
-    plugin: "hwp", startMethod: "command.run", startCommand: "hwp.diagnostics.frames.start", startParams: {},
+    plugin: "hwp",
     async startContentTrace() {
-      const result = hwpStartResult(85, 64);
-      appendHwpStartExposure(logs, "view-a", result);
-      return result;
+      return hwpStartResult(85, 64);
     },
     async stopContentTrace() { return { enabled: false, studioViewport: null }; },
   };

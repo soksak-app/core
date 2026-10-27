@@ -27,9 +27,6 @@ export async function terminalFirstContentFrame({ captured, rect, directory, rec
 /** Terminal content proof uses the initial fixture-shell prompt without adding a command or waiting on readiness as proof. */
 export const terminalViewDescriptor = Object.freeze({
   plugin: "terminal",
-  startMethod: "command.run",
-  startCommand: "terminal.view.frames",
-  startParams: { action: "start" },
   params: undefined,
   expectedContent: "sh-3.2$",
   language: "en-US",

@@ -149,9 +149,6 @@ export async function hwpViewDescriptor(s, diagnostic = () => {}, captureObserva
     await session.run("hwp.diagnostics.frames.read", {}, surface));
   return Object.freeze({
     plugin: "hwp",
-    startMethod: "command.run",
-    startCommand: "hwp.diagnostics.frames.start",
-    startParams: {},
     params: content.params,
     expectedContent: HWP_CONTENT,
     language: "ko-KR",

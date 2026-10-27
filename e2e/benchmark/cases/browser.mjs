@@ -15,9 +15,6 @@ import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTim
 /** Browser-specific inputs for the shared view lifecycle measurement collector. */
 export const browserViewDescriptor = Object.freeze({
   plugin: "browser",
-  startMethod: "command.run",
-  startCommand: "browser.view.measure",
-  startParams: { action: "start" },
   params: undefined,
   expectedContent: "주소를 입력하세요",
   language: "ko-KR",
