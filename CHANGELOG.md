@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.10-core-3: Accept the retired-window callback correction with both rebuilt hosts. The project-close checks pass with zero new Wails missing-window warnings, zero log-audit findings, normal host/sidecar shutdown and restored foreground state. All three framework warning paths have owning Red/Green coverage and preserve warnings for unallocated IDs. Independent audit closes the functional defect while retaining uncertainty about the exact nine historical callers.
+
 - F212.10-core-3-16: Pin both Wails modules and checksums to the published callback-lifetime correction. Preserve event filtering and single-window event routing from the pinned base. Eleven framework owner cases and independent review pass; both core modules resolve the public replacement, and focused event-binding, window-event and runtime-listener checks pass. Application rebuild and project-close acceptance remain pending.
 
 - F239-239: Preserve the complete HWP startup recording in the measurement artifact directory before offline OCR and successful-check cleanup. Share the post-open collector with the actual window check and test it through fake session boundaries. A fresh archive assertion fails without the copy and passes with it; all five owner cases and e2e-check pass. Preserve source/archive identities and report copy, read and OCR failures. Three earlier comparison recordings were removed by normal successful-check cleanup; their saved JSON does not replace raw frames.

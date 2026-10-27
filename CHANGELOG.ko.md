@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.10-core-3: 재빌드한 양 host에서 retired-window callback 수정을 확인한다. Project-close 검사는 새 Wails missing-window 경고 0개, log 감사 finding 0, 정상 host/sidecar 종료와 foreground 복원으로 통과한다. Framework의 경고 경로 세 개 모두 소유 Red/Green을 갖추고 미할당 ID 경고는 유지한다. 독립 감사로 기능 결함을 종결하며 과거 호출자 아홉 개의 정확한 attribution은 미확인으로 유지한다.
+
 - F212.10-core-3-16: 양 Wails module과 checksum을 공개된 callback-lifetime 수정으로 고정한다. 고정한 base의 event filtering과 single-window event routing을 유지한다. Framework owner case 11개와 독립 검토가 통과하고 양 core module이 공개 replacement를 받아오며 집중 event-binding, window-event 및 runtime-listener 검사가 통과한다. 애플리케이션 재빌드와 project-close acceptance는 미완료다.
 
 - F239-239: Offline OCR과 성공한 check의 cleanup 전에 HWP startup recording 전체를 측정 artifact directory에 보존한다. Open 이후 collector를 실제 window check와 공유하고 fake session 경계로 검증한다. 새 archive assertion은 copy가 없으면 실패하고 copy 뒤 통과하며 owner case 5개와 e2e-check도 통과한다. 원본/archive identity를 남기고 copy, read 및 OCR 실패를 보고한다. 앞선 비교 recording 세 건은 성공한 check의 일반 cleanup에서 제거됐으며 저장된 JSON이 원본 frame을 대체하지 않는다.
