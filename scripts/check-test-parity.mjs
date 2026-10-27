@@ -198,6 +198,46 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
 {
+  "id": "F239-235",
+  "implementation": [
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function openRecordedView("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function collectViewProcessGroups("
+    },
+    {
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function collectViewStartAndMemory("
+    }
+  ],
+  "tests": [
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "view totals are sampled at their declared count before extra process-start views open"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "one recording proves the physical anchor boundary before target content"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "footprint failure retains recording paths and skips deferred OCR"
+    },
+    {
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "deferred OCR failure retains its recording path and rejects the collector"
+    }
+  ],
+  "expected": "Live readiness, finalized recordings and process identities precede clock-bracketed one-view and N-view footprint sampling; offline pixel analysis follows both samples without changing recordings, thresholds or failure retention.",
+  "levels": [
+    "unit",
+    "application"
+  ]
+},
+{
   "id": "F239-233",
   "implementation": [
     {

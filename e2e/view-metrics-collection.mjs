@@ -508,9 +508,9 @@ async function presentDifferentPluginAnchor(s, { card, plugin }) {
     rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height } };
 }
 
-/** Opens a view under a live recording and proves its first visible content from a decoded capture frame. */
+/** Opens a view under a live recording and verifies pixels before return unless its caller defers analysis. */
 export async function openRecordedView(t, s, { card, plugin, params, readiness, readinessStatus, expectedContent, language,
-  recognizeFrame, captureObservationWindowMs } = {}) {
+  recognizeFrame, captureObservationWindowMs, deferContentVerification = false } = {}) {
   assert.ok(typeof card === "string" && card.length > 0, "view card must be nonempty text");
   assert.ok(typeof plugin === "string" && plugin.length > 0, "view plugin must be nonempty text");
   assert.equal(typeof readiness, "function", "view readiness callback is required");
@@ -519,6 +519,7 @@ export async function openRecordedView(t, s, { card, plugin, params, readiness, 
   assert.ok(typeof expectedContent === "string" && expectedContent.length > 0, "expected view content is required");
   assert.ok(typeof language === "string" && language.length > 0, "view content language is required");
   assert.ok(recognizeFrame === undefined || typeof recognizeFrame === "function", "view frame recognizer must be a function");
+  assert.equal(typeof deferContentVerification, "boolean", "view content verification deferral must be boolean");
   if (captureObservationWindowMs !== undefined) {
     assert.ok(Number.isFinite(captureObservationWindowMs) && captureObservationWindowMs > 0,
       "view capture observation window must be a finite positive duration");
@@ -548,7 +549,6 @@ export async function openRecordedView(t, s, { card, plugin, params, readiness, 
     const paths = frames(capture.frames);
     assert.equal(paths.length, capture.count, `${plugin} first-content recording omitted captured frames`);
     assert.ok(paths.length > 0, `${plugin} first-content recording contains no frames`);
-    const decoded = paths.map(readFrame);
     const events = readEvents(s.app.configDir, offsets).events;
     const starts = processStartSamples(events, [tab], plugin);
     assert.equal(starts.length, 1, `${plugin} view ${tab} has no unique process request event`);
@@ -556,29 +556,43 @@ export async function openRecordedView(t, s, { card, plugin, params, readiness, 
     const row = host.documents.find((document) => document.surface === tab && document.document === "");
     assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
       `${plugin} view ${tab} has no visible native view frame`);
-    const anchorContentFrame = await firstDifferentContentFrame({ captured: decoded, rect: anchor.rect,
-      expected: expectedContent, language: anchor.language, directory: capture.frames, recognizeFrame });
-    const result = await firstContentFrame({ captured: decoded,
-      rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height },
-      expected: expectedContent, language, directory: capture.frames, recognizeFrame,
-      startFrameIndex: anchorContentFrame.frameIndex + 1 });
     const pids = viewRootProcessPids(host, [tab]);
     assert.equal(pids.length, 1, `${plugin} view ${tab} does not have one process identity`);
     const processGroupPids = viewProcessPids(host, [tab]);
-    return {
+    let contentProof;
+    const result = {
       surface: tab,
       requestAtMs: starts[0].requestAtMs,
       processStart: starts[0],
       requestClock,
       readinessEvidence,
-      anchor: { ...anchor, contentFrame: anchorContentFrame },
+      anchor,
       openedPid: pids[0],
       processGroupPids,
-      contentFrame: result,
-      recording: { directory: capture.frames, frameCount: paths.length, files: paths,
-        anchorContentFrame },
+      recording: { directory: capture.frames, frameCount: paths.length, files: paths },
+      verifyContent: async () => {
+        if (contentProof) return contentProof;
+        try {
+          const decoded = paths.map(readFrame);
+          const anchorContentFrame = await firstDifferentContentFrame({ captured: decoded, rect: anchor.rect,
+            expected: expectedContent, language: anchor.language, directory: capture.frames, recognizeFrame });
+          const contentFrame = await firstContentFrame({ captured: decoded,
+            rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height },
+            expected: expectedContent, language, directory: capture.frames, recognizeFrame,
+            startFrameIndex: anchorContentFrame.frameIndex + 1 });
+          contentProof = { anchor: { ...anchor, contentFrame: anchorContentFrame }, contentFrame,
+            recording: { directory: capture.frames, frameCount: paths.length, files: paths,
+              anchorContentFrame } };
+          return contentProof;
+        } catch (error) {
+          t.diagnostic(`offline view content verification failed; recording retained at ${capture.frames}`);
+          throw error;
+        }
+      },
       events,
     };
+    if (!deferContentVerification) Object.assign(result, await result.verifyContent());
+    return result;
   } catch (error) {
     if (!stopped) {
       try {
@@ -601,10 +615,47 @@ export async function viewFootprints(host, surfaces, measureFootprint) {
   return measureProcessGroup(viewProcessPids(host, surfaces), measureFootprint);
 }
 
+function validateFootprintSample(value, label) {
+  assert.ok(value && Array.isArray(value.processes), `${label} footprint sample must include process rows`);
+  assert.ok(value.processes.length > 0, `${label} footprint sample must include at least one process`);
+  assert.ok(value.sampleClock && typeof value.sampleClock === "object",
+    `${label} footprint sample must include monotonic clock bounds`);
+  for (const edge of ["before", "after"]) {
+    const reading = value.sampleClock[edge];
+    assert.ok(reading && typeof reading.monoNs === "string" && /^[1-9]\d*$/u.test(reading.monoNs),
+      `${label} footprint sample has invalid ${edge} monoNs`);
+    assert.ok(Number.isFinite(reading.timeMs), `${label} footprint sample has invalid ${edge} timeMs`);
+    assert.equal(reading.timeMs, Number(BigInt(reading.monoNs)) / 1_000_000,
+      `${label} footprint sample ${edge} timeMs does not match monoNs`);
+  }
+  assert.ok(BigInt(value.sampleClock.after.monoNs) >= BigInt(value.sampleClock.before.monoNs),
+    `${label} footprint sample clock bounds are reversed`);
+  return value;
+}
+
+async function verifyOpenedViewContent(view) {
+  assert.equal(typeof view.verifyContent, "function", `view ${view.surface} has no deferred content verifier`);
+  const proof = await view.verifyContent();
+  assert.ok(proof && typeof proof === "object", `view ${view.surface} content verifier returned no proof`);
+  Object.assign(view, proof);
+  assert.ok(view.contentFrame, `view ${view.surface} content verifier returned no content frame`);
+  return view;
+}
+
+function reportRetainedRecordings(diagnostic, opened, phase, error) {
+  diagnostic(`${phase} failed: ${error.stack ?? error}`);
+  for (const view of opened) {
+    if (typeof view.recording?.directory === "string") {
+      diagnostic(`view recording retained at ${view.recording.directory} after ${phase} failure`);
+    }
+  }
+}
+
 /** Opens the requested view set, measures its process groups, and collects independent start samples. */
-export async function collectViewProcessGroups({ openView, readFootprints, viewCount, processStartCount }) {
+export async function collectViewProcessGroups({ openView, readFootprints, diagnostic, viewCount, processStartCount }) {
   assert.equal(typeof openView, "function", "view process collection requires an open callback");
   assert.equal(typeof readFootprints, "function", "view process collection requires a footprint callback");
+  assert.equal(typeof diagnostic, "function", "view process collection requires an error diagnostic callback");
   assert.ok(Number.isSafeInteger(viewCount) && viewCount >= 2, "view count must be at least two");
   assert.ok(Number.isSafeInteger(processStartCount) && processStartCount >= 1,
     "process start sample count must be positive");
@@ -620,12 +671,31 @@ export async function collectViewProcessGroups({ openView, readFootprints, viewC
     return value;
   };
   const first = await open();
-  const oneViewProcesses = await readFootprints([first.surface]);
+  let oneView;
+  try {
+    oneView = validateFootprintSample(await readFootprints([first.surface]), "one-view");
+  } catch (error) {
+    reportRetainedRecordings(diagnostic, opened, "one-view footprint sample", error);
+    throw error;
+  }
   while (opened.length < viewCount) await open();
   const measuredViews = opened.slice(0, viewCount);
-  const allViewProcesses = await readFootprints(measuredViews.map(({ surface }) => surface));
+  let allViews;
+  try {
+    allViews = validateFootprintSample(await readFootprints(measuredViews.map(({ surface }) => surface)), "N-view");
+  } catch (error) {
+    reportRetainedRecordings(diagnostic, opened, "N-view footprint sample", error);
+    throw error;
+  }
   while (opened.length < Math.max(viewCount, processStartCount)) await open();
-  return { opened, events, oneViewProcesses, allViewProcesses, openView: open };
+  try {
+    for (const view of opened) await verifyOpenedViewContent(view);
+  } catch (error) {
+    reportRetainedRecordings(diagnostic, opened, "deferred content verification", error);
+    throw error;
+  }
+  return { opened, events, oneViewProcesses: oneView.processes, oneViewSampleClock: oneView.sampleClock,
+    allViewProcesses: allViews.processes, allViewSampleClock: allViews.sampleClock, openView: open };
 }
 
 /** Measures one view and the declared view count before collecting five process-start samples and warm reuse. */
@@ -637,12 +707,19 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
   const card = viewCardWithDifferentPluginTab(grid, descriptor.plugin, activeCard?.id);
 
   const groups = await collectViewProcessGroups({
-    openView: () => openRecordedView(t, s, { card, ...descriptor }),
-    readFootprints: async (surfaces) => viewFootprints(await s.get("host.window"), surfaces),
+    openView: () => openRecordedView(t, s, { card, ...descriptor, deferContentVerification: true }),
+    diagnostic: (message) => t.diagnostic(message),
+    readFootprints: async (surfaces) => {
+      const host = await s.get("host.window");
+      const before = await monotonicTimeMs(s);
+      const processes = await viewFootprints(host, surfaces);
+      const after = await monotonicTimeMs(s);
+      return { processes, sampleClock: { before, after } };
+    },
     viewCount,
     processStartCount,
   });
-  const { opened, events, oneViewProcesses, allViewProcesses, openView } = groups;
+  const { opened, events, oneViewProcesses, oneViewSampleClock, allViewProcesses, allViewSampleClock, openView } = groups;
   const starts = processStartSamples(events, opened.slice(0, processStartCount).map(({ surface }) => surface), descriptor.plugin);
   const startBySurface = new Map(opened.slice(0, processStartCount).map(({ surface }, index) => [surface, starts[index]]));
   const firstDisplays = opened.slice(0, 3).map(({ surface, contentFrame }) => ({
@@ -654,6 +731,7 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
   const beforePids = allViewRootProcessPids(await s.get("host.window"));
   const beforePidsAt = await monotonicTimeMs(s);
   const warm = await openView();
+  await verifyOpenedViewContent(warm);
   const warmDisplay = {
     surface: warm.surface,
     beforePidsAtMs: beforePidsAt.timeMs,
@@ -667,7 +745,7 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
     opened,
     events,
     recordings: opened.map(({ recording }) => recording),
-    total: { viewCount, oneViewProcesses, allViewProcesses },
+    total: { viewCount, oneViewProcesses, oneViewSampleClock, allViewProcesses, allViewSampleClock },
     processStarts: starts,
     firstDisplays,
     warmDisplay,
@@ -710,10 +788,11 @@ export async function collectViewReclaimMeasurements(t, s, descriptor, views, ev
     const grid = await s.get("core.grid");
     const activeCard = grid.cards.find((item) => item.active);
     const card = viewCardWithDifferentPluginTab(grid, descriptor.plugin, activeCard?.id);
-    const view = await openRecordedView(t, s, { card, ...descriptor });
+    const view = await openRecordedView(t, s, { card, ...descriptor, deferContentVerification: true });
     evidence.events.push(...view.events);
-    evidence.recordings.push(view.recording);
     const sample = await closeInitial([view]);
+    await verifyOpenedViewContent(view);
+    evidence.recordings.push(view.recording);
     reclaim.push(sample);
   }
   return reclaim;

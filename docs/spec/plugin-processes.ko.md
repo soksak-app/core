@@ -35,7 +35,7 @@ Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름
 
 각 값은 행에 적힌 측정으로, 애플리케이션 안에서 도는 timer가 아니라 녹화에서 판정한다. 메모리 값은 SI megabyte를 사용하며 1 MB는 1,000,000 bytes다. 회수 측정은 process를 공유하는 전체 group과 그 group의 모든 view를 닫기 직전 physical footprint를 기록한다. 닫은 뒤 같은 process identity를 비교하며 종료한 process는 0으로 센다. View를 열기 전 baseline을 빼지 않는다. Group은 root view와 연결된 모든 native document-region process를 포함하며 포함한 process를 공유하는 모든 surface로 확장한다. 기록은 닫은 각 view의 root와 연결된 각 document region의 session history에 초기 document만 있음을 입증한다.
 
-Total-footprint 측정은 process group을 수집할 때 정확히 N개 workload view만 열어 둔다. 독립적인 다섯 process-start 표본에 필요한 추가 view는 N-view 총값을 기록한 뒤에만 연다.
+Total-footprint 측정은 process group을 수집할 때 정확히 N개 workload view만 열어 둔다. 각 process-group footprint sample 전후의 native monotonic clock 경계를 기록한다. OS footprint read는 순차 실행하므로 각 process read는 기록된 sample 경계 안에서 이뤄진다. 녹화, readiness 근거와 process identity를 수집한 뒤 footprint를 측정하고, one-view 및 N-view sample 후에 녹화 pixel을 검사한다. Offline frame decode와 OCR은 어느 footprint sample도 늦추지 않는다. 독립적인 다섯 process-start 표본에 필요한 추가 view는 N-view 총값을 기록한 뒤에만 연다. 반복 reclaim 표본은 새 view를 녹화하고 close 및 footprint sample을 마친 뒤 해당 녹화의 pixel을 검사한다. 최초 view의 content 근거는 반복 표본 전에 이미 기록한다.
 
 ### Source-frame 시계 상관
 
