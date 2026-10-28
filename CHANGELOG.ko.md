@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-273: 명시적 index/proof URL과 SHA-256 pin을 요구하는 standalone candidate registry consumer를 추가한다. Parsing 전에 양쪽 byte stream을 검사하고 proof를 정확한 index bytes에 결합한 뒤 SDK version/tree, core version 집합, component replacement, revocation projection과 manifest count를 비교한다. Core revocation member가 없으면 빈 목록으로 취급하고 비어 있지 않은 목록은 정확히 비교한다. Public-index 검사는 유지하고 release artifact와 manifest 검증은 기존 검사에 맡긴다. 소유 test 11/11, parity 및 문서 검사가 통과한다. Candidate pin이나 release workflow 변경은 포함하지 않는다.
+
 - F239-274: Push gate가 거부한 image wait method와 소유 assertion에 repository Rust formatter를 적용한다. Workspace format 검사가 통과한다. Diff는 배치와 trailing comma만 바꾸므로 기존 소유 결과가 계속 적용된다.
 
 - F239-272: Continuous image presentation은 같은 raster의 후속 sequence를 기다리지 않고 현재 generation과 raster에 설치된 snapshot으로 완료한다. Settled wait는 최신 sequence를 계속 엄격히 요구하고 generation 변경 시 presented watermark를 지우며 raster 무효화와 error 처리를 유지하고 hidden region은 계속 대기를 막지 않는다. Go와 Rust owner Red는 continuous 완료 지연과 오래된 generation watermark를 재현한다. 집중 Green은 settled, raster, generation, hidden-region, error control과 함께 통과한다. 이 state 변경은 application cadence 개선을 주장하지 않는다.

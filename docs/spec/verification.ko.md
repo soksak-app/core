@@ -42,7 +42,9 @@ Release host별 job은 자체 bundle을 build하고 audit하며 해당 host로 s
 
 Plugin format acceptance를 바꾸는 release는 대체 component release와 core release file이 준비될 때까지 현재 public registry를 유지한다. 이전 plugin 형식을 거부한다는 이유로 이전 released core에서 설치할 수 있는 모든 plugin을 제거하는 조기 public-index 전환을 허용하지 않는다.
 
-Registry owner는 검증된 registry declaration에서 candidate index를 만들고 그 bytes를 prerelease file로 게시한다. Candidate proof는 registry source revision, candidate SDK revision, API version과 API tree를 식별한다. 정확한 대체 component version을 검증하고 기존 revocation을 보존하며 추가 revocation의 정확한 집합을 검사하고 준비되지 않은 core release file을 추가하지 않은 채 현재 published core entry를 유지한다. Plugin이 0개인 결과로는 충분하지 않다. Core는 parsing 전에 index digest를 검사하고 자신의 API tree와 version을 해당 proof와 비교한다.
+Registry owner는 검증된 registry declaration에서 candidate index를 만들고 그 bytes를 prerelease file로 게시한다. Candidate proof format 1은 registry source revision, candidate SDK revision, API version과 API tree를 식별한다. 보존한 core version 집합, 정확한 대체 component identity와 version, 보존한 revocation, 추가 plugin revocation 및 검사한 candidate manifest 수를 기록한다. Registry producer는 proof를 만들기 전에 보존된 core entry 객체 전체와 candidate projection을 검증한다. Plugin이 0개인 결과로는 충분하지 않다.
+
+Core candidate acceptance에는 명시적 index와 proof URL 및 SHA-256 값이 필요하다. 두 JSON 문서 중 하나를 parsing하기 전에 양쪽 raw bytes digest를 검사하고, proof가 정확한 index bytes에 결합됐는지 확인하며 지원하지 않는 index 또는 proof format을 거부한다. Candidate SDK의 API version과 tree를 현재 `packages/plugin-api` manifest 및 `HEAD:packages/plugin-api`와 비교한 뒤 보존한 core version 집합, 대체 identity 및 revocation projection을 index와 대조한다. 대체 sidecar 집합은 비어 있어도 되지만 plugin 대체 집합은 비어 있을 수 없다. Core revocation member는 없어도 되고 빈 array와 같은 의미이며, 비어 있지 않은 목록은 정확히 일치해야 한다. Manifest count는 대체 plugin 집합과 같아야 한다. 기존 registry manifest 검사는 candidate plugin release를 내려받고 artifact digest를 확인하며 manifest를 검증한다.
 
 Core tag를 만들기 전에 동일하게 고정한 candidate index와 proof가 필수 main CI를 통과해야 한다. Tag는 정확히 그 통과한 commit을 가리킨다. Tag-triggered release 검사는 tag가 이미 존재한 뒤 실행되며 release file을 게시하기 전에 candidate acceptance를 다시 수행한다. Release job 실패는 public tag를 제거하지 않는다. Component packaging 뒤 API가 바뀌면 이전 SDK 결과를 재사용하지 않고 component acceptance를 새로 수행한다.
 

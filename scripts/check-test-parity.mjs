@@ -71,6 +71,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   lane("registry manifest release check", "js-ts", ["scripts/check-registry-manifests.mjs"], ["scripts/test/registry-manifests.test.mjs"]),
+  lane("candidate registry proof check", "js-ts", ["scripts/check-candidate-registry.mjs"], ["scripts/test/candidate-registry.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
   lane("soksak utility scripts", "js-ts", [
@@ -3183,6 +3184,28 @@ const FEATURE_LINKS = [
       { file: "scripts/test/registry-manifests.test.mjs", id: "the explicit index is accepted when its sha256 matches" },
     ],
     expected: "An explicit index may retain the existing URL-only mode. When an expected SHA-256 is supplied, require a nonempty explicit URL and a 64-character lowercase hexadecimal digest, compare the fetched bytes before parsing, and reject mismatches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-273",
+    implementation: [
+      { file: "scripts/check-candidate-registry.mjs", symbol: "export function verifyCandidateRegistry" },
+      { file: "scripts/check-candidate-registry.mjs", symbol: "function currentIdentity()" },
+    ],
+    tests: [
+      { file: "scripts/test/candidate-registry.test.mjs", id: "candidate proof and index pass when SDK and all declared projections match" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "both raw digests are checked before parsing either JSON document" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "the proof index digest binds the exact candidate index bytes" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "the candidate index and proof reject unknown wire formats" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "the proof must match the current SDK version and HEAD API tree" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "the candidate core and preserved core projection must match the index" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "replacement identities and versions must be present in the candidate index" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "a candidate with no sidecar replacements still requires a nonempty plugin manifest check" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "revocation projection and exact manifest count must agree" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "an absent or empty core revocation list is equivalent and nonempty entries must match" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "the CLI requires explicit index and proof URLs with SHA-256 pins" },
+    ],
+    expected: "A candidate index and proof are fetched only from explicit URLs with pinned SHA-256 values and verified before JSON parsing. The proof must bind the exact index bytes, current SDK version and API tree, preserved core version set, component replacements, revocation projection and nonempty exact manifest-check count. The existing public-index release check is unchanged.",
     levels: ["unit"],
   },
   {
