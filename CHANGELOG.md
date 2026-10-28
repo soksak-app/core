@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-246: Update the command-supervisor language adapter expectation from 20 to its 22 current cases. The integrated run passes all cases but rejects the stale count; the focused adapter passes after correction. The Rust, Go, Objective-C and shell cases retain their passing integrated results.
+
 - F239-244: Align published view-operation cases with API observations while retaining identifier progression, the first plugin event and cids propagation. Reject obsolete single-record surface logs in the fixture and acknowledge clock/batch delivery before observing events. All three SDK owner cases pass with no open calls or unexpected reports; affected consumer acceptance remains separate.
 
 - F239-243: Correct the restoration-failure fixture to reflect an after-write failure: the saved performance value is applied before the fake rejects the reply. The owner retains both action and restoration errors and verifies both setting attempts. The failing integrated case passes in its focused repeat; other integrated failures remain separate.

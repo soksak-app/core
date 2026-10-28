@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-246: Command-supervisor language adapter의 예상 case 수를 20개에서 현재 22개로 갱신한다. 통합 실행은 모든 case가 통과했지만 오래된 개수를 거부했으며 수정 후 해당 adapter가 통과한다. Rust, Go, Objective-C와 shell case는 통합 실행의 통과 결과를 유지한다.
+
 - F239-244: Identifier 증가, 첫 plugin event와 cids 전달을 유지하며 공개 view-operation case를 API 관측에 맞춘다. Fixture는 폐기된 단일 surface log를 거부하고 event 관측 전에 clock/batch 전달을 확인한다. SDK 소유 case 3개가 열린 call 및 예상 밖 report 없이 통과하며 관련 consumer acceptance는 별도로 유지한다.
 
 - F239-243: 복원 실패 fixture를 값을 쓴 뒤 응답이 실패하는 실제 fake 동작에 맞춘다. Fake는 저장한 performance 값을 적용한 뒤 응답을 거부한다. 소유 검사는 action과 복원 오류를 모두 유지하고 두 설정 시도를 확인한다. 통합 실행에서 실패한 case는 집중 반복에서 통과하며 다른 통합 실패는 별도로 유지한다.

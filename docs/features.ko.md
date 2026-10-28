@@ -13,7 +13,7 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 12개와 waiting 30개인 42개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 6** — F239-223, F239-223-3, F239-233, F239-243, F239-244, F239-245
+- **현재 측정과 검사 수정: 6** — F239-223, F239-223-3, F239-233, F239-243, F239-245, F239-246
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -25,9 +25,11 @@ F239-241과 F239-242 전의 최신 Terminal drag 측정은 Wails/Tauri cadence 7
 
 앞선 macOS 26.6.2 arm64 optimized diagnostic 측정 묶음은 측정 실패 7개와 수집 거부 1개를 보존한다. Browser source-frame 간격은 Wails/Tauri에서 51/34 ms, Editor는 50/34 ms, HWP는 34/34 ms, Wails Terminal은 71 ms다. Tauri Terminal은 창이 active 상태여서 synthetic drag를 거부했으며 drag 결과를 입증하지 않는다. HWP footprint는 양 host에서 통과한다. Wails는 허용 581,004,760 bytes에 대해 571,791,024 bytes이고, Tauri는 허용 569,847,184 bytes에 대해 568,760,032 bytes다. HWP adjusted first display는 기준 1001/1113 ms에 대해 1616.594/1755.235 ms로 여전히 실패한다. Source 간격은 observer 간격이며 입력부터 표시까지 측정한 latency가 아니다. 독립 F239-238 evaluator로 보존된 측정을 진단 replay한 결과 Browser와 Editor는 양 host에서 convergence를 통과하고 HWP는 양 host, Terminal은 Wails에서 실패한다. Tauri Terminal에는 convergence 결과가 없다. 이 replay는 새로운 application acceptance 실행이 아니다. 양 host는 정상 종료하고 error-log 감사를 통과하며 원래 frontmost baseline을 복원한다. F239-223과 F239-233은 열린 상태를 유지하며 제품 memory 최적화나 공통 latency 원인을 추론하지 않는다.
 
+- [~] F239-246 — P1: Language adapter의 command-supervisor 예상 test 수를 현재 소유 case 22개에 맞춘다. 통합 실행은 실제 22개 모두 통과했지만 manifest가 20개를 기대해 실패했다. 해당 adapter만 다시 실행하고 통과한 나머지 언어 case는 반복하지 않는다.
+
 - [~] F239-245 — P1: 통합 census와 fallback 검사에서 발견된 default 및 오류 처리 지점을 검토한다. 각 지점은 현재 계약에 맞는 명시적인 오류 전달 또는 정당한 복구·미관측 결과의 근거를 갖춰야 한다. 검사를 약화하지 않고 동작이 잘못된 경우 소유 Red/Green으로 수정하며 올바른 경우 실제 이유를 기록한다. 두 소유 audit만 재검증하고 전체 모음은 반복하지 않는다.
 
-- [~] F239-244 — P1, F239-240 연결: 공개 view-operation case와 소유 검사를 현재 view writer 계약에 맞춘다. Operation identifier 증가, 첫 operation log 및 sidecar/command의 cids 전달 검증을 유지하며 폐기된 단일 view-log payload를 기대하지 않는다. 통합 실행에서 clock 요청을 옛 log record와 비교하는 실패를 보존하고 소유 경계와 관련 consumer case만 수정·재검증한다.
+- [o] F239-244 — P1, F239-240 연결: 공개 view-operation case와 소유 검사를 현재 view writer 계약에 맞춘다. Operation identifier 증가, 첫 operation log 및 sidecar/command의 cids 전달 검증을 유지하며 폐기된 단일 view-log payload를 기대하지 않는다. 통합 실행에서 clock 요청을 옛 log record와 비교하는 실패를 보존하고 소유 경계와 관련 consumer case만 수정·재검증한다. SDK 3개 case, HWP operation 2개 case와 Browser operation replay 및 view 22개 case가 통과했고 각 소유 저장소에 커밋했다.
 
 - [~] F239-243 — P1, F239-223 연결: Terminal continuous-drag 성능 측정에서 필요한 source-frame log와 capture를 유지하며 무관한 전역 performance trace만 끈다. Process 및 one-shot layout 수집은 trace를 유지하고, drag 종료와 오류 경로에서 기존 값을 복원한 뒤 reclaim을 수집한다. 소유 Red/Green으로 phase 설정과 복원·오류 보존을 확인하고 측정 mode를 보존한다. 33 ms, 2 pt 및 2-frame 기준은 바꾸지 않는다. 구현은 준비됐으며 검증은 미완료다.
 
