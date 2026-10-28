@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-282: Give `document_throttle_test` explicit ownership of its window so its scheduled autorelease does not follow an explicit release. Flush assertion and measurement output to retain the last completed stage on failure. The retained CI run observed a SIGSEGV without attributing its cause; the unchanged local owner passed once, and the corrected owner passes 1/1 in 10.154 seconds on macOS 26.6.2 arm64. `make docs-check` passes.
+
 - F239-278: Keep native Darwin test output and the runner manifest under `runner.temp`, and upload them with the user DiagnosticReports directory on job failure. Resolve the Library directory through Foundation. The existing workflow owner passes 9/9, the CI workflow parses as YAML, and `make docs-check` passes. This retains future failure evidence without changing native test criteria or fixing the observed native failures.
 
 - F239-276: Align the frozen SDK bootstrap digest with the document-start page identity change. The existing view-check cases reproduce the stale constant and pass 6/6 after its update while continuing to reject changed scripts and literals. Component literals and SDK pins require owner updates before release.
