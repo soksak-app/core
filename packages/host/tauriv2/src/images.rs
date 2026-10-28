@@ -126,6 +126,8 @@ impl Inner {
                 state.configured = false;
                 state.presentation_error = None;
                 state.last_sequence = 0;
+                state.presented_raster = 0;
+                state.presented_sequence = 0;
             }
         }
         generation
@@ -203,7 +205,10 @@ impl Images {
     /// Creates a generation that distinguishes frames from the previous frames when a new surface document starts.
     pub fn begin_generation(&self, surface: &str) -> u64 {
         let mut inner = self.lock();
-        inner.begin_generation(surface)
+        let generation = inner.begin_generation(surface);
+        drop(inner);
+        self.changed();
+        generation
     }
 
     /// Captures every current or retryable supplier owner before advancing a page generation.
@@ -251,6 +256,8 @@ impl Images {
             .collect();
         targets.sort_by(|left, right| left.name.cmp(&right.name));
         inner.begin_generation(surface);
+        drop(inner);
+        self.changed();
         targets
     }
 
@@ -783,6 +790,24 @@ impl Images {
         })
     }
 
+    fn current_raster_snapshot_installed_locked(inner: &Inner) -> bool {
+        inner.states.iter().all(|(key, state)| {
+            let surface_visible = inner
+                .surface_visibility
+                .get(&key.0)
+                .copied()
+                // default: a surface that did not report hiding is visible (it is written to surface_visibility only
+                // when it is hidden).
+                .unwrap_or(true);
+            // default: the address of a region that is not registered is 0, the same as a region that is not attached.
+            inner.handles.get(key).copied().unwrap_or_default() == 0
+                || !state.visible
+                || !surface_visible
+                || state.raster == 0
+                || (state.presented_raster == state.raster && state.presented_sequence > 0)
+        })
+    }
+
     /// Lists the image regions that the presentation barrier still waits for, in the order of surface and name. When
     /// the barrier times out, the list is attached to the error to report which regions were not presented. It is
     /// "none" when no region is waited for.
@@ -855,11 +880,41 @@ impl Images {
         self.wait_current_observed(timeout, || {})
     }
 
+    /// Waits for the image completion boundary selected by the layout request.
+    pub(crate) fn wait_layout_rasters(
+        &self,
+        timeout: Duration,
+        settled: bool,
+    ) -> Result<(), String> {
+        if settled {
+            self.wait_current(timeout)
+        } else {
+            self.wait_raster_snapshot_observed(timeout, || {})
+        }
+    }
+
+    fn wait_raster_snapshot_observed(
+        &self,
+        timeout: Duration,
+        waiting: impl FnOnce(),
+    ) -> Result<(), String> {
+        self.wait_observed(timeout, waiting, Self::current_raster_snapshot_installed_locked)
+    }
+
     /// Signals the first pending check under the owner lock so tests can order the next frame before wakeup.
     fn wait_current_observed(
         &self,
         timeout: Duration,
         waiting: impl FnOnce(),
+    ) -> Result<(), String> {
+        self.wait_observed(timeout, waiting, Self::current_presented_locked)
+    }
+
+    fn wait_observed(
+        &self,
+        timeout: Duration,
+        waiting: impl FnOnce(),
+        complete: fn(&Inner) -> bool,
     ) -> Result<(), String> {
         let mut waiting = Some(waiting);
         let deadline = Instant::now() + timeout;
@@ -872,7 +927,7 @@ impl Images {
             {
                 return Err(error);
             }
-            if Self::current_presented_locked(&inner) {
+            if complete(&inner) {
                 return Ok(());
             }
             let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
@@ -891,7 +946,7 @@ impl Images {
             inner = next;
             // The failure of the time limit answers that request with the regions that the caller waited for
             // (docs/spec/hosts.md#application-log).
-            if result.timed_out() && !Self::current_presented_locked(&inner) {
+            if result.timed_out() && !complete(&inner) {
                 return Err("presentationTimeout".to_string());
             }
         }

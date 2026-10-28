@@ -155,8 +155,11 @@ func (i *Images) BeginGeneration(surface string) uint64 {
 			state.Configured = false
 			state.PresentationError = ""
 			state.LastSequence = 0
+			state.PresentedRaster = 0
+			state.PresentedSequence = 0
 		}
 	}
+	i.changedLocked()
 	return i.nextGeneration
 }
 
@@ -520,6 +523,18 @@ func (i *Images) currentPresentedLocked() bool {
 	return true
 }
 
+// currentRasterSnapshotInstalledLocked reports whether every visible valid image region has a presented frame of its current raster.
+func (i *Images) currentRasterSnapshotInstalledLocked() bool {
+	for key, state := range i.states {
+		surfaceVisible, known := i.surfaceVisible[key.Surface]
+		if i.handles[key] != nil && state.Visible && (!known || surfaceVisible) && state.Raster > 0 &&
+			(state.PresentedRaster != state.Raster || state.PresentedSequence <= 0) {
+			return false
+		}
+	}
+	return true
+}
+
 // PendingRasters lists, in the order of surface and name, the image regions that the display barrier still waits for. When the barrier times out, the list is attached to the error to report
 // which regions were not displayed. It is "none" when no region is waited for.
 func (i *Images) PendingRasters() string {
@@ -566,8 +581,24 @@ func (i *Images) WaitCurrentError(timeout time.Duration) error {
 	return i.waitCurrentObserved(timeout, nil)
 }
 
+// WaitLayoutRasters waits for the completion boundary selected by the layout request.
+func (i *Images) WaitLayoutRasters(timeout time.Duration, settled bool) error {
+	if settled {
+		return i.WaitCurrentError(timeout)
+	}
+	return i.waitRasterSnapshotObserved(timeout, nil)
+}
+
+func (i *Images) waitRasterSnapshotObserved(timeout time.Duration, waiting func()) error {
+	return i.waitObserved(timeout, waiting, i.currentRasterSnapshotInstalledLocked)
+}
+
 // waitCurrentObserved signals the first pending check under the owner lock so tests can order the next frame before wakeup.
 func (i *Images) waitCurrentObserved(timeout time.Duration, waiting func()) error {
+	return i.waitObserved(timeout, waiting, i.currentPresentedLocked)
+}
+
+func (i *Images) waitObserved(timeout time.Duration, waiting func(), complete func() bool) error {
 	deadline := time.Now().Add(timeout)
 	for {
 		i.mu.Lock()
@@ -578,7 +609,7 @@ func (i *Images) waitCurrentObserved(timeout time.Duration, waiting func()) erro
 				return err
 			}
 		}
-		if i.currentPresentedLocked() {
+		if complete() {
 			i.mu.Unlock()
 			return nil
 		}

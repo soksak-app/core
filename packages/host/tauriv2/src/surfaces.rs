@@ -1657,17 +1657,19 @@ pub(crate) async fn present(
                 },
                 || {
                     crate::composition::refresh_image_rasters(&raster_window)?;
-                    images.wait_current(exposure::TIMEOUT).map_err(|reason| {
-                        if reason == "presentationTimeout" {
-                            format!(
-                                "the current image raster did not present within {:?}; pending {}",
-                                exposure::TIMEOUT,
-                                images.pending_rasters()
-                            )
-                        } else {
-                            format!("the current image raster failed to present: {reason}")
-                        }
-                    })
+                    images
+                        .wait_layout_rasters(exposure::TIMEOUT, presentation_settled)
+                        .map_err(|reason| {
+                            if reason == "presentationTimeout" {
+                                format!(
+                                    "the current image raster did not present within {:?}; pending {}",
+                                    exposure::TIMEOUT,
+                                    images.pending_rasters()
+                                )
+                            } else {
+                                format!("the current image raster failed to present: {reason}")
+                            }
+                        })
                 },
                 || {
                     let (prepared_tx, prepared_rx) = mpsc::channel();

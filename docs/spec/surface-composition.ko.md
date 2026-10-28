@@ -1,7 +1,9 @@
 # 표면 합성
 
 
-이미지 표시 대기는 완료될 때까지 가장 최근 수락된 frame을 따른다. 대기 시작 시 sequence를 고정하면 후속 수락 frame이 미표시인 상태에서 settled commit이 끝날 수 있으므로, 이전 frame이 후속 수신 전에 완료되었더라도 후속 수락 frame이 대기를 계속 미완료로 유지한다.
+Settled 이미지 표시 대기는 완료될 때까지 가장 최근 수락된 frame을 따른다. 대기 시작 시 sequence를 고정하면 후속 수락 frame이 미표시인 상태에서 settled commit이 끝날 수 있으므로, 이전 frame이 후속 수신 전에 완료되었더라도 후속 수락 frame이 대기를 계속 미완료로 유지한다.
+Continuous layout 대기는 대신 현재 generation과 raster의 완전한 snapshot이 설치됐음을 요구한다. 같은 raster의 후속 accepted sequence는 그 geometry를 무효화하거나 이 대기를 다시 시작하지 않는다. Raster와 generation 변경은 snapshot을 무효화하며 presentation failure는 여전히 완료를 거부한다. 이 구분은 무관한 같은 크기 image 갱신이 continuous layout transaction을 무한히 연장하지 않도록 하며 settled 완료는 최신 content를 계속 확인한다.
+
 [English](surface-composition.md)
 
 이 명세는 표면 페이지와 네이티브 콘텐츠 사이의 소유 경계를 정의한다. view 표면의 네이티브 영역과 오버레이의 기준 명세다. 바깥 표면의 배치는 [네이티브 표면 배치](native-surfaces.ko.md)가 정의한다.

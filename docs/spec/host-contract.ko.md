@@ -503,7 +503,8 @@ fn invalid_json_closes_connection() {
 | `images.wait.blocks-before-first-frame` | 표시 대기는 보이는 raster의 첫 프레임 전에는 통과하지 않는다. | both |
 | `images.wait.releases-after-current-frame-presented` | 현재 raster의 프레임이 표시되면 표시 대기가 통과한다. | both |
 | `images.wait.successful-handle-replies-consumed` | 주 스레드 표시에 성공한 봉투를 처리하면 consumed로 응답한다. | both |
-| `images.wait.newer-sequence-rearms-wait` | 같은 raster에서 새 sequence를 결정하면 표시 대기가 다시 막힌다. | both |
+| `images.wait.newer-sequence-rearms-wait` | 같은 raster의 새 sequence를 결정하면 settled presentation wait가 다시 대기한다. | both |
+| `images.wait.continuous-raster-snapshot` | Continuous layout 대기는 후속 같은 raster sequence가 수락되더라도 현재 generation과 raster에 positive presented sequence가 설치되면 완료된다. Generation 또는 raster 변경은 설치된 snapshot을 지우고, presentation error는 대기를 실패시키며, 숨긴 영역은 대기를 막지 않는다. Settled 대기는 최신 accepted sequence를 계속 요구한다. | both |
 | `tauriv2.images.presentation.runs-after-framework-event` | Tauri image presentation은 framework event가 lock을 놓은 뒤 commit하며, queue enqueue와 native presentation 오류를 frame handler에 그대로 전달한다. | tauriv2 only: Tauri UI callback adapter의 lock 및 오류 경계를 검증한다 |
 | `images.wait.reconfigure-clears-presented` | raster를 다시 구성하면 표시 상태를 지운다. | both |
 | `images.wait.hidden-image-does-not-block` | 숨긴 이미지는 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | both |
@@ -517,6 +518,7 @@ fn invalid_json_closes_connection() {
 | `images.present.rejects-frame-superseded-during-main-thread` | 주 스레드 표시 전에 raster가 다시 구성된 프레임에 stale로 응답한다. | both |
 | `images.present.rejects-frame-detached-during-main-thread` | 주 스레드 표시 전에 표면 이미지가 제거된 프레임에 stale로 응답한다. | both |
 | `images.present.main-thread-failure-reports-present-failed` | 주 스레드 표시가 실패하면 presentFailed로 응답하고 표시 대기는 그 오류를 반환한다. | both |
+| `images.present.older-ack-preserves-newer-rejection` | 성공한 오래된 in-flight presentation은 실제 presented sequence를 전진시키지만 더 새 accepted sequence의 rejection을 지우지 않는다. 최신 accepted sequence의 성공 acknowledgment만 그 rejection을 지운다. | both |
 | `images.present.missing-native-surface-requests-reconfiguration` | notFound로 실패한 표시는 같은 raster의 새 구성을 요청한다. | both |
 | `images.attach.surface-close-removes-only-its-images` | 표면을 제거하면 그 이미지 핸들을 반환하고 다른 표면의 이미지는 유지한다. | both |
 | `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | both |

@@ -186,6 +186,7 @@ mod wait_boundary {
     }
 
     #[test]
+    // contract: exposure.window.region-reports-presented-frame, images.wait.newer-sequence-rearms-wait
     fn an_in_flight_frame_presentation_is_recorded_after_a_newer_frame_is_accepted() {
         let images = Images::default();
         let key = ("surface-in-flight".into(), "view".into());
@@ -280,6 +281,7 @@ mod wait_boundary {
     }
 
     #[test]
+    // contract: images.present.older-ack-preserves-newer-rejection
     fn an_older_in_flight_presentation_does_not_clear_a_newer_frame_failure() {
         let images = Images::default();
         let key = ("surface-in-flight-failure".into(), "view".into());
@@ -330,6 +332,239 @@ mod wait_boundary {
             state.presentation_error.as_deref(),
             Some("sequence 2 failed"),
             "the newer failure remains observable"
+        );
+    }
+
+    #[test]
+    // contract: images.wait.continuous-raster-snapshot, images.wait.newer-sequence-rearms-wait
+    fn continuous_image_wait_uses_the_installed_snapshot_and_blocks_after_generation_or_raster_change() {
+        let images = Images::default();
+        let key = ("surface-continuous-snapshot".into(), "view".into());
+        images
+            .reserve(&key, "owner", "sidecar")
+            .expect("reserve image");
+        assert!(images.set(&key, 100));
+        let config = images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .expect("configure raster")
+            .expect("new raster");
+        for sequence in 1..=2 {
+            images
+                .authorize_frame(
+                    &key,
+                    "sidecar",
+                    FrameIdentity {
+                        generation: config.generation,
+                        raster: config.raster,
+                        width: config.width,
+                        height: config.height,
+                        scale: config.scale,
+                        sequence,
+                    },
+                )
+                .expect("authorize frame");
+            if sequence == 1 {
+                assert!(images.mark_presented(
+                    &key,
+                    config.generation,
+                    config.raster,
+                    sequence
+                ));
+            }
+        }
+        assert_eq!(
+            images.wait_layout_rasters(Duration::ZERO, false),
+            Ok(()),
+            "continuous wait completes from the installed raster snapshot after a later same-raster acceptance"
+        );
+        assert_eq!(
+            images.wait_layout_rasters(Duration::ZERO, true),
+            Err("presentationTimeout".into()),
+            "settled wait continues to require the newest sequence"
+        );
+        assert_eq!(
+            images.presented_frame(&key),
+            Some(PresentedFrame {
+                generation: config.generation,
+                raster: config.raster,
+                sequence: 1,
+            })
+        );
+
+        let old_generation = config.generation;
+        let new_generation = images.begin_generation(&key.0);
+        assert_eq!(
+            images.presented_frame(&key),
+            None,
+            "the previous generation is no longer the installed snapshot"
+        );
+        let new_config = images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .expect("configure same raster in new generation")
+            .expect("new-generation raster configuration");
+        assert_eq!(new_config.generation, new_generation);
+        assert_eq!(new_config.raster, config.raster);
+        images
+            .authorize_frame(
+                &key,
+                "sidecar",
+                FrameIdentity {
+                    generation: new_generation,
+                    raster: new_config.raster,
+                    width: new_config.width,
+                    height: new_config.height,
+                    scale: new_config.scale,
+                    sequence: 1,
+                },
+            )
+            .expect("authorize new-generation sequence");
+        assert!(
+            !images.mark_presented(&key, old_generation, config.raster, 1),
+            "an acknowledgment from the previous generation is refused"
+        );
+        assert_eq!(
+            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            Err("presentationTimeout".into()),
+            "an accepted but unpresented new-generation frame blocks completion"
+        );
+        assert!(images.mark_presented(&key, new_generation, new_config.raster, 1));
+        assert_eq!(
+            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            Ok(())
+        );
+
+        let raster_config = images
+            .configure_raster(&key, 801, 600, 2.0, true)
+            .expect("configure changed raster")
+            .expect("new raster");
+        assert_ne!(raster_config.raster, new_config.raster);
+        assert_eq!(
+            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            Err("presentationTimeout".into()),
+            "a changed raster has no installed snapshot"
+        );
+        images
+            .authorize_frame(
+                &key,
+                "sidecar",
+                FrameIdentity {
+                    generation: raster_config.generation,
+                    raster: raster_config.raster,
+                    width: raster_config.width,
+                    height: raster_config.height,
+                    scale: raster_config.scale,
+                    sequence: 1,
+                },
+            )
+            .expect("authorize changed-raster sequence");
+        assert_eq!(
+            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            Err("presentationTimeout".into()),
+            "an accepted but unpresented changed raster blocks completion"
+        );
+        assert!(images.mark_presented(&key, raster_config.generation, raster_config.raster, 1));
+        assert_eq!(
+            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            Ok(())
+        );
+    }
+
+    #[test]
+    // contract: images.wait.continuous-raster-snapshot
+    fn beginning_new_generation_clears_the_presented_image_snapshot() {
+        let images = Images::default();
+        let key = ("surface-generation-snapshot".into(), "view".into());
+        images
+            .reserve(&key, "owner", "sidecar")
+            .expect("reserve image");
+        assert!(images.set(&key, 100));
+        let config = images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .expect("configure raster")
+            .expect("new raster");
+        images
+            .authorize_frame(
+                &key,
+                "sidecar",
+                FrameIdentity {
+                    generation: config.generation,
+                    raster: config.raster,
+                    width: config.width,
+                    height: config.height,
+                    scale: config.scale,
+                    sequence: 1,
+                },
+            )
+            .expect("authorize frame");
+        assert!(images.mark_presented(&key, config.generation, config.raster, 1));
+        assert!(images.presented_frame(&key).is_some());
+        images.begin_generation(&key.0);
+        assert_eq!(
+            images.presented_frame(&key),
+            None,
+            "the previous-generation frame remained current"
+        );
+    }
+
+    #[test]
+    // contract: images.wait.continuous-raster-snapshot
+    fn continuous_image_wait_ignores_hidden_regions_and_fails_on_presentation_error() {
+        let images = Images::default();
+        let hidden_key = ("surface-continuous-hidden".into(), "view".into());
+        images
+            .reserve(&hidden_key, "owner", "sidecar")
+            .expect("reserve hidden image");
+        assert!(images.set(&hidden_key, 100));
+        assert!(images
+            .configure_raster(&hidden_key, 800, 600, 2.0, false)
+            .expect("configure hidden image")
+            .is_none());
+        assert_eq!(
+            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            Ok(()),
+            "a hidden image does not block continuous wait"
+        );
+        images.set_surface_visible(&hidden_key.0, false);
+        assert_eq!(
+            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            Ok(()),
+            "a hidden surface does not block continuous wait"
+        );
+
+        let visible_key = ("surface-continuous-error".into(), "view".into());
+        images
+            .reserve(&visible_key, "owner", "sidecar")
+            .expect("reserve visible image");
+        assert!(images.set(&visible_key, 101));
+        let config = images
+            .configure_raster(&visible_key, 800, 600, 2.0, true)
+            .expect("configure visible image")
+            .expect("visible raster");
+        images
+            .authorize_frame(
+                &visible_key,
+                "sidecar",
+                FrameIdentity {
+                    generation: config.generation,
+                    raster: config.raster,
+                    width: config.width,
+                    height: config.height,
+                    scale: config.scale,
+                    sequence: 1,
+                },
+            )
+            .expect("authorize visible frame");
+        images.mark_presentation_failed(
+            &visible_key,
+            config.generation,
+            config.raster,
+            1,
+            "continuous presentation failed",
+        );
+        assert_eq!(
+            images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
+            Err("continuous presentation failed".into()),
+            "presentation failure remains fail-closed"
         );
     }
 }

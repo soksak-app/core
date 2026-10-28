@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-272: Complete continuous image presentation from an installed snapshot of the current generation and raster without waiting for later same-raster sequences. Keep settled waits latest-sequence strict, clear presented watermarks on generation changes, retain raster invalidation and error handling, and let hidden regions remain nonblocking. Go and Rust owner Reds reproduce the delayed continuous completion and stale generation watermark; focused Greens pass with settled, raster, generation, hidden-region, and error controls. This state change does not claim an application cadence improvement.
+
 - F239-271: Record a successful native presentation acknowledgment for the current generation and raster when its sequence advances presentation state and is no newer than the latest accepted sequence. Only an acknowledgment for the latest sequence clears a presentation error. Keep pre-presentation freshness and current-frame waits strict to the latest accepted sequence. Go and Rust owner tests reproduce the lost in-flight acknowledgment and stale-ack error clearing, then pass with invalid, duplicate, regressing, and latest-wait controls. This state correction does not claim a cadence improvement.
 
 - F239-270: Capture the document-start `performance.timeOrigin` once and expose it as read-only `window.sokView.page`. Reuse that identity for view log batches and `page.start.time_origin`. The controlled getter Red reproduces a ready/writer mismatch; the same owner passes after correction, and the frozen view-wire contract checks the exposed value. The Tauri runtime cause remains unverified.

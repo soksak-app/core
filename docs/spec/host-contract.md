@@ -497,7 +497,8 @@ Items:
 | `images.wait.blocks-before-first-frame` | The presentation wait does not pass before the first frame of a visible raster. | both |
 | `images.wait.releases-after-current-frame-presented` | The presentation wait passes once a frame of the current raster is presented. | both |
 | `images.wait.successful-handle-replies-consumed` | Handling an envelope whose main-thread presentation succeeds replies consumed. | both |
-| `images.wait.newer-sequence-rearms-wait` | Deciding a newer sequence on the same raster makes the presentation wait block again. | both |
+| `images.wait.newer-sequence-rearms-wait` | Deciding a newer sequence on the same raster makes the settled presentation wait block again. | both |
+| `images.wait.continuous-raster-snapshot` | A continuous layout wait completes when a positive presented sequence is installed for the current generation and raster, even when a later sequence of that raster is accepted. A generation or raster change clears the installed snapshot, any presentation error fails the wait, hidden regions do not block it, and settled waits still require the latest accepted sequence. | both |
 | `tauriv2.images.presentation.runs-after-framework-event` | Tauri image presentation commits only after the framework event releases its lock; queue-enqueue and native-presentation errors reach the frame handler unchanged. | tauriv2 only: this case verifies the Tauri UI callback adapter’s lock and error boundaries |
 | `images.wait.reconfigure-clears-presented` | Reconfiguring the raster clears the presented state. | both |
 | `images.wait.hidden-image-does-not-block` | A hidden image does not block the presentation wait, and showing it blocks again. | both |
@@ -511,6 +512,7 @@ Items:
 | `images.present.rejects-frame-superseded-during-main-thread` | A frame whose raster is reconfigured before main-thread presentation is answered with stale. | both |
 | `images.present.rejects-frame-detached-during-main-thread` | A frame whose surface images are removed before main-thread presentation is answered with stale. | both |
 | `images.present.main-thread-failure-reports-present-failed` | A failed main-thread presentation is answered with presentFailed, and the presentation wait returns that error. | both |
+| `images.present.older-ack-preserves-newer-rejection` | A successful older in-flight presentation advances the actual presented sequence but does not clear a rejection recorded for a newer accepted sequence; only a successful acknowledgment of the latest accepted sequence clears that rejection. | both |
 | `images.present.missing-native-surface-requests-reconfiguration` | A presentation that fails with notFound requests a fresh configuration of the same raster. | both |
 | `images.attach.surface-close-removes-only-its-images` | Removing a surface returns its image handles and keeps another surface's images. | both |
 | `images.attach.rejects-reservation-without-sidecar` | An image reservation without its owning sidecar is rejected and registers nothing. | both |

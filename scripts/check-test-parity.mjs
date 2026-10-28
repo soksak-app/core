@@ -8746,6 +8746,25 @@ const FEATURE_LINKS = [
     expected: "Successful acknowledgments advance presentation state for the current generation and raster when their sequence is positive, no newer than the accepted sequence, and newer than the presented sequence; only a latest-sequence acknowledgment clears a presentation error, and freshness checks and current-frame waits remain latest-sequence strict.",
     levels: ["unit"],
   },
+  {
+    id: "F239-272",
+    implementation: [
+      { file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) WaitLayoutRasters" },
+      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "s.images.WaitLayoutRasters(pageTimeout, req.Settled)" },
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub(crate) fn wait_layout_rasters" },
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: ".wait_layout_rasters(exposure::TIMEOUT, presentation_settled)" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/images_test.go", id: "TestContinuousImageWaitUsesInstalledSnapshotAndBlocksAfterGenerationOrRasterChange" },
+      { file: "packages/host/wailsv3/src/images_test.go", id: "TestBeginningNewGenerationClearsThePresentedImageSnapshot" },
+      { file: "packages/host/wailsv3/src/images_test.go", id: "TestContinuousImageWaitIgnoresHiddenRegionsAndFailsOnPresentationError" },
+      { file: "packages/host/tauriv2/src/images_test.rs", id: "continuous_image_wait_uses_the_installed_snapshot_and_blocks_after_generation_or_raster_change" },
+      { file: "packages/host/tauriv2/src/images_test.rs", id: "beginning_new_generation_clears_the_presented_image_snapshot" },
+      { file: "packages/host/tauriv2/src/images_test.rs", id: "continuous_image_wait_ignores_hidden_regions_and_fails_on_presentation_error" },
+    ],
+    expected: "Continuous requests complete from a positive presented snapshot of the current raster while settled requests remain latest-sequence strict; generation and raster changes invalidate the snapshot, hidden regions do not block, and presentation errors still fail closed.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
