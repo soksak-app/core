@@ -8580,6 +8580,20 @@ const FEATURE_LINKS = [
     expected: "The generated producer tables classify the declared surface dispatch event as frame and match the canonical catalog.",
     levels: ["unit"],
   },
+  {
+    id: "F239-259",
+    implementation: [
+      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func awaitDocumentFrameIdentity" },
+      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn await_document_frame_identity_schedule_result" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityReportsLateErrorAfterTimeout" },
+      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestAwaitDocumentFrameIdentityPreservesCallbackErrorWhenScheduleFails" },
+      { file: "packages/host/tauriv2/src/diagnostics_test.rs", id: "document_frame_identity_preserves_synchronous_callback_error_when_scheduling_fails" },
+    ],
+    expected: "Bounded identity waits report late callback errors and preserve a synchronous callback failure together with a scheduling failure.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

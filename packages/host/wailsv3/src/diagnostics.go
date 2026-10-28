@@ -957,22 +957,63 @@ func awaitDocumentFrameIdentity(s *Surfaces, schedule func(func(json.RawMessage,
 		reply json.RawMessage
 		err   error
 	}, 1)
+	var callbackMu sync.Mutex
+	callbackCompleted := false
+	waitAbandoned := false
 	var scheduleErr error
 	s.invoke(func() {
 		scheduleErr = schedule(func(reply json.RawMessage, err error) {
+			callbackMu.Lock()
+			if waitAbandoned {
+				callbackMu.Unlock()
+				if err != nil {
+					LogError("document frame identity callback", err)
+				}
+				return
+			}
+			if callbackCompleted {
+				callbackMu.Unlock()
+				duplicateErr := errors.New("document frame identity callback completed more than once")
+				if err != nil {
+					duplicateErr = errors.Join(duplicateErr, err)
+				}
+				LogError("document frame identity callback", duplicateErr)
+				return
+			}
+			callbackCompleted = true
 			done <- struct {
 				reply json.RawMessage
 				err   error
 			}{reply: reply, err: err}
+			callbackMu.Unlock()
 		})
 	})
 	if scheduleErr != nil {
+		callbackMu.Lock()
+		var callbackErr error
+		if callbackCompleted {
+			callbackErr = (<-done).err
+		} else {
+			waitAbandoned = true
+		}
+		callbackMu.Unlock()
+		if callbackErr != nil {
+			return nil, errors.Join(scheduleErr, callbackErr)
+		}
 		return nil, scheduleErr
 	}
 	select {
 	case result := <-done:
 		return result.reply, result.err
 	case <-time.After(pageTimeout):
+		callbackMu.Lock()
+		if callbackCompleted {
+			result := <-done
+			callbackMu.Unlock()
+			return result.reply, result.err
+		}
+		waitAbandoned = true
+		callbackMu.Unlock()
 		return nil, errors.New("document frame identity native operation did not complete within the diagnostic timeout")
 	}
 }

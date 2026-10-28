@@ -29,6 +29,8 @@ F239-252 이후 최신 Terminal drag 측정은 Wails/Tauri source cadence 72/82 
 
 - [o] F239-257 — P1: Capture identity cleanup acceptance를 recording당 source 하나 계약에 맞춘다. 통합 검사의 오래된 기대값은 수정 전 실패하며 clear 뒤 선택 비활성과 두 번째 source 거절을 확인한 같은 소유 검사는 수정 후 통과한다. Production 동작은 변경하지 않는다.
 
+- [o] F239-259 — P1, F239-258 연결: 이전 결과를 대체하지 않고 Wails identity callback의 제한된 대기와 늦은 오류 보고를 완성한다. 중복 Go callback을 명시적으로 보고하고 양 host에서 동기 callback 오류와 scheduling 오류를 함께 보존한다. 소유 Red는 log 누락과 오류 소실을 재현하며 Go 네 case 및 Rust 선택 오류·성공 Green이 통과한다. Rust FnOnce callback은 중복 호출을 정적으로 막는다.
+
 - [o] F239-260 — P1, F239-255 연결: 선언된 surface dispatch frame event에 맞춰 Go·Rust·page event class table을 재생성한다. 기존 generator 소유 검사는 수정 전 분류 누락으로 실패하고 세 table을 동기화한 뒤 통과한다. 실패한 application log는 보존하며 수정 후 application 검증은 별도다.
 
 - [o] F239-256 — P1: Prior-run retention fixture를 구성하기 전에 startup log 기록을 flush한다. Red: Startup rotation이 생성 중인 fixture를 제거해 timestamp 준비가 NotFound로 실패한다. Green: Flush barrier로 fixture 생성 전에 startup retention을 완료한 뒤 같은 소유 검사가 통과한다. Production retention은 바뀌지 않는다.

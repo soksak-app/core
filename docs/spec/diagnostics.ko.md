@@ -100,6 +100,7 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | 창의 WebContent process가 끝난다 | `error host page process: <window>: terminated`. 앱 DOM webview가 등록되어 있으면 native 계층은 WebKit 종료 이유(`reason`과 `code`)를 담은 `native.webview.process_ended` 이벤트도 저장한다 |
 | Tauri host가 main thread 감시의 heartbeat를 그 thread에 보내지 못한다 | `error host stall watch: heartbeat: <reason>`, 그리고 감시가 끝난다([logging](logging.ko.md), 정지) |
 | `diagnostics.input.source`의 선택한 input source 대기가 응답이 끝난 뒤에 답한다(Tauri host) | `error host input source: the wait answered after its reply ended: <result>` |
+| document-frame identity callback이 wait 종료 뒤 error를 보고하거나 Go callback이 두 번 이상 호출된다 | Go는 `error host document frame identity callback: <reason>`을 쓴다. Tauri는 늦은 callback failure를 `error host diagnostics: document frame identity callback failed after its request ended: <reason>`으로 쓴다. 첫 callback 결과가 유지된다. |
 | writer가 쓴 뒤 event 파일의 색인을 최신으로 맞출 수 없다(event 구조를 어기는 줄, 손상된 색인, 열 수 없는 파일) | `error host log index: <reason>`, 파일마다 이유가 다를 때마다 한 번([logging](logging.ko.md#색인)) |
 | 파일 `log-policy.json`이 [정책](logging.ko.md#정책)의 형식을 어기거나(JSON이 아닌 글, 모르는 항목, 빠졌거나 계약 밖인 class, 여섯 밖의 level) 정책을 감시하거나 적용할 수 없다 | `error host log policy: <file>: <발견한 것>`, 파일이 바뀔 때마다 한 번. 적용 중인 정책은 그대로 남는다 |
 | document stream을 문서에서 켜거나 끄지 못하거나, 그 스냅샷이나 메시지가 실패한다 | `sp_log_error`의 `error native document stream: <stream> <on or off>: <text>`, `error native document stream: elements snapshot: <text>`, `error native document stream: <stream>: the message is not JSON` |

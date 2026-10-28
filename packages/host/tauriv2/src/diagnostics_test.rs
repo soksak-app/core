@@ -364,6 +364,43 @@ fn document_frame_identity_callback_wait_is_bounded() {
     );
 }
 
+// contract: diagnostics.capture-document-identity.schedule-error-preserves-callback-error
+#[test]
+fn document_frame_identity_preserves_synchronous_callback_error_when_scheduling_fails() {
+    let (sender, receiver) = mpsc::channel();
+    sender
+        .send(Err("native callback failed".to_string()))
+        .unwrap();
+
+    let result = super::await_document_frame_identity_schedule_result(
+        Err("native operation was not scheduled".into()),
+        receiver,
+        Duration::from_millis(1),
+    );
+    let Err(error) = result else {
+        panic!("schedule and callback failures were accepted as success: {result:?}");
+    };
+    assert!(
+        error.contains("native operation was not scheduled"),
+        "{error}"
+    );
+    assert!(error.contains("native callback failed"), "{error}");
+}
+
+// contract: diagnostics.capture-document-identity.schedule-error-preserves-callback-error
+#[test]
+fn document_frame_identity_preserves_synchronous_success_reply() {
+    let (sender, receiver) = mpsc::channel();
+    sender.send(Ok("native reply".to_string())).unwrap();
+
+    let result = super::await_document_frame_identity_schedule_result(
+        Ok(()),
+        receiver,
+        Duration::from_millis(1),
+    );
+    assert_eq!(result.as_deref(), Ok("native reply"));
+}
+
 // contract: diagnostics.capture-document-identity.reports-late-callback-errors
 #[test]
 fn late_document_frame_identity_callback_errors_are_logged_as_errors() {

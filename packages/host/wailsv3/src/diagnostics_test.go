@@ -34,6 +34,82 @@ func TestCaptureStopLayoutFailurePreservesStartedFolder(t *testing.T) {
 	}
 }
 
+// contract: diagnostics.capture-stop.bounds-identity-callback-wait
+// contract: diagnostics.capture-document-identity.reports-late-callback-errors
+func TestAwaitDocumentFrameIdentityReportsLateErrorAfterTimeout(t *testing.T) {
+	isolateTraceRecords(t)
+	s := &Surfaces{invoke: func(work func()) { work() }}
+	var callback func(json.RawMessage, error)
+	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+		callback = done
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "did not complete within the diagnostic timeout") || reply != nil {
+		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want explicit timeout and no source result", reply, err)
+	}
+	if callback == nil {
+		t.Fatal("native callback was not registered")
+	}
+
+	callback(nil, errors.New("late native identity callback failed"))
+	errors := bufferedTraces(t, "host.record.error")
+	if len(errors) != 1 {
+		t.Fatalf("late callback error records = %#v, want one error", errors)
+	}
+	if errors[0]["where"] != "document frame identity callback" || errors[0]["text"] != "late native identity callback failed" {
+		t.Fatalf("late callback error record = %#v, want the callback error at its source", errors[0])
+	}
+}
+
+// contract: diagnostics.capture-document-identity.callback-completion-is-single-use
+func TestAwaitDocumentFrameIdentitySynchronousCallbackReturnsResult(t *testing.T) {
+	s := &Surfaces{invoke: func(work func()) { work() }}
+	want := json.RawMessage(`{"generation":7}`)
+	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+		done(want, nil)
+		return nil
+	})
+	if err != nil || string(reply) != string(want) {
+		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want synchronous result %s", reply, err, want)
+	}
+}
+
+// contract: diagnostics.capture-document-identity.callback-completion-is-single-use
+func TestAwaitDocumentFrameIdentityReportsDuplicateCallback(t *testing.T) {
+	isolateTraceRecords(t)
+	s := &Surfaces{invoke: func(work func()) { work() }}
+	var first error
+	reply, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+		done(json.RawMessage(`{"generation":7}`), nil)
+		first = errors.New("identity callback completion invoked more than once")
+		done(nil, first)
+		return nil
+	})
+	if err != nil || string(reply) != `{"generation":7}` {
+		t.Fatalf("awaitDocumentFrameIdentity = %s, %v; want first callback result", reply, err)
+	}
+	got := bufferedTraces(t, "host.record.error")
+	if len(got) != 1 || got[0]["where"] != "document frame identity callback" ||
+		!strings.Contains(got[0]["text"].(string), "completed more than once") ||
+		!strings.Contains(got[0]["text"].(string), first.Error()) {
+		t.Fatalf("duplicate callback records = %#v, want one explicit callback error", got)
+	}
+}
+
+// contract: diagnostics.capture-document-identity.schedule-error-preserves-callback-error
+func TestAwaitDocumentFrameIdentityPreservesCallbackErrorWhenScheduleFails(t *testing.T) {
+	scheduleErr := errors.New("identity operation was not scheduled")
+	callbackErr := errors.New("identity callback failed")
+	s := &Surfaces{invoke: func(work func()) { work() }}
+	_, err := awaitDocumentFrameIdentity(s, func(done func(json.RawMessage, error)) error {
+		done(nil, callbackErr)
+		return scheduleErr
+	})
+	if !errors.Is(err, scheduleErr) || !errors.Is(err, callbackErr) {
+		t.Fatalf("awaitDocumentFrameIdentity error = %v, want both schedule and callback errors", err)
+	}
+}
+
 // contract: diagnostics.capture-start.preserves-display-option-parsing
 func TestCaptureStartOptionsPreserveDisplayParsing(t *testing.T) {
 	for _, test := range []struct {

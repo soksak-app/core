@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-259: Wails identity callback 완료와 timeout 소유권을 선형화하고 늦거나 중복된 callback 오류를 보고하며 양 host에서 scheduling 실패 시 동기 callback 오류를 보존한다. 기존 timeout 및 새 오류 보존 소유 검사는 수정 전 실패하고 수정 후 통과한다. 동기 성공 결과와 명시적 scheduling 실패를 유지하고 실제 실패 표시 경로를 기록한다.
+
 - F239-260: 생성된 event class table 세 개를 surface dispatch frame event에 동기화한다. 기존 소유 검사는 재생성 전 분류 누락을 재현하고 이후 통과한다. Undeclared-event finding이 있는 application 실행은 통과로 보고하지 않고 보존한다.
 
 - F239-255: Performance tracing을 사용할 수 없을 때 frame trace gate로 기존 surface dispatch의 queue·진입·반환 경계를 기록한다. 기존 performance event를 우선하고 중복 event를 만들지 않으며 두 gate가 닫히면 clock을 읽지 않는다. Go와 Rust 소유 Red와 Green, 최종 Rust 소유 확인, Clippy, event 및 문서 검사를 통과한다. Policy gate 조회는 수행한다. Application cadence acceptance는 미완료다.

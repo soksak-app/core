@@ -1398,14 +1398,33 @@ fn await_document_frame_identity(
     + 'static,
 ) -> Result<String, String> {
     let (sender, receiver) = std::sync::mpsc::channel();
-    on_main(window, move || {
+    let scheduled = on_main(window, move || {
         schedule(Box::new(move |result| {
             if let Err(error) = sender.send(result) {
                 log_late_document_frame_identity_result(error.0);
             }
         }))
-    })?;
-    await_document_frame_identity_reply(receiver, TIMEOUT)
+    });
+    await_document_frame_identity_schedule_result(scheduled, receiver, TIMEOUT)
+}
+
+fn await_document_frame_identity_schedule_result(
+    scheduled: Result<(), String>,
+    receiver: std::sync::mpsc::Receiver<Result<String, String>>,
+    timeout: Duration,
+) -> Result<String, String> {
+    if let Err(schedule_error) = scheduled {
+        return match receiver.try_recv() {
+            Ok(Err(callback_error)) => Err(format!(
+                "document frame identity scheduling failed: {schedule_error}; callback failed: {callback_error}"
+            )),
+            Ok(Ok(_))
+            | Err(
+                std::sync::mpsc::TryRecvError::Empty | std::sync::mpsc::TryRecvError::Disconnected,
+            ) => Err(schedule_error),
+        };
+    }
+    await_document_frame_identity_reply(receiver, timeout)
 }
 
 fn await_document_frame_identity_reply(
