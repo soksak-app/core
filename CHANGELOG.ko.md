@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-243: 변경되지 않은 통합 통과 4개와 수정한 restoration fixture의 집중 통과로 trace-mode 소유 acceptance를 완료한다. 두 결과 사이 production helper는 바뀌지 않았으며 전체 모음은 반복하지 않는다. 측정 mode와 복원을 검증하며 application cadence 또는 convergence를 입증하지는 않는다.
+
 - F239-249: Capture lifecycle test 결과를 버리지 않고 확인하며 safe-integer bound, identity cleanup 조건, presentation callback 및 test slice에 동등한 Clippy 수정을 적용한다. Warning 억제 없이 집중 lifecycle case와 diagnostic host Clippy가 통과한다.
 
 - F239-250: Project 및 plugin test source에 gofmt를 적용한다. Test 동작 변경 없이 누락된 빈 줄 두 개를 복원하며 Go formatting gate가 통과한다.

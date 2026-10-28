@@ -11,9 +11,9 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 11개와 waiting 30개인 41개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 9개와 waiting 30개인 39개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 5** — F239-223, F239-223-3, F239-233, F239-243, F239-249
+- **현재 측정과 검사 수정: 3** — F239-223, F239-223-3, F239-233
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -29,7 +29,7 @@ F239-241과 F239-242 전의 최신 Terminal drag 측정은 Wails/Tauri cadence 7
 
 - [o] F239-250 — P2: 통합 Go formatting gate에서 실패한 project 및 plugin test source에 gofmt를 적용한다. 동작은 유지하고 formatting만 재검사한다.
 
-- [~] F239-249 — P1: Warning을 억제하지 않고 통합 native 실행의 Tauri Clippy 실패 7건을 해결한다. 두 lifecycle test 결과를 확인하고 integer bound, 조건부 cleanup, callback 및 test slice에 동등한 lint 수정을 적용한다. 소유 host lint와 lifecycle test를 재검사한 뒤 남은 native 단계만 재개한다.
+- [o] F239-249 — P1: Warning을 억제하지 않고 통합 native 실행의 Tauri Clippy 실패 7건을 해결한다. 두 lifecycle test 결과를 확인하고 integer bound, 조건부 cleanup, callback 및 test slice에 동등한 lint 수정을 적용한다. 소유 host lint와 lifecycle test를 재검사한 뒤 남은 native 단계만 재개한다.
 
 - [o] F239-248 — P2: Workspace Rust format 검사에서 발견한 기존 endpoint 및 surface source의 formatting 차이를 정규화한다. 동작은 바꾸지 않고 format 검사로 확인한다.
 
@@ -39,7 +39,7 @@ F239-241과 F239-242 전의 최신 Terminal drag 측정은 Wails/Tauri cadence 7
 
 - [o] F239-244 — P1, F239-240 연결: 공개 view-operation case와 소유 검사를 현재 view writer 계약에 맞춘다. Operation identifier 증가, 첫 operation log 및 sidecar/command의 cids 전달 검증을 유지하며 폐기된 단일 view-log payload를 기대하지 않는다. 통합 실행에서 clock 요청을 옛 log record와 비교하는 실패를 보존하고 소유 경계와 관련 consumer case만 수정·재검증한다. SDK 3개 case, HWP operation 2개 case와 Browser operation replay 및 view 22개 case가 통과했고 각 소유 저장소에 커밋했다.
 
-- [~] F239-243 — P1, F239-223 연결: Terminal continuous-drag 성능 측정에서 필요한 source-frame log와 capture를 유지하며 무관한 전역 performance trace만 끈다. Process 및 one-shot layout 수집은 trace를 유지하고, drag 종료와 오류 경로에서 기존 값을 복원한 뒤 reclaim을 수집한다. 소유 Red/Green으로 phase 설정과 복원·오류 보존을 확인하고 측정 mode를 보존한다. 33 ms, 2 pt 및 2-frame 기준은 바꾸지 않는다. 구현은 준비됐으며 검증은 미완료다.
+- [o] F239-243 — P1, F239-223 연결: Terminal continuous-drag 성능 측정에서 필요한 source-frame log와 capture를 유지하며 무관한 전역 performance trace만 끈다. Process 및 one-shot layout 수집은 trace를 유지하고, drag 종료와 오류 경로에서 기존 값을 복원한 뒤 reclaim을 수집한다. 소유 Red/Green으로 phase 설정과 복원·오류 보존을 확인하고 측정 mode를 보존한다. 33 ms, 2 pt 및 2-frame 기준은 바꾸지 않는다.  Trace-mode 소유 case 5개가 통과한다. 변경되지 않은 4개는 통합 결과를 유지하고 수정한 after-write restoration fixture는 집중 반복에서 통과한다. 두 결과 사이 production helper는 바뀌지 않았다. Application 성능은 F239-223 및 F239-233에 남는다.
 
 - [o] F239-242 — P1, F239-223 연결: Diagnostic source artifact를 frame writer와 독립적인 serial writer에 기록한다. 기존 64 MiB pending/history bound와 drop 보고를 유지한다. 제어된 held-frame-writer Red/Green과 replacement callback 및 stop-intake 소유 검사가 통과한다. 재빌드한 macOS arm64 양 host에서 consecutive-capture 창 case가 2/2 통과하며 총 6개 recording의 count와 byte가 보존되고 app log finding은 0이다. 정상 종료, endpoint 제거와 동일 foreground baseline 복원도 통과한다. 이전 capacity 오류 29개를 보존하며 전체 drag 성능의 통과를 추론하지 않는다.
 

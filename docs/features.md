@@ -11,9 +11,9 @@
 The source audits use the matching current SDK's public commands. Older installed SDK readers reject schema 3; their default command is not reported as passing. These are local development results. Publication and historical failure-closure tasks retain their own checklist states.
 
 
-The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 41 rows: 11 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
+The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 39 rows: 9 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
 
-- **Current measurement and check corrections: 5** — F239-223, F239-223-3, F239-233, F239-243, F239-249
+- **Current measurement and check corrections: 3** — F239-223, F239-223-3, F239-233
 - **Reported failures and historical closure audits: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1 through F266.3, F266.5 through F266.7 and F266.9 through F266.13
 - **Performance measurements: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package installation and publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -29,7 +29,7 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
 
 - [o] F239-250 — P2: Apply gofmt to the project and plugin test sources that fail the integrated Go formatting gate. Preserve behavior and recheck only formatting.
 
-- [~] F239-249 — P1: Resolve the seven Tauri Clippy failures in the integrated native run without suppressing warnings. Assert both lifecycle test results and apply equivalent lint corrections to integer bounds, conditional cleanup, callbacks and test slices. Recheck the owning host lint and lifecycle test, then resume only the remaining native stages.
+- [o] F239-249 — P1: Resolve the seven Tauri Clippy failures in the integrated native run without suppressing warnings. Assert both lifecycle test results and apply equivalent lint corrections to integer bounds, conditional cleanup, callbacks and test slices. Recheck the owning host lint and lifecycle test, then resume only the remaining native stages.
 
 - [o] F239-248 — P2: Normalize the existing endpoint and surface source differences against the workspace Rust formatter. Preserve behavior and verify the format check.
 
@@ -39,7 +39,7 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
 
 - [o] F239-244 — P1, linked to F239-240: Align the published view-operation cases and owners with the current view writer contract. Preserve operation identifier progression, the first operation log, and sidecar/command cids propagation without expecting the removed single-record view payload. Retain the integrated clock-versus-record failure and correct only the owning boundary and affected consumer cases. The three SDK cases, two HWP operation cases, and Browser operation replay and 22 view cases pass and are committed in their owning repositories.
 
-- [~] F239-243 — P1, linked to F239-223: Disable unrelated global performance tracing only during Terminal continuous-drag measurement while retaining required source-frame logging and capture. Keep tracing through process and one-shot layout collection, restore the saved value on success and failure before reclaim collection, and preserve the measured mode. Verify phase state, restoration and error retention through owner Red/Green without changing the 33 ms, 2 pt or two-frame criteria. Implementation is ready; validation is pending.
+- [o] F239-243 — P1, linked to F239-223: Disable unrelated global performance tracing only during Terminal continuous-drag measurement while retaining required source-frame logging and capture. Keep tracing through process and one-shot layout collection, restore the saved value on success and failure before reclaim collection, and preserve the measured mode. Verify phase state, restoration and error retention through owner Red/Green without changing the 33 ms, 2 pt or two-frame criteria. All five trace-mode owner cases pass: four unchanged cases retain integrated results and the corrected after-write restoration fixture passes its focused repeat. The production helper is unchanged between those results. Application performance remains under F239-223 and F239-233.
 
 - [o] F239-242 — P1, linked to F239-223: Write diagnostic source artifacts on a serial writer independent of the frame writer. Preserve the 64 MiB pending/history bounds and drop reporting. Controlled held-frame-writer Red/Green, replacement callback and stop-intake owners pass. Both rebuilt macOS arm64 hosts pass consecutive-capture window cases, preserving all six recordings and reporting zero application-log findings, normal exit, removed endpoints and restored shared foreground baseline. Retain the earlier 29 capacity errors without inferring full drag-performance acceptance.
 
