@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-252: Complete capture cleanup ownership acceptance from the owning Go, Rust and native results and the subsequent two-host capture cohort. Retain stream-ownership distinctions and retry error reporting; keep cadence and convergence acceptance separate.
+
 - F239-259: Linearize Wails identity callback completion and timeout ownership, report late and duplicate callback errors, and preserve synchronous callback failures when scheduling fails in both hosts. Existing timeout and new error-preservation owners fail before correction and pass afterward. Retain synchronous success and explicit scheduling failures. Record the actual failure display paths.
 
 - F239-260: Synchronize the three generated event class tables with the surface dispatch frame event. The existing owner reproduces missing classification before regeneration and passes afterward. Retain the application run with undeclared-event findings without reporting it as passing.

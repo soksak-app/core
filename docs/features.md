@@ -11,9 +11,9 @@
 The source audits use the matching current SDK's public commands. Older installed SDK readers reject schema 3; their default command is not reported as passing. These are local development results. Publication and historical failure-closure tasks retain their own checklist states.
 
 
-The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 41 rows: 11 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
+The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 40 rows: 10 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
 
-- **Current measurement and check corrections: 5** — F239-223, F239-223-3, F239-233, F239-252, F239-254
+- **Current measurement and check corrections: 4** — F239-223, F239-223-3, F239-233, F239-254
 - **Reported failures and historical closure audits: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1 through F266.3, F266.5 through F266.7 and F266.9 through F266.13
 - **Performance measurements: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package installation and publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -39,7 +39,7 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
 
 - [~] F239-254 — P1: Reconcile current host test contract declarations, completed-feature links and the shared contract table before the integrated host run. Classify undefined identifiers and the table entry without a source against current specifications and actual assertions. Preserve shared behavior coverage and explicit host-specific reasons; do not bypass declaration checks or infer coverage from test names.
 
-- [~] F239-252 — P1, linked to F239-245: Align both hosts and the shared host-contract cases with capture cleanup ownership after stop or removal failures. Distinguish a stop error from retirement of the native stream and drained writers through an explicit ownership query; a late OS completion remains owned by the existing native attempt, not by a new host retry handle. Reproduce the Go boundary failures before correction, preserve retry ownership and original errors, and declare the new owning cases without suppressing parity checks.
+- [o] F239-252 — P1, linked to F239-245: Distinguish capture stop failures from native stream ownership in both hosts. Owning Red/Green verifies retired finish ownership release, retained active or unknown ownership, original errors and removal retry without another stop. Native pressure verifies ownership before and after finalization errors. Both optimized applications complete subsequent captures and exit normally; the error-free capture cohort does not imply drag-performance acceptance.
 
 - [o] F239-253 — P1: Resolve the native capture pressure and decoded-frame write-error acceptance failures from the integrated run. Determine whether finalization loses errors or the owning assertions expect an obsolete error contract, preserve explicit failure reporting, and recheck only those owners.
 

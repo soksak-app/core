@@ -11,9 +11,9 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 11개와 waiting 30개인 41개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 10개와 waiting 30개인 40개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 5** — F239-223, F239-223-3, F239-233, F239-252, F239-254
+- **현재 측정과 검사 수정: 4** — F239-223, F239-223-3, F239-233, F239-254
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -39,7 +39,7 @@ F239-252 이후 최신 Terminal drag 측정은 Wails/Tauri source cadence 72/82 
 
 - [~] F239-254 — P1: 통합 host 실행 전에 현재 host test의 contract 선언, 완료 feature link 및 공유 contract table을 맞춘다. 미정의 identifier와 source가 없는 table 항목을 현재 사양 및 실제 assertion과 대조한다. 공유 동작 coverage와 명시적인 host별 사유를 유지하고 선언 검사를 우회하거나 test 이름으로 coverage를 추정하지 않는다.
 
-- [~] F239-252 — P1, F239-245 연결: Stop 또는 삭제 실패 뒤 capture cleanup 소유권에 양 host와 공유 host-contract case를 맞춘다. 명시적 소유권 조회로 stop 오류와 native stream 및 drain된 writer의 퇴역을 구분하며 늦은 OS 완료는 새 host retry handle 대신 기존 native attempt가 소유한다. 수정 전 Go boundary 실패를 재현하고 재시도 소유권 및 원래 오류를 보존하며 parity 검사를 억제하지 않고 새 소유 case를 선언한다.
+- [o] F239-252 — P1, F239-245 연결: 양 host에서 capture stop 실패와 native stream 소유권을 구분한다. 소유 Red/Green은 퇴역한 finish 소유권 해제, active 또는 불명확한 소유권 보존, 원래 오류 및 추가 stop 없는 제거 재시도를 검증한다. Native pressure는 finalization 오류 전후 소유권을 검증한다. 양 optimized application은 이후 capture와 정상 종료를 완료하며 오류 없는 capture cohort가 drag 성능 acceptance를 뜻하지는 않는다.
 
 - [o] F239-253 — P1: 통합 실행의 native capture pressure 및 decoded-frame 쓰기 오류 acceptance 실패를 해결한다. Finalization이 오류를 잃는지 소유 assertion이 폐기된 오류 계약을 기대하는지 확인하고 명시적 실패 보고를 유지하며 해당 소유 검사만 재실행한다.
 

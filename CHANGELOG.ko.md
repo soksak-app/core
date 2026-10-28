@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-252: Go·Rust·native 소유 결과와 이후 양 host capture cohort로 capture cleanup 소유권 acceptance를 완료한다. Stream 소유권 구분과 재시도 오류 보고를 유지하고 cadence 및 convergence acceptance는 별도로 둔다.
+
 - F239-259: Wails identity callback 완료와 timeout 소유권을 선형화하고 늦거나 중복된 callback 오류를 보고하며 양 host에서 scheduling 실패 시 동기 callback 오류를 보존한다. 기존 timeout 및 새 오류 보존 소유 검사는 수정 전 실패하고 수정 후 통과한다. 동기 성공 결과와 명시적 scheduling 실패를 유지하고 실제 실패 표시 경로를 기록한다.
 
 - F239-260: 생성된 event class table 세 개를 surface dispatch frame event에 동기화한다. 기존 소유 검사는 재생성 전 분류 누락을 재현하고 이후 통과한다. Undeclared-event finding이 있는 application 실행은 통과로 보고하지 않고 보존한다.
