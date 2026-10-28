@@ -4,6 +4,17 @@
 
 ## 미배포
 
+- F239-277: Wails dependency download에 필요한 Go workspace archive hash와
+  standalone Sok offline readonly resolution에 필요한 archive 및 go.mod
+  checksum을 추가한다. Red: Wails lock guard가 생성된 archive hash 141개와
+  go.mod hash 하나를 발견했고 Linux Sok build가 module checksum 누락을 보고했다.
+  Green: 표준 Go 1.25.0 resolution이 workspace와 standalone module checksum을
+  기록한다. Offline readonly dependency listing은 Wails host, Wails Sok,
+  standalone Sok module graph에서 통과하고 모든 resolved module의 검증도 통과한다.
+  Lock guard는 추가 변경이 없다고 확인한다. Compile 결과는 주장하지 않는다.
+
+## 미배포
+
 - F239-276: Frozen SDK bootstrap digest를 document-start page identity 변경에 맞춘다. 기존 view-check case가 오래된 상수를 재현하고 갱신 뒤 변경된 script와 literal은 계속 거부하면서 6/6 통과한다. Component literal과 SDK pin은 release 전에 owner 갱신이 필요하다.
 
 - F239-273-2: Registry builder는 index version을 정렬하고 proof는 source 순서를 유지하므로 보존된 core version projection을 집합으로 비교한다. 중복 및 포함 거부는 유지한다. 세 version producer형 Red가 순서 불일치를 재현하며 집중 case 1/1, candidate registry owner 15/15가 통과한다.

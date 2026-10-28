@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- F239-277: Add the Go workspace archive hashes required by Wails dependency
+  downloads and the standalone Sok archive and go.mod checksums required by
+  offline readonly resolution. Red: the Wails lock guard saw 141 generated
+  archive hashes and one go.mod hash, and the Linux Sok build reported missing
+  module checksums. Green: standard Go 1.25.0 resolution records the required
+  workspace and standalone module checksums. Offline readonly dependency lists
+  pass for the Wails host, Wails Sok and standalone Sok module graphs; module
+  verification passes for all resolved modules. The lock guard reports no
+  additional mutation. No compilation result is claimed.
+
+## Unreleased
+
 - F239-276: Align the frozen SDK bootstrap digest with the document-start page identity change. The existing view-check cases reproduce the stale constant and pass 6/6 after its update while continuing to reject changed scripts and literals. Component literals and SDK pins require owner updates before release.
 
 - F239-273-2: Compare the preserved core version projection as a set because registry builders sort index versions while proofs retain source order. Keep duplicate and membership rejection. The producer-shaped three-version Red reproduces the order mismatch; the focused case passes 1/1 and the candidate registry owner passes 15/15.
