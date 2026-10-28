@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-251: Size the two-region capture identity fixture for the existing 192-pixel reserved ROI on a 1x display and report region creation and raster dimensions separately. Preserve production QR geometry and capture behavior. The original acceptance case and all four affected checker and lifecycle wrappers pass after the shared fixture correction; the separate pressure and write-error failures remain open.
+
 - F239-243: Complete trace-mode owner acceptance from the four unchanged integrated passes and the corrected restoration fixture focused pass. The production helper is unchanged across both results; no full suite is repeated. This validates measurement mode and restoration, not application cadence or convergence.
 
 - F239-249: Assert the capture lifecycle test results instead of discarding them and apply equivalent Clippy corrections to the safe-integer bound, identity cleanup condition, presentation callback and test slice. The focused lifecycle case and diagnostic host Clippy pass without warning suppression.

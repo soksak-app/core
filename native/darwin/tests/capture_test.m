@@ -163,6 +163,8 @@ int main(void) { @autoreleasepool {
                 (unsigned long)decoded.length, (unsigned long long)(header + payload)]);
     }
     check(!NSApp.isActive, @"recording an unchanged window does not activate the application");
+    // The identity fixture places two side-by-side image regions. Each region needs the full reserved 192-pixel QR ROI.
+    [window setContentSize:NSMakeSize(384, 192)];
     check(sp_capture_open(window.windowNumber, false, &operationError),
         @"the window reopens for an opt-in identity recording");
     free(operationError); operationError = NULL;
@@ -178,15 +180,23 @@ int main(void) { @autoreleasepool {
         WKWebView *surface = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
         surface.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         if (surfaceHost) webviewAttachSurface(surface, main);
-        webviewSetFrame(surface, 0, 0, 200, 100);
+        webviewSetFrame(surface, 0, 0, NSWidth(window.contentView.bounds), NSHeight(window.contentView.bounds));
         void *regionA = surfaceHost ? sp_region_create(surface, "capture-identity-a", discardRegionEvent, NULL) : NULL;
         void *regionB = surfaceHost ? sp_region_create(surface, "capture-identity-b", discardRegionEvent, NULL) : NULL;
-        sp_region_place(regionA, 0, 0, 100, 0, true);
-        sp_region_place(regionB, 100, 0, 0, 0, true);
+        sp_region_place(regionA, 0, 0, 192, 0, true);
+        sp_region_place(regionB, 192, 0, 0, 0, true);
         double rasterA[3] = {0}, rasterB[3] = {0};
-        BOOL regionsReady = surfaceHost && sp_region_raster(regionA, rasterA) && sp_region_raster(regionB, rasterB)
+        BOOL rasterAReady = sp_region_raster(regionA, rasterA);
+        BOOL rasterBReady = sp_region_raster(regionB, rasterB);
+        check(surfaceHost != NULL, @"opt-in identity fixture creates its surface host");
+        check(regionA != NULL && regionB != NULL, @"opt-in identity fixture creates both image regions");
+        check(rasterAReady && rasterBReady && rasterA[0] >= 192 && rasterA[1] >= 192
+            && rasterB[0] >= 192 && rasterB[1] >= 192,
+            [NSString stringWithFormat:
+                @"opt-in identity regions meet the reserved 192x192 pixel ROI (raster A %.0fx%.0f, B %.0fx%.0f; available %d/%d)",
+                rasterA[0], rasterA[1], rasterB[0], rasterB[1], rasterAReady, rasterBReady]);
+        BOOL regionsReady = surfaceHost && regionA && regionB && rasterAReady && rasterBReady
             && rasterA[0] >= 192 && rasterA[1] >= 192 && rasterB[0] >= 192 && rasterB[1] >= 192;
-        check(regionsReady, @"opt-in capture stop fixture creates two image regions that fit the identity code");
         unsigned char nonceA[16], nonceB[16];
         NSData *rawA = nil, *rawB = nil;
         IOSurfaceRef imageA = regionsReady ? identitySurface((size_t)rasterA[0], (size_t)rasterA[1], nonceA, &rawA) : NULL;
