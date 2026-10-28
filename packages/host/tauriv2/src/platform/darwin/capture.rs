@@ -14,6 +14,7 @@ unsafe extern "C" {
     fn sp_capture_error() -> *const c_char;
     fn sp_capture_wait() -> c_int;
     fn sp_capture_stop(after: f64) -> c_int;
+    fn sp_capture_has_stream() -> bool;
     fn sp_document_frame_identity_start(
         document: *mut c_void,
         generation: u64,
@@ -215,6 +216,11 @@ pub fn stop(after: f64) -> Result<i32, String> {
     } else {
         Err(format!("capture stop failed: {}", error.to_string_lossy()))
     }
+}
+
+/// Reports whether the native capture module still owns the current stream and writer transaction.
+pub fn has_stream() -> bool {
+    unsafe { sp_capture_has_stream() }
 }
 
 /// Returns whether the last recording reached the finite frame limit and stopped automatically.

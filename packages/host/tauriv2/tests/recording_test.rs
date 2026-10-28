@@ -22,6 +22,9 @@ struct Fake {
     fail_start: bool,
     no_frame: bool,
     fail_stop: bool,
+    owned_stream: Cell<bool>,
+    retire_on_stop_error: bool,
+    stream_query_error: Option<String>,
     replace_directory_on_open: Option<std::path::PathBuf>,
     replace_directory_on_stop: Option<std::path::PathBuf>,
 }
@@ -55,6 +58,7 @@ impl Capture for Fake {
         if self.fail_start {
             Err("start failed".into())
         } else {
+            self.owned_stream.set(true);
             Ok(())
         }
     }
@@ -68,9 +72,20 @@ impl Capture for Fake {
             replace_directory_with_file(path)?;
         }
         if self.fail_stop {
+            if self.retire_on_stop_error {
+                self.owned_stream.set(false);
+            }
             Err("stop failed".into())
         } else {
+            self.owned_stream.set(false);
             Ok(3)
+        }
+    }
+    fn has_stream(&self) -> Result<bool, String> {
+        self.calls.borrow_mut().push("has stream".into());
+        match &self.stream_query_error {
+            Some(error) => Err(error.clone()),
+            None => Ok(self.owned_stream.get()),
         }
     }
 }
@@ -142,6 +157,57 @@ fn a_stop_failure_keeps_the_folder_returned_by_start() {
         next.contains("is running"),
         "another capture was allowed: {next}"
     );
+}
+
+// contract: recording.finish.stop-query-failure-preserves-owner
+#[test]
+fn a_stop_ownership_query_failure_preserves_the_folder() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let fake = Fake {
+        fail_stop: true,
+        retire_on_stop_error: true,
+        stream_query_error: Some("status unavailable".into()),
+        ..Fake::default()
+    };
+    recording
+        .start(&fake, WINDOW, &folder, false, &make)
+        .unwrap();
+
+    let error = recording.finish(&fake).unwrap_err();
+    assert!(error.contains("stop failed"), "{error}");
+    assert!(error.contains("status unavailable"), "{error}");
+    assert!(folder.is_dir());
+    assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
+}
+
+// contract: recording.finish.retired-stop-failure-releases-owner
+#[test]
+fn a_retired_stop_failure_preserves_folder_and_releases_owner() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let fake = Fake {
+        fail_stop: true,
+        retire_on_stop_error: true,
+        ..Fake::default()
+    };
+    recording
+        .start(&fake, WINDOW, &folder, false, &make)
+        .unwrap();
+
+    assert_eq!(recording.finish(&fake).unwrap_err(), "stop failed");
+    assert!(folder.is_dir(), "retired folder was deleted");
+    assert_eq!(
+        recording.running(),
+        None,
+        "retired recording owner remained"
+    );
+    let next = parent.path().join("next-frames");
+    recording
+        .start(&Fake::default(), WINDOW, &next, false, &make)
+        .expect("next recording should start after native ownership retired");
 }
 
 // contract: recording.start.failed-open-removes-folder
@@ -276,6 +342,100 @@ fn a_failed_start_removes_the_folder() {
     assert_eq!(recording.running(), None);
 }
 
+// contract: recording.start.stop-failure-preserves-retry-state
+#[test]
+fn a_start_stop_failure_preserves_retry_state() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let failed = Fake {
+        no_frame: true,
+        fail_stop: true,
+        ..Fake::default()
+    };
+
+    let error = recording
+        .start(&failed, WINDOW, &folder, false, &make)
+        .unwrap_err();
+    assert!(error.contains("stop failed"), "{error}");
+    assert!(
+        folder.is_dir(),
+        "the folder was removed before capture stopped"
+    );
+    assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
+    let blocked = recording
+        .start(
+            &Fake::default(),
+            WINDOW,
+            &parent.path().join("next"),
+            false,
+            &make,
+        )
+        .unwrap_err();
+    assert!(
+        blocked.contains("is running"),
+        "another capture was allowed: {blocked}"
+    );
+
+    recording.abort(&Fake::default()).unwrap();
+    assert!(!folder.exists());
+    assert_eq!(
+        calls(&failed),
+        ["open 7", "start", "wait", "stop", "has stream"]
+    );
+}
+
+// contract: recording.start.retired-stop-failure-removes-folder
+#[test]
+fn a_start_retired_stop_failure_removes_the_folder() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let failed = Fake {
+        no_frame: true,
+        fail_stop: true,
+        retire_on_stop_error: true,
+        ..Fake::default()
+    };
+
+    let error = recording
+        .start(&failed, WINDOW, &folder, false, &make)
+        .unwrap_err();
+    assert!(
+        error.contains("capture did not produce an initial frame"),
+        "{error}"
+    );
+    assert!(error.contains("stop failed"), "{error}");
+    assert!(!folder.exists(), "retired folder was kept");
+    assert_eq!(recording.running(), None);
+}
+
+// contract: recording.start.stop-query-failure-preserves-owner
+#[test]
+fn a_start_ownership_query_failure_preserves_cleanup_state() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let failed = Fake {
+        no_frame: true,
+        fail_stop: true,
+        stream_query_error: Some("status unavailable".into()),
+        ..Fake::default()
+    };
+
+    let error = recording
+        .start(&failed, WINDOW, &folder, false, &make)
+        .unwrap_err();
+    assert!(
+        error.contains("capture did not produce an initial frame"),
+        "{error}"
+    );
+    assert!(error.contains("stop failed"), "{error}");
+    assert!(error.contains("status unavailable"), "{error}");
+    assert!(folder.is_dir());
+    assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
+}
+
 // contract: recording.start.no-first-frame-stops-and-removes
 #[test]
 fn a_recording_without_a_first_frame_is_stopped_and_removed() {
@@ -357,6 +517,84 @@ fn an_abort_reports_a_stop_failure_and_preserves_cleanup_state() {
     assert!(
         next.contains("is running"),
         "another capture was allowed: {next}"
+    );
+}
+
+// contract: recording.abort.retired-stop-failure-removes-folder
+#[test]
+fn an_abort_removes_retired_folder_and_reports_stop_error() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let fake = Fake {
+        fail_stop: true,
+        retire_on_stop_error: true,
+        ..Fake::default()
+    };
+    recording
+        .start(&fake, WINDOW, &folder, false, &make)
+        .unwrap();
+
+    let error = recording.abort(&fake).unwrap_err();
+    assert!(error.contains("stop failed"), "{error}");
+    assert!(!folder.exists(), "retired folder was kept");
+    assert_eq!(recording.running(), None);
+}
+
+// contract: recording.abort.stop-query-failure-preserves-owner
+#[test]
+fn an_abort_ownership_query_failure_preserves_cleanup_state() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let failed = Fake {
+        fail_stop: true,
+        stream_query_error: Some("status unavailable".into()),
+        ..Fake::default()
+    };
+    recording
+        .start(&failed, WINDOW, &folder, false, &make)
+        .unwrap();
+
+    let error = recording.abort(&failed).unwrap_err();
+    assert!(error.contains("stop failed"), "{error}");
+    assert!(error.contains("status unavailable"), "{error}");
+    assert!(folder.is_dir());
+    assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
+    recording.abort(&Fake::default()).unwrap();
+    assert!(!folder.exists());
+}
+
+// contract: recording.abort.retired-stop-failure-cleanup-retry-skips-stop
+#[test]
+fn an_abort_retries_retired_folder_cleanup_without_repeating_stop() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let fake = Fake {
+        fail_stop: true,
+        retire_on_stop_error: true,
+        replace_directory_on_stop: Some(folder.clone()),
+        ..Fake::default()
+    };
+    recording
+        .start(&fake, WINDOW, &folder, false, &make)
+        .unwrap();
+
+    let error = recording.abort(&fake).unwrap_err();
+    assert!(error.contains("stop failed"), "{error}");
+    assert!(
+        error.contains("capture directory cleanup failed"),
+        "{error}"
+    );
+    assert!(folder.is_file());
+    assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
+    std::fs::remove_file(&folder).unwrap();
+    recording.abort(&fake).unwrap();
+    assert_eq!(recording.running(), None);
+    assert_eq!(
+        calls(&fake),
+        ["open 7", "start", "wait", "stop", "has stream"]
     );
 }
 
@@ -475,6 +713,8 @@ struct Panicking {
     active: Cell<bool>,
     stops: Cell<usize>,
     fail_first_stop: bool,
+    retire_on_first_stop_error: bool,
+    stream_query_error: bool,
 }
 
 impl Capture for Panicking {
@@ -491,10 +731,20 @@ impl Capture for Panicking {
     fn stop(&self) -> Result<i32, String> {
         self.stops.set(self.stops.get() + 1);
         if self.fail_first_stop && self.stops.get() == 1 {
+            if self.retire_on_first_stop_error {
+                self.active.set(false);
+            }
             return Err("first stop failed".into());
         }
         self.active.set(false);
         Ok(0)
+    }
+    fn has_stream(&self) -> Result<bool, String> {
+        if self.stream_query_error {
+            Err("status unavailable".into())
+        } else {
+            Ok(self.active.get())
+        }
     }
 }
 
@@ -509,6 +759,8 @@ fn a_panicking_capture_start_stops_partial_capture_before_unwinding() {
         active: Cell::new(false),
         stops: Cell::new(0),
         fail_first_stop: false,
+        retire_on_first_stop_error: false,
+        stream_query_error: false,
     };
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = recording.start(&capture, WINDOW, &folder, false, &make);
@@ -533,6 +785,44 @@ fn a_panicking_capture_start_stops_partial_capture_before_unwinding() {
     assert!(errors.is_empty(), "errors {errors:?}");
 }
 
+// contract: recording.start.panicking-capture-retired-stop-error-releases-owner
+#[test]
+fn a_panicking_start_releases_retired_capture_after_stop_error() {
+    let config = folder::Folder::new();
+    let writer = records::start_writer(config.path());
+    let folder = config.path().join("frames");
+    let recording = Recording::new();
+    let capture = Panicking {
+        active: Cell::new(false),
+        stops: Cell::new(0),
+        fail_first_stop: true,
+        retire_on_first_stop_error: true,
+        stream_query_error: false,
+    };
+    let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = recording.start(&capture, WINDOW, &folder, false, &make);
+    }));
+    assert!(panicked.is_err());
+    assert!(!capture.active.get(), "native stream was not retired");
+    assert!(!folder.exists(), "retired folder was retained");
+    assert_eq!(recording.running(), None);
+    writer.flush(std::time::Duration::from_secs(5)).unwrap();
+    use_host_event_log(None);
+    let errors: Vec<String> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| {
+            event["event"] == "host.record.error" && event["fields"]["where"] == "recording"
+        })
+        .map(|event| event["fields"]["text"].as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("capture stop failed: first stop failed")),
+        "stop error was not reported: {errors:?}"
+    );
+}
+
 // contract: recording.start.panic-cleanup-failure-blocks-next-start
 #[test]
 fn a_failed_panic_cleanup_retains_state_until_abort_retries() {
@@ -545,6 +835,8 @@ fn a_failed_panic_cleanup_retains_state_until_abort_retries() {
         active: Cell::new(false),
         stops: Cell::new(0),
         fail_first_stop: true,
+        retire_on_first_stop_error: false,
+        stream_query_error: false,
     };
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = recording.start(&capture, WINDOW, &folder, false, &make);

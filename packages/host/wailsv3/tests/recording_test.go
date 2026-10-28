@@ -17,11 +17,23 @@ import (
 
 // fakeCapture records the calls and fails at the specified stage.
 type fakeCapture struct {
-	calls     []string
-	failOpen  bool
-	failStart bool
-	noFrame   bool
-	stopErr   bool
+	calls                []string
+	failOpen             bool
+	failStart            bool
+	noFrame              bool
+	stopErr              bool
+	ownedStream          bool
+	retireOnStopError    bool
+	streamQueryErr       error
+	blockDirectoryOnOpen string
+	blockDirectoryOnStop string
+}
+
+func blockDirectory(path string) error {
+	if err := os.WriteFile(filepath.Join(path, "blocker"), []byte("prevent removal"), 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0)
 }
 
 func (f *fakeCapture) Open(target host.CaptureTarget) error {
@@ -30,6 +42,11 @@ func (f *fakeCapture) Open(target host.CaptureTarget) error {
 		kind = " display"
 	}
 	f.calls = append(f.calls, fmt.Sprintf("open %d%s", target.Window, kind))
+	if f.blockDirectoryOnOpen != "" {
+		if err := blockDirectory(f.blockDirectoryOnOpen); err != nil {
+			return err
+		}
+	}
 	if f.failOpen {
 		return errors.New("open failed")
 	}
@@ -45,6 +62,7 @@ func (f *fakeCapture) Start(_ string, frameIdentity bool) error {
 	if f.failStart {
 		return errors.New("start failed")
 	}
+	f.ownedStream = true
 	return nil
 }
 
@@ -55,10 +73,24 @@ func (f *fakeCapture) Wait() (bool, error) {
 
 func (f *fakeCapture) Stop() (int, error) {
 	f.calls = append(f.calls, "stop")
+	if f.blockDirectoryOnStop != "" {
+		if err := blockDirectory(f.blockDirectoryOnStop); err != nil {
+			return 0, err
+		}
+	}
 	if f.stopErr {
+		if f.retireOnStopError {
+			f.ownedStream = false
+		}
 		return 0, errors.New("stop failed")
 	}
+	f.ownedStream = false
 	return 3, nil
+}
+
+func (f *fakeCapture) HasStream() (bool, error) {
+	f.calls = append(f.calls, "has stream")
+	return f.ownedStream, f.streamQueryErr
 }
 
 var window = host.CaptureTarget{Window: 7}
@@ -96,6 +128,27 @@ func TestFinishedRecordingKeepsItsFolderAndReportsFrames(t *testing.T) {
 	}
 }
 
+// contract: recording.finish.retired-stop-failure-releases-owner
+func TestFinishRetiredStopFailureReleasesOwnerAndPreservesFolder(t *testing.T) {
+	parent := t.TempDir()
+	folder := filepath.Join(parent, "frames")
+	fake := &fakeCapture{stopErr: true, retireOnStopError: true}
+	var recording host.Recording
+	if err := recording.Start(fake, window, folder, false); err != nil {
+		t.Fatal(err)
+	}
+	directory, _, _, err := recording.Finish(fake)
+	if err == nil || !strings.Contains(err.Error(), "stop failed") {
+		t.Fatalf("finish error %v, want stop failure", err)
+	}
+	if directory != folder || !exists(folder) || recording.Running() != "" {
+		t.Fatalf("retired finish directory=%q exists=%t running=%q", directory, exists(folder), recording.Running())
+	}
+	if err := recording.Start(&fakeCapture{}, window, filepath.Join(parent, "next"), false); err != nil {
+		t.Fatalf("next start after retired stop failure: %v", err)
+	}
+}
+
 // contract: recording.start.failed-open-removes-folder
 func TestFailedOpenRemovesTheFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
@@ -113,6 +166,113 @@ func TestFailedStartRemovesTheFolder(t *testing.T) {
 	err := recording.Start(&fakeCapture{failStart: true}, window, folder, false)
 	if err == nil || err.Error() != "start failed" || exists(folder) || recording.Running() != "" {
 		t.Fatalf("start %v, folder kept %v", err, exists(folder))
+	}
+}
+
+// contract: recording.start.make-failure-preserves-unowned-path
+func TestStartMakeFailurePreservesUnownedPath(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	if err := os.Mkdir(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sentinel := filepath.Join(folder, "caller-owned")
+	if err := os.WriteFile(sentinel, []byte("preserve"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var recording host.Recording
+	fake := &fakeCapture{}
+	err := recording.Start(fake, window, folder, false)
+	if err == nil || recording.Running() != "" || !exists(sentinel) {
+		t.Fatalf("start error=%v running=%q caller path exists=%t", err, recording.Running(), exists(sentinel))
+	}
+	expectCalls(t, fake)
+}
+
+// contract: recording.start.cleanup-failure-retains-folder-owner
+func TestFailedStartCleanupRetainsFolderOwner(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{failOpen: true, blockDirectoryOnOpen: folder}
+	err := recording.Start(fake, window, folder, false)
+	defer os.Chmod(folder, 0o700)
+	if err == nil || !strings.Contains(err.Error(), "remove failed capture directory") {
+		t.Fatalf("start error = %v", err)
+	}
+	if recording.Running() != folder {
+		t.Fatalf("cleanup owner %q, want %q", recording.Running(), folder)
+	}
+	blocked := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), false)
+	if blocked == nil || !strings.Contains(blocked.Error(), "is running") {
+		t.Fatalf("a new recording was not blocked: %v", blocked)
+	}
+	if err := os.Chmod(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := recording.Abort(fake); err != nil {
+		t.Fatal(err)
+	}
+	if exists(folder) || recording.Running() != "" {
+		t.Fatalf("abort left folder=%t running=%q", exists(folder), recording.Running())
+	}
+	expectCalls(t, fake, "open 7")
+}
+
+// contract: recording.start.stop-failure-preserves-retry-state
+func TestStartStopFailurePreservesRetryState(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{noFrame: true, stopErr: true}
+	err := recording.Start(fake, window, folder, false)
+	if err == nil || !strings.Contains(err.Error(), "stop failed recording: stop failed") {
+		t.Fatalf("start error = %v", err)
+	}
+	if !exists(folder) || recording.Running() != folder {
+		t.Fatalf("failed stop lost cleanup owner: folder=%t running=%q", exists(folder), recording.Running())
+	}
+	blocked := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), false)
+	if blocked == nil || !strings.Contains(blocked.Error(), "is running") {
+		t.Fatalf("a new recording was not blocked: %v", blocked)
+	}
+	fake.stopErr = false
+	if err := recording.Abort(fake); err != nil {
+		t.Fatal(err)
+	}
+	if exists(folder) || recording.Running() != "" {
+		t.Fatalf("retry left folder=%t running=%q", exists(folder), recording.Running())
+	}
+	expectCalls(t, fake, "open 7", "start", "wait", "stop", "has stream", "stop")
+}
+
+// contract: recording.start.retired-stop-failure-removes-folder
+func TestStartRetiredStopFailureRemovesFolder(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{noFrame: true, stopErr: true, retireOnStopError: true}
+	err := recording.Start(fake, window, folder, false)
+	if err == nil || !strings.Contains(err.Error(), "stop failed recording: stop failed") {
+		t.Fatalf("start error = %v", err)
+	}
+	if exists(folder) || recording.Running() != "" {
+		t.Fatalf("retired failed start left folder=%t running=%q", exists(folder), recording.Running())
+	}
+}
+
+// contract: recording.start.stop-query-failure-preserves-owner
+func TestStartStopOwnershipQueryFailurePreservesOwner(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{noFrame: true, stopErr: true, streamQueryErr: errors.New("status unavailable")}
+	err := recording.Start(fake, window, folder, false)
+	if err == nil || !strings.Contains(err.Error(), "stop failed recording: stop failed") || !strings.Contains(err.Error(), "status unavailable") {
+		t.Fatalf("start error %v, want stop and query errors", err)
+	}
+	if !exists(folder) || recording.Running() != folder {
+		t.Fatalf("unknown ownership lost folder=%t running=%q", exists(folder), recording.Running())
+	}
+	fake.stopErr = false
+	fake.streamQueryErr = nil
+	if err := recording.Abort(fake); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -150,8 +310,8 @@ func TestAbortedRecordingIsStoppedAndRemovedAndAllowsTheNext(t *testing.T) {
 	expectCalls(t, fake, "open 7", "start", "wait", "stop", "open 7", "start", "wait")
 }
 
-// contract: recording.abort.reports-stop-failure-and-removes-folder
-func TestAbortReportsStopFailureAndStillRemovesFolder(t *testing.T) {
+// contract: recording.abort.stop-failure-preserves-retry-state
+func TestAbortStopFailurePreservesRetryState(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
 	fake := &fakeCapture{stopErr: true}
@@ -162,9 +322,139 @@ func TestAbortReportsStopFailureAndStillRemovesFolder(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "stop capture: stop failed") {
 		t.Fatalf("abort error %v", err)
 	}
-	if exists(folder) {
-		t.Fatal("the aborted folder remains")
+	if !exists(folder) || recording.Running() != folder {
+		t.Fatalf("failed stop lost cleanup owner: folder=%t running=%q", exists(folder), recording.Running())
 	}
+	blocked := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), false)
+	if blocked == nil || !strings.Contains(blocked.Error(), "is running") {
+		t.Fatalf("a new recording was not blocked: %v", blocked)
+	}
+	fake.stopErr = false
+	if err := recording.Abort(fake); err != nil {
+		t.Fatal(err)
+	}
+	if exists(folder) || recording.Running() != "" {
+		t.Fatalf("retry left folder=%t running=%q", exists(folder), recording.Running())
+	}
+}
+
+// contract: recording.abort.retired-stop-failure-removes-folder
+func TestAbortRetiredStopFailureRemovesFolderAndReportsStopError(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{stopErr: true, retireOnStopError: true}
+	if err := recording.Start(fake, window, folder, false); err != nil {
+		t.Fatal(err)
+	}
+	err := recording.Abort(fake)
+	if err == nil || !strings.Contains(err.Error(), "stop capture: stop failed") {
+		t.Fatalf("abort error %v", err)
+	}
+	if exists(folder) || recording.Running() != "" {
+		t.Fatalf("retired abort left folder=%t running=%q", exists(folder), recording.Running())
+	}
+	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), false); err != nil {
+		t.Fatalf("next start after retired abort: %v", err)
+	}
+}
+
+// contract: recording.abort.stop-query-failure-preserves-owner
+func TestAbortStopOwnershipQueryFailurePreservesOwner(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{stopErr: true, streamQueryErr: errors.New("status unavailable")}
+	if err := recording.Start(fake, window, folder, false); err != nil {
+		t.Fatal(err)
+	}
+	err := recording.Abort(fake)
+	if err == nil || !strings.Contains(err.Error(), "stop failed") || !strings.Contains(err.Error(), "status unavailable") {
+		t.Fatalf("abort error %v, want stop and query errors", err)
+	}
+	if !exists(folder) || recording.Running() != folder {
+		t.Fatalf("unknown ownership lost folder=%t running=%q", exists(folder), recording.Running())
+	}
+	fake.stopErr = false
+	fake.streamQueryErr = nil
+	if err := recording.Abort(fake); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// contract: recording.abort.retired-stop-failure-cleanup-retry-skips-stop
+func TestAbortRetiredStopFailureCleanupRetrySkipsStop(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{stopErr: true, retireOnStopError: true, blockDirectoryOnStop: folder}
+	if err := recording.Start(fake, window, folder, false); err != nil {
+		t.Fatal(err)
+	}
+	err := recording.Abort(fake)
+	defer os.Chmod(folder, 0o700)
+	if err == nil || !strings.Contains(err.Error(), "stop failed") || !strings.Contains(err.Error(), "remove capture directory") {
+		t.Fatalf("abort error %v, want stop and cleanup errors", err)
+	}
+	if recording.Running() != folder {
+		t.Fatalf("retired cleanup owner %q, want %q", recording.Running(), folder)
+	}
+	if err := os.Chmod(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(folder, "blocker")); err != nil {
+		t.Fatal(err)
+	}
+	if err := recording.Abort(fake); err != nil {
+		t.Fatal(err)
+	}
+	if exists(folder) || recording.Running() != "" {
+		t.Fatalf("retry left folder=%t running=%q", exists(folder), recording.Running())
+	}
+	expectCalls(t, fake, "open 7", "start", "wait", "stop", "has stream")
+}
+
+// contract: recording.finish.stop-query-failure-preserves-owner
+func TestFinishStopOwnershipQueryFailurePreservesOwner(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{stopErr: true, retireOnStopError: true, streamQueryErr: errors.New("status unavailable")}
+	if err := recording.Start(fake, window, folder, false); err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, err := recording.Finish(fake)
+	if err == nil || !strings.Contains(err.Error(), "stop failed") || !strings.Contains(err.Error(), "status unavailable") {
+		t.Fatalf("finish error %v, want stop and query errors", err)
+	}
+	if !exists(folder) || recording.Running() != folder {
+		t.Fatalf("unknown ownership lost folder=%t running=%q", exists(folder), recording.Running())
+	}
+}
+
+// contract: recording.abort.stop-complete-cleanup-retry-skips-stop
+func TestAbortCleanupRetrySkipsCompletedStop(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "frames")
+	var recording host.Recording
+	fake := &fakeCapture{blockDirectoryOnStop: folder}
+	if err := recording.Start(fake, window, folder, false); err != nil {
+		t.Fatal(err)
+	}
+	err := recording.Abort(fake)
+	defer os.Chmod(folder, 0o700)
+	if err == nil || !strings.Contains(err.Error(), "remove capture directory") {
+		t.Fatalf("abort error = %v", err)
+	}
+	if recording.Running() != folder {
+		t.Fatalf("cleanup owner %q, want %q", recording.Running(), folder)
+	}
+	expectCalls(t, fake, "open 7", "start", "wait", "stop")
+	if err := os.Chmod(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := recording.Abort(fake); err != nil {
+		t.Fatal(err)
+	}
+	if exists(folder) || recording.Running() != "" {
+		t.Fatalf("retry left folder=%t running=%q", exists(folder), recording.Running())
+	}
+	expectCalls(t, fake, "open 7", "start", "wait", "stop")
 }
 
 // contract: recording.target.different-target-reopened

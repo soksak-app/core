@@ -1692,6 +1692,10 @@ int sp_capture_wait(void) {
     return hasCaptureError() ? 0 : 1;
 }
 
+bool sp_capture_has_stream(void) {
+    @synchronized([SPCapture class]) { return captureStream != nil; }
+}
+
 static void registerCaptureStopBoundary(SPCapture *sink, SPCaptureAttempt *attempt, double after,
     uint64_t targetMachTicks, uint64_t registrationMachTicks, dispatch_semaphore_t caughtUp) {
     captureCaughtUp = caughtUp;

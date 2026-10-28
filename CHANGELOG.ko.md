@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-252: 양 host에서 capture stop 오류와 현재 native stream 소유권을 구분한다. 비동기 stop 완료 동작을 바꾸지 않고 동기화된 native 소유권 조회를 노출한다. 소유 중이거나 알 수 없는 cleanup 상태를 보존하고 퇴역한 finish의 폴더를 유지하면서 소유권을 해제하며 퇴역한 abort 오류는 cleanup 뒤에도 보고한다. 삭제 실패는 stop 반복 없이 재시도하도록 보존한다. Go와 Rust 소유 case는 수정 전 retired-error 차단을 재현하고 수정 후 통과하며 native pressure는 오류 finalization 전후 소유권을 검증한다. 공유 contract case와 기존 sidecar fixture constructor formatting도 맞춘다.
+
 - F239-253: 제어된 capture-stop stream에 필수 attempt context를 부여해 pressure 소유 검사가 write, delivery-deadline 및 stream-completion 오류 경로에 도달하고 검증하도록 한다. Decoded-frame 쓰기 fault assertion을 현재의 명시적 finalization 오류에 맞추며 실패 결과를 유지한다. 관련 소유 검사 두 개가 통과하고 production capture 코드는 바뀌지 않는다.
 
 - F239-251: 1x display에서 기존 192-pixel reserved ROI를 만족하도록 capture identity fixture의 두 region 크기를 설정하고 region 생성과 raster 크기를 별도로 보고한다. Production QR geometry와 capture 동작은 유지한다. 공유 fixture 수정 후 원래 acceptance case와 관련 checker 및 lifecycle wrapper 네 개가 모두 통과하며 별도 pressure 및 쓰기 오류 실패는 미완료로 유지한다.

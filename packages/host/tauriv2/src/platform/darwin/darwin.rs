@@ -627,6 +627,10 @@ impl Platform for Darwin {
         capture::stop(after)
     }
     #[cfg(feature = "diagnostics")]
+    fn capture_has_stream(&self) -> Result<bool, String> {
+        Ok(capture::has_stream())
+    }
+    #[cfg(feature = "diagnostics")]
     fn document_frame_identity_start(
         &self,
         document: Handle,

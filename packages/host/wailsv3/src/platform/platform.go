@@ -240,6 +240,9 @@ type Capturer interface {
 	// CaptureStop ends the recording and returns the number of recorded frames.
 	// after is the last display time (ms, on the same clock as the display time) to include in the recording, and 0 means the time of the call.
 	CaptureStop(after float64) (int, error)
+	// CaptureHasStream reports whether the native capture module still owns its current stream and writer transaction.
+	// It does not report whether the operating system's asynchronous stop callback has completed.
+	CaptureHasStream() (bool, error)
 	// CaptureLimited tells whether the last recording reached the frame limit.
 	CaptureLimited() bool
 	// CaptureLongestGap is the longest display interval (ms) between consecutive frames in the recording stopped last.

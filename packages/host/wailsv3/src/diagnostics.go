@@ -332,8 +332,9 @@ func (c platformCapture) Open(target CaptureTarget) error {
 func (c platformCapture) Start(directory string, frameIdentity bool) error {
 	return c.CaptureStart(directory, frameIdentity)
 }
-func (c platformCapture) Wait() (bool, error) { return c.CaptureWait() }
-func (c platformCapture) Stop() (int, error)  { return c.CaptureStop(c.after) }
+func (c platformCapture) Wait() (bool, error)      { return c.CaptureWait() }
+func (c platformCapture) Stop() (int, error)       { return c.CaptureStop(c.after) }
+func (c platformCapture) HasStream() (bool, error) { return c.CaptureHasStream() }
 
 func (c platformCapture) Limited() bool { return c.CaptureLimited() }
 

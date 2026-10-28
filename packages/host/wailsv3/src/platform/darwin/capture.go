@@ -116,6 +116,11 @@ func (implementation) CaptureStop(after float64) (int, error) {
 	return frames, nil
 }
 
+// CaptureHasStream reports whether the capture module still owns its current stream and writer transaction.
+func (implementation) CaptureHasStream() (bool, error) {
+	return bool(C.sp_capture_has_stream()), nil
+}
+
 func captureErrorIfPresent(operation string) error {
 	message := C.GoString(C.sp_capture_error())
 	if message == "" {

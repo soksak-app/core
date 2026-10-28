@@ -477,16 +477,30 @@ fn invalid_json_closes_connection() {
 | `surfaces.reload.reconnects-only-declared-sidecars` | page를 다시 불러오면 이전 page의 각 surface에 대해 plugin이 선언한 image region의 사이드카와 그 surface가 보낸 적이 있는 실행 중인 persistent 사이드카를 다시 연결하고, 어떤 plugin도 선언하지 않는 사이드카는 건너뛴다. 그 surface는 plugin 제거와 함께 끝났다. | tauriv2 only: Wails host는 page를 다시 불러올 때 reconnect를 보내지 않는다 |
 | `images.present.failure-line-names-the-current-frame` | 다른 표시 실패는 그 사유(알 수 없는 상세는 `presentFailed`)로 답하고 오류 줄 `error host image present: ... reason=<detail> current <frame state>`를 남긴다. | both |
 | `recording.finish.keeps-folder-and-reports-frames` | 녹화를 마치면 폴더를 유지하고 프레임 수와 시작 때 받은 `frameIdentity` 옵션을 보고하며, 두 번째 마침은 실패한다. | both |
-| `recording.finish.stop-failure-preserves-folder` | capture stop이 실패하면 finish는 stop 오류를 반환하고 start가 이미 반환한 frame 폴더를 보존한다. | both |
+| `recording.finish.stop-failure-preserves-folder` | native stream이 계속 소유 상태일 때 capture stop이 실패하면 finish는 stop 오류를 보고하고 start가 반환한 폴더와 소유권을 유지해 이후 abort 재시도를 허용한다. | both |
+| `recording.finish.retired-stop-failure-releases-owner` | native stream과 writer가 퇴역한 뒤 capture stop이 실패하면 finish는 stop 오류를 보고하고 start가 반환한 폴더를 그대로 두며, 다른 녹화를 시작할 수 있도록 녹화 소유권을 해제한다. | both |
+| `recording.finish.stop-query-failure-preserves-owner` | capture stop과 native 소유권 조회가 모두 실패하면 finish는 두 오류를 보고하고 폴더와 cleanup 소유권을 유지한다. | both |
 | `recording.finish.layout-trace-failure-preserves-folder` | capture stop 뒤 layout trace finalization이 실패하면 finish는 해당 오류를 반환하고 start가 이미 반환한 frame 폴더를 보존한다. | both |
 | `recording.start.failed-open-removes-folder` | 캡처 열기에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | both |
 | `recording.start.failed-start-removes-folder` | 캡처 시작에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | both |
+| `recording.start.cleanup-failure-retains-folder-owner` | 시작 실패 뒤 소유 폴더를 제거할 수 없으면 두 오류를 보고하고 cleanup 소유권을 유지하며, abort가 폴더를 제거할 때까지 다음 시작을 막는다. | both |
+| `recording.start.make-failure-preserves-unowned-path` | 폴더 생성이 실패하면 기존 경로를 변경하지 않고 capture 장치를 호출하지 않으며 그 경로의 소유권을 주장하지 않는다. | both |
+| `recording.start.stop-failure-preserves-retry-state` | 첫 프레임 대기가 실패하고 native stream이 계속 소유 상태인 채 capture stop도 실패하면 start는 두 오류를 보고하고 폴더와 cleanup 상태를 유지하며, 다음 시작을 막고 abort 재시도를 허용한다. | both |
+| `recording.start.retired-stop-failure-removes-folder` | 첫 프레임 대기와 capture stop이 실패했지만 native stream과 writer가 퇴역했다면 start는 두 오류를 보고하고 실패한 녹화 폴더를 제거하며 녹화 소유권을 해제한다. | both |
+| `recording.start.stop-query-failure-preserves-owner` | 시작 cleanup의 stop 호출과 native 소유권 조회가 모두 실패하면 start는 모든 오류를 보고하고 폴더와 cleanup 소유권을 유지한다. | both |
 | `recording.start.no-first-frame-stops-and-removes` | 첫 프레임이 없는 녹화는 중지되고 폴더가 제거된다. | both |
 | `recording.start.rejects-while-running` | 녹화 중에 녹화를 시작하면 실패하고 폴더를 만들지 않는다. | both |
 | `recording.abort.stops-removes-and-allows-next` | 녹화를 중단하면 중지하고 폴더를 제거하며 다음 녹화를 허용한다. | both |
 | `recording.target.prepared-each-recording` | 준비가 그때의 창 크기로 stream 출력 크기를 정하므로, 녹화마다 같은 대상도 다시 준비한다. | both |
 | `recording.target.different-target-reopened` | 다른 대상을 녹화하면 대상을 다시 준비한다. | both |
-| `recording.abort.reports-stop-failure-and-removes-folder` | 중지에 실패한 중단은 중지 오류를 보고하고 폴더는 그래도 제거한다. | both |
+| `recording.abort.stop-failure-preserves-retry-state` | abort가 capture를 중지하지 못하고 native stream이 계속 소유 상태면 stop 오류를 보고하고 폴더 소유권과 cleanup 상태를 보존하며, 다음 시작을 막고 abort 재시도를 허용한다. | both |
+| `recording.abort.stop-query-failure-preserves-owner` | abort의 stop 호출과 native 소유권 조회가 실패하면 두 오류를 보고하고 폴더와 cleanup 소유권을 유지한다. | both |
+| `recording.abort.retired-stop-failure-removes-folder` | native stream과 writer가 퇴역한 뒤 capture stop이 실패하면 abort는 폴더를 제거하고 녹화 소유권을 해제하면서 stop 오류를 계속 보고한다. | both |
+| `recording.abort.retired-stop-failure-cleanup-retry-skips-stop` | 퇴역한 stream의 cleanup이 실패하면 abort는 stop과 삭제 오류를 보고하고 퇴역 폴더 소유권을 유지한다. 재시도는 stop을 다시 하지 않고 폴더를 제거한다. | both |
+| `recording.abort.stop-complete-cleanup-retry-skips-stop` | capture 중지에는 성공했지만 폴더 제거가 실패하면 abort는 제거 오류를 보고하고 중지된 cleanup 소유권을 유지한다. 재시도는 stop을 중복 호출하지 않고 폴더를 제거한 뒤 다음 시작을 허용한다. | both |
+| `recording.start.panicking-capture-is-cleaned-up` | capture 시작 중 panic하면 partial capture를 중지하고 폴더를 제거하려 시도한 뒤 panic을 다시 전달한다. | tauriv2 only: Tauri는 unwind 중 최선의 녹화 cleanup을 수행하고, Wails는 panic 상태 2로 process를 끝내 cleanup을 재개하지 않는다. |
+| `recording.start.panicking-capture-retired-stop-error-releases-owner` | panic cleanup에서 native stream과 writer가 퇴역한 뒤 stop 오류가 나면 폴더를 제거하고 녹화 소유권을 해제하며 stop 오류를 기록한 뒤 원래 panic을 다시 전달한다. | tauriv2 only: Wails는 panic 상태 2로 process를 끝내므로 process 안의 panic cleanup은 실행되지 않는다. |
+| `recording.start.panic-cleanup-failure-blocks-next-start` | panic cleanup에서 capture 중지나 폴더 제거를 확인하지 못하면 녹화는 cleanup 소유권을 유지해 다음 시작을 막고 abort 재시도를 허용한다. | tauriv2 only: Wails는 panic 상태 2로 process를 끝내므로 이후 시작이 실행되지 않는다. |
 | `sidecars.send.delivers-only-to-owning-window` | 각 창의 사이드카 메시지는 사이드카, 표면, 본문이 그대로인 이벤트로 그 창에만 돌아온다. | both |
 | `sidecars.send.rejects-surface-owned-by-another-window` | 다른 창이 소유한 표면으로 보내면 "another window"로 실패한다. | both |
 | `sidecars.protocol.request-lines-carry-surface-root-body` | 사이드카는 surface, root, body 요청 줄을 보낸 순서로 받는다. | both |

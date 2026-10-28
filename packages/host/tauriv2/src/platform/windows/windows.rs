@@ -476,6 +476,10 @@ impl Platform for Windows {
         unsupported::capture_stop(after)
     }
     #[cfg(feature = "diagnostics")]
+    fn capture_has_stream(&self) -> Result<bool, String> {
+        unsupported::capture_has_stream()
+    }
+    #[cfg(feature = "diagnostics")]
     fn document_frame_identity_start(
         &self,
         _document: Handle,

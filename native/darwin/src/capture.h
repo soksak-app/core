@@ -15,6 +15,9 @@ bool sp_capture_open(long windowNumber, bool display, char **error);
 bool sp_capture_start(const char *directory, bool frame_identity, char **error);
 const char *sp_capture_error(void);
 int sp_capture_wait(void);
+// Whether a native stream is currently owned by the capture module. False means no current stream; it does not
+// establish that an earlier ScreenCaptureKit stop callback completed successfully.
+bool sp_capture_has_stream(void);
 // Stops the recording after the screen of the later of the display time after (ms, mach absolute time) and the call
 // time
 // has been delivered to the stream, and returns the number of recorded frames. Callback evidence capacity

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-252: Distinguish capture stop errors from current native stream ownership in both hosts. Expose the synchronized native ownership query without changing asynchronous stop completion. Preserve owned or unknown cleanup state; release retired finish ownership while keeping its folder, and report retired abort errors after cleanup. Retain deletion failures for retries without another stop. Go and Rust owner cases reproduce retired-error blocking before correction and pass after it; native pressure verifies ownership before and after error finalization. Align shared contract cases and format the existing sidecar fixture constructor.
+
 - F239-253: Give the controlled capture-stop stream its required attempt context so the pressure owner reaches and verifies the write, delivery-deadline and stream-completion error paths. Align the decoded-frame write-fault assertion with the current explicit finalization error and retain failure results. Both affected owners pass; production capture code is unchanged.
 
 - F239-251: Size the two-region capture identity fixture for the existing 192-pixel reserved ROI on a 1x display and report region creation and raster dimensions separately. Preserve production QR geometry and capture behavior. The original acceptance case and all four affected checker and lifecycle wrappers pass after the shared fixture correction; the separate pressure and write-error failures remain open.

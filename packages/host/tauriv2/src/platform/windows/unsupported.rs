@@ -462,6 +462,11 @@ pub fn capture_stop(_after: f64) -> Result<i32, String> {
 }
 
 #[cfg(feature = "diagnostics")]
+pub fn capture_has_stream() -> Result<bool, String> {
+    missing("window capture")
+}
+
+#[cfg(feature = "diagnostics")]
 pub fn capture_limited() -> Result<bool, String> {
     missing("window capture")
 }

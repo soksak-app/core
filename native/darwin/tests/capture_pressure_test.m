@@ -269,6 +269,11 @@ int main(void) { @autoreleasepool {
         @"the controlled file-write failure is observable before stop");
     captureStream = (SCStream *)[CaptureStopFixture new];
     captureQueue = dispatch_queue_create("capture.test.samples", DISPATCH_QUEUE_SERIAL);
+    check(sp_capture_has_stream(), @"the capture module reports its current native stream");
+    sp_capture_stop(0);
+    check(strstr(sp_capture_error(), "no attempt context") != NULL,
+        @"a stop without attempt context reports its preflight error");
+    check(sp_capture_has_stream(), @"a rejected preflight keeps the current native stream owned");
     SPCaptureAttempt *stopAttempt = [SPCaptureAttempt new];
     stopAttempt.session = @"capture-pressure-stop";
     stopAttempt.startCompletionSeen = YES;
@@ -276,6 +281,7 @@ int main(void) { @autoreleasepool {
     objc_setAssociatedObject(captureStream, &captureAttemptAssociationKey, stopAttempt, OBJC_ASSOCIATION_RETAIN);
     [stopAttempt release];
     sp_capture_stop(0);
+    check(!sp_capture_has_stream(), @"a stop error retires the current native stream");
     NSString *stopError = [NSString stringWithUTF8String:sp_capture_error()] ?: @"";
     check([stopError containsString:@"not written"],
         [NSString stringWithFormat:@"stop preserves the earlier recording write error (%@)", stopError]);

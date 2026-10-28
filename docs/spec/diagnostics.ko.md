@@ -8,7 +8,7 @@
 
 Recording은 idle callback을 포함해 callback record 최대 4096개와 pending frame write 최대 64개를 수락한다. 별도 전체 frame 차단은 없다. Callback 용량 초과는 명시적 recording 오류로 이후 sample을 거부하고 `limited:true`를 보고한다. 수락한 frame 파일과 writer timing은 수락한 callback record 수로 제한된다.
 
-Diagnostic recording은 capture stop이 성공한 뒤 finish가 넘기거나 abort가 삭제할 때까지 출력 directory를 소유한다. Stop 실패는 cleanup 소유권을 유지하고 다음 start를 차단한다. Directory 삭제 실패는 이미 멈춘 capture를 다시 stop하지 않고 재시도할 수 있다. Start의 panic은 원래 panic을 다시 전달하기 전에 cleanup을 시도하고 cleanup 실패를 별도로 보고한다. Directory 생성 실패는 요청한 path의 소유권을 얻거나 삭제하지 않는다. Poison된 document-frame lifecycle 및 pending-start lock은 불확실한 상태로 진행하지 않고 명시적 오류를 반환한다.
+Diagnostic recording은 native stream 소유권이 퇴역한 뒤 finish가 넘기거나 abort가 삭제할 때까지 출력 directory를 소유한다. Stop 오류와 native 소유권은 별개다. 소유권 조회는 현재 native stream transaction이 남아 있는지를 보고하며 모든 OS callback의 완료를 뜻하지 않는다. 정상 stop은 intake를 닫고 artifact writer를 drain한 뒤 stream을 퇴역시킨다. 기존 attempt가 늦은 완료를 소유하므로 host에 별도 callback 대기 구조를 추가하지 않는다. Finish는 directory를 보존하고 finalization 오류를 보고하면서 퇴역한 소유권을 해제한다. 퇴역하지 않은 stream 또는 directory 삭제 실패는 cleanup 소유권을 유지하고 다음 start를 차단한다. 삭제 재시도는 퇴역한 stream을 다시 stop하지 않는다. Rust recording owner는 start panic을 다시 전달하기 전에 cleanup을 시도하며 host panic 정책은 여전히 프로세스를 종료하고 crash artifact가 남을 수 있다. Directory 생성 실패는 요청한 path의 소유권을 얻거나 삭제하지 않는다. Poison된 document-frame lifecycle 및 pending-start lock은 불확실한 상태로 진행하지 않고 명시적 오류를 반환한다.
 
 ## 폴더
 

@@ -1,8 +1,8 @@
 //! The state of a diagnostic recording. It is included only by the cargo feature `diagnostics`.
 //!
-//! There is one recording at a time. A start failure removes its folder after capture cleanup; when stopping fails, the
-//! owned folder and stop state remain so `abort` can retry and block another start. A successful finish transfers the
-//! folder to the requester.
+//! There is one recording at a time. A start failure removes its folder after capture cleanup. A stop failure retains
+//! ownership while the capture module still owns its stream and writer transaction; once that ownership retires, finish
+//! transfers the folder to its requester and abort removes it. A remaining recording or cleanup folder blocks another start.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
@@ -72,8 +72,11 @@ pub trait Capture {
     fn start(&self, directory: &Path, frame_identity: bool) -> Result<(), String>;
     /// Returns whether the first frame was recorded.
     fn wait(&self) -> Result<bool, String>;
-    /// Ends the recording and returns the number of recorded frames.
+    /// Ends the recording and returns the number of recorded frames. An error may occur after native ownership retires.
     fn stop(&self) -> Result<i32, String>;
+    /// Reports whether the native capture module still owns the current stream and writer transaction.
+    /// It does not report whether the operating system's asynchronous stop callback has completed.
+    fn has_stream(&self) -> Result<bool, String>;
 }
 
 struct State {
@@ -162,9 +165,21 @@ impl Recording {
                             capture_stopped = true;
                             Err("capture did not produce an initial frame".into())
                         }
-                        Err(stop_error) => Err(format!(
-                            "capture did not produce an initial frame; stop failed: {stop_error}"
-                        )),
+                        Err(stop_error) => {
+                            let failure = format!(
+                                "capture did not produce an initial frame; stop failed: {stop_error}"
+                            );
+                            match capture.has_stream() {
+                                Ok(false) => {
+                                    capture_stopped = true;
+                                    Err(failure)
+                                }
+                                Ok(true) => Err(failure),
+                                Err(query_error) => Err(format!(
+                                    "{failure}; capture ownership query failed: {query_error}"
+                                )),
+                            }
+                        }
                     }
                 }
                 Err(error) => {
@@ -175,7 +190,17 @@ impl Recording {
                             Err(error)
                         }
                         Err(stop_error) => {
-                            Err(format!("{error}; capture stop failed: {stop_error}"))
+                            let failure = format!("{error}; capture stop failed: {stop_error}");
+                            match capture.has_stream() {
+                                Ok(false) => {
+                                    capture_stopped = true;
+                                    Err(failure)
+                                }
+                                Ok(true) => Err(failure),
+                                Err(query_error) => Err(format!(
+                                    "{failure}; capture ownership query failed: {query_error}"
+                                )),
+                            }
                         }
                     }
                 }
@@ -213,6 +238,7 @@ impl Recording {
             },
             Err(panic) => {
                 let mut cleanup_errors = Vec::new();
+                let mut retain_owner = false;
                 if !capture_open_attempted {
                     capture_stopped = true;
                 }
@@ -222,8 +248,54 @@ impl Recording {
                         Ok(Ok(_)) => capture_stopped = true,
                         Ok(Err(error)) => {
                             cleanup_errors.push(format!("capture stop failed: {error}"));
+                            match capture.has_stream() {
+                                Ok(false) => capture_stopped = true,
+                                Ok(true) => retain_owner = true,
+                                Err(query_error) => {
+                                    retain_owner = true;
+                                    cleanup_errors.push(format!(
+                                        "capture ownership query failed: {query_error}"
+                                    ));
+                                }
+                            }
                         }
-                        Err(_) => cleanup_errors.push("capture stop panicked".into()),
+                        Err(_) => {
+                            cleanup_errors.push("capture stop panicked".into());
+                            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                capture.has_stream()
+                            })) {
+                                Ok(Ok(false)) => capture_stopped = true,
+                                Ok(Ok(true)) => retain_owner = true,
+                                Ok(Err(query_error)) => {
+                                    retain_owner = true;
+                                    cleanup_errors.push(format!(
+                                        "capture ownership query failed: {query_error}"
+                                    ));
+                                }
+                                Err(_) => {
+                                    retain_owner = true;
+                                    cleanup_errors.push("capture ownership query panicked".into());
+                                }
+                            }
+                        }
+                    }
+                }
+                if capture_open_attempted && capture_stop_attempted && !capture_stopped {
+                    cleanup_errors.push("capture stop did not complete before panic".into());
+                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        capture.has_stream()
+                    })) {
+                        Ok(Ok(false)) => capture_stopped = true,
+                        Ok(Ok(true)) => retain_owner = true,
+                        Ok(Err(query_error)) => {
+                            retain_owner = true;
+                            cleanup_errors
+                                .push(format!("capture ownership query failed: {query_error}"));
+                        }
+                        Err(_) => {
+                            retain_owner = true;
+                            cleanup_errors.push("capture ownership query panicked".into());
+                        }
                     }
                 }
                 if !capture_stopped && cleanup_errors.is_empty() {
@@ -233,11 +305,14 @@ impl Recording {
                     match std::fs::remove_dir_all(directory) {
                         Ok(()) => {}
                         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                        Err(error) => cleanup_errors
-                            .push(format!("capture directory cleanup failed: {error}")),
+                        Err(error) => {
+                            retain_owner = true;
+                            cleanup_errors
+                                .push(format!("capture directory cleanup failed: {error}"));
+                        }
                     }
                 }
-                if cleanup_errors.is_empty() {
+                if !retain_owner {
                     state.directory = None;
                     state.capture_stopped = false;
                     state.frame_identity = false;
@@ -252,30 +327,53 @@ impl Recording {
                     state.identity_source = None;
                     crate::application_log::log_error("recording", cleanup_errors.join("; "));
                 }
+                if !cleanup_errors.is_empty() && !retain_owner {
+                    crate::application_log::log_error("recording", cleanup_errors.join("; "));
+                }
                 drop(state);
                 std::panic::resume_unwind(panic)
             }
         }
     }
 
-    /// Stops the recording in progress and deletes the folder. It does nothing when there is no recording.
+    /// Stops the recording in progress and deletes the folder. It reports a stop error even after native ownership retires.
+    /// It does nothing when there is no recording.
     pub fn abort(&self, capture: &dyn Capture) -> Result<(), String> {
         let mut state = self
             .state
             .lock()
             // default: a poisoned state retains the owned directory and stop status for an explicit cleanup retry.
             .unwrap_or_else(PoisonError::into_inner);
+        let mut retired_stop_error = None;
         if state.directory.is_some() {
             if !state.capture_stopped {
-                capture.stop()?;
-                state.capture_stopped = true;
+                match capture.stop() {
+                    Ok(_) => state.capture_stopped = true,
+                    Err(stop_error) => match capture.has_stream() {
+                        Ok(true) => return Err(format!("capture stop failed: {stop_error}")),
+                        Err(query_error) => {
+                            return Err(format!(
+                                "capture stop failed: {stop_error}; capture ownership query failed: {query_error}"
+                            ));
+                        }
+                        Ok(false) => {
+                            state.capture_stopped = true;
+                            retired_stop_error = Some(format!("capture stop failed: {stop_error}"));
+                        }
+                    },
+                }
             }
             if let Some(directory) = state.directory.as_deref() {
                 match std::fs::remove_dir_all(directory) {
                     Ok(()) => {}
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                     Err(error) => {
-                        return Err(format!("capture directory cleanup failed: {error}"));
+                        return Err(match retired_stop_error {
+                            Some(stop_error) => {
+                                format!("{stop_error}; capture directory cleanup failed: {error}")
+                            }
+                            None => format!("capture directory cleanup failed: {error}"),
+                        });
                     }
                 }
             }
@@ -286,11 +384,14 @@ impl Recording {
         state.document_identity_allowed = false;
         state.identity_source = None;
         self.state.clear_poison();
-        Ok(())
+        match retired_stop_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 
     /// Ends the recording in progress and returns the folder and the number of frames. The requester deletes the
-    /// folder.
+    /// folder. A stop error after native ownership retires releases recording ownership and leaves the folder in place.
     pub fn finish(&self, capture: &dyn Capture) -> Result<(PathBuf, i32, bool), String> {
         let mut state = self
             .state
@@ -306,7 +407,27 @@ impl Recording {
         if state.directory.is_none() {
             return Err("no capture is running".into());
         }
-        let count = capture.stop()?;
+        let count = match capture.stop() {
+            Ok(count) => count,
+            Err(stop_error) => match capture.has_stream() {
+                Ok(true) => return Err(stop_error),
+                Err(query_error) => {
+                    return Err(format!(
+                        "{stop_error}; capture ownership query failed: {query_error}"
+                    ));
+                }
+                Ok(false) => {
+                    state.directory = None;
+                    state.capture_stopped = false;
+                    state.frame_identity = false;
+                    if state.identity_source.is_none() {
+                        state.document_identity_allowed = false;
+                    }
+                    self.state.clear_poison();
+                    return Err(stop_error);
+                }
+            },
+        };
         state.capture_stopped = true;
         let directory = state
             .directory

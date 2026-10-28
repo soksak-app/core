@@ -137,11 +137,13 @@ type fakeCaptureStatus struct {
 type captureStartProbe struct {
 	frameIdentity bool
 	failStop      bool
+	ownedStream   bool
 }
 
 func (*captureStartProbe) Open(CaptureTarget) error { return nil }
 func (c *captureStartProbe) Start(_ string, frameIdentity bool) error {
 	c.frameIdentity = frameIdentity
+	c.ownedStream = true
 	return nil
 }
 func (*captureStartProbe) Wait() (bool, error) { return true, nil }
@@ -149,8 +151,10 @@ func (c *captureStartProbe) Stop() (int, error) {
 	if c.failStop {
 		return 0, errors.New("stop failed")
 	}
+	c.ownedStream = false
 	return 1, nil
 }
+func (c *captureStartProbe) HasStream() (bool, error) { return c.ownedStream, nil }
 
 // contract: diagnostics.capture-start.forwards-frame-identity
 func TestRecordingStartForwardsFrameIdentity(t *testing.T) {
@@ -194,8 +198,20 @@ func TestRecordingFinishStopFailurePreservesFolder(t *testing.T) {
 	if info, statErr := os.Stat(directory); statErr != nil || !info.IsDir() {
 		t.Fatalf("failed capture directory was not preserved: stat=%v info=%v", statErr, info)
 	}
-	if recording.Running() != "" {
-		t.Fatalf("recording still running at %q", recording.Running())
+	if recording.Running() != directory {
+		t.Fatalf("failed finish lost cleanup owner: running=%q want=%q", recording.Running(), directory)
+	}
+	blocked := recording.Start(&captureStartProbe{}, CaptureTarget{Window: 8}, filepath.Join(t.TempDir(), "next"), false)
+	if blocked == nil || !strings.Contains(blocked.Error(), "is running") {
+		t.Fatalf("a new recording was not blocked: %v", blocked)
+	}
+	fake.failStop = false
+	if err := recording.Abort(fake); err != nil {
+		t.Fatal(err)
+	}
+	_, statErr := os.Stat(directory)
+	if recording.Running() != "" || !os.IsNotExist(statErr) {
+		t.Fatalf("abort retry left running=%q folder error=%v", recording.Running(), statErr)
 	}
 }
 

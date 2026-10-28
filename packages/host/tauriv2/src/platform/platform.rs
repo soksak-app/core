@@ -724,6 +724,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// recorded frames.
     fn capture_stop(&self, after: f64) -> Result<i32, String>;
     #[cfg(feature = "diagnostics")]
+    /// Reports whether the native capture module still owns the current stream and writer transaction. This does not
+    /// report whether the operating system's asynchronous stop callback has completed.
+    fn capture_has_stream(&self) -> Result<bool, String>;
+    #[cfg(feature = "diagnostics")]
     /// Starts the document-frame identity producer for an attached view root on the UI thread.
     fn document_frame_identity_start(
         &self,

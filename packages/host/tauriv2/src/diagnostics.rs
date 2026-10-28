@@ -81,6 +81,9 @@ impl Capture for PlatformCapture {
     fn stop(&self) -> Result<i32, String> {
         self.0.capture_stop(self.1)
     }
+    fn has_stream(&self) -> Result<bool, String> {
+        self.0.capture_has_stream()
+    }
 }
 
 fn recorder() -> Result<PlatformCapture, Failure> {

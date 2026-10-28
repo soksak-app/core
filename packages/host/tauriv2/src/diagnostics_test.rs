@@ -21,6 +21,9 @@ impl Capture for IdentityCaptureProbe {
     fn stop(&self) -> Result<i32, String> {
         Ok(1)
     }
+    fn has_stream(&self) -> Result<bool, String> {
+        Ok(false)
+    }
 }
 
 // contract: recording.finish.layout-trace-failure-preserves-folder
