@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-263: Complete two-host application acceptance for request-local declaration transfer. Both hosts accept the wire format with zero application-log findings and 0.4 pt geometry error, restore the frontmost baseline and exit normally. The nine-view declaration component falls from 125,733 to 22,101 bytes. Retain the 50/79 ms cadence and convergence failures separately; reduced transfer does not establish their acceptance.
+
 - F239-263: Declare the synchronization helper as a shipped workbench asset. The first rebuilt application reports the missing asset before startup completes. The owning staging case reproduces the absent file and passes after the package file declaration is corrected.
 
 - F239-263: Share identical view declarations through a request-local table in surface synchronization requests. Resolve indices before native surface mutation and preserve complete view start values. Reject malformed tables, unused entries and invalid indices without a legacy reader. Owning JavaScript, Go and Rust cases reproduce the missing behavior and pass after correction. Keep declaration byte counts in the existing frame-gated sync event. Application and performance comparison remain pending.

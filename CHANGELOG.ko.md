@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-263: Request-local declaration 전송의 두 host application acceptance를 완료한다. 두 host는 application-log finding 0건과 geometry 오차 0.4 pt로 wire 형식을 수락하며 전면 baseline 복원과 정상 종료를 확인한다. View 아홉 개의 declaration component는 125,733에서 22,101 byte로 줄었다. Cadence 50/79 ms와 convergence 실패는 별도로 유지한다. 전송 감소는 그 acceptance를 입증하지 않는다.
+
 - F239-263: Synchronization helper를 shipped workbench asset으로 선언한다. 첫 rebuilt application은 startup 완료 전에 누락된 asset을 보고한다. 소유 staging 사례는 파일 누락을 재현하고 package file 선언 수정 후 통과한다.
 
 - F239-263: Surface synchronization request에서 request-local table로 동일한 view declaration을 공유한다. Native surface 변경 전에 index를 해석하고 완전한 view 시작 값을 보존한다. Legacy reader 없이 잘못된 table, 사용하지 않는 entry와 잘못된 index를 거부한다. 소유 JavaScript, Go, Rust 사례는 누락된 동작을 재현하고 수정 후 통과한다. Declaration byte 수는 기존 frame-gated sync event에 기록한다. Application과 성능 비교는 미완료다.
