@@ -8604,6 +8604,19 @@ const FEATURE_LINKS = [
     expected: "Existing layout phases follow the frame gate independently of performance tracing while other trace events remain disabled.",
     levels: ["unit"],
   },
+  {
+    id: "F239-262",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/log_policy.go", symbol: "func PassesEveryGate" },
+      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "pub fn passes_every_gate" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/log_policy_test.go", id: "TestPageClockAnchorPassesTheDefaultLifecyclePolicy" },
+      { file: "packages/sok/tauriv2/tests/log_policy_test.rs", id: "page_clock_anchor_passes_the_default_lifecycle_policy" },
+    ],
+    expected: "The existing page clock anchor survives the default writer policy while ordinary lifecycle info remains gated.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

@@ -265,12 +265,11 @@ pub struct EventLog {
 /// The layers of the event contract that another layer of a process relays (docs/spec/logging.md#event).
 const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
 
-/// Whether `cid` can be stored as a correlation identifier: it is not empty and holds no quote, no backslash and no
-/// control character, so it is written as the text of a JSON string without escaping.
-/// The events that pass every gate, so the policy never refuses them (docs/spec/logging.md#policy): `page.start`, which the
-/// first module emits before the page policy reaches its gate; host stall records, the only record of a main-thread stall;
-/// `host.view.killed`, which reports an ended view's unsent batch; and `host.test.start`/`host.test.end`, whose flushed
-/// positions delimit a diagnostic window check under every selected policy.
+/// The events that pass every gate, so the policy never refuses them (docs/spec/logging.md#policy): `page.start`, which marks
+/// a document before its page policy reaches the gate; `page.log.clock`, the one-time clock uncertainty metadata required to
+/// compare that document's timestamps; host stall records, the only record of a main-thread stall; `host.view.killed`, which
+/// reports an ended view's unsent batch; and `host.test.start`/`host.test.end`, whose flushed positions delimit a diagnostic
+/// window check under every selected policy.
 pub fn passes_every_gate(event: &str) -> bool {
     matches!(
         event,
@@ -281,9 +280,12 @@ pub fn passes_every_gate(event: &str) -> bool {
             | "host.view.killed"
             | "host.test.start"
             | "host.test.end"
+            | "page.log.clock"
     )
 }
 
+/// Whether `cid` can be stored as a correlation identifier: it is not empty and holds no quote, no backslash and no
+/// control character, so it is written as the text of a JSON string without escaping.
 pub fn valid_cid(cid: &str) -> bool {
     !cid.is_empty()
         && cid

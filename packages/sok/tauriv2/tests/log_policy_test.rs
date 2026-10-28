@@ -5,8 +5,9 @@
 use std::time::Duration;
 
 use serde_json::Value;
+use soksak_sok::event_bounds::Fields;
 use soksak_sok::event_classes::Class;
-use soksak_sok::event_log::{EventLog, Level, Options};
+use soksak_sok::event_log::{EventLog, Level, Options, RelayedEvent};
 use soksak_sok::log_policy::LogPolicy;
 
 #[path = "support/folder.rs"]
@@ -184,6 +185,63 @@ fn the_default_policy_of_the_writer_is_the_golden_default() {
         }
     }
     log.close();
+}
+
+// contract: log.page.clock-anchor-passes-default-policy
+#[test]
+fn page_clock_anchor_passes_the_default_lifecycle_policy() {
+    let config = Folder::new("page-clock");
+    let log = soksak_sok::start_tool_event_log(config.path()).unwrap();
+    assert_eq!(
+        log.emit_relayed(RelayedEvent {
+            ts_us: 1,
+            mono_ns: 9,
+            layer: "page".into(),
+            page: Some("page-origin".into()),
+            level: Level::Info,
+            event: "page.log.clock".into(),
+            cids: Vec::new(),
+            fields: Fields::of(&serde_json::json!({
+                "trip_us": 100,
+                "resolution_us": 1
+            }))
+            .unwrap(),
+        }),
+        Ok(true),
+        "the clock anchor is required under the default policy"
+    );
+    assert_eq!(
+        log.emit_relayed(RelayedEvent {
+            ts_us: 2,
+            mono_ns: 10,
+            layer: "page".into(),
+            page: Some("page-origin".into()),
+            level: Level::Info,
+            event: "page.background.session".into(),
+            cids: Vec::new(),
+            fields: Fields::of(&serde_json::json!({})).unwrap(),
+        }),
+        Ok(false),
+        "ordinary lifecycle info remains gated by the default policy"
+    );
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    log.close();
+    let lines: Vec<Value> = std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert!(
+        lines.iter().any(|line| line["event"] == "page.log.clock"),
+        "the first batch's anchor metadata was not written: {lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .all(|line| line["event"] != "page.background.session"),
+        "ordinary lifecycle info bypassed the default policy: {lines:?}"
+    );
 }
 
 /// Runs the tool with the arguments and the configuration directory, and returns the events that the run stored in the main file.

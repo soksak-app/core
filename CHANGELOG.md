@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F239-262: Keep the one-time page clock anchor as an exact native writer gate exception so later diagnostics retain timing uncertainty metadata. Ordinary lifecycle/info events remain gated. Public Go and Rust owner Reds and Greens and the Wails view-writer consumer pass. Keep runtime diagnosis in the existing application event log.
+
+
 - F239-258: Complete the compiler-selected declaration audit with all 1,008 cases declared, including Wails 964/964 and Tauri 988/988. This closes the declaration work of F239-254 without repeating test bodies; functional and performance results retain their separate evidence.
 
 - F239-261: Route existing page layout phase events through the frame log gate independently of the global performance switch. Preserve call-class disabling and avoid field formatting when the frame gate is closed. The tracer Red and eight-case Green, native class owners and generated-table checks pass. Keep the existing batch writer and transport; add no recording history or separate collector.

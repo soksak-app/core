@@ -35,6 +35,8 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
 
 - [o] F239-261 — P1, linked to F239-223: Preserve existing page layout phase records through the frame gate while global performance tracing is disabled. The owning Red reproduces dropped layout phases; Green passes all eight tracer cases, including no field formatting or relay when the frame gate is closed. Both native producer class owners and generated-table checks pass. Reuse the existing phase/id/time payload, batch writer and transport; application cause attribution remains open.
 
+- [o] F239-262 — P1, linked to F239-223: Preserve the existing page clock anchor through the native writers under the default policy. Public Go and Rust owners reproduce the refused anchor before correction and pass afterward while ordinary lifecycle/info remains refused. The directly affected Wails view-writer consumer also passes. Use the existing event log for runtime diagnosis; cross-clock ordering still requires the retained anchor uncertainty.
+
 - [o] F239-258 — P1, linked to F239-254: Register the compiler-selected Rust assertions and exact host-specific helper cases, including test-only receive-before-cleanup callback ordering. F239-259 supplies the two missing Wails identity assertions. The completed static audit declares all 1,008 cases: Wails 964/964 and Tauri 988/988. No test body is changed by this metadata correction.
 
 - [o] F239-256 — P1: Flush startup log records before constructing the prior-run retention fixture. Red: startup rotation prunes a partially written fixture and timestamp preparation fails with NotFound. Green: the same owning test passes after the flush barrier completes startup retention before fixture creation. Production retention is unchanged.

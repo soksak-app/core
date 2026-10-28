@@ -35,6 +35,8 @@ F239-255 이후 최신 비프로파일 Terminal drag 측정은 Wails/Tauri sourc
 
 - [o] F239-261 — P1, F239-223 연결: Global performance tracing이 꺼진 동안에도 frame gate로 기존 page layout 단계 기록을 보존한다. 소유 Red는 layout 단계 누락을 재현하며 Green은 frame gate가 닫힐 때 field formatting과 relay가 없음을 포함한 tracer 여덟 case를 통과한다. 양 native producer class 소유 검사와 생성 table 검사도 통과한다. 기존 phase/id/time payload·batch writer·transport를 재사용하며 application 원인 분석은 미완료다.
 
+- [o] F239-262 — P1, F239-223 연결: 기본 정책에서 native writer를 통해 기존 page clock anchor를 보존한다. Public Go·Rust 소유 검사는 수정 전 anchor 거부를 재현하고 수정 후 일반 lifecycle/info 거부를 유지하며 통과한다. 직접 영향을 받는 Wails view-writer 소비자도 통과한다. Runtime 진단은 기존 event log를 사용하며 시계 간 순서 해석에는 보존된 anchor 오차 한계가 필요하다.
+
 - [o] F239-258 — P1 연결: Compiler-selected Rust assertion과 정확한 host별 helper case를 등록하며 test-only receive-before-cleanup callback 순서도 포함한다. F239-259가 누락된 Wails identity assertion 두 개를 제공한다. 완료된 정적 감사는 Wails 964/964와 Tauri 988/988을 포함한 case 1,008개를 모두 선언한다. 이 metadata 수정은 test body를 바꾸지 않는다.
 
 - [o] F239-256 — P1: Prior-run retention fixture를 구성하기 전에 startup log 기록을 flush한다. Red: Startup rotation이 생성 중인 fixture를 제거해 timestamp 준비가 NotFound로 실패한다. Green: Flush barrier로 fixture 생성 전에 startup retention을 완료한 뒤 같은 소유 검사가 통과한다. Production retention은 바뀌지 않는다.

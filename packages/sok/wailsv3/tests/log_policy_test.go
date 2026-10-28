@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
@@ -125,6 +126,42 @@ func TestTheDefaultPolicyIsTheGoldenDefault(t *testing.T) {
 				t.Errorf("default %s %s stored is %v, expected %v for the value %q", class, level, got, want, value)
 			}
 		}
+	}
+}
+
+// contract: log.page.clock-anchor-passes-default-policy
+func TestPageClockAnchorPassesTheDefaultLifecyclePolicy(t *testing.T) {
+	config := t.TempDir()
+	log, err := sok.StartToolEventLog(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(log.Close)
+	stored, err := log.EmitRelayed(sok.RelayedEvent{
+		TsMicros: 1, MonoNs: 9, Layer: "page", Page: "page-origin", Level: sok.LevelInfo,
+		Event: "page.log.clock", Fields: json.RawMessage(`{"trip_us":100,"resolution_us":1}`),
+	})
+	if err != nil || !stored {
+		t.Fatalf("page clock anchor stored=%t error=%v, want stored under the default policy", stored, err)
+	}
+	ordinary, err := log.EmitRelayed(sok.RelayedEvent{
+		TsMicros: 2, MonoNs: 10, Layer: "page", Page: "page-origin", Level: sok.LevelInfo,
+		Event: "page.background.session", Fields: json.RawMessage(`{}`),
+	})
+	if err != nil || ordinary {
+		t.Fatalf("ordinary lifecycle info stored=%t error=%v, want default-policy refusal", ordinary, err)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	log.Close()
+	var clockStored, ordinaryStored bool
+	for _, event := range eventsOf(t, config) {
+		clockStored = clockStored || event.Event == "page.log.clock"
+		ordinaryStored = ordinaryStored || event.Event == "page.background.session"
+	}
+	if !clockStored || ordinaryStored {
+		t.Fatalf("default-policy page records: clock=%t ordinary=%t; want only the clock metadata exception", clockStored, ordinaryStored)
 	}
 }
 

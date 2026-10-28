@@ -381,8 +381,8 @@ func (l *EventLog) EmitRelayed(e RelayedEvent) (bool, error) {
 	if documentLayer := e.Layer == "page" || e.Layer == "plugin"; documentLayer != (e.Page != "") {
 		return false, fmt.Errorf("the event %s of the layer %s names the page %q; only an event of the layer page or plugin names one, and it must", e.Event, e.Layer, e.Page)
 	}
-	// page.start passes every gate: the first module of the page emits it before the policy reaches the gate of the page, and a
-	// reader finds the start of each document by it (docs/spec/logging.md#policy).
+	// page.start and page.log.clock pass every gate because they are required document identity and clock metadata
+	// (docs/spec/logging.md#policy).
 	if class, declared := EventClassOf(e.Event); declared && !PassesEveryGate(e.Event) && !l.Gate(class, e.Level) {
 		return false, nil
 	}
@@ -418,7 +418,7 @@ func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer, page stri
 	pending := &pendingEvent{tsMicros: tsMicros, monoNs: monoNs, cids: cids, layer: layer, page: page, level: level, event: event, fields: text, bytes: bytes, truncated: truncated, placed: placed}
 	l.classify(pending)
 	// A closed gate stores nothing and counts the event; an event that the catalog does not declare has no class and no gate, and
-	// page.start passes every gate.
+	// the named metadata exceptions pass every gate.
 	if pending.class != "" && !PassesEveryGate(event) && !l.Gate(pending.class, level) {
 		return errPolicy
 	}

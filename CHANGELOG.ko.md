@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F239-262: 이후 diagnostics가 시각 오차 metadata를 유지하도록 일회성 page clock anchor를 정확한 native writer gate 예외로 보존한다. 일반 lifecycle/info event는 gate를 유지한다. Public Go·Rust 소유 Red 및 Green과 Wails view-writer 소비자가 통과한다. Runtime 진단은 기존 application event log에 유지한다.
+
+
 - F239-258: Wails 964/964와 Tauri 988/988을 포함해 case 1,008개를 모두 선언한 compiler-selected 선언 감사를 완료한다. Test body를 반복하지 않고 F239-254의 선언 작업을 완료하며 기능과 성능 결과는 각각의 증거를 유지한다.
 
 - F239-261: 기존 page layout 단계 event를 global performance switch와 독립적으로 frame log gate에 전달한다. Call-class 비활성과 frame gate가 닫힐 때 field formatting 생략을 유지한다. Tracer Red 및 여덟 case Green, native class 소유 검사와 생성 table 검사를 통과한다. 기존 batch writer와 transport를 유지하고 recording history나 별도 collector는 추가하지 않는다.
