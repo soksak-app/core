@@ -308,7 +308,7 @@ macOS 애플리케이션 bundle build target 네 개는 `Contents`를 교체하�
 
 ## native/darwin
 
-`native/darwin`은 두 호스트가 호출하는 공용 macOS 라이브러리다. 최소 macOS 버전은 14.4다. `capture.m`이 macOS 14.4에서 추가된 `SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:`를 호출하기 때문이다. Makefile은 이 값을 `MACOS_MINIMUM`에 선언하고 라이브러리와 두 애플리케이션을 그 값으로 build한다. 두 애플리케이션의 `Info.plist`는 `LSMinimumSystemVersion`에, `apps/tauriv2/tauri.conf.json`은 `bundle.macOS.minimumSystemVersion`에 같은 값을 선언하는데, Tauri bundler가 그 값으로 애플리케이션을 build하기 때문이다. 번들이 다른 값을 선언하거나, 애플리케이션 실행 파일이 다른 macOS version으로 build되었거나, 번들의 다른 실행 파일이 더 새 version으로 build되었으면 `make release-check`가 실패한다.
+`native/darwin`은 두 호스트가 호출하는 공용 macOS 라이브러리다. 최소 macOS 버전은 14.4다. `capture.m`이 macOS 14.4에서 추가된 `SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:`를 호출하기 때문이다. Makefile은 이 값을 `MACOS_MINIMUM`에 선언하고 라이브러리와 두 애플리케이션을 그 값으로 build한다. 두 애플리케이션의 `Info.plist`는 `LSMinimumSystemVersion`에, `apps/tauriv2/tauri.conf.json`은 `bundle.macOS.minimumSystemVersion`에 같은 값을 선언하는데, Tauri bundler가 그 값으로 애플리케이션을 build하기 때문이다. 번들이 다른 값을 선언하거나, 애플리케이션 실행 파일이 다른 macOS version으로 build되었거나, 번들의 다른 실행 파일이 더 새 version으로 build되었으면 `make release-check`가 실패한다. Bundled Rust 실행 파일은 application과 같은 선언된 Cargo deployment target을 사용하므로 deployment 환경만으로 공용 의존성의 build identity가 달라지지 않는다.
 
 | 경로 | 내용 |
 | --- | --- |

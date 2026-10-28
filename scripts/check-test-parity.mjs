@@ -8633,6 +8633,13 @@ const FEATURE_LINKS = [
     expected: "Each request shares identical declarations while preserving complete view start values and rejecting invalid tables and indices before surface mutation.",
     levels: ["unit"],
   },
+  {
+    id: "F239-264",
+    implementation: [{ file: "Makefile", symbol: "sok-tauriv2 = $(CARGO_ENV) cargo build" }],
+    tests: [{ file: "scripts/test/native-pkgconfig.test.mjs", id: "Tauri app and bundled CLI Cargo commands use the declared deployment target" }],
+    expected: "Application and bundled CLI Cargo commands use the same declared macOS deployment target in debug and release builds.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

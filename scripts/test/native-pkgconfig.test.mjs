@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const makefile = fileURLToPath(new URL("../../native/darwin/Makefile", import.meta.url));
+const workspace = fileURLToPath(new URL("../../", import.meta.url));
 
 test("generated pkg-config file follows a relocated workspace", { timeout: 10000 }, (t) => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "soksak-pkgconfig-")));
@@ -35,4 +36,18 @@ test("generated pkg-config file follows a relocated workspace", { timeout: 10000
 
   generate(after);
   assert.equal(statSync(pc).mtimeMs, written, "an unchanged pkg-config file was rewritten");
+});
+
+test("Tauri app and bundled CLI Cargo commands use the declared deployment target", { timeout: 10000 }, () => {
+  for (const target of ["tauriv2-build", "tauriv2-build-release"]) {
+    const output = execFileSync("make", ["-n", "-o", "native-darwin", "-o", "build", "-o", "registry", "-o", "frontend-tauriv2", target], {
+      cwd: workspace,
+      encoding: "utf8",
+      env: { ...process.env, MACOSX_DEPLOYMENT_TARGET: "13.0" },
+    });
+    const cargo = output.split(/\r?\n/).filter((line) => /\bcargo build\b.*-p soksak-(?:tauriv2|sok-tauriv2)(?:\s|$)/.test(line));
+    assert.equal(cargo.length, 2, `${target} must expand to one app build and one bundled CLI build:\n${output}`);
+    assert.match(cargo[0], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p soksak-tauriv2(?:\s|$)/, `${target} app build: ${cargo[0]}`);
+    assert.match(cargo[1], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p soksak-sok-tauriv2(?:\s|$)/, `${target} bundled CLI build: ${cargo[1]}`);
+  }
 });
