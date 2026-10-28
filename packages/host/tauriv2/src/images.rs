@@ -898,7 +898,11 @@ impl Images {
         timeout: Duration,
         waiting: impl FnOnce(),
     ) -> Result<(), String> {
-        self.wait_observed(timeout, waiting, Self::current_raster_snapshot_installed_locked)
+        self.wait_observed(
+            timeout,
+            waiting,
+            Self::current_raster_snapshot_installed_locked,
+        )
     }
 
     /// Signals the first pending check under the owner lock so tests can order the next frame before wakeup.

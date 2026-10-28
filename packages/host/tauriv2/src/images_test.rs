@@ -337,7 +337,8 @@ mod wait_boundary {
 
     #[test]
     // contract: images.wait.continuous-raster-snapshot, images.wait.newer-sequence-rearms-wait
-    fn continuous_image_wait_uses_the_installed_snapshot_and_blocks_after_generation_or_raster_change() {
+    fn continuous_image_wait_uses_the_installed_snapshot_and_blocks_after_generation_or_raster_change()
+     {
         let images = Images::default();
         let key = ("surface-continuous-snapshot".into(), "view".into());
         images
@@ -364,12 +365,7 @@ mod wait_boundary {
                 )
                 .expect("authorize frame");
             if sequence == 1 {
-                assert!(images.mark_presented(
-                    &key,
-                    config.generation,
-                    config.raster,
-                    sequence
-                ));
+                assert!(images.mark_presented(&key, config.generation, config.raster, sequence));
             }
         }
         assert_eq!(
@@ -515,10 +511,12 @@ mod wait_boundary {
             .reserve(&hidden_key, "owner", "sidecar")
             .expect("reserve hidden image");
         assert!(images.set(&hidden_key, 100));
-        assert!(images
-            .configure_raster(&hidden_key, 800, 600, 2.0, false)
-            .expect("configure hidden image")
-            .is_none());
+        assert!(
+            images
+                .configure_raster(&hidden_key, 800, 600, 2.0, false)
+                .expect("configure hidden image")
+                .is_none()
+        );
         assert_eq!(
             images.wait_raster_snapshot_observed(Duration::ZERO, || {}),
             Ok(()),

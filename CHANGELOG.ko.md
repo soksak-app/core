@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-274: Push gate가 거부한 image wait method와 소유 assertion에 repository Rust formatter를 적용한다. Workspace format 검사가 통과한다. Diff는 배치와 trailing comma만 바꾸므로 기존 소유 결과가 계속 적용된다.
+
 - F239-272: Continuous image presentation은 같은 raster의 후속 sequence를 기다리지 않고 현재 generation과 raster에 설치된 snapshot으로 완료한다. Settled wait는 최신 sequence를 계속 엄격히 요구하고 generation 변경 시 presented watermark를 지우며 raster 무효화와 error 처리를 유지하고 hidden region은 계속 대기를 막지 않는다. Go와 Rust owner Red는 continuous 완료 지연과 오래된 generation watermark를 재현한다. 집중 Green은 settled, raster, generation, hidden-region, error control과 함께 통과한다. 이 state 변경은 application cadence 개선을 주장하지 않는다.
 
 - F239-271: Sequence가 presentation state를 전진시키고 최신 accepted sequence 이하이면 현재 generation과 raster의 성공한 native presentation acknowledgment를 기록한다. 최신 sequence의 acknowledgment만 presentation error를 지운다. Pre-presentation freshness와 current-frame wait는 최신 accepted sequence를 계속 엄격히 요구한다. Go와 Rust owner test는 in-flight acknowledgment 유실과 오래된 ack의 오류 삭제를 재현하고 invalid, duplicate, 역행, latest-wait control과 함께 수정 후 통과한다. 이 state 보정은 cadence 개선을 주장하지 않는다.
