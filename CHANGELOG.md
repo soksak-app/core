@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-243: Correct the restoration-failure fixture to reflect an after-write failure: the saved performance value is applied before the fake rejects the reply. The owner retains both action and restoration errors and verifies both setting attempts. The failing integrated case passes in its focused repeat; other integrated failures remain separate.
+
 - F239-243: Scope Terminal continuous-drag measurement to the required source-frame log and capture evidence while disabling the unrelated global performance tracer. Preserve process and one-shot layout tracing, record before/during/after phase mode, and restore the exact setting before reclaim sampling. Prepare owner cases for policy preservation, restoration failures and falsy thrown values. Validation has not run; cadence, geometry and convergence criteria remain unchanged.
 
 - F239-242: Accept the rebuilt macOS arm64 capture lifecycle on both hosts. Both window cases pass with six independent finalized recordings, unchanged retained bytes, zero application-log findings, normal exits and restored foreground baseline. This validates writer lifecycle; the full drag capacity and performance measurement remains separate.

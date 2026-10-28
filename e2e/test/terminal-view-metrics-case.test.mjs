@@ -63,7 +63,7 @@ test("terminal drag performance trace mode preserves frame logging and restores 
   assert.deepEqual(values["diagnostics.log"], logPolicy);
 });
 
-test("terminal drag trace-mode cleanup preserves action and restoration failures", { timeout: 5000 }, async () => {
+test("terminal drag trace-mode cleanup preserves action and after-write restoration failures", { timeout: 5000 }, async () => {
   const runInMode = terminalCase.withTerminalDragTraceMode;
   assert.equal(typeof runInMode, "function", "terminal drag must expose its production trace-mode boundary");
   const logPolicy = { frame: "trace" };
@@ -84,7 +84,8 @@ test("terminal drag trace-mode cleanup preserves action and restoration failures
     assert.deepEqual(error.errors, [actionError, restoreError]);
     return true;
   });
-  assert.equal(values["diagnostics.performance"], false);
+  assert.deepEqual(calls.map(({ params }) => params.value), [false, true]);
+  assert.equal(values["diagnostics.performance"], true);
   assert.deepEqual(values["diagnostics.log"], logPolicy);
 });
 
