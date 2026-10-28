@@ -8718,6 +8718,19 @@ const FEATURE_LINKS = [
     expected: "Stable text zoom state does not repeat DOM writes during layout redraws while scale changes apply and clear the marker and property.",
     levels: ["unit"],
   },
+  {
+    id: "F239-270",
+    implementation: [
+      { file: "packages/plugin-api/view-start.js", symbol: "const page = String(performance.timeOrigin);" },
+      { file: "packages/plugin-api/view.js", symbol: "page: window.sokView.page," },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "the view writer reuses the document-start page identity when later clock reads differ" },
+      { file: "packages/plugin-api/test/view-wire-contract.test.mjs", id: "view wire ${testCase.id} matches the view script step by step" },
+    ],
+    expected: "The view writer uses the read-only document-start page identity for batch records and page.start without resampling timeOrigin.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

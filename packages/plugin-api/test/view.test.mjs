@@ -18,11 +18,18 @@ const observeRejection = (promise) => { promise.catch(() => {}); return promise;
  * Creates a page on url with the sok-view handler, loads the injected script when script is true, and makes the page window the
  * global window of the view module for the test.
  */
-function setup(t, { url = "soksak://probe/", script = true } = {}) {
+function setup(t, { url = "soksak://probe/", script = true, timeOrigins } = {}) {
   const dom = new JSDOM("", { url, runScripts: "outside-only" });
   t.after(() => dom.window.close());
   const posted = [];
   dom.window.webkit = { messageHandlers: { "sok-view": { postMessage: (message) => posted.push(message) } } };
+  if (timeOrigins) {
+    let index = 0;
+    Object.defineProperty(dom.window.performance, "timeOrigin", {
+      configurable: true,
+      get: () => timeOrigins[Math.min(index++, timeOrigins.length - 1)],
+    });
+  }
   if (script) dom.window.eval(readFileSync(new URL("../view-start.js", import.meta.url), "utf8"));
   // The view module reads the global window, which Node does not define; the test defines it for the test only.
   Object.defineProperty(globalThis, "window", { value: dom.window, configurable: true, writable: true });
@@ -51,7 +58,9 @@ test("each page has its own document identifier", (t) => {
 
 test("the injected script exposes one global, sokView, whose attach is the only reader of host messages", (t) => {
   const { host } = setup(t);
-  assert.deepEqual(Object.keys(globalThis.window.sokView), ["attach"]);
+  assert.deepEqual(Object.keys(globalThis.window.sokView), ["page", "attach"]);
+  assert.equal(globalThis.window.sokView.page, globalThis.window.performance.timeOrigin.toString());
+  assert.equal(Object.getOwnPropertyDescriptor(globalThis.window.sokView, "page").writable, false);
   assert.equal(Object.isFrozen(globalThis.window.sokView), true);
   host({ sok: 1, id: 1, result: "queued" });
   const received = [];
@@ -390,6 +399,29 @@ test("contributions(point) returns the connected items of the point, and fail(re
     params: { point: "language", plugin: "one", index: 0, reason: "extend is not a function" } });
   host({ sok: 1, id: 2, result: null });
   assert.equal(await failing, undefined);
+});
+
+test("the view writer reuses the document-start page identity when later clock reads differ", { timeout: 5000 }, async (t) => {
+  const { posted, host } = setup(t, { timeOrigins: [1_700_000_000_000.5, 1_700_000_000_111.25] });
+  const reports = [];
+  const { runtime, calls } = createViewBridge({ handler: { postMessage: (message) => posted.push(plain(message)) }, report: (error) => reports.push(error) });
+  runtime.log.info("saved", { n: 1 });
+  for (let index = 0; index < 5; index += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    const request = posted.filter(({ command, params }) => command === "runtime.log" && params?.action === "clock")[index];
+    assert.ok(request, `clock anchor ${index + 1} was not requested`);
+    host({ sok: 1, id: request.id, result: { ts_us: 1_791_000_000_000_000 + index, mono_ns: 5_000_000_000 + index } });
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+  const batch = posted.find(({ command, params }) => command === "runtime.log" && params?.action === "batch");
+  assert.ok(batch, "the view did not send a batch request");
+  host({ sok: 1, id: batch.id, result: null });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(batch.params.events.every(({ page }) => page === "1700000000000.5"), "batch identity differs from document-start ready identity");
+  assert.deepEqual(batch.params.events.find(({ event }) => event === "page.start").fields,
+    { time_origin: 1_700_000_000_000.5, url: "soksak://probe/" });
+  assert.equal(calls.openCalls().count, 0, "the batch call remained open after its reply");
+  assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), [], "the successful batch reported an error");
 });
 
 test("the view bridge keeps the public log API and batches source-clocked records through the direct writer", { timeout: 5000 }, async (t) => {

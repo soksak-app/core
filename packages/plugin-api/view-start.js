@@ -64,9 +64,11 @@
     reportFailure(`unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
   });
 
-  handler.postMessage({ event: "view.ready", plugin, document: crypto.randomUUID(), page: String(performance.timeOrigin) });
+  const page = String(performance.timeOrigin);
+  handler.postMessage({ event: "view.ready", plugin, document: crypto.randomUUID(), page });
 
   window.sokView = Object.freeze({
+    page,
     attach(next) {
       if (typeof next !== "function") throw new TypeError("attach requires a listener function");
       if (listener) throw new Error(`view channel for ${plugin} already has a message listener`);

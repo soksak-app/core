@@ -26,7 +26,7 @@ function startView(host, document) {
     },
   };
   vm.runInNewContext(SCRIPT, { window, crypto: { randomUUID: () => document }, performance: { timeOrigin: Number(PAGE) } });
-  return { window, posted, delivered, messages };
+  return { window, posted, delivered, messages, state: { sokView: { page: window.sokView.page } } };
 }
 
 /** The listener that a step names: `record` keeps each message, and any other input is passed as it is. */
@@ -57,7 +57,7 @@ export function runViewWireCase(testCase) {
         view.messages.listener({ source, data: JSON.parse(JSON.stringify(step.message.data)) });
       }
     }
-    if (step.load) return { posted: view.posted.slice(0), delivered: [], throws: null };
+    if (step.load) return { posted: view.posted.slice(0), delivered: [], throws: null, state: view.state };
     return {
       posted: view.posted.slice(before.posted),
       delivered: view.delivered.slice(before.delivered),
@@ -74,6 +74,7 @@ test("the view wire contract cases have ids that are unique and steps that name 
     for (const step of testCase.steps) {
       const kinds = ["load", "attach", "message"].filter((kind) => kind in step);
       assert.equal(kinds.length, 1, `${testCase.id} has a step that is not one load, attach or message`);
+      if (step.load) assert.ok(step.output.state?.sokView?.page, `${testCase.id} load output has no read-only page metadata`);
       assert.ok("posted" in step.output && "throws" in step.output, `${testCase.id} has a step without posted or throws`);
       assert.ok("delivered" in step.output || "deliveredCount" in step.output, `${testCase.id} has a step without delivered`);
     }
@@ -86,6 +87,7 @@ for (const testCase of CONTRACT.cases) {
     testCase.steps.forEach((step, index) => {
       const where = `${testCase.id} step ${index + 1}`;
       assert.deepStrictEqual(actual[index].posted, step.output.posted, `${where} posted`);
+      if ("state" in step.output) assert.deepStrictEqual(actual[index].state, step.output.state, `${where} state`);
       if ("deliveredCount" in step.output) {
         assert.equal(actual[index].delivered.length, step.output.deliveredCount, `${where} delivered count`);
       } else {

@@ -166,9 +166,9 @@ export function createViewBridge({ handler, report }) {
         call: (request) => calls.request("runtime.log", request),
         report: recordError("log batch"),
         now: () => window.performance.now(),
-        page: String(window.performance.timeOrigin),
+        page: window.sokView.page,
       });
-      eventBatcher.emit("info", "page.start", { time_origin: window.performance.timeOrigin, url: window.location.href });
+      eventBatcher.emit("info", "page.start", { time_origin: Number(window.sokView.page), url: window.location.href });
     }
     eventBatcher.emit(level, event, fields, cids);
   };

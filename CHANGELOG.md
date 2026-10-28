@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-270: Capture the document-start `performance.timeOrigin` once and expose it as read-only `window.sokView.page`. Reuse that identity for view log batches and `page.start.time_origin`. The controlled getter Red reproduces a ready/writer mismatch; the same owner passes after correction, and the frozen view-wire contract checks the exposed value. The Tauri runtime cause remains unverified.
+
 - F239-269: Verify an explicitly supplied registry index against an optional SHA-256 before parsing it. Preserve `--index` without a digest and the default public-index check; reject a digest without a nonempty explicit URL or with any form other than 64 lowercase hexadecimal characters. The unchanged owner reproduces absent digest validation and the same focused owner passes 6/6 after correction. No candidate URL was configured.
 
 - F239-268: Remove an unused mutable binding from the view-origin fixture without changing its assertions. The push Clippy gate reproduces the warning; the owning test-target lint check passes after correction.

@@ -425,7 +425,7 @@ emitter는 catalog 검사에서 하나의 지점이고(이름, level, 리터럴 
 
 View는 공통 bounded event batcher를 사용해 record마다 workbench document를 거치지 않고 host writer로 직접 log를 보낸다. View에는 policy gate가 없어 모든 record를 만들고 host writer가 설치된 event catalog와 policy를 적용한다. Queue bound, clock anchor, correlation identifier, field truncation, loss report 및 전달 실패 보고는 page batcher와 공유한다.
 
-주입하는 `view.ready` message에는 document UUID와 함께 정확히 `String(performance.timeOrigin)`인 `page`가 들어 있다. Host는 두 identity를 native surface generation에 묶는다. View batcher는 비어 있지 않은 document URL을 담은 `page.start`와 해당 document의 `page.log.clock`을 내보내며 plugin record는 workbench document 대신 그 view document identity를 가진다.
+주입하는 `view.ready` message에는 document UUID와 함께 정확히 `String(performance.timeOrigin)`인 `page`가 들어 있다. Host는 두 identity를 native surface generation에 묶는다. View batcher는 비어 있지 않은 document URL을 담은 `page.start`와 해당 document의 `page.log.clock`을 내보내며 plugin record는 workbench document 대신 그 view document identity를 가진다. Bootstrap은 page 값을 한 번 읽고 read-only `window.sokView.page`로 공개한다. View writer는 batch identity에 정확히 이 값을 사용하고 `page.start.time_origin`에는 이 값의 숫자 값을 사용하며 time origin을 다시 읽지 않는다.
 
 View channel은 기존 writer request인 `action: "clock"`과 `action: "batch"`만으로 `runtime.log`를 직접 처리한다. Batch는 등록된 page와 소유 plugin prefix를 이름으로 가져야 한다. Plugin record의 caller-provided `fields.surface`는 거부하며 host가 source에 묶인 surface를 더한다. Writer가 만드는 lifecycle, clock 및 loss record는 선언한 이름으로 제한한다. Host는 전체 batch를 검증한 뒤에만 기록한다. Policy 변경, identity 불일치와 이전 단일 record payload는 오류다. Clock은 `{ts_us, mono_ns}`로, batch는 `null`로 답하고 오류는 같은 ID에 `{code: -32000, message}`로 답한다. 처리 전과 result 또는 error reply를 post하기 전에 generation을 검사한다. 종료된 document는 대체 generation으로 기록할 수 없다.
 

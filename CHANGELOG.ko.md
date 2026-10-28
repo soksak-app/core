@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-270: Document-start에서 `performance.timeOrigin`을 한 번 캡처해 read-only `window.sokView.page`로 공개한다. View log batch와 `page.start.time_origin`은 같은 identity를 재사용한다. Controlled getter Red는 ready와 writer의 불일치를 재현하고 수정 후 같은 소유 검사가 통과하며 frozen view-wire contract도 공개 값을 확인한다. Tauri runtime에서 값이 달라진 원인은 미검증 상태다.
+
 - F239-269: 명시한 registry index는 JSON parse 전에 optional SHA-256과 비교한다. `--index` 단독 사용과 기본 public-index 검사는 유지하고, 명시 URL 없는 digest 또는 64자리 lowercase hexadecimal이 아닌 값을 거부한다. 변경 전 소유 검사는 digest 검증 부재를 재현하고 수정 후 같은 집중 검사가 6/6 통과한다. Candidate URL은 설정하지 않았다.
 
 - F239-268: View-origin fixture의 assertion을 바꾸지 않고 사용하지 않는 mutable binding을 제거한다. Push Clippy gate가 경고를 재현하며 수정 후 소유 test-target lint 검사가 통과한다.
