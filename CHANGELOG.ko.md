@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-244: Identifier 증가, 첫 plugin event와 cids 전달을 유지하며 공개 view-operation case를 API 관측에 맞춘다. Fixture는 폐기된 단일 surface log를 거부하고 event 관측 전에 clock/batch 전달을 확인한다. SDK 소유 case 3개가 열린 call 및 예상 밖 report 없이 통과하며 관련 consumer acceptance는 별도로 유지한다.
+
 - F239-243: 복원 실패 fixture를 값을 쓴 뒤 응답이 실패하는 실제 fake 동작에 맞춘다. Fake는 저장한 performance 값을 적용한 뒤 응답을 거부한다. 소유 검사는 action과 복원 오류를 모두 유지하고 두 설정 시도를 확인한다. 통합 실행에서 실패한 case는 집중 반복에서 통과하며 다른 통합 실패는 별도로 유지한다.
 
 - F239-243: Terminal continuous-drag 측정에 필요한 source-frame log와 capture 증거를 유지하며 무관한 전역 performance tracer를 끈다. Process와 one-shot layout trace를 유지하고 전·중·후 phase mode를 기록하며 reclaim sampling 전에 정확한 설정을 복원한다. Policy 보존, 복원 오류 및 falsy throw 소유 case를 준비한다. 검증은 실행하지 않았으며 cadence, geometry 및 convergence 기준은 유지한다.

@@ -1,31 +1,28 @@
 {
   "surface": "packages/plugin-api/view.js#createViewBridge runtime.beginOperation",
-  "description": "Ordered steps of an operation that starts in a view page. An operation step calls runtime.beginOperation(event, fields) and stores its returned list under the name as, then posts the first event through runtime.log; a sidecar step calls runtime.sidecar(name).send(id, body, cids) and a command step calls runtime.command(name, params, {cids}), where cids names a stored list. The answer of a step is the host reply to the request that the step posted. Each step lists what it produces: posted is the messages the page sends in order, result is the value of the call, and throws is the text of the error the step raises, or null. An identifier in the form p<time origin of the page>.<n> is written as p$ORIGIN.<n>, where $ORIGIN is the time origin of the test page. The page is soksak://probe/.",
+  "description": "Ordered API observations of an operation that starts in a surface view page. An operation step calls runtime.beginOperation(event, fields) and stores its returned cids under as. A sidecar step calls runtime.sidecar(name).send(id, body, cids) and a command step calls runtime.command(name, params, {cids}); cids names a stored list. A log observation is the first plugin event delivered by the page writer, independent of its clock and batch transport. A request observation is a non-log API call with its transport id omitted. The surface writer accepts only runtime.log requests with action clock or batch; its clock sampling, lifecycle records and timestamps are specified and verified by the logging writer owners. Each step lists log or request, result and throws. Identifiers use p$ORIGIN.<n>, where $ORIGIN is the time origin of the test page. The page is soksak://probe/.",
   "cases": [
     {
       "id": "view.operation.begin-logs-first-event-and-carries-cids",
       "steps": [
         {
           "operation": { "event": "open", "fields": { "a": 1 }, "as": "op" },
-          "answer": { "result": null },
           "output": {
-            "posted": [{ "sok": 1, "id": 1, "command": "runtime.log", "params": { "level": "info", "event": "open", "fields": { "a": 1 }, "cids": ["p$ORIGIN.1"] } }],
+            "log": { "level": "info", "event": "plugin.probe.open", "fields": { "a": 1 }, "cids": ["p$ORIGIN.1"] },
             "result": ["p$ORIGIN.1"], "throws": null
           }
         },
         {
           "sidecar": { "name": "demo", "id": "s1", "body": { "n": 1 }, "cids": "op" },
-          "answer": { "result": null },
           "output": {
-            "posted": [{ "sok": 1, "id": 2, "command": "runtime.sidecar.send", "params": { "id": "s1", "sidecar": "demo", "body": { "n": 1 }, "cids": ["p$ORIGIN.1"] } }],
+            "request": { "command": "runtime.sidecar.send", "params": { "id": "s1", "sidecar": "demo", "body": { "n": 1 }, "cids": ["p$ORIGIN.1"] } },
             "result": null, "throws": null
           }
         },
         {
           "command": { "name": "demo.run", "params": { "x": 1 }, "cids": "op" },
-          "answer": { "result": null },
           "output": {
-            "posted": [{ "sok": 1, "id": 3, "command": "demo.run", "params": { "x": 1 }, "cids": ["p$ORIGIN.1"] }],
+            "request": { "command": "demo.run", "params": { "x": 1 }, "cids": ["p$ORIGIN.1"] },
             "result": null, "throws": null
           }
         }
@@ -36,17 +33,15 @@
       "steps": [
         {
           "operation": { "event": "open", "fields": {}, "as": "first" },
-          "answer": { "result": null },
           "output": {
-            "posted": [{ "sok": 1, "id": 1, "command": "runtime.log", "params": { "level": "info", "event": "open", "fields": {}, "cids": ["p$ORIGIN.1"] } }],
+            "log": { "level": "info", "event": "plugin.probe.open", "fields": {}, "cids": ["p$ORIGIN.1"] },
             "result": ["p$ORIGIN.1"], "throws": null
           }
         },
         {
           "operation": { "event": "open", "fields": {}, "as": "second" },
-          "answer": { "result": null },
           "output": {
-            "posted": [{ "sok": 1, "id": 2, "command": "runtime.log", "params": { "level": "info", "event": "open", "fields": {}, "cids": ["p$ORIGIN.2"] } }],
+            "log": { "level": "info", "event": "plugin.probe.open", "fields": {}, "cids": ["p$ORIGIN.2"] },
             "result": ["p$ORIGIN.2"], "throws": null
           }
         }
