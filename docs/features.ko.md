@@ -21,15 +21,17 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
-F239-241과 F239-242 전의 최신 Terminal drag 측정은 Wails/Tauri cadence 73/65 ms와 양 host convergence에서 실패하며 geometry는 0.5 pt로 통과한다. Source 보관 capacity 오류 29개와 공유 plugin-host logging 회귀도 기록한다. 이후 channel과 capture-lifecycle 통과는 새로운 drag 성능 acceptance를 입증하지 않는다.
+F239-252 이후 최신 Terminal drag 측정은 Wails/Tauri source cadence 72/82 ms와 양 host convergence에서 실패하며 geometry는 0.4 pt로 통과한다. Application-log finding은 0개이고 양 host는 정상 종료하며 기존 frontmost baseline을 복원한다. 이 결과는 오류 없는 측정을 입증하지만 drag 성능 acceptance를 입증하지 않는다. 이전 capacity 오류와 channel 회귀 기록은 보존한다.
 
 앞선 macOS 26.6.2 arm64 optimized diagnostic 측정 묶음은 측정 실패 7개와 수집 거부 1개를 보존한다. Browser source-frame 간격은 Wails/Tauri에서 51/34 ms, Editor는 50/34 ms, HWP는 34/34 ms, Wails Terminal은 71 ms다. Tauri Terminal은 창이 active 상태여서 synthetic drag를 거부했으며 drag 결과를 입증하지 않는다. HWP footprint는 양 host에서 통과한다. Wails는 허용 581,004,760 bytes에 대해 571,791,024 bytes이고, Tauri는 허용 569,847,184 bytes에 대해 568,760,032 bytes다. HWP adjusted first display는 기준 1001/1113 ms에 대해 1616.594/1755.235 ms로 여전히 실패한다. Source 간격은 observer 간격이며 입력부터 표시까지 측정한 latency가 아니다. 독립 F239-238 evaluator로 보존된 측정을 진단 replay한 결과 Browser와 Editor는 양 host에서 convergence를 통과하고 HWP는 양 host, Terminal은 Wails에서 실패한다. Tauri Terminal에는 convergence 결과가 없다. 이 replay는 새로운 application acceptance 실행이 아니다. 양 host는 정상 종료하고 error-log 감사를 통과하며 원래 frontmost baseline을 복원한다. F239-223과 F239-233은 열린 상태를 유지하며 제품 memory 최적화나 공통 latency 원인을 추론하지 않는다.
 
 - [o] F239-247 — P2, F239-245 연결: 기존 lock/condition-wait census에서 누락된 map_or 및 map_or_else default handler를 검출한다. 두 lock 및 두 wait 반례를 소유 fixture로 재현하고 현재 propagation/recovery 허용은 유지한다.
 
+- [o] F239-257 — P1: Capture identity cleanup acceptance를 recording당 source 하나 계약에 맞춘다. 통합 검사의 오래된 기대값은 수정 전 실패하며 clear 뒤 선택 비활성과 두 번째 source 거절을 확인한 같은 소유 검사는 수정 후 통과한다. Production 동작은 변경하지 않는다.
+
 - [o] F239-256 — P1: Prior-run retention fixture를 구성하기 전에 startup log 기록을 flush한다. Red: Startup rotation이 생성 중인 fixture를 제거해 timestamp 준비가 NotFound로 실패한다. Green: Flush barrier로 fixture 생성 전에 startup retention을 완료한 뒤 같은 소유 검사가 통과한다. Production retention은 바뀌지 않는다.
 
-- [o] F239-257 — P1: Capture identity cleanup acceptance를 recording당 source 하나 계약에 맞춘다. 통합 검사의 오래된 기대값은 수정 전 실패하며 clear 뒤 선택 비활성과 두 번째 source 거절을 확인한 같은 소유 검사는 수정 후 통과한다. Production 동작은 변경하지 않는다.
+- [o] F239-255 — P1, F239-223 연결: Performance 경로를 사용할 수 없을 때 frame tracing으로 기존 surface dispatch의 queue·진입·반환 경계를 기록한다. 배타적 event 선택을 유지하고 두 gate가 닫히면 clock을 읽지 않는다. Go와 Rust 소유 검사는 수정 전 frame event 누락을 재현하고 수정 후 통과하며 최종 Rust observer signature는 관련 소유 검사 세 개와 Clippy를 통과한다. Event 및 문서 검사는 통과한다. Application 성능 acceptance는 F239-223에 남는다.
 
 - [~] F239-254 — P1: 통합 host 실행 전에 현재 host test의 contract 선언, 완료 feature link 및 공유 contract table을 맞춘다. 미정의 identifier와 source가 없는 table 항목을 현재 사양 및 실제 assertion과 대조한다. 공유 동작 coverage와 명시적인 host별 사유를 유지하고 선언 검사를 우회하거나 test 이름으로 coverage를 추정하지 않는다.
 

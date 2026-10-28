@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-255: Record existing surface dispatch queue, entry and return boundaries through the frame trace gate when performance tracing is ineligible. Prefer the existing performance event, emit no duplicate event and read no clock when both gates are closed. Go and Rust owner Reds and Greens, final Rust owner confirmation, Clippy, event and documentation checks pass. Policy gate lookup still occurs. Application cadence acceptance remains open.
+
 - F239-256: Flush startup records before constructing the earlier-run retention fixture so startup rotation cannot delete files while their timestamps are prepared. The integrated owner fails with NotFound before correction and the same focused owner passes after it. Production retention is unchanged.
 
 - F239-257: Correct the capture identity cleanup test to expect selection to remain disabled after clear and verify that the same recording rejects a second source. The owning test fails with the old expectation and passes after correction; production behavior is unchanged.

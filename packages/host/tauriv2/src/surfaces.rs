@@ -477,20 +477,50 @@ fn complete_layout_presentation<T>(
     Ok(prepared)
 }
 
-fn surface_dispatch_clock() -> Option<u64> {
-    let enabled = crate::performance::enabled()
-        && crate::log_policy::gate_event(
-            crate::log_policy::Class::Call,
-            crate::event_log::Level::Debug,
-        );
-    surface_dispatch_clock_from(enabled, crate::event_log::monotonic_ns)
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SurfaceDispatchMode {
+    Performance,
+    Frame,
 }
 
-fn surface_dispatch_clock_from(enabled: bool, read: impl FnOnce() -> u64) -> Option<u64> {
-    if !enabled {
+fn surface_dispatch_clock() -> Option<(u64, SurfaceDispatchMode)> {
+    surface_dispatch_clock_from(
+        crate::performance::enabled(),
+        || {
+            crate::log_policy::gate_event(
+                crate::log_policy::Class::Call,
+                crate::event_log::Level::Debug,
+            )
+        },
+        || {
+            crate::log_policy::gate_event(
+                crate::log_policy::Class::Frame,
+                crate::event_log::Level::Trace,
+            )
+        },
+        crate::event_log::monotonic_ns,
+    )
+}
+
+fn surface_dispatch_clock_from(
+    performance: bool,
+    call_trace: impl FnOnce() -> bool,
+    frame_trace: impl FnOnce() -> bool,
+    read: impl FnOnce() -> u64,
+) -> Option<(u64, SurfaceDispatchMode)> {
+    let mode = if performance && call_trace() {
+        SurfaceDispatchMode::Performance
+    } else if frame_trace() {
+        SurfaceDispatchMode::Frame
+    } else {
         return None;
-    }
+    };
     let value = read();
+    (value != 0).then_some((value, mode))
+}
+
+fn surface_dispatch_timestamp() -> Option<u64> {
+    let value = crate::event_log::monotonic_ns();
     (value != 0).then_some(value)
 }
 
@@ -501,6 +531,7 @@ struct SurfaceDispatch {
     operation: &'static str,
     stage: &'static str,
     queued: u64,
+    mode: SurfaceDispatchMode,
 }
 
 fn surface_dispatch(
@@ -519,33 +550,55 @@ fn surface_dispatch(
 }
 
 fn surface_dispatch_context_with(
-    clock: impl FnOnce() -> Option<u64>,
+    clock: impl FnOnce() -> Option<(u64, SurfaceDispatchMode)>,
     window: impl FnOnce() -> String,
     ticket: Option<u64>,
     operation: &'static str,
     stage: &'static str,
 ) -> Option<SurfaceDispatch> {
-    clock().map(|queued| SurfaceDispatch {
+    clock().map(|(queued, mode)| SurfaceDispatch {
         window: window(),
         ticket,
         operation,
         stage,
         queued,
+        mode,
     })
 }
 
-fn record_surface_dispatch(
-    window: &str,
-    ticket: Option<u64>,
-    operation: &str,
-    stage: &str,
-    queued: u64,
-    entered: u64,
-    returned: u64,
-) {
-    crate::performance::observe("host", || {
-        surface_dispatch_fields(window, ticket, operation, stage, queued, entered, returned)
-    });
+fn record_surface_dispatch(dispatch: &SurfaceDispatch, entered: u64, returned: u64) {
+    match dispatch.mode {
+        SurfaceDispatchMode::Performance => crate::performance::observe("host", || {
+            surface_dispatch_fields(
+                &dispatch.window,
+                dispatch.ticket,
+                dispatch.operation,
+                dispatch.stage,
+                dispatch.queued,
+                entered,
+                returned,
+            )
+        }),
+        SurfaceDispatchMode::Frame => {
+            let mut fields = surface_dispatch_fields(
+                &dispatch.window,
+                dispatch.ticket,
+                dispatch.operation,
+                dispatch.stage,
+                dispatch.queued,
+                entered,
+                returned,
+            );
+            if let Value::Object(fields) = &mut fields {
+                fields.remove("event");
+            }
+            crate::event_record::emit_host(
+                crate::event_log::Level::Trace,
+                "host.frame.surface.dispatch",
+                fields,
+            );
+        }
+    }
 }
 
 fn surface_dispatch_fields(
@@ -575,7 +628,7 @@ fn surface_dispatch_fields(
 fn surface_dispatch_result<T>(dispatch: Option<SurfaceDispatch>, work: impl FnOnce() -> T) -> T {
     surface_dispatch_result_with(
         dispatch,
-        surface_dispatch_clock,
+        surface_dispatch_timestamp,
         record_surface_dispatch,
         work,
     )
@@ -584,7 +637,7 @@ fn surface_dispatch_result<T>(dispatch: Option<SurfaceDispatch>, work: impl FnOn
 fn surface_dispatch_result_with<T>(
     dispatch: Option<SurfaceDispatch>,
     mut clock: impl FnMut() -> Option<u64>,
-    mut observe: impl FnMut(&str, Option<u64>, &str, &str, u64, u64, u64),
+    mut observe: impl FnMut(&SurfaceDispatch, u64, u64),
     work: impl FnOnce() -> T,
 ) -> T {
     let Some(dispatch) = dispatch else {
@@ -594,15 +647,7 @@ fn surface_dispatch_result_with<T>(
     let result = work();
     let returned = clock();
     if let (Some(entered), Some(returned)) = (entered, returned) {
-        observe(
-            &dispatch.window,
-            dispatch.ticket,
-            dispatch.operation,
-            dispatch.stage,
-            dispatch.queued,
-            entered,
-            returned,
-        );
+        observe(&dispatch, entered, returned);
     }
     result
 }

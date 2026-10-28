@@ -884,7 +884,15 @@ func completeLayoutPresentation(prepareViews, awaitDOM, awaitRasters func() erro
 	commit(err)
 }
 
-func recordSurfaceDispatch(window string, ticket *uint64, operation, stage string, queued, entered, returned uint64) {
+type surfaceDispatchMode uint8
+
+const (
+	surfaceDispatchOff surfaceDispatchMode = iota
+	surfaceDispatchPerformance
+	surfaceDispatchFrame
+)
+
+func recordSurfaceDispatch(mode surfaceDispatchMode, window string, ticket *uint64, operation, stage string, queued, entered, returned uint64) {
 	fields := map[string]any{
 		"event": "surface.dispatch", "window": window, "operation": operation, "stage": stage,
 		"queued_ns": strconv.FormatUint(queued, 10), "entered_ns": strconv.FormatUint(entered, 10),
@@ -893,13 +901,42 @@ func recordSurfaceDispatch(window string, ticket *uint64, operation, stage strin
 	if ticket != nil && *ticket != 0 {
 		fields["ticket"] = *ticket
 	}
-	PerformanceObserve("host", func() map[string]any { return fields })
+	switch mode {
+	case surfaceDispatchPerformance:
+		PerformanceObserve("host", func() map[string]any { return fields })
+	case surfaceDispatchFrame:
+		delete(fields, "event")
+		EmitHost(LevelTrace, "host.frame.surface.dispatch", fields)
+	}
 }
 
-func surfaceDispatchClock() (uint64, bool) {
-	if !PerformanceEnabled() || !GateEvent(ClassCall, LevelDebug) {
-		return 0, false
+func surfaceDispatchClock() (uint64, surfaceDispatchMode) {
+	return surfaceDispatchClockFrom(
+		PerformanceEnabled(),
+		func() bool { return GateEvent(ClassCall, LevelDebug) },
+		func() bool { return GateEvent(ClassFrame, LevelTrace) },
+		readSurfaceDispatchClock,
+	)
+}
+
+func surfaceDispatchClockFrom(performance bool, callTrace, frameTrace func() bool, read func() (uint64, bool)) (uint64, surfaceDispatchMode) {
+	mode := surfaceDispatchOff
+	if performance && callTrace() {
+		mode = surfaceDispatchPerformance
+	} else if frameTrace() {
+		mode = surfaceDispatchFrame
 	}
+	if mode == surfaceDispatchOff {
+		return 0, surfaceDispatchOff
+	}
+	value, ok := read()
+	if !ok {
+		return 0, surfaceDispatchOff
+	}
+	return value, mode
+}
+
+func readSurfaceDispatchClock() (uint64, bool) {
 	if system == nil {
 		LogError("surface dispatch clock", "the platform is unavailable")
 		return 0, false
@@ -917,36 +954,36 @@ func surfaceDispatchClock() (uint64, bool) {
 }
 
 func runSurfaceDispatch(dispatch func(func()), window string, ticket *uint64, operation, stage string, work func() error) error {
-	queued, trace := surfaceDispatchClock()
+	queued, mode := surfaceDispatchClock()
 	var entered, returned uint64
 	var enteredAvailable, returnedAvailable bool
 	var workErr error
 	dispatch(func() {
-		if trace {
-			entered, enteredAvailable = surfaceDispatchClock()
+		if mode != surfaceDispatchOff {
+			entered, enteredAvailable = readSurfaceDispatchClock()
 		}
 		workErr = work()
-		if trace {
-			returned, returnedAvailable = surfaceDispatchClock()
+		if mode != surfaceDispatchOff {
+			returned, returnedAvailable = readSurfaceDispatchClock()
 		}
 	})
-	if trace && enteredAvailable && returnedAvailable {
-		recordSurfaceDispatch(window, ticket, operation, stage, queued, entered, returned)
+	if mode != surfaceDispatchOff && enteredAvailable && returnedAvailable {
+		recordSurfaceDispatch(mode, window, ticket, operation, stage, queued, entered, returned)
 	}
 	return workErr
 }
 
-func observeSurfaceCallback(window string, ticket *uint64, operation, stage string, queued uint64, trace bool, work func()) {
+func observeSurfaceCallback(window string, ticket *uint64, operation, stage string, queued uint64, mode surfaceDispatchMode, work func()) {
 	var entered, returned uint64
 	var enteredAvailable, returnedAvailable bool
-	if trace {
-		entered, enteredAvailable = surfaceDispatchClock()
+	if mode != surfaceDispatchOff {
+		entered, enteredAvailable = readSurfaceDispatchClock()
 	}
 	work()
-	if trace {
-		returned, returnedAvailable = surfaceDispatchClock()
+	if mode != surfaceDispatchOff {
+		returned, returnedAvailable = readSurfaceDispatchClock()
 		if enteredAvailable && returnedAvailable {
-			recordSurfaceDispatch(window, ticket, operation, stage, queued, entered, returned)
+			recordSurfaceDispatch(mode, window, ticket, operation, stage, queued, entered, returned)
 		}
 	}
 }
@@ -1013,18 +1050,18 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			return nil
 		}, func(waiting error) {
 			// The commit and the cancel run outside the framework event lock.
-			queued, trace := surfaceDispatchClock()
+			queued, mode := surfaceDispatchClock()
 			if err := system.EnqueueUI(func() {
 				var entered uint64
 				var enteredAvailable bool
-				if trace {
-					entered, enteredAvailable = surfaceDispatchClock()
+				if mode != surfaceDispatchOff {
+					entered, enteredAvailable = readSurfaceDispatchClock()
 				}
 				defer func() {
-					if trace {
-						returned, returnedAvailable := surfaceDispatchClock()
+					if mode != surfaceDispatchOff {
+						returned, returnedAvailable := readSurfaceDispatchClock()
 						if enteredAvailable && returnedAvailable {
-							recordSurfaceDispatch(win.Name(), &req.Ticket, "present", "present-commit-ui", queued, entered, returned)
+							recordSurfaceDispatch(mode, win.Name(), &req.Ticket, "present", "present-commit-ui", queued, entered, returned)
 						}
 					}
 				}()

@@ -7,11 +7,12 @@ use std::thread;
 use std::time::Duration;
 
 use super::{
-    Running, SurfaceComposition, cancel_layout_after_setup_error, clear_page_compositions,
-    close_registered_surface, commit_layout_after_root_joins, committed_view_updates,
-    complete_layout_presentation, create_registered_surface, mark_first_commit,
-    prepare_surface_visibility, pressed_surface, removed_surfaces, surface_dispatch_clock_from,
-    surface_dispatch_context_with, surface_dispatch_fields, surface_dispatch_result_with,
+    Running, SurfaceComposition, SurfaceDispatchMode, cancel_layout_after_setup_error,
+    clear_page_compositions, close_registered_surface, commit_layout_after_root_joins,
+    committed_view_updates, complete_layout_presentation, create_registered_surface,
+    mark_first_commit, prepare_surface_visibility, pressed_surface, removed_surfaces,
+    surface_dispatch_clock_from, surface_dispatch_context_with, surface_dispatch_fields,
+    surface_dispatch_result_with,
 };
 
 // contract: performance.surface.dispatch-records-existing-boundaries
@@ -22,7 +23,7 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
     let mut phases = Vec::new();
     let fake_ui_dispatch = |work: Box<dyn FnOnce() + '_>| work();
     let dispatch = surface_dispatch_context_with(
-        || Some(100),
+        || Some((100, SurfaceDispatchMode::Performance)),
         || "main".to_owned(),
         Some(41),
         "present",
@@ -34,9 +35,16 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
         let result = surface_dispatch_result_with(
             Some(dispatch_for_run.clone()),
             || clock_values.next().flatten(),
-            |window, ticket, operation, stage, queued, entered, returned| {
+            |dispatch, entered, returned| {
+                assert_eq!(dispatch.mode, SurfaceDispatchMode::Performance);
                 observed.push(surface_dispatch_fields(
-                    window, ticket, operation, stage, queued, entered, returned,
+                    &dispatch.window,
+                    dispatch.ticket,
+                    dispatch.operation,
+                    dispatch.stage,
+                    dispatch.queued,
+                    entered,
+                    returned,
                 ));
             },
             || {
@@ -81,7 +89,7 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
             off_clock_reads += 1;
             Some(1)
         },
-        |_, _, _, _, _, _, _| off_observations += 1,
+        |_, _, _| off_observations += 1,
         || 9,
     );
     assert_eq!(value, 9);
@@ -93,13 +101,95 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
     );
     let mut monotonic_reads = 0;
     assert_eq!(
-        surface_dispatch_clock_from(false, || {
-            monotonic_reads += 1;
-            1
-        }),
+        surface_dispatch_clock_from(
+            false,
+            || false,
+            || false,
+            || {
+                monotonic_reads += 1;
+                1
+            }
+        ),
         None
     );
     assert_eq!(monotonic_reads, 0, "disabled trace read the event clock");
+}
+
+// contract: performance.surface.dispatch-records-frame-only-boundaries
+#[test]
+fn surface_dispatch_records_frame_boundaries_when_performance_trace_is_off() {
+    let was_on = crate::performance::enabled();
+    crate::performance::command(serde_json::json!({"action": "off"})).unwrap();
+    let dispatch = surface_dispatch_context_with(
+        || Some((400, SurfaceDispatchMode::Frame)),
+        || "main".to_owned(),
+        None,
+        "present",
+        "present-prepare-ui",
+    )
+    .expect("frame-only trace captures its dispatch context");
+    let mut clock_values = [Some(420), Some(440)].into_iter();
+    surface_dispatch_result_with(
+        Some(dispatch),
+        || clock_values.next().flatten(),
+        super::record_surface_dispatch,
+        || (),
+    );
+    let got = crate::event_record::buffered_fields("host.frame.surface.dispatch");
+    assert_eq!(
+        got.last(),
+        Some(&serde_json::json!({
+            "window": "main",
+            "operation": "present",
+            "stage": "present-prepare-ui",
+            "queued_ns": "400",
+            "entered_ns": "420",
+            "returned_ns": "440"
+        })),
+        "frame-only dispatch must store the same clock boundaries"
+    );
+    assert!(
+        crate::event_record::buffered_fields("host.trace.surface.dispatch").is_empty(),
+        "frame-only dispatch must not duplicate the performance event"
+    );
+    if was_on {
+        crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
+    }
+}
+
+// contract: performance.surface.dispatch-frame-fallback-is-exclusive
+#[test]
+fn surface_dispatch_frame_fallback_selection_and_disabled_clock() {
+    assert_eq!(
+        surface_dispatch_clock_from(true, || true, || true, || 1),
+        Some((1, SurfaceDispatchMode::Performance)),
+        "performance trace wins when both gates are open"
+    );
+    assert_eq!(
+        surface_dispatch_clock_from(true, || false, || true, || 2),
+        Some((2, SurfaceDispatchMode::Frame)),
+        "frame trace is the fallback when call trace is gated"
+    );
+    assert_eq!(
+        surface_dispatch_clock_from(false, || false, || true, || 3),
+        Some((3, SurfaceDispatchMode::Frame)),
+        "frame trace records when performance trace is off"
+    );
+    let mut reads = 0;
+    assert_eq!(
+        surface_dispatch_clock_from(
+            false,
+            || false,
+            || false,
+            || {
+                reads += 1;
+                4
+            }
+        ),
+        None,
+        "closed gates disable dispatch records"
+    );
+    assert_eq!(reads, 0, "closed gates must not read the clock");
 }
 
 // contract: surface-layout.setup-failure-cancels-open-transaction

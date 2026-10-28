@@ -134,7 +134,7 @@ func TestSurfaceDispatchRecordKeepsTicketAndClockBoundaries(t *testing.T) {
 	wasOn := performanceOn.Swap(true)
 	t.Cleanup(func() { performanceOn.Store(wasOn) })
 	oldSystem := system
-	clock := &surfaceDispatchClockPlatform{Platform: oldSystem, times: []uint64{100, 120, 140, 200, 220, 240, 300, 320}}
+	clock := &surfaceDispatchClockPlatform{Platform: oldSystem, times: []uint64{100, 120, 140, 200, 220, 240, 300, 320, 340, 360, 380}}
 	system = clock
 	t.Cleanup(func() { system = oldSystem })
 	ticket := uint64(41)
@@ -156,7 +156,7 @@ func TestSurfaceDispatchRecordKeepsTicketAndClockBoundaries(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("run unassigned-ticket dispatch: %v", err)
 	}
-	observeSurfaceCallback("main", &ticket, "present", "present-dom-callback", 280, true, func() {
+	observeSurfaceCallback("main", &ticket, "present", "present-dom-callback", 280, surfaceDispatchPerformance, func() {
 		phases = append(phases, "callback")
 	})
 	if want := []string{"entered", "prepare", "returned", "entered", "sync", "returned", "callback"}; !reflect.DeepEqual(phases, want) {
@@ -191,12 +191,78 @@ func TestSurfaceDispatchRecordKeepsTicketAndClockBoundaries(t *testing.T) {
 	if clock.reads != 8 {
 		t.Fatalf("monotonic clock reads = %d, want eight reads for two dispatches and one callback", clock.reads)
 	}
+	if frame := bufferedTraces(t, "host.frame.surface.dispatch"); len(frame) != 0 {
+		t.Fatalf("performance trace emitted a duplicate frame event: %#v", frame)
+	}
 	performanceOn.Store(false)
 	if err := runSurfaceDispatch(dispatch, "main", nil, "sync", "sync-layout-ui", func() error { return nil }); err != nil {
-		t.Fatalf("run untraced dispatch: %v", err)
+		t.Fatalf("run frame-fallback dispatch: %v", err)
 	}
-	if clock.reads != 8 || len(bufferedTraces(t, "host.trace.surface.dispatch")) != 3 {
-		t.Fatalf("disabled trace read clock or emitted a record: clock reads=%d records=%d", clock.reads, len(bufferedTraces(t, "host.trace.surface.dispatch")))
+	if clock.reads != 11 || len(bufferedTraces(t, "host.trace.surface.dispatch")) != 3 || len(bufferedTraces(t, "host.frame.surface.dispatch")) != 1 {
+		t.Fatalf("frame fallback did not record exactly once: clock reads=%d call records=%d frame records=%d", clock.reads, len(bufferedTraces(t, "host.trace.surface.dispatch")), len(bufferedTraces(t, "host.frame.surface.dispatch")))
+	}
+}
+
+// contract: performance.surface.dispatch-frame-fallback-is-exclusive
+func TestSurfaceDispatchFrameFallbackSelectionAndDisabledClock(t *testing.T) {
+	cases := []struct {
+		name                     string
+		performance, call, frame bool
+		want                     surfaceDispatchMode
+	}{
+		{"performance wins when both gates are open", true, true, true, surfaceDispatchPerformance},
+		{"frame fallback when call trace is gated", true, false, true, surfaceDispatchFrame},
+		{"frame trace when performance is off", false, false, true, surfaceDispatchFrame},
+		{"off when both gates are closed", false, false, false, surfaceDispatchOff},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			reads := 0
+			_, got := surfaceDispatchClockFrom(test.performance, func() bool { return test.call }, func() bool { return test.frame }, func() (uint64, bool) {
+				reads++
+				return 1, true
+			})
+			if got != test.want {
+				t.Fatalf("selected dispatch mode = %v, want %v", got, test.want)
+			}
+			wantReads := 1
+			if test.want == surfaceDispatchOff {
+				wantReads = 0
+			}
+			if reads != wantReads {
+				t.Fatalf("clock reads = %d, want %d", reads, wantReads)
+			}
+		})
+	}
+}
+
+// contract: performance.surface.dispatch-records-frame-only-boundaries
+func TestSurfaceDispatchRecordsFrameBoundariesWhenPerformanceTraceIsOff(t *testing.T) {
+	isolateTraceRecords(t)
+	wasOn := performanceOn.Swap(false)
+	t.Cleanup(func() { performanceOn.Store(wasOn) })
+	oldSystem := system
+	clock := &surfaceDispatchClockPlatform{Platform: oldSystem, times: []uint64{400, 420, 440}}
+	system = clock
+	t.Cleanup(func() { system = oldSystem })
+	if err := runSurfaceDispatch(func(task func()) { task() }, "main", nil, "present", "present-prepare-ui", func() error {
+		return nil
+	}); err != nil {
+		t.Fatalf("run frame-traced dispatch: %v", err)
+	}
+	got := bufferedTraces(t, "host.frame.surface.dispatch")
+	want := []map[string]any{{
+		"window": "main", "operation": "present", "stage": "present-prepare-ui",
+		"queued_ns": "400", "entered_ns": "420", "returned_ns": "440",
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("frame-only dispatch records = %#v, want %#v", got, want)
+	}
+	if clock.reads != 3 {
+		t.Fatalf("monotonic clock reads = %d, want three for a frame-only dispatch", clock.reads)
+	}
+	if trace := bufferedTraces(t, "host.trace.surface.dispatch"); len(trace) != 0 {
+		t.Fatalf("frame-only dispatch duplicated the performance event: %#v", trace)
 	}
 }
 

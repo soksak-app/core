@@ -12,7 +12,7 @@
 
 ## Surface dispatch 측정
 
-trace가 켜져 있으면 surface `sync`와 `present` 경로에서 이미 존재하는 UI admission과 비동기 callback마다 `host.trace.surface.dispatch`를 기록한다. 기록에는 window, operation, host별 stage, 선택적 layout ticket이 들어간다. `queued_ns`는 기존 dispatch 또는 native callback 등록 직전, `entered_ns`는 UI closure 또는 callback 진입 시점, `returned_ns`는 종료 시점에 샘플링한다. 이 십진 나노초 값은 `mono_ns`와 같은 host event clock(macOS에서는 CLOCK_UPTIME_RAW)을 사용한다. Callback이 등록 호출의 반환보다 먼저 inline으로 실행될 수 있다. 기록은 동기 dispatch 뒤 caller가 재개되는 시간을 포함하지 않고, dispatch나 대기를 추가하지 않는다. Root-view join 등록과 완료의 근거로 기존 `host.trace.view.presentation-join` 기록을 계속 사용한다.
+surface `sync`와 `present` 경로에서 이미 존재하는 각 UI admission과 비동기 callback은 performance trace가 켜져 있고 call/debug gate가 열려 있으면 기존 performance trace인 `host.trace.surface.dispatch`를 사용한다. 그렇지 않고 frame/trace gate가 열려 있으면 같은 경계가 `host.frame.surface.dispatch`를 기록한다. 두 gate가 모두 열려 있어도 각 경계는 event 하나만 기록한다. 기록에는 window, operation, host별 stage, 선택적 layout ticket이 들어간다. `queued_ns`는 기존 dispatch 또는 native callback 등록 직전, `entered_ns`는 UI closure 또는 callback 진입 시점, `returned_ns`는 종료 시점에 샘플링한다. 이 십진 나노초 값은 `mono_ns`와 같은 host event clock(macOS에서는 CLOCK_UPTIME_RAW)을 사용한다. Callback이 등록 호출의 반환보다 먼저 inline으로 실행될 수 있다. 기록은 동기 dispatch 뒤 caller가 재개되는 시간을 포함하지 않고, dispatch나 대기를 추가하지 않는다. 두 gate가 모두 닫히면 host는 clock을 읽지 않고 dispatch 기록을 만들지 않는다. Root-view join 등록과 완료의 근거로 기존 `host.trace.view.presentation-join` 기록을 계속 사용한다.
 
 ## 출력
 

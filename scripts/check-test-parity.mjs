@@ -8555,6 +8555,21 @@ const FEATURE_LINKS = [
     expected: "Stop errors remain observable while native ownership decides whether cleanup is retained or released; retired recordings permit another start and removal retries do not repeat stop.",
     levels: ["unit", "native"],
   },
+  {
+    id: "F239-255",
+    implementation: [
+      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func surfaceDispatchClockFrom" },
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn surface_dispatch_clock_from" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestSurfaceDispatchRecordsFrameBoundariesWhenPerformanceTraceIsOff" },
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestSurfaceDispatchFrameFallbackSelectionAndDisabledClock" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "surface_dispatch_records_frame_boundaries_when_performance_trace_is_off" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "surface_dispatch_frame_fallback_selection_and_disabled_clock" },
+    ],
+    expected: "Frame tracing records existing dispatch boundaries when the performance path is ineligible, without duplicate events or clock reads when both gates are closed.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

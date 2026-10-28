@@ -819,6 +819,27 @@
       },
       "description": "The performance trace of an existing surface-layout UI admission or native callback. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The record does not include the caller's resume time after a synchronous dispatch."
     },
+    "host.frame.surface.dispatch": {
+      "layer": "host",
+      "class": "frame",
+      "level": "trace",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {"type": "string", "minLength": 1},
+          "ticket": {"type": "integer", "minimum": 1},
+          "operation": {"enum": ["sync", "present"]},
+          "stage": {"type": "string", "minLength": 1},
+          "queued_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+          "entered_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+          "returned_ns": {"type": "string", "pattern": "^[1-9][0-9]*$"}
+        },
+        "required": ["window", "operation", "stage", "queued_ns", "entered_ns", "returned_ns"],
+        "additionalProperties": false
+      },
+      "description": "The frame trace of an existing surface-layout UI admission or native callback when the performance trace's call/debug path is not eligible. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The record does not include the caller's resume time after a synchronous dispatch."
+    },
     "host.trace.view.callback-cancelled": {
       "layer": "host",
       "class": "call",
