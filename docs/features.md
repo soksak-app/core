@@ -11,9 +11,9 @@
 The source audits use the matching current SDK's public commands. Older installed SDK readers reject schema 3; their default command is not reported as passing. These are local development results. Publication and historical failure-closure tasks retain their own checklist states.
 
 
-The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 41 rows: 11 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
+The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 39 rows: 9 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
 
-- **Current measurement and check corrections: 5** — F239-258, F239-223, F239-223-3, F239-233, F239-254
+- **Current measurement and check corrections: 3** — F239-223, F239-223-3, F239-233
 - **Reported failures and historical closure audits: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1 through F266.3, F266.5 through F266.7 and F266.9 through F266.13
 - **Performance measurements: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package installation and publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -35,13 +35,13 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
 
 - [o] F239-261 — P1, linked to F239-223: Preserve existing page layout phase records through the frame gate while global performance tracing is disabled. The owning Red reproduces dropped layout phases; Green passes all eight tracer cases, including no field formatting or relay when the frame gate is closed. Both native producer class owners and generated-table checks pass. Reuse the existing phase/id/time payload, batch writer and transport; application cause attribution remains open.
 
-- [~] F239-258 — P1, linked to F239-254: Implementation ready. Register the compiler-selected Rust assertions and exact host-specific helper cases, including the test-only receive-before-cleanup callback order. F239-259 supplies the two missing Wails identity assertions. Current declarations resolve all 22 retained static findings; the final compiler-selected declaration audit remains pending. No test body is changed by this metadata correction.
+- [o] F239-258 — P1, linked to F239-254: Register the compiler-selected Rust assertions and exact host-specific helper cases, including test-only receive-before-cleanup callback ordering. F239-259 supplies the two missing Wails identity assertions. The completed static audit declares all 1,008 cases: Wails 964/964 and Tauri 988/988. No test body is changed by this metadata correction.
 
 - [o] F239-256 — P1: Flush startup log records before constructing the prior-run retention fixture. Red: startup rotation prunes a partially written fixture and timestamp preparation fails with NotFound. Green: the same owning test passes after the flush barrier completes startup retention before fixture creation. Production retention is unchanged.
 
 - [o] F239-255 — P1, linked to F239-223: Record existing surface dispatch queue, entry and return boundaries through frame tracing when the performance path is ineligible. Preserve exclusive event selection and read no clock when both gates are closed. Go and Rust owners reproduce missing frame events before correction and pass afterward; the final Rust observer signature passes its three owners and Clippy. Event and documentation checks pass. Application performance acceptance remains under F239-223.
 
-- [~] F239-254 — P1: Reconcile current host test contract declarations, completed-feature links and the shared contract table before the integrated host run. Classify undefined identifiers and the table entry without a source against current specifications and actual assertions. Preserve shared behavior coverage and explicit host-specific reasons; do not bypass declaration checks or infer coverage from test names.
+- [o] F239-254 — P1: Reconcile host declarations, completed-feature links and the shared contract table with actual owner assertions. Owning recovery and writer tests pass. F239-258 completes the remaining compiler-selected declarations, and the static audit passes all 1,008 cases. Shared behavior scopes and explicit host-specific implementation reasons remain intact.
 
 - [o] F239-252 — P1, linked to F239-245: Distinguish capture stop failures from native stream ownership in both hosts. Owning Red/Green verifies retired finish ownership release, retained active or unknown ownership, original errors and removal retry without another stop. Native pressure verifies ownership before and after finalization errors. Both optimized applications complete subsequent captures and exit normally; the error-free capture cohort does not imply drag-performance acceptance.
 

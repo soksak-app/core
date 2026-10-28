@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-258: Wails 964/964와 Tauri 988/988을 포함해 case 1,008개를 모두 선언한 compiler-selected 선언 감사를 완료한다. Test body를 반복하지 않고 F239-254의 선언 작업을 완료하며 기능과 성능 결과는 각각의 증거를 유지한다.
+
 - F239-261: 기존 page layout 단계 event를 global performance switch와 독립적으로 frame log gate에 전달한다. Call-class 비활성과 frame gate가 닫힐 때 field formatting 생략을 유지한다. Tracer Red 및 여덟 case Green, native class 소유 검사와 생성 table 검사를 통과한다. 기존 batch writer와 transport를 유지하고 recording history나 별도 collector는 추가하지 않는다.
 
 - F239-258: Compiler-selected host assertion을 실제 contract에 등록하고 공유 동작 범위를 유지한다. Drain fixture는 child process나 sidecar queue 검증을 주장하지 않고 callback 순서로 설명한다. 현재 선언은 보존된 정적 문제를 해결하며 최종 compiler-selected 감사는 별도로 남긴다.

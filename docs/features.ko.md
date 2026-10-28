@@ -11,9 +11,9 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 11개와 waiting 30개인 41개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 9개와 waiting 30개인 39개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 5** — F239-258, F239-223, F239-223-3, F239-233, F239-254
+- **현재 측정과 검사 수정: 3** — F239-223, F239-223-3, F239-233
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -35,13 +35,13 @@ F239-255 이후 최신 비프로파일 Terminal drag 측정은 Wails/Tauri sourc
 
 - [o] F239-261 — P1, F239-223 연결: Global performance tracing이 꺼진 동안에도 frame gate로 기존 page layout 단계 기록을 보존한다. 소유 Red는 layout 단계 누락을 재현하며 Green은 frame gate가 닫힐 때 field formatting과 relay가 없음을 포함한 tracer 여덟 case를 통과한다. 양 native producer class 소유 검사와 생성 table 검사도 통과한다. 기존 phase/id/time payload·batch writer·transport를 재사용하며 application 원인 분석은 미완료다.
 
-- [~] F239-258 — P1, F239-254 연결: 구현 준비 완료. Compiler-selected Rust assertion과 정확한 host별 helper case를 등록하며 test-only receive-before-cleanup callback 순서도 포함한다. F239-259가 누락된 Wails identity assertion 두 개를 제공한다. 현재 선언은 보존된 정적 문제 22개를 모두 해결하며 최종 compiler-selected 선언 감사는 남아 있다. 이 metadata 수정은 test body를 바꾸지 않는다.
+- [o] F239-258 — P1 연결: Compiler-selected Rust assertion과 정확한 host별 helper case를 등록하며 test-only receive-before-cleanup callback 순서도 포함한다. F239-259가 누락된 Wails identity assertion 두 개를 제공한다. 완료된 정적 감사는 Wails 964/964와 Tauri 988/988을 포함한 case 1,008개를 모두 선언한다. 이 metadata 수정은 test body를 바꾸지 않는다.
 
 - [o] F239-256 — P1: Prior-run retention fixture를 구성하기 전에 startup log 기록을 flush한다. Red: Startup rotation이 생성 중인 fixture를 제거해 timestamp 준비가 NotFound로 실패한다. Green: Flush barrier로 fixture 생성 전에 startup retention을 완료한 뒤 같은 소유 검사가 통과한다. Production retention은 바뀌지 않는다.
 
 - [o] F239-255 — P1, F239-223 연결: Performance 경로를 사용할 수 없을 때 frame tracing으로 기존 surface dispatch의 queue·진입·반환 경계를 기록한다. 배타적 event 선택을 유지하고 두 gate가 닫히면 clock을 읽지 않는다. Go와 Rust 소유 검사는 수정 전 frame event 누락을 재현하고 수정 후 통과하며 최종 Rust observer signature는 관련 소유 검사 세 개와 Clippy를 통과한다. Event 및 문서 검사는 통과한다. Application 성능 acceptance는 F239-223에 남는다.
 
-- [~] F239-254 — P1: 통합 host 실행 전에 현재 host test의 contract 선언, 완료 feature link 및 공유 contract table을 맞춘다. 미정의 identifier와 source가 없는 table 항목을 현재 사양 및 실제 assertion과 대조한다. 공유 동작 coverage와 명시적인 host별 사유를 유지하고 선언 검사를 우회하거나 test 이름으로 coverage를 추정하지 않는다.
+- [o] F239-254 — P1: Host 선언·완료 feature link·공유 contract table을 실제 소유 assertion에 맞춘다. 소유 recovery와 writer 검사는 통과한다. F239-258이 남은 compiler-selected 선언을 완성하고 정적 감사는 case 1,008개를 모두 통과한다. 공유 동작 범위와 명시적 host별 구현 사유를 유지한다.
 
 - [o] F239-252 — P1, F239-245 연결: 양 host에서 capture stop 실패와 native stream 소유권을 구분한다. 소유 Red/Green은 퇴역한 finish 소유권 해제, active 또는 불명확한 소유권 보존, 원래 오류 및 추가 stop 없는 제거 재시도를 검증한다. Native pressure는 finalization 오류 전후 소유권을 검증한다. 양 optimized application은 이후 capture와 정상 종료를 완료하며 오류 없는 capture cohort가 drag 성능 acceptance를 뜻하지는 않는다.
 

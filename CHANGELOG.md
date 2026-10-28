@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-258: Complete the compiler-selected declaration audit with all 1,008 cases declared, including Wails 964/964 and Tauri 988/988. This closes the declaration work of F239-254 without repeating test bodies; functional and performance results retain their separate evidence.
+
 - F239-261: Route existing page layout phase events through the frame log gate independently of the global performance switch. Preserve call-class disabling and avoid field formatting when the frame gate is closed. The tracer Red and eight-case Green, native class owners and generated-table checks pass. Keep the existing batch writer and transport; add no recording history or separate collector.
 
 - F239-258: Register compiler-selected host assertions against their actual contracts and retain shared behavior scopes. Describe the drain fixture as callback ordering without claiming child-process or sidecar-queue verification. Current declarations resolve the retained static findings; final compiler-selected auditing remains separate.
