@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-248: Normalize Rust formatting in endpoint assertions and native surface handlers without changing behavior. The workspace format check passes after correction.
+
 - F239-247: Detect lock and condition-wait results that replace poison errors through map_or or map_or_else. Four valid guard-result counterexamples fail before correction and the same focused owner passes afterward. Preserve explicit propagation and guard recovery.
 
 - F239-245: Preserve capture cleanup ownership after a start panic, stop failure or directory-removal failure. Retry directory cleanup without repeating a completed stop, and leave paths whose creation failed untouched. Reject poisoned document-frame lifecycle and pending-start locks explicitly, and release the pending lock before receiving. Recording owners pass 20/20 and targeted poison and reentry cases pass after their recorded failures. Recognize explicit lock-error propagation in the census while retaining findings for discarded errors and defaults; document the reasons for intentional boundary defaults. The panic policy records the original failure and terminates the host, so no separate recovery mode is introduced.

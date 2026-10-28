@@ -11,9 +11,9 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 12개와 waiting 30개인 42개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 11개와 waiting 30개인 41개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 6** — F239-223, F239-223-3, F239-233, F239-243, F239-247, F239-248
+- **현재 측정과 검사 수정: 5** — F239-223, F239-223-3, F239-233, F239-243, F239-248
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -25,7 +25,7 @@ F239-241과 F239-242 전의 최신 Terminal drag 측정은 Wails/Tauri cadence 7
 
 앞선 macOS 26.6.2 arm64 optimized diagnostic 측정 묶음은 측정 실패 7개와 수집 거부 1개를 보존한다. Browser source-frame 간격은 Wails/Tauri에서 51/34 ms, Editor는 50/34 ms, HWP는 34/34 ms, Wails Terminal은 71 ms다. Tauri Terminal은 창이 active 상태여서 synthetic drag를 거부했으며 drag 결과를 입증하지 않는다. HWP footprint는 양 host에서 통과한다. Wails는 허용 581,004,760 bytes에 대해 571,791,024 bytes이고, Tauri는 허용 569,847,184 bytes에 대해 568,760,032 bytes다. HWP adjusted first display는 기준 1001/1113 ms에 대해 1616.594/1755.235 ms로 여전히 실패한다. Source 간격은 observer 간격이며 입력부터 표시까지 측정한 latency가 아니다. 독립 F239-238 evaluator로 보존된 측정을 진단 replay한 결과 Browser와 Editor는 양 host에서 convergence를 통과하고 HWP는 양 host, Terminal은 Wails에서 실패한다. Tauri Terminal에는 convergence 결과가 없다. 이 replay는 새로운 application acceptance 실행이 아니다. 양 host는 정상 종료하고 error-log 감사를 통과하며 원래 frontmost baseline을 복원한다. F239-223과 F239-233은 열린 상태를 유지하며 제품 memory 최적화나 공통 latency 원인을 추론하지 않는다.
 
-- [~] F239-247 — P2, F239-245 연결: 기존 lock/condition-wait census에서 누락된 map_or 및 map_or_else default handler를 검출한다. 두 lock 및 두 wait 반례를 소유 fixture로 재현하고 현재 propagation/recovery 허용은 유지한다.
+- [o] F239-247 — P2, F239-245 연결: 기존 lock/condition-wait census에서 누락된 map_or 및 map_or_else default handler를 검출한다. 두 lock 및 두 wait 반례를 소유 fixture로 재현하고 현재 propagation/recovery 허용은 유지한다.
 
 - [~] F239-248 — P2: Workspace Rust format 검사에서 발견한 기존 endpoint 및 surface source의 formatting 차이를 정규화한다. 동작은 바꾸지 않고 format 검사로 확인한다.
 

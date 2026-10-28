@@ -1453,6 +1453,8 @@ mod document_frame_identity_declaration_test {
     // contract: diagnostics.capture.document-identity.start.is-declared
     #[test]
     fn document_frame_identity_start_method_is_declared() {
-        assert!(super::declared("diagnostics.capture.document-identity.start"));
+        assert!(super::declared(
+            "diagnostics.capture.document-identity.start"
+        ));
     }
 }

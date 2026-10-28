@@ -572,10 +572,7 @@ fn surface_dispatch_fields(
     Value::Object(fields)
 }
 
-fn surface_dispatch_result<T>(
-    dispatch: Option<SurfaceDispatch>,
-    work: impl FnOnce() -> T,
-) -> T {
+fn surface_dispatch_result<T>(dispatch: Option<SurfaceDispatch>, work: impl FnOnce() -> T) -> T {
     surface_dispatch_result_with(
         dispatch,
         surface_dispatch_clock,
@@ -1073,8 +1070,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     let dispatch = surface_dispatch(window, None, "sync", "sync-root-view-ui");
     let main = exposure::on_main(window, move || {
         surface_dispatch_result(dispatch, || {
-            crate::windows::root_view(&root_window)
-                .ok_or_else(|| "the main webview is gone".into())
+            crate::windows::root_view(&root_window).ok_or_else(|| "the main webview is gone".into())
         })
     })?;
     let ticket = running.prepared.fetch_add(1, Ordering::Relaxed) + 1;
@@ -1112,7 +1108,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                     owner,
                     ticket,
                     Box::new(move |allowed| {
-                        let sent = surface_dispatch_result(callback_dispatch.clone(), || tx.send(allowed));
+                        let sent =
+                            surface_dispatch_result(callback_dispatch.clone(), || tx.send(allowed));
                         if sent.is_err() {
                             crate::application_log::log_info(
                                 "surface",
@@ -1194,7 +1191,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 let names = Arc::clone(&views.0);
                 let hosts = Arc::clone(&context);
                 let id = s.id.clone();
-                let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-surface-create-ui");
+                let dispatch =
+                    surface_dispatch(window, Some(ticket), "sync", "sync-surface-create-ui");
                 let handle = exposure::on_main(window, move || {
                     surface_dispatch_result(dispatch, || {
                         create_registered_surface(&names, &hosts.surface_hosts, &id, || {
@@ -1205,7 +1203,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 crate::performance::surface("created", &s.id, None);
                 handle
             };
-            let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-surface-prepare-ui");
+            let dispatch =
+                surface_dispatch(window, Some(ticket), "sync", "sync-surface-prepare-ui");
             exposure::on_main(window, move || {
                 surface_dispatch_result(dispatch, || {
                     // Visible surfaces keep their current visibility until present applies the transaction; invisible surfaces hide now.
@@ -1414,11 +1413,15 @@ pub(crate) async fn present(
     request: PresentRequest,
 ) -> Result<Vec<Placement>, String> {
     let root_window = window.clone();
-    let root_dispatch = surface_dispatch(&window, Some(request.ticket), "present", "present-root-view-ui");
+    let root_dispatch = surface_dispatch(
+        &window,
+        Some(request.ticket),
+        "present",
+        "present-root-view-ui",
+    );
     let main = exposure::on_main(&window, move || {
         surface_dispatch_result(root_dispatch, || {
-            crate::windows::root_view(&root_window)
-                .ok_or_else(|| "the main webview is gone".into())
+            crate::windows::root_view(&root_window).ok_or_else(|| "the main webview is gone".into())
         })
     })?;
     let ticket = request.ticket;
@@ -1584,7 +1587,8 @@ pub(crate) async fn present(
             // returning so that the next split does not wait forever behind the failed owner.
             return Err(cancel_layout_after_setup_error(error, || {
                 let target = window.clone();
-                let dispatch = surface_dispatch(&target, Some(ticket), "present", "present-cancel-setup-ui");
+                let dispatch =
+                    surface_dispatch(&target, Some(ticket), "present", "present-cancel-setup-ui");
                 platform::current()?.enqueue_ui(Box::new(move || {
                     surface_dispatch_result(dispatch, || {
                         log_failure(
@@ -1598,7 +1602,8 @@ pub(crate) async fn present(
     };
     let (ui_tx, mut ui_rx) = tauri::async_runtime::channel(1);
     // A commit can call an AppKit redraw, so it runs outside the Tao event lock.
-    let commit_dispatch = surface_dispatch(&commit_window, Some(ticket), "present", "present-commit-ui");
+    let commit_dispatch =
+        surface_dispatch(&commit_window, Some(ticket), "present", "present-commit-ui");
     platform::current()?.enqueue_ui(Box::new(move || {
         surface_dispatch_result(commit_dispatch, || {
             let result = (|| -> Result<Vec<Placement>, String> {
@@ -1648,17 +1653,19 @@ pub(crate) async fn present(
                             .needs_join(surface, generation, placement)
                     },
                     |missing| {
-                        documents::join_shown_views(
-                            &presentation_window,
-                            platform,
-                            ticket,
-                            missing,
-                        )
+                        documents::join_shown_views(&presentation_window, platform, ticket, missing)
                     },
                     || {
-                        let dispatch = surface_dispatch(&presentation_window, Some(ticket), "present", "present-native-commit-ui");
+                        let dispatch = surface_dispatch(
+                            &presentation_window,
+                            Some(ticket),
+                            "present",
+                            "present-native-commit-ui",
+                        );
                         with_native_owner(&presentation_window, move |owner| {
-                            surface_dispatch_result(dispatch, || platform.commit_layout(owner, ticket))
+                            surface_dispatch_result(dispatch, || {
+                                platform.commit_layout(owner, ticket)
+                            })
                         })
                         .map_err(|error| error.to_string())
                     },

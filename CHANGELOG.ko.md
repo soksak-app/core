@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-248: 동작을 바꾸지 않고 endpoint assertion과 native surface handler의 Rust formatting을 정규화한다. 수정 후 workspace format 검사가 통과한다.
+
 - F239-247: map_or 또는 map_or_else로 poison 오류를 대체하는 lock 및 condition-wait 결과를 검출한다. 유효한 guard 결과 반례 네 개가 수정 전 실패하고 수정 후 동일 집중 소유 검사가 통과한다. 명시적 전파 및 guard 복구는 유지한다.
 
 - F239-245: Start panic, stop 실패 또는 directory 삭제 실패 뒤 capture cleanup 소유권을 유지한다. 완료한 stop을 반복하지 않고 directory cleanup을 재시도하며 생성에 실패한 path는 건드리지 않는다. Poison된 document-frame lifecycle 및 pending-start lock을 명시적으로 거부하고 receive 전에 pending lock을 해제한다. Recording 소유 검사 20/20과 poison 및 재진입 집중 case는 기록된 실패 뒤 통과한다. Census는 명시적 lock 오류 전파를 인정하면서 버린 오류와 default를 계속 검출하며 의도된 boundary default의 이유를 기록한다. Panic 정책은 원래 실패를 기록하고 host를 종료하므로 별도 복구 모드를 만들지 않는다.
