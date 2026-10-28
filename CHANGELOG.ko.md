@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-283: `@soksak/plugin-api/contract/` 전체를 게시한다. Packed SDK owner는 release 파일에서 `contract/view-operations.json`을 찾지 못해 실패했고, 이제 현재 contract 파일 전체를 pack하며 1/1 통과한다. `make docs-check`가 통과하고 F239-283 parity link에는 finding이 없다. 전체 parity는 F239-277과 F239-278의 누락 link를 보고한다. Package tree가 바뀌므로 release 전에 SDK pin과 candidate proof identity를 갱신해야 한다. 여기서는 pin이나 publication을 주장하지 않는다.
+
 - F239-278: Native Darwin test output과 runner manifest를 `runner.temp`에 보존하고, job failure 시 Foundation으로 찾은 사용자 DiagnosticReports directory와 함께 업로드한다. 기존 workflow owner 9/9, CI workflow YAML parsing, `make docs-check`가 통과한다. 이 변경은 향후 failure evidence를 보존하며 native test 기준을 바꾸거나 관찰된 native failure를 수정하지 않는다.
 - F239-277: Wails dependency download에 필요한 Go workspace archive hash와
   standalone Sok offline readonly resolution에 필요한 archive 및 go.mod

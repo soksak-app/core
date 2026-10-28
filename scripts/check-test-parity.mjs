@@ -200,6 +200,13 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-283",
+    implementation: [{ file: "packages/plugin-api/package.json", symbol: '"contract/"' }],
+    tests: [{ file: "packages/plugin-api/test/package-files.test.mjs", id: "the packed SDK contains every current contract file" }],
+    expected: "The SDK tar release contains every current file under its public contract directory, checked from the packed output rather than a mirrored manifest list.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-276",
     implementation: [{ file: "packages/plugin-api/view-check.js", symbol: "export const VIEW_START_SHA256" }],
     tests: [

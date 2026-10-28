@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-283: Publish the complete `@soksak/plugin-api/contract/` directory. The packed SDK owner failed because `contract/view-operations.json` was absent from the release file; it now packs every current contract file and passes 1/1. `make docs-check` passes and the F239-283 parity link has no finding; parity still reports missing links for F239-277 and F239-278. The package tree changed, so SDK pins and candidate proof identity must be refreshed before a release; no pin or publication is claimed here.
+
 - F239-278: Keep native Darwin test output and the runner manifest under `runner.temp`, and upload them with the user DiagnosticReports directory on job failure. Resolve the Library directory through Foundation. The existing workflow owner passes 9/9, the CI workflow parses as YAML, and `make docs-check` passes. This retains future failure evidence without changing native test criteria or fixing the observed native failures.
 - F239-277: Add the Go workspace archive hashes required by Wails dependency
   downloads and the standalone Sok archive and go.mod checksums required by
