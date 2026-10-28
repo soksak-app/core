@@ -11,9 +11,9 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 14개와 waiting 30개인 44개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 13개와 waiting 30개인 43개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 4** — F239-223, F239-223-3, F239-233, F239-272
+- **현재 측정과 검사 수정: 3** — F239-223, F239-223-3, F239-233
 - **CI와 release 소유권: 4** — F239-266 및 F239-266-1부터 F239-266-3
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
@@ -28,9 +28,11 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 
 앞선 macOS 26.6.2 arm64 optimized diagnostic 측정 묶음은 측정 실패 7개와 수집 거부 1개를 보존한다. Browser source-frame 간격은 Wails/Tauri에서 51/34 ms, Editor는 50/34 ms, HWP는 34/34 ms, Wails Terminal은 71 ms다. Tauri Terminal은 창이 active 상태여서 synthetic drag를 거부했으며 drag 결과를 입증하지 않는다. HWP footprint는 양 host에서 통과한다. Wails는 허용 581,004,760 bytes에 대해 571,791,024 bytes이고, Tauri는 허용 569,847,184 bytes에 대해 568,760,032 bytes다. 이 과거 cohort에서 HWP adjusted first display는 1616.594/1755.235 ms로 기록됐고 기준은 1001/1113 ms다. 보존된 first-display 결과에는 해당 값을 현재 HWP H44 package 또는 H40 Studio source와 연결하는 implementation manifest가 없다. 확인 가능한 startup-comparison manifest는 별도 HWP candidate를 식별하며 이 값이 어느 구현에서 측정됐는지 입증하지 않는다. 현재 HWP first-display 성능은 미검증이다. Source 간격은 observer 간격이며 입력부터 표시까지 측정한 latency가 아니다. 독립 F239-238 evaluator로 보존된 측정을 진단 replay한 결과 Browser와 Editor는 양 host에서 convergence를 통과하고 HWP는 양 host, Terminal은 Wails에서 실패한다. Tauri Terminal에는 convergence 결과가 없다. 이 replay는 새로운 application acceptance 실행이 아니다. 양 host는 정상 종료하고 error-log 감사를 통과하며 원래 frontmost baseline을 복원한다. F239-223과 F239-233은 열린 상태를 유지하며 제품 memory 최적화나 공통 latency 원인을 추론하지 않는다.
 
+- [o] F239-275 — P1, F239-263 연결: 비동기 응답 뒤 synchronization trace에 현재 mount attempt가 없을 수 있는 이유를 명시한다. Synchronization 대기 중 surface가 unmount될 수 있으며 diagnostic null은 그 부재를 기록하고 native request data를 대신하지 않는다. Push fallback audit가 누락된 이유를 거부한다. 바뀌지 않은 동작을 확인하고 소유 audit만 다시 실행한다.
+
 - [o] F239-274 — P1, F239-272 연결: 변경한 Rust image wait method와 소유 assertion에 repository formatter를 적용한다. Main push gate가 서식을 거부한다. 동작을 보존하고 formatter가 배치만 바꿨을 때만 소유 test 결과를 재사용한다.
 
-- [~] F239-272 — P0, F239-223 및 F239-271 연결: 더 늦은 same-raster content sequence를 기다리지 않고 정확한 현재 generation과 raster의 설치된 snapshot으로 continuous image presentation을 완료한다. Settled placement와 host.window.presented의 최신 sequence 대기, 엄격한 stale-frame preflight, raster/generation 무효화와 모든 presentation error를 유지한다. 제어된 소유 case로 두 완료 경계를 구분한다. Main push gate가 거부한 누락 declaration 네 개를 포함해 영향을 받은 모든 소유 case를 등록한다. Cadence와 geometry 기준은 바꾸지 않는다. Implementation ready: 양 host에서 수정 전에 same-raster 대기 결함과 이전 generation watermark를 재현하고 수정 뒤 집중 소유 case를 통과한다. Consumer는 settled 최신 sequence 대기를 유지한다. Parity는 통과했으며 compiled host declaration acceptance와 application cadence는 미검증이다.
+- [o] F239-272 — P0, F239-223 및 F239-271 연결: 더 늦은 same-raster content sequence를 기다리지 않고 정확한 현재 generation과 raster의 설치된 snapshot으로 continuous image presentation을 완료한다. Settled placement와 host.window.presented의 최신 sequence 대기, 엄격한 stale-frame preflight, raster/generation 무효화와 모든 presentation error를 유지한다. 제어된 소유 case로 두 완료 경계를 구분한다. Main push gate가 거부한 누락 declaration 네 개를 포함해 영향을 받은 모든 소유 case를 등록한다. Cadence와 geometry 기준은 바꾸지 않는다. Implementation ready: 양 host에서 수정 전에 same-raster 대기 결함과 이전 generation watermark를 재현하고 수정 뒤 집중 소유 case를 통과한다. Consumer는 settled 최신 sequence 대기를 유지한다. Parity와 compiled declaration은 marker 수정 뒤 contract case 1,012개 모두 통과한다. Application cadence는 F239-223에 남는다.
 
 - [o] F239-271 — P0, F239-223 연결: Preflight와 acknowledgment 사이에 더 새 frame이 수락돼도 성공한 native image 표시를 기록한다. 정확한 generation과 raster, 단조 증가하는 presented sequence, 표시 전 stale 거부와 최신 sequence settled 대기를 보존한다. 수정 전에 양 host 소유 module에서 interleaving을 재현하며 future, duplicate, 이전 sequence와 다른 raster acknowledgment를 거부한다. Continuous wait 기준을 바꾸거나 cadence 개선을 입증하지 않는다. 제어된 소유 interleaving은 future 및 stale acknowledgment, 단조 증가와 이전 성공 acknowledgment 뒤 새 failure 보존을 포함해 양 host에서 통과한다. Presentation error는 최신 sequence의 성공 때만 지운다. Application 재검증은 별도다.
 

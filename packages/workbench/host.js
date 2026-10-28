@@ -387,6 +387,7 @@ async function syncSurfaces(request, surfaceModules, declarationBytes) {
     const requestId = ++nextSurfaceSyncRequestId;
     const views = request.surfaces
       .filter(({ composition }) => composition?.kind === "view")
+      // default: a surface can unmount before the sync reply; null records the absent current mount registration.
       .map(({ id }) => ({ surface: id, attempt: surfaceModules.mountedSurface(id)?.mountRegistration?.attempt ?? null }));
     const bytes = declarationBytes();
     trace("surface.sync", {

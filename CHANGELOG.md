@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-275: State the lifecycle reason for a null mount attempt in synchronization diagnostics. An asynchronous reply can arrive after unmount. Runtime behavior is unchanged and the owning fallback audit passes 10/10.
+
 - F239-274: Apply the repository Rust formatter to the image wait method and owner assertions rejected by the push gate. The workspace format check passes; the diff changes only layout and trailing commas, so existing owner results remain applicable.
 
 - F239-272: Complete continuous image presentation from an installed snapshot of the current generation and raster without waiting for later same-raster sequences. Keep settled waits latest-sequence strict, clear presented watermarks on generation changes, retain raster invalidation and error handling, and let hidden regions remain nonblocking. Go and Rust owner Reds reproduce the delayed continuous completion and stale generation watermark; focused Greens pass with settled, raster, generation, hidden-region, and error controls. This state change does not claim an application cadence improvement.
