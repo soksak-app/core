@@ -38,6 +38,16 @@ Release host별 job은 자체 bundle을 build하고 audit하며 해당 host로 s
 명시적으로 선택한 registry index에는 고정한 SHA-256을 지정할 수 있다. Digest를 지정하면 정확히 소문자 hexadecimal 64자리여야 하고 비어 있지 않은 명시적 index URL이 필요하며 JSON parsing 전에 받은 bytes와 비교한다. 불일치는 acceptance 실패다. 기본 public-index 검사와 digest 없는 명시적 index는 기존 동작을 유지한다.
 
 
+## Candidate registry release acceptance
+
+Plugin format acceptance를 바꾸는 release는 대체 component release와 core release file이 준비될 때까지 현재 public registry를 유지한다. 이전 plugin 형식을 거부한다는 이유로 이전 released core에서 설치할 수 있는 모든 plugin을 제거하는 조기 public-index 전환을 허용하지 않는다.
+
+Registry owner는 검증된 registry declaration에서 candidate index를 만들고 그 bytes를 prerelease file로 게시한다. Candidate proof는 registry source revision, candidate SDK revision, API version과 API tree를 식별한다. 정확한 대체 component version을 검증하고 기존 revocation을 보존하며 추가 revocation의 정확한 집합을 검사하고 준비되지 않은 core release file을 추가하지 않은 채 현재 published core entry를 유지한다. Plugin이 0개인 결과로는 충분하지 않다. Core는 parsing 전에 index digest를 검사하고 자신의 API tree와 version을 해당 proof와 비교한다.
+
+Core tag를 만들기 전에 동일하게 고정한 candidate index와 proof가 필수 main CI를 통과해야 한다. Tag는 정확히 그 통과한 commit을 가리킨다. Tag-triggered release 검사는 tag가 이미 존재한 뒤 실행되며 release file을 게시하기 전에 candidate acceptance를 다시 수행한다. Release job 실패는 public tag를 제거하지 않는다. Component packaging 뒤 API가 바뀌면 이전 SDK 결과를 재사용하지 않고 component acceptance를 새로 수행한다.
+
+Core release file이 준비된 뒤 registry owner는 이미 검증한 component와 revocation projection에 새 core entry를 더한 index 하나를 게시한다. Prerelease candidate는 public index를 바꾸지 않는다. URL만으로 release-file 내용을 고정할 수 없으며 고정한 digest와 source proof가 모두 필요하다.
+
 ## 제한된 실행
 
 E2E 실행기는 frontmost application을 조회하거나 시험 child를 시작하기 전에 비어 있지 않은 `SOKSAK_RUN_ID`와 `SOKSAK_RUN_FOLDER`를 함께 요구한다. 누락되거나 일부만 있는 metadata는 실행기 경계에서 실패한다. 실행기는 전달받은 두 값을 child에 그대로 전달하며 id나 폴더를 만들어내지 않는다. 따라서 모든 window-check child를 해당 run과 감사 출력에 연결할 수 있다.

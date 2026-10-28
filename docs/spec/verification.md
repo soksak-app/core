@@ -38,6 +38,16 @@ Each release host job builds and audits its own bundle, verifies stored-data mig
 An explicitly selected registry index may carry a pinned SHA-256. When supplied, the digest is exactly 64 lowercase hexadecimal characters, requires a nonempty explicit index URL, and is checked against the downloaded bytes before JSON parsing. A mismatch fails acceptance. The default public-index check and an explicit index without a digest retain their existing behavior.
 
 
+## Candidate registry release acceptance
+
+A release that changes plugin format acceptance preserves the currently published registry until replacement component releases and core release files are available. Rejecting older plugin formats does not authorize an early public-index transition that removes every installable plugin from the previously released core.
+
+The registry owner builds a candidate index from validated registry declarations and publishes its bytes as a prerelease file. Candidate proof identifies the registry source revision, candidate SDK revision, API version and API tree. It verifies the exact replacement component versions, preserves existing revocations, checks the exact additional revocation set, and retains the current published core entry without adding unavailable core release files. A zero-plugin result is insufficient. Core checks the index digest before parsing and compares its API tree and version with that proof.
+
+The same pinned candidate index and proof pass required main CI before creating the core tag. The tag names that exact passing commit. Tag-triggered release checks run after the tag already exists and repeat the candidate acceptance before publishing release files; a failing release job does not remove the public tag. API changes after component packaging require new component acceptance rather than reuse of an earlier SDK result.
+
+After core release files exist, the registry owner publishes one index containing the already-verified component and revocation projection plus the new core entry. The prerelease candidate does not change the public index. A URL alone does not freeze release-file contents; the pinned digest and source proof are both required.
+
 ## Bounded execution
 
 The E2E runner requires nonempty `SOKSAK_RUN_ID` and `SOKSAK_RUN_FOLDER` values together before it probes the frontmost application or starts a test child. Missing or partial metadata fails at the runner boundary. The runner passes the supplied values to the child unchanged; it does not synthesize an identifier or folder. This keeps every window-check child attributable to its run and audit output.
