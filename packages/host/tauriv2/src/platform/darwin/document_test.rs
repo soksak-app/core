@@ -107,21 +107,25 @@ fn callback_retirement(kind: &str) {
     );
 }
 
+// contract: tauriv2.document-callback.retirement-keeps-active-callback-alive
 #[test]
 fn callback_lifetime_ended_survives_document_retirement() {
     callback_retirement("ended");
 }
 
+// contract: tauriv2.document-callback.retirement-keeps-active-callback-alive
 #[test]
 fn callback_lifetime_changed_survives_document_retirement() {
     callback_retirement("changed");
 }
 
+// contract: tauriv2.document-callback.retirement-keeps-active-callback-alive
 #[test]
 fn callback_lifetime_event_survives_document_retirement() {
     callback_retirement("event");
 }
 
+// contract: tauriv2.document-callback.retirement-keeps-active-callback-alive
 #[test]
 fn callback_lifetime_responsiveness_survives_document_retirement() {
     callback_retirement("responsiveness");

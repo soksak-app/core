@@ -66,6 +66,7 @@ mod presentation_queue {
     use std::sync::{Arc, Mutex, mpsc};
     use std::time::Duration;
 
+    // contract: tauriv2.images.presentation.runs-after-framework-event
     #[test]
     fn image_commit_runs_after_the_framework_event_releases_its_lock() {
         let event_lock = Arc::new(Mutex::new(()));
@@ -96,6 +97,7 @@ mod presentation_queue {
         );
     }
 
+    // contract: tauriv2.images.presentation.runs-after-framework-event
     #[test]
     fn image_enqueue_failure_reaches_the_frame_handler() {
         let result = present_on_ui(Box::new(|| panic!("refused work ran")), |_| {
@@ -104,6 +106,7 @@ mod presentation_queue {
         assert_eq!(result, Err("native queue refused".into()));
     }
 
+    // contract: tauriv2.images.presentation.runs-after-framework-event
     #[test]
     fn native_image_failure_reaches_the_frame_handler() {
         let result = present_on_ui(
@@ -121,6 +124,7 @@ mod wait_boundary {
     use super::super::*;
     use std::sync::mpsc;
 
+    // contract: images.wait.newer-sequence-rearms-wait
     #[test]
     fn a_pending_newer_frame_is_required_after_the_wait_begins() {
         let images = Images::default();

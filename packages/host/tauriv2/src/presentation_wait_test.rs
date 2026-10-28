@@ -153,7 +153,7 @@ fn a_presentation_does_not_abandon_the_native_join() {
     assert_eq!(abandons.load(Ordering::SeqCst), 0);
 }
 
-// contract: view.presentation-wait.ends
+// contract: view.presentation-wait.ends, view.presentation-wait.cancel-clears-ticket
 #[test]
 fn cancellation_removes_only_its_ticket_before_abandoning_the_native_join() {
     let wait = Arc::new(PresentationWait::default());

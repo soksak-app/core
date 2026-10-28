@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-258: Register compiler-selected host assertions against their actual contracts and retain shared behavior scopes. Describe the drain fixture as callback ordering without claiming child-process or sidecar-queue verification. Current declarations resolve the retained static findings; final compiler-selected auditing remains separate.
+
 - F239-252: Complete capture cleanup ownership acceptance from the owning Go, Rust and native results and the subsequent two-host capture cohort. Retain stream-ownership distinctions and retry error reporting; keep cadence and convergence acceptance separate.
 
 - F239-259: Linearize Wails identity callback completion and timeout ownership, report late and duplicate callback errors, and preserve synchronous callback failures when scheduling fails in both hosts. Existing timeout and new error-preservation owners fail before correction and pass afterward. Retain synchronous success and explicit scheduling failures. Record the actual failure display paths.

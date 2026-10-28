@@ -1,6 +1,7 @@
 use soksak_host_tauriv2::sidecars::receive_sidecar_message;
 use std::cell::{Cell, RefCell};
 
+// contract: tauriv2.sidecars.receive-trace.records-before-dispatch
 #[test]
 fn a_handled_image_records_its_receipt_once() {
     let receipts = Cell::new(0);
@@ -13,6 +14,7 @@ fn a_handled_image_records_its_receipt_once() {
     );
 }
 
+// contract: tauriv2.sidecars.receive-trace.records-before-dispatch
 #[test]
 fn ordinary_message_keeps_its_receipt_and_page_delivery() {
     let receipts = Cell::new(0);
@@ -24,6 +26,7 @@ fn ordinary_message_keeps_its_receipt_and_page_delivery() {
     assert_eq!(receipts.get(), 1);
 }
 
+// contract: tauriv2.sidecars.receive-trace.records-before-dispatch
 #[test]
 fn receipt_precedes_native_dispatch() {
     let order = RefCell::new(Vec::new());

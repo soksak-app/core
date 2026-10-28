@@ -19,6 +19,7 @@ fn plugin_host_facts_match_registered_handles_only() {
     );
 }
 
+// contract: performance.sampler.reads-plugin-host-process
 #[test]
 fn plugin_host_facts_preserve_unstarted_and_reject_missing_handles() {
     let webviews = vec![json!({"view": 33, "process": 0})];

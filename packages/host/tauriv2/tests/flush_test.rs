@@ -143,6 +143,7 @@ fn finish_drain_scenario(
     result
 }
 
+// contract: verification.flush-fixture.receives-before-cleanup
 #[test]
 fn the_drain_fixture_receives_pending_child_output_before_cleanup() {
     let child_running = std::cell::Cell::new(true);

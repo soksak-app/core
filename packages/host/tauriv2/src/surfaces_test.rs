@@ -751,6 +751,7 @@ fn a_poisoned_surface_lock_still_creates_and_closes_a_surface() {
 mod placement_snapshot {
     use super::super::{Placement, read_surface_placements};
 
+    // contract: tauriv2.surface-placement.reads-in-one-main-thread-turn
     #[test]
     fn prepared_frames_share_one_main_thread_turn() {
         let mut turns = 0;
@@ -786,6 +787,7 @@ mod placement_snapshot {
         assert!(!placements[1].visible);
     }
 
+    // contract: tauriv2.surface-placement.read-error-reaches-reply
     #[test]
     fn frame_read_failure_rejects_the_placement_reply() {
         let result = read_surface_placements(vec![(1, "first".into(), true)], |_| {
@@ -794,6 +796,7 @@ mod placement_snapshot {
         assert_eq!(result.err().as_deref(), Some("frame read failed"));
     }
 
+    // contract: tauriv2.surface-placement.empty-skips-main-thread-dispatch
     #[test]
     fn no_surfaces_require_no_main_thread_turn() {
         let placements = read_surface_placements(vec![], |_| panic!("empty placement dispatched"))

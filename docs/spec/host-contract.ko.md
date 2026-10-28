@@ -275,6 +275,8 @@ fn invalid_json_closes_connection() {
 | `view.origin.retired-callback-is-cancelled` | 종료된 view origin의 callback은 dispatch 전에 취소되고 교체 view에는 도달하지 않는다. | both |
 | `view.origin.retired-producer-error-is-preserved` | 종료된 view origin의 producer 오류는 원래 이유와 view 식별자를 보존해 기록하며 현재 channel에는 들어가지 않는다. | both |
 | `view.origin.retired-channel-errors-are-reported` | 종료된 view origin에서 발생한 잘못된 JSON과 transport 오류는 원래 이유를 보존한 channel 오류로 보고된다. | both |
+| `tauriv2.view.dispatch.decodes-envelope-once` | Tauri view dispatcher는 현재 message envelope를 한 번만 decode하고 decode한 값에서 reply, call, snapshot, ready message를 분기한다. | tauriv2 only: Rust dispatcher의 decoded-value ownership 경로를 검증한다 |
+| `tauriv2.view.dispatch.preserves-precedence-and-errors` | Tauri view dispatcher는 field를 검증하기 전에 reply, cancel, ready 우선순위를 적용하고 잘못된 reply와 malformed JSON의 명시적 오류를 보존한다. | tauriv2 only: Rust dispatcher의 message-kind 선택과 decoder 오류를 검증한다 |
 | `view.origin.retired-malformed-envelope-is-reported` | 종료된 view origin의 잘못된 message envelope는 원래 이유를 보존한 channel 오류로 보고된다. | both |
 | `view.call.reply-generation-scoped-cleanup` | 이전 view generation의 늦은 reply는 같은 call id를 가진 교체 generation의 pending-call 기록을 제거하지 않는다. | both |
 | `sidecars.stop.stdin-eof-cancels-late-image` | stdio sidecar의 입력이 닫힌 뒤 이를 중지하면 늦은 image transfer를 닫힌 surface에 전달하지 않고 취소한다. | both |
@@ -408,6 +410,7 @@ fn invalid_json_closes_connection() {
 | `flush.buffer.closes-delivered-after-drain` | 대기열이 가득 찬 동안 버퍼에 넣은 표면 닫기 알림이 사이드카에 도착한다. | both |
 | `flush.buffer.consumed-acks-not-coalesced` | 버퍼에 넣은 consumed 응답은 같은 이미지의 두 응답을 포함해 각각 한 번 도착한다. | both |
 | `flush.buffer.delivered-after-queued-bodies` | 버퍼에 넣은 응답과 닫기 알림은 이미 대기열에 있던 본문 뒤에 도착한다. | both |
+| `verification.flush-fixture.receives-before-cleanup` | Tauri drain scenario는 cleanup callback보다 먼저 receive callback을 호출한다. 이 test-only case는 child process나 sidecar queue를 검증하지 않는다. | tauriv2 only: 이 fixture는 Tauri sidecar test harness에 속한다 |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | both |
 | `performance.trace.switch-accepts-on-and-off-only` | `performance` 호출은 동작 `on`과 `off`만 받으며, `line`을 포함한 다른 동작은 `action must be on or off`로 실패하고 아무것도 쓰지 않는다. | both |
 | `performance.trace.switch-is-held-by-the-process` | 프로세스가 스위치를 가진다. `on`은 trace를 켜고 `off`는 끄며, 켜진 동안의 관측만 event `host.trace.on`과 `host.trace.off` 사이에 저장되고, 그 뒤에 파일 `performance`, 파일 `logs/performance.ndjson`, service 폴더의 flag는 없다. | both |
@@ -437,6 +440,7 @@ fn invalid_json_closes_connection() {
 | `log.record.one-line` | 기록은 한 줄이다. 본문의 줄바꿈은 두 글자 `\n`으로 쓰고, 시각을 뺀 항목은 `<level> <layer> <where>: <text>`다. | both |
 | `sidecars.disconnect.record-end` | 영속 서비스 연결의 `host.sidecar.disconnect` 기록은 연결이 어떻게 끝났는지(`end`: `eof`, `unfinished line`, `read error: <text>`, `violation`)와 그 연결을 기다리던 요청 수(`waiting`)를 담는다. 서비스의 종료 상태는 기록하지 않는다. 호스트가 그 프로세스를 소유하지 않기 때문이다. | both |
 | `sidecars.trace.relay-records-every-message-with-its-body` | performance trace가 켜진 동안 host가 sidecar로 보내는 각 요청은 event log의 event `host.trace.sidecar.send`, 받는 각 메시지는 `host.trace.sidecar.receive`이며, field에 `sidecar`, `surface`, 본문 전체를 담는다. | both |
+| `tauriv2.sidecars.receive-trace.records-before-dispatch` | Tauri sidecar receive trace callback은 처리되는 message와 일반 message에서 각각 한 번 실행되며 native image dispatch보다 먼저 실행된다. 일반 message는 page 전달에 계속 사용할 수 있다. | tauriv2 only: Rust receive hook의 trace 관찰과 native dispatch 순서를 검증한다 |
 | `sidecars.trace.first-answer-after-spawn-is-recorded` | host가 spawn한 sidecar마다 event `host.trace.sidecar.ready`(level `debug`)를 남기며, 필드 `sidecar`, `pid`, `ms`를 담는다. `ms`는 spawn부터 그 프로세스가 보낸 첫 메시지 줄까지의 밀리초다. spawn마다 한 번 남기며, 다른 host가 시작한 프로세스는 아무것도 남기지 않는다. | both |
 | `sidecars.lifetime.start-and-exit-events` | 호스트가 시작하는 표준 입출력 사이드카 프로세스마다 `name`과 `pid`를 가진 event `host.sidecar.start`가 있고, 그 종료는 `name`, `pid`, `status`(`exit status <code>` 또는 `signal <number>`), 호스트가 멈추는 중이었는지 알려 주는 `stopping`을 가진 event `host.sidecar.exit`다. | both |
 | `sidecars.display-name.requires-canonical-component` | 사이드카 선언에는 `displayName`이 필요하며 `soksak://sidecar/<lowercase-id>` 형식의 component 하나여야 한다. 누락, 문자열이 아닌 값, 잘못된 scheme 또는 role, 추가 path component, 대문자 id는 거부된다. | both |
@@ -498,6 +502,7 @@ fn invalid_json_closes_connection() {
 | `images.wait.releases-after-current-frame-presented` | 현재 raster의 프레임이 표시되면 표시 대기가 통과한다. | both |
 | `images.wait.successful-handle-replies-consumed` | 주 스레드 표시에 성공한 봉투를 처리하면 consumed로 응답한다. | both |
 | `images.wait.newer-sequence-rearms-wait` | 같은 raster에서 새 sequence를 결정하면 표시 대기가 다시 막힌다. | both |
+| `tauriv2.images.presentation.runs-after-framework-event` | Tauri image presentation은 framework event가 lock을 놓은 뒤 commit하며, queue enqueue와 native presentation 오류를 frame handler에 그대로 전달한다. | tauriv2 only: Tauri UI callback adapter의 lock 및 오류 경계를 검증한다 |
 | `images.wait.reconfigure-clears-presented` | raster를 다시 구성하면 표시 상태를 지운다. | both |
 | `images.wait.hidden-image-does-not-block` | 숨긴 이미지는 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | both |
 | `images.wait.hidden-surface-does-not-block` | 숨긴 표면은 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | both |
@@ -1044,9 +1049,13 @@ fn invalid_json_closes_connection() {
 | `plugin-host.declared-source-stream.send-failure-is-returned` | Tauri channel로 declared-source event를 보내지 못하면 source handler에 오류를 반환한다. | tauriv2 only: Tauri `Channel` send operation은 결과를 반환한다 |
 | `plugin-host.declared-source-stream.rejects-unlisted-events` | declared-source channel은 allowlist 밖의 event 이름을 거부한다. | tauriv2 only: host가 Tauri channel allowlist를 소유한다 |
 | `view.placement.geometry-failure-is-reported` | Tauri native geometry operation이 반환한 placement 실패를 호출자에게 전달한다. | tauriv2 only: Tauri platform geometry method는 결과를 반환한다 |
+| `tauriv2.surface-placement.reads-in-one-main-thread-turn` | Tauri는 준비된 모든 surface placement를 한 번의 main-thread turn에서 읽고 같은 frame 응답을 각 placement에 사용한다. | tauriv2 only: Rust host의 placement snapshot helper를 검증한다 |
+| `tauriv2.surface-placement.empty-skips-main-thread-dispatch` | Placement snapshot에 surface가 없으면 Tauri는 main-thread dispatch를 하지 않는다. | tauriv2 only: Rust host의 placement snapshot helper를 검증한다 |
+| `tauriv2.surface-placement.read-error-reaches-reply` | Tauri surface-placement의 frame-read 오류를 placement reply에 그대로 전달한다. | tauriv2 only: Rust host의 placement snapshot helper에서 오류가 전달되는지 검증한다 |
 | `plugin-host.source-generation` | Plugin-host request, reply, event 직렬화는 JavaScript safe integer 한도를 넘는 generation을 거부하고 최대 safe integer를 허용한다. | both |
 | `plugin-host.channel.reply-generation-scoped-cleanup` | 이전 plugin-host generation의 reply는 같은 call id를 가진 교체 generation의 열린 call 기록을 지울 수 없다. | both |
 | `plugin-host.channel.stale-instance-message` | 각 message callback은 그것을 설치한 plugin host의 local instance에 묶인다. Callback, host 생성, dispose는 main thread에서 직렬화된다. Instance를 처분한 뒤 늦게 도착한 callback은 같은 plugin의 새 host가 있고 native handle을 재사용하더라도 dispatch 전에 취소되며 performance tracing 중에는 `host.trace.plugin-host.message-stale {plugin}`을 기록한다. 이전 provider가 명시한 error는 해당 plugin context로 기록하고 대체 host를 닫거나 재시작하지 않는다. Tauri는 window record가 이미 제거된 뒤에도 이를 보존한다. 생성 중 도착한 callback을 포함해 현재 instance의 message는 정상 처리한다. | both |
+| `tauriv2.document-callback.retirement-keeps-active-callback-alive` | Tauri document를 폐기할 때 이미 실행 중인 invocation이 반환된 뒤 ended, changed, event, responsiveness callback을 해제한다. | tauriv2 only: native document FFI 경계를 넘는 Rust callback receiver ownership을 검증한다 |
 | `plugin-host.channel.late-error-preserved` | Tauri host에 늦은 provider callback의 window record가 없을 때도 명시적 provider 오류를 callback이 캡처한 plugin id로 기록한다. 일반 late snapshot 또는 call은 새 오류 없이 취소한다. | tauriv2 only: provider callback 경로가 Tauri 전용이다 |
 | `plugin-host.channel.ready-theme` | host 페이지의 ready message `view.ready {plugin, document}`는 그 document를 ready document로 기록하고, 생성 뒤 첫 ready message는 `host.trace.plugin-host.process-ready`를 쓴다. host는 각 ready message 뒤와 각 later theme 변경 때 ready document가 있는 host에 theme을 보낸다. host 페이지의 새 navigation(문서 상태의 `navigations` 값 상승)은 ready document를 지운다. 다른 plugin의 ready message, document 없는 ready message, 알 수 없는 event는 거부된다. | both |
 | `plugin-host.channel.progress-keeps-ready` | 직전 상태와 같은 `navigations` 값을 가진 host 페이지의 document 상태는 ready document를 유지하므로, load 중에 보낸 ready message는 그 load의 progress 뒤에도 유지된다. | both |

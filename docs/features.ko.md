@@ -11,9 +11,9 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 10개와 waiting 30개인 40개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 11개와 waiting 30개인 41개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 4** — F239-223, F239-223-3, F239-233, F239-254
+- **현재 측정과 검사 수정: 5** — F239-258, F239-223, F239-223-3, F239-233, F239-254
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -32,6 +32,8 @@ F239-252 이후 최신 Terminal drag 측정은 Wails/Tauri source cadence 72/82 
 - [o] F239-259 — P1, F239-258 연결: 이전 결과를 대체하지 않고 Wails identity callback의 제한된 대기와 늦은 오류 보고를 완성한다. 중복 Go callback을 명시적으로 보고하고 양 host에서 동기 callback 오류와 scheduling 오류를 함께 보존한다. 소유 Red는 log 누락과 오류 소실을 재현하며 Go 네 case 및 Rust 선택 오류·성공 Green이 통과한다. Rust FnOnce callback은 중복 호출을 정적으로 막는다.
 
 - [o] F239-260 — P1, F239-255 연결: 선언된 surface dispatch frame event에 맞춰 Go·Rust·page event class table을 재생성한다. 기존 generator 소유 검사는 수정 전 분류 누락으로 실패하고 세 table을 동기화한 뒤 통과한다. 실패한 application log는 보존하며 수정 후 application 검증은 별도다.
+
+- [~] F239-258 — P1, F239-254 연결: 구현 준비 완료. Compiler-selected Rust assertion과 정확한 host별 helper case를 등록하며 test-only receive-before-cleanup callback 순서도 포함한다. F239-259가 누락된 Wails identity assertion 두 개를 제공한다. 현재 선언은 보존된 정적 문제 22개를 모두 해결하며 최종 compiler-selected 선언 감사는 남아 있다. 이 metadata 수정은 test body를 바꾸지 않는다.
 
 - [o] F239-256 — P1: Prior-run retention fixture를 구성하기 전에 startup log 기록을 flush한다. Red: Startup rotation이 생성 중인 fixture를 제거해 timestamp 준비가 NotFound로 실패한다. Green: Flush barrier로 fixture 생성 전에 startup retention을 완료한 뒤 같은 소유 검사가 통과한다. Production retention은 바뀌지 않는다.
 

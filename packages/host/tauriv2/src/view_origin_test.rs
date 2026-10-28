@@ -45,6 +45,7 @@ mod view_decode {
     use super::super::{ViewChannels, ViewDispatch};
     use serde_json::json;
 
+    // contract: tauriv2.view.dispatch.decodes-envelope-once
     #[test]
     fn a_current_view_envelope_is_decoded_once_for_every_dispatch_kind() {
         for message in [
@@ -76,6 +77,7 @@ mod view_decode {
         }
     }
 
+    // contract: tauriv2.view.dispatch.preserves-precedence-and-errors
     #[test]
     fn view_dispatch_preserves_precedence_and_invalid_field_errors() {
         let channels = ViewChannels::default();
@@ -118,6 +120,7 @@ mod view_decode {
         );
     }
 
+    // contract: view.call.forward
     #[test]
     fn a_view_call_transfers_the_owned_params_tree_without_copying_it() {
         let channels = ViewChannels::default();
