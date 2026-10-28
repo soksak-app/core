@@ -113,7 +113,7 @@ func (h *Host) Theme(ctx context.Context) (Theme, error) {
 }
 
 func (h *Host) SyncSurfaces(ctx context.Context, reqJSON json.RawMessage) (PreparedSurfaces, error) {
-	req, err := argument[SyncRequest]("request", reqJSON)
+	req, err := decodeSyncRequest(reqJSON)
 	if err != nil {
 		return PreparedSurfaces{}, err
 	}

@@ -7003,7 +7003,7 @@ const FEATURE_LINKS = [
     id: "F263",
     implementation: [
       { file: "packages/workbench/host.js", symbol: "while (reply !== themeReply)" },
-      { file: "packages/workbench/host.js", symbol: 'return syncSurfaces(request, surfaceModules)' },
+      { file: "packages/workbench/host.js", symbol: 'async function syncSurfaces(request, surfaceModules, declarationBytes)' },
     ],
     tests: [
       { file: "packages/workbench/test/host-theme-placement.test.mjs", id: "view placement waits for the latest host theme reply" },
@@ -8615,6 +8615,22 @@ const FEATURE_LINKS = [
       { file: "packages/sok/tauriv2/tests/log_policy_test.rs", id: "page_clock_anchor_passes_the_default_lifecycle_policy" },
     ],
     expected: "The existing page clock anchor survives the default writer policy while ordinary lifecycle info remains gated.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-263",
+    implementation: [
+      { file: "packages/workbench/surface-sync-request.js", symbol: "export function surfaceSyncRequestWithDeclarationTable" },
+      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func decodeSyncRequest" },
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn resolve(self)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-sync-request.test.mjs", id: "surface sync declarations use a request-local table and preserve view start context" },
+      { file: "packages/workbench/test/view-start-handoff.test.mjs", id: "core.file.open parameters reach the host placement request" },
+      { file: "packages/host/wailsv3/src/view_start_test.go", id: "TestSyncRequestRequiresAndResolvesItsDeclarationTable" },
+      { file: "packages/host/tauriv2/tests/surfaces_geometry_test.rs", id: "sync_request_resolves_request_local_view_declaration_indices" },
+    ],
+    expected: "Each request shares identical declarations while preserving complete view start values and rejecting invalid tables and indices before surface mutation.",
     levels: ["unit"],
   },
 ];

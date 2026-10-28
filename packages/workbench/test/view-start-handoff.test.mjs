@@ -2,22 +2,35 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { logGate } from "../log-gate.js";
 import { registerPlugin } from "../registry.js";
 
 const pluginId = "fixture-start-handoff";
 
 test("core.file.open parameters reach the host placement request", { timeout: 5000 }, async (t) => {
   const hostCalls = [];
+  let heldSync = null;
+  const syncReply = (request) => ({
+    placements: request.surfaces.map(({ id, visible, x, y, w, h }) => ({ id, visible, x, y, w, h })),
+    chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: request.titlebar },
+  });
   const bridge = {
     on: () => () => {},
     page: (path) => path,
     reload: () => {},
     call: async (name, request) => {
       hostCalls.push({ name, request });
-      if (name === "syncSurfaces") return {
-        placements: request.surfaces.map(({ id, visible, x, y, w, h }) => ({ id, visible, x, y, w, h })),
-        chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: 40 },
-      };
+      if (name === "log" && request.action === "clock") return { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
+      if (name === "log") return null;
+      if (name === "syncSurfaces") {
+        if (heldSync !== null) {
+          const pending = heldSync;
+          heldSync = null;
+          pending.start(request);
+          return pending.answer;
+        }
+        return syncReply(request);
+      }
       if (name === "presentSurfaces") return request.placements;
       if (name === "notificationState") return { authorization: "notDetermined", error: null };
       return null;
@@ -64,6 +77,17 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
   const { authorizeSurface, surfacePlacementsForHost, viewStartValues } = await import("../surface-modules.js");
   const { recordOrigin } = await import("../tab-reports.js");
   const { surfaces: hostSurfaces } = await import("../host.js");
+  const holdNextSync = () => {
+    let resolveAnswer;
+    let resolveStarted;
+    const answer = new Promise((resolve) => { resolveAnswer = resolve; });
+    const started = new Promise((resolve) => { resolveStarted = resolve; });
+    heldSync = { answer, start: resolveStarted };
+    return { started, resolve: resolveAnswer };
+  };
+  const surfaceSyncEvents = () => hostCalls.filter(({ name }) => name === "log")
+    .flatMap(({ request }) => request.events ?? [])
+    .filter(({ event }) => event === "page.trace.surface.sync");
   try {
     const startValuesSurfaces = ["tab-snapshot-one", "tab-snapshot-two"].map((surfaceId) => {
       recordOrigin(surfaceId, null, "test fixture");
@@ -108,8 +132,60 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     const initial = compositor.latest();
     authorizeSurface(initial.surfaces[0].id);
     await hostSurfaces.theme({ scheme: "light", tokens: {} });
-    await hostSurfaces.place({ ...initial, surfaces: surfacePlacementsForHost(initial.surfaces, null) });
+    const previousLogPolicy = logGate.classes();
+    logGate.set({ ...previousLogPolicy, frame: "trace" });
+    try {
+      await hostSurfaces.place({ ...initial, surfaces: surfacePlacementsForHost(initial.surfaces, null) });
+    } finally {
+      logGate.set(previousLogPolicy);
+    }
+    await new Promise((resolve) => setImmediate(resolve));
     const initialSync = hostCalls.filter(({ name }) => name === "syncSurfaces").at(-1);
+    assert.ok(Array.isArray(initialSync.request.declarations), "the wire request omitted its declaration table");
+    assert.equal(Number.isSafeInteger(initialSync.request.surfaces[0].start.declarations), true,
+      "the host request did not replace nested declarations with a table index");
+    assert.ok(initialSync.request.declarations[initialSync.request.surfaces[0].start.declarations],
+      "the request-local declaration index does not resolve to an object");
+    const syncTrace = hostCalls.filter(({ name }) => name === "log")
+      .flatMap(({ request }) => request.events ?? [])
+      .find(({ event }) => event === "page.trace.surface.sync");
+    assert.ok(syncTrace, "the frame gate did not record surface sync while the performance trace was off");
+    assert.equal(syncTrace.fields.declarationTableBytes > 0, true,
+      "the sync event omitted the normalized declaration component size");
+    assert.equal(syncTrace.fields.declarationInlineBytes > 0, true,
+      "the sync event omitted the pre-normalized declaration component size");
+
+    const priorTracePolicy = logGate.classes();
+    try {
+      logGate.set({ ...priorTracePolicy, frame: "off" });
+      const opensBeforeCompletion = holdNextSync();
+      const openingPlacement = hostSurfaces.place({ ...initial, settled: false,
+        surfaces: surfacePlacementsForHost(initial.surfaces, null) });
+      const openingRequest = await opensBeforeCompletion.started;
+      logGate.set({ ...priorTracePolicy, frame: "trace" });
+      opensBeforeCompletion.resolve(syncReply(openingRequest));
+      await openingPlacement;
+      await new Promise((resolve) => setImmediate(resolve));
+      const afterOpening = surfaceSyncEvents();
+      assert.equal(afterOpening.length, 2,
+        "a frame gate opened while sync was pending must record the completed request");
+      assert.ok(afterOpening[1].fields.declarationInlineBytes > 0 && afterOpening[1].fields.declarationTableBytes > 0,
+        "completion-time measurement omitted declaration component bytes");
+
+      const closesBeforeCompletion = holdNextSync();
+      const closingPlacement = hostSurfaces.place({ ...initial, settled: true,
+        surfaces: surfacePlacementsForHost(initial.surfaces, null) });
+      const closingRequest = await closesBeforeCompletion.started;
+      logGate.set({ ...priorTracePolicy, frame: "off" });
+      closesBeforeCompletion.resolve(syncReply(closingRequest));
+      await closingPlacement;
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(surfaceSyncEvents().length, 2,
+        "a frame gate closed while sync was pending must omit the completed request record");
+    } finally {
+      logGate.set(priorTracePolicy);
+    }
+
     assert.strictEqual(initialSync.request.surfaces[0].start.params, null,
       "a tab without stored parameters did not preserve explicit null in the host request");
 

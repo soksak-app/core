@@ -182,6 +182,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "page.trace.layout" => Some(Class::Frame),
         "page.trace.modal.answer" => Some(Class::Call),
         "page.trace.picker.close" => Some(Class::Call),
+        "page.trace.surface.sync" => Some(Class::Frame),
         "page.update.operation" => Some(Class::Call),
         "page.view.call" => Some(Class::Call),
         "page.view.call.cancel" => Some(Class::Call),

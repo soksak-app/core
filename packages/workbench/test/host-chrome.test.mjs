@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
 import { clockAnswer } from "./support/records.mjs";
+const emptySurfaceDeclarations = { status: [], commands: [], dom: [] };
 
 test("a view surface carries its start values in the preparation and a surface without them carries none", async (t) => {
   const dom = new JSDOM('<div id="plane"></div>');
@@ -50,7 +51,11 @@ test("a view surface carries its start values in the preparation and a surface w
     await surfaces.theme({ scheme: "dark", tokens: { "--bg": "#000" } });
     calls.length = 0;
     await surfaces.place(record);
-    assert.deepEqual(calls[0].request.surfaces[0].start, start);
+    assert.equal(calls[0].request.surfaces[0].start.declarations, 0);
+    assert.deepEqual(calls[0].request.declarations, [start.declarations]);
+    assert.deepEqual({ params: calls[0].request.surfaces[0].start.params,
+      origin: calls[0].request.surfaces[0].start.origin, project: calls[0].request.surfaces[0].start.project },
+    { params: start.params, origin: start.origin, project: start.project });
     assert.equal("start" in calls[0].request.surfaces[1], false);
   } finally {
     dom.window.close();
@@ -97,6 +102,7 @@ test("the preparation carries the title bar height and the presented chrome is t
     await surfaces.place(record(54, false));
     assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces"]);
     assert.equal(calls[0].request.titlebar, 54, "the preparation carries the row of the next draw");
+    assert.deepEqual(calls[0].request.declarations, [], "a request without views must carry its empty declaration table");
     assert.equal(chrome.presented(), null, "a preparation is not the committed state before its presentation");
 
     await surfaces.place(record(54, true));
@@ -162,7 +168,7 @@ test("native view placement waits for current-page composition readiness", async
   const record = {
     surfaces: [{ id: "view-ready-barrier", dim: false, visible: true,
       surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
-      applied: { x: 0, y: 0, w: 3, h: 4 }, start: { origin: { directory: null } } }],
+      applied: { x: 0, y: 0, w: 3, h: 4 }, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } }],
     settled: true, drawn: false, titlebar: 40,
   };
   try {
@@ -210,7 +216,7 @@ test("native view placement rejects when its surface is disposed before composit
   const record = {
     surfaces: [{ id: "view-disposed", dim: false, visible: true,
       surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
-      applied: { x: 0, y: 0, w: 3, h: 4 }, start: { origin: { directory: null } } }],
+      applied: { x: 0, y: 0, w: 3, h: 4 }, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } }],
     settled: true, drawn: true, titlebar: 40,
   };
   try {
@@ -277,7 +283,7 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
     return {
       surfaces: [{ id: "view-mount-order", dim: false, visible: true,
         surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
-        applied: { x: 1, y: 2, w: 30, h: 40 }, start: { origin: { directory: null } } }],
+        applied: { x: 1, y: 2, w: 30, h: 40 }, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } }],
       settled: true, drawn, titlebar: 40,
     };
   };

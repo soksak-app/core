@@ -538,6 +538,14 @@
       "definition": "An independent ordinary AppKit text view in an application window that diagnostic activation checks compare with the same native keys.",
       "rejected": [],
       "allowed": []
+    },
+    {
+      "term": "declaration table",
+      "definition": "The request-local array of declaration objects referenced by surface start values in a native surface synchronization request.",
+      "rejected": [
+        "declaration pool"
+      ],
+      "allowed": []
     }
   ]
 }

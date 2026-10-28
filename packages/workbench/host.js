@@ -7,12 +7,14 @@
 // This file is not duplicated per application. The only difference between applications is the transport, which the
 // runtime module (@soksak/runtime) handles.
 import { emitEvent, reportRecord } from "./page-log.js";
-import { trace, traceEnabled } from "./performance.js";
+import { trace } from "./performance.js";
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
 import { registerSurfacePort, registry } from "./exposure.js";
 import { pluginSessionOf } from "./plugin-host.js";
+import { logGate } from "./log-gate.js";
+import { surfaceSyncRequestWithDeclarationTable } from "./surface-sync-request.js";
 
 /**
  * Returns the computed CSS color as [r, g, b, a]. The alpha is 1 when the color has none.
@@ -379,16 +381,18 @@ let nextSurfaceSyncRequestId = 0;
  */
 const layoutStepEnd = (step) => step.then(() => undefined, () => undefined);
 
-async function syncSurfaces(request, surfaceModules) {
-  const enabled = traceEnabled();
-  const requestId = enabled ? ++nextSurfaceSyncRequestId : null;
-  const views = enabled ? request.surfaces
-    .filter(({ composition }) => composition?.kind === "view")
-    .map(({ id }) => ({ surface: id, attempt: surfaceModules.mountedSurface(id)?.mountRegistration?.attempt ?? null })) : null; // default: a view not mounted yet has no registration attempt to report.
+async function syncSurfaces(request, surfaceModules, declarationBytes) {
   const record = (outcome) => {
-    if (!enabled) return;
+    if (!logGate.enabled("frame", "debug")) return;
+    const requestId = ++nextSurfaceSyncRequestId;
+    const views = request.surfaces
+      .filter(({ composition }) => composition?.kind === "view")
+      .map(({ id }) => ({ surface: id, attempt: surfaceModules.mountedSurface(id)?.mountRegistration?.attempt ?? null }));
+    const bytes = declarationBytes();
     trace("surface.sync", {
       page: String(document.defaultView.performance.timeOrigin), requestId, views, outcome,
+      declarationInlineBytes: bytes.declarationInlineBytes,
+      declarationTableBytes: bytes.declarationTableBytes,
     });
   };
   try {
@@ -553,7 +557,7 @@ export const surfaces = native ? {
 
         // place is called on every render, and on every frame while a divider is dragged.
         // A request identical to the previous one is not sent.
-        const request = {
+        const fullRequest = {
           // Every placement waits for the matching app DOM and required rasters;
           // settled distinguishes the final update from a continuing gesture.
           settled: record.settled !== false,
@@ -562,6 +566,8 @@ export const surfaces = native ? {
           // The height (pt) of the first row that the next drawing will show. The host sets the window title bar to this height in the transaction of this preparation.
           titlebar: record.titlebar,
         };
+        const normalized = surfaceSyncRequestWithDeclarationTable(fullRequest);
+        const request = normalized.request;
         const key = JSON.stringify({ request, deferredViews });
         if (key !== last) {
           last = key;
@@ -582,7 +588,7 @@ export const surfaces = native ? {
                 await reply;
               } while (reply !== themeReply);
             }
-            return syncSurfaces(request, surfaceModules);
+            return syncSurfaces(request, surfaceModules, normalized.declarationBytes);
           });
           layoutFrame = scheduled;
           layoutResult = scheduled.then((frame) => {

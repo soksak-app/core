@@ -560,6 +560,36 @@
       },
       "description": "A phase of the page layout pipeline, while the frame log gate stores it: `phase` is one of `queued`, `prepare`, `prepared`, `draw`, `drawn`, `frame`, or `presented`; `id` identifies the layout; and `t` is the page `performance.now()` reading in milliseconds. `jsHeapMB` is present when the engine exposes the heap reading. This event uses class `frame` and is independent of the performance trace switch."
     },
+    "page.trace.surface.sync": {
+      "layer": "page",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "page": { "type": "string" },
+          "requestId": { "type": "integer", "minimum": 1 },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "surface": { "type": "string" },
+                "attempt": { "type": ["integer", "null"], "minimum": 1 }
+              },
+              "required": ["surface", "attempt"]
+            }
+          },
+          "outcome": { "enum": ["accepted", "rejected"] },
+          "declarationInlineBytes": { "type": "integer", "minimum": 0 },
+          "declarationTableBytes": { "type": "integer", "minimum": 0 },
+          "jsHeapMB": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["page", "requestId", "views", "outcome", "declarationInlineBytes", "declarationTableBytes"]
+      },
+      "description": "The outcome of a complete surface synchronization request, recorded only if the frame log gate is open when the host call settles, independently of the performance trace switch. The declaration byte counters compare only the UTF-8 JSON values of declarations repeated inline across view starts with the UTF-8 JSON encoding of the request-local declaration table; they exclude the rest of the request and transport overhead. Normalization retains each serialized value and its request-local reference count; byte lengths are computed once per distinct value at completion only when the gate is open. A closed completion gate creates no fields, reads no mount metadata, and computes no byte lengths. `views` names the exact view surfaces and their page-local mount attempts."
+    },
     "page.trace.declared-ui.snapshot.skipped": {
       "layer": "page",
       "class": "call",

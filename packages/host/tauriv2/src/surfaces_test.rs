@@ -15,6 +15,78 @@ use super::{
     surface_dispatch_result_with,
 };
 
+mod declaration_table {
+    use super::super::SyncRequest;
+
+    // contract: view.start-values.declaration-table
+    #[test]
+    fn resolving_declaration_indices_preserves_each_complete_start_and_is_request_local() {
+        let first: SyncRequest = serde_json::from_value(serde_json::json!({
+            "settled": true,
+            "titlebar": 40.0,
+            "declarations": [{"commands": ["open"], "dom": ["alpha"], "nested": {"keep": true}}],
+            "surfaces": [
+                {"id":"one","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
+                 "plugin":"page","composition":{"kind":"view","page":"one.html"},
+                 "start":{"params":{"path":"one.md"},"origin":{"directory":"/work/one"},
+                          "project":{"id":"project-one","root":"/work/one"},"declarations":0}},
+                {"id":"two","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
+                 "plugin":"page","composition":{"kind":"view","page":"two.html"},
+                 "start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0}}
+            ]
+        }))
+        .expect("the indexed wire request is valid");
+        let resolved = first.resolve().expect("the declaration index resolves");
+        let one = resolved.surfaces[0]
+            .start
+            .as_ref()
+            .expect("view start values");
+        assert_eq!(one.params, Some(serde_json::json!({"path":"one.md"})));
+        assert_eq!(
+            one.origin,
+            Some(serde_json::json!({"directory":"/work/one"}))
+        );
+        assert_eq!(
+            one.project.as_ref().map(|project| project.id.as_str()),
+            Some("project-one")
+        );
+        assert_eq!(
+            one.declarations,
+            Some(serde_json::json!({"commands":["open"],"dom":["alpha"],"nested":{"keep":true}}))
+        );
+        let two = resolved.surfaces[1]
+            .start
+            .as_ref()
+            .expect("view start values");
+        assert_eq!(two.params, None);
+        assert_eq!(two.origin, Some(serde_json::json!({"directory":null})));
+        assert_eq!(two.project, None);
+        assert_eq!(two.declarations, one.declarations);
+        assert_eq!(
+            crate::documents::surface_start_script("two", two)
+                .expect("the resolved start values form a valid script"),
+            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"dom":["alpha"],"nested":{"keep":true}})});"##
+        );
+
+        let next: SyncRequest = serde_json::from_value(serde_json::json!({
+            "settled": true,
+            "titlebar": 40.0,
+            "declarations": [{"commands": ["save"]}],
+            "surfaces": [{"id":"three","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
+                          "plugin":"page","composition":{"kind":"view","page":"three.html"},
+                          "start":{"origin":{"directory":null},"project":null,"params":null,"declarations":0}}]
+        }))
+        .expect("the next request has its own declaration table");
+        let next = next
+            .resolve()
+            .expect("the next request resolves independently");
+        assert_eq!(
+            next.surfaces[0].start.as_ref().unwrap().declarations,
+            Some(serde_json::json!({"commands":["save"]}))
+        );
+    }
+}
+
 // contract: performance.surface.dispatch-records-existing-boundaries
 #[test]
 fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {

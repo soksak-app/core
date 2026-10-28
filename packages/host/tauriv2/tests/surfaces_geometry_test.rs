@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use soksak_host_tauriv2::platform::WindowOverlay;
-use soksak_host_tauriv2::surfaces::{SyncRequest, check_sync_request, validate_rect};
+use soksak_host_tauriv2::surfaces::{
+    SurfaceComposition, SyncRequest, check_sync_request, validate_rect,
+};
 
 // contract: surfaces-geometry.rect.accepts-zero-size, surfaces-geometry.rect.rejects-negative-size, surfaces-geometry.rect.rejects-non-finite
 #[test]
@@ -23,11 +25,130 @@ fn sync_request(request: serde_json::Value) -> SyncRequest {
     serde_json::from_value(request).expect("the sync request fixture is a valid request")
 }
 
+// contract: view.start-values.declaration-table
+#[test]
+fn sync_request_resolves_request_local_view_declaration_indices() {
+    let view = |id: &str, index: serde_json::Value| {
+        serde_json::json!({
+            "id": id, "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
+            "visible": true, "dim": false, "plugin": "page",
+            "composition": {"kind": "view", "page": "ui/page.html"},
+            "start": {
+                "params": {"path": id},
+                "origin": {"directory": "/work/one"},
+                "project": {"id": "prj-one", "root": "/work/one"},
+                "declarations": index,
+            },
+        })
+    };
+    let missing_table = serde_json::json!({
+        "settled": true, "titlebar": 40.0, "surfaces": [view("tab-1", serde_json::json!(0))],
+    });
+    assert!(
+        serde_json::from_value::<SyncRequest>(missing_table).is_err(),
+        "a sync request without its declaration table must be refused"
+    );
+
+    let declarations = serde_json::json!([
+        {"commands": ["open"], "dom": ["one"]},
+        {"commands": ["save"], "dom": ["two"]},
+    ]);
+    let request: SyncRequest = serde_json::from_value(serde_json::json!({
+        "settled": true,
+        "titlebar": 40.0,
+        "declarations": declarations,
+        "surfaces": [view("tab-1", serde_json::json!(0)), view("tab-2", serde_json::json!(1))],
+    }))
+    .expect("the current indexed wire request is valid");
+    let composition: SurfaceComposition = serde_json::from_value(serde_json::json!({
+        "kind": "view", "page": "ui/page.html",
+    }))
+    .expect("the composition fixture is valid");
+    let held = HashMap::from([
+        ("tab-1".to_string(), composition.clone()),
+        ("tab-2".to_string(), composition),
+    ]);
+    let plugins = HashMap::from([
+        ("tab-1".to_string(), "page".to_string()),
+        ("tab-2".to_string(), "page".to_string()),
+    ]);
+    assert!(
+        check_sync_request(&request, &held, &plugins).is_ok(),
+        "each view index must resolve to a declaration object in this request"
+    );
+
+    let negative_zero: Result<SyncRequest, _> = serde_json::from_str(
+        r#"{"settled":true,"titlebar":40,"declarations":[{"commands":[]}],"surfaces":[{"id":"tab-zero","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"page","composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":-0}}]}"#,
+    );
+    assert!(
+        negative_zero.is_err(),
+        "serde's nonnegative integer index rejects negative zero's floating representation"
+    );
+
+    for (request, expected) in [
+        (
+            serde_json::json!({
+                "settled": true, "titlebar": 40.0, "declarations": [],
+                "surfaces": [view("tab-1", serde_json::json!(0))],
+            }),
+            r#"surface "tab-1": view start declarations index 0 is outside the request table of 0 entries"#,
+        ),
+        (
+            serde_json::json!({
+                "settled": true, "titlebar": 40.0, "declarations": [null],
+                "surfaces": [view("tab-1", serde_json::json!(0))],
+            }),
+            "surface declaration table entry 0 is not an object",
+        ),
+        (
+            serde_json::json!({
+                "settled": true, "titlebar": 40.0,
+                "declarations": [{"commands": ["open"]}, {"commands": ["unused"]}],
+                "surfaces": [view("tab-1", serde_json::json!(0))],
+            }),
+            "surface declaration table entry 1 is not referenced",
+        ),
+    ] {
+        let request: SyncRequest = serde_json::from_value(request)
+            .expect("the invalid reference fixture has a valid wire type");
+        let error = check_sync_request(&request, &HashMap::new(), &HashMap::new())
+            .expect_err("an invalid declaration reference must be refused");
+        assert_eq!(error, expected);
+    }
+
+    for start in [
+        serde_json::json!({"origin": {"directory": "/work/one"}}),
+        serde_json::json!({"origin": {"directory": "/work/one"}, "declarations": -1}),
+        serde_json::json!({"origin": {"directory": "/work/one"}, "declarations": 0.5}),
+        serde_json::json!({"origin": {"directory": "/work/one"}, "declarations": {"commands": []}}),
+    ] {
+        let mut surface = view("tab-1", serde_json::json!(0));
+        surface["start"] = start;
+        let request = serde_json::json!({
+            "settled": true, "titlebar": 40.0, "declarations": [{"commands": []}],
+            "surfaces": [surface],
+        });
+        assert!(
+            serde_json::from_value::<SyncRequest>(request).is_err(),
+            "missing, noninteger, negative and nested declaration forms must be refused"
+        );
+    }
+    for declarations in [serde_json::Value::Null, serde_json::json!({})] {
+        let request = serde_json::json!({
+            "settled": true, "titlebar": 40.0, "declarations": declarations, "surfaces": [],
+        });
+        assert!(
+            serde_json::from_value::<SyncRequest>(request).is_err(),
+            "a null or non-array declaration table must be refused"
+        );
+    }
+}
+
 fn surface(id: &str, w: f64) -> serde_json::Value {
     serde_json::json!({
         "id": id, "module": "surface.js", "x": 0.0, "y": 0.0, "w": w, "h": 10.0,
         "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "view", "page": "ui/page.html", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
-        "start": {"origin": {"directory": null}},
+        "start": {"origin": {"directory": null}, "declarations": 0},
     })
 }
 
@@ -39,12 +160,13 @@ fn sync_request_check_rejects_an_invalid_surface_rectangle() {
     let held = HashMap::from([("tab-1".to_string(), composition)]);
     let plugins = HashMap::from([("tab-1".to_string(), "page".to_string())]);
     let valid = sync_request(
-        serde_json::json!({"settled": true, "titlebar": 40.0, "surfaces": [surface("tab-1", 10.0)]}),
+        serde_json::json!({"settled": true, "titlebar": 40.0, "declarations": [{"commands": []}], "surfaces": [surface("tab-1", 10.0)]}),
     );
     assert!(check_sync_request(&valid, &held, &plugins).is_ok());
     let negative = sync_request(serde_json::json!({
         "settled": true,
         "titlebar": 40.0,
+        "declarations": [{"commands": []}],
         "surfaces": [surface("tab-1", 10.0), surface("tab-2", -1.0)],
     }));
     assert_eq!(
@@ -57,7 +179,7 @@ fn sync_request_check_rejects_an_invalid_surface_rectangle() {
 #[test]
 fn sync_request_check_rejects_a_view_without_a_current_page_declaration() {
     let request = sync_request(serde_json::json!({
-        "settled": true, "titlebar": 40.0, "surfaces": [surface("tab-unannounced", 10.0)]
+        "settled": true, "titlebar": 40.0, "declarations": [{"commands": []}], "surfaces": [surface("tab-unannounced", 10.0)]
     }));
     assert_eq!(
         check_sync_request(&request, &HashMap::new(), &HashMap::new()).unwrap_err(),
@@ -70,7 +192,7 @@ fn sync_request_check_rejects_a_view_without_a_current_page_declaration() {
 fn sync_request_check_rejects_an_invalid_window_overlay_rectangle() {
     let held = HashMap::new();
     let valid = sync_request(serde_json::json!({
-        "settled": true, "titlebar": 40.0, "surfaces": [],
+        "settled": true, "titlebar": 40.0, "declarations": [], "surfaces": [],
         "overlays": [{"x": 1.0, "y": 2.0, "w": 3.0, "h": 4.0}, {"x": 5.0, "y": 6.0, "w": 7.0, "h": 8.0, "visible": false}],
     }));
     assert_eq!(
@@ -94,7 +216,7 @@ fn sync_request_check_rejects_an_invalid_window_overlay_rectangle() {
         ]
     );
     let negative = sync_request(serde_json::json!({
-        "settled": true, "titlebar": 40.0, "surfaces": [],
+        "settled": true, "titlebar": 40.0, "declarations": [], "surfaces": [],
         "overlays": [{"x": 1.0, "y": 2.0, "w": 3.0, "h": 4.0}, {"x": 0.0, "y": 0.0, "w": 3.0, "h": -4.0}],
     }));
     assert_eq!(
@@ -114,7 +236,7 @@ fn sync_request_check_requires_the_same_plugin_of_each_surface() {
         serde_json::from_value(document).expect("the composition fixture is valid"),
     )]);
     let request = sync_request(
-        serde_json::json!({"settled": true, "titlebar": 40.0, "surfaces": [value.clone()]}),
+        serde_json::json!({"settled": true, "titlebar": 40.0, "declarations": [{"commands": []}], "surfaces": [value.clone()]}),
     );
     let same = HashMap::from([("tab-1".to_string(), "page".to_string())]);
     assert!(check_sync_request(&request, &held, &same).is_ok());
@@ -132,8 +254,9 @@ fn sync_request_check_requires_the_same_plugin_of_each_surface() {
         r#"surface "tab-1" changed its composition declaration"#
     );
     value["plugin"] = serde_json::json!("");
-    let missing =
-        sync_request(serde_json::json!({"settled": true, "titlebar": 40.0, "surfaces": [value]}));
+    let missing = sync_request(
+        serde_json::json!({"settled": true, "titlebar": 40.0, "declarations": [{"commands": []}], "surfaces": [value]}),
+    );
     assert_eq!(
         check_sync_request(&missing, &HashMap::new(), &HashMap::new()).unwrap_err(),
         r#"surface "tab-1" requires its plugin"#
@@ -153,7 +276,8 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
     };
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0,
-        "surfaces": [view(serde_json::json!({"project": {"id": "prj-one", "root": ""}}))],
+        "declarations": [{"commands": []}],
+        "surfaces": [view(serde_json::json!({"project": {"id": "prj-one", "root": ""}, "declarations": 0}))],
     }));
     assert_eq!(
         check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
@@ -161,7 +285,8 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
     );
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0,
-        "surfaces": [view(serde_json::json!({"project": {"id": "", "root": "/work/one"}}))],
+        "declarations": [{"commands": []}],
+        "surfaces": [view(serde_json::json!({"project": {"id": "", "root": "/work/one"}, "declarations": 0}))],
     }));
     assert_eq!(
         check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
@@ -169,7 +294,8 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
     );
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0,
-        "surfaces": [view(serde_json::json!({"origin": {"directory": ""}}))],
+        "declarations": [{"commands": []}],
+        "surfaces": [view(serde_json::json!({"origin": {"directory": ""}, "declarations": 0}))],
     }));
     assert_eq!(
         check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
@@ -177,21 +303,22 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
     );
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0,
-        "surfaces": [view(serde_json::json!({"declarations": []}))],
+        "declarations": [{"commands": []}],
+        "surfaces": [view(serde_json::json!({"origin": {"directory": null}, "declarations": 1}))],
     }));
     assert_eq!(
         check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
-        r#"surface "tab-1": view start declarations are not an object"#
+        r#"surface "tab-1": view start declarations index 1 is outside the request table of 1 entries"#
     );
     // The removed hybrid composition is refused with the plugin and the field, whatever its start values.
     let hybrid = serde_json::json!({
         "id": "tab-1", "module": "surface.js", "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
         "visible": true, "dim": false, "plugin": "page",
         "composition": {"kind": "hybrid", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
-        "start": {"project": {"id": "prj-one", "root": "/work/one"}},
+        "start": {"project": {"id": "prj-one", "root": "/work/one"}, "declarations": 0},
     });
     let request = sync_request(serde_json::json!({
-        "settled": true, "titlebar": 40.0, "surfaces": [hybrid],
+        "settled": true, "titlebar": 40.0, "declarations": [{"commands": []}], "surfaces": [hybrid],
     }));
     assert_eq!(
         check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
@@ -216,7 +343,7 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
             "visible": true, "dim": false, "plugin": "page",
             "composition": {"kind": "view", "page": "ui/page.html"},
         });
-        if let Some(start) = start {
+        if let Some(mut start) = start {
             surface["start"] = start;
         }
         surface
@@ -225,21 +352,37 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
     let malformed = r#"surface "tab-1": view start origin is not {directory} with a path or null"#;
     let cases = [
         (None, missing),
-        (Some(serde_json::json!({"params": null})), missing),
-        (Some(serde_json::json!({"origin": null})), malformed),
-        (Some(serde_json::json!({"origin": {}})), malformed),
         (
-            Some(serde_json::json!({"origin": {"directory": 1}})),
+            Some(serde_json::json!({"params": null, "declarations": 0})),
+            missing,
+        ),
+        (
+            Some(serde_json::json!({"origin": null, "declarations": 0})),
             malformed,
         ),
         (
-            Some(serde_json::json!({"origin": {"directory": "/work/one", "root": "/work/one"}})),
+            Some(serde_json::json!({"origin": {}, "declarations": 0})),
+            malformed,
+        ),
+        (
+            Some(serde_json::json!({"origin": {"directory": 1}, "declarations": 0})),
+            malformed,
+        ),
+        (
+            Some(
+                serde_json::json!({"origin": {"directory": "/work/one", "root": "/work/one"}, "declarations": 0}),
+            ),
             malformed,
         ),
     ];
     for (start, want) in cases {
+        let declarations = if start.is_some() {
+            serde_json::json!([{"commands": []}])
+        } else {
+            serde_json::json!([])
+        };
         let request = sync_request(serde_json::json!({
-            "settled": true, "titlebar": 40.0, "surfaces": [view(start)],
+            "settled": true, "titlebar": 40.0, "declarations": declarations, "surfaces": [view(start)],
         }));
         assert_eq!(
             check_sync_request(&request, &held, &plugins).unwrap_err(),
@@ -248,7 +391,8 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
     }
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0,
-        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}})))],
+        "declarations": [{"commands": []}],
+        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}, "declarations": 0})))],
     }));
     assert!(check_sync_request(&request, &held, &plugins).is_ok());
 }

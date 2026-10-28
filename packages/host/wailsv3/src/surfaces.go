@@ -247,6 +247,88 @@ type SyncRequest struct {
 	Titlebar float64 `json:"titlebar"`
 }
 
+type syncRequestWire struct {
+	Settled      bool                   `json:"settled"`
+	Surfaces     []syncSurfaceWire      `json:"surfaces"`
+	Overlays     []WindowOverlayRequest `json:"overlays,omitempty"`
+	Titlebar     float64                `json:"titlebar"`
+	Declarations []json.RawMessage      `json:"declarations"`
+}
+
+type syncSurfaceWire struct {
+	ID          string             `json:"id"`
+	Visible     bool               `json:"visible"`
+	Dim         bool               `json:"dim"`
+	Plugin      string             `json:"plugin"`
+	Composition SurfaceComposition `json:"composition"`
+	Rect
+	Start *syncViewStartWire `json:"start,omitempty"`
+}
+
+type syncViewStartWire struct {
+	Params       json.RawMessage `json:"params,omitempty"`
+	Origin       json.RawMessage `json:"origin,omitempty"`
+	Project      *SurfaceProject `json:"project,omitempty"`
+	Declarations json.RawMessage `json:"declarations"`
+}
+
+// decodeSyncRequest resolves the request-local declaration table before any surface state is read or changed.
+func decodeSyncRequest(raw json.RawMessage) (SyncRequest, error) {
+	wire, err := argument[syncRequestWire]("request", raw)
+	if err != nil {
+		return SyncRequest{}, err
+	}
+	if wire.Declarations == nil {
+		return SyncRequest{}, fmt.Errorf("argument request.declarations must be a non-null array")
+	}
+	declarations := make([]json.RawMessage, len(wire.Declarations))
+	for i, declaration := range wire.Declarations {
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(declaration, &object); err != nil || object == nil {
+			return SyncRequest{}, fmt.Errorf("argument request.declarations[%d] must be an object", i)
+		}
+		declarations[i] = append(json.RawMessage(nil), declaration...)
+	}
+	used := make([]bool, len(declarations))
+	surfaces := make([]Surface, len(wire.Surfaces))
+	for i, item := range wire.Surfaces {
+		surface := Surface{
+			ID: item.ID, Visible: item.Visible, Dim: item.Dim, Plugin: item.Plugin,
+			Composition: item.Composition, Rect: item.Rect,
+		}
+		if item.Composition.Kind == "view" {
+			if item.Start == nil {
+				return SyncRequest{}, fmt.Errorf("surface %q: view start is missing", item.ID)
+			}
+			indexText := strings.TrimSpace(string(item.Start.Declarations))
+			if indexText == "" || indexText[0] < '0' || indexText[0] > '9' {
+				return SyncRequest{}, fmt.Errorf("surface %q: view start declarations must be a nonnegative integer index", item.ID)
+			}
+			index, err := strconv.ParseUint(indexText, 10, 64)
+			if err != nil {
+				return SyncRequest{}, fmt.Errorf("surface %q: view start declarations must be a nonnegative integer index", item.ID)
+			}
+			if index >= uint64(len(declarations)) {
+				return SyncRequest{}, fmt.Errorf("surface %q: view start declarations index %d is out of range", item.ID, index)
+			}
+			used[index] = true
+			surface.Start = &ViewStart{
+				Params: item.Start.Params, Origin: item.Start.Origin, Project: item.Start.Project,
+				Declarations: declarations[index],
+			}
+		} else if item.Start != nil {
+			return SyncRequest{}, fmt.Errorf("surface %q: non-view composition cannot carry start values", item.ID)
+		}
+		surfaces[i] = surface
+	}
+	for i, referenced := range used {
+		if !referenced {
+			return SyncRequest{}, fmt.Errorf("argument request.declarations[%d] is unused", i)
+		}
+	}
+	return SyncRequest{Settled: wire.Settled, Surfaces: surfaces, Overlays: wire.Overlays, Titlebar: wire.Titlebar}, nil
+}
+
 type WindowOverlayRequest struct {
 	X       float64 `json:"x"`
 	Y       float64 `json:"y"`

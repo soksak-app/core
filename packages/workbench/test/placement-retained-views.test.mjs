@@ -5,6 +5,9 @@ import { clockAnswer } from "./support/records.mjs";
 import { createMemorySaver } from "../memory-saver.js";
 import { memoryPlacement } from "../memory-placement.js";
 import { setSurfaceTextSize } from "../text-size.js";
+import { logGate } from "../log-gate.js";
+import { byteLength } from "@soksak/plugin-api/bounded-json.js";
+const emptySurfaceDeclarations = { status: [], commands: [], dom: [] };
 
 setSurfaceTextSize(() => 1);
 
@@ -60,7 +63,9 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     },
   } } });
 
+  const priorPolicy = logGate.classes();
   try {
+    logGate.set({ ...priorPolicy, frame: "trace" });
     const host = await import("../host.js?retained-view-placement");
     const { placeCompositorRecord } = await import("../compositor.js?retained-view-placement");
     const retainedMounts = await import("../retained-surface-mounts.js?retained-view-placement");
@@ -68,7 +73,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     calls.length = 0;
   const view = (id, x) => ({ id, plugin: "placement-probe", dim: false, visible: id === "visible-view", applied: { x, y: 0, w: 20, h: 20 },
     surface: { surfaceId: id, pluginId: "placement-probe", composition: { kind: "view", page: "ui/page.html" } },
-      start: { origin: { directory: null } } });
+      start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } });
     const record = { surfaces: [view("visible-view", 0)], settled: true, drawn: true, titlebar: 40 };
     const requested = [record.surfaces[0], view("retained-view", 20),
       { ...view("cold-view", 40), retainedTextSize: () => 1.875 }, view("background-view", 60)];
@@ -90,7 +95,8 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
         { surface: "visible-view", attempt: 1 },
         { surface: "retained-view", attempt: 2 },
         { surface: "cold-view", attempt: 3 },
-      ], outcome: "accepted" },
+      ], outcome: "accepted", declarationInlineBytes: 3 * byteLength(JSON.stringify(emptySurfaceDeclarations)),
+        declarationTableBytes: byteLength(JSON.stringify(emptySurfaceDeclarations)) + 2 },
     }, "the completed sync record did not identify the exact view set and mount attempts");
     assert.equal(Object.hasOwn(calls.find(({ name }) => name === "syncSurfaces").request.surfaces[2], "retainedTextSize"), false,
       "workbench-only retained text scale metadata crossed the host placement boundary");
@@ -169,21 +175,22 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     retainedMounts.releaseRetainedSurfaceSlots(record, new Set());
     assert.equal(document.querySelector("[data-retained-surface-mounts]"), null, "released hidden mount slots remained in the document");
   } finally {
+    logGate.set(priorPolicy);
     dom.window.close();
   }
 });
 
-test("surface sync traces its result only while the performance trace is enabled", { timeout: 5000 }, async (t) => {
+test("surface sync traces its result only while the frame log gate is open", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM('<div id="plane"></div>', { url: "https://example.test/" });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   const traceEvents = [];
   let mountTraceLookups = 0;
-  let tracing = false;
+  let heldSync = null;
   const view = { id: "sync-trace-view", plugin: "sync-trace-probe", dim: false, visible: true,
     applied: { x: 0, y: 0, w: 20, h: 20 },
     surface: { surfaceId: "sync-trace-view", pluginId: "sync-trace-probe", composition: { kind: "view", page: "ui/page.html" } },
-    start: { origin: { directory: null } } };
+    start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } };
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: () => { mountTraceLookups += 1; return { mountRegistration: { attempt: 7 } }; },
     waitSurfaceCompositionDeclared: async () => {},
@@ -191,7 +198,6 @@ test("surface sync traces its result only while the performance trace is enabled
   const actualPerformance = await import("../performance.js");
   t.mock.module("../performance.js", { exports: {
     ...actualPerformance,
-    traceEnabled: () => tracing,
     trace: (event, fields) => traceEvents.push({ event, fields }),
   } });
   t.mock.module("@soksak/runtime", { namedExports: { windows: {}, host: {
@@ -200,29 +206,75 @@ test("surface sync traces its result only while the performance trace is enabled
     call: async (name, request) => {
       if (name === "log") return clockAnswer(name, request);
       if (name === "setTheme") return null;
-      if (name === "syncSurfaces") throw new Error("composition missing in current page");
+      if (name === "syncSurfaces") {
+        if (heldSync !== null) {
+          const pending = heldSync;
+          heldSync = null;
+          pending.start();
+          return pending.answer;
+        }
+        throw new Error("composition missing in current page");
+      }
       throw new Error(`unexpected host call ${name}`);
     },
   } } });
 
+  const priorPolicy = logGate.classes();
+  const holdNextSync = () => {
+    let rejectAnswer;
+    let resolveStarted;
+    const answer = new Promise((_resolve, reject) => { rejectAnswer = reject; });
+    const started = new Promise((resolve) => { resolveStarted = resolve; });
+    heldSync = { answer, start: resolveStarted };
+    return { started, reject: rejectAnswer };
+  };
   try {
     const host = await import("../host.js?surface-sync-trace-result");
     await host.surfaces.theme({ scheme: "dark", tokens: {} });
+    logGate.set({ ...priorPolicy, frame: "off" });
     const record = { surfaces: [view], settled: true, drawn: true, titlebar: 40 };
     await assert.rejects(host.surfaces.place(record), /composition missing in current page/);
     assert.deepEqual(traceEvents, [], "a disabled trace wrote a surface sync record");
     assert.equal(mountTraceLookups, 0, "a disabled trace read mount metadata to build fields");
 
-    tracing = true;
+    logGate.set({ ...priorPolicy, frame: "trace" });
     await assert.rejects(host.surfaces.place({ ...record, surfaces: [{ ...view, applied: { ...view.applied, x: 1 } }] }),
       /composition missing in current page/);
     assert.deepEqual(traceEvents.filter(({ event }) => event === "surface.sync"), [{
       event: "surface.sync",
       fields: { page: String(document.defaultView.performance.timeOrigin), requestId: 1,
-        views: [{ surface: view.id, attempt: 7 }], outcome: "rejected" },
+        views: [{ surface: view.id, attempt: 7 }], outcome: "rejected",
+        declarationInlineBytes: byteLength(JSON.stringify(emptySurfaceDeclarations)),
+        declarationTableBytes: byteLength(JSON.stringify(emptySurfaceDeclarations)) + 2 },
     }], "a rejected native sync was not recorded with its exact request view and mount attempt");
     assert.equal(mountTraceLookups, 1, "an enabled sync did not read its mount attempt exactly once");
+
+    logGate.set({ ...priorPolicy, frame: "off" });
+    const opensWhilePending = holdNextSync();
+    const openingPlacement = host.surfaces.place({ ...record,
+      surfaces: [{ ...view, applied: { ...view.applied, x: 2 } }] });
+    await opensWhilePending.started;
+    assert.equal(mountTraceLookups, 1, "pending sync read mount metadata before its completion policy was known");
+    logGate.set({ ...priorPolicy, frame: "trace" });
+    opensWhilePending.reject(new Error("composition missing in current page"));
+    await assert.rejects(openingPlacement, /composition missing in current page/);
+    assert.equal(mountTraceLookups, 2, "a gate opened before completion did not read its view metadata");
+    assert.equal(traceEvents.filter(({ event }) => event === "surface.sync").length, 2,
+      "a gate opened while sync was pending did not record its completed request");
+
+    const closesWhilePending = holdNextSync();
+    const closingPlacement = host.surfaces.place({ ...record,
+      surfaces: [{ ...view, applied: { ...view.applied, x: 3 } }] });
+    await closesWhilePending.started;
+    assert.equal(mountTraceLookups, 2, "pending sync read mount metadata before its completion policy was known");
+    logGate.set({ ...priorPolicy, frame: "off" });
+    closesWhilePending.reject(new Error("composition missing in current page"));
+    await assert.rejects(closingPlacement, /composition missing in current page/);
+    assert.equal(mountTraceLookups, 2, "a gate closed before completion still read view metadata");
+    assert.equal(traceEvents.filter(({ event }) => event === "surface.sync").length, 2,
+      "a gate closed while sync was pending still recorded its completed request");
   } finally {
+    logGate.set(priorPolicy);
     dom.window.close();
   }
 });
@@ -275,7 +327,7 @@ test("host placement preserves call order across the lazy view-module import", {
   const surface = { id, plugin: "retained-race-plugin", dim: false, visible: true,
     applied: { x: 0, y: 0, w: 20, h: 20 },
     surface: { surfaceId: id, pluginId: "retained-race-plugin", composition: { kind: "view", page: "ui/page.html" } },
-    start: { origin: { directory: null } } };
+    start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } };
   const emptyRecord = { surfaces: [], settled: true, drawn: true, titlebar: 40 };
   const viewRecord = { surfaces: [surface], settled: true, drawn: true, titlebar: 40 };
 
@@ -331,7 +383,7 @@ test("an active view that is not in an undrawn record waits for its drawn commit
     calls.length = 0;
     const view = { id: "active-view", plugin: "placement-probe", dim: false, visible: true, applied: { x: 0, y: 0, w: 20, h: 20 },
       surface: { surfaceId: "active-view", pluginId: "placement-probe", composition: { kind: "view", page: "ui/page.html" } },
-      start: { origin: { directory: null } } };
+      start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } };
     const activeIds = new Set([view.id]);
     const policy = {
       activeIds,
@@ -397,7 +449,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
     const cold = { id: "cold-unload-view", plugin: "placement-probe", dim: false, visible: false,
       applied: { x: 0, y: 0, w: 0, h: 0 },
       surface: { surfaceId: "cold-unload-view", pluginId: "placement-probe",
-        composition: { kind: "view", page: "ui/page.html" } }, start: { origin: { directory: null } } };
+        composition: { kind: "view", page: "ui/page.html" } }, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } };
     const candidates = [cold];
     let initialized = false;
     let resolveReady;
@@ -510,7 +562,7 @@ test("a disabled memory saver mounts a cold hidden view at startup", async (t) =
     const cold = { id: "cold-loaded-view", plugin: "placement-probe", dim: false, visible: false,
       applied: { x: 0, y: 0, w: 0, h: 0 },
       surface: { surfaceId: "cold-loaded-view", pluginId: "placement-probe",
-        composition: { kind: "view", page: "ui/page.html" } }, start: { origin: { directory: null } } };
+        composition: { kind: "view", page: "ui/page.html" } }, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } };
     const candidates = [cold];
     memory.observe(new Set(), [{ id: cold.id, plugin: cold.plugin }]);
     memory.start();

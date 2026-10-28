@@ -11,9 +11,9 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 9개와 waiting 30개인 39개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 10개와 waiting 30개인 40개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 3** — F239-223, F239-223-3, F239-233
+- **현재 측정과 검사 수정: 4** — F239-223, F239-223-3, F239-233, F239-263
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -21,9 +21,11 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
-F239-255 이후 최신 비프로파일 Terminal drag 측정은 Wails/Tauri source cadence 81/66 ms와 양 host convergence에서 실패하며 geometry는 0.4 pt로 통과한다. 양 host는 정상 종료하고 frontmost baseline을 복원하지만 dispatch event의 생성된 class 항목 누락으로 감사 finding 1,842개가 발생한다. F239-260이 이 항목을 수정한다. 이후 Wails 진단 profile은 application-log finding 0개를 기록하지만 capture gap이 251 ms여서 성능 acceptance를 제공하지 않는다. 이전 실패 기록은 보존한다.
+최신 unprofiled Wails Terminal drag 측정은 source cadence 51 ms와 convergence에서 실패하며 geometry는 0.4 pt로 통과한다. Application은 정상 종료하고 전면 baseline을 복원하며 application-log finding은 0건이다. 보존된 trace의 page layout 준비는 17–27 ms다. 보존된 debug log에는 오차 bound 1 ms인 완전한 page clock anchor가 있어 재실행 없이 page-to-host 시간을 범위로 비교할 수 있다. 조사한 순서에서 native layout UI 작업은 주변 request 구간보다 짧지만 별개인 page-layout과 native-ticket 식별자는 동일 request를 기계적으로 입증하지 않는다. F239-263은 반복 declaration 전송을 줄이며 성능 acceptance는 별도로 유지한다. Generated-class 누락과 diagnostic capture gap을 포함한 이전 실패 기록은 보존한다.
 
 앞선 macOS 26.6.2 arm64 optimized diagnostic 측정 묶음은 측정 실패 7개와 수집 거부 1개를 보존한다. Browser source-frame 간격은 Wails/Tauri에서 51/34 ms, Editor는 50/34 ms, HWP는 34/34 ms, Wails Terminal은 71 ms다. Tauri Terminal은 창이 active 상태여서 synthetic drag를 거부했으며 drag 결과를 입증하지 않는다. HWP footprint는 양 host에서 통과한다. Wails는 허용 581,004,760 bytes에 대해 571,791,024 bytes이고, Tauri는 허용 569,847,184 bytes에 대해 568,760,032 bytes다. HWP adjusted first display는 기준 1001/1113 ms에 대해 1616.594/1755.235 ms로 여전히 실패한다. Source 간격은 observer 간격이며 입력부터 표시까지 측정한 latency가 아니다. 독립 F239-238 evaluator로 보존된 측정을 진단 replay한 결과 Browser와 Editor는 양 host에서 convergence를 통과하고 HWP는 양 host, Terminal은 Wails에서 실패한다. Tauri Terminal에는 convergence 결과가 없다. 이 replay는 새로운 application acceptance 실행이 아니다. 양 host는 정상 종료하고 error-log 감사를 통과하며 원래 frontmost baseline을 복원한다. F239-223과 F239-233은 열린 상태를 유지하며 제품 memory 최적화나 공통 latency 원인을 추론하지 않는다.
+
+- [~] F239-263 — P1, F239-223 연결: Request-local declaration table로 각 surface synchronization request의 반복 declaration object를 제거한다. 완전한 view별 시작 값을 보존하고 surface 변경 전에 잘못된 참조를 거부한다. 구현과 소유 Red/Green 검사는 JavaScript, Go와 Rust에서 통과한다. Request-local table은 주입할 시작 값을 보존하고 잘못되거나 사용하지 않는 참조를 거부한다. 독립 리뷰로 pending call 중 gate 변경을 반영하고 닫힌 gate에서는 진단 필드를 만들지 않는다. Application 비교와 성능 acceptance는 미완료다.
 
 - [o] F239-247 — P2, F239-245 연결: 기존 lock/condition-wait census에서 누락된 map_or 및 map_or_else default handler를 검출한다. 두 lock 및 두 wait 반례를 소유 fixture로 재현하고 현재 propagation/recovery 허용은 유지한다.
 

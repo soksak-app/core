@@ -1,7 +1,10 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 	"unsafe"
 )
@@ -99,6 +102,100 @@ func TestSyncRequestValidatesTheStartValuesOfAView(t *testing.T) {
 	entries[0].Composition = SurfaceComposition{Kind: "hybrid", Regions: []SurfaceRegion{{Name: "main", Kind: "image", Input: "dom", Sidecar: "probe"}}, Overlays: []string{}}
 	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": plugin probe surface composition: kind hybrid is removed; the composition takes kind view` {
 		t.Fatalf("a hybrid composition with start values: %v", err)
+	}
+}
+
+// contract: view.start-values.declaration-table
+func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
+	const surface = `"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10,"start":{"params":{"path":"/work/one"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"}`
+	request := func(table, index string) json.RawMessage {
+		return json.RawMessage(`{"settled":true,"titlebar":40,"declarations":` + table + `,"surfaces":[{` + surface + `,"declarations":` + index + `}}]}`)
+	}
+	valid := request(`[{"commands":[{"name":"probe.command","params":{"path":"/work/one"}}]}]`, `0`)
+	decoded, err := decodeSyncRequest(valid)
+	if err != nil {
+		t.Fatalf("valid declaration table: %v", err)
+	}
+	start := decoded.Surfaces[0].Start
+	if string(start.Params) != `{"path":"/work/one"}` || string(start.Origin) != `{"directory":"/work/one"}` ||
+		!reflect.DeepEqual(start.Project, &SurfaceProject{ID: "prj-one", Root: "/work/one"}) ||
+		string(start.Declarations) != `{"commands":[{"name":"probe.command","params":{"path":"/work/one"}}]}` {
+		t.Fatalf("resolved start values %+v", start)
+	}
+	script, err := surfaceStartScript("probe", *start)
+	if err != nil || !strings.Contains(script, `"declarations":Object.freeze({"commands":[{"name":"probe.command","params":{"path":"/work/one"}}]})`) {
+		t.Fatalf("resolved declarations were not retained for injection: %q, error %v", script, err)
+	}
+	if _, err := (&Host{}).SyncSurfaces(context.Background(), valid); err == nil || err.Error() != "host call has no window" {
+		t.Fatalf("valid declaration table did not proceed to window lookup: %v", err)
+	}
+	for _, index := range []string{"-0", "1e0", "0.0", "true", `"0"`, "18446744073709551616"} {
+		if _, err := decodeSyncRequest(request(`[{"commands":[]}]`, index)); err == nil {
+			t.Errorf("non-integer or overflowing index %s was accepted", index)
+		}
+	}
+
+	second := strings.Replace(surface, `"id":"probe"`, `"id":"probe-two"`, 1)
+	paired := json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[{"commands":[{"name":"probe.first"}]},{"commands":[{"name":"probe.second"}]}],"surfaces":[{` + surface + `,"declarations":0}},{` + second + `,"declarations":1}}]}`)
+	pairedDecoded, err := decodeSyncRequest(paired)
+	if err != nil || string(pairedDecoded.Surfaces[0].Start.Declarations) != `{"commands":[{"name":"probe.first"}]}` ||
+		string(pairedDecoded.Surfaces[1].Start.Declarations) != `{"commands":[{"name":"probe.second"}]}` {
+		t.Fatalf("same-plugin declarations resolved as %+v, error %v", pairedDecoded.Surfaces, err)
+	}
+	changed := request(`[{"commands":[{"name":"probe.changed"}]}]`, `0`)
+	changedDecoded, err := decodeSyncRequest(changed)
+	if err != nil || string(changedDecoded.Surfaces[0].Start.Declarations) != `{"commands":[{"name":"probe.changed"}]}` {
+		t.Fatalf("new request declarations resolved as %+v, error %v", changedDecoded.Surfaces, err)
+	}
+	empty, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[],"surfaces":[]}`))
+	if err != nil || len(empty.Surfaces) != 0 {
+		t.Fatalf("empty declaration table without view starts was refused: %+v, error %v", empty, err)
+	}
+	for _, raw := range []json.RawMessage{
+		json.RawMessage(`{"settled":true,"titlebar":40,"surfaces":[]}`),
+		json.RawMessage(`{"settled":true,"titlebar":40,"declarations":null,"surfaces":[]}`),
+	} {
+		if _, err := (&Host{}).SyncSurfaces(context.Background(), raw); err == nil || !strings.Contains(err.Error(), "declarations") {
+			t.Errorf("no-view request without a non-null declaration table returned %v", err)
+		}
+	}
+	nonView := strings.Replace(surface, `"composition":{"kind":"view"`, `"composition":{"kind":"other"`, 1)
+	if _, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[{"commands":[]}],"surfaces":[{` + nonView + `,"declarations":0}}]}`)); err == nil || !strings.Contains(err.Error(), "non-view composition") {
+		t.Fatalf("non-view start values were not rejected explicitly: %v", err)
+	}
+
+	missingTable := json.RawMessage(`{"settled":true,"titlebar":40,"surfaces":[{` + surface + `,"declarations":0}}]}`)
+	cases := []struct {
+		name, table, index, want string
+	}{
+		{"null table", `null`, `0`, "request.declarations is missing"},
+		{"object table", `{"commands":[]}`, `0`, "request.declarations must be an array"},
+		{"non-object table entry", `[null]`, `0`, "request.declarations[0]"},
+		{"array table entry", `[[]]`, `0`, "request.declarations[0]"},
+		{"missing index", `[{"commands":[]}]`, ``, "request.surfaces[0].start.declarations"},
+		{"null index", `[{"commands":[]}]`, `null`, "start.declarations is missing"},
+		{"nested legacy object", `[{"commands":[]}]`, `{"commands":[]}`, "declarations must be a nonnegative integer index"},
+		{"negative index", `[{"commands":[]}]`, `-1`, "declarations must be a nonnegative integer index"},
+		{"fractional index", `[{"commands":[]}]`, `0.5`, "declarations must be a nonnegative integer index"},
+		{"out-of-range index", `[{"commands":[]}]`, `1`, "declarations index 1 is out of range"},
+		{"unused entry", `[{"commands":[]},{"dom":[]}]`, `0`, "request.declarations[1] is unused"},
+	}
+	if _, err := (&Host{}).SyncSurfaces(context.Background(), missingTable); err == nil || !strings.Contains(err.Error(), "declarations") {
+		t.Fatalf("sync request without its declaration table returned %v, want a declaration-table error before window lookup", err)
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var raw json.RawMessage
+			if tc.name == "missing index" {
+				raw = json.RawMessage(`{"settled":true,"titlebar":40,"declarations":` + tc.table + `,"surfaces":[{` + surface + `}}]}`)
+			} else {
+				raw = request(tc.table, tc.index)
+			}
+			_, err := (&Host{}).SyncSurfaces(context.Background(), raw)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("sync request returned %v, want an error containing %q before window lookup", err, tc.want)
+			}
+		})
 	}
 }
 

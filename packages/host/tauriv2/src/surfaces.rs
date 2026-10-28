@@ -25,8 +25,8 @@ use crate::windows::{
 pub(crate) struct Background;
 
 /// One surface that the page declared. The coordinates are CSS pixels relative to the page viewport.
-#[derive(Debug, Deserialize)]
-pub(crate) struct Surface {
+#[derive(Clone, Debug, Deserialize)]
+struct SurfaceRequest {
     id: String,
     x: f64,
     y: f64,
@@ -41,6 +41,20 @@ pub(crate) struct Surface {
     /// The start values of the view of a view surface, which the host injects as window.sokSurface before the page runs
     /// (docs/spec/native-surfaces.md#view-surfaces). A surface of another composition carries none.
     #[serde(default)]
+    start: Option<ViewStartRequest>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct Surface {
+    id: String,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    visible: bool,
+    dim: bool,
+    plugin: String,
+    composition: SurfaceComposition,
     start: Option<ViewStart>,
 }
 
@@ -65,6 +79,19 @@ pub struct ViewStart {
     pub(crate) project: Option<SurfaceProject>,
     #[serde(default)]
     pub(crate) declarations: Option<Value>,
+}
+
+/// The wire start values of a view. `declarations` is an index into the request-local table and has no default, so a
+/// missing, null, non-integer, negative or nested legacy value is refused by serde before sync can mutate surfaces.
+#[derive(Clone, Debug, Deserialize)]
+struct ViewStartRequest {
+    #[serde(default)]
+    params: Option<Value>,
+    #[serde(default, deserialize_with = "present_value")]
+    origin: Option<Value>,
+    #[serde(default)]
+    project: Option<SurfaceProject>,
+    declarations: u64,
 }
 
 /// Keeps a present value, null included, so that an absent field and a null field are told apart.
@@ -399,17 +426,97 @@ pub(crate) fn press_at(window: &Window, x: f64, y: f64) -> Result<(), NativeFail
     Ok(())
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct SyncRequest {
     /// Shows whether a continuous placement update ended.
     settled: bool,
+    /// Complete view declarations referenced by this request's start values.
+    declarations: Vec<Value>,
     #[serde(default)]
     overlays: Vec<WindowOverlayRequest>,
-    surfaces: Vec<Surface>,
+    surfaces: Vec<SurfaceRequest>,
     /// The height (pt) of the first row that the next draw will show. The window title bar is set to this height inside
     /// the placement transaction.
     /// (docs/spec/native-surfaces.md#title-bar-height).
     titlebar: f64,
+}
+
+#[derive(Clone, Debug)]
+struct ResolvedSyncRequest {
+    settled: bool,
+    overlays: Vec<WindowOverlayRequest>,
+    surfaces: Vec<Surface>,
+    titlebar: f64,
+}
+
+impl SyncRequest {
+    /// Resolves each view's request-local declaration index into its complete start object. No resolution state survives
+    /// this request, and all table checks finish before sync reads or changes window state.
+    fn resolve(self) -> Result<ResolvedSyncRequest, String> {
+        for (index, declarations) in self.declarations.iter().enumerate() {
+            if !declarations.is_object() {
+                return Err(format!(
+                    "surface declaration table entry {index} is not an object"
+                ));
+            }
+        }
+
+        let mut referenced = vec![false; self.declarations.len()];
+        let mut surfaces = Vec::with_capacity(self.surfaces.len());
+        for surface in self.surfaces {
+            let start = match surface.start {
+                Some(start) => {
+                    let index = usize::try_from(start.declarations).map_err(|_| {
+                        format!(
+                            "surface {:?}: view start declarations index {} is outside the request table of {} entries",
+                            surface.id,
+                            start.declarations,
+                            self.declarations.len()
+                        )
+                    })?;
+                    let Some(declarations) = self.declarations.get(index) else {
+                        return Err(format!(
+                            "surface {:?}: view start declarations index {} is outside the request table of {} entries",
+                            surface.id,
+                            start.declarations,
+                            self.declarations.len()
+                        ));
+                    };
+                    referenced[index] = true;
+                    Some(ViewStart {
+                        params: start.params,
+                        origin: start.origin,
+                        project: start.project,
+                        declarations: Some(declarations.clone()),
+                    })
+                }
+                None => None,
+            };
+            surfaces.push(Surface {
+                id: surface.id,
+                x: surface.x,
+                y: surface.y,
+                w: surface.w,
+                h: surface.h,
+                visible: surface.visible,
+                dim: surface.dim,
+                plugin: surface.plugin,
+                composition: surface.composition,
+                start,
+            });
+        }
+        if let Some(index) = referenced.iter().position(|used| !used) {
+            return Err(format!(
+                "surface declaration table entry {index} is not referenced"
+            ));
+        }
+        Ok(ResolvedSyncRequest {
+            settled: self.settled,
+            overlays: self.overlays,
+            surfaces,
+            titlebar: self.titlebar,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -979,6 +1086,15 @@ pub fn check_sync_request(
     held: &HashMap<String, SurfaceComposition>,
     plugins: &HashMap<String, String>,
 ) -> Result<Vec<platform::WindowOverlay>, String> {
+    let request = request.clone().resolve()?;
+    check_resolved_sync_request(&request, held, plugins)
+}
+
+fn check_resolved_sync_request(
+    request: &ResolvedSyncRequest,
+    held: &HashMap<String, SurfaceComposition>,
+    plugins: &HashMap<String, String>,
+) -> Result<Vec<platform::WindowOverlay>, String> {
     validate_titlebar_height(request.titlebar)?;
     let mut ids = HashSet::new();
     for surface in &request.surfaces {
@@ -1071,13 +1187,14 @@ pub fn run_layout<C, T>(
 /// Fits the child webviews of the window to the surfaces that the page declared, and prepares the surface placement
 /// transaction.
 pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, String> {
+    let request = request.resolve()?;
     let context = window_data(window)?;
     let views = &context.views;
     let watching = &context.watching;
     let running = &context.running;
     let surface_hosts = &context.surface_hosts;
 
-    let overlays = check_sync_request(
+    let overlays = check_resolved_sync_request(
         &request,
         &context
             .compositions

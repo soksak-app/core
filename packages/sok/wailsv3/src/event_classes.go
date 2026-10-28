@@ -140,6 +140,7 @@ var eventClasses = map[string]Class{
 	"page.trace.layout":                       ClassFrame,
 	"page.trace.modal.answer":                 ClassCall,
 	"page.trace.picker.close":                 ClassCall,
+	"page.trace.surface.sync":                 ClassFrame,
 	"page.update.operation":                   ClassCall,
 	"page.view.call":                          ClassCall,
 	"page.view.call.cancel":                   ClassCall,
