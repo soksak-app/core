@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-269: 명시한 registry index는 JSON parse 전에 optional SHA-256과 비교한다. `--index` 단독 사용과 기본 public-index 검사는 유지하고, 명시 URL 없는 digest 또는 64자리 lowercase hexadecimal이 아닌 값을 거부한다. 변경 전 소유 검사는 digest 검증 부재를 재현하고 수정 후 같은 집중 검사가 6/6 통과한다. Candidate URL은 설정하지 않았다.
+
 - F239-268: View-origin fixture의 assertion을 바꾸지 않고 사용하지 않는 mutable binding을 제거한다. Push Clippy gate가 경고를 재현하며 수정 후 소유 test-target lint 검사가 통과한다.
 
 - F239-266-1: 고정된 언어 setup action을 재사용하고 각 job에서 잠긴 의존성을 받는다. Native 의존성 fetch를 compile과 분리하며 cache hash를 검사하고 offline mode에서는 입력이 없으면 network 접근 전에 거부한다. Setup과 native offline 소유 검사가 각각 5/5 통과한다.

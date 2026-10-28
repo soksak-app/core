@@ -35,6 +35,9 @@ Dependency acquisition precedes offline build and check stages. Node and pnpm ve
 
 Each release host job builds and audits its own bundle, verifies stored-data migration with that host, and packages its release file. Registry compatibility remains a separate required check. The final decision requires success from every required job, including independent equivalence. Publication consumes the audited host release files only after that decision; failed, cancelled or skipped required jobs prevent publication.
 
+An explicitly selected registry index may carry a pinned SHA-256. When supplied, the digest is exactly 64 lowercase hexadecimal characters, requires a nonempty explicit index URL, and is checked against the downloaded bytes before JSON parsing. A mismatch fails acceptance. The default public-index check and an explicit index without a digest retain their existing behavior.
+
+
 ## Bounded execution
 
 The E2E runner requires nonempty `SOKSAK_RUN_ID` and `SOKSAK_RUN_FOLDER` values together before it probes the frontmost application or starts a test child. Missing or partial metadata fails at the runner boundary. The runner passes the supplied values to the child unchanged; it does not synthesize an identifier or folder. This keeps every window-check child attributable to its run and audit output.

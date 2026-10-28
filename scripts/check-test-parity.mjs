@@ -3170,6 +3170,22 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-269",
+    implementation: [
+      { file: "scripts/check-registry-manifests.mjs", symbol: "if (values.sha256 !== undefined && values.index === undefined)" },
+      { file: "scripts/check-registry-manifests.mjs", symbol: 'createHash("sha256").update(bytes).digest("hex")' },
+    ],
+    tests: [
+      { file: "scripts/test/registry-manifests.test.mjs", id: "an explicit index remains supported without a sha256" },
+      { file: "scripts/test/registry-manifests.test.mjs", id: "an expected index sha256 requires an explicit nonempty index URL" },
+      { file: "scripts/test/registry-manifests.test.mjs", id: "the explicit index sha256 must be 64 lowercase hexadecimal characters" },
+      { file: "scripts/test/registry-manifests.test.mjs", id: "the explicit index sha256 is checked before parsing index bytes" },
+      { file: "scripts/test/registry-manifests.test.mjs", id: "the explicit index is accepted when its sha256 matches" },
+    ],
+    expected: "An explicit index may retain the existing URL-only mode. When an expected SHA-256 is supplied, require a nonempty explicit URL and a 64-character lowercase hexadecimal digest, compare the fetched bytes before parsing, and reject mismatches.",
+    levels: ["unit"],
+  },
+  {
     id: "F129",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export async function prepareFixture" },

@@ -4,7 +4,7 @@
 // is not revoked and its engines.soksak contains the core version; the check downloads its release, verifies the sha256,
 // reads plugin.json and runs validateManifest of this checkout's @soksak/plugin-api.
 //
-//   node scripts/check-registry-manifests.mjs [--index URL]
+//   node scripts/check-registry-manifests.mjs [--index URL [--sha256 HASH]]
 import { parseArgs } from "node:util";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -60,7 +60,22 @@ export async function registryManifestErrors(index, core, fetchRelease = fetchBy
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const { values } = parseArgs({ options: { index: { type: "string" } }, strict: true });
+  const { values } = parseArgs({
+    options: { index: { type: "string" }, sha256: { type: "string" } },
+    strict: true,
+  });
+  if (values.sha256 !== undefined && values.index === undefined) {
+    console.error("--sha256 requires --index");
+    process.exit(2);
+  }
+  if (values.index !== undefined && values.index === "") {
+    console.error("--index must be a nonempty URL");
+    process.exit(2);
+  }
+  if (values.sha256 !== undefined && !/^[0-9a-f]{64}$/.test(values.sha256)) {
+    console.error("--sha256 must be 64 lowercase hexadecimal characters");
+    process.exit(2);
+  }
   const environment = JSON.parse(readFileSync(join(ROOT, "apps/wailsv3/environment.json"), "utf8"));
   // default: without --index the registry of the environment is checked.
   const url = values.index ?? environment.registry;
@@ -69,7 +84,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(2);
   }
   const core = JSON.parse(readFileSync(join(ROOT, "packages/plugin-api/package.json"), "utf8")).version;
-  const index = JSON.parse((await fetchBytes(url)).toString("utf8"));
+  const bytes = await fetchBytes(url);
+  if (values.sha256 !== undefined) {
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    if (digest !== values.sha256) {
+      console.error(`index sha256 ${digest} differs from expected ${values.sha256}`);
+      process.exit(1);
+    }
+  }
+  const index = JSON.parse(bytes.toString("utf8"));
   const { checked, errors } = await registryManifestErrors(index, core);
   if (errors.length) {
     console.error(errors.join("\n"));
