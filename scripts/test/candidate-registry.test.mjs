@@ -180,6 +180,25 @@ test("the candidate core and preserved core projection must match the index", { 
   }
 });
 
+test("the preserved core version projection matches the producer-sorted index set", { timeout: 5000 }, () => {
+  const current = fixture();
+  current.index.core.versions = [
+    { version: "0.0.10" },
+    { version: "0.0.11" },
+    { version: "0.0.9" },
+  ];
+  current.proof.preservedCoreVersions = ["0.0.9", "0.0.10", "0.0.11"];
+  current.indexBytes = Buffer.from(`${JSON.stringify(current.index)}\n`);
+  current.proof.indexSha256 = digest(current.indexBytes);
+  current.proofBytes = Buffer.from(`${JSON.stringify(current.proof)}\n`);
+  assert.deepEqual(verifyCandidateRegistry(current.indexBytes, current.proofBytes, identity), {
+    coreVersion: "0.0.21",
+    plugins: 1,
+    sidecars: 1,
+    producerReportedManifestCount: 1,
+  });
+});
+
 test("replacement identities and versions must be present in the candidate index", { timeout: 5000 }, () => {
   for (const mutate of [
     (proof) => { proof.replacementPlugins[0].version = "9.9.9"; },

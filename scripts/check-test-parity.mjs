@@ -3225,6 +3225,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-273-2",
+    implementation: [
+      { file: "scripts/check-candidate-registry.mjs", symbol: "[...coreVersions].sort()" },
+    ],
+    tests: [
+      { file: "scripts/test/candidate-registry.test.mjs", id: "the preserved core version projection matches the producer-sorted index set" },
+    ],
+    expected: "Compare the candidate index and preserved core version projection as exact sets so producer sorting does not reject the same declared versions. Preserve duplicate and membership rejection.",
+    levels: ["unit"],
+  },
+  {
     id: "F129",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export async function prepareFixture" },

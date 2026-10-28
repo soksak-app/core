@@ -191,7 +191,7 @@ export function verifyCandidateRegistry(indexBytes, proofBytes, identity, expect
   );
   const preservedCoreVersions = uniqueVersions(proof.preservedCoreVersions, "candidate proof preservedCoreVersions");
   if (preservedCoreVersions.length === 0) fail("candidate proof preservedCoreVersions must not be empty");
-  if (!isDeepStrictEqual(coreVersions, preservedCoreVersions)) fail("candidate index core version projection differs from the proof");
+  if (!isDeepStrictEqual([...coreVersions].sort(), [...preservedCoreVersions].sort())) fail("candidate index core version projection differs from the proof");
   if (coreVersions.includes(proof.candidateCoreVersion)) fail(`candidate index includes core ${proof.candidateCoreVersion} before its release files exist`);
 
   const pluginCount = verifyReplacementProjection(index, proof, "replacementPlugins", "id", "plugin", true);
