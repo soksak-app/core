@@ -105,6 +105,7 @@ func TestFailedOrRetiredFrameDoesNotNotifyItsWindowWatcher(t *testing.T) {
 	}
 }
 
+// contract: images.wait.newer-sequence-rearms-wait
 func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
 	images := NewImages()
 	key := ImageKey{Surface: "surface", Name: "view"}

@@ -2780,7 +2780,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/test-parity.test.mjs", id: "Go failure audit rejects ignored results in every Go production lane" },
-      { file: "packages/host/wailsv3/tests/recording_test.go", id: "TestAbortReportsStopFailureAndStillRemovesFolder" },
+      { file: "packages/host/wailsv3/tests/recording_test.go", id: "TestAbortRetiredStopFailureRemovesFolderAndReportsStopError" },
     ],
     expected: "The JS/TS, Rust, Go, and Objective-C failure lanes run as one machine-audited matrix; each lane rejects ignored outcomes, and Wails capture, recording cleanup, and shell close failures remain attributable.",
     levels: ["unit", "native"],
@@ -8493,6 +8493,68 @@ const FEATURE_LINKS = [
     expected: "The registered ProjectShown binding rejects an omitted project member but accepts explicit null and clears the committed project.",
     levels: ["unit"],
   },
+  {
+    id: "F239-243",
+    implementation: [{ file: "e2e/benchmark/cases/terminal.mjs", symbol: "export async function withTerminalDragTraceMode" }],
+    tests: [
+      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag performance trace mode preserves frame logging and restores the original setting" },
+      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace-mode cleanup preserves action and after-write restoration failures" },
+      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode restores performance even when post-action settings cannot be read" },
+      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode restores performance before reporting a changed log policy" },
+      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "terminal drag trace mode preserves falsy action rejection values" },
+    ],
+    expected: "Terminal drag measurement disables only the global performance trace while preserving frame logging, restores the original setting before reporting failures, and retains action and restoration errors without changing cadence or geometry acceptance criteria.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-245",
+    implementation: [
+      { file: "packages/plugin-api/events-check.js", symbol: "export function censusFindings" },
+      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn lifecycle_lock" },
+      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn pending_frame_identity_lock" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/events-check.test.mjs", id: "a poisoned lock error may be explicitly propagated, while recovery defaults and discarded errors remain findings" },
+      { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_poisoned_lifecycle_lock_is_reported_before_the_operation_runs" },
+      { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_poisoned_pending_lock_is_reported_without_consuming_the_receiver" },
+      { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_pending_start_probe_releases_the_lock_before_receive" },
+    ],
+    expected: "The lock census accepts explicit error propagation while preserving findings for discarded errors and unapproved recovery defaults; poisoned identity lifecycle and pending-start locks return explicit errors, and the pending probe releases its guard before the receiving helper reacquires it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-247",
+    implementation: [
+      { file: "packages/plugin-api/events-check.js", symbol: "function recoversPoisonedGuard" },
+      { file: "packages/plugin-api/events-check.js", symbol: "export function censusFindings" },
+      { file: "packages/plugin-api/census-rules.json", symbol: "rs.lock-result" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/events-check.test.mjs", id: "lock and condition-wait fallback combinators are findings" },
+      { file: "packages/plugin-api/test/events-check.test.mjs", id: "lock and condition-wait map_or defaults are findings" },
+      { file: "packages/plugin-api/test/events-check.test.mjs", id: "condition wait recovery checks include nested calls and closure blocks" },
+      { file: "packages/plugin-api/test/events-check.test.mjs", id: "condition wait checks preserve recovered waits and lexical exclusions" },
+    ],
+    expected: "The Rust lock and condition-wait census detects unwrap, expect, fallback combinators, and map_or/map_or_else defaults while preserving explicitly accepted recovery cases and lexical exclusions.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-252",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "bool sp_capture_has_stream(void)" },
+      { file: "packages/host/wailsv3/src/recording.go", symbol: "func (r *Recording) Finish" },
+      { file: "packages/host/tauriv2/src/recording.rs", symbol: "pub fn finish" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/recording_test.go", id: "TestFinishRetiredStopFailureReleasesOwnerAndPreservesFolder" },
+      { file: "packages/host/wailsv3/tests/recording_test.go", id: "TestAbortStopOwnershipQueryFailurePreservesOwner" },
+      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "a_retired_stop_failure_preserves_folder_and_releases_owner" },
+      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "an_abort_retries_retired_folder_cleanup_without_repeating_stop" },
+      { file: "native/darwin/tests/capture_pressure_test.m", id: "a stop error retires the current native stream" },
+    ],
+    expected: "Stop errors remain observable while native ownership decides whether cleanup is retained or released; retired recordings permit another start and removal retries do not repeat stop.",
+    levels: ["unit", "native"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
@@ -8994,8 +9056,12 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F239-217 changes only synthetic identities in existing owner test fixtures.
 // F239-227 replaces an unsafe fixture identity without changing endpoint behavior.
 // F239-228 aligns paired test filenames without changing their assertions.
-// F239-190 corrects a checklist evidence attribution without changing product behavior.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203"]);
+// F239-190 corrects checklist evidence attribution; F239-244 aligns contract fixtures; F239-246 corrects adapter counts;
+// F239-248, F239-249 and F239-250 correct formatting and lint; F239-251 and F239-253 correct native test fixtures.
+// F239-254 registers existing host assertions against the current contract cases.
+// F239-256 corrects a fixture's startup flush; F239-257 aligns assertions with existing capture-source cleanup behavior.
+// These items change no runtime capability and remain outside this capability-link inventory.
+const NON_CAPABILITY_COMPLETIONS = new Set(["F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read

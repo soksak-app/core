@@ -97,6 +97,7 @@ func TestTitlebarIsSetInTheBegunLayoutBeforeTheSurfaces(t *testing.T) {
 	}
 }
 
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
 func TestContinuousPreparationStartsRasterBeforeReply(t *testing.T) {
 	var calls []string
 	err := host.PrepareRasterUpdate(func() error {
@@ -109,6 +110,7 @@ func TestContinuousPreparationStartsRasterBeforeReply(t *testing.T) {
 	}
 }
 
+// contract: surface-layout.presentation-failure-stops-before-commit
 func TestRasterPreparationFailureCancelsBeforeReply(t *testing.T) {
 	failed := errors.New("raster configure failed")
 	var calls []string
@@ -121,6 +123,7 @@ func TestRasterPreparationFailureCancelsBeforeReply(t *testing.T) {
 	}
 }
 
+// contract: surface-layout.presentation-failure-stops-before-commit
 func TestRasterPreparationRetainsCancellationSchedulingError(t *testing.T) {
 	failed := errors.New("raster configure failed")
 	err := host.PrepareRasterUpdate(func() error { return failed },

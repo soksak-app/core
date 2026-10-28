@@ -130,6 +130,30 @@ fn invalid_json_closes_connection() {
 | `diagnostics.capture-start.parses-frame-identity-option` | `diagnostics.capture.start`는 선택적 boolean `frameIdentity`를 받고 그 값을 recording capture에 전달한다. | both |
 | `diagnostics.capture-start.frame-identity-is-strict-boolean` | JSON boolean이 아닌 `frameIdentity` 값은 `frameIdentity must be a boolean` 오류로 거부된다. | both |
 | `diagnostics.capture-start.forwards-frame-identity` | recording 시작은 요청된 `frameIdentity` 값을 native capture 시작에 전달한다. | both |
+| `diagnostics.document.viewport-marker.is-declared` | 진단 build는 `diagnostics.document.viewport-marker`를 선언한다. | both |
+| `diagnostics.document.viewport-marker.requires-valid-parameters` | viewport-marker command는 비어 있지 않은 `surface`, `document` 문자열과 boolean `enabled`를 요구하며, 없거나 비어 있거나 null이거나 타입이 다른 값은 native 작업 전에 거부한다. | both |
+| `diagnostics.document.viewport-marker.uses-the-owning-window-document` | command는 요청한 surface와 window에 속한 연결 document만 찾는다. 해당 document 없이 시작하면 native 작업 전에 실패하고, 제거 뒤 중지는 idempotent하다. | both |
+| `diagnostics.document.viewport-marker.schedules-native-work-and-returns-native-result` | command는 UI dispatcher를 통해 marker 작업을 실행하고 native enabled 상태, kind, color, border width를 그대로 반환한다. | both |
+| `diagnostics.document.viewport-marker.reports-native-errors` | native marker 실패는 원래 text와 internal-error code로 반환하며 성공으로 보고하지 않는다. | both |
+| `diagnostics.capture.document-identity.start.is-declared` | 진단 build는 `diagnostics.capture.document-identity.start`를 선언한다. | both |
+| `diagnostics.capture-document-identity.stop-preserves-captures-without-a-document-source` | 선택된 document identity source가 없는 중지는 source freeze와 제거를 건너뛰고 capture를 한 번 중지하며 `frameIdentity` option의 두 값을 모두 보존한다. | both |
+| `diagnostics.capture-document-identity.stop-orders-freeze-capture-and-cleanup` | 선택된 source가 있으면 중지는 source를 freeze하고 capture를 중지한 뒤 같은 generation을 제거한다. `issuedSlots`는 성공한 freeze reply에서 온다. | both |
+| `diagnostics.capture-document-identity.stop-does-not-credit-unconfirmed-freeze` | source freeze에 실패하면 issued-slot count를 더하지 않지만 capture finalization과 source 제거는 계속 시도하고 오류를 보존한다. | both |
+| `diagnostics.capture-document-identity.stop-drains-late-start-before-cleanup` | 중지는 cleanup 전에 대기 중인 source start가 끝나기를 기다리며, timeout된 start가 확인하지 않은 issued count는 반영하지 않는다. | both |
+| `diagnostics.capture-document-identity.start-validates-current-root-generation` | source 시작은 요청된 surface와 generation의 현재 연결된 root document만 찾고, 교체되거나 종료된 generation은 거부한다. | both |
+| `diagnostics.capture-document-identity.start-rejects-invalid-parameters` | source 시작은 document source를 선택하기 전에 없거나 비어 있거나 안전하지 않은 surface와 generation 값을 거부한다. | both |
+| `diagnostics.capture-document-identity.start-validates-native-metadata` | source 시작은 현재 generation과 측정된 유효 ROI를 가리키는 native metadata를 요구하며, 없거나 일치하지 않는 metadata는 거부한다. | both |
+| `diagnostics.capture-document-identity.stop-requires-issued-slots-field` | source-freeze reply에는 `issuedSlots`가 있어야 하며 0은 유효하고 필드 누락은 오류다. | both |
+| `diagnostics.capture-document-identity.start-selects-one-source-per-capture` | capture 하나는 document identity source를 최대 하나 선택하며 두 번째 source는 거부한다. | both |
+| `diagnostics.capture-document-identity.start-requires-explicit-capture-endpoint` | document identity source는 명시적인 capture endpoint가 필요하며 drag operation이 소유한 identity capture에는 연결할 수 없다. | both |
+| `diagnostics.capture-start.waits-for-prior-identity-removal` | 새 capture 시작은 이전에 선택한 document identity source 제거가 완료될 때까지 기다린다. | both |
+| `diagnostics.capture-stop.bounds-identity-callback-wait` | document identity callback 대기는 제한되어 있으며 callback이 오지 않으면 명시적인 timeout 오류를 반환한다. | both |
+| `diagnostics.capture-document-identity.reports-late-callback-errors` | 늦은 document identity callback 오류는 error level로 기록하고 현재 source 결과를 대체하지 않는다. | both |
+| `diagnostics.capture-document-identity.cleanup-source-survives-recording-stop` | recording 중지는 선택된 identity source의 native 제거가 완료될 때까지 소유권을 유지하며, recording finalization 오류 뒤에도 마찬가지다. | both |
+| `diagnostics.capture-start.rejects-unconfirmed-identity-cleanup` | 이전 source 제거가 확인되지 않은 동안 새 identity capture를 거부한다. | both |
+| `diagnostics.capture.poisoned-lifecycle-lock-is-reported` | poisoned document-identity lifecycle lock은 보호 작업 실행 전에 명시적인 interruption 오류를 반환한다. | tauriv2 only: Rust `Mutex` poisoning은 Rust 전용 synchronization 상태다 |
+| `diagnostics.capture.poisoned-pending-lock-is-reported` | poisoned pending-start lock은 명시적인 interruption 오류를 반환하고 저장된 receiver를 유지한다. | tauriv2 only: Rust `Mutex` poisoning은 Rust 전용 synchronization 상태다 |
+| `diagnostics.capture.pending-start-probe-does-not-reenter-lock` | pending-start probe는 receive helper가 다시 lock을 얻기 전에 기존 lock을 놓아 ready receiver가 deadlock을 일으키지 않는다. | tauriv2 only: pending receiver helper와 `Mutex`는 Rust 전용이다 |
 | `diagnostics.drag.forwards-frame-identity` | `diagnostics.drag`는 선택적 strict boolean `frameIdentity`를 받고 기본값은 false다. Identity를 켜면 `capture: true`를 요구하고 recording 시작에 전달한다. | both |
 | `diagnostics.native-objects.payload-names-counts` | `diagnostics.native.objects` 응답은 라이브러리의 살아 있는 객체 수를 `windowCompositions`, `surfaceHosts`, `inputRegistrations` 정수로만 담는다. | both |
 | `diagnostics.native-window-color-space.reports-appkit-profile` | `diagnostics.native.window-color-space`는 선택한 window를 한 번 읽어 `name`과 `iccSHA256`만 반환한다. `name`은 AppKit color space의 localized name이고 hash는 ICC profile byte의 lowercase SHA-256이며 ICC profile을 사용할 수 없으면 null이다. Window에 backing color space가 없으면 두 값 모두 null이다. 이 method는 diagnostic build에서만 선언되고 window를 변경하지 않는다. 비활성 window check는 OS가 선택한 profile을 고정하지 않고 응답 형식을 정확히 확인하며, 존재하지 않는 window에 error 1003을 요구하고, query 전후의 안정된 `host.window` facts를 비교한다. | both |
@@ -209,12 +233,24 @@ fn invalid_json_closes_connection() {
 | `documents.binary.take-releases-id` | document 영역의 binary id를 take하면 저장된 byte를 돌려주고 id를 놓으므로, 같은 id의 두 번째 take는 native 오류 문구 `the binary id is not stored`로 실패한다. | both |
 | `documents.binary.take-errors` | 연결되지 않은 document의 take는 다른 document 작업의 문구인 `document "<name>" is not attached`로 실패한다. | both |
 | `view.presentation-wait.ends` | view는 변경마다 한 번 presentation wait에 참여한다. presentation 없는 끝(process-ended, hidden, unresponsive)은 wait를 한 번 끝내고 `host.trace.view.presentation-abandoned {surface, reason}`을 쓴다. presentation은 그 event 없이 wait를 끝낸다. end가 아닌 reason은 거부된다. | both |
+| `view.presentation-wait.join-trace` | performance trace가 켜져 있으면 presentation join은 정확한 surface, generation, ticket을 담은 `host.trace.view.presentation-join`의 요청, native 결과, presentation, abandonment phase를 기록한다. 동기 callback은 native join 결과보다 먼저 기록되며 abandonment 뒤의 늦은 callback도 원래 join identity를 유지한다. | both |
+| `view.presentation-wait.cancel-clears-ticket` | 열린 layout ticket을 취소하면 view presentation wait와 pending 상태를 제거하고 정확한 ticket을 취소하기 전에 native join을 끝내며 presentation-abandoned event를 내보내지 않는다. 늦은 callback은 wait를 복원하지 못한다. | both |
 | `view.presentation-wait.joins` | 표시되며 기다리는 것이 없는 view는 settled present의 열린 배치 트랜잭션에 참여하고, 트랜잭션은 view가 표시된 뒤 commit된다. 표시 없이 끝나면 native 참여를 한 번 끝낸다. | both |
+| `surface-layout.setup-failure-cancels-open-transaction` | Tauri가 layout setup 중 WebView presentation callback을 등록하지 못하면 열린 layout transaction을 취소하고 setup 오류를 반환한다. 취소도 실패하면 그 오류를 setup 오류에 덧붙인다. | tauriv2 only: callback 등록 setup 단계는 Tauri WebView 경로의 일부이며 Wails는 platform operation으로 참여한다 |
+| `surface-layout.prepare-visible-surfaces` | 표시할 surface를 준비하면 요청된 표시 상태를 유지하고, 표시하지 않을 surface는 즉시 숨긴다. | both |
+| `surface-layout.joins-root-views-before-awaiting-app-dom` | 표시 중인 root view가 변경되면 host는 application DOM presentation을 기다리기 전에 열린 layout ticket에 참여한다. host는 DOM과 raster 준비를 기다린 뒤 commit하며 교체된 root generation도 commit 전에 해당 ticket에 참여해야 한다. 변경되지 않은 commit된 root는 다시 참여하지 않는다. | both |
+| `surface-layout.presentation-failure-stops-before-commit` | application DOM presentation 실패 시 raster 작업을 건너뛰며 DOM 또는 raster 오류를 성공한 native commit 없이 반환한다. | both |
 | `view.call.peer-lost` | view가 `sok-view`로 보내고 메인 page가 답하지 않은 call 요청은 view process가 끝날 때까지 열려 있다. process 종료는 그것을 process-ended 이유로 끝내고 `host.call.peer-lost {plugin, command, reason}`을 쓴다. 종료 전에 메인 page가 답한 call은 아무것도 쓰지 않는다. | both |
 | `view.theme.first-script` | host가 만든 view는 page를 불러오기 전에 생성 시점의 테마 `{scheme, tokens}`를 동결해 `window.sokTheme`에 넣는 document-start script를 가진다. 그래서 page의 첫 script가 토큰을 읽으며, 나중의 테마 변경은 post 경로로 보낸다. | both |
 | `view.start-values.first-script` | host가 만든 view는 page를 불러오기 전에 페이지가 준비로 그 surface에 선언한 동결된 시작 값 `{surface, params, origin, project, declarations}`를 `window.sokSurface`에 넣는 document-start script를 가진다. 그래서 page의 첫 script가 이를 읽는다. surface가 가지지 않은 값은 `null`이되, `origin`은 연 탭이 directory를 기록하지 않았을 때 `{directory: null}`이고, 형식이 맞지 않는 값은 준비와 함께 거부되며, 다른 구성의 surface는 이 값을 담지 않고, host는 view를 다시 만들 때 surface의 기록에서 이 값을 다시 주입한다. | both |
 | `view.start-values.refuses-a-missing-origin` | `origin`이 없거나, `null`이거나, 경로 또는 `null`을 담은 `{directory}`가 아니거나, directory가 로컬 절대 경로가 아닌 view surface의 준비는 [네이티브 surface](native-surfaces.ko.md#view-표면)의 네 문구 중 하나로 거부된다. 순서는 그 절의 순서이며, 문구는 `surface "<id>": view start origin is missing`, `surface "<id>": view start origin is not {directory} with a path or null`, `surface "<id>": view start origin directory is empty`, `surface "<id>": view start origin directory is not an absolute path`다. host는 그 자리에 directory를 주입하지 않으며, 시작 값 script도 이런 origin을 거부한다. | both |
 | `view.channel.ready` | view의 `view.ready` message는 그 문서를 ready 문서로 기록하고, 호스트는 이어서 현재 테마를 `sok: 1`과 함께 보낸다. view의 새 탐색(document 상태의 `navigations` 값 상승)은 기록을 지우므로, 그 뒤의 post는 다음 ready message 전까지 거부된다. | both |
+| `view.log.uses-direct-writer` | view의 `runtime.log` clock 또는 batch 요청은 host writer가 처리하며 합성 `host.view.call`이나 workbench relay event가 되지 않는다. | both |
+| `view.log.retired-generation-cannot-write-as-replacement` | retired view generation에서 받은 runtime log 요청은 replacement page의 요청으로 받아들이지 않으며 replacement를 통해 기록하지 않는다. | both |
+| `view.log-navigation-clears-ready-page` | 새 navigation이 시작되면 이전 ready page의 runtime log 요청은 no-ready-page 오류로 거부하고 요청 id를 reply에 보존한다. | both |
+| `view.log.same-id-replies` | 직접 runtime log reply는 성공 결과와 오류 모두 원래 요청 id를 담는다. | both |
+| `view.log.reply-post-failure-is-reported` | Wails가 direct runtime log reply를 native view에 보내지 못하면 host는 그 native post failure를 view error 경로에 기록한다. | wailsv3 only: Wails runtime log handler는 native post 오류를 보고할 수 있는 WebView API로 reply를 보내며 Tauri는 command response로 invoke 결과를 반환한다 |
+| `view.ready.binds-writer-page-to-positive-time-origin` | page identity가 양의 유한 decimal `performance.timeOrigin`이 아니면 view는 direct log 전달을 위한 ready 상태가 되지 않으며, 잘못된 identity는 ready document를 만들지 않는다. | both |
 | `host.window.close-keeps-plugin-host-records` | 닫히는 창은 기록을 지우기 전에 잡으므로 닫기 단계가 그 plugin host webview를 여전히 닫는다. 제거 뒤의 기록 읽기는 아무 기록도 찾지 못한다(`project window is closed`). | both |
 | `view.channel.progress-keeps-ready` | `loading`이 true이고 `navigations` 값이 직전 상태와 같은 view의 document 상태는 ready 기록을 유지한다. 그래서 load가 도는 중에 ready message를 보낸 view는 그 load의 progress 뒤에도 post를 받는다. | both |
 | `view.channel.state-boolean` | view의 document 상태는 `loading`을 JSON boolean으로 담고, host는 상태의 native payload(`url`, `title`, `loading`, `progress`, `canGoBack`, `canGoForward`, `error`, `scroll`, `history`, `link`, `navigations`)를 받는다. | both |
@@ -377,7 +413,10 @@ fn invalid_json_closes_connection() {
 | `performance.trace.already-off-writes-nothing` | trace가 꺼져 있을 때의 `off` 요청은 event를 저장하지 않는다. | both |
 | `performance.trace.host-observation-is-an-event` | trace가 켜져 있는 동안 host의 관측(layer `host` 또는 `sampler`)은 이름이 field에 반복되지 않는 level `debug`의 event `host.trace.<event>` 또는 `host.sampler.<event>`로 event log에 저장되며 trace 파일의 줄이 아니다. event 이름이 없는 관측은 오류 `performance trace`로 보고하고 아무것도 저장하지 않는다. | both |
 | `performance.surface.dispatch-records-existing-boundaries` | performance trace가 켜져 있으면 surface `sync`와 `present` 경로의 기존 UI dispatch와 비동기 presentation callback마다 같은 host event clock으로 window, operation, stage, `queued_ns`, `entered_ns`, `returned_ns`를 담은 `host.trace.surface.dispatch`를 저장한다. 이미 배정된 layout ticket은 포함하고, 아직 ticket이 배정되지 않았으면 생략한다. `queued_ns`는 기존 dispatch 또는 callback 등록 직전, `entered_ns`는 UI closure 또는 callback 진입 시점, `returned_ns`는 종료 시점에 기록한다. 이 기록은 caller 재개 시간을 포함하지 않으며 dispatch를 추가하지 않는다. | both |
+| `performance.surface.dispatch-records-frame-only-boundaries` | performance trace가 꺼져 있고 frame trace가 켜져 있으면 기존 surface dispatch마다 window, operation, stage와 `queued_ns`, `entered_ns`, `returned_ns`를 담은 `host.frame.surface.dispatch` 하나를 저장하며 중복 `host.trace.surface.dispatch` 기록은 만들지 않는다. | both |
+| `performance.surface.dispatch-frame-fallback-is-exclusive` | surface dispatch는 performance trace gate가 열려 있으면 이를 사용하고, 아니면 frame trace gate가 열려 있을 때 frame tracing을 사용하며, 두 gate가 모두 닫혀 있으면 event clock을 읽지 않는다. `host.trace.surface.dispatch`와 `host.frame.surface.dispatch` 중 최대 하나의 경로로 기록한다. | both |
 | `performance.sampler.failed-reading-is-explicit` | 상주 크기를 얻지 못한 sampler 읽기는 `rss_host_kb` 대신 `error`를 기록한다. | both |
+| `performance.sampler.reads-plugin-host-process` | Plugin-host process 정보는 등록된 process handle로만 읽는다. 미등록 또는 오래된 handle을 활성 plugin-host process로 취급하지 않는다. | both |
 | `performance.sampler.reads-every-registered-process` | trace가 켜져 있는 동안 표본 추출은 host와 프로세스 등록부의 각 process마다 `role`, `name`, `pid`, `rss_kb`를 담은 이벤트 `host.sampler.memory`를 하나씩 저장한다. process의 이름을 붙이면 이벤트 `host.trace.process`를 저장하고, 제거된 process는 다시 읽지 않으며, 크기를 읽을 수 없는 등록 process는 `rss_kb` 없이 `error`와 함께 저장한다. | both |
 | `performance.sampler.names-the-sidecar-processes` | host가 시작한 사이드카 process와 연결한 상주 service는 process가 끝나거나 연결이 끝날 때까지 프로세스 등록부에 있다. | both |
 | `performance.sampler.reads-every-window-process` | 표본은 등록된 각 window의 page process마다 `role` `page`, `window`, `pid`, `rss_kb`, `footprint_kb`를 가진 `host.sampler.memory` event 하나를, 각 document region의 process마다 `role` `document`, `window`, `surface`, `pid`, `footprint_kb`를 가진 event 하나를 저장합니다. process가 아직 시작되지 않은 document region과 process를 읽을 수 없는 window는 `rss_kb` 없이 `error`로 저장됩니다. | both |
@@ -970,6 +1009,15 @@ fn invalid_json_closes_connection() {
 | `log.batch.stores-plugin-events-in-the-layer-plugin` | `log` 중계는 이름이 `plugin.`으로 시작하는 event를 계층 `plugin`에, `page.`로 시작하는 event를 계층 `page`에, 각각 page가 준 시각과 writer의 `seq`로 저장한다. | both |
 | `log.batch.stores-clock-and-cids-of-page-events` | `log` 중계는 page가 준 `ts_us`, `mono_ns`와, event에 있으면 `cids`를 저장하고, `cids`가 없는 event에는 `cids`가 없다. | both |
 | `log.batch.answers-the-clock-request` | `log` 중계는 `{action: "clock"}`에 host가 호출 시점에 읽은 `ts_us`와 `mono_ns`로 답하고 event를 저장하지 않는다. 두 번째 답은 어느 clock에서도 첫 번째 답보다 작지 않다. | both |
+| `log.view-batch.binds-ready-page-and-native-surface` | view batch는 해당 view의 ready page에 대해서만 허용된다. host는 native plugin과 surface를 묶고 결과 기록에 page와 주입한 surface를 저장한다. | both |
+| `log.view-batch.rejects-foreign-source-without-partial-write` | 다른 page의 event가 포함된 batch는 전체를 거부하며 그보다 앞선 유효 event도 쓰지 않는다. | both |
+| `log.view-batch-requires-page-start-to-match-ready-origin` | view batch의 `page.start`는 ready page identity와 같은 `time_origin`을 가져야 한다. 다르면 전체 batch를 쓰지 않고 거부한다. | both |
+| `log.view-batch-requires-a-nonempty-page-start-url` | view batch의 `page.start`에는 비어 있지 않은 URL이 필요하며, 빈 URL이면 전체 batch를 쓰지 않고 거부한다. | both |
+| `log.view-batch-refuses-a-caller-supplied-surface` | plugin event는 자신의 `surface`를 view batch에 넣을 수 없다. host는 그 값을 신뢰하거나 교체하지 않고 batch를 거부한다. | both |
+| `log.view-batch-rejects-a-foreign-plugin-prefix` | view batch의 plugin event는 해당 view plugin의 prefix를 사용해야 하며 다른 prefix는 batch 전체 쓰기 없이 거부된다. | both |
+| `log.view-batch-bounds-fields-after-surface-injection` | native surface를 주입한 뒤 host는 event fields를 page field 크기 제한 안에 유지하고 잘라낸 fields를 표시한다. | both |
+| `log.view-request-accepts-only-declared-clock-and-batch-fields` | view writer는 `clock`에 `{action}`만, `batch`에 `{action, events}`만 허용한다. 알 수 없는 요청 field는 기록 없이 거부한다. | both |
+| `log.view-clock-answers-without-policy-or-event-write` | view clock 요청은 host wall 및 monotonic clock으로 답하고 policy 작업은 허용하지 않으며 event를 쓰지 않는다. | both |
 | `startup.failure.exits-with-its-message` | setup 단계의 실패는 그 메시지를 쓰고, 실패를 event loop에 돌려주지 않고 상태 1로 프로세스를 끝낸다. 돌려주면 프로세스가 abort된다. | both |
 | `startup.ends-no-process` | 호스트의 시작은 어떤 프로세스도 끝내지 않는다: 이전 실행의 기록 파일이 나열한 다른 애플리케이션의 WebKit 프로세스는 설정 디렉터리를 준비한 뒤에도 살아 있다. | both |
 | `plugin-host.create-loads-page` | window의 main page가 ready가 되면 host는 `plugin.json`이 `host`를 declare한 설치되고 켜진 각 plugin에 대해 view 구성(channel script, data directory, installed folder, declaration의 plugin)으로 plugin host web view를 만들고 `soksak://<plugin>/<page>`를 load한다; host를 declare하지 않은 plugin은 아무것도 만들지 않는다. | both |

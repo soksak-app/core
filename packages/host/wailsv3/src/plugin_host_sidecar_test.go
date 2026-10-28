@@ -385,6 +385,7 @@ func TestPluginHostSidecarCloseClosesOnlyTheCallersSessionsOfThePlugin(t *testin
 	}
 }
 
+// contract: host-calls.decode.messages
 func TestPluginHostSidecarCloseBindingAcceptsTheDeclaredRequestObject(t *testing.T) {
 	var host Host
 	err := host.PluginHostSidecarClose(context.Background(), json.RawMessage(`{"plugin":"probe"}`))

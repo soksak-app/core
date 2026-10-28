@@ -290,7 +290,7 @@ func TestDiagnosticViewportMarkerIsDeclared(t *testing.T) {
 	}
 }
 
-// contract: diagnostics.capture.document-identity.start.is-registered
+// contract: diagnostics.capture.document-identity.start.is-declared
 func TestCaptureDocumentIdentityStartIsRegistered(t *testing.T) {
 	method, ok := diagnosticMethods["diagnostics.capture.document-identity.start"]
 	if !ok || method == nil {
@@ -451,7 +451,7 @@ func TestCaptureStopDrainsPendingStartWithoutCreditingItsUnconfirmedCount(t *tes
 	}
 }
 
-// contract: diagnostics.capture-document-identity.start-resolves-current-root-handle
+// contract: diagnostics.capture-document-identity.start-validates-current-root-generation
 func TestCaptureDocumentIdentityStartResolvesCurrentRootHandle(t *testing.T) {
 	s := &Surfaces{documents: NewDocuments(), sourceOrigins: newSourceOrigins()}
 	generation, err := s.sourceOriginState().create("surface-a", true)
@@ -666,7 +666,7 @@ func runViewportMarker(t *testing.T, e *Endpoint, params string) (any, error) {
 	return method(e, nil, json.RawMessage(params))
 }
 
-// contract: diagnostics.document.viewport-marker.validates-owned-region-and-runs-on-ui
+// contract: diagnostics.document.viewport-marker.uses-the-owning-window-document, diagnostics.document.viewport-marker.schedules-native-work-and-returns-native-result
 func TestDiagnosticViewportMarkerValidatesAndRunsOnUI(t *testing.T) {
 	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
 	e, _, document := viewportMarkerEndpoint(t, marker, true)
@@ -694,7 +694,7 @@ func TestDiagnosticViewportMarkerValidatesAndRunsOnUI(t *testing.T) {
 	}
 }
 
-// contract: diagnostics.document.viewport-marker.rejects-invalid-and-unowned-targets
+// contract: diagnostics.document.viewport-marker.requires-valid-parameters
 func TestDiagnosticViewportMarkerRejectsInvalidAndUnownedTargets(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -721,7 +721,7 @@ func TestDiagnosticViewportMarkerRejectsInvalidAndUnownedTargets(t *testing.T) {
 	}
 }
 
-// contract: diagnostics.document.viewport-marker.requires-existing-region-to-start
+// contract: diagnostics.document.viewport-marker.uses-the-owning-window-document
 func TestDiagnosticViewportMarkerStartRequiresAttachedRegion(t *testing.T) {
 	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
 	e, _, _ := viewportMarkerEndpoint(t, marker, false)
@@ -734,7 +734,7 @@ func TestDiagnosticViewportMarkerStartRequiresAttachedRegion(t *testing.T) {
 	}
 }
 
-// contract: diagnostics.document.viewport-marker.stop-is-idempotent-after-region-removal
+// contract: diagnostics.document.viewport-marker.uses-the-owning-window-document
 func TestDiagnosticViewportMarkerStopAfterRegionRemoval(t *testing.T) {
 	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
 	e, _, _ := viewportMarkerEndpoint(t, marker, false)
@@ -750,7 +750,7 @@ func TestDiagnosticViewportMarkerStopAfterRegionRemoval(t *testing.T) {
 	}
 }
 
-// contract: diagnostics.document.viewport-marker.propagates-native-failures
+// contract: diagnostics.document.viewport-marker.reports-native-errors
 func TestDiagnosticViewportMarkerPropagatesNativeFailure(t *testing.T) {
 	marker := &viewportMarkerPlatform{err: errors.New("native marker failed")}
 	e, _, _ := viewportMarkerEndpoint(t, marker, true)

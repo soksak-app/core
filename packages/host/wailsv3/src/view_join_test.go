@@ -18,7 +18,7 @@ func (p synchronousPresentationPlatform) JoinView(window unsafe.Pointer, ticket 
 	return abandon, joined, err
 }
 
-// contract: view.presentation-wait.changed-root-joins-each-geometry
+// contract: view.presentation-wait.joins
 func TestUnsettledChangedRootPlacementJoinsItsPresentation(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 	window := unsafe.Pointer(new(int))
@@ -35,7 +35,7 @@ func TestUnsettledChangedRootPlacementJoinsItsPresentation(t *testing.T) {
 	}
 }
 
-// contract: view.presentation-wait.rejoins-current-generation-before-commit
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
 func TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 	window := unsafe.Pointer(new(int))
@@ -71,7 +71,7 @@ func TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit(t *testing.T) {
 	}
 }
 
-// contract: view.presentation-wait.rejoins-current-generation-before-commit
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
 func TestRestartLimitLeavesNoReplacementGenerationToJoin(t *testing.T) {
 	clock := &fakeClock{}
 	s, fake, _ := newLifecycleSurfaces(t, clock)
@@ -104,7 +104,7 @@ func TestRestartLimitLeavesNoReplacementGenerationToJoin(t *testing.T) {
 	}
 }
 
-// contract: view.presentation-wait.rejoins-current-generation-before-commit
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
 func TestRestartLimitInvalidatesPlacementAfterItsJoinPresented(t *testing.T) {
 	clock := &fakeClock{}
 	s, fake, _ := newLifecycleSurfaces(t, clock)
@@ -149,7 +149,7 @@ func TestRestartLimitInvalidatesPlacementAfterItsJoinPresented(t *testing.T) {
 	}
 }
 
-// contract: view.presentation-wait.rejoins-current-generation-before-commit
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
 func TestInitiallyAbsentRootGenerationIsNotPromoted(t *testing.T) {
 	s, _, _ := newLifecycleSurfaces(t, &fakeClock{})
 	window := unsafe.Pointer(new(int))
@@ -170,7 +170,7 @@ func TestInitiallyAbsentRootGenerationIsNotPromoted(t *testing.T) {
 	}
 }
 
-// contract: view.presentation-wait.changed-root-joins-each-geometry
+// contract: view.presentation-wait.joins
 func TestChangedPlacementJoinTracksCommittedGeometryVisibilityAndGeneration(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 	root := fake.created[0]
@@ -251,7 +251,7 @@ func TestChangedPlacementJoinTracksCommittedGeometryVisibilityAndGeneration(t *t
 	}
 }
 
-// contract: view.presentation-wait.completion-is-ticket-and-generation-specific
+// contract: view.presentation-wait.joins
 func TestOlderViewPresentationCannotEndANewerJoin(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 	window := unsafe.Pointer(new(int))

@@ -6,6 +6,8 @@
 
 - F239-257: Capture identity cleanup 검사가 clear 뒤에도 선택 비활성 상태를 기대하고 같은 recording의 두 번째 source를 거절하는지 확인하도록 수정한다. 소유 검사는 기존 기대값에서 실패하고 수정 후 통과하며 production 동작은 바뀌지 않는다.
 
+- F239-254: Host contract 선언을 현재 소유 assertion에 맞추고 대응하는 한국어 table을 완성한다. 정확한 공유 coverage를 등록하고 host별 구현 사유를 유지하며 poison된 receiver 보존과 recording 상태 복구를 검증하고 Wails ready-view writer assertion을 보강한다. 완료 capability link를 복원하고 fixture, formatting 및 lint maintenance는 기존 non-capability 정책으로 분류한다. 집중 소유 검사와 구조 inventory는 통과하며 통합 host 실행은 별도로 남는다.
+
 - F239-252: 양 host에서 capture stop 오류와 현재 native stream 소유권을 구분한다. 비동기 stop 완료 동작을 바꾸지 않고 동기화된 native 소유권 조회를 노출한다. 소유 중이거나 알 수 없는 cleanup 상태를 보존하고 퇴역한 finish의 폴더를 유지하면서 소유권을 해제하며 퇴역한 abort 오류는 cleanup 뒤에도 보고한다. 삭제 실패는 stop 반복 없이 재시도하도록 보존한다. Go와 Rust 소유 case는 수정 전 retired-error 차단을 재현하고 수정 후 통과하며 native pressure는 오류 finalization 전후 소유권을 검증한다. 공유 contract case와 기존 sidecar fixture constructor formatting도 맞춘다.
 
 - F239-253: 제어된 capture-stop stream에 필수 attempt context를 부여해 pressure 소유 검사가 write, delivery-deadline 및 stream-completion 오류 경로에 도달하고 검증하도록 한다. Decoded-frame 쓰기 fault assertion을 현재의 명시적 finalization 오류에 맞추며 실패 결과를 유지한다. 관련 소유 검사 두 개가 통과하고 production capture 코드는 바뀌지 않는다.

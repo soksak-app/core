@@ -13,7 +13,7 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// contract: surface-layout.continuous-waits-for-app-dom
+// contract: surface-layout.joins-root-views-before-awaiting-app-dom
 func TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit(t *testing.T) {
 	phases := make(chan string, 4)
 	domRelease := make(chan struct{})
@@ -69,7 +69,7 @@ func TestContinuousLayoutWaitsForApplicationDOMBeforeRasterAndCommit(t *testing.
 	}
 }
 
-// contract: surface-layout.continuous-presentation-failures-stop-before-commit
+// contract: surface-layout.presentation-failure-stops-before-commit
 func TestLayoutPresentationFailureSkipsLaterStages(t *testing.T) {
 	domFailure := errors.New("application presentation failed")
 	var rasterCalls, commitCalls int
@@ -371,7 +371,7 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	}
 }
 
-// contract: surface-layout.prepare-preserves-visible-state
+// contract: surface-layout.prepare-visible-surfaces
 func TestPrepareSurfaceVisibilityPreservesVisibleAndHidesInvisible(t *testing.T) {
 	cases := []struct {
 		name             string

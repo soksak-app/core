@@ -70,11 +70,16 @@ fn a_poisoned_pending_lock_is_reported_without_consuming_the_receiver() {
         pending_frame_identity_lock(&lock).err().as_deref(),
         Some("pending document frame identity start was interrupted by a panic")
     );
+    let pending = lock.lock().unwrap_or_else(PoisonError::into_inner);
+    assert!(
+        pending.is_some(),
+        "the poisoned pending receiver was consumed before reporting the lock error"
+    );
 }
 
-// contract: diagnostics.capture.pending-start-releases-lock-before-receive
+// contract: diagnostics.capture.pending-start-probe-does-not-reenter-lock
 #[test]
-fn a_pending_start_releases_its_lock_before_receiving() {
+fn a_pending_start_probe_releases_the_lock_before_receive() {
     let (sender, receiver) = mpsc::channel();
     sender.send(Ok("started".to_string())).unwrap();
     let lock = Arc::new(Mutex::new(Some(receiver)));

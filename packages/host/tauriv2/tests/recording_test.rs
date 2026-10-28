@@ -22,6 +22,7 @@ struct Fake {
     fail_start: bool,
     no_frame: bool,
     fail_stop: bool,
+    panic_stop_once: Cell<bool>,
     owned_stream: Cell<bool>,
     retire_on_stop_error: bool,
     stream_query_error: Option<String>,
@@ -68,6 +69,9 @@ impl Capture for Fake {
     }
     fn stop(&self) -> Result<i32, String> {
         self.calls.borrow_mut().push("stop".into());
+        if self.panic_stop_once.replace(false) {
+            panic!("fixture stop panic");
+        }
         if let Some(path) = &self.replace_directory_on_stop {
             replace_directory_with_file(path)?;
         }
@@ -157,6 +161,36 @@ fn a_stop_failure_keeps_the_folder_returned_by_start() {
         next.contains("is running"),
         "another capture was allowed: {next}"
     );
+}
+
+// contract: recording.state.poisoned-lock-is-recovered
+#[test]
+fn a_poisoned_recording_state_is_recovered_when_it_ends() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let fake = Fake {
+        panic_stop_once: Cell::new(true),
+        ..Fake::default()
+    };
+    recording
+        .start(&fake, WINDOW, &folder, false, &make)
+        .unwrap();
+
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = recording.finish(&fake);
+    }));
+    assert!(panic.is_err(), "the fake stop did not panic");
+    assert_eq!(
+        recording.running().as_deref(),
+        Some(folder.as_path()),
+        "reading a poisoned recording state lost its owned folder"
+    );
+    recording
+        .abort(&fake)
+        .expect("abort did not recover the poisoned state and complete cleanup");
+    assert_eq!(recording.running(), None);
+    assert!(!folder.exists(), "abort retained the recovered folder");
 }
 
 // contract: recording.finish.stop-query-failure-preserves-owner

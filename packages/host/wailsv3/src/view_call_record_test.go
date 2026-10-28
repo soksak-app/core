@@ -134,7 +134,7 @@ func viewRecordEvents(t *testing.T, config string) []map[string]any {
 
 const viewLogDeliveryChild = "SOKSAK_VIEW_LOG_DELIVERY_CHILD"
 
-// contract: logging.view-runtime-log-directly-replies
+// contract: log.view-clock-answers-without-policy-or-event-write, view.log.uses-direct-writer, log.view-request-accepts-only-declared-clock-and-batch-fields, view.log.same-id-replies, log.view-batch.binds-ready-page-and-native-surface, log.view-batch.rejects-foreign-source-without-partial-write, log.view-batch-requires-page-start-to-match-ready-origin, log.view-batch-requires-a-nonempty-page-start-url, log.view-batch-refuses-a-caller-supplied-surface, log.view-batch-rejects-a-foreign-plugin-prefix
 func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)
@@ -147,6 +147,10 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 		}
 		fake.posted = nil
 		events = nil
+		if err := log.Flush(5 * time.Second); err != nil {
+			t.Fatalf("flush before runtime.log clock: %v", err)
+		}
+		clockRecordCount := len(viewRecordEvents(t, config))
 		message := `{"message":{"sok":1,"id":7,"command":"runtime.log","params":{"action":"clock"}}}`
 		if err := s.ViewMessage("probe-surface", message); err != nil {
 			t.Fatalf("runtime.log clock: %v", err)
@@ -164,6 +168,13 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 		result, ok := reply["result"].(map[string]any)
 		if !ok || reply["id"] != float64(7) || result["ts_us"] == nil || result["mono_ns"] == nil {
 			t.Fatalf("runtime.log clock native reply: %v, want id 7 and host clocks", reply)
+		}
+		if err := log.Flush(5 * time.Second); err != nil {
+			t.Fatalf("flush after runtime.log clock: %v", err)
+		}
+		clockRecords := viewRecordEvents(t, config)
+		if len(clockRecords) != clockRecordCount {
+			t.Fatalf("runtime.log clock changed event record count: before %d, after %d, records %v", clockRecordCount, len(clockRecords), clockRecords)
 		}
 
 		batch := map[string]any{"action": "batch", "events": []any{
@@ -233,6 +244,11 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 			}
 		}
 		invalidRequests := []map[string]any{
+			{"action": "clock", "unexpected": true},
+			{"action": "batch", "events": []any{}, "unexpected": true},
+			{"action": "batch", "events": []any{
+				map[string]any{"ts_us": 1234583, "mono_ns": 1234583890, "page": "1234.5", "level": "info", "event": "page.start", "fields": map[string]any{"time_origin": 1234.5, "url": ""}},
+			}},
 			{"action": "batch", "events": []any{
 				map[string]any{"ts_us": 1234580, "mono_ns": 1234580890, "page": "9999", "level": "info", "event": "plugin.probe.wrong-page", "fields": map[string]any{}},
 			}},
@@ -275,7 +291,7 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 	}
 }
 
-// contract: logging.view-runtime-log-surface-respects-page-field-bound
+// contract: log.view-batch-bounds-fields-after-surface-injection
 func TestViewRuntimeLogSurfaceKeepsPluginFieldsWithinPageBound(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)
@@ -342,7 +358,7 @@ func TestViewRuntimeLogSurfaceKeepsPluginFieldsWithinPageBound(t *testing.T) {
 	}
 }
 
-// contract: logging.view-ready-binds-finite-page-origin
+// contract: view.ready.binds-writer-page-to-positive-time-origin
 func TestViewReadyRequiresFiniteDecimalPageIdentity(t *testing.T) {
 	for _, page := range []string{"", "0", "-1", "NaN", "Infinity", "0x1p4"} {
 		t.Run(page, func(t *testing.T) {
@@ -366,7 +382,7 @@ func TestViewReadyRequiresFiniteDecimalPageIdentity(t *testing.T) {
 	}
 }
 
-// contract: logging.view-runtime-log-current-document-only
+// contract: view.log-navigation-clears-ready-page
 func TestViewRuntimeLogReplyDoesNotReachANavigatedDocument(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)
@@ -419,7 +435,7 @@ func TestViewRuntimeLogReplyDoesNotReachANavigatedDocument(t *testing.T) {
 	}
 }
 
-// contract: logging.view-runtime-log-reply-post-failure-is-reported
+// contract: view.log.reply-post-failure-is-reported
 func TestViewRuntimeLogNativeReplyPostFailureIsReported(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)
@@ -456,7 +472,7 @@ func TestViewRuntimeLogNativeReplyPostFailureIsReported(t *testing.T) {
 	}
 }
 
-// contract: logging.view-runtime-log-retired-generation-is-cancelled
+// contract: view.log.retired-generation-cannot-write-as-replacement
 func TestRetiredViewRuntimeLogDoesNotWriteThroughReplacement(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)

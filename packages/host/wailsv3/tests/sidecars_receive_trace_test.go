@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// contract: sidecars.trace.relay-records-every-message-with-its-body
 func TestHandledImageRecordsItsReceiptOnce(t *testing.T) {
 	receipts := 0
 	handled := host.ReceiveSidecarMessage(func() { receipts++ }, func() bool { return true })
@@ -17,6 +18,7 @@ func TestHandledImageRecordsItsReceiptOnce(t *testing.T) {
 	}
 }
 
+// contract: sidecars.trace.relay-records-every-message-with-its-body
 func TestOrdinaryMessageKeepsItsReceiptAndPageDelivery(t *testing.T) {
 	receipts := 0
 	handled := host.ReceiveSidecarMessage(func() { receipts++ }, func() bool { return false })
@@ -28,6 +30,7 @@ func TestOrdinaryMessageKeepsItsReceiptAndPageDelivery(t *testing.T) {
 	}
 }
 
+// contract: sidecars.trace.relay-records-every-message-with-its-body
 func TestReceiptPrecedesNativeDispatch(t *testing.T) {
 	var order []string
 	host.ReceiveSidecarMessage(func() { order = append(order, "receive") }, func() bool {

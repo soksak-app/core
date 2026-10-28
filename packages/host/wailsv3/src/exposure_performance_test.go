@@ -19,6 +19,7 @@ func TestPluginHostProcessesUseRegisteredHandlesOnly(t *testing.T) {
 	}
 }
 
+// contract: performance.sampler.reads-plugin-host-process
 func TestPluginHostProcessesPreserveUnstartedAndMissingStates(t *testing.T) {
 	processes, err := pluginHostProcessesForFacts([]windowWebviewFacts{{View: 33, Process: 0}}, map[uint64]string{33: "probealpha"})
 	if err != nil {
