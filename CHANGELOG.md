@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-266-1: Reuse pinned language setup actions and acquire locked dependencies in each job. Separate native dependency fetching from compilation; verify cached hashes and reject missing input before network access in offline mode. Setup and native offline owners pass 5/5 each.
+
+- F239-266-3: Build, inspect, migrate and package each release host independently. Reuse the CI graph and require both host results and registry acceptance before publication. Selected-host release CLI owners pass 26/26. GitHub execution and publication are not established by these local checks.
+
+- F239-266-2: Assign Go formatting, Rust formatting and Clippy to their host-language CI jobs. Keep host contract execution in the independent equivalence job, stage only the core frontend for fixture-based host tests, and remove sidecar dependency fetches that those tests do not use. Run the native process-identity Node entrypoint in the native job and partition discovered Node tests across package, script and native jobs without overlap. Workflow and Make dry-run owners pass; no native or host suite was run.
+
 - F239-265: Avoid rewriting stable card, tool and native-slot state attributes during layout redraws. The owning DOM Reds record repeated attribute changes without state changes; Greens retain focus, slot, availability and fullscreen transitions without redundant writes. Keep mounting and transaction ordering unchanged; no application cadence result is inferred.
 
 - F239-264: Apply the declared Cargo deployment target to the bundled Tauri CLI as well as the application so shared dependencies use the same build environment. The expanded-command owner reproduces the missing assignment and passes for debug and release with an ambient target different from the declared minimum.

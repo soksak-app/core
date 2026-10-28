@@ -1,0 +1,34 @@
+name: Set up the workspace Go toolchain
+description: Install the Go version declared by go.work and select a workspace module directory.
+inputs:
+  root:
+    description: Workspace root relative to the checkout.
+    required: false
+    default: core
+  module:
+    description: Go module directory relative to the workspace root.
+    required: false
+    default: .
+runs:
+  using: composite
+  steps:
+    - name: Install Go
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+      with:
+        go-version-file: ${{ inputs.root }}/go.work
+        cache-dependency-path: |
+          ${{ inputs.root }}/go.work.sum
+          ${{ inputs.root }}/**/go.sum
+    - name: Resolve the selected Go module directory
+      id: module-path
+      shell: bash
+      env:
+        WORKSPACE_ROOT: ${{ inputs.root }}
+        MODULE_PATH: ${{ inputs.module }}
+      run: |
+        set -euo pipefail
+        case "$MODULE_PATH" in
+          /*|..|../*|*/../*|*/..) echo "module must be a root-relative directory: $MODULE_PATH" >&2; exit 2 ;;
+        esac
+        directory="$WORKSPACE_ROOT/$MODULE_PATH"
+        test -d "$directory" || { echo "Go module directory not found: $directory" >&2; exit 2; }

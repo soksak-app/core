@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { discoverNodeTests, parseTestScript } from "../node-tests.mjs";
+import { discoverNodeTests, parseTestScript, selectNodeTests } from "../node-tests.mjs";
 import { runTests } from "../test-runner.mjs";
 
 const workspace = () => mkdtempSync(join(tmpdir(), "node-tests-"));
@@ -46,6 +46,24 @@ test("each test file of a package is a test with the folder and the flags of its
     ["b/test/three.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr"], join(root, "b")],
   ]);
   assert.deepEqual(before, [{ name: "b: pnpm build", command: "pnpm", args: ["build"], cwd: join(root, "b") }]);
+});
+
+test("only and excluded path scopes partition scripts tests from workspace package tests", () => {
+  const all = ["scripts/a.test.mjs", "scripts/nested/b.test.mjs", "packages/a/test/a.test.mjs", "e2e/a.test.mjs"]
+    .map((name) => ({ name }));
+  const scripts = selectNodeTests(all, { only: "scripts/" });
+  const packages = selectNodeTests(all, { exclude: ["scripts/"] });
+  assert.deepEqual(scripts.map(({ name }) => name), ["scripts/a.test.mjs", "scripts/nested/b.test.mjs"]);
+  assert.deepEqual(packages.map(({ name }) => name), ["packages/a/test/a.test.mjs", "e2e/a.test.mjs"]);
+  assert.deepEqual([...scripts, ...packages].map(({ name }) => name).sort(), all.map(({ name }) => name).sort());
+  assert.equal(new Set([...scripts, ...packages].map(({ name }) => name)).size, all.length);
+});
+
+test("excluded test scopes reject empty, absolute, and traversing paths", () => {
+  const tests = [{ name: "scripts/a.test.mjs" }];
+  for (const path of ["", "/scripts", "../scripts", "scripts/../packages", "C:\\scripts"]) {
+    assert.throws(() => selectNodeTests(tests, { exclude: [path] }), /--exclude path must be a nonempty root-relative path/);
+  }
 });
 
 test("a package whose test script names no file, or whose script cannot be read, is an error that names the package", () => {

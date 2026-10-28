@@ -220,7 +220,11 @@ export function uncoveredCases(cases, declared) {
  * Compares the contract cases with the declarations and the run results of each host.
  * hosts: [{ name, language, tests, errors, runs }] — runs maps the test name to its result for each configuration.
  */
-export function auditHostContract(cases, hosts) {
+export function auditHostContract(cases, hosts, { selectedHosts = HOSTS } = {}) {
+  if (!Array.isArray(selectedHosts) || selectedHosts.length === 0 || new Set(selectedHosts).size !== selectedHosts.length) {
+    throw new Error('selectedHosts must contain unique known hosts');
+  }
+  for (const name of selectedHosts) if (!HOSTS.includes(name)) throw new Error(`unknown host ${JSON.stringify(name)}`);
   const { errors, declared } = auditDeclarations(cases, hosts);
   const covered = new Map(hosts.map((host) => [host.name, new Set()]));
   for (const host of hosts) {
@@ -235,7 +239,7 @@ export function auditHostContract(cases, hosts) {
     }
   }
   for (const [id, contract] of cases) {
-    for (const name of contract.hosts) {
+    for (const name of contract.hosts.filter((host) => selectedHosts.includes(host))) {
       const host = hosts.find((item) => item.name === name);
       if (!host) errors.push(`contract case ${id} requires host ${name}, which was not checked`);
       else if (!covered.get(name).has(id)) errors.push(`${name} runs no passing test for contract case ${id}`);
@@ -487,9 +491,11 @@ async function main(argv) {
   // The Go link flags start with a dash, so they are given as --go-ldflags=<flags>.
   const { values } = parseArgs({
     args: argv, strict: true,
-    options: { 'go-ldflags': { type: 'string' }, run: { type: 'string' }, only: { type: 'string' }, static: { type: 'boolean' } },
+    options: { 'go-ldflags': { type: 'string' }, host: { type: 'string' }, run: { type: 'string' }, only: { type: 'string' }, static: { type: 'boolean' } },
   });
   const cases = parseContractCases(readFileSync(join(ROOT, SPEC), 'utf8'));
+  if (values.host !== undefined && !HOSTS.includes(values.host)) throw new Error('--host must be wailsv3 or tauriv2');
+  if (values.host !== undefined && values.static) throw new Error('--host cannot be combined with --static');
   // --static checks declarations from the current compiler target. Rust test executables are built and listed, but never run.
   if (values.static) {
     const write = (line) => process.stdout.write(`${line}\n`);
@@ -498,7 +504,7 @@ async function main(argv) {
     const rustItems = rustFound.flatMap((entry) => entry.tests);
     return checkDeclarations(cases, rustItems, rustFound.flatMap((entry) => entry.failures));
   }
-  if (!values['go-ldflags']) throw new Error('usage: check-host-contract.mjs --go-ldflags=<flags> [--run <text>] [--only <text>] | --static');
+  if (values.host !== 'tauriv2' && !values['go-ldflags']) throw new Error('usage: check-host-contract.mjs [--host wailsv3|tauriv2] [--go-ldflags=<flags>] [--run <text>] [--only <text>] | --static');
   const write = (line) => process.stdout.write(`${line}\n`);
   const concurrency = Math.max(2, cpus().length - 2);
   const buildDir = mkdtempSync(join(tmpdir(), 'host-contract-'));
@@ -507,10 +513,15 @@ async function main(argv) {
   if (values.run === '') throw new Error('--run needs a text that the id of a run contains');
   // default: without --run every run builds, because every id contains the empty text.
   const runText = values.run ?? '';
-  const goDiscovery = Promise.all(GO_RUNS(values['go-ldflags']).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency, timeoutMs: TEST_TIMEOUT_MS })));
+  const selectedHosts = values.host === undefined ? HOSTS : [values.host];
+  const goDiscovery = selectedHosts.includes('wailsv3')
+    ? Promise.all(GO_RUNS(values['go-ldflags']).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency, timeoutMs: TEST_TIMEOUT_MS })))
+    : Promise.resolve([]);
   const rustDiscovery = (async () => {
     const found = [];
-    for (const run of RUST_RUNS.filter((entry) => entry.id.includes(runText))) found.push(await discoverRust({ ...run, cwd: ROOT, write, timeoutMs: TEST_TIMEOUT_MS }));
+    if (selectedHosts.includes('tauriv2')) {
+      for (const run of RUST_RUNS.filter((entry) => entry.id.includes(runText))) found.push(await discoverRust({ ...run, cwd: ROOT, write, timeoutMs: TEST_TIMEOUT_MS }));
+    }
     return found;
   })();
   const [goFound, rustFound] = await Promise.all([goDiscovery, rustDiscovery]);
@@ -529,7 +540,7 @@ async function main(argv) {
   write(`RUN  ${items.length} tests with ${concurrency} at once, each limited to ${TEST_TIMEOUT_MS / 1000}s`);
   const { results } = await runTests({ tests: items, concurrency, write });
   const hosts = [];
-  for (const name of HOSTS) {
+  for (const name of selectedHosts) {
     const own = found[name].flatMap((entry) => entry.tests);
     const { language, tests, errors: sourceErrors } = parseHostSources(name, name === 'tauriv2' ? own : []);
     const errors = [...found[name].flatMap((entry) => entry.failures), ...sourceErrors];
@@ -538,7 +549,8 @@ async function main(argv) {
     }
     hosts.push({ name, language, tests, errors, items: own, runs: [...groupResults(own, results).values()] });
   }
-  const { errors, covered } = auditHostContract(cases, hosts);
+  const selectedForAudit = values.host === undefined ? HOSTS : selectedHosts;
+  const { errors, covered } = auditHostContract(cases, hosts, { selectedHosts: selectedForAudit });
   for (const host of hosts) {
     const required = [...cases.values()].filter((contract) => contract.hosts.includes(host.name)).length;
     process.stdout.write(`${host.name}: ${covered.get(host.name).size} of ${required} contract cases pass; ${host.tests.length} tests\n`);
@@ -547,7 +559,8 @@ async function main(argv) {
     process.stderr.write(`Host contract check failed: ${errors.length} issue(s)\n${errors.map((error) => `- ${error}`).join('\n')}\n`);
     return 1;
   }
-  process.stdout.write(`Host contract check passed: ${cases.size} contract cases\n`);
+  if (values.host !== undefined) process.stdout.write(`Host contract check passed: ${covered.get(values.host).size} ${values.host} contract cases; cross-host parity was not run\n`);
+  else process.stdout.write(`Host contract check passed: ${cases.size} contract cases\n`);
   return 0;
 }
 

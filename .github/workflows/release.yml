@@ -1,5 +1,4 @@
 name: release
-# build-machine: skip test reason=the ci workflow tests the tagged commit on main before the tag is pushed
 # build-machine: skip smoke reason=the window checks need a signed-in desktop and run before a release on the development Mac (docs/operations/examples.md)
 
 on:
@@ -7,36 +6,167 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  release-wailsv3:
     runs-on: macos-15
+    env:
+      GOTOOLCHAIN: local
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: core
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          node-version-file: .node-version
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-go@v5
+          path: core
+      - uses: ./core/.github/actions/setup-node
         with:
-          go-version-file: packages/host/wailsv3/go.mod
-      - uses: dtolnay/rust-toolchain@stable
-      # release 번들을 빌드하고 진단 코드가 없는지 검사한다.
-      - name: Build
-        run: make release-check
-      # 릴리즈 빌드가 이전 릴리즈가 쓴 저장 데이터에서 시작하는지 확인한다(docs/spec/installation.md#stored-data-migration, F189).
-      - name: Migrate the stored data of the earlier release
-        run: bash scripts/release-step.sh "target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2"
-      # 서명하지 않은 번들이므로 설치 안내를 release 본문으로 쓴다(docs/operations/install.md).
-      - name: Package
+          root: core
+      - uses: ./core/.github/actions/setup-go
+        with:
+          root: core
+          module: apps/wailsv3
+      - uses: ./core/.github/actions/setup-native
+        with:
+          root: core
+      - name: Install locked dependencies
         run: |
-          version="${{ github.ref_name }}"
-          version="${version#v}"
-          mkdir dist
+          make preflight
+          CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
+          go -C apps/wailsv3 mod download
+          go -C packages/sok/wailsv3 mod download
+      - name: Fetch the pinned native release file
+        run: make native-darwin-fetch
+      - name: Build and audit Wails release bundle offline
+        env:
+          OFFLINE: '1'
+          npm_config_offline: 'true'
+          GOTOOLCHAIN: local
+          GOFLAGS: -mod=readonly
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+        run: make release-check-wailsv3
+      - name: Migrate stored data with the Wails release host
+        run: bash scripts/release-step.sh "target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3"
+      - name: Package Wails release bundle
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
           ditto -c -k --keepParent target/release/wailsv3/soksak.app "dist/soksak-$version-darwin-arm64-wailsv3.zip"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-wailsv3
+          path: core/dist/*.zip
+          if-no-files-found: error
+          retention-days: 1
+      - name: Verify lockfiles remain unchanged
+        if: always()
+        run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
+  release-tauriv2:
+    runs-on: macos-15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-rust
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-native
+        with:
+          root: core
+      - name: Install locked dependencies
+        run: |
+          make preflight
+          CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
+          cargo fetch --locked
+      - name: Fetch the pinned native release file
+        run: make native-darwin-fetch
+      - name: Build and audit Tauri release bundle offline
+        env:
+          OFFLINE: '1'
+          npm_config_offline: 'true'
+          CARGO_NET_OFFLINE: 'true'
+        run: make release-check-tauriv2
+      - name: Migrate stored data with the Tauri release host
+        run: bash scripts/release-step.sh "target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2"
+      - name: Package Tauri release bundle
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
           ditto -c -k --keepParent target/release/tauriv2/soksak.app "dist/soksak-$version-darwin-arm64-tauriv2.zip"
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-tauriv2
+          path: core/dist/*.zip
+          if-no-files-found: error
+          retention-days: 1
+      - name: Verify lockfiles remain unchanged
+        if: always()
+        run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
+  registry-manifest:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - name: Install locked Node dependencies
+        working-directory: core
+        run: CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
+      - name: Check manifests from the public registry
+        working-directory: core
+        run: node scripts/check-registry-manifests.mjs
+      - name: Verify lockfiles remain unchanged
+        if: always()
+        working-directory: core
+        run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
+  publish:
+    runs-on: ubuntu-26.04-arm
+    needs: [checks, release-wailsv3, release-tauriv2, registry-manifest]
+    if: always()
+    permissions:
+      contents: write
+    steps:
+      - name: Require every release gate to succeed
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          WAILS_RESULT: ${{ needs.release-wailsv3.result }}
+          TAURI_RESULT: ${{ needs.release-tauriv2.result }}
+          REGISTRY_RESULT: ${{ needs.registry-manifest.result }}
+        run: |
+          test "$CHECKS_RESULT" = success
+          test "$WAILS_RESULT" = success
+          test "$TAURI_RESULT" = success
+          test "$REGISTRY_RESULT" = success
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-wailsv3
+          path: dist
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-tauriv2
+          path: dist
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           files: dist/*
           body_path: docs/operations/install.md

@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-266-1: 고정된 언어 setup action을 재사용하고 각 job에서 잠긴 의존성을 받는다. Native 의존성 fetch를 compile과 분리하며 cache hash를 검사하고 offline mode에서는 입력이 없으면 network 접근 전에 거부한다. Setup과 native offline 소유 검사가 각각 5/5 통과한다.
+
+- F239-266-3: Release host별로 build, inspect, migration과 package를 독립 수행한다. CI graph를 재사용하고 두 host 결과와 registry acceptance가 성공해야 publish한다. Selected-host release CLI 소유 검사가 26/26 통과한다. 이 로컬 검사로 GitHub 실행이나 publication을 입증하지 않는다.
+
+- F239-266-2: Go formatting, Rust formatting과 Clippy를 각 host-language CI job에 배정한다. Host contract 실행은 독립 equivalence job에 두고 fixture 기반 host test는 core frontend만 stage하며 사용하지 않는 sidecar dependency fetch를 제거한다. Native process-identity Node entrypoint는 native job에서 실행하고 발견된 Node test를 package, script, native job에 중복 없이 나눈다. Workflow와 Make dry-run 소유 검사가 통과했으며 native 또는 host suite는 실행하지 않았다.
+
 - F239-265: Layout redraw에서 같은 card, tool, native-slot state attribute를 다시 쓰지 않는다. 소유 DOM Red는 state 변경 없는 반복 attribute 변경을 기록하며 Green은 중복 쓰기 없이 focus, slot, availability, fullscreen 전환을 보존한다. Mounting과 transaction 순서를 유지하며 application cadence 결과는 추론하지 않는다.
 
 - F239-264: 공용 의존성이 같은 build 환경을 사용하도록 Tauri application뿐 아니라 bundled CLI에도 선언된 Cargo deployment target을 적용한다. Expanded-command 소유 검사는 누락된 assignment를 재현하며 선언된 minimum과 다른 ambient target에서 debug와 release 모두 통과한다.

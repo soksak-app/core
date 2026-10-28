@@ -66,6 +66,24 @@ test('host contract passes when each host runs a passing test for every case in 
   assert.deepEqual([...covered.get('tauriv2')], ['area.shared']);
 });
 
+test('single-host audit keeps shared cases while limiting required coverage to the selected host', () => {
+  const cases = parseContractCases(SPEC);
+  assert.deepEqual(cases.get('area.shared').hosts, ['wailsv3', 'tauriv2']);
+  const { errors, covered } = auditHostContract(cases, [
+    { name: 'tauriv2', language: 'rust', ...parseDeclarations(RUST, 'rust', 'tauri_test.rs'), items: [], runs: [owners('.', [['shared', 'pass']])] },
+  ], { selectedHosts: ['tauriv2'] });
+  assert.deepEqual(errors, []);
+  assert.deepEqual([...covered.get('tauriv2')], ['area.shared']);
+  assert.throws(() => auditHostContract(cases, [], { selectedHosts: ['unknown'] }), /unknown host/);
+});
+
+test('single-host audit refuses an empty or repeated host selection', () => {
+  const cases = parseContractCases(SPEC);
+  for (const selectedHosts of [[], ['tauriv2', 'tauriv2']]) {
+    assert.throws(() => auditHostContract(cases, [], { selectedHosts }), /selectedHosts must contain unique known hosts/);
+  }
+});
+
 test('a host without a test for a shared case fails', () => {
   const { errors } = auditHostContract(parseContractCases(SPEC), hosts({ rust: '#[test]\nfn other() {}\n', rustRuns: [owners('.', [['other', 'pass']])] }));
   assert.ok(errors.includes('tauriv2 runs no passing test for contract case area.shared'), errors.join('\n'));

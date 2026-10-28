@@ -60,7 +60,7 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
 export async function discoverRust({ packageName, features, cwd, env, id, write, timeoutMs }) {
   const build = await runTests({
     tests: [{ name: `build ${id}`, command: 'cargo', cwd, env, timeoutMs: BUILD_TIMEOUT_MS,
-      args: ['test', '-p', packageName, ...(features ? ['--features', features] : []), '--no-run', '--message-format=json'] }],
+      args: ['test', '--locked', '-p', packageName, ...(features ? ['--features', features] : []), '--no-run', '--message-format=json'] }],
     concurrency: 1, write,
   });
   const result = build.results.get(`build ${id}`);

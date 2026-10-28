@@ -9,11 +9,12 @@
 // package.json. Plugins and sidecars are not in the bundle; they are installed into the configuration folder (docs/spec/installation.md).
 // `make release-check` runs the release build first.
 //
-// The check also compares each bundle with the macOS minimum of the Makefile (`MACOS_MINIMUM`): Info.plist declares it
-// in LSMinimumSystemVersion, the application executable is built for it, and no other executable is built for a newer
-// macOS (docs/spec/hosts.md#nativedarwin).
+// The check compares each selected bundle with the macOS minimum of the Makefile (`MACOS_MINIMUM`): Info.plist declares
+// it in LSMinimumSystemVersion, the application executable is built for it, and no other executable is built for a newer
+// macOS (docs/spec/hosts.md#nativedarwin). Without --host, both application bundles remain required.
 //
 //   node scripts/check-release.mjs --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH
+//   node scripts/check-release.mjs --host wailsv3|tauriv2 --macos-minimum VERSION --<host>-bundle PATH
 import { parseArgs } from "node:util";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -142,13 +143,16 @@ if (import.meta.main) {
   // parseArgs keeps the last value of a repeated option, so a repeated option is found from the tokens and refused.
   const { values, tokens } = parseArgs({
     strict: true, tokens: true,
-    options: Object.fromEntries([["macos-minimum", { type: "string" }], ...APPS.map((app) => [`${app}-bundle`, { type: "string" }])]),
+    options: Object.fromEntries([["host", { type: "string" }], ["macos-minimum", { type: "string" }], ...APPS.map((app) => [`${app}-bundle`, { type: "string" }])]),
   });
   const seen = new Set();
   for (const token of tokens.filter((entry) => entry.kind === "option")) {
     if (seen.has(token.name)) throw new Error(`duplicate release option: --${token.name}`);
     seen.add(token.name);
   }
+  const selectedHost = values.host;
+  if (selectedHost !== undefined && !APPS.includes(selectedHost)) throw new Error("--host must be wailsv3 or tauriv2");
+  const apps = selectedHost === undefined ? APPS : [selectedHost];
   const minimum = values["macos-minimum"];
   if (minimum !== undefined && !/^\d+\.\d+(?:\.\d+)?$/.test(minimum)) throw new Error("--macos-minimum requires a macOS version such as 14.4");
   const bundles = new Map();
@@ -156,9 +160,17 @@ if (import.meta.main) {
     const path = values[`${app}-bundle`];
     if (path === undefined) continue;
     if (path === "") throw new Error(`--${app}-bundle requires a bundle path`);
+    if (selectedHost !== undefined && app !== selectedHost) {
+      throw new Error(`--${app}-bundle is not accepted with --host ${selectedHost}`);
+    }
     bundles.set(app, resolve(path));
   }
-  if (minimum === undefined || bundles.size !== APPS.length) {
+  if (selectedHost !== undefined) {
+    if (minimum === undefined) throw new Error("required release option: --macos-minimum VERSION");
+    if (!bundles.has(selectedHost)) {
+      throw new Error(`required release option: --${selectedHost}-bundle PATH`);
+    }
+  } else if (minimum === undefined || bundles.size !== APPS.length) {
     throw new Error("required release options: --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH");
   }
   const errors = [];
@@ -166,7 +178,7 @@ if (import.meta.main) {
   const version = RELEASE;
   const diagnostic = diagnosticRelease(version);
 
-  for (const app of APPS) {
+  for (const app of apps) {
     // The application and the command line sok are in Contents/MacOS of the bundle (docs/spec/hosts.md).
     const executables = join(bundles.get(app), "Contents", "MacOS");
     const executable = join(executables, `soksak-${app}`);
@@ -199,6 +211,6 @@ if (import.meta.main) {
     console.error(errors.join("\n"));
     process.exitCode = 1;
   } else {
-    console.log(`Release checks passed: ${APPS.length} applications, ${diagnostic ? "diagnostic" : "without diagnostics"} for version ${version}`);
+    console.log(`Release checks passed: ${apps.join(", ")}, ${diagnostic ? "diagnostic" : "without diagnostics"} for version ${version}`);
   }
 }

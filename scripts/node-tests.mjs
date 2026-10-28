@@ -113,6 +113,22 @@ export function changedPackages(files, packages) {
   return packages.filter((folder) => owned.has(folder));
 }
 
+/** Selects test files by the existing substring selector and explicit root-relative path exclusions. */
+export function selectNodeTests(tests, { only = '', exclude = [] } = {}) {
+  const prefixes = exclude.map((path) => {
+    if (typeof path !== 'string') throw new Error(`--exclude path must be a nonempty root-relative path, found ${JSON.stringify(path)}`);
+    const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
+    const segments = normalized.split('/');
+    if (normalized.length === 0 || normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)
+        || segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
+      throw new Error(`--exclude path must be a nonempty root-relative path, found ${JSON.stringify(path)}`);
+    }
+    return normalized;
+  });
+  return tests.filter((item) => item.name.includes(only)
+    && !prefixes.some((prefix) => item.name === prefix || item.name.startsWith(`${prefix}/`)));
+}
+
 /**
  * The tests of the packages (folders relative to `root`, or `.` for the root): one test per file, with the folder of its package
  * and the flags of its script, and the commands to run before them. With `changed` (the changed files), only the packages that hold
@@ -175,6 +191,7 @@ async function main(argv) {
     args: argv, strict: true,
     options: {
       only: { type: 'string', default: '' },
+      exclude: { type: 'string', multiple: true, default: [] },
       script: { type: 'string', default: 'test' },
       timeout: { type: 'string', default: String(TEST_TIMEOUT_MS / 1000) },
       concurrency: { type: 'string', default: String(Math.max(2, cpus().length - 2)) },
@@ -199,7 +216,7 @@ async function main(argv) {
     write(`SKIP no test file of a package changed in ${values.changed}`);
     return 0;
   }
-  const tests = all.filter((item) => item.name.includes(only));
+  const tests = selectNodeTests(all, { only, exclude: values.exclude });
   if (tests.length === 0) throw new Error(`no test file contains ${JSON.stringify(only)}`);
   // The commands before the tests run one at a time, each with its elapsed time, and a failure ends the run.
   const prepare = before.filter((step) => tests.some((item) => item.cwd === step.cwd));

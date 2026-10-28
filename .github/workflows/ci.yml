@@ -1,95 +1,342 @@
 name: ci
-# build-machine: skip smoke reason=the window checks need a signed-in desktop and run before a release on the development Mac (docs/operations/examples.md)
+# build-machine: skip smoke reason=window checks need a signed-in desktop and run before release on the development Mac (docs/operations/examples.md)
 
 on:
+  workflow_call:
   push:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  core-node:
     runs-on: macos-15
     steps:
-      # 구조 검사는 형제 폴더의 plugin 과 sidecar repository 를 읽는다(docs/spec/plugins.md#repositories 의 배치).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: core
-          # 커밋 메시지 검사는 push 와 pull request 의 커밋 범위를 읽는다.
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - name: Fetch locked Node dependencies
+        run: pnpm -C core install --frozen-lockfile
+      - name: Core package and E2E tests
+        env:
+          npm_config_offline: 'true'
+        run: node core/scripts/node-tests.mjs --exclude scripts/ --exclude native/
+      - name: Reject lockfile changes
+        if: always()
+        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
+  macos-wailsv3:
+    runs-on: macos-15
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-go
+        with:
+          root: core
+          module: packages/host/wailsv3
+      - uses: ./core/.github/actions/setup-native
+        with:
+          root: core
+      - name: Fetch locked Node dependencies
+        run: pnpm -C core install --frozen-lockfile
+      - name: Fetch Go modules
+        working-directory: core
+        run: |
+          go -C apps/wailsv3 mod download
+          go -C packages/host/wailsv3 mod download
+          go -C packages/sok/wailsv3 mod download
+      - name: Fetch pinned native release file
+        run: make -C core native-darwin-fetch
+      - name: Wails host tests
+        env:
+          npm_config_offline: 'true'
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOFLAGS: -mod=readonly
+          CARGO_NET_OFFLINE: 'true'
+          OFFLINE: '1'
+        run: make -C core host-test-wailsv3
+      - name: Go format checks
+        env:
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOFLAGS: '-mod=readonly'
+        run: make -C core go-format-check
+      - name: Reject lockfile changes
+        if: always()
+        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
+  macos-tauriv2:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-rust
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-native
+        with:
+          root: core
+      - name: Fetch locked Node dependencies
+        run: pnpm -C core install --frozen-lockfile
+      - name: Fetch locked Rust dependencies
+        working-directory: core
+        run: cargo fetch --locked
+      - name: Fetch pinned native release file
+        run: make -C core native-darwin-fetch
+      - name: Tauri host tests
+        env:
+          npm_config_offline: 'true'
+          CARGO_NET_OFFLINE: 'true'
+          GOPROXY: 'off'
+          GOFLAGS: -mod=readonly
+          OFFLINE: '1'
+        run: make -C core host-test-tauriv2
+      - name: Rust format and clippy checks
+        env:
+          CARGO_NET_OFFLINE: 'true'
+          OFFLINE: '1'
+        run: make -C core rust-format-check rust-clippy-check
+      - name: Reject lockfile changes
+        if: always()
+        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
+  native-darwin:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-native
+        with:
+          root: core
+      - name: Fetch pinned native release file
+        run: make -C core native-darwin-fetch
+      - name: Build the native library offline
+        env:
+          OFFLINE: '1'
+        run: make -C core native-darwin
+      - name: Native Darwin tests
+        env:
+          OFFLINE: '1'
+        run: make -C core/native/darwin test
+      - name: Native process identity package tests
+        env:
+          OFFLINE: '1'
+        run: pnpm -C core/native/darwin/process-identity test
+      - name: Reject lockfile changes
+        if: always()
+        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
+  sok-linux-go:
+    runs-on: ubuntu-26.04-arm
+    env:
+      GOWORK: off
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: core/.node-version
+      - uses: ./core/.github/actions/setup-go
+        with:
+          root: core
+          module: packages/sok/wailsv3
+      - name: Fetch Go modules
+        working-directory: core/packages/sok/wailsv3
+        run: go mod download
+      - name: Build the Go CLI offline
+        working-directory: core
+        env:
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOFLAGS: -mod=readonly
+        run: go build -C packages/sok/wailsv3 ./...
+      - name: Run Go CLI tests with per-test limits
+        working-directory: core/packages/sok/wailsv3
+        env:
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOFLAGS: -mod=readonly
+        run: node ../../../scripts/go-tests.mjs --package ./... --count 1
+      - name: Reject lockfile changes
+        if: always()
+        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
+  sok-linux-rust:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: core/.node-version
+      - uses: ./core/.github/actions/setup-rust
+        with:
+          root: core
+      - name: Fetch locked Rust dependencies
+        working-directory: core
+        run: cargo fetch --locked
+      - name: Build the Rust CLI offline
+        working-directory: core
+        env:
+          CARGO_NET_OFFLINE: 'true'
+        run: cargo build --locked -p soksak-sok-tauriv2
+      - name: Run Rust CLI tests with per-test limits
+        working-directory: core
+        env:
+          CARGO_NET_OFFLINE: 'true'
+        run: node scripts/rust-tests.mjs --manifest Cargo.toml --package soksak-sok-tauriv2 --count 1
+      - name: Reject lockfile changes
+        if: always()
+        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
+  equivalence:
+    runs-on: macos-15
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      # Structural checks read the repositories declared by the workspace registry.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
           fetch-depth: 0
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: soksak-app/plugin-browser
           path: plugins/browser
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: soksak-app/plugin-editor
           path: plugins/editor
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: soksak-app/plugin-files
           path: plugins/files
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: soksak-app/plugin-hwp
           path: plugins/hwp
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: soksak-app/plugin-terminal
           path: plugins/terminal
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: soksak-app/sidecar-files
           path: sidecars/files
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: soksak-app/sidecar-vt
           path: sidecars/vt
-      - uses: actions/setup-node@v4
+      - uses: ./core/.github/actions/setup-node
         with:
-          node-version-file: core/.node-version
-      - uses: pnpm/action-setup@v4
+          root: core
+      - uses: ./core/.github/actions/setup-go
         with:
-          package_json_file: core/package.json
-      - uses: actions/setup-go@v5
+          root: core
+          module: packages/host/wailsv3
+      - uses: ./core/.github/actions/setup-rust
         with:
-          go-version-file: core/packages/host/wailsv3/go.mod
-          # The modules and the build cache of Go are kept between runs; the go.sum files of the checkout key them.
-          cache-dependency-path: core/**/go.sum
-      - uses: dtolnay/rust-toolchain@stable
+          root: core
+      - uses: ./core/.github/actions/setup-native
         with:
-          components: clippy, rustfmt
-      # The crates and the dependency build output of cargo are kept between runs, so a run does not build every crate cold. The action keeps
-      # only the dependencies in the cache and removes the workspace crates and the incremental output, so the cache does not grow with each
-      # run; a cache of the whole target folder grew to 8 GB and filled the disk of the runner.
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: core -> target
-      - name: Build
-        run: make -C core build native-darwin
+          root: core
+      - name: Fetch locked Node dependencies
+        run: pnpm -C core install --frozen-lockfile
+      - name: Fetch Go modules
+        working-directory: core
+        run: |
+          go -C apps/wailsv3 mod download
+          go -C packages/host/wailsv3 mod download
+          go -C packages/sok/wailsv3 mod download
+      - name: Fetch locked Rust dependencies
+        working-directory: core
+        run: cargo fetch --locked
+      - name: Fetch pinned native release file
+        run: make -C core native-darwin-fetch
       - name: Commit messages
         if: github.event_name == 'pull_request' || github.event.before != '0000000000000000000000000000000000000000'
         run: make -C core commits-check RANGE=${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
       - name: Structure checks
+        env:
+          npm_config_offline: 'true'
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOFLAGS: -mod=readonly
+          CARGO_NET_OFFLINE: 'true'
+          CARGO_INCREMENTAL: '0'
+          CARGO_BUILD_JOBS: '1'
+          OFFLINE: '1'
         run: make -C core docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check events-check census-check
       - name: Host tests
-        run: make -C core host-contract-check rust-format-check go-format-check rust-clippy-check
-      - name: Package tests
-        run: pnpm -C core test
+        env:
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOFLAGS: -mod=readonly
+          CARGO_NET_OFFLINE: 'true'
+          CARGO_INCREMENTAL: '0'
+          CARGO_BUILD_JOBS: '1'
+          OFFLINE: '1'
+        run: make -C core host-contract-check
+      - name: Cross-toolchain script tests
+        env:
+          npm_config_offline: 'true'
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOFLAGS: -mod=readonly
+          CARGO_NET_OFFLINE: 'true'
+          CARGO_INCREMENTAL: '0'
+          CARGO_BUILD_JOBS: '1'
+          OFFLINE: '1'
+        run: node core/scripts/node-tests.mjs --only scripts/
+      - name: Reject lockfile changes
+        if: always()
+        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
-  # sok 은 Linux 에서도 실행된다(docs/spec/cli.md#operating-systems). 두 언어의 sok 테스트를 Linux 에서 실행한다.
-  sok-linux:
+  required:
+    if: always()
+    needs:
+      - core-node
+      - macos-wailsv3
+      - macos-tauriv2
+      - native-darwin
+      - sok-linux-go
+      - sok-linux-rust
+      - equivalence
     runs-on: ubuntu-26.04-arm
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: packages/sok/wailsv3/go.mod
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build sok
+      - name: Require every CI job
+        env:
+          CORE_NODE: ${{ needs.core-node.result }}
+          WAILS: ${{ needs.macos-wailsv3.result }}
+          TAURI: ${{ needs.macos-tauriv2.result }}
+          NATIVE: ${{ needs.native-darwin.result }}
+          SOK_GO: ${{ needs.sok-linux-go.result }}
+          SOK_RUST: ${{ needs.sok-linux-rust.result }}
+          EQUIVALENCE: ${{ needs.equivalence.result }}
         run: |
-          go build -C packages/sok/wailsv3 ./...
-          cargo build --locked -p soksak-sok-tauriv2
-      - name: Go sok tests
-        run: go test -C packages/sok/wailsv3 -count=1 ./...
-      - name: Rust sok tests
-        run: cargo test --locked -p soksak-sok-tauriv2
+          for result in "$CORE_NODE" "$WAILS" "$TAURI" "$NATIVE" "$SOK_GO" "$SOK_RUST" "$EQUIVALENCE"; do
+            test "$result" = success || exit 1
+          done

@@ -110,6 +110,42 @@ test("release CLI inspects the supplied bundles instead of default release paths
   assert.ok(stderr.includes(join(tauri, "Contents/MacOS/soksak-tauriv2") + ": missing"), stderr);
 });
 
+for (const [host, other] of [["wailsv3", "tauriv2"], ["tauriv2", "wailsv3"]]) {
+  test(`release CLI audits only the explicitly selected ${host} bundle`, { timeout: 5000 }, (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "soksak-release-host-path-"));
+    t.after(() => rmSync(dir, { recursive: true }));
+    const bundle = join(dir, `isolated-${host}.app`);
+    const stderr = check(["--host", host, "--macos-minimum", "14.4", `--${host}-bundle`, bundle]);
+    assert.ok(stderr.includes(join(bundle, `Contents/MacOS/soksak-${host}`) + ": missing"), stderr);
+    assert.doesNotMatch(stderr, new RegExp(`soksak-${other}:`), stderr);
+    assert.doesNotMatch(stderr, /required release options/, stderr);
+  });
+
+  test(`release CLI rejects an unselected ${other} bundle in ${host} mode`, { timeout: 5000 }, () => {
+    const stderr = check([
+      "--host", host,
+      "--macos-minimum", "14.4",
+      `--${host}-bundle`, "selected.app",
+      `--${other}-bundle`, "unselected.app",
+    ]);
+    assert.match(stderr, new RegExp(`--${other}-bundle is not accepted with --host ${host}`), stderr);
+  });
+}
+
+test("release CLI identifies a missing minimum in selected-host mode", { timeout: 5000 }, () => {
+  assert.match(check(["--host", "wailsv3", "--wailsv3-bundle", "selected.app"]), /required release option: --macos-minimum VERSION/);
+});
+
+test("release CLI preserves the default audit of both host bundles", { timeout: 5000 }, (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "soksak-release-both-paths-"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  const wails = join(dir, "isolated-wails.app");
+  const tauri = join(dir, "isolated-tauri.app");
+  const stderr = check(["--macos-minimum", "14.4", "--wailsv3-bundle", wails, "--tauriv2-bundle", tauri]);
+  assert.ok(stderr.includes(join(wails, "Contents/MacOS/soksak-wailsv3") + ": missing"), stderr);
+  assert.ok(stderr.includes(join(tauri, "Contents/MacOS/soksak-tauriv2") + ": missing"), stderr);
+});
+
 test("release CLI inspects every executable in the bundle", { timeout: 5000 }, (t) => {
   const { paths, args } = bundles(t, { tauriv2: "\0sp_diag_probe\0" });
   const stderr = check(args);
@@ -127,6 +163,10 @@ for (const [name, args, message] of [
   ["empty value", ["--wailsv3-bundle", ""], /requires a bundle path/],
   ["option as value", ["--wailsv3-bundle", "--tauriv2-bundle"], /argument is ambiguous/],
   ["duplicate option", ["--wailsv3-bundle", "a", "--wailsv3-bundle", "b"], /duplicate release option/],
+  ["unknown host", ["--host", "other", "--macos-minimum", "14.4", "--wailsv3-bundle", "a"], /--host must be wailsv3 or tauriv2/],
+  ["missing selected host bundle", ["--host", "wailsv3", "--macos-minimum", "14.4"], /required release option: --wailsv3-bundle PATH/],
+  ["empty selected host bundle", ["--host", "wailsv3", "--macos-minimum", "14.4", "--wailsv3-bundle", ""], /--wailsv3-bundle requires a bundle path/],
+  ["duplicate host", ["--host", "wailsv3", "--host", "tauriv2", "--macos-minimum", "14.4", "--wailsv3-bundle", "a"], /duplicate release option: --host/],
 ]) {
   test(`release CLI rejects ${name}`, { timeout: 5000 }, () => {
     assert.match(check(args), message);

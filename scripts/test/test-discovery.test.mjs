@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -41,6 +41,7 @@ test("a Rust package lists its tests, each test runs by itself, and an ignored t
   mkdirSync(join(root, "src"));
   mkdirSync(join(root, "tests"));
   writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "fixture"\nversion = "0.0.1"\nedition = "2021"\n\n[workspace]\n');
+  writeFileSync(join(root, "Cargo.lock"), 'version = 4\n\n[[package]]\nname = "fixture"\nversion = "0.0.1"\n');
   writeFileSync(join(root, "src", "lib.rs"), "pub fn one() -> u32 { 1 }\n");
   writeFileSync(join(root, "tests", "a.rs"), [
     "#[test] fn passes() { assert!(std::path::Path::new(\"Cargo.toml\").exists()); }",
@@ -57,6 +58,36 @@ test("a Rust package lists its tests, each test runs by itself, and an ignored t
   const { results } = await runTests({ tests, concurrency: 3, write() {} });
   assert.deepEqual(tests.map((item) => [item.testName, auditStatus(results.get(item.name))]).sort(),
     [["fails", "fail"], ["passes", "pass"], ["skipped", "skip"]]);
+});
+
+test("Rust host discovery requires the existing locked dependency graph", { timeout: 10_000 }, async (t) => {
+  const root = folder();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "src"));
+  writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "fixture"\nversion = "0.0.1"\nedition = "2021"\n\n[workspace]\n');
+  writeFileSync(join(root, "src", "lib.rs"), "pub fn one() -> u32 { 1 }\n");
+  const binary = join(root, "fixture-test");
+  writeFileSync(binary, '#!/bin/sh\nprintf "fixture::locked: test\\n\\n1 tests, 0 benchmarks\\n"\n');
+  chmodSync(binary, 0o755);
+  const cargo = join(root, "cargo");
+  writeFileSync(cargo, `#!/bin/sh
+case "$1" in
+  test) case " $* " in *" --locked "*) ;; *) echo "Rust discovery omitted --locked" >&2; exit 1 ;; esac
+    printf '%s\\n' '{"reason":"compiler-artifact","profile":{"test":true},"manifest_path":"${join(root, "Cargo.toml")}","target":{"name":"fixture","src_path":"${join(root, "src/lib.rs")}"},"executable":"${binary}"}' ;;
+  *) echo "unexpected cargo command: $*" >&2; exit 1 ;;
+esac
+`);
+  chmodSync(cargo, 0o755);
+  const oldPath = process.env.PATH;
+  const lines = [];
+  process.env.PATH = `${root}:${oldPath}`;
+  try {
+    const { tests, failures } = await discoverRust({ packageName: "fixture", cwd: root, id: "locked", write: (line) => lines.push(line), timeoutMs: 1000 });
+    assert.deepEqual(failures, [], lines.join("\n"));
+    assert.deepEqual(tests.map((item) => item.testName), ["fixture::locked"]);
+  } finally {
+    process.env.PATH = oldPath;
+  }
 });
 
 test("a cargo line that starts with a brace but is not JSON fails with the line", async () => {

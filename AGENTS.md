@@ -63,6 +63,8 @@ This workspace contains the headless layout library `soksak`, the workbench fron
 
 ## Verification
 
+- CI and release jobs own their required toolchain installation, locked dependency acquisition, build and checks. Reuse language setup procedures within each job; keep equivalence jobs independent of language-job installations and outputs, and gate publication on all required job results.
+
 - Start long operations with a short yield and retain their live process or session handle. Do not block coordination with foreground waits or retry loops. Report the current step and inspect the same live handle before deciding whether an operation ended; a slow merge requires a process and error audit, not unattended waiting.
 
 - During the active five-group development phase, complete implementation in all five groups before running manual per-item acceptance, suites, or repeated builds. Tests and verification plans may be prepared while implementation proceeds, but run the integrated verification pass only once after all five groups are complete. Keep normal commit hooks enabled. Record implementation-ready separately from verification-complete; do not claim verification complete before the final pass. This phase rule takes precedence over per-item test execution requirements for these five groups.

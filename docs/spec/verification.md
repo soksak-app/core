@@ -25,6 +25,16 @@ Evidence identifies the feature and test, verification level, language, host and
 
 The language evidence recorder (`scripts/test-evidence.mjs`) stores those fields in schema version 1. `make language-test` emits one record for each declared executable-language case. Passing `--evidence-file PATH` persists the records; a later run appends a numbered attempt only when the immutable source, test, dependency, dirty-worktree, build-flag, and process snapshot is identical. It retains the first failure and rejects stale or malformed records. A required running host or sidecar must be supplied by PID and executable path and is hashed while it is alive; an empty process list is explicit evidence that the case owns no running process.
 
+## CI and release ownership
+
+Language and host jobs install the toolchains and locked dependencies they need, build their own outputs and run their owning checks. A Wails job does not require Rust, and a Tauri job does not require Go. Frontend generation and the native library remain direct prerequisites of either host when needed. Shared setup procedures run independently inside each job; a cache is optional acceleration, not a supplied installation or required build output.
+
+The host-equivalence job installs every language and toolchain required for its comparisons, fetches its own locked dependencies, builds both hosts and runs its own comparison. It has no dependency on language jobs and downloads none of their build outputs. Cross-toolchain JavaScript harness checks belong to this job; pure JavaScript package checks remain separate. The assigned scopes preserve the full test inventory without mandatory skips or omitted owners. Single-host checks report host coverage, never cross-host equivalence.
+
+Dependency acquisition precedes offline build and check stages. Node and pnpm versions follow their exact declarations, Go follows its module/workspace declaration, and Rust uses an exact declared toolchain. Frozen pnpm locks, Cargo.lock and Go module sums remain enforced. Offline checks do not fetch a missing dependency or update locks; they fail with the missing input.
+
+Each release host job builds and audits its own bundle, verifies stored-data migration with that host, and packages its release file. Registry compatibility remains a separate required check. The final decision requires success from every required job, including independent equivalence. Publication consumes the audited host release files only after that decision; failed, cancelled or skipped required jobs prevent publication.
+
 ## Bounded execution
 
 The E2E runner requires nonempty `SOKSAK_RUN_ID` and `SOKSAK_RUN_FOLDER` values together before it probes the frontmost application or starts a test child. Missing or partial metadata fails at the runner boundary. The runner passes the supplied values to the child unchanged; it does not synthesize an identifier or folder. This keeps every window-check child attributable to its run and audit output.

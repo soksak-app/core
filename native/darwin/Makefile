@@ -88,6 +88,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 ZXING_COMMIT := 287c85df6f961c8efbfb5ffd736cd9457b8b890e
 ZXING_URL := https://codeload.github.com/zxing-cpp/zxing-cpp/tar.gz/$(ZXING_COMMIT)
 ZXING_SHA256 := 97d952c661b1f79d21aacc2ec544ef05c4d1465f55692cc49622ea6a8166ca7b
+OFFLINE ?= 0
 ZXING_RELEASE_FILE := $(BUILD)/zxing-cpp-$(ZXING_COMMIT).tar.gz
 ZXING_SOURCE := $(BUILD)/zxing-cpp-$(ZXING_COMMIT)
 ZXING_BUILD := $(BUILD)/zxing-cpp-build
@@ -98,23 +99,40 @@ ZXING_LIBRARY := $(ZXING_INSTALL)/lib/libZXing.a
 # The same minimum version is also put in Cflags and Libs of the .pc so that the builds that use it compile and link
 # with it.
 MINIMUM    := -mmacosx-version-min=14.4
+
+ifneq ($(OFFLINE),0)
+ifneq ($(OFFLINE),1)
+$(error OFFLINE must be 0 or 1 (got '$(OFFLINE)'))
+endif
+endif
+
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 DIAGNOSTIC ?= 1
 ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: all capture-text-path test test-capture-frame-identity test-capture-stop-intake test-activation test-input-reference-readiness test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
+.PHONY: all fetch capture-text-path test test-capture-frame-identity test-capture-stop-intake test-activation test-input-reference-readiness test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
 
-all: $(LIBRARY) $(PKGCONFIG)
+all: fetch $(LIBRARY) $(PKGCONFIG)
 
 $(BUILD)/%.o: src/%.m $(wildcard src/*.h src/private/*.h) Makefile $(ZXING_LIBRARY) | $(BUILD)
 	@clang $(CFLAGS) -I$(ZXING_INSTALL)/include -c $< -o $@
 
-$(ZXING_RELEASE_FILE): | $(BUILD)
-	@set -eu; curl -L --fail --show-error $(ZXING_URL) -o $@.part; \
-	  printf '%s  %s\n' '$(ZXING_SHA256)' '$@.part' | shasum -a 256 -c -; \
-	  mv $@.part $@
+fetch: | $(BUILD)
+	@set -eu; \
+	  if [ -f '$(ZXING_RELEASE_FILE)' ]; then \
+	    printf '%s  %s\n' '$(ZXING_SHA256)' '$(ZXING_RELEASE_FILE)' | shasum -a 256 -c -; \
+	  elif [ '$(OFFLINE)' = '1' ]; then \
+	    echo 'ERROR: offline mode is missing pinned ZXing release file $(ZXING_RELEASE_FILE)' >&2; exit 1; \
+	  else \
+	    curl -L --fail --show-error '$(ZXING_URL)' -o '$(ZXING_RELEASE_FILE).part'; \
+	    printf '%s  %s\n' '$(ZXING_SHA256)' '$(ZXING_RELEASE_FILE).part' | shasum -a 256 -c -; \
+	    mv '$(ZXING_RELEASE_FILE).part' '$(ZXING_RELEASE_FILE)'; \
+	  fi
+
+$(ZXING_RELEASE_FILE): | fetch
+	@test -f '$@' || { echo 'ERROR: pinned ZXing release file was not produced at $@' >&2; exit 1; }
 
 $(ZXING_SOURCE)/LICENSE: $(ZXING_RELEASE_FILE) | $(BUILD)
 	@mkdir -p $(ZXING_SOURCE)

@@ -1,0 +1,19 @@
+name: Set up the workspace Node toolchain
+description: Install the Node and pnpm versions declared by the workspace.
+inputs:
+  root:
+    description: Workspace root relative to the checkout.
+    required: false
+    default: core
+runs:
+  using: composite
+  steps:
+    - name: Install Node
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version-file: ${{ inputs.root }}/.node-version
+    - name: Install pnpm
+      uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
+      with:
+        package_json_file: ${{ inputs.root }}/package.json
+        run_install: false

@@ -195,7 +195,7 @@ export TEST_TARGET
 endif
 rust-tests-alone:
 	@case "$(PACKAGE)" in '') echo "rust-tests-alone requires PACKAGE=<cargo package> [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
-	@$(CARGO_ENV) cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
+	@$(CARGO_ENV) cargo test --locked -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
 	@$(CARGO_ENV) node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --count 1 --timeout $(TEST_TIMEOUT)
 
 # Runs the tests of a Rust package COUNT times in sequence. With TEST, runs only the test of that name.
@@ -286,7 +286,7 @@ verify: prepare docs-check exposure-check parity-check host-parity-check
 COMMA := ,
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: native-darwin registry install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check rust-clippy-check go-format-check \
+.PHONY: native-darwin native-darwin-fetch registry install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-wailsv3-core frontend-tauriv2-core host-test-wailsv3 host-test-tauriv2 host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
@@ -337,10 +337,14 @@ bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
 # Builds the command line sok (docs/spec/cli.md) and places it beside the executables of the bundle. The first argument is the bundle and the second is the profile.
 sok-wailsv3 = go build -C packages/sok/wailsv3 $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") $(if $(filter debug,$(2)),-tags "diagnostics dev",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
-sok-tauriv2 = $(CARGO_ENV) cargo build -p soksak-sok-tauriv2 $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features diagnostics$(COMMA)dev,$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
+sok-tauriv2 = $(CARGO_ENV) cargo build --locked -p soksak-sok-tauriv2 $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features diagnostics$(COMMA)dev,$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 native-darwin:
 	@$(MAKE) -C native/darwin
+
+# Fetches and checksum-validates the pinned native dependency without compiling it.
+native-darwin-fetch:
+	@$(MAKE) -C native/darwin fetch
 
 # The workspace registry. Packs the sibling plugin repositories that scripts/workspace-registry.json declares as diagnostic builds,
 # builds every declared sidecar from its repository and releases them for the current platform, and then
@@ -349,7 +353,7 @@ native-darwin:
 REGISTRY = target/registry
 
 registry:
-	@cargo build -p soksak-sok-tauriv2
+	@$(CARGO_ENV) cargo build --locked -p soksak-sok-tauriv2
 	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) --diagnostics
 
 # Installs every plugin of the workspace registry into the CONFIG configuration folder. Applications do not hold plugins in the bundle, so
@@ -377,12 +381,19 @@ frontend-wailsv3: build registry
 frontend-tauriv2: build registry
 	@$(call stage-tauriv2,--diagnostics --registry-index "$(abspath $(REGISTRY)/index.json)")
 
+# Stages only the core frontend for independent host language checks. Registry builds belong to full host and release checks.
+frontend-wailsv3-core: build
+	@$(call stage-wailsv3,--diagnostics)
+
+frontend-tauriv2-core: build
+	@$(call stage-tauriv2,--diagnostics)
+
 # generate_context! includes the frontend, so this rebuilds the crate.
 tauriv2-build: native-darwin frontend-tauriv2
 	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@$(call bundle-dev,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@touch apps/tauriv2/src/main.rs
-	@$(CARGO_ENV) cargo build -p soksak-tauriv2 --features diagnostics,dev
+	@$(CARGO_ENV) cargo build --locked -p soksak-tauriv2 --features diagnostics,dev
 	@cp target/debug/soksak-tauriv2 $(TAURI_DEBUG)
 	@$(call sok-tauriv2,$(TAURI_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(TAURI_DEBUG_BUNDLE))
@@ -391,7 +402,7 @@ tauriv2-build-release: native-darwin build
 	@$(call bundle-info,$(TAURI_RELEASE_BUNDLE),tauriv2)
 	@$(call stage-tauriv2,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
 	@touch apps/tauriv2/src/main.rs
-	@$(CARGO_ENV) cargo build --release -p soksak-tauriv2 $(if $(DIAGNOSTIC_RELEASE),--features diagnostics)
+	@$(CARGO_ENV) cargo build --locked --release -p soksak-tauriv2 $(if $(DIAGNOSTIC_RELEASE),--features diagnostics)
 	@cp target/release/soksak-tauriv2 $(TAURI_RELEASE)
 	@$(call sok-tauriv2,$(TAURI_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(TAURI_RELEASE_BUNDLE))
@@ -424,7 +435,7 @@ wailsv3-release: wailsv3-build-release
 
 # Unit checks of native code. Runs the shared input check and the host contract check, which runs the tests of the two hosts.
 # The checks of a sidecar run in each sidecar repository.
-native-test: native-darwin frontend-wailsv3 frontend-tauriv2
+native-test: native-darwin frontend-wailsv3-core frontend-tauriv2-core
 	@$(MAKE) rust-format-check
 	@$(MAKE) rust-clippy-check
 	@$(MAKE) go-format-check
@@ -440,9 +451,9 @@ go-format-check:
 
 # Checks every package and test of the Rust workspace in the diagnostic build and the default build without clippy warnings.
 # generate_context! of soksak-tauriv2 reads the staged frontend (frontendDist), so the check stages it first, as native-test does.
-rust-clippy-check: native-darwin frontend-tauriv2
-	@$(CARGO_ENV) cargo clippy --workspace --tests --features soksak-host-tauriv2/diagnostics -- -D warnings
-	@$(CARGO_ENV) cargo clippy --workspace --tests -- -D warnings
+rust-clippy-check: native-darwin frontend-tauriv2-core
+	@$(CARGO_ENV) cargo clippy --locked --workspace --tests --features soksak-host-tauriv2/diagnostics -- -D warnings
+	@$(CARGO_ENV) cargo clippy --locked --workspace --tests -- -D warnings
 	@echo "Rust clippy check passed: 1 workspace, diagnostics and default builds"
 
 # Checks that every package of the Rust workspace is in rustfmt form.
@@ -452,8 +463,23 @@ rust-format-check:
 
 # Runs the tests of the two hosts in the default configuration and the diagnostic configuration and checks from the results that the host contract cases
 # (docs/spec/host-contract.md) run at the same level.
-host-contract-check: native-darwin frontend-wailsv3 frontend-tauriv2
+# Host contract tests build their fixture plugins and sidecars under test-owned temporary directories.
+host-contract-check: native-darwin frontend-wailsv3-core frontend-tauriv2-core
 	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags="$(GO_LINK)"
+
+# Per-language CI checks use the same selected host contract without discovering or building the other host.
+host-test-wailsv3: native-darwin frontend-wailsv3-core
+	@$(GO_ENV) node scripts/check-host-contract.mjs --host wailsv3 --go-ldflags="$(GO_LINK)"
+
+host-test-tauriv2: native-darwin frontend-tauriv2-core
+	@$(CARGO_ENV) node scripts/check-host-contract.mjs --host tauriv2
+
+# Release host checks build and audit only the selected application bundle. Registry verification is a separate target.
+release-check-wailsv3: wailsv3-build-release
+	@node scripts/check-release.mjs --host wailsv3 --macos-minimum $(MACOS_MINIMUM) --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)"
+
+release-check-tauriv2: tauriv2-build-release
+	@node scripts/check-release.mjs --host tauriv2 --macos-minimum $(MACOS_MINIMUM) --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
 
 # Checks the windows of already running apps in sequence through the local endpoint. The harness does not start the apps.
 examples-verify: docs-check e2e-check exposure-check

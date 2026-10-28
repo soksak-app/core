@@ -11,9 +11,10 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 9개와 waiting 30개인 39개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 13개와 waiting 30개인 43개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
 - **현재 측정과 검사 수정: 3** — F239-223, F239-223-3, F239-233
+- **CI와 release 소유권: 4** — F239-266 및 F239-266-1부터 F239-266-3
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -24,6 +25,11 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 최신 optimized diagnostic Terminal drag cohort의 cadence는 Wails/Tauri 50/79 ms로 실패하며 convergence도 두 host에서 실패한다. Geometry는 0.4 pt로 통과하고 application-log finding은 0건이며 두 host는 정상 종료와 전면 baseline 복원을 확인한다. F239-263은 declaration 전송과 layout 준비 비용을 줄였지만 cadence나 convergence acceptance를 입증하지 않는다. Wails의 한 50 ms source 구간에서 이전 presentation은 약 24 ms 후 완료하고 다음 준비에 9 ms, DOM 예약과 그리기에 7 ms가 걸리며 약 10 ms 후 다음 source event가 발생한다. 첫 구간에는 WebKit presentation callback 대기 17.2 ms가 포함된다. Page 사이 clock 비교의 결합 오차는 약 2 ms다. 이는 physical scanout이 아닌 source-event 관측이다. 현재 exact-ticket transaction 계약에서는 이 대기 중 다음 native 준비를 시작할 수 없다. 같은 window의 begin은 현재 ticket을 queue에 넣지 않고 교체한다. 이전 실패 기록은 보존한다.
 
 앞선 macOS 26.6.2 arm64 optimized diagnostic 측정 묶음은 측정 실패 7개와 수집 거부 1개를 보존한다. Browser source-frame 간격은 Wails/Tauri에서 51/34 ms, Editor는 50/34 ms, HWP는 34/34 ms, Wails Terminal은 71 ms다. Tauri Terminal은 창이 active 상태여서 synthetic drag를 거부했으며 drag 결과를 입증하지 않는다. HWP footprint는 양 host에서 통과한다. Wails는 허용 581,004,760 bytes에 대해 571,791,024 bytes이고, Tauri는 허용 569,847,184 bytes에 대해 568,760,032 bytes다. HWP adjusted first display는 기준 1001/1113 ms에 대해 1616.594/1755.235 ms로 여전히 실패한다. Source 간격은 observer 간격이며 입력부터 표시까지 측정한 latency가 아니다. 독립 F239-238 evaluator로 보존된 측정을 진단 replay한 결과 Browser와 Editor는 양 host에서 convergence를 통과하고 HWP는 양 host, Terminal은 Wails에서 실패한다. Tauri Terminal에는 convergence 결과가 없다. 이 replay는 새로운 application acceptance 실행이 아니다. 양 host는 정상 종료하고 error-log 감사를 통과하며 원래 frontmost baseline을 복원한다. F239-223과 F239-233은 열린 상태를 유지하며 제품 memory 최적화나 공통 latency 원인을 추론하지 않는다.
+
+- [~] F239-266 — P1: 잠긴 의존성, offline 검사와 필수 coverage를 유지하며 CI와 release 소유권을 언어와 host별로 나눈다.
+  - [~] F239-266-1 — P1: 언어별 setup action을 재사용한다. 각 호출 job은 자기에게 필요한 toolchain과 잠긴 의존성을 설치한 뒤 offline으로 검사한다. 다른 job의 setup 결과를 받지 않는다. Objective-C job은 고정된 ZXing 입력만 받는 download-only `fetch` target을 제공한다. Offline mode에서는 release file이 없으면 curl 실행 전에 거부하며 fetch는 compile 없이 cache와 download의 hash를 검증한다.
+  - [~] F239-266-2 — P1: JavaScript, Wails/Go, Tauri/Rust, Objective-C, Linux CLI 검사를 독립 job으로 둔다. Cross-toolchain script 검사와 host equivalence는 언어 job에 의존하지 않는 자체 환경 job에서 실행한다. 최종 gate 전에 각 소유 test를 지정 scope 하나에 빠짐없이 배정한다.
+  - [~] F239-266-3 — P1: Release host별 job에서 build, audit와 migration을 수행한다. 두 host job, 독립 equivalence와 registry acceptance가 성공해야 publish한다. Publish는 최종 release file을 받을 수 있으나 equivalence는 자체 checkout에서 build한다. Implementation ready: setup과 native offline 소유 검사는 각각 5/5, workflow 9/9, Make 7/7, host audit 25/25, Node selector 15/15, release CLI 26/26 통과한다. 독립 source review에서 다른 job의 build 결과에 대한 남은 의존성을 찾지 못했다. 이 로컬 결과는 GitHub 실행이나 publication을 입증하지 않는다.
 
 - [o] F239-265 — P1, F239-223 연결: Layout redraw에서 같은 card, tool, native-slot state attribute를 보존한다. 소유 Red는 반복 card/slot mutation 8개와 tool-label mutation 10개를 기록한다. Green은 같은 state를 다시 쓰지 않고 focus, slot identity, action availability, fullscreen state 변경은 계속 갱신함을 확인한다. Same-slot mount 경로와 직렬 exact-ticket presentation은 유지한다. Application cadence acceptance는 F239-223에서 미완료로 유지한다.
 

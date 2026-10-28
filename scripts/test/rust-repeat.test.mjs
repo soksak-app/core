@@ -238,6 +238,21 @@ test('make rust-repeat passes its features to every cargo test call', (t) => {
   for (const call of calls) assert.match(call, /--features diagnostics/, call);
 });
 
+test('Rust repeat discovery locks Cargo test and metadata resolution', { timeout: 10000 }, (t) => {
+  const directory = fakeCargo(t);
+  const result = spawnSync(process.execPath, [
+    'scripts/rust-tests.mjs', '--manifest', join(directory, 'Cargo.toml'), '--package', 'fixture',
+    '--test-target', 'lib', '--test', 'fixture::alpha',
+  ], {
+    cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}` },
+    encoding: 'utf8', timeout: 10000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n');
+  assert.ok(calls.some((call) => /^test .*--locked/.test(call)), `Cargo test discovery did not lock resolution: ${calls.join('\n')}`);
+  assert.ok(calls.some((call) => /^metadata .*--locked/.test(call)), `Cargo metadata did not lock resolution: ${calls.join('\n')}`);
+});
+
 test('make rust-repeat runs each documentation test of the library with its own name, result and elapsed time', (t) => {
   const directory = fakeCargo(t);
   // The make target passes the name quoted: a doc-test name holds spaces and parentheses, which the recipe shell would split.

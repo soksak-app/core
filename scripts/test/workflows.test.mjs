@@ -2,8 +2,9 @@
 // a hosted label of the repository or a label that the document declares, and the window-check workflow runs the checks, then
 // the audit of the run folder, and keeps the run folder of a failed job.
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -43,6 +44,19 @@ test('every runner label of a workflow is hosted or declared in examples.md', ()
   }
 });
 
+test('CI and release workflows pin each external action to an immutable revision', { timeout: 1000 }, () => {
+  for (const file of ['.github/workflows/ci.yml', '.github/workflows/release.yml']) {
+    const text = read(file);
+    const uses = [...text.matchAll(/^\s*(?:-\s*)?uses:\s*(\S+)/gm)].map((match) => match[1]);
+    assert.ok(uses.length > 0, `${file} has no action or reusable workflow references`);
+    for (const reference of uses) {
+      if (reference.startsWith('./')) continue;
+      assert.match(reference, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/i,
+        `${file} uses an unpinned external action: ${reference}`);
+    }
+  }
+});
+
 test('the window-check workflow runs on the declared self-hosted labels', () => {
   const [labels] = runnerLabels(read('.github/workflows/window-checks.yml'));
   assert.deepEqual(labels, declaredLabels());
@@ -71,19 +85,49 @@ test('the window-check workflow names the window checks, the audit step and the 
   assert.ok(index('Keep the run folder') > index('Audit of the logs'), 'the artifact is taken after the audit');
 });
 
-test('the release workflow runs a release-built host once on the stored data of the earlier release', () => {
+test('release builds, migrates, and packages each host after reusable CI and registry checks succeed', () => {
   const text = read('.github/workflows/release.yml');
-  const list = steps(text);
-  const found = list.find((step) => step.name === 'Migrate the stored data of the earlier release');
-  assert.ok(found, 'the workflow has no step that migrates the stored data of the earlier release');
-  assert.match(found.text, /bash scripts\/release-step\.sh/, 'the step runs the release step script');
+  assert.match(text, /checks:\n\s+uses: \.\/\.github\/workflows\/ci\.yml/, 'release checks reuse the independent CI jobs');
+  const job = (name) => {
+    const start = text.indexOf(`  ${name}:`);
+    assert.notEqual(start, -1, `release.yml has no job ${name}`);
+    const next = text.slice(start + 1).search(/\n(?=  [a-z][a-z0-9-]+:\s*$)/m);
+    return next < 0 ? text.slice(start) : text.slice(start, start + 1 + next);
+  };
+  for (const [host, target, binary] of [
+    ['wailsv3', 'release-check-wailsv3', 'wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3'],
+    ['tauriv2', 'release-check-tauriv2', 'tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2'],
+  ]) {
+    const hostJob = job(`release-${host}`);
+    assert.match(hostJob, new RegExp(`run: make ${target}`));
+    const list = steps(hostJob);
+    const migration = list.findIndex((step) => step.name === `Migrate stored data with the ${host === 'wailsv3' ? 'Wails' : 'Tauri'} release host`);
+    const packaging = list.findIndex((step) => step.name === `Package ${host === 'wailsv3' ? 'Wails' : 'Tauri'} release bundle`);
+    assert.ok(migration >= 0, `${host}: no release migration step`);
+    assert.ok(packaging > migration, `${host}: package step does not follow migration`);
+    assert.match(list[migration].text, new RegExp(`bash scripts/release-step\\.sh ".*${binary}"`));
+    assert.match(list[packaging].text, /ditto -c -k --keepParent/);
+    const nativeFetch = list.findIndex((step) => step.name === 'Fetch the pinned native release file');
+    const build = list.findIndex((step) => step.name === `Build and audit ${host === 'wailsv3' ? 'Wails' : 'Tauri'} release bundle offline`);
+    assert.ok(nativeFetch >= 0 && build > nativeFetch, `${host}: native dependency fetch must precede its offline build`);
+    assert.match(list[build].text, /OFFLINE: '1'/);
+  }
+  assert.match(job('registry-manifest'), /node scripts\/check-registry-manifests\.mjs/);
+  const publish = job('publish');
+  assert.match(publish, /needs: \[checks, release-wailsv3, release-tauriv2, registry-manifest\]/);
+  assert.match(publish, /if: always\(\)/);
+  for (const [name, env] of [['checks', 'CHECKS_RESULT'], ['release-wailsv3', 'WAILS_RESULT'],
+    ['release-tauriv2', 'TAURI_RESULT'], ['registry-manifest', 'REGISTRY_RESULT']]) {
+    assert.match(publish, new RegExp(`${env}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`));
+    assert.match(publish, new RegExp(`test \\"\\$${env}\\" = success`), `${name}: publication is not gated on success`);
+  }
+  assert.match(publish, /name: release-wailsv3/);
+  assert.match(publish, /name: release-tauriv2/);
   const step = read('scripts/release-step.sh');
   assert.match(step, /"format":2/, 'the script writes the released format-2 form');
   assert.match(step, /--config-dir/, 'the script runs the host once');
   assert.match(step, /log\.migrated/, 'the script requires the migration record');
   assert.match(step, /"format": ?3/, 'the script requires the migrated file');
-  assert.ok(list.findIndex((step) => step.name === 'Migrate the stored data of the earlier release') < list.findIndex((step) => step.name === 'Package'),
-    'the migration runs before the bundles are packaged');
 });
 
 test('the push check runs every check of the structure step and the format and clippy checks of ci', () => {
@@ -93,7 +137,12 @@ test('the push check runs every check of the structure step and the format and c
     assert.ok(step, `ci.yml has no step ${name}`);
     return /run:\s*make -C core (.+)$/m.exec(step.text)[1].trim().split(/\s+/);
   };
-  const wanted = [...targets('Structure checks'), ...targets('Host tests').filter((target) => target !== 'host-contract-check')];
+  const wanted = [
+    ...targets('Structure checks'),
+    ...targets('Host tests').filter((target) => target !== 'host-contract-check'),
+    ...targets('Go format checks'),
+    ...targets('Rust format and clippy checks'),
+  ];
   // The event catalog and census audits are structure checks: a source change that removes an emitter must fail before it is pushed.
   assert.deepEqual(['events-check', 'census-check'].filter((target) => !targets('Structure checks').includes(target)), [],
     'the structure step of ci.yml does not run the event catalog and census audits');
@@ -102,6 +151,112 @@ test('the push check runs every check of the structure step and the format and c
   const named = recipe[0];
   assert.deepEqual(wanted.filter((target) => !named.includes(target)), [], `push-check does not run: ${wanted.join(' ')}`);
   assert.match(read('.githooks/pre-push'), /make -C "\$\(git rev-parse --show-toplevel\)" push-check/);
+});
+
+test('ci keeps language host checks independent and gates release on every required job', () => {
+  const ci = read('.github/workflows/ci.yml');
+  const jobsText = /^jobs:\n([\s\S]*)$/m.exec(ci)?.[1] ?? '';
+  const jobNames = [...jobsText.matchAll(/^  ([a-z][a-z0-9-]+):\s*$/gm)].map((match) => match[1]);
+  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'native-darwin', 'sok-linux-go', 'sok-linux-rust', 'equivalence', 'required'];
+  for (const name of required) assert.ok(jobNames.includes(name), `ci.yml has no required job ${name}`);
+  const job = (name) => {
+    const start = jobsText.indexOf(`  ${name}:`);
+    assert.notEqual(start, -1, `ci.yml has no job ${name}`);
+    const next = jobsText.slice(start + 1).search(/\n(?=  [a-z][a-z0-9-]+:\s*$)/m);
+    return next < 0 ? jobsText.slice(start) : jobsText.slice(start, start + 1 + next);
+  };
+  assert.match(job('macos-wailsv3'), /host-test-wailsv3/);
+  assert.match(job('macos-tauriv2'), /host-test-tauriv2/);
+  assert.match(job('core-node'), /node core\/scripts\/node-tests\.mjs --exclude scripts\/ --exclude native\//);
+  assert.match(job('equivalence'), /node core\/scripts\/node-tests\.mjs --only scripts\//);
+  assert.doesNotMatch(job('equivalence'), /needs:/, 'equivalence installs and builds its own inputs');
+  const nodeAction = 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020';
+  for (const name of ['sok-linux-go', 'sok-linux-rust']) {
+    const text = job(name);
+    assert.match(text, new RegExp(`uses: ${nodeAction}`), `${name}: Node runtime is missing`);
+    assert.match(text, new RegExp(`uses: ${nodeAction}\\n\\s+with:\\n\\s+node-version-file: core/\\.node-version`));
+    assert.doesNotMatch(text, /pnpm\/action-setup|pnpm install/, `${name}: pnpm is not required by its test runner`);
+  }
+  assert.doesNotMatch(job('sok-linux-go'), /setup-rust|cargo /, 'Linux Go installs or invokes the Rust toolchain');
+  assert.doesNotMatch(job('sok-linux-rust'), /setup-go|go mod download/, 'Linux Rust installs or fetches Go dependencies');
+  assert.match(job('native-darwin'), /uses: \.\/core\/\.github\/actions\/setup-node[\s\S]*?root: core/,
+    'native Darwin package tests need the Node and pnpm toolchains');
+  assert.doesNotMatch(job('native-darwin'), /setup-go|setup-rust|pnpm install/,
+    'native Darwin checks install unused language toolchains or workspace dependencies');
+  const goCli = steps(job('sok-linux-go'));
+  const goTests = goCli.find((step) => step.name === 'Run Go CLI tests with per-test limits');
+  assert.ok(goTests, 'Linux Go tests do not use the bounded owner runner');
+  assert.match(goTests.text, /node \.\.\/\.\.\/\.\.\/scripts\/go-tests\.mjs --package \.\/\.\.\. --count 1/);
+  assert.doesNotMatch(goTests.text, /go test /, 'Linux Go tests use the raw suite command');
+  assert.match(goTests.text, /GOPROXY: 'off'/);
+  assert.match(goTests.text, /GOFLAGS: -mod=readonly/);
+  const rustCli = steps(job('sok-linux-rust'));
+  const rustTests = rustCli.find((step) => step.name === 'Run Rust CLI tests with per-test limits');
+  assert.ok(rustTests, 'Linux Rust tests do not use the bounded owner runner');
+  assert.match(rustTests.text, /node scripts\/rust-tests\.mjs --manifest Cargo\.toml --package soksak-sok-tauriv2 --count 1/);
+  assert.doesNotMatch(rustTests.text, /cargo test /, 'Linux Rust tests use the raw suite command');
+  assert.match(rustTests.text, /CARGO_NET_OFFLINE: 'true'/);
+  const wailsSteps = steps(job('macos-wailsv3'));
+  assert.match(wailsSteps.find((step) => step.name === 'Go format checks')?.text ?? '', /make -C core go-format-check/);
+  const tauriSteps = steps(job('macos-tauriv2'));
+  assert.match(tauriSteps.find((step) => step.name === 'Rust format and clippy checks')?.text ?? '', /make -C core rust-format-check rust-clippy-check/);
+  const equivalenceHostTests = steps(job('equivalence')).find((step) => step.name === 'Host tests')?.text ?? '';
+  assert.match(equivalenceHostTests, /run: make -C core host-contract-check$/m);
+  assert.doesNotMatch(equivalenceHostTests, /go-format-check|rust-format-check|rust-clippy-check/,
+    'language-owned format and lint checks are duplicated in equivalence');
+  assert.doesNotMatch(job('equivalence'), /Fetch workspace sidecar dependencies|sidecars\/files mod download|sidecars\/vt\/Cargo\.toml/,
+    'equivalence fetches sidecar build dependencies that host contract tests do not use');
+  const gate = job('required');
+  for (const [name, variable] of [
+    ['core-node', 'CORE_NODE'], ['macos-wailsv3', 'WAILS'], ['macos-tauriv2', 'TAURI'],
+    ['native-darwin', 'NATIVE'], ['sok-linux-go', 'SOK_GO'], ['sok-linux-rust', 'SOK_RUST'], ['equivalence', 'EQUIVALENCE'],
+  ]) {
+    assert.match(gate, new RegExp(`${variable}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`), `required gate does not read ${name}`);
+  }
+  assert.match(gate, /test "\$result" = success \|\| exit 1/);
+  const gateLoop = /for result in ([^;]+); do/.exec(gate);
+  assert.ok(gateLoop, 'required gate does not loop over its job results');
+  assert.deepEqual(gateLoop[1].match(/"\$([A-Z_]+)"/g),
+    ['"$CORE_NODE"', '"$WAILS"', '"$TAURI"', '"$NATIVE"', '"$SOK_GO"', '"$SOK_RUST"', '"$EQUIVALENCE"']);
+  for (const [host, jobName, testName] of [
+    ['wailsv3', 'macos-wailsv3', 'Wails host tests'], ['tauriv2', 'macos-tauriv2', 'Tauri host tests'],
+  ]) {
+    const list = steps(job(jobName));
+    const fetch = list.findIndex((step) => step.name === 'Fetch pinned native release file');
+    const check = list.findIndex((step) => step.name === testName);
+    assert.ok(fetch >= 0 && check > fetch, `${host}: native release file fetch must precede offline host tests`);
+    assert.match(list[check].text, /OFFLINE: '1'/);
+  }
+  const native = steps(job('native-darwin'));
+  const nativeFetch = native.findIndex((step) => step.name === 'Fetch pinned native release file');
+  const nativeBuild = native.findIndex((step) => step.name === 'Build the native library offline');
+  const nativeTest = native.findIndex((step) => step.name === 'Native Darwin tests');
+  const processIdentityTest = native.findIndex((step) => step.name === 'Native process identity package tests');
+  assert.ok(nativeFetch >= 0 && nativeBuild > nativeFetch && nativeTest > nativeBuild && processIdentityTest > nativeBuild,
+    'native dependency fetch, build, and tests are not ordered');
+  assert.match(native[processIdentityTest].text, /pnpm -C core\/native\/darwin\/process-identity test/);
+  assert.match(native[nativeBuild].text, /OFFLINE: '1'/);
+  assert.match(native[nativeTest].text, /OFFLINE: '1'/);
+  const equivalence = steps(job('equivalence'));
+  const eqFetch = equivalence.findIndex((step) => step.name === 'Fetch pinned native release file');
+  const eqChecks = equivalence.findIndex((step) => step.name === 'Host tests');
+  assert.ok(eqFetch >= 0 && eqChecks > eqFetch, 'equivalence does not fetch native dependency before offline host checks');
+  assert.match(equivalence[eqChecks].text, /OFFLINE: '1'/);
+});
+
+test('CI JavaScript scopes cover every discovered test file exactly once', { timeout: 10_000 }, async () => {
+  const { discoverNodeTests, selectNodeTests } = await import('../node-tests.mjs');
+  const packages = JSON.parse(execFileSync('pnpm', ['-r', 'list', '--json', '--depth', '-1'], { cwd: ROOT, encoding: 'utf8' }))
+    .map((item) => relative(ROOT, item.path) || '.')
+    .sort((a, b) => (a === '.' ? -1 : b === '.' ? 1 : a.localeCompare(b)));
+  const { tests } = discoverNodeTests({ root: ROOT, packages });
+  const core = selectNodeTests(tests, { exclude: ['scripts/', 'native/'] });
+  const scripts = selectNodeTests(tests, { only: 'scripts/' });
+  const native = selectNodeTests(tests, { only: 'native/darwin/process-identity/' });
+  assert.deepEqual(native.map(({ name }) => name), ['native/darwin/process-identity/tests/package.test.mjs']);
+  const assigned = [...core, ...scripts, ...native].map(({ name }) => name);
+  assert.deepEqual([...assigned].sort(), tests.map(({ name }) => name).sort(), 'the three CI scopes do not cover the complete discovered inventory');
+  assert.equal(new Set(assigned).size, tests.length, 'a Node test file is assigned to both CI scopes');
 });
 
 test('the window-check workflow sets every variable that a window check of the run requires', { timeout: 1000 }, () => {

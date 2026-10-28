@@ -60,7 +60,7 @@ export function cargoTargetArgs(target) {
 
 /** The package of the manifest, as `cargo metadata` describes it: its folder and whether its library has documentation tests. */
 function packageOf(manifest, pkg) {
-  const metadata = JSON.parse(cargo(['metadata', '--no-deps', '--format-version', '1', '--manifest-path', manifest]));
+  const metadata = JSON.parse(cargo(['metadata', '--locked', '--no-deps', '--format-version', '1', '--manifest-path', manifest]));
   const found = metadata.packages.find((item) => item.name === pkg);
   if (found === undefined) throw new Error(`${pkg} is not a package of ${manifest}`);
   return {
@@ -76,7 +76,7 @@ function packageOf(manifest, pkg) {
  */
 export async function runRustTests({ manifest, package: pkg, features, testTarget, test, count, timeoutMs, write }) {
   const targetArgs = cargoTargetArgs(testTarget);
-  const cargoArgs = ['test', '-q', '--manifest-path', manifest, '-p', pkg,
+  const cargoArgs = ['test', '--locked', '-q', '--manifest-path', manifest, '-p', pkg,
     ...(features ? ['--features', features] : []), ...targetArgs];
   const executables = testExecutables(cargo([...cargoArgs, '--no-run', '--message-format=json']));
   const { folder: cwd, doctests } = packageOf(manifest, pkg);

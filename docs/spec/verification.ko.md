@@ -25,6 +25,16 @@ Core test 소유권은 독립적으로 선언된 core package를 따른다. Root
 
 언어 증거 recorder(`scripts/test-evidence.mjs`)는 이 필드를 schema 1로 저장한다. `make language-test`는 선언된 실행 언어 케이스마다 레코드를 출력한다. `--evidence-file PATH`를 전달하면 레코드를 보존하고, 이후 실행은 불변 소스·테스트·의존성·dirty 작업 트리·빌드 옵션·프로세스 snapshot이 같을 때만 번호가 붙은 시도를 추가한다. 최초 실패를 보존하고 오래되거나 잘못된 레코드는 거부한다. 실행 중인 호스트·사이드카가 필요한 경우 PID와 실행 파일 경로를 받아 살아 있는 동안 해시해야 하며, 빈 프로세스 목록은 해당 케이스가 소유한 실행 중 프로세스가 없다는 명시적 증거다.
 
+## CI와 release 소유권
+
+언어와 host job은 필요한 toolchain과 잠긴 의존성을 설치하고 자기 output을 build하며 소유 검사를 실행한다. Wails job은 Rust를 요구하지 않고 Tauri job은 Go를 요구하지 않는다. 필요한 frontend 생성과 native library는 각 host의 직접 prerequisite으로 유지한다. 공유 setup 절차는 각 job 안에서 독립 실행한다. Cache는 선택적인 가속 수단이며 다른 job이 제공하는 설치나 필수 build output이 아니다.
+
+Host-equivalence job은 비교에 필요한 모든 언어와 toolchain을 설치하고 잠긴 의존성을 직접 받으며 두 host를 build해 자체 비교를 실행한다. 언어 job에 의존하지 않고 그 build output을 내려받지 않는다. Cross-toolchain JavaScript harness 검사는 이 job에 속하며 순수 JavaScript package 검사는 별도로 유지한다. 지정 scope는 필수 skip이나 누락 owner 없이 전체 test inventory를 보존한다. Single-host 검사는 host coverage만 보고하며 cross-host equivalence로 보고하지 않는다.
+
+의존성을 받은 뒤 build와 check stage는 offline으로 실행한다. Node와 pnpm은 정확한 선언 버전, Go는 module/workspace 선언, Rust는 정확하게 선언된 toolchain을 따른다. Frozen pnpm lock, Cargo.lock과 Go module sum을 계속 검사한다. Offline 검사는 누락된 의존성을 받거나 lock을 갱신하지 않으며 빠진 input을 밝히고 실패한다.
+
+Release host별 job은 자체 bundle을 build하고 audit하며 해당 host로 stored-data migration을 검증하고 release file를 만든다. Registry compatibility는 별도 필수 검사로 유지한다. 최종 판정은 독립 equivalence를 포함한 모든 필수 job의 성공을 요구한다. Publish는 그 판정 후 audit한 host release file만 받는다. 필수 job의 실패, 취소나 skip은 publication을 막는다.
+
 ## 제한된 실행
 
 E2E 실행기는 frontmost application을 조회하거나 시험 child를 시작하기 전에 비어 있지 않은 `SOKSAK_RUN_ID`와 `SOKSAK_RUN_FOLDER`를 함께 요구한다. 누락되거나 일부만 있는 metadata는 실행기 경계에서 실패한다. 실행기는 전달받은 두 값을 child에 그대로 전달하며 id나 폴더를 만들어내지 않는다. 따라서 모든 window-check child를 해당 run과 감사 출력에 연결할 수 있다.
