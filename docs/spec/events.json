@@ -520,6 +520,46 @@
       },
       "description": "The performance trace of the page, while it is on."
     },
+    "page.trace.layout": {
+      "layer": "page",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "phase": {
+            "enum": [
+              "queued",
+              "prepare",
+              "prepared",
+              "draw",
+              "drawn",
+              "frame",
+              "presented"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "t": {
+            "type": "number",
+            "minimum": 0
+          },
+          "jsHeapMB": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "phase",
+          "id",
+          "t"
+        ]
+      },
+      "description": "A phase of the page layout pipeline, while the frame log gate stores it: `phase` is one of `queued`, `prepare`, `prepared`, `draw`, `drawn`, `frame`, or `presented`; `id` identifies the layout; and `t` is the page `performance.now()` reading in milliseconds. `jsHeapMB` is present when the engine exposes the heap reading. This event uses class `frame` and is independent of the performance trace switch."
+    },
     "page.trace.declared-ui.snapshot.skipped": {
       "layer": "page",
       "class": "call",

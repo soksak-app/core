@@ -70,6 +70,7 @@ fn the_class_table_gives_the_catalog_class_of_events_and_families() {
         ("page.console.warn", Class::Lifecycle),
         ("host.trace.mark", Class::Call),
         ("host.trace.view.presentation-join", Class::Call),
+        ("page.trace.layout", Class::Frame),
     ] {
         assert_eq!(class_of(name), Some(want), "{name}");
     }

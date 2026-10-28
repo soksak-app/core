@@ -124,6 +124,7 @@ const EXACT = new Map([
   ["page.tab.unload.skipped", "lifecycle"],
   ["page.tab.unloaded", "lifecycle"],
   ["page.trace.declared-ui.snapshot.skipped", "call"],
+  ["page.trace.layout", "frame"],
   ["page.trace.modal.answer", "call"],
   ["page.trace.picker.close", "call"],
   ["page.update.operation", "call"],

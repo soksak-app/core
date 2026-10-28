@@ -21,7 +21,7 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 각 행은 개별 요구사항과 상태를 유지한다. 기능 cohort 통과는 과거 실패의 원인, 성능 목표 또는 publication을 입증하지 않는다. Package 설치 행에는 개발 작업이 남을 수 있으며 로컬 설치로 publication을 추론하지 않는다.
 
-F239-252 이후 최신 Terminal drag 측정은 Wails/Tauri source cadence 72/82 ms와 양 host convergence에서 실패하며 geometry는 0.4 pt로 통과한다. Application-log finding은 0개이고 양 host는 정상 종료하며 기존 frontmost baseline을 복원한다. 이 결과는 오류 없는 측정을 입증하지만 drag 성능 acceptance를 입증하지 않는다. 이전 capacity 오류와 channel 회귀 기록은 보존한다.
+F239-255 이후 최신 비프로파일 Terminal drag 측정은 Wails/Tauri source cadence 81/66 ms와 양 host convergence에서 실패하며 geometry는 0.4 pt로 통과한다. 양 host는 정상 종료하고 frontmost baseline을 복원하지만 dispatch event의 생성된 class 항목 누락으로 감사 finding 1,842개가 발생한다. F239-260이 이 항목을 수정한다. 이후 Wails 진단 profile은 application-log finding 0개를 기록하지만 capture gap이 251 ms여서 성능 acceptance를 제공하지 않는다. 이전 실패 기록은 보존한다.
 
 앞선 macOS 26.6.2 arm64 optimized diagnostic 측정 묶음은 측정 실패 7개와 수집 거부 1개를 보존한다. Browser source-frame 간격은 Wails/Tauri에서 51/34 ms, Editor는 50/34 ms, HWP는 34/34 ms, Wails Terminal은 71 ms다. Tauri Terminal은 창이 active 상태여서 synthetic drag를 거부했으며 drag 결과를 입증하지 않는다. HWP footprint는 양 host에서 통과한다. Wails는 허용 581,004,760 bytes에 대해 571,791,024 bytes이고, Tauri는 허용 569,847,184 bytes에 대해 568,760,032 bytes다. HWP adjusted first display는 기준 1001/1113 ms에 대해 1616.594/1755.235 ms로 여전히 실패한다. Source 간격은 observer 간격이며 입력부터 표시까지 측정한 latency가 아니다. 독립 F239-238 evaluator로 보존된 측정을 진단 replay한 결과 Browser와 Editor는 양 host에서 convergence를 통과하고 HWP는 양 host, Terminal은 Wails에서 실패한다. Tauri Terminal에는 convergence 결과가 없다. 이 replay는 새로운 application acceptance 실행이 아니다. 양 host는 정상 종료하고 error-log 감사를 통과하며 원래 frontmost baseline을 복원한다. F239-223과 F239-233은 열린 상태를 유지하며 제품 memory 최적화나 공통 latency 원인을 추론하지 않는다.
 
@@ -29,9 +29,11 @@ F239-252 이후 최신 Terminal drag 측정은 Wails/Tauri source cadence 72/82 
 
 - [o] F239-257 — P1: Capture identity cleanup acceptance를 recording당 source 하나 계약에 맞춘다. 통합 검사의 오래된 기대값은 수정 전 실패하며 clear 뒤 선택 비활성과 두 번째 source 거절을 확인한 같은 소유 검사는 수정 후 통과한다. Production 동작은 변경하지 않는다.
 
+- [o] F239-260 — P1, F239-255 연결: 선언된 surface dispatch frame event에 맞춰 Go·Rust·page event class table을 재생성한다. 기존 generator 소유 검사는 수정 전 분류 누락으로 실패하고 세 table을 동기화한 뒤 통과한다. 실패한 application log는 보존하며 수정 후 application 검증은 별도다.
+
 - [o] F239-259 — P1, F239-258 연결: 이전 결과를 대체하지 않고 Wails identity callback의 제한된 대기와 늦은 오류 보고를 완성한다. 중복 Go callback을 명시적으로 보고하고 양 host에서 동기 callback 오류와 scheduling 오류를 함께 보존한다. 소유 Red는 log 누락과 오류 소실을 재현하며 Go 네 case 및 Rust 선택 오류·성공 Green이 통과한다. Rust FnOnce callback은 중복 호출을 정적으로 막는다.
 
-- [o] F239-260 — P1, F239-255 연결: 선언된 surface dispatch frame event에 맞춰 Go·Rust·page event class table을 재생성한다. 기존 generator 소유 검사는 수정 전 분류 누락으로 실패하고 세 table을 동기화한 뒤 통과한다. 실패한 application log는 보존하며 수정 후 application 검증은 별도다.
+- [o] F239-261 — P1, F239-223 연결: Global performance tracing이 꺼진 동안에도 frame gate로 기존 page layout 단계 기록을 보존한다. 소유 Red는 layout 단계 누락을 재현하며 Green은 frame gate가 닫힐 때 field formatting과 relay가 없음을 포함한 tracer 여덟 case를 통과한다. 양 native producer class 소유 검사와 생성 table 검사도 통과한다. 기존 phase/id/time payload·batch writer·transport를 재사용하며 application 원인 분석은 미완료다.
 
 - [~] F239-258 — P1, F239-254 연결: 구현 준비 완료. Compiler-selected Rust assertion과 정확한 host별 helper case를 등록하며 test-only receive-before-cleanup callback 순서도 포함한다. F239-259가 누락된 Wails identity assertion 두 개를 제공한다. 현재 선언은 보존된 정적 문제 22개를 모두 해결하며 최종 compiler-selected 선언 감사는 남아 있다. 이 metadata 수정은 test body를 바꾸지 않는다.
 

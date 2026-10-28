@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-261: Route existing page layout phase events through the frame log gate independently of the global performance switch. Preserve call-class disabling and avoid field formatting when the frame gate is closed. The tracer Red and eight-case Green, native class owners and generated-table checks pass. Keep the existing batch writer and transport; add no recording history or separate collector.
+
 - F239-258: Register compiler-selected host assertions against their actual contracts and retain shared behavior scopes. Describe the drain fixture as callback ordering without claiming child-process or sidecar-queue verification. Current declarations resolve the retained static findings; final compiler-selected auditing remains separate.
 
 - F239-252: Complete capture cleanup ownership acceptance from the owning Go, Rust and native results and the subsequent two-host capture cohort. Retain stream-ownership distinctions and retry error reporting; keep cadence and convergence acceptance separate.

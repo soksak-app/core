@@ -46,7 +46,7 @@ export function createTracer(call, report = reportRelayError, log = null) {
     });
   };
   const trace = (event, fields = {}) => {
-    if (!enabled || !batcher) return;
+    if (!batcher || (!enabled && classOf(`page.trace.${event}`) !== "frame")) return;
     // The payload is built only for an event that the gate stores.
     batcher.emit("debug", `page.trace.${event}`, () => {
       const memory = globalThis.performance?.memory;

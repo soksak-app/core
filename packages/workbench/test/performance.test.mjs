@@ -48,6 +48,40 @@ test("disabled page tracing does not format or relay a focus event", async (t) =
   assert.equal(formatted, 0, "disabled tracing formatted a focus event");
 });
 
+test("a layout phase uses the frame gate while the performance trace is off", async () => {
+  const { calls, tracer } = recorded();
+  logGate.set({ lifecycle: "off", input: "off", call: "off", io: "off", frame: "trace" });
+  try {
+    tracer.trace("layout", { phase: "queued", id: 1, t: 2 });
+    tracer.trace("focus", { phase: "in" });
+    await settle();
+    const events = calls.filter(([kind]) => kind === "log").flatMap(([, batch]) => batch);
+    assert.ok(events.some(({ event, fields }) => event === "page.trace.layout"
+      && fields.phase === "queued" && fields.id === 1 && fields.t === 2),
+    "the frame-gated layout phase is recorded while performance tracing is off");
+    assert.equal(events.some(({ event }) => event === "page.trace.focus"), false,
+      "call-class tracing remains off while the performance trace is off");
+  } finally {
+    logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
+  }
+});
+
+test("a closed frame gate does not format or relay a layout phase", async () => {
+  const { calls, tracer } = recorded();
+  logGate.set({ lifecycle: "off", input: "off", call: "off", io: "off", frame: "off" });
+  let formatted = 0;
+  try {
+    tracer.trace("layout", { get phase() { formatted++; return "queued"; }, id: 1, t: 2 });
+    await settle();
+    const events = calls.filter(([kind]) => kind === "log").flatMap(([, batch]) => batch);
+    assert.equal(events.some(({ event }) => event === "page.trace.layout"), false,
+      "a closed frame gate stores no layout phase");
+    assert.equal(formatted, 0, "a closed frame gate does not build layout fields");
+  } finally {
+    logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
+  }
+});
+
 test("an enabled trace relays its events of one turn in one log call, and the line has no timestamp of its own", async () => {
   const { calls, tracer } = recorded();
   await tracer.setEnabled(true);

@@ -8594,6 +8594,16 @@ const FEATURE_LINKS = [
     expected: "Bounded identity waits report late callback errors and preserve a synchronous callback failure together with a scheduling failure.",
     levels: ["unit"],
   },
+  {
+    id: "F239-261",
+    implementation: [{ file: "packages/workbench/performance.js", symbol: "export function createTracer" }],
+    tests: [
+      { file: "packages/workbench/test/performance.test.mjs", id: "a layout phase uses the frame gate while the performance trace is off" },
+      { file: "packages/workbench/test/performance.test.mjs", id: "a closed frame gate does not format or relay a layout phase" },
+    ],
+    expected: "Existing layout phases follow the frame gate independently of performance tracing while other trace events remain disabled.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
