@@ -5,6 +5,15 @@
 ## 미배포
 
 - F239-278: Native Darwin test output과 runner manifest를 `runner.temp`에 보존하고, job failure 시 Foundation으로 찾은 사용자 DiagnosticReports directory와 함께 업로드한다. 기존 workflow owner 9/9, CI workflow YAML parsing, `make docs-check`가 통과한다. 이 변경은 향후 failure evidence를 보존하며 native test 기준을 바꾸거나 관찰된 native failure를 수정하지 않는다.
+- F239-277: Wails dependency download에 필요한 Go workspace archive hash와
+  standalone Sok offline readonly resolution에 필요한 archive 및 go.mod
+  checksum을 추가한다. Red: Wails lock guard가 생성된 archive hash 141개와
+  go.mod hash 하나를 발견했고 Linux Sok build가 module checksum 누락을 보고했다.
+  Green: 표준 Go 1.25.0 resolution이 workspace와 standalone module checksum을
+  기록한다. Offline readonly dependency listing은 Wails host, Wails Sok,
+  standalone Sok module graph에서 통과하고 모든 resolved module의 검증도 통과한다.
+  Lock guard는 추가 변경이 없다고 확인한다. Compile 결과는 주장하지 않는다.
+
 
 - F239-276: Frozen SDK bootstrap digest를 document-start page identity 변경에 맞춘다. 기존 view-check case가 오래된 상수를 재현하고 갱신 뒤 변경된 script와 literal은 계속 거부하면서 6/6 통과한다. Component literal과 SDK pin은 release 전에 owner 갱신이 필요하다.
 

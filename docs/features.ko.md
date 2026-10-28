@@ -30,6 +30,8 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 
 - [o] F239-276 — P0, F239-270 연결: Document-start page identity 변경 뒤 frozen SDK bootstrap digest를 갱신한다. 변경 전 소유 view-check case가 bootstrap digest와 SDK 상수의 불일치를 거부한다. 상수만 갱신한 뒤 script와 literal drift 거부를 포함한 같은 소유 case 여섯 개가 통과한다. 일치하는 plugin literal과 release dependency는 F212.12-1-10-6g의 각 owner 작업에 남으며 이 source 수정은 미출시다.
 
+- [o] F239-277 — P0: CI workspace download와 독립 Linux Sok module에 필요한 Go checksum만 추가한다. macOS Wails 준비 단계는 workspace mode로 module 세 개를 resolve한다. archive hash가 없으면 표준 `go mod download`가 `go.work.sum`을 바꾸고 readonly lock guard가 실패한다. Linux Sok job은 `GOWORK=off`이며 offline readonly build가 `github.com/Masterminds/semver/v3` archive 및 go.mod checksum 누락으로 실패한다. Red: 보존한 CI log는 workspace archive hash 141개와 go.mod hash 하나가 생성되고 Sok module checksum이 누락됨을 보여 준다. Green: 표준 Go 1.25.0 resolution이 workspace entry 142개와 standalone module checksum 두 개를 추가한다. Offline readonly dependency listing은 Wails host 250개, Wails Sok 203개, standalone Sok 203개 package에서 통과한다. Workspace 세 module과 standalone Sok의 `go mod verify`가 통과하고 CI lockfile guard는 검증 후 추가 변경이 없다고 확인한다. Compile 결과는 주장하지 않는다.
+
 - [o] F239-275 — P1, F239-263 연결: 비동기 응답 뒤 synchronization trace에 현재 mount attempt가 없을 수 있는 이유를 명시한다. Synchronization 대기 중 surface가 unmount될 수 있으며 diagnostic null은 그 부재를 기록하고 native request data를 대신하지 않는다. Push fallback audit가 누락된 이유를 거부한다. 바뀌지 않은 동작을 확인하고 소유 audit만 다시 실행한다.
 
 - [o] F239-274 — P1, F239-272 연결: 변경한 Rust image wait method와 소유 assertion에 repository formatter를 적용한다. Main push gate가 서식을 거부한다. 동작을 보존하고 formatter가 배치만 바꿨을 때만 소유 test 결과를 재사용한다.
