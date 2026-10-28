@@ -211,6 +211,7 @@ function createCard(card) {
  */
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 const setHTML = (el, html) => { if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; } };
+const setData = (el, name, value) => { if (el.dataset[name] !== value) el.dataset[name] = value; };
 
 function updateCard(el, card, rect) {
   // A previous layout that waited for native preparation can contain a card closed in the meantime. A closed card has no tabs
@@ -227,8 +228,8 @@ function updateCard(el, card, rect) {
     el.dataset.textZoom = "";
     el.style.setProperty("--text-zoom", String(textZoom));
   }
-  el.dataset.role = card.fixed ? "fixed" : "pane";
-  el.dataset.focused = String(card.id === focusedId);
+  setData(el, "role", card.fixed ? "fixed" : "pane");
+  setData(el, "focused", String(card.id === focusedId));
   const chrome = el.querySelector(".chrome");
   const status = el.querySelector(".status");
   let statusText = status.querySelector(".status__text");
@@ -387,12 +388,12 @@ function updateCard(el, card, rect) {
     setText(statusText, cardStatusText(card, tabs, folded));
     return;
   }
-  slot.dataset.nativeSurface = "stub";
-  slot.dataset.nativeSurfaceId = shown.id;
-  slot.dataset.nativeLayer = "10";
-  slot.dataset.nativePlugin = shown.plugin;
-  slot.dataset.nativeTitle = shown.title;
-  slot.dataset.nativeDim = String(dimmed(card.id));
+  setData(slot, "nativeSurface", "stub");
+  setData(slot, "nativeSurfaceId", shown.id);
+  setData(slot, "nativeLayer", "10");
+  setData(slot, "nativePlugin", shown.plugin);
+  setData(slot, "nativeTitle", shown.title);
+  setData(slot, "nativeDim", String(dimmed(card.id)));
   // default: a tab opened without parameters mounts with params null.
   const surface = surfaceForTab(shown);
   setSlotSurface(slot, surface);

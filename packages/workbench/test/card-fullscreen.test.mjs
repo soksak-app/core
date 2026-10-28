@@ -22,6 +22,20 @@ test("the header fullscreen control precedes close and runs its declared command
     assert.equal(button.nextElementSibling.dataset.expose, "core.card.close");
     assert.equal(button.getAttribute("aria-pressed"), "false");
     assert.equal(button.getAttribute("aria-label"), "카드 전체 화면");
+    const stableMutations = [];
+    const observer = new dom.window.MutationObserver((records) => stableMutations.push(...records));
+    observer.observe(toolbar, { attributes: true, subtree: true, attributeFilter: ["disabled", "title", "aria-label"] });
+    tools.updateCardTools(toolbar, { canClose: true, canSplitX: true, canSplitY: true, fullscreen: false });
+    await Promise.resolve();
+    observer.disconnect();
+    assert.deepEqual(stableMutations.map(({ attributeName }) => attributeName), [],
+      "an unchanged update must not rewrite tool availability or labels");
+    const close = toolbar.querySelector('[data-do="close"]');
+    const splitX = toolbar.querySelector('[data-do="x"]');
+    tools.updateCardTools(toolbar, { canClose: false, canSplitX: false, canSplitY: true, fullscreen: false });
+    assert.equal(close.disabled, true, "the close availability change was lost");
+    assert.match(close.title, /닫을 수 없다/, "the close explanation did not follow availability");
+    assert.equal(splitX.disabled, true, "the split availability change was lost");
     const { audit } = await import("../commands.js");
     assert.deepEqual(audit(toolbar), []);
     button.click();

@@ -29,6 +29,9 @@ Tauri host의 native 이미지 표시 commit은 framework event callback 밖의 
 4. 표시 요청의 첫 UI 스레드 단계에서 호스트는 요청된 visibility를 적용하고, 변경되거나 새로 표시되거나 재생성된 plugin root view를 열린 transaction에 참여시킨다. 이어서 창의 앱 DOM과 필요한 그림 래스터를 기다린다. 마지막 UI 스레드 단계에서 대기 중 교체된 root generation을 다시 참여시키고, 참여한 generation만 기록한 뒤 실제 좌표를 읽고 커밋하며, 참여한 모든 root view가 표시될 때까지 transaction은 열린 상태로 유지된다. [문서 영역](#문서-영역)은 독립적으로 렌더링하며 URL 출처와 무관하게 root-view 표시 대기에 참여하지 않는다.
 5. 응답 후 페이지가 대기 중인 최신 배치의 준비를 시작한다. 시작하지 않은 이전 배치는 더 새 배치로 대신되며, 대신된 배치의 준비와 그리기는 실행되지 않는다. 가장 새 배치는 앞선 입력을 모두 담는다. 표시가 정착하면 페이지는 대신된 배치의 수를 애플리케이션 로그에 기록한다.
 
+Layout redraw는 값이 바뀔 때만 card, tool과 native-slot state attribute를 바꾼다. 같은 state는 반복 attribute mutation을 만들지 않으며 focus, action availability, label과 surface identity의 변경은 같은 DOM entry로 관측된다.
+
+
 워크벤치 배치 콜백은 대상 표면의 식별자·흐림·대상 슬롯 여백을 카드 사각형과 함께 캡처한다. 대상 여백은 측정한 슬롯에서 이전에 그린 사이드바 영역을 빼고 요청한 카드 상태의 영역을 더한다. 컴포지터는 이전 사이드바 배치를 다시 읽지 않고 캡처한 기하를 사용한다. 측정할 수 없는 기존 슬롯은 null로 명시하고 준비 동안 숨긴다. 잘못된 여백 값은 오류다.
 
 페이지는 현재 compositor record에 없는 보존 surface도 host placement request에 포함할 수 있다. 페이지는 전체 request의 모든 ID를 기준으로 host 응답을 검증한다. 각 요청 ID는 배치되거나, 그려지지 않은 preparation 중에만 deferred되어야 하며, 누락·추가·중복 ID와 잘못된 deferred ID는 오류다. 현재 compositor record를 기록하기 전 검증된 응답을 해당 record의 ID로 투영한다. Record 밖의 보존 surface는 retention 경로가 소유하며 활성 compositor 배치로 기록하지 않는다.

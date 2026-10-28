@@ -70,8 +70,33 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
     // The drawing of a live card mounts the surface of its tab.
     const mainTab = plane.currentGrid().card("main").data.activeId;
     assert.ok(mounts.includes(mainTab), `the first draw did not mount the main tab ${mainTab}`);
+    const stableCard = planeEl.querySelector('.card[data-card-id="main"]');
+    const stableSlot = stableCard.querySelector(".slot");
+    const stableAttributes = ["data-role", "data-focused", "data-native-surface", "data-native-surface-id",
+      "data-native-layer", "data-native-plugin", "data-native-title", "data-native-dim"];
+    const stableMutations = [];
+    const observer = new dom.window.MutationObserver((records) => stableMutations.push(...records));
+    observer.observe(stableCard, { attributes: true, subtree: true, attributeFilter: stableAttributes });
+    plane.settle();
+    held.draw();
+    await Promise.resolve();
+    observer.disconnect();
+    assert.deepEqual(stableMutations.map(({ attributeName }) => attributeName), [],
+      "an unchanged redraw must not rewrite stable card or slot state attributes");
+    const replacementTab = plane.addTabTo("main", pluginId, null);
+    held.draw();
+    assert.equal(stableSlot.dataset.nativeSurfaceId, replacementTab,
+      "a changed active tab did not update the slot identity");
     const { card, tab } = plane.splitCard("main", "right", pluginId);
     assert.ok(plane.currentGrid().card(card), "the split made no card");
+    held.draw();
+    assert.equal(planeEl.querySelector(`.card[data-card-id="${card}"]`).dataset.focused, "true",
+      "the split did not update the focused card state");
+    plane.focusCard("main");
+    held.draw();
+    assert.equal(stableCard.dataset.focused, "true", "a changed focus did not update the card state");
+    assert.equal(planeEl.querySelector(`.card[data-card-id="${card}"]`).dataset.focused, "false",
+      "the prior focus remained on the split card");
     const stale = held;
     assert.ok(stale.made.has(card), "the held layout does not contain the split card");
     await plane.closeTabById(tab);

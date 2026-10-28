@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-265: Avoid rewriting stable card, tool and native-slot state attributes during layout redraws. The owning DOM Reds record repeated attribute changes without state changes; Greens retain focus, slot, availability and fullscreen transitions without redundant writes. Keep mounting and transaction ordering unchanged; no application cadence result is inferred.
+
 - F239-264: Apply the declared Cargo deployment target to the bundled Tauri CLI as well as the application so shared dependencies use the same build environment. The expanded-command owner reproduces the missing assignment and passes for debug and release with an ambient target different from the declared minimum.
 
 - F239-263: Complete two-host application acceptance for request-local declaration transfer. Both hosts accept the wire format with zero application-log findings and 0.4 pt geometry error, restore the frontmost baseline and exit normally. The nine-view declaration component falls from 125,733 to 22,101 bytes. Retain the 50/79 ms cadence and convergence failures separately; reduced transfer does not establish their acceptance.

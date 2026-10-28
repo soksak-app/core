@@ -8640,6 +8640,19 @@ const FEATURE_LINKS = [
     expected: "Application and bundled CLI Cargo commands use the same declared macOS deployment target in debug and release builds.",
     levels: ["unit"],
   },
+  {
+    id: "F239-265",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "const setData =" },
+      { file: "packages/workbench/card-tools.js", symbol: "export function updateCardTools" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-stale-layout.test.mjs", id: "a held layout draw survives the close of a card it contains" },
+      { file: "packages/workbench/test/card-fullscreen.test.mjs", id: "the header fullscreen control precedes close and runs its declared command" },
+    ],
+    expected: "Stable redraws preserve state attributes without redundant mutation while actual focus, slot, availability and fullscreen changes remain visible.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
