@@ -11,7 +11,7 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 11개와 waiting 31개인 42개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 12개와 waiting 30개인 42개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
 - **현재 측정과 검사 수정: 6** — F239-223, F239-223-3, F239-233, F239-243, F239-247, F239-248
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
@@ -27,7 +27,7 @@ F239-241과 F239-242 전의 최신 Terminal drag 측정은 Wails/Tauri cadence 7
 
 - [~] F239-247 — P2, F239-245 연결: 기존 lock/condition-wait census에서 누락된 map_or 및 map_or_else default handler를 검출한다. 두 lock 및 두 wait 반례를 소유 fixture로 재현하고 현재 propagation/recovery 허용은 유지한다.
 
-- [ ] F239-248 — P2: Workspace Rust format 검사에서 발견한 기존 endpoint 및 surface source의 formatting 차이를 정규화한다. 동작은 바꾸지 않고 format 검사로 확인한다.
+- [~] F239-248 — P2: Workspace Rust format 검사에서 발견한 기존 endpoint 및 surface source의 formatting 차이를 정규화한다. 동작은 바꾸지 않고 format 검사로 확인한다.
 
 - [o] F239-246 — P1: Language adapter의 command-supervisor 예상 test 수를 현재 소유 case 22개에 맞춘다. 통합 실행은 실제 22개 모두 통과했지만 manifest가 20개를 기대해 실패했다. 해당 adapter만 다시 실행하고 통과한 나머지 언어 case는 반복하지 않는다.
 

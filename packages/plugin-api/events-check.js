@@ -743,7 +743,7 @@ export function censusFindings(sources, config, rules = censusRules()) {
           const open = match.index + match[0].lastIndexOf('(');
           const close = matchClose(source, open);
           if (source.code.slice(open + 1, close).trim() === '') continue;
-          if (!/^\s*(?:\.\s*(?:map_err|expect|unwrap(?:_or_else|_or)?|or_else|ok)\s*\(|\?)/.test(source.code.slice(close + 1))) continue;
+          if (!/^\s*(?:\.\s*(?:map_err|map_or(?:_else)?|expect|unwrap(?:_or_else|_or)?|or_else|ok)\s*\(|\?)/.test(source.code.slice(close + 1))) continue;
           if (resultIsPropagated(source, close + 1)) continue;
           if (recoversPoisonedGuard(source, close + 1)) continue;
         }

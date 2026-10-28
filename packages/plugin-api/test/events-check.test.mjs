@@ -282,6 +282,20 @@ test('lock and condition-wait fallback combinators are findings', () => {
   assert.deepEqual(findings.map(({ line }) => line), [2, 3, 4, 5]);
 });
 
+test('lock and condition-wait map_or defaults are findings', () => {
+  const source = [
+    'fn run(state: &Mutex<State>, guard: Guard, fallback_guard: Guard) {',
+    '    let _ = state.lock().map_or(fallback_guard, |guard| guard);',
+    '    let _ = state.lock().map_or_else(|_| fallback_guard, |guard| guard);',
+    '    let _ = wake.wait(guard).map_or(fallback_guard, |guard| guard);',
+    '    let _ = wake.wait(guard).map_or_else(|_| fallback_guard, |guard| guard);',
+    '}',
+  ].join('\n');
+  const findings = checker.censusFindings(new Map([['map-default.rs', source]]), noConfig())
+    .filter(({ rule }) => rule === 'rs.lock-result');
+  assert.deepEqual(findings.map(({ line }) => line), [2, 3, 4, 5]);
+});
+
 test('condition wait recovery checks include nested calls and closure blocks', () => {
   const source = [
     'fn run(guard: Guard) {',
