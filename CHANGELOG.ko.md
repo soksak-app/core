@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-278: Native Darwin test output과 runner manifest를 `runner.temp`에 보존하고, job failure 시 Foundation으로 찾은 사용자 DiagnosticReports directory와 함께 업로드한다. 기존 workflow owner 9/9, CI workflow YAML parsing, `make docs-check`가 통과한다. 이 변경은 향후 failure evidence를 보존하며 native test 기준을 바꾸거나 관찰된 native failure를 수정하지 않는다.
+
 - F239-276: Frozen SDK bootstrap digest를 document-start page identity 변경에 맞춘다. 기존 view-check case가 오래된 상수를 재현하고 갱신 뒤 변경된 script와 literal은 계속 거부하면서 6/6 통과한다. Component literal과 SDK pin은 release 전에 owner 갱신이 필요하다.
 
 - F239-273-2: Registry builder는 index version을 정렬하고 proof는 source 순서를 유지하므로 보존된 core version projection을 집합으로 비교한다. 중복 및 포함 거부는 유지한다. 세 version producer형 Red가 순서 불일치를 재현하며 집중 case 1/1, candidate registry owner 15/15가 통과한다.

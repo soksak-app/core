@@ -137,11 +137,28 @@ jobs:
       - name: Native Darwin tests
         env:
           OFFLINE: '1'
+          SOKSAK_NATIVE_TEST_RUN_FOLDER: ${{ runner.temp }}/soksak-native-darwin
         run: make -C core/native/darwin test
       - name: Native process identity package tests
         env:
           OFFLINE: '1'
         run: pnpm -C core/native/darwin/process-identity test
+      - name: Resolve user DiagnosticReports directory
+        if: failure()
+        id: native-diagnostic-reports
+        shell: bash
+        run: |
+          directory="$(swift -e 'import Foundation; guard let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { fputs("user Library directory is unavailable\n", stderr); exit(1) }; print(library.appendingPathComponent("Logs/DiagnosticReports", isDirectory: true).path)')"
+          printf 'directory=%s\n' "$directory" >> "$GITHUB_OUTPUT"
+      - name: Keep native Darwin failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-darwin-failure
+          path: |
+            ${{ runner.temp }}/soksak-native-darwin
+            ${{ steps.native-diagnostic-reports.outputs.directory }}
+          if-no-files-found: warn
       - name: Reject lockfile changes
         if: always()
         run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-278: Keep native Darwin test output and the runner manifest under `runner.temp`, and upload them with the user DiagnosticReports directory on job failure. Resolve the Library directory through Foundation. The existing workflow owner passes 9/9, the CI workflow parses as YAML, and `make docs-check` passes. This retains future failure evidence without changing native test criteria or fixing the observed native failures.
+
 - F239-276: Align the frozen SDK bootstrap digest with the document-start page identity change. The existing view-check cases reproduce the stale constant and pass 6/6 after its update while continuing to reject changed scripts and literals. Component literals and SDK pins require owner updates before release.
 
 - F239-273-2: Compare the preserved core version projection as a set because registry builders sort index versions while proofs retain source order. Keep duplicate and membership rejection. The producer-shaped three-version Red reproduces the order mismatch; the focused case passes 1/1 and the candidate registry owner passes 15/15.
