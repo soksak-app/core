@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-250: Project 및 plugin test source에 gofmt를 적용한다. Test 동작 변경 없이 누락된 빈 줄 두 개를 복원하며 Go formatting gate가 통과한다.
+
 - F239-248: 동작을 바꾸지 않고 endpoint assertion과 native surface handler의 Rust formatting을 정규화한다. 수정 후 workspace format 검사가 통과한다.
 
 - F239-247: map_or 또는 map_or_else로 poison 오류를 대체하는 lock 및 condition-wait 결과를 검출한다. 유효한 guard 결과 반례 네 개가 수정 전 실패하고 수정 후 동일 집중 소유 검사가 통과한다. 명시적 전파 및 guard 복구는 유지한다.

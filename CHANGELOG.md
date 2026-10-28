@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-250: Apply gofmt to the project and plugin test sources. The two missing blank lines are restored without changing test behavior, and the Go formatting gate passes.
+
 - F239-248: Normalize Rust formatting in endpoint assertions and native surface handlers without changing behavior. The workspace format check passes after correction.
 
 - F239-247: Detect lock and condition-wait results that replace poison errors through map_or or map_or_else. Four valid guard-result counterexamples fail before correction and the same focused owner passes afterward. Preserve explicit propagation and guard recovery.

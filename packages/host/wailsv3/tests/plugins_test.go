@@ -322,6 +322,7 @@ func TestPluginsUseRegistrySetsTheRegistryLikeTheCommand(t *testing.T) {
 		}
 	}
 }
+
 // contract: cli.plugin.starter-job-transitions-are-bound-to-snapshot
 func TestPluginsStarterPendingAndCompletedStatesSurviveManagerRecreation(t *testing.T) {
 	config := t.TempDir()

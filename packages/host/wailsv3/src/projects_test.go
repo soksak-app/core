@@ -289,6 +289,7 @@ func TestProjectOpenKeepsCommittedRootUntilThePageSelectsTheNewRoot(t *testing.T
 		t.Fatalf("reopen root %q, want requested root %q", surfaces.projects["prj-current"], newRoot.Root)
 	}
 }
+
 // contract: projects.shown-validates-before-commit
 func TestProjectShownRootMismatchDoesNotMutateProjectState(t *testing.T) {
 	host, surfaces, fake, ctx := projectOpenFixture(t)
