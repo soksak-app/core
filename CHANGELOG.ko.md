@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-253: 제어된 capture-stop stream에 필수 attempt context를 부여해 pressure 소유 검사가 write, delivery-deadline 및 stream-completion 오류 경로에 도달하고 검증하도록 한다. Decoded-frame 쓰기 fault assertion을 현재의 명시적 finalization 오류에 맞추며 실패 결과를 유지한다. 관련 소유 검사 두 개가 통과하고 production capture 코드는 바뀌지 않는다.
+
 - F239-251: 1x display에서 기존 192-pixel reserved ROI를 만족하도록 capture identity fixture의 두 region 크기를 설정하고 region 생성과 raster 크기를 별도로 보고한다. Production QR geometry와 capture 동작은 유지한다. 공유 fixture 수정 후 원래 acceptance case와 관련 checker 및 lifecycle wrapper 네 개가 모두 통과하며 별도 pressure 및 쓰기 오류 실패는 미완료로 유지한다.
 
 - F239-243: 변경되지 않은 통합 통과 4개와 수정한 restoration fixture의 집중 통과로 trace-mode 소유 acceptance를 완료한다. 두 결과 사이 production helper는 바뀌지 않았으며 전체 모음은 반복하지 않는다. 측정 mode와 복원을 검증하며 application cadence 또는 convergence를 입증하지는 않는다.

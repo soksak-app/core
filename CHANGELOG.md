@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-253: Give the controlled capture-stop stream its required attempt context so the pressure owner reaches and verifies the write, delivery-deadline and stream-completion error paths. Align the decoded-frame write-fault assertion with the current explicit finalization error and retain failure results. Both affected owners pass; production capture code is unchanged.
+
 - F239-251: Size the two-region capture identity fixture for the existing 192-pixel reserved ROI on a 1x display and report region creation and raster dimensions separately. Preserve production QR geometry and capture behavior. The original acceptance case and all four affected checker and lifecycle wrappers pass after the shared fixture correction; the separate pressure and write-error failures remain open.
 
 - F239-243: Complete trace-mode owner acceptance from the four unchanged integrated passes and the corrected restoration fixture focused pass. The production helper is unchanged across both results; no full suite is repeated. This validates measurement mode and restoration, not application cadence or convergence.

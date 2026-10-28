@@ -269,13 +269,20 @@ int main(void) { @autoreleasepool {
         @"the controlled file-write failure is observable before stop");
     captureStream = (SCStream *)[CaptureStopFixture new];
     captureQueue = dispatch_queue_create("capture.test.samples", DISPATCH_QUEUE_SERIAL);
+    SPCaptureAttempt *stopAttempt = [SPCaptureAttempt new];
+    stopAttempt.session = @"capture-pressure-stop";
+    stopAttempt.startCompletionSeen = YES;
+    [captureAttempt release]; captureAttempt = [stopAttempt retain];
+    objc_setAssociatedObject(captureStream, &captureAttemptAssociationKey, stopAttempt, OBJC_ASSOCIATION_RETAIN);
+    [stopAttempt release];
     sp_capture_stop(0);
-    check(strstr(sp_capture_error(), "not written") != NULL,
-        @"stop preserves the earlier recording write error");
-    check(strstr(sp_capture_error(), "no frame arrived") != NULL,
-        @"stop also reports its separate delivery deadline error");
-    check(strstr(sp_capture_error(), "fixture stop failure") != NULL,
-        @"stop reports the stream completion error alongside earlier failures");
+    NSString *stopError = [NSString stringWithUTF8String:sp_capture_error()] ?: @"";
+    check([stopError containsString:@"not written"],
+        [NSString stringWithFormat:@"stop preserves the earlier recording write error (%@)", stopError]);
+    check([stopError containsString:@"no frame arrived within 1000ms"],
+        [NSString stringWithFormat:@"stop reports its separate delivery deadline error (%@)", stopError]);
+    check([stopError containsString:@"fixture stop failure"],
+        [NSString stringWithFormat:@"stop reports the stream completion error alongside earlier failures (%@)", stopError]);
     CFRelease(frame);
     NSError *error = nil;
     check([[NSFileManager defaultManager] removeItemAtPath:directory error:&error],

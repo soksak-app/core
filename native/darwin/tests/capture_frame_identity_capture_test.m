@@ -547,7 +547,8 @@ int main(void) { @autoreleasepool {
     NSString *finalError = [NSString stringWithUTF8String:sp_capture_error()];
     BOOL identityDirectoryUnlocked = chmod(identityDirectory.fileSystemRepresentation, 0700) == 0;
     check(failedSessionStarted && identityDirectoryCreated && identityDirectoryLocked && !failedFinalize
-        && [finalError containsString:@"frame identity decode artifact write failed"] && identityDirectoryUnlocked,
+        && [finalError containsString:@"frame identity capture failed"]
+        && [finalError containsString:@"decoded identity frame 1 could not be appended"] && identityDirectoryUnlocked,
         [NSString stringWithFormat:@"a decoded-frame artifact write error fails finalization (%@, %@)",
             finalError, directoryError.localizedDescription ?: @""]);
     free(identityError);
