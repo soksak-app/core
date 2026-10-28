@@ -7,6 +7,7 @@
 - F239-282: `document_throttle_test` window을 명시적으로 소유해 명시적 release 뒤 예약된 autorelease가 다시 실행되지 않게 한다. 실패 시 마지막 완료 단계를 보존하도록 assertion과 측정 출력을 flush한다. 보존된 CI 실행은 원인 귀속 없이 SIGSEGV를 관측했고 변경 전 local owner는 한 번 통과했다. 수정된 owner는 macOS 26.6.2 arm64에서 10.154초에 1/1 통과하며 `make docs-check`도 통과한다.
 - F239-283: `@soksak/plugin-api/contract/` 전체를 게시한다. Packed SDK owner는 release 파일에서 `contract/view-operations.json`을 찾지 못해 실패했고, 이제 현재 contract 파일 전체를 pack하며 1/1 통과한다. `make docs-check`가 통과하고 F239-283 parity link에는 finding이 없다. 전체 parity는 F239-277과 F239-278의 누락 link를 보고한다. Package tree가 바뀌므로 release 전에 SDK pin과 candidate proof identity를 갱신해야 한다. 여기서는 pin이나 publication을 주장하지 않는다.
 
+- F239-284: 기존 Go version parser/range test, native CI workflow, document-throttle owner를 feature parity link에 연결한다. 기존 workflow test의 검증 범위를 함께 명시하며 product source와 test assertion은 바꾸지 않는다.
 - F239-278: Native Darwin test output과 runner manifest를 `runner.temp`에 보존하고, job failure 시 Foundation으로 찾은 사용자 DiagnosticReports directory와 함께 업로드한다. 기존 workflow owner 9/9, CI workflow YAML parsing, `make docs-check`가 통과한다. 이 변경은 향후 failure evidence를 보존하며 native test 기준을 바꾸거나 관찰된 native failure를 수정하지 않는다.
 - F239-277: Wails dependency download에 필요한 Go workspace archive hash와
   standalone Sok offline readonly resolution에 필요한 archive 및 go.mod

@@ -1673,6 +1673,49 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-277",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/install.go", symbol: "func ParseVersion(text string)" },
+      { file: "go.work.sum", symbol: "github.com/Masterminds/semver/v3 v3.5.0 h1:" },
+      { file: "packages/sok/wailsv3/go.sum", symbol: "github.com/Masterminds/semver/v3 v3.5.0 h1:" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestVersionRangesAcceptExactCaretTildeAndBoundedForms" },
+      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestVersionsAndRangesRefuseTheFormsThatTheLibraryAccepts" },
+    ],
+    expected: "The Sok installer parses and orders the declared semantic version forms, rejects unsupported forms, and both workspace and standalone module graphs retain the checksums needed to resolve that parser offline.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-278",
+    implementation: [
+      { file: ".github/workflows/ci.yml", symbol: "SOKSAK_NATIVE_TEST_RUN_FOLDER: ${{ runner.temp }}/soksak-native-darwin" },
+      { file: ".github/workflows/ci.yml", symbol: "- name: Keep native Darwin failure evidence" },
+      { file: ".github/workflows/ci.yml", symbol: "steps.native-diagnostic-reports.outputs.directory" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
+      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow names the window checks, the audit step and the artifact of a failed job" },
+    ],
+    expected: "The native Darwin job remains a required isolated CI job. Its workflow records runner output under runner.temp and configures a failure-only artifact containing that output and the resolved user DiagnosticReports directory; the existing workflow checks cover required-job ownership and failure-artifact configuration patterns.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-282",
+    implementation: [
+      { file: "native/darwin/tests/document_throttle_test.m", symbol: "[window setReleasedWhenClosed:NO]" },
+      { file: "native/darwin/tests/document_throttle_test.m", symbol: "[window release]" },
+      { file: "native/darwin/tests/document_throttle_test.m", symbol: "if (fflush(stdout) != 0)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_throttle_test.m", id: "a hidden region runs at most 10%% of the shown animation frame rate" },
+      { file: "native/darwin/tests/document_throttle_test.m", id: "a covered region runs at most 10%% of the shown animation frame rate" },
+      { file: "native/darwin/tests/document_throttle_test.m", id: "PASS: document_throttle_test" },
+    ],
+    expected: "The document throttle owner measures shown, hidden, and covered animation and timer rates without activating the application, reports output flush failures, and explicitly closes and releases its owned window before the autorelease pool drains.",
+    levels: ["native"],
+  },
+  {
     id: "F266.4",
     implementation: [
       { file: "packages/host/tauriv2/tests/flush_test.rs", symbol: "fn finish_drain_scenario(" },
@@ -9341,8 +9384,9 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F239-275 documents the existing nullable diagnostic mount identity without changing behavior.
 // F239-274 applies the Rust formatter without changing behavior or assertions.
 // F239-268 removes an unused mutable fixture binding without changing its assertions.
+// F239-284 restores exact parity links for completed lock, workflow-evidence, and test-fixture records.
 // These items change no runtime capability and remain outside this capability-link inventory.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read
