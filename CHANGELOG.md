@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-268: Remove an unused mutable binding from the view-origin fixture without changing its assertions. The push Clippy gate reproduces the warning; the owning test-target lint check passes after correction.
+
 - F239-266-1: Reuse pinned language setup actions and acquire locked dependencies in each job. Separate native dependency fetching from compilation; verify cached hashes and reject missing input before network access in offline mode. Setup and native offline owners pass 5/5 each.
 
 - F239-266-3: Build, inspect, migrate and package each release host independently. Reuse the CI graph and require both host results and registry acceptance before publication. Selected-host release CLI owners pass 26/26. GitHub execution and publication are not established by these local checks.

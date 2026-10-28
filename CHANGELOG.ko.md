@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-268: View-origin fixture의 assertion을 바꾸지 않고 사용하지 않는 mutable binding을 제거한다. Push Clippy gate가 경고를 재현하며 수정 후 소유 test-target lint 검사가 통과한다.
+
 - F239-266-1: 고정된 언어 setup action을 재사용하고 각 job에서 잠긴 의존성을 받는다. Native 의존성 fetch를 compile과 분리하며 cache hash를 검사하고 offline mode에서는 입력이 없으면 network 접근 전에 거부한다. Setup과 native offline 소유 검사가 각각 5/5 통과한다.
 
 - F239-266-3: Release host별로 build, inspect, migration과 package를 독립 수행한다. CI graph를 재사용하고 두 host 결과와 registry acceptance가 성공해야 publish한다. Selected-host release CLI 소유 검사가 26/26 통과한다. 이 로컬 검사로 GitHub 실행이나 publication을 입증하지 않는다.

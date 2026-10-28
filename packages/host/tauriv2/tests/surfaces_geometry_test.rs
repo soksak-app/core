@@ -343,7 +343,7 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
             "visible": true, "dim": false, "plugin": "page",
             "composition": {"kind": "view", "page": "ui/page.html"},
         });
-        if let Some(mut start) = start {
+        if let Some(start) = start {
             surface["start"] = start;
         }
         surface
