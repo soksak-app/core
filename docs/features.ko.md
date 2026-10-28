@@ -11,9 +11,9 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 14개와 waiting 30개인 44개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 13개와 waiting 30개인 43개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 4** — F239-223, F239-223-3, F239-233, F239-271
+- **현재 측정과 검사 수정: 3** — F239-223, F239-223-3, F239-233
 - **CI와 release 소유권: 4** — F239-266 및 F239-266-1부터 F239-266-3
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
@@ -26,7 +26,7 @@ Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전
 
 앞선 macOS 26.6.2 arm64 optimized diagnostic 측정 묶음은 측정 실패 7개와 수집 거부 1개를 보존한다. Browser source-frame 간격은 Wails/Tauri에서 51/34 ms, Editor는 50/34 ms, HWP는 34/34 ms, Wails Terminal은 71 ms다. Tauri Terminal은 창이 active 상태여서 synthetic drag를 거부했으며 drag 결과를 입증하지 않는다. HWP footprint는 양 host에서 통과한다. Wails는 허용 581,004,760 bytes에 대해 571,791,024 bytes이고, Tauri는 허용 569,847,184 bytes에 대해 568,760,032 bytes다. 이 과거 cohort에서 HWP adjusted first display는 1616.594/1755.235 ms로 기록됐고 기준은 1001/1113 ms다. 보존된 first-display 결과에는 해당 값을 현재 HWP H44 package 또는 H40 Studio source와 연결하는 implementation manifest가 없다. 확인 가능한 startup-comparison manifest는 별도 HWP candidate를 식별하며 이 값이 어느 구현에서 측정됐는지 입증하지 않는다. 현재 HWP first-display 성능은 미검증이다. Source 간격은 observer 간격이며 입력부터 표시까지 측정한 latency가 아니다. 독립 F239-238 evaluator로 보존된 측정을 진단 replay한 결과 Browser와 Editor는 양 host에서 convergence를 통과하고 HWP는 양 host, Terminal은 Wails에서 실패한다. Tauri Terminal에는 convergence 결과가 없다. 이 replay는 새로운 application acceptance 실행이 아니다. 양 host는 정상 종료하고 error-log 감사를 통과하며 원래 frontmost baseline을 복원한다. F239-223과 F239-233은 열린 상태를 유지하며 제품 memory 최적화나 공통 latency 원인을 추론하지 않는다.
 
-- [~] F239-271 — P0, F239-223 연결: Preflight와 acknowledgment 사이에 더 새 frame이 수락돼도 성공한 native image 표시를 기록한다. 정확한 generation과 raster, 단조 증가하는 presented sequence, 표시 전 stale 거부와 최신 sequence settled 대기를 보존한다. 수정 전에 양 host 소유 module에서 interleaving을 재현하며 future, duplicate, 이전 sequence와 다른 raster acknowledgment를 거부한다. Continuous wait 기준을 바꾸거나 cadence 개선을 입증하지 않는다.
+- [o] F239-271 — P0, F239-223 연결: Preflight와 acknowledgment 사이에 더 새 frame이 수락돼도 성공한 native image 표시를 기록한다. 정확한 generation과 raster, 단조 증가하는 presented sequence, 표시 전 stale 거부와 최신 sequence settled 대기를 보존한다. 수정 전에 양 host 소유 module에서 interleaving을 재현하며 future, duplicate, 이전 sequence와 다른 raster acknowledgment를 거부한다. Continuous wait 기준을 바꾸거나 cadence 개선을 입증하지 않는다. 제어된 소유 interleaving은 future 및 stale acknowledgment, 단조 증가와 이전 성공 acknowledgment 뒤 새 failure 보존을 포함해 양 host에서 통과한다. Presentation error는 최신 sequence의 성공 때만 지운다. Application 재검증은 별도다.
 
 - [o] F239-270 — P0, F239-262 연결: Time origin을 독립적으로 다시 읽지 않고 document-start page identity를 view log writer와 공유한다. Tauri application에서 ready page와 다른 page를 가진 batch 33개가 거부된다. 제어된 getter로 서로 다른 읽기를 재현하고 정확한 native identity 검증과 오류 기록을 유지하며 batch를 버리지 않는다. 운영체제에서 값이 달랐던 이유는 미검증이다. 제어된 getter Red가 ready와 batch identity 불일치를 재현하며 한 번 읽은 값을 공유한 뒤 view와 bootstrap wire 소유 검사가 62/62 통과한다. Application 재검증은 별도다.
 

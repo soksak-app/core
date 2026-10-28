@@ -184,6 +184,154 @@ mod wait_boundary {
             "a new wait must require the already accepted second frame"
         );
     }
+
+    #[test]
+    fn an_in_flight_frame_presentation_is_recorded_after_a_newer_frame_is_accepted() {
+        let images = Images::default();
+        let key = ("surface-in-flight".into(), "view".into());
+        images
+            .reserve(&key, "owner", "sidecar")
+            .expect("reserve image");
+        assert!(images.set(&key, 100));
+        let config = images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .expect("configure raster")
+            .expect("new raster");
+        let frame = |sequence| FrameIdentity {
+            generation: config.generation,
+            raster: config.raster,
+            width: config.width,
+            height: config.height,
+            scale: config.scale,
+            sequence,
+        };
+
+        images
+            .authorize_frame(&key, "sidecar", frame(1))
+            .expect("authorize first frame");
+        assert_eq!(
+            images.frame_status(&key, config.generation, config.raster, 1),
+            Ok(()),
+            "first frame passes freshness before native presentation starts"
+        );
+        images
+            .authorize_frame(&key, "sidecar", frame(2))
+            .expect("accept newer frame while the first native presentation is in flight");
+        assert_eq!(
+            images.frame_status(&key, config.generation, config.raster, 1),
+            Err("stale"),
+            "an older frame cannot start a native presentation after a newer acceptance"
+        );
+        assert_eq!(
+            images.frame_status(&key, config.generation, config.raster, 2),
+            Ok(()),
+            "the latest frame remains eligible to start native presentation"
+        );
+
+        for (name, generation, raster, sequence) in [
+            ("zero sequence", config.generation, config.raster, 0),
+            ("future sequence", config.generation, config.raster, 3),
+            ("wrong generation", config.generation + 1, config.raster, 1),
+            ("wrong raster", config.generation, config.raster + 1, 1),
+        ] {
+            assert!(
+                !images.mark_presented(&key, generation, raster, sequence),
+                "{name} acknowledgment must not change image state"
+            );
+        }
+        assert_eq!(
+            images.presented_frame(&key),
+            None,
+            "invalid acknowledgments do not produce a presented frame"
+        );
+        assert!(
+            images.mark_presented(&key, config.generation, config.raster, 1),
+            "a successful in-flight acknowledgment remains recordable after a newer acceptance"
+        );
+        assert_eq!(
+            images.presented_frame(&key),
+            Some(PresentedFrame {
+                generation: config.generation,
+                raster: config.raster,
+                sequence: 1,
+            })
+        );
+        assert!(
+            !images.current_presented(),
+            "the latest-frame barrier still waits while sequence 2 is pending"
+        );
+        assert!(
+            !images.mark_presented(&key, config.generation, config.raster, 1),
+            "a duplicate acknowledgment does not change image state"
+        );
+        assert!(images.mark_presented(&key, config.generation, config.raster, 2));
+        assert!(
+            !images.mark_presented(&key, config.generation, config.raster, 1),
+            "a regressing acknowledgment does not replace the newer presented sequence"
+        );
+        assert_eq!(
+            images.presented_frame(&key).map(|frame| frame.sequence),
+            Some(2)
+        );
+        assert!(
+            images.current_presented(),
+            "the latest-frame barrier completes only after sequence 2 is acknowledged"
+        );
+    }
+
+    #[test]
+    fn an_older_in_flight_presentation_does_not_clear_a_newer_frame_failure() {
+        let images = Images::default();
+        let key = ("surface-in-flight-failure".into(), "view".into());
+        images
+            .reserve(&key, "owner", "sidecar")
+            .expect("reserve image");
+        assert!(images.set(&key, 100));
+        let config = images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .expect("configure raster")
+            .expect("new raster");
+        for sequence in 1..=2 {
+            images
+                .authorize_frame(
+                    &key,
+                    "sidecar",
+                    FrameIdentity {
+                        generation: config.generation,
+                        raster: config.raster,
+                        width: config.width,
+                        height: config.height,
+                        scale: config.scale,
+                        sequence,
+                    },
+                )
+                .expect("authorize frame");
+        }
+        images.mark_presentation_failed(
+            &key,
+            config.generation,
+            config.raster,
+            2,
+            "sequence 2 failed",
+        );
+        assert!(
+            images.mark_presented(&key, config.generation, config.raster, 1),
+            "successful in-flight sequence 1 acknowledgment was discarded"
+        );
+        assert_eq!(
+            images.presented_frame(&key).map(|frame| frame.sequence),
+            Some(1),
+            "the actual older presentation remains recorded"
+        );
+        let inner = images.lock();
+        let state = inner.states.get(&key).expect("image state");
+        assert!(!state.configured, "the newer failure remains unconfigured");
+        assert_eq!(
+            state.presentation_error.as_deref(),
+            Some("sequence 2 failed"),
+            "the newer failure remains observable"
+        );
+    }
 }
 
 // contract: images.detach.timeout-retains-target

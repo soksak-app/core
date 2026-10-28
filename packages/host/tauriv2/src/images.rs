@@ -716,7 +716,8 @@ impl Images {
         }
     }
 
-    /// Records that the frame of the current raster was copied to the native display storage.
+    /// Records a successful native presentation that advances the current raster's presented sequence. A newer frame
+    /// can be accepted after frame_status allows an earlier native presentation to start but before its acknowledgement arrives.
     fn mark_presented(&self, key: &Key, generation: u64, raster: u64, sequence: i32) -> bool {
         let mut inner = self.lock();
         let Some(state) = inner.states.get_mut(key) else {
@@ -724,18 +725,19 @@ impl Images {
         };
         if state.generation != generation
             || state.raster != raster
-            || state.last_sequence != sequence
+            || sequence <= 0
+            || sequence <= state.presented_sequence
+            || sequence > state.last_sequence
         {
             return false;
         }
-        if state.presented_raster != raster || state.presented_sequence != sequence {
-            state.presented_raster = raster;
-            state.presented_sequence = sequence;
+        state.presented_raster = raster;
+        state.presented_sequence = sequence;
+        if sequence == state.last_sequence {
             state.presentation_error = None;
-            self.changed();
-            return true;
         }
-        false
+        self.changed();
+        true
     }
 
     fn mark_presentation_failed(

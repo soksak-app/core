@@ -457,22 +457,23 @@ func (i *Images) FrameStatus(key ImageKey, generation, raster uint64, sequence i
 	return ""
 }
 
-// MarkPresented records that the frame of the current raster was copied to the native display storage.
+// MarkPresented records a successful native presentation that advances the current raster's presented sequence. A newer
+// frame can be accepted after FrameStatus allows an earlier native presentation to start but before its acknowledgement arrives.
 func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence int) bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	state := i.states[key]
-	if state == nil || state.Generation != generation || state.Raster != raster || state.LastSequence != sequence {
+	if state == nil || state.Generation != generation || state.Raster != raster || sequence <= 0 ||
+		sequence <= state.PresentedSequence || sequence > state.LastSequence {
 		return false
 	}
-	if state.PresentedRaster != raster || state.PresentedSequence != sequence {
-		state.PresentedRaster = raster
-		state.PresentedSequence = sequence
+	state.PresentedRaster = raster
+	state.PresentedSequence = sequence
+	if sequence == state.LastSequence {
 		state.PresentationError = ""
-		i.changedLocked()
-		return true
 	}
-	return false
+	i.changedLocked()
+	return true
 }
 
 // PresentedFrame is the identity of the frame that an image region presents: the generation, the raster and the sequence of the frame.

@@ -303,6 +303,8 @@ Images are created by sidecars and supplied to the core through a region. The co
 
 `host.window.regions[].error` retains the last native presentation rejection until a valid frame is presented. A valid older snapshot does not make a later rejection disappear. Image pixels retain their size at the native backing scale; resizing a layer must not scale text to fill the new geometry.
 
+A successful native image acknowledgment records the actual presented sequence monotonically for the same generation and raster, even if a later sequence was accepted after its pre-render check. Future, duplicate, regressing and different-generation or different-raster acknowledgments are refused. Pre-render validation still rejects a stale sequence, and a settled presentation wait still requires the latest accepted sequence.
+
 Both hosts forward each native image event as `image-event {surface, name, event}` only to its owning surface webview. An empty callback, broadcast delivery, or substituting a direct sidecar command for keyboard delivery violates this contract. Invalid event JSON and delivery failures are reported, never replaced with a null event.
 
 The terminal exposes its latest cell rows as `terminal.screen` and notifies subscribers on sidecar screen events. Input checks use native clicks and keys, wait for these notifications, and verify editing, command output, and isolation across at least three visible terminals. `terminal.input` checks only direct sidecar input, not native keyboard delivery.

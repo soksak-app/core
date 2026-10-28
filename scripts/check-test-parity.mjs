@@ -8731,6 +8731,21 @@ const FEATURE_LINKS = [
     expected: "The view writer uses the read-only document-start page identity for batch records and page.start without resampling timeOrigin.",
     levels: ["unit"],
   },
+  {
+    id: "F239-271",
+    implementation: [
+      { file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) MarkPresented" },
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "fn mark_presented" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/images_test.go", id: "TestInFlightFramePresentationIsRecordedAfterANewerFrameIsAccepted" },
+      { file: "packages/host/wailsv3/src/images_test.go", id: "TestOlderInFlightPresentationDoesNotClearANewerFrameFailure" },
+      { file: "packages/host/tauriv2/src/images_test.rs", id: "an_in_flight_frame_presentation_is_recorded_after_a_newer_frame_is_accepted" },
+      { file: "packages/host/tauriv2/src/images_test.rs", id: "an_older_in_flight_presentation_does_not_clear_a_newer_frame_failure" },
+    ],
+    expected: "Successful acknowledgments advance presentation state for the current generation and raster when their sequence is positive, no newer than the accepted sequence, and newer than the presented sequence; only a latest-sequence acknowledgment clears a presentation error, and freshness checks and current-frame waits remain latest-sequence strict.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

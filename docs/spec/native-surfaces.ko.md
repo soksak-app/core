@@ -304,6 +304,8 @@ place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트
 
 `host.window.regions[].error`는 유효한 프레임이 표시될 때까지 마지막 네이티브 표시 거절을 유지한다. 이전의 유효 스냅샷이 이후 거절을 없애지는 않는다. 그림 픽셀은 네이티브 백킹 배율에서 크기를 유지하며, 레이어 크기 변경으로 글자를 늘려 새 영역을 채우면 안 된다.
 
+성공한 native image acknowledgment는 표시 전 검사 후 더 새 sequence가 수락됐더라도 같은 generation과 raster의 실제 presented sequence를 단조 증가하도록 기록한다. Future, duplicate, 후퇴하는 sequence, 다른 generation이나 raster의 acknowledgment는 거부한다. 표시 전 검사는 여전히 stale sequence를 거부하고 settled presentation 대기는 최신 accepted sequence를 요구한다.
+
 두 호스트는 각 네이티브 그림 이벤트를 `image-event {surface, name, event}`로 소유 표면 웹뷰에만 전달한다. 빈 콜백, 전체 전송, 키보드 전달을 직접 사이드카 명령으로 대체하는 것은 계약 위반이다. 잘못된 이벤트 JSON과 전달 실패는 보고하며 null 이벤트로 대체하지 않는다.
 
 터미널은 최신 셀 행을 `terminal.screen`으로 공개하고 사이드카 화면 이벤트마다 구독자에게 알린다. 입력 검사는 네이티브 클릭과 키를 사용하고 이 알림을 기다리며, 보이는 터미널 최소 3개에서 편집·명령 출력·입력 격리를 확인한다. `terminal.input`은 직접 사이드카 입력만 검사하며 네이티브 키보드 전달을 검증하지 않는다.
