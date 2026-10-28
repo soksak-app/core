@@ -199,6 +199,16 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // the expected result, and the verification level of one feature.
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
+  {
+    id: "F239-276",
+    implementation: [{ file: "packages/plugin-api/view-check.js", symbol: "export const VIEW_START_SHA256" }],
+    tests: [
+      { file: "packages/plugin-api/test/view-check.test.mjs", id: "a literal copied from the SDK has no difference" },
+      { file: "packages/plugin-api/test/view-check.test.mjs", id: "a changed view-start.js fails until the constant and the literals are updated" },
+    ],
+    expected: "The SDK constant matches its injected bootstrap while script and literal drift remain explicit errors.",
+    levels: ["unit"],
+  },
 {
   "id": "F239-234",
   "implementation": [

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-276: Frozen SDK bootstrap digest를 document-start page identity 변경에 맞춘다. 기존 view-check case가 오래된 상수를 재현하고 갱신 뒤 변경된 script와 literal은 계속 거부하면서 6/6 통과한다. Component literal과 SDK pin은 release 전에 owner 갱신이 필요하다.
+
 - F239-273-2: Registry builder는 index version을 정렬하고 proof는 source 순서를 유지하므로 보존된 core version projection을 집합으로 비교한다. 중복 및 포함 거부는 유지한다. 세 version producer형 Red가 순서 불일치를 재현하며 집중 case 1/1, candidate registry owner 15/15가 통과한다.
 
 - F239-273-1: Proof identity/digest metadata의 문자열 형식, 비어 있지 않은 current SDK version, HEAD tree를 쓰기 전의 clean tracked/untracked SDK package를 요구한다. 성공 결과를 candidate proof 검사로 이름 붙이고 manifest count를 producer 보고값으로 표시하며 release-manifest 검사는 분리한다. 소유 Red는 coercion, identity 누락, dirty SDK 수용, 오해를 부르는 출력을 재현하고 Green은 14/14다.

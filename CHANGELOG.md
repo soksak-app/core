@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-276: Align the frozen SDK bootstrap digest with the document-start page identity change. The existing view-check cases reproduce the stale constant and pass 6/6 after its update while continuing to reject changed scripts and literals. Component literals and SDK pins require owner updates before release.
+
 - F239-273-2: Compare the preserved core version projection as a set because registry builders sort index versions while proofs retain source order. Keep duplicate and membership rejection. The producer-shaped three-version Red reproduces the order mismatch; the focused case passes 1/1 and the candidate registry owner passes 15/15.
 
 - F239-273-1: Require string-typed proof identity and digest metadata, a nonempty current SDK version, and a clean tracked/untracked SDK package before using its HEAD tree. Name success as a candidate proof check and identify the manifest count as producer-reported; keep release-manifest validation separate. Owner Reds reproduce coercion, missing identity, dirty SDK acceptance and misleading output; Green passes 14/14.
