@@ -12,7 +12,12 @@
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
-    fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
+    FILE *output = condition ? stdout : stderr;
+    fprintf(output, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
+    if (fflush(output) != 0) {
+        perror("fflush test result");
+        failures++;
+    }
     if (!condition) failures++;
 }
 
@@ -111,6 +116,10 @@ static Measurement measure(NSString *name, WKWebView *view) {
     result.visibility = [evaluate(view, @"document.visibilityState") description];
     printf("%s: timer loop %.1f per second, animation frames %.1f per second over %.2f seconds, document visibility %s\n",
         name.UTF8String, result.timerRate, result.frameRate, seconds, result.visibility.UTF8String);
+    if (fflush(stdout) != 0) {
+        perror("fflush measurement");
+        failures++;
+    }
     return result;
 }
 
@@ -122,8 +131,8 @@ int main(void) { @autoreleasepool {
     nw_listener_t listener = serve();
     NSString *address = [NSString stringWithFormat:@"http://127.0.0.1:%d/throttle", nw_listener_get_port(listener)];
 
-    NSWindow *window = [[[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
-        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];

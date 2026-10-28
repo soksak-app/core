@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-282: Give `document_throttle_test` explicit ownership of its window so its scheduled autorelease does not follow an explicit release. Flush assertion and measurement output to retain the last completed stage on failure. The retained CI run observed a SIGSEGV without attributing its cause; the unchanged local owner passed once, and the corrected owner passes 1/1 in 10.154 seconds on macOS 26.6.2 arm64. `make docs-check` passes.
+
 - F239-278: Keep native Darwin test output and the runner manifest under `runner.temp`, and upload them with the user DiagnosticReports directory on job failure. Resolve the Library directory through Foundation. The existing workflow owner passes 9/9, the CI workflow parses as YAML, and `make docs-check` passes. This retains future failure evidence without changing native test criteria or fixing the observed native failures.
 - F239-277: Add the Go workspace archive hashes required by Wails dependency
   downloads and the standalone Sok archive and go.mod checksums required by

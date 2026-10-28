@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-282: `document_throttle_test` window을 명시적으로 소유해 명시적 release 뒤 예약된 autorelease가 다시 실행되지 않게 한다. 실패 시 마지막 완료 단계를 보존하도록 assertion과 측정 출력을 flush한다. 보존된 CI 실행은 원인 귀속 없이 SIGSEGV를 관측했고 변경 전 local owner는 한 번 통과했다. 수정된 owner는 macOS 26.6.2 arm64에서 10.154초에 1/1 통과하며 `make docs-check`도 통과한다.
+
 - F239-278: Native Darwin test output과 runner manifest를 `runner.temp`에 보존하고, job failure 시 Foundation으로 찾은 사용자 DiagnosticReports directory와 함께 업로드한다. 기존 workflow owner 9/9, CI workflow YAML parsing, `make docs-check`가 통과한다. 이 변경은 향후 failure evidence를 보존하며 native test 기준을 바꾸거나 관찰된 native failure를 수정하지 않는다.
 - F239-277: Wails dependency download에 필요한 Go workspace archive hash와
   standalone Sok offline readonly resolution에 필요한 archive 및 go.mod
