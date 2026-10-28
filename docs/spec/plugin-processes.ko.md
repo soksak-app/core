@@ -254,3 +254,5 @@ private `WKNavigationDelegatePrivate` selector `_webViewWebProcessDidBecomeUnres
 | `runtime.theme`, `runtime.settings`, `runtime.textSize`, `status.subscribe`, `events.on` | event |
 | `contributions(point)` | core root에서 import하는 동기 module 목록 |
 | `exposure`, binder | view 안에서 그대로. 등록은 통로로 보낸다 |
+
+Terminal continuous-drag 측정은 process와 one-shot layout 증거 수집 뒤에만 전역 performance tracer를 끈다. 명시적인 source-frame observer, 그 observer의 `frame: trace` log gate, clock bracket, input과 capture pixel은 유지한다. 설정 command는 observer와 gesture 시작 전에 완료되어야 한다. Recording과 observer 종료 및 event flush도 이 mode 안에서 수행한다. Action이 실패해도 reclaim 수집 전에 저장한 performance 설정을 정확히 복원한다. 측정 artifact에는 phase mode와 유지한 log policy를 기록한다. 이 방법은 cadence, geometry 또는 convergence 기준을 바꾸지 않고 측정 gesture에서 무관한 profiling 작업을 제외한다.

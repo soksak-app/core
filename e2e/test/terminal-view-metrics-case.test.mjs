@@ -5,10 +5,132 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { findFirstChangedSlotFrame } from "../view-frame-geometry.mjs";
+import * as terminalCase from "../benchmark/cases/terminal.mjs";
 import { terminalDragGeometryFrame, terminalFirstContentFrame, terminalSourceContentFrame,
   terminalViewDescriptor, writeTerminalDragLayouts, measureTerminalLayoutFrame,
   setTerminalGeometryBackground, terminalRasterTargetRectPt, TERMINAL_GEOMETRY_BACKGROUND }
   from "../benchmark/cases/terminal.mjs";
+
+function terminalTraceModeSession({ performanceTrace, logPolicy }) {
+  const values = {
+    "diagnostics.performance": performanceTrace,
+    "diagnostics.log": structuredClone(logPolicy),
+  };
+  const calls = [];
+  return {
+    calls,
+    values,
+    session: {
+      async get(name) {
+        assert.equal(name, "core.settings");
+        return { values: structuredClone(values) };
+      },
+      async run(name, params) {
+        calls.push({ name, params });
+        assert.equal(name, "core.settings.change");
+        assert.equal(params.key, "diagnostics.performance");
+        assert.equal(params.scope, "common");
+        values["diagnostics.performance"] = params.value;
+        return null;
+      },
+    },
+  };
+}
+
+test("terminal drag performance trace mode preserves frame logging and restores the original setting", { timeout: 5000 }, async () => {
+  const runInMode = terminalCase.withTerminalDragTraceMode;
+  assert.equal(typeof runInMode, "function", "terminal drag must expose its production trace-mode boundary");
+  const logPolicy = { frame: "trace", call: "debug" };
+  const { session, calls, values } = terminalTraceModeSession({ performanceTrace: true, logPolicy });
+  const result = await runInMode(session, async () => {
+    const during = (await session.get("core.settings")).values;
+    assert.equal(during["diagnostics.performance"], false);
+    assert.deepEqual(during["diagnostics.log"], logPolicy);
+    return { gesture: "captured" };
+  });
+  assert.deepEqual(result, {
+    result: { gesture: "captured" },
+    phaseMode: {
+      performanceTrace: { before: true, during: false, after: true },
+      logPolicy: { before: logPolicy, during: logPolicy, after: logPolicy },
+    },
+  });
+  assert.deepEqual(calls, [
+    { name: "core.settings.change", params: { key: "diagnostics.performance", value: false, scope: "common" } },
+    { name: "core.settings.change", params: { key: "diagnostics.performance", value: true, scope: "common" } },
+  ]);
+  assert.equal(values["diagnostics.performance"], true);
+  assert.deepEqual(values["diagnostics.log"], logPolicy);
+});
+
+test("terminal drag trace-mode cleanup preserves action and restoration failures", { timeout: 5000 }, async () => {
+  const runInMode = terminalCase.withTerminalDragTraceMode;
+  assert.equal(typeof runInMode, "function", "terminal drag must expose its production trace-mode boundary");
+  const logPolicy = { frame: "trace" };
+  const { session, calls, values } = terminalTraceModeSession({ performanceTrace: true, logPolicy });
+  const restoreError = new Error("trace setting restoration failed");
+  const actionError = new Error("drag evidence failed");
+  const originalRun = session.run;
+  session.run = async (name, params) => {
+    if (params.value === true) {
+      calls.push({ name, params });
+      values["diagnostics.performance"] = true;
+      throw restoreError;
+    }
+    return originalRun(name, params);
+  };
+  await assert.rejects(runInMode(session, async () => { throw actionError; }), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.deepEqual(error.errors, [actionError, restoreError]);
+    return true;
+  });
+  assert.equal(values["diagnostics.performance"], false);
+  assert.deepEqual(values["diagnostics.log"], logPolicy);
+});
+
+test("terminal drag trace mode restores performance even when post-action settings cannot be read", { timeout: 5000 }, async () => {
+  const runInMode = terminalCase.withTerminalDragTraceMode;
+  assert.equal(typeof runInMode, "function", "terminal drag must expose its production trace-mode boundary");
+  const { session, calls, values } = terminalTraceModeSession({ performanceTrace: true, logPolicy: { frame: "trace" } });
+  const stateError = new Error("post-action settings read failed");
+  const originalGet = session.get;
+  let reads = 0;
+  session.get = async (name) => {
+    reads++;
+    if (reads === 3) throw stateError;
+    return originalGet(name);
+  };
+  await assert.rejects(runInMode(session, async () => "captured"), (error) => error === stateError);
+  assert.deepEqual(calls.map(({ params }) => params.value), [false, true]);
+  assert.equal(values["diagnostics.performance"], true);
+});
+
+test("terminal drag trace mode restores performance before reporting a changed log policy", { timeout: 5000 }, async () => {
+  const runInMode = terminalCase.withTerminalDragTraceMode;
+  assert.equal(typeof runInMode, "function", "terminal drag must expose its production trace-mode boundary");
+  const { session, calls, values } = terminalTraceModeSession({ performanceTrace: true, logPolicy: { frame: "trace" } });
+  await assert.rejects(runInMode(session, async () => {
+    values["diagnostics.log"] = {};
+    return "captured";
+  }), /terminal drag requires the frame trace log policy/);
+  assert.deepEqual(calls.map(({ params }) => params.value), [false, true]);
+  assert.equal(values["diagnostics.performance"], true);
+});
+
+test("terminal drag trace mode preserves falsy action rejection values", { timeout: 5000 }, async () => {
+  for (const failure of [null, undefined, 0]) {
+    const { session, values } = terminalTraceModeSession({ performanceTrace: true, logPolicy: { frame: "trace" } });
+    await assert.rejects(runTerminalTraceMode(session, async () => { throw failure; }),
+      (error) => error === failure);
+    assert.equal(values["diagnostics.performance"], true);
+  }
+});
+
+async function runTerminalTraceMode(session, action) {
+  const runInMode = terminalCase.withTerminalDragTraceMode;
+  assert.equal(typeof runInMode, "function", "terminal drag must expose its production trace-mode boundary");
+  return runInMode(session, action);
+}
 
 function terminalLayoutFrame({ cardLeft, rootLeft, time, contentColor = TERMINAL_GEOMETRY_BACKGROUND }) {
   const width = 1024;

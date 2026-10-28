@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-243: Scope Terminal continuous-drag measurement to the required source-frame log and capture evidence while disabling the unrelated global performance tracer. Preserve process and one-shot layout tracing, record before/during/after phase mode, and restore the exact setting before reclaim sampling. Prepare owner cases for policy preservation, restoration failures and falsy thrown values. Validation has not run; cadence, geometry and convergence criteria remain unchanged.
+
 - F239-242: Accept the rebuilt macOS arm64 capture lifecycle on both hosts. Both window cases pass with six independent finalized recordings, unchanged retained bytes, zero application-log findings, normal exits and restored foreground baseline. This validates writer lifecycle; the full drag capacity and performance measurement remains separate.
 
 - F239-242: Give diagnostic source artifacts a serial writer independent of captured-frame compression and writes. Keep the existing pending-byte and history bounds. The controlled held-frame-writer owner fails before correction and passes after source records and their manifest progress independently. Replacement setup and stop-intake owners pass after correcting queue retirement; finalization drains and releases both owned writers. Application capacity and latency acceptance remain pending.

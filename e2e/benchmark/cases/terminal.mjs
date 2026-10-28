@@ -88,6 +88,84 @@ export function terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt) {
   };
 }
 
+async function terminalTraceModeSnapshot(s) {
+  const settings = await s.get("core.settings");
+  const values = settings?.values;
+  const performanceTrace = values?.["diagnostics.performance"];
+  const logPolicy = values?.["diagnostics.log"];
+  assert.equal(typeof performanceTrace, "boolean", "terminal drag performance setting must be boolean");
+  assert.ok(logPolicy && typeof logPolicy === "object" && !Array.isArray(logPolicy),
+    "terminal drag log policy must be an object");
+  assert.equal(logPolicy.frame, "trace", "terminal drag requires the frame trace log policy");
+  return { performanceTrace, logPolicy: structuredClone(logPolicy) };
+}
+
+/** Disables only the global performance trace while the terminal content-frame drag is measured. */
+export async function withTerminalDragTraceMode(s, action) {
+  assert.equal(typeof action, "function", "terminal drag trace-mode action is required");
+  const before = await terminalTraceModeSnapshot(s);
+  let during;
+  let result;
+  let actionFailed = false;
+  let actionError;
+  try {
+    if (before.performanceTrace) {
+      await s.run("core.settings.change", {
+        key: "diagnostics.performance", value: false, scope: "common",
+      });
+    }
+    during = await terminalTraceModeSnapshot(s);
+    assert.equal(during.performanceTrace, false, "terminal drag performance trace remained enabled");
+    assert.deepEqual(during.logPolicy, before.logPolicy, "terminal drag log policy changed before measurement");
+    result = await action();
+  } catch (error) {
+    actionFailed = true;
+    actionError = error;
+  }
+
+  let after;
+  const restoreErrors = [];
+  try {
+    await s.run("core.settings.change", {
+      key: "diagnostics.performance", value: before.performanceTrace, scope: "common",
+    });
+  } catch (error) {
+    restoreErrors.push(error);
+  }
+  try {
+    after = await terminalTraceModeSnapshot(s);
+    assert.equal(after.performanceTrace, before.performanceTrace,
+      "terminal drag performance setting was not restored");
+    assert.deepEqual(after.logPolicy, before.logPolicy, "terminal drag log policy was not preserved");
+  } catch (error) {
+    restoreErrors.push(error);
+  }
+
+  const restoreFailed = restoreErrors.length > 0;
+  const restoreError = restoreErrors.length === 1 ? restoreErrors[0]
+    : restoreFailed ? new AggregateError(restoreErrors, "terminal drag trace-mode restoration failed") : undefined;
+  if (actionFailed && restoreFailed) {
+    throw new AggregateError([actionError, restoreError], "terminal drag and trace-mode restoration failed");
+  }
+  if (actionFailed) throw actionError;
+  if (restoreFailed) throw restoreError;
+  return {
+    result,
+    phaseMode: {
+      performanceTrace: {
+        before: before.performanceTrace,
+        during: during.performanceTrace,
+        after: after.performanceTrace,
+      },
+      logPolicy: {
+        before: before.logPolicy,
+        during: during.logPolicy,
+        after: after.logPolicy,
+      },
+    },
+  };
+}
+
 /** Preserves one source document size update and its mapped capture time without assigning a native readback. */
 export function terminalSourceContentFrame(source, displayFrame, displayCapture = null) {
   const frameIndex = source.frameIndex;
@@ -245,8 +323,9 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   assert.ok(pane, `terminal measurement card ${card} is absent before drag`);
   const plan = rightEdgeWidthDragPlan(beforeGrid, pane);
   await s.presented();
-  const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
-    drag(t, s, plan, { capture: true }));
+  const measurement = await withTerminalDragTraceMode(s, () =>
+    withViewContentTrace(t, s, descriptor, surface, async () => drag(t, s, plan, { capture: true })));
+  const traced = measurement.result;
   const run = traced.action;
   mkdirSync(join(configDir, "logs"), { recursive: true });
   const directory = mkdtempSync(join(configDir, "logs", "terminal-view-drag-"));
@@ -308,6 +387,7 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
     tailGeometryFrames,
     contentFrames: sourceFrames,
     sourceContentFrames: traced.contentFrames,
+    phaseMode: measurement.phaseMode,
     rootSlotInsetsPt,
     layouts: run.layouts,
     ticks: run.ticks,

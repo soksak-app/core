@@ -254,3 +254,5 @@ The private `WKNavigationDelegatePrivate` selectors `_webViewWebProcessDidBecome
 | `runtime.theme`, `runtime.settings`, `runtime.textSize`, `status.subscribe`, `events.on` | events |
 | `contributions(point)` | synchronous list of modules, imported from the core root |
 | `exposure`, binder | unchanged in the view. Registration goes through the channel |
+
+Terminal continuous-drag measurements disable the global performance tracer only after process and one-shot layout evidence has been collected. They retain the explicit source-frame observer, its `frame: trace` log gate, clock brackets, input and captured pixels. The setting command must complete before the observer and gesture begin. Recording and observer stop and event flushing remain inside this mode; the exact saved performance setting is restored before reclaim collection, including failed actions. The measured artifact states this phase mode and the unchanged log policy. This excludes unrelated profiling work from the timed gesture without changing cadence, geometry or convergence criteria.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-243: Terminal continuous-drag 측정에 필요한 source-frame log와 capture 증거를 유지하며 무관한 전역 performance tracer를 끈다. Process와 one-shot layout trace를 유지하고 전·중·후 phase mode를 기록하며 reclaim sampling 전에 정확한 설정을 복원한다. Policy 보존, 복원 오류 및 falsy throw 소유 case를 준비한다. 검증은 실행하지 않았으며 cadence, geometry 및 convergence 기준은 유지한다.
+
 - F239-242: 재빌드한 macOS arm64 양 host의 capture lifecycle을 확인한다. 독립적으로 finalize한 recording 6개, 보존 byte 불변, app log finding 0, 정상 종료 및 foreground baseline 복원으로 양 window case가 통과한다. Writer lifecycle을 검증하며 전체 drag capacity와 성능 측정은 별도로 유지한다.
 
 - F239-242: Diagnostic source artifact에 captured-frame 압축 및 쓰기와 독립적인 serial writer를 둔다. 기존 pending-byte 및 history bound를 유지한다. Frame writer를 제어해 대기시키는 소유 검사는 수정 전에 실패하고 source record와 manifest가 독립적으로 진행한 뒤 통과한다. Queue retirement를 수정한 뒤 replacement setup과 stop-intake 소유 검사도 통과하며 finalization은 양 writer를 drain하고 해제한다. 애플리케이션 capacity와 latency acceptance는 아직 미완료다.

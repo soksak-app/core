@@ -11,9 +11,9 @@
 The source audits use the matching current SDK's public commands. Older installed SDK readers reject schema 3; their default command is not reported as passing. These are local development results. Publication and historical failure-closure tasks retain their own checklist states.
 
 
-The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 39 rows: 9 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
+The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 40 rows: 10 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
 
-- **Current measurement and check corrections: 3** — F239-223, F239-223-3, F239-233
+- **Current measurement and check corrections: 4** — F239-223, F239-223-3, F239-233, F239-243
 - **Reported failures and historical closure audits: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1 through F266.3, F266.5 through F266.7 and F266.9 through F266.13
 - **Performance measurements: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package installation and publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -24,6 +24,8 @@ These rows retain their individual requirements and states. A passing functional
 The most recent Terminal drag measurement before F239-241 and F239-242 fails cadence at 73/65 ms on Wails/Tauri and fails convergence on both hosts; geometry passes at 0.5 pt. It also records 29 source-retention capacity errors and the shared plugin-host logging regression. The subsequent channel and capture-lifecycle passes do not establish new drag-performance acceptance.
 
 The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains seven measured failures and one refused collection. Browser source-frame gaps are 51/34 ms on Wails/Tauri, Editor 50/34 ms, HWP 34/34 ms, and Wails Terminal 71 ms. Tauri Terminal refuses synthetic drag because its window is active and establishes no drag result. HWP footprint passes on both hosts: 571,791,024 bytes against 581,004,760 allowed on Wails, and 568,760,032 against 569,847,184 on Tauri. HWP adjusted first display still fails at 1616.594/1755.235 ms against 1001/1113 ms. Source gaps are observer intervals, not measured input-to-display latency. The independent F239-238 evaluator reports convergence passes for Browser and Editor on both hosts and failures for HWP on both hosts and Wails Terminal in a diagnostic replay of retained measurements. Tauri Terminal has no convergence result. This replay is not a new application acceptance run. Both hosts exit normally, error-log audits pass, and the original frontmost baseline is restored. F239-223 and F239-233 remain open; no product memory optimization or common latency cause is inferred.
+
+- [~] F239-243 — P1, linked to F239-223: Disable unrelated global performance tracing only during Terminal continuous-drag measurement while retaining required source-frame logging and capture. Keep tracing through process and one-shot layout collection, restore the saved value on success and failure before reclaim collection, and preserve the measured mode. Verify phase state, restoration and error retention through owner Red/Green without changing the 33 ms, 2 pt or two-frame criteria. Implementation is ready; validation is pending.
 
 - [o] F239-242 — P1, linked to F239-223: Write diagnostic source artifacts on a serial writer independent of the frame writer. Preserve the 64 MiB pending/history bounds and drop reporting. Controlled held-frame-writer Red/Green, replacement callback and stop-intake owners pass. Both rebuilt macOS arm64 hosts pass consecutive-capture window cases, preserving all six recordings and reporting zero application-log findings, normal exit, removed endpoints and restored shared foreground baseline. Retain the earlier 29 capacity errors without inferring full drag-performance acceptance.
 
