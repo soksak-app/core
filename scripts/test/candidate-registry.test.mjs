@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import test from "node:test";
-import { verifyCandidateRegistry } from "../check-candidate-registry.mjs";
+import * as candidateRegistry from "../check-candidate-registry.mjs";
+
+const { verifyCandidateRegistry } = candidateRegistry;
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const revision = (letter) => letter.repeat(40);
@@ -50,13 +52,26 @@ function fixture() {
 
 const identity = { coreVersion: "0.0.21", apiTree: tree };
 
+function gitSdkFixture(t) {
+  const root = mkdtempSync(join(tmpdir(), "candidate-sdk-identity-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const packageDir = join(root, "packages", "plugin-api");
+  mkdirSync(packageDir, { recursive: true });
+  writeFileSync(join(packageDir, "package.json"), JSON.stringify({ name: "@soksak/plugin-api", version: "0.0.21" }));
+  writeFileSync(join(packageDir, "index.js"), "export const version = '0.0.21';\n");
+  execFileSync("git", ["-C", root, "init", "-q"]);
+  execFileSync("git", ["-C", root, "add", "packages/plugin-api/package.json", "packages/plugin-api/index.js"]);
+  execFileSync("git", ["-C", root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
+  return { root, packageDir };
+}
+
 test("candidate proof and index pass when SDK and all declared projections match", { timeout: 5000 }, () => {
   const current = fixture();
   assert.deepEqual(verifyCandidateRegistry(current.indexBytes, current.proofBytes, identity), {
     coreVersion: "0.0.21",
     plugins: 1,
     sidecars: 1,
-    manifestChecked: 1,
+    producerReportedManifestCount: 1,
   });
 });
 
@@ -82,6 +97,42 @@ test("the proof index digest binds the exact candidate index bytes", { timeout: 
   const current = fixture();
   current.indexBytes = Buffer.concat([current.indexBytes, Buffer.from(" ")]);
   assert.throws(() => verifyCandidateRegistry(current.indexBytes, current.proofBytes, identity), /proof indexSha256/);
+});
+
+test("the current SDK identity requires a nonempty version", { timeout: 5000 }, () => {
+  const absentIdentity = fixture();
+  delete absentIdentity.proof.candidateSdk.apiVersion;
+  delete absentIdentity.proof.candidateCoreVersion;
+  absentIdentity.proofBytes = Buffer.from(JSON.stringify(absentIdentity.proof));
+  assert.throws(() => verifyCandidateRegistry(absentIdentity.indexBytes, absentIdentity.proofBytes, { apiTree: tree }), /current SDK identity/);
+});
+
+test("proof revision and digest metadata must be strings", { timeout: 5000 }, () => {
+  for (const [mutate, message] of [
+    [(proof) => { proof.registrySourceRevision = [revision("a")]; }, /registrySourceRevision must be a full Git commit id/],
+    [(proof) => { proof.candidateSdk.sourceRevision = [revision("c")]; }, /sourceRevision must be a full Git commit id/],
+    [(proof) => { proof.preservedCoreJsonSha256 = ["a".repeat(64)]; }, /preservedCoreJsonSha256 must be a SHA-256 digest/],
+    [(proof) => { proof.candidateSdk.apiTree = [tree]; }, /apiTree must be a full Git tree id/],
+    [(proof) => { proof.candidateSdk.apiVersion = ["0.0.21"]; }, /candidate SDK versions must be nonempty strings/],
+    [(proof) => { proof.candidateCoreVersion = ["0.0.21"]; }, /candidate SDK versions must be nonempty strings/],
+  ]) {
+    const current = fixture();
+    mutate(current.proof);
+    current.proofBytes = Buffer.from(JSON.stringify(current.proof));
+    assert.throws(() => verifyCandidateRegistry(current.indexBytes, current.proofBytes, identity), message);
+  }
+});
+
+test("the SDK identity reader rejects tracked edits and untracked source files", { timeout: 5000 }, (t) => {
+  const reader = candidateRegistry.readCurrentIdentity;
+  assert.equal(typeof reader, "function", "the SDK identity reader must be testable against a disposable Git checkout");
+  const fixtureRoot = gitSdkFixture(t);
+  assert.equal(reader(fixtureRoot.root).coreVersion, "0.0.21");
+  writeFileSync(join(fixtureRoot.packageDir, "index.js"), "export const version = 'changed';\n");
+  assert.throws(() => reader(fixtureRoot.root), /SDK package has uncommitted source changes/);
+  writeFileSync(join(fixtureRoot.packageDir, "index.js"), "export const version = '0.0.21';\n");
+  writeFileSync(join(fixtureRoot.packageDir, "new-source.js"), "export const source = true;\n");
+  assert.throws(() => reader(fixtureRoot.root), /SDK package has uncommitted source changes/);
 });
 
 test("the candidate index and proof reject unknown wire formats", { timeout: 5000 }, () => {
@@ -153,7 +204,7 @@ test("a candidate with no sidecar replacements still requires a nonempty plugin 
     coreVersion: "0.0.21",
     plugins: 1,
     sidecars: 0,
-    manifestChecked: 1,
+    producerReportedManifestCount: 1,
   });
 });
 
@@ -243,5 +294,6 @@ test("the CLI requires explicit index and proof URLs with SHA-256 pins", { timeo
     "--proof", proofUrl, "--proof-sha256", digest(current.proofBytes),
   ], { encoding: "utf8", timeout: 4000 });
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
-  assert.match(result.stdout, /Candidate registry check passed/);
+  assert.match(result.stdout, /Candidate registry proof check passed/);
+  assert.match(result.stdout, /producer-reported manifest count 1/);
 });

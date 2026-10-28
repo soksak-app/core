@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-273-1: Proof identity/digest metadata의 문자열 형식, 비어 있지 않은 current SDK version, HEAD tree를 쓰기 전의 clean tracked/untracked SDK package를 요구한다. 성공 결과를 candidate proof 검사로 이름 붙이고 manifest count를 producer 보고값으로 표시하며 release-manifest 검사는 분리한다. 소유 Red는 coercion, identity 누락, dirty SDK 수용, 오해를 부르는 출력을 재현하고 Green은 14/14다.
+
 - F239-273: 명시적 index/proof URL과 SHA-256 pin을 요구하는 standalone candidate registry consumer를 추가한다. Parsing 전에 양쪽 byte stream을 검사하고 proof를 정확한 index bytes에 결합한 뒤 SDK version/tree, core version 집합, component replacement, revocation projection과 manifest count를 비교한다. Core revocation member가 없으면 빈 목록으로 취급하고 비어 있지 않은 목록은 정확히 비교한다. Public-index 검사는 유지하고 release artifact와 manifest 검증은 기존 검사에 맡긴다. 소유 test 11/11, parity 및 문서 검사가 통과한다. Candidate pin이나 release workflow 변경은 포함하지 않는다.
 
 - F239-274: Push gate가 거부한 image wait method와 소유 assertion에 repository Rust formatter를 적용한다. Workspace format 검사가 통과한다. Diff는 배치와 trailing comma만 바꾸므로 기존 소유 결과가 계속 적용된다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-273-1: Require string-typed proof identity and digest metadata, a nonempty current SDK version, and a clean tracked/untracked SDK package before using its HEAD tree. Name success as a candidate proof check and identify the manifest count as producer-reported; keep release-manifest validation separate. Owner Reds reproduce coercion, missing identity, dirty SDK acceptance and misleading output; Green passes 14/14.
+
 - F239-273: Add a standalone candidate registry consumer requiring explicit index and proof URLs with SHA-256 pins. Verify both byte streams before parsing and bind the proof to the exact index bytes, then compare its SDK version/tree, core version set, component replacements, revocation projection and manifest count. Treat an absent core revocation member as an empty list and compare nonempty lists exactly. Preserve the public-index check and delegate release artifact and manifest validation to the existing check. Owner tests pass 11/11; parity and documentation checks pass. No candidate pins or release workflow changes are included.
 
 - F239-274: Apply the repository Rust formatter to the image wait method and owner assertions rejected by the push gate. The workspace format check passes; the diff changes only layout and trailing commas, so existing owner results remain applicable.

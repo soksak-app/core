@@ -3190,7 +3190,7 @@ const FEATURE_LINKS = [
     id: "F239-273",
     implementation: [
       { file: "scripts/check-candidate-registry.mjs", symbol: "export function verifyCandidateRegistry" },
-      { file: "scripts/check-candidate-registry.mjs", symbol: "function currentIdentity()" },
+      { file: "scripts/check-candidate-registry.mjs", symbol: "export function readCurrentIdentity(root = ROOT)" },
     ],
     tests: [
       { file: "scripts/test/candidate-registry.test.mjs", id: "candidate proof and index pass when SDK and all declared projections match" },
@@ -3206,6 +3206,22 @@ const FEATURE_LINKS = [
       { file: "scripts/test/candidate-registry.test.mjs", id: "the CLI requires explicit index and proof URLs with SHA-256 pins" },
     ],
     expected: "A candidate index and proof are fetched only from explicit URLs with pinned SHA-256 values and verified before JSON parsing. The proof must bind the exact index bytes, current SDK version and API tree, preserved core version set, component replacements, revocation projection and nonempty exact manifest-check count. The existing public-index release check is unchanged.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-273-1",
+    implementation: [
+      { file: "scripts/check-candidate-registry.mjs", symbol: "export function readCurrentIdentity(root = ROOT)" },
+      { file: "scripts/check-candidate-registry.mjs", symbol: "typeof proof.registrySourceRevision !== \"string\"" },
+      { file: "scripts/check-candidate-registry.mjs", symbol: "producer-reported manifest count" },
+    ],
+    tests: [
+      { file: "scripts/test/candidate-registry.test.mjs", id: "the current SDK identity requires a nonempty version" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "proof revision and digest metadata must be strings" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "the SDK identity reader rejects tracked edits and untracked source files" },
+      { file: "scripts/test/candidate-registry.test.mjs", id: "the CLI requires explicit index and proof URLs with SHA-256 pins" },
+    ],
+    expected: "Reject non-string identity metadata and a missing current SDK version, reject tracked and untracked SDK package changes before trusting the HEAD tree, and label the candidate proof result and producer-reported manifest count without claiming that this check ran plugin release-manifest validation.",
     levels: ["unit"],
   },
   {

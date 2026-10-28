@@ -150,15 +150,33 @@ export function verifyCandidateRegistry(indexBytes, proofBytes, identity, expect
   object(proof, "candidate proof");
   if (index.format !== 1) fail(`candidate index format ${index.format} is unsupported`);
   if (proof.format !== 1) fail(`candidate proof format ${proof.format} is unsupported`);
-  if (!REVISION.test(proof.registrySourceRevision ?? "")) fail("candidate proof registrySourceRevision must be a full Git commit id");
-  if (!HASH.test(proof.indexSha256 ?? "") || proof.indexSha256 !== sha256(indexBytes)) {
+  if (typeof proof.registrySourceRevision !== "string" || !REVISION.test(proof.registrySourceRevision)) {
+    fail("candidate proof registrySourceRevision must be a full Git commit id");
+  }
+  if (typeof proof.indexSha256 !== "string" || !HASH.test(proof.indexSha256) || proof.indexSha256 !== sha256(indexBytes)) {
     fail("candidate proof indexSha256 does not match the candidate index bytes");
   }
-  if (!HASH.test(proof.preservedCoreJsonSha256 ?? "")) fail("candidate proof preservedCoreJsonSha256 must be a SHA-256 digest");
+  if (typeof proof.preservedCoreJsonSha256 !== "string" || !HASH.test(proof.preservedCoreJsonSha256)) {
+    fail("candidate proof preservedCoreJsonSha256 must be a SHA-256 digest");
+  }
 
   const sdk = object(proof.candidateSdk, "candidate proof candidateSdk");
-  if (!REVISION.test(sdk.sourceRevision ?? "")) fail("candidate SDK sourceRevision must be a full Git commit id");
-  if (!REVISION.test(sdk.apiTree ?? "")) fail("candidate proof candidateSdk.apiTree must be a full Git tree id");
+  if (typeof sdk.sourceRevision !== "string" || !REVISION.test(sdk.sourceRevision)) {
+    fail("candidate SDK sourceRevision must be a full Git commit id");
+  }
+  if (typeof sdk.apiTree !== "string" || !REVISION.test(sdk.apiTree)) {
+    fail("candidate proof candidateSdk.apiTree must be a full Git tree id");
+  }
+  if (typeof identity?.coreVersion !== "string" || identity.coreVersion === "") {
+    fail("current SDK identity requires a nonempty core version");
+  }
+  if (typeof identity.apiTree !== "string" || !REVISION.test(identity.apiTree)) {
+    fail("current SDK identity requires a full API tree id");
+  }
+  if (typeof sdk.apiVersion !== "string" || sdk.apiVersion === "" ||
+      typeof proof.candidateCoreVersion !== "string" || proof.candidateCoreVersion === "") {
+    fail("candidate SDK versions must be nonempty strings");
+  }
   if (sdk.apiVersion !== identity.coreVersion || proof.candidateCoreVersion !== identity.coreVersion) {
     fail(`candidate SDK version ${sdk.apiVersion}/${proof.candidateCoreVersion} differs from current SDK ${identity.coreVersion}`);
   }
@@ -186,7 +204,7 @@ export function verifyCandidateRegistry(indexBytes, proofBytes, identity, expect
     coreVersion: identity.coreVersion,
     plugins: pluginCount,
     sidecars: sidecarCount,
-    manifestChecked: proof.candidateManifestChecked,
+    producerReportedManifestCount: proof.candidateManifestChecked,
   };
 }
 
@@ -218,9 +236,14 @@ async function fetchBytes(url, label) {
   }
 }
 
-function currentIdentity() {
-  const packageJson = JSON.parse(readFileSync(join(ROOT, "packages/plugin-api/package.json"), "utf8"));
-  const apiTree = execFileSync("git", ["-C", ROOT, "rev-parse", "HEAD:packages/plugin-api"], { encoding: "utf8" }).trim();
+export function readCurrentIdentity(root = ROOT) {
+  const packageJson = JSON.parse(readFileSync(join(root, "packages/plugin-api/package.json"), "utf8"));
+  if (typeof packageJson.version !== "string" || packageJson.version === "") {
+    fail("current SDK package version must be a nonempty string");
+  }
+  const changes = execFileSync("git", ["-C", root, "status", "--porcelain", "--untracked-files=all", "--", "packages/plugin-api"], { encoding: "utf8" }).trim();
+  if (changes !== "") fail(`SDK package has uncommitted source changes: ${changes.replaceAll("\n", ", ")}`);
+  const apiTree = execFileSync("git", ["-C", root, "rev-parse", "HEAD:packages/plugin-api"], { encoding: "utf8" }).trim();
   return { coreVersion: packageJson.version, apiTree };
 }
 
@@ -245,11 +268,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (!HASH.test(values["proof-sha256"])) fail("--proof-sha256 must be 64 lowercase hexadecimal characters");
     const indexBytes = await fetchBytes(values.index, "candidate index");
     const proofBytes = await fetchBytes(values.proof, "candidate proof");
-    const result = verifyCandidateRegistry(indexBytes, proofBytes, currentIdentity(), {
+    const result = verifyCandidateRegistry(indexBytes, proofBytes, readCurrentIdentity(), {
       indexSha256: values["index-sha256"],
       proofSha256: values["proof-sha256"],
     });
-    console.log(`Candidate registry check passed: core ${result.coreVersion}, ${result.plugins} plugins, ${result.sidecars} sidecars, ${result.manifestChecked} candidate manifests`);
+    console.log(`Candidate registry proof check passed: core ${result.coreVersion}, ${result.plugins} plugin replacements, ${result.sidecars} sidecar replacements, producer-reported manifest count ${result.producerReportedManifestCount}`);
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;
