@@ -222,11 +222,12 @@ function updateCard(el, card, rect) {
   // declaration with the value 1 raised the cost for WebKit to redraw the surface content and reduced the display during a drag.
   const textZoom = value("textSize") * cardTextSize(card);
   if (textZoom === 1) {
-    delete el.dataset.textZoom;
-    el.style.removeProperty("--text-zoom");
+    if (el.dataset.textZoom !== undefined) delete el.dataset.textZoom;
+    if (el.style.getPropertyValue("--text-zoom") !== "") el.style.removeProperty("--text-zoom");
   } else {
-    el.dataset.textZoom = "";
-    el.style.setProperty("--text-zoom", String(textZoom));
+    if (el.dataset.textZoom !== "") el.dataset.textZoom = "";
+    const zoom = String(textZoom);
+    if (el.style.getPropertyValue("--text-zoom") !== zoom) el.style.setProperty("--text-zoom", zoom);
   }
   setData(el, "role", card.fixed ? "fixed" : "pane");
   setData(el, "focused", String(card.id === focusedId));

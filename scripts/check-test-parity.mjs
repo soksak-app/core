@@ -8695,6 +8695,13 @@ const FEATURE_LINKS = [
     expected: "Stable redraws preserve state attributes without redundant mutation while actual focus, slot, availability and fullscreen changes remain visible.",
     levels: ["unit"],
   },
+  {
+    id: "F239-267",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "function updateCard" }],
+    tests: [{ file: "packages/workbench/test/plane-stale-layout.test.mjs", id: "a held layout draw survives the close of a card it contains" }],
+    expected: "Stable text zoom state does not repeat DOM writes during layout redraws while scale changes apply and clear the marker and property.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

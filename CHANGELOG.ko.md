@@ -12,6 +12,8 @@
 
 - F239-265: Layout redraw에서 같은 card, tool, native-slot state attribute를 다시 쓰지 않는다. 소유 DOM Red는 state 변경 없는 반복 attribute 변경을 기록하며 Green은 중복 쓰기 없이 focus, slot, availability, fullscreen 전환을 보존한다. Mounting과 transaction 순서를 유지하며 application cadence 결과는 추론하지 않는다.
 
+- F239-267: 유효 text zoom이 바뀌지 않으면 marker와 CSS property를 반복해서 쓰지 않는다. Plane 소유 검사는 redraw 중 불필요한 property 대입을 재현하고 안정값 guard 후 통과하며 기본 배율과 확대 배율 전환도 유지한다. 이 변경만으로 application cadence 개선을 입증하지 않는다.
+
 - F239-264: 공용 의존성이 같은 build 환경을 사용하도록 Tauri application뿐 아니라 bundled CLI에도 선언된 Cargo deployment target을 적용한다. Expanded-command 소유 검사는 누락된 assignment를 재현하며 선언된 minimum과 다른 ambient target에서 debug와 release 모두 통과한다.
 
 - F239-263: Request-local declaration 전송의 두 host application acceptance를 완료한다. 두 host는 application-log finding 0건과 geometry 오차 0.4 pt로 wire 형식을 수락하며 전면 baseline 복원과 정상 종료를 확인한다. View 아홉 개의 declaration component는 125,733에서 22,101 byte로 줄었다. Cadence 50/79 ms와 convergence 실패는 별도로 유지한다. 전송 감소는 그 acceptance를 입증하지 않는다.

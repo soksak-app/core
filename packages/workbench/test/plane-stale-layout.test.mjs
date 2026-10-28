@@ -83,11 +83,54 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
     observer.disconnect();
     assert.deepEqual(stableMutations.map(({ attributeName }) => attributeName), [],
       "an unchanged redraw must not rewrite stable card or slot state attributes");
+    const setCardTextSize = (textSize) => plane.currentGrid().setData("main", {
+      ...plane.currentGrid().card("main").data, textSize,
+    });
+    setCardTextSize(1.5);
+    plane.settle();
+    held.draw();
+    assert.equal(stableCard.dataset.textZoom, "", "a changed card text factor was not declared");
+    assert.equal(stableCard.style.getPropertyValue("--text-zoom"), "1.5", "a changed card text factor was not applied");
+    let textZoomSetCalls = 0;
+    const stylePrototype = Object.getPrototypeOf(stableCard.style);
+    const setProperty = stylePrototype.setProperty;
+    stylePrototype.setProperty = function(name, ...args) {
+      if (this === stableCard.style && name === "--text-zoom") textZoomSetCalls += 1;
+      return setProperty.call(this, name, ...args);
+    };
+    const textZoomMutations = [];
+    const textZoomObserver = new dom.window.MutationObserver((records) => textZoomMutations.push(...records));
+    textZoomObserver.observe(stableCard, { attributes: true, attributeFilter: ["data-text-zoom", "style"] });
     const replacementTab = plane.addTabTo("main", pluginId, null);
+    held.draw();
+    await Promise.resolve();
+    textZoomObserver.disconnect();
+    assert.equal(textZoomSetCalls, 0, "an unchanged card text factor must not call CSSStyleDeclaration.setProperty");
+    assert.deepEqual(textZoomMutations.map(({ attributeName }) => attributeName), [],
+      "an unchanged card text factor must not rewrite its DOM state");
+    stylePrototype.setProperty = setProperty;
+    setCardTextSize(1);
+    plane.settle();
+    held.draw();
+    assert.equal(stableCard.dataset.textZoom, undefined, "resetting card text scale did not remove its marker");
+    assert.equal(stableCard.style.getPropertyValue("--text-zoom"), "", "resetting card text scale did not remove its property");
+    let textZoomRemoveCalls = 0;
+    const removeProperty = stylePrototype.removeProperty;
+    stylePrototype.removeProperty = function(name, ...args) {
+      if (this === stableCard.style && name === "--text-zoom") textZoomRemoveCalls += 1;
+      return removeProperty.call(this, name, ...args);
+    };
+    const { card, tab } = plane.splitCard("main", "right", pluginId);
+    held.draw();
+    assert.equal(textZoomRemoveCalls, 0, "an unchanged default card text factor must not call CSSStyleDeclaration.removeProperty");
+    stylePrototype.removeProperty = removeProperty;
+    setCardTextSize(1.5);
+    plane.settle();
+    held.draw();
+    assert.equal(stableCard.style.getPropertyValue("--text-zoom"), "1.5", "increasing card text scale did not restore its property");
     held.draw();
     assert.equal(stableSlot.dataset.nativeSurfaceId, replacementTab,
       "a changed active tab did not update the slot identity");
-    const { card, tab } = plane.splitCard("main", "right", pluginId);
     assert.ok(plane.currentGrid().card(card), "the split made no card");
     held.draw();
     assert.equal(planeEl.querySelector(`.card[data-card-id="${card}"]`).dataset.focused, "true",
