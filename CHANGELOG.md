@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-256: Flush startup records before constructing the earlier-run retention fixture so startup rotation cannot delete files while their timestamps are prepared. The integrated owner fails with NotFound before correction and the same focused owner passes after it. Production retention is unchanged.
+
 - F239-257: Correct the capture identity cleanup test to expect selection to remain disabled after clear and verify that the same recording rejects a second source. The owning test fails with the old expectation and passes after correction; production behavior is unchanged.
 
 - F239-254: Align host contract declarations with the current owner assertions and complete the matching Korean table. Register exact shared coverage, retain host-specific implementation reasons, verify poisoned receiver preservation and recording-state recovery, and strengthen the Wails ready-view writer assertions. Restore completed capability links and classify fixture, formatting and lint maintenance under the existing non-capability policy. Focused owners and structural inventories pass; integrated host execution remains separate.

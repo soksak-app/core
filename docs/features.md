@@ -27,6 +27,8 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
 
 - [o] F239-247 — P2, linked to F239-245: Detect the pre-existing map_or and map_or_else default-handler omissions in the lock and condition-wait census. Reproduce two lock and two wait counterexamples in the owning fixture while preserving current propagation and recovery acceptance.
 
+- [o] F239-256 — P1: Flush startup log records before constructing the prior-run retention fixture. Red: startup rotation prunes a partially written fixture and timestamp preparation fails with NotFound. Green: the same owning test passes after the flush barrier completes startup retention before fixture creation. Production retention is unchanged.
+
 - [o] F239-257 — P1: Align capture identity cleanup acceptance with the one-source-per-recording contract. The integrated stale expectation fails before correction; the same owning test passes after asserting disabled selection and rejection of a second source after clear. Production behavior is unchanged.
 
 - [~] F239-254 — P1: Reconcile current host test contract declarations, completed-feature links and the shared contract table before the integrated host run. Classify undefined identifiers and the table entry without a source against current specifications and actual assertions. Preserve shared behavior coverage and explicit host-specific reasons; do not bypass declaration checks or infer coverage from test names.

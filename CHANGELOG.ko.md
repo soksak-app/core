@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-256: 이전 run retention fixture 생성 전에 startup 기록을 flush해 timestamp 준비 중 startup rotation이 파일을 제거하지 못하게 한다. 통합 소유 검사는 수정 전 NotFound로 실패하고 같은 집중 소유 검사는 수정 후 통과한다. Production retention은 바뀌지 않는다.
+
 - F239-257: Capture identity cleanup 검사가 clear 뒤에도 선택 비활성 상태를 기대하고 같은 recording의 두 번째 source를 거절하는지 확인하도록 수정한다. 소유 검사는 기존 기대값에서 실패하고 수정 후 통과하며 production 동작은 바뀌지 않는다.
 
 - F239-254: Host contract 선언을 현재 소유 assertion에 맞추고 대응하는 한국어 table을 완성한다. 정확한 공유 coverage를 등록하고 host별 구현 사유를 유지하며 poison된 receiver 보존과 recording 상태 복구를 검증하고 Wails ready-view writer assertion을 보강한다. 완료 capability link를 복원하고 fixture, formatting 및 lint maintenance는 기존 non-capability 정책으로 분류한다. 집중 소유 검사와 구조 inventory는 통과하며 통합 host 실행은 별도로 남는다.

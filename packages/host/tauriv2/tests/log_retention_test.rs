@@ -248,6 +248,8 @@ fn a_rotation_runs_the_retention_again() {
     opts.queue_events = 200;
     let log = event_log::start(opts).unwrap();
     records::store_every_level(&log);
+    // Finish startup records before the fixture appears so a startup rotation cannot prune a partially written earlier run.
+    log.flush(Duration::from_secs(5)).unwrap();
     // An earlier run appears after the start; the first rotation finds the files past the bound and removes it.
     run(
         &logs,

@@ -27,6 +27,8 @@ F239-241과 F239-242 전의 최신 Terminal drag 측정은 Wails/Tauri cadence 7
 
 - [o] F239-247 — P2, F239-245 연결: 기존 lock/condition-wait census에서 누락된 map_or 및 map_or_else default handler를 검출한다. 두 lock 및 두 wait 반례를 소유 fixture로 재현하고 현재 propagation/recovery 허용은 유지한다.
 
+- [o] F239-256 — P1: Prior-run retention fixture를 구성하기 전에 startup log 기록을 flush한다. Red: Startup rotation이 생성 중인 fixture를 제거해 timestamp 준비가 NotFound로 실패한다. Green: Flush barrier로 fixture 생성 전에 startup retention을 완료한 뒤 같은 소유 검사가 통과한다. Production retention은 바뀌지 않는다.
+
 - [o] F239-257 — P1: Capture identity cleanup acceptance를 recording당 source 하나 계약에 맞춘다. 통합 검사의 오래된 기대값은 수정 전 실패하며 clear 뒤 선택 비활성과 두 번째 source 거절을 확인한 같은 소유 검사는 수정 후 통과한다. Production 동작은 변경하지 않는다.
 
 - [~] F239-254 — P1: 통합 host 실행 전에 현재 host test의 contract 선언, 완료 feature link 및 공유 contract table을 맞춘다. 미정의 identifier와 source가 없는 table 항목을 현재 사양 및 실제 assertion과 대조한다. 공유 동작 coverage와 명시적인 host별 사유를 유지하고 선언 검사를 우회하거나 test 이름으로 coverage를 추정하지 않는다.
