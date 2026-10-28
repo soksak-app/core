@@ -303,6 +303,8 @@ An application has no plugins in its bundle: the host serves the plugins install
 
 Every file imported by published files must be listed in the `files` array of its `package.json`; this is validated by `packages/workbench/test/published-imports.test.mjs`.
 
+The `@soksak/plugin-api` package publishes every file under its `contract/` directory so installed consumers can read and replay the current public API contracts.
+
 The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` add `--diagnostics`; release builds contain no page diagnostic code, and plugin diagnostic code reaches only configurations that install [diagnostic releases](cli.md#releases-and-the-registry). `make release-check` fails when a staged release frontend contains `/transcript.js` or a page diagnostic module.
 
 Every workbench page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/plugin-api/screen-hash` (the [screen hash](replay.md#screen-hash) of a screen message), `@soksak/runtime`, `@soksak/shared/` and `@soksak/workbench/`. A view page holds no import map of its own; the host inserts `VIEW_IMPORTS` into it ([plugin processes](plugin-processes.md), rule 4).

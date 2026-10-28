@@ -304,6 +304,8 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 
 게시된 파일이 import하는 모든 파일은 그 `package.json`의 `files` 배열에 나열되어야 하며, `packages/workbench/test/published-imports.test.mjs`가 이를 검증한다.
 
+`@soksak/plugin-api` package는 설치된 consumer가 현재 공개 API contract를 읽고 replay할 수 있도록 `contract/` directory의 모든 파일을 게시한다.
+
 디버그 스테이징 대상 `frontend-wailsv3`, `frontend-tauriv2`는 `--diagnostics`를 더한다. 릴리스 빌드에는 페이지 진단 코드가 없고, 플러그인 진단 코드는 [진단 release](cli.ko.md#release-registry)를 설치한 설정에만 있다. `make release-check`는 스테이징된 릴리스 프런트엔드에 `/transcript.js`나 페이지 진단 모듈이 있으면 실패한다.
 
 모든 workbench 페이지는 `PAGE_IMPORTS`와 같은 import map 하나를 선언한다. 항목은 `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/plugin-api/screen-hash`(화면 메시지의 [화면 hash](replay.ko.md#화면-hash)), `@soksak/runtime`, `@soksak/shared/`, `@soksak/workbench/`다. view 페이지는 자기 import map을 갖지 않으며, 호스트가 `VIEW_IMPORTS`를 넣는다([plugin 처리](plugin-processes.ko.md), rule 4).
