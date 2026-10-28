@@ -271,7 +271,12 @@ fn recording_selects_one_document_identity_source() {
         (true, Some(("surface-a".into(), 7)))
     );
     assert!(recording.clear_frame_identity_source("surface-a", 7));
-    assert_eq!(recording.frame_identity_state(), (true, None));
+    assert_eq!(recording.frame_identity_state(), (false, None));
+    assert!(
+        recording
+            .select_frame_identity_source("surface-b", 8)
+            .is_err()
+    );
 }
 
 // contract: diagnostics.capture-document-identity.start-requires-explicit-capture-endpoint
