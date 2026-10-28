@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-263: Synchronization helper를 shipped workbench asset으로 선언한다. 첫 rebuilt application은 startup 완료 전에 누락된 asset을 보고한다. 소유 staging 사례는 파일 누락을 재현하고 package file 선언 수정 후 통과한다.
+
 - F239-263: Surface synchronization request에서 request-local table로 동일한 view declaration을 공유한다. Native surface 변경 전에 index를 해석하고 완전한 view 시작 값을 보존한다. Legacy reader 없이 잘못된 table, 사용하지 않는 entry와 잘못된 index를 거부한다. 소유 JavaScript, Go, Rust 사례는 누락된 동작을 재현하고 수정 후 통과한다. Declaration byte 수는 기존 frame-gated sync event에 기록한다. Application과 성능 비교는 미완료다.
 
 - F239-262: 이후 diagnostics가 시각 오차 metadata를 유지하도록 일회성 page clock anchor를 정확한 native writer gate 예외로 보존한다. 일반 lifecycle/info event는 gate를 유지한다. Public Go·Rust 소유 Red 및 Green과 Wails view-writer 소비자가 통과한다. Runtime 진단은 기존 application event log에 유지한다.

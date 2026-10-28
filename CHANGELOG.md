@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-263: Declare the synchronization helper as a shipped workbench asset. The first rebuilt application reports the missing asset before startup completes. The owning staging case reproduces the absent file and passes after the package file declaration is corrected.
+
 - F239-263: Share identical view declarations through a request-local table in surface synchronization requests. Resolve indices before native surface mutation and preserve complete view start values. Reject malformed tables, unused entries and invalid indices without a legacy reader. Owning JavaScript, Go and Rust cases reproduce the missing behavior and pass after correction. Keep declaration byte counts in the existing frame-gated sync event. Application and performance comparison remain pending.
 
 - F239-262: Keep the one-time page clock anchor as an exact native writer gate exception so later diagnostics retain timing uncertainty metadata. Ordinary lifecycle/info events remain gated. Public Go and Rust owner Reds and Greens and the Wails view-writer consumer pass. Keep runtime diagnosis in the existing application event log.

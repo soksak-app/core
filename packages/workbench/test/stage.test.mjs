@@ -201,6 +201,8 @@ test("a native application stages no plugin and no installed plugin document", (
 test("staging writes core-root.json with the core targets of the view import map", (t) => {
   const app = fixtureApp(t);
   stage(app);
+  assert.equal(existsSync(join(app, "out/surface-sync-request.js")), true,
+    "the host request normalizer must be present in the staged page assets");
   assert.equal(existsSync(join(app, "out/core-root.json")), true);
   const targets = JSON.parse(readFileSync(join(app, "out/core-root.json"), "utf8"));
   assert.deepEqual(targets, [...targets].sort());
