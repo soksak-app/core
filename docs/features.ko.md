@@ -11,9 +11,9 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 12개와 waiting 30개인 42개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 11개와 waiting 30개인 41개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
-- **현재 측정과 검사 수정: 6** — F239-223, F239-223-3, F239-233, F239-243, F239-249, F239-250
+- **현재 측정과 검사 수정: 5** — F239-223, F239-223-3, F239-233, F239-243, F239-249
 - **보고된 실패와 과거 종료 감사: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -27,7 +27,7 @@ F239-241과 F239-242 전의 최신 Terminal drag 측정은 Wails/Tauri cadence 7
 
 - [o] F239-247 — P2, F239-245 연결: 기존 lock/condition-wait census에서 누락된 map_or 및 map_or_else default handler를 검출한다. 두 lock 및 두 wait 반례를 소유 fixture로 재현하고 현재 propagation/recovery 허용은 유지한다.
 
-- [~] F239-250 — P2: 통합 Go formatting gate에서 실패한 project 및 plugin test source에 gofmt를 적용한다. 동작은 유지하고 formatting만 재검사한다.
+- [o] F239-250 — P2: 통합 Go formatting gate에서 실패한 project 및 plugin test source에 gofmt를 적용한다. 동작은 유지하고 formatting만 재검사한다.
 
 - [~] F239-249 — P1: Warning을 억제하지 않고 통합 native 실행의 Tauri Clippy 실패 7건을 해결한다. 두 lifecycle test 결과를 확인하고 integer bound, 조건부 cleanup, callback 및 test slice에 동등한 lint 수정을 적용한다. 소유 host lint와 lifecycle test를 재검사한 뒤 남은 native 단계만 재개한다.
 

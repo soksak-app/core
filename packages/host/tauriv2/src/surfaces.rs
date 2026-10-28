@@ -1097,7 +1097,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-layout-begin-ui");
         let callback_window = window.clone();
         with_native_owner(window, move |owner| {
-            let result = surface_dispatch_result(dispatch, || {
+            surface_dispatch_result(dispatch, || {
                 let callback_dispatch = surface_dispatch(
                     &callback_window,
                     Some(ticket),
@@ -1118,8 +1118,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                         }
                     }),
                 )
-            });
-            result
+            })
         })
         .map_err(|e| e.to_string())?;
         if !rx.recv().map_err(|e| e.to_string())? {

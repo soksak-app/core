@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-249: Assert the capture lifecycle test results instead of discarding them and apply equivalent Clippy corrections to the safe-integer bound, identity cleanup condition, presentation callback and test slice. The focused lifecycle case and diagnostic host Clippy pass without warning suppression.
+
 - F239-250: Apply gofmt to the project and plugin test sources. The two missing blank lines are restored without changing test behavior, and the Go formatting gate passes.
 
 - F239-248: Normalize Rust formatting in endpoint assertions and native surface handlers without changing behavior. The workspace format check passes after correction.

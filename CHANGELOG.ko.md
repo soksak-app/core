@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-249: Capture lifecycle test 결과를 버리지 않고 확인하며 safe-integer bound, identity cleanup 조건, presentation callback 및 test slice에 동등한 Clippy 수정을 적용한다. Warning 억제 없이 집중 lifecycle case와 diagnostic host Clippy가 통과한다.
+
 - F239-250: Project 및 plugin test source에 gofmt를 적용한다. Test 동작 변경 없이 누락된 빈 줄 두 개를 복원하며 Go formatting gate가 통과한다.
 
 - F239-248: 동작을 바꾸지 않고 endpoint assertion과 native surface handler의 Rust formatting을 정규화한다. 수정 후 workspace format 검사가 통과한다.

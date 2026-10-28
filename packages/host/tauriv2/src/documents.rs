@@ -3415,7 +3415,7 @@ fn end_ticket_presentation_wait(
         data.documents
             .presentation()
             .end(surface, generation, ticket, reason)
-            .map(|ended| usize::from(ended))
+            .map(usize::from)
             .map_err(|error| error.to_string())
     });
     report_ended_presentation_waits(window, surface, reason, result);

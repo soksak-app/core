@@ -318,7 +318,7 @@ fn parse_capture_document_identity_request(
     let generation = params
         .get("generation")
         .and_then(Value::as_u64)
-        .filter(|generation| *generation > 0 && *generation <= (1u64 << 53) - 1)
+        .filter(|generation| *generation > 0 && *generation < (1u64 << 53))
         .ok_or_else(|| Failure::params("generation must be a positive JavaScript safe integer"))?;
     Ok(CaptureDocumentIdentityRequest {
         surface: surface.to_string(),
@@ -1283,10 +1283,10 @@ fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
             })
         },
     );
-    if let Some((surface, generation)) = &source {
-        if removed {
-            RECORDING.clear_frame_identity_source(surface, *generation);
-        }
+    if let Some((surface, generation)) = &source
+        && removed
+    {
+        RECORDING.clear_frame_identity_source(surface, *generation);
     }
     let detach_error = detach_pending_document_frame_identity_start()
         .err()
