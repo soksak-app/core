@@ -24,6 +24,7 @@ var eventClasses = map[string]Class{
 	"host.call.timeout":                       ClassCall,
 	"host.crash.found":                        ClassLifecycle,
 	"host.endpoint.call":                      ClassCall,
+	"host.frame.surface.dispatch":             ClassFrame,
 	"host.input.relay":                        ClassInput,
 	"host.log.index_rebuilt":                  ClassLifecycle,
 	"host.notification.event":                 ClassLifecycle,

@@ -8570,6 +8570,16 @@ const FEATURE_LINKS = [
     expected: "Frame tracing records existing dispatch boundaries when the performance path is ineligible, without duplicate events or clock reads when both gates are closed.",
     levels: ["unit"],
   },
+  {
+    id: "F239-260",
+    implementation: [{ file: "scripts/generate-event-classes.mjs", symbol: "export function generatedTables" }],
+    tests: [
+      { file: "scripts/test/event-classes.test.mjs", id: "the committed class tables equal what the catalog gives" },
+      { file: "scripts/test/event-classes.test.mjs", id: "the page table gives every declared event and family member its catalog class" },
+    ],
+    expected: "The generated producer tables classify the declared surface dispatch event as frame and match the canonical catalog.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

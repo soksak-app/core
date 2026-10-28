@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-260: 생성된 event class table 세 개를 surface dispatch frame event에 동기화한다. 기존 소유 검사는 재생성 전 분류 누락을 재현하고 이후 통과한다. Undeclared-event finding이 있는 application 실행은 통과로 보고하지 않고 보존한다.
+
 - F239-255: Performance tracing을 사용할 수 없을 때 frame trace gate로 기존 surface dispatch의 queue·진입·반환 경계를 기록한다. 기존 performance event를 우선하고 중복 event를 만들지 않으며 두 gate가 닫히면 clock을 읽지 않는다. Go와 Rust 소유 Red와 Green, 최종 Rust 소유 확인, Clippy, event 및 문서 검사를 통과한다. Policy gate 조회는 수행한다. Application cadence acceptance는 미완료다.
 
 - F239-256: 이전 run retention fixture 생성 전에 startup 기록을 flush해 timestamp 준비 중 startup rotation이 파일을 제거하지 못하게 한다. 통합 소유 검사는 수정 전 NotFound로 실패하고 같은 집중 소유 검사는 수정 후 통과한다. Production retention은 바뀌지 않는다.

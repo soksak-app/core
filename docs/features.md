@@ -29,6 +29,8 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
 
 - [o] F239-257 — P1: Align capture identity cleanup acceptance with the one-source-per-recording contract. The integrated stale expectation fails before correction; the same owning test passes after asserting disabled selection and rejection of a second source after clear. Production behavior is unchanged.
 
+- [o] F239-260 — P1, linked to F239-255: Regenerate the Go, Rust and page event class tables for the declared surface dispatch frame event. The existing generator owner fails with missing classification before correction and passes after all three tables are synchronized. The failing application log remains retained; corrected application validation is separate.
+
 - [o] F239-256 — P1: Flush startup log records before constructing the prior-run retention fixture. Red: startup rotation prunes a partially written fixture and timestamp preparation fails with NotFound. Green: the same owning test passes after the flush barrier completes startup retention before fixture creation. Production retention is unchanged.
 
 - [o] F239-255 — P1, linked to F239-223: Record existing surface dispatch queue, entry and return boundaries through frame tracing when the performance path is ineligible. Preserve exclusive event selection and read no clock when both gates are closed. Go and Rust owners reproduce missing frame events before correction and pass afterward; the final Rust observer signature passes its three owners and Clippy. Event and documentation checks pass. Application performance acceptance remains under F239-223.

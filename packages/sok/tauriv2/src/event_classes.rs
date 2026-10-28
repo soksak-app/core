@@ -66,6 +66,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.call.timeout" => Some(Class::Call),
         "host.crash.found" => Some(Class::Lifecycle),
         "host.endpoint.call" => Some(Class::Call),
+        "host.frame.surface.dispatch" => Some(Class::Frame),
         "host.input.relay" => Some(Class::Input),
         "host.log.index_rebuilt" => Some(Class::Lifecycle),
         "host.notification.event" => Some(Class::Lifecycle),
