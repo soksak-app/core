@@ -960,6 +960,7 @@ impl ViewChannels {
         } else {
             None
         };
+        // default: a runtime.log call without params carries a null request.
         let request = message.get("params").cloned().unwrap_or(Value::Null);
         let channels = self.lock();
         let channel = channels.get(surface).ok_or_else(|| {
@@ -1186,6 +1187,7 @@ impl ViewChannels {
             })?;
         match event.event.as_str() {
             "view.ready" => {
+                // silent: a malformed origin becomes None and the validation below returns an explicit view.ready error.
                 let time_origin = event.page.parse::<f64>().ok();
                 if event.plugin != plugin
                     || event.document.is_empty()
@@ -1354,11 +1356,10 @@ impl ViewChannels {
             "id": id,
             "command": command,
         });
-        // default: a call without params sends null to its command, as the call envelope has no params for it.
         payload["params"] = message
             .get_mut("params")
             .map(Value::take)
-            .unwrap_or(Value::Null);
+            .unwrap_or(Value::Null); // default: a call without params sends null to its command.
         if !cids.is_empty() {
             payload["cids"] = json!(cids);
         }

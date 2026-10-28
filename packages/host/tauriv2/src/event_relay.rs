@@ -241,6 +241,7 @@ pub fn view_log_command(
             let plugin_prefix = format!("plugin.{plugin}.");
             let page_time_origin = page
                 .parse::<f64>()
+                // silent: a parse failure becomes no valid origin and the request is rejected below.
                 .ok()
                 .filter(|value| value.is_finite() && *value > 0.0)
                 .ok_or_else(|| {

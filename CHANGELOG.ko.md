@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-245: Start panic, stop 실패 또는 directory 삭제 실패 뒤 capture cleanup 소유권을 유지한다. 완료한 stop을 반복하지 않고 directory cleanup을 재시도하며 생성에 실패한 path는 건드리지 않는다. Poison된 document-frame lifecycle 및 pending-start lock을 명시적으로 거부하고 receive 전에 pending lock을 해제한다. Recording 소유 검사 20/20과 poison 및 재진입 집중 case는 기록된 실패 뒤 통과한다. Census는 명시적 lock 오류 전파를 인정하면서 버린 오류와 default를 계속 검출하며 의도된 boundary default의 이유를 기록한다. Panic 정책은 원래 실패를 기록하고 host를 종료하므로 별도 복구 모드를 만들지 않는다.
+
 - F239-246: Command-supervisor language adapter의 예상 case 수를 20개에서 현재 22개로 갱신한다. 통합 실행은 모든 case가 통과했지만 오래된 개수를 거부했으며 수정 후 해당 adapter가 통과한다. Rust, Go, Objective-C와 shell case는 통합 실행의 통과 결과를 유지한다.
 
 - F239-244: Identifier 증가, 첫 plugin event와 cids 전달을 유지하며 공개 view-operation case를 API 관측에 맞춘다. Fixture는 폐기된 단일 surface log를 거부하고 event 관측 전에 clock/batch 전달을 확인한다. SDK 소유 case 3개가 열린 call 및 예상 밖 report 없이 통과하며 관련 consumer acceptance는 별도로 유지한다.

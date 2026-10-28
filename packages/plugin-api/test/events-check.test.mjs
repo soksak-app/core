@@ -217,7 +217,7 @@ test('the message of a finding names the file, the line and the rule', () => {
   assert.equal(outside.message, 'a.go:4: go.go-statement is outside its entrance files');
 });
 
-test('a lock result or a condition wait that is matched, mapped, unwrapped or dropped is a finding of the recovery rule, and a recovered lock, a method of the type and a process wait are not', () => {
+test('an unhandled lock result or condition wait is a finding, while propagated errors, recovered locks, type methods and process waits are not', () => {
   const source = [
     'fn f() {',
     '    if let Ok(mut a) = state.lock() {',
@@ -246,9 +246,40 @@ test('a lock result or a condition wait that is matched, mapped, unwrapped or dr
   ].join('\n');
   const findings = checker.censusFindings(new Map([['a.rs', source]]), noConfig()).filter(({ rule }) => rule === 'rs.lock-result');
   assert.deepEqual(findings.map(({ file, line, rule }) => `${file}:${line} ${rule}`), [
-    'a.rs:2 rs.lock-result', 'a.rs:5 rs.lock-result', 'a.rs:6 rs.lock-result', 'a.rs:7 rs.lock-result',
+    'a.rs:2 rs.lock-result', 'a.rs:6 rs.lock-result', 'a.rs:7 rs.lock-result',
     'a.rs:16 rs.lock-result', 'a.rs:18 rs.lock-result',
   ]);
+});
+
+test('a poisoned lock error may be explicitly propagated, while recovery defaults and discarded errors remain findings', () => {
+  const source = [
+    'fn run(state: &Mutex<State>) -> Result<(), String> {',
+    '    let guard = state.lock().map_err(|_| "state lock was interrupted")?;',
+    '    drop(guard);',
+    '    // default: use empty state after poison.',
+    '    let guard = state.lock().unwrap_or_else(|_| State::default());',
+    '    let _ = state.lock().map_err(|_| "state lock failed");',
+    '    let _ = state.lock().map_err(|_| "state lock failed").ok();',
+    '    Ok(())',
+    '}',
+  ].join('\n');
+  const findings = checker.censusFindings(new Map([['a.rs', source]]), noConfig())
+    .filter(({ rule }) => rule === 'rs.lock-result');
+  assert.deepEqual(findings.map(({ line }) => line), [5, 6, 7]);
+});
+
+test('lock and condition-wait fallback combinators are findings', () => {
+  const source = [
+    'fn run(state: &Mutex<State>, guard: Guard, fallback_guard: Guard) {',
+    '    let _ = state.lock().unwrap_or(fallback_guard);',
+    '    let _ = state.lock().or_else(|_| Ok(fallback_guard));',
+    '    let _ = wake.wait(guard).unwrap_or(fallback_guard);',
+    '    let _ = wake.wait(guard).or_else(|_| Ok(fallback_guard));',
+    '}',
+  ].join('\n');
+  const findings = checker.censusFindings(new Map([['fallback.rs', source]]), noConfig())
+    .filter(({ rule }) => rule === 'rs.lock-result');
+  assert.deepEqual(findings.map(({ line }) => line), [2, 3, 4, 5]);
 });
 
 test('condition wait recovery checks include nested calls and closure blocks', () => {
@@ -262,7 +293,7 @@ test('condition wait recovery checks include nested calls and closure blocks', (
   ].join('\n');
   const findings = checker.censusFindings(new Map([['wait.rs', source]]), noConfig())
     .filter(({ rule }) => rule === 'rs.lock-result');
-  assert.deepEqual(findings.map(({ line }) => line), [2, 3, 4, 5]);
+  assert.deepEqual(findings.map(({ line }) => line), [2, 4, 5]);
 });
 
 test('condition wait argument boundaries ignore string and comment brackets', () => {

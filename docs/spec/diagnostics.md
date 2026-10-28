@@ -8,6 +8,8 @@ The same callback artifact records `writerEnqueuedTime`, `writerStartTime`, and 
 
 A recording admits at most 4096 callback records, including idle callbacks, and at most 64 pending frame writes. There is no separate total frame cutoff. Callback capacity exhaustion rejects further samples with an explicit recording error and reports `limited:true`; accepted frame files and writer timings remain bounded by admitted callback records.
 
+A diagnostic recording owns its output directory until capture stop succeeds and finish transfers it, or abort removes it. A failed stop retains cleanup ownership and blocks another start; a failed directory removal is retryable without stopping an already stopped capture again. A panicking start attempts cleanup before resuming the original panic and reports cleanup failures separately. A failed directory creation does not acquire or remove the requested path. Poisoned document-frame lifecycle and pending-start locks return explicit errors instead of continuing with uncertain state.
+
 ## Folder
 
 Every diagnostic file of an application is under `<config-dir>/logs/`. A person who meets a defect hands over this folder, and the [debug view](debug.md) lists and saves it. No other folder holds a diagnostic file. Operating files such as `process.lock` are not records and stay outside `logs/`.
@@ -150,7 +152,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | a stream message of a document region is not valid, cannot be delivered, or its snapshot acknowledgement is refused | `error host document stream <name>: <reason>`, written for each failed stream message of the document named `<name>`: an invalid message, an unknown stream or message type, a refused `on` or acknowledgement, or a missing document |
 | a modal cannot be placed, rounded, raised or given the focus back, or a modal document fails to render | `error host modal place`, `error host modal corners`, `error host modal raise`, `error host modal focus restoration` and `error host modal <id>`, each followed by `: <reason>` |
 | a sidecar cannot be stopped, replaced, retained for a window or told that a surface closed, or the native view bridge of the Wails host fails | `error host sidecar stop`, `error host replace`, `error host sidecar retain`, `error host sidecar close <surface>`, `error host native message` and `error host native reply`, each followed by `: <reason>` |
-| the lock of the recording state is poisoned | `error host recording: <reason>` |
+| cleanup after a panicking recording start cannot stop capture or remove its owned directory | `error host recording: <reason>`; the original panic remains a separate `host.panic` record |
 | an input reference reply arrives after its request ended | `error host input reference: <reason>` |
 | the notification center reports a failure, an event cannot be read, a notice has an unknown type, names no window and surface, or names a window that is closed | `error host notification: <reason>` |
 | a crash report of an earlier run cannot be read, or the folder of the crash reports cannot be listed or named | `error host crash reports: <reason>`, and `error native diagnostic reports: the system names no Library folder for the user`; the reason names the file or the folder, and an unreadable report is reported once ([logging](logging.md#entrances)) |

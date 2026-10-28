@@ -5,7 +5,7 @@
 #[path = "support/folder.rs"]
 mod folder;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::Path;
 
 #[path = "support/records.rs"]
@@ -22,6 +22,13 @@ struct Fake {
     fail_start: bool,
     no_frame: bool,
     fail_stop: bool,
+    replace_directory_on_open: Option<std::path::PathBuf>,
+    replace_directory_on_stop: Option<std::path::PathBuf>,
+}
+
+fn replace_directory_with_file(path: &Path) -> Result<(), String> {
+    std::fs::remove_dir_all(path).map_err(|error| error.to_string())?;
+    std::fs::write(path, "blocks directory cleanup").map_err(|error| error.to_string())
 }
 
 impl Capture for Fake {
@@ -30,6 +37,9 @@ impl Capture for Fake {
         self.calls
             .borrow_mut()
             .push(format!("open {}{kind}", target.window));
+        if let Some(path) = &self.replace_directory_on_open {
+            replace_directory_with_file(path)?;
+        }
         if self.fail_open {
             Err("open failed".into())
         } else {
@@ -54,6 +64,9 @@ impl Capture for Fake {
     }
     fn stop(&self) -> Result<i32, String> {
         self.calls.borrow_mut().push("stop".into());
+        if let Some(path) = &self.replace_directory_on_stop {
+            replace_directory_with_file(path)?;
+        }
         if self.fail_stop {
             Err("stop failed".into())
         } else {
@@ -114,8 +127,21 @@ fn a_stop_failure_keeps_the_folder_returned_by_start() {
         .unwrap();
 
     assert_eq!(recording.finish(&fake).unwrap_err(), "stop failed");
-    assert!(folder.is_dir(), "failed recording evidence was removed");
-    assert_eq!(recording.running(), None);
+    assert!(folder.is_dir(), "failed recording folder was removed");
+    assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
+    let next = recording
+        .start(
+            &Fake::default(),
+            WINDOW,
+            &parent.path().join("next"),
+            false,
+            &make,
+        )
+        .unwrap_err();
+    assert!(
+        next.contains("is running"),
+        "another capture was allowed: {next}"
+    );
 }
 
 // contract: recording.start.failed-open-removes-folder
@@ -136,6 +162,98 @@ fn a_failed_open_removes_the_folder() {
     );
     assert!(!folder.exists());
     assert_eq!(recording.running(), None);
+}
+
+// contract: recording.start.cleanup-failure-retains-folder-owner
+#[test]
+fn a_failed_start_cleanup_retains_retry_ownership() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let next = parent.path().join("next-frames");
+    let recording = Recording::new();
+    let fake = Fake {
+        fail_open: true,
+        replace_directory_on_open: Some(folder.clone()),
+        ..Fake::default()
+    };
+    let error = recording
+        .start(&fake, WINDOW, &folder, false, &make)
+        .unwrap_err();
+    assert!(
+        error.contains("capture directory cleanup failed"),
+        "{error}"
+    );
+    assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
+    assert_eq!(calls(&fake), ["open 7"]);
+
+    let blocked = recording
+        .start(&fake, WINDOW, &next, false, &make)
+        .unwrap_err();
+    assert!(
+        blocked.contains("is running"),
+        "another capture was allowed: {blocked}"
+    );
+    assert!(!next.exists());
+
+    std::fs::remove_file(&folder).unwrap();
+    recording
+        .abort(&fake)
+        .expect("abort did not retry folder cleanup");
+    assert_eq!(calls(&fake), ["open 7"]);
+    assert_eq!(recording.running(), None);
+}
+
+// contract: recording.abort.stop-complete-cleanup-retry-skips-stop
+#[test]
+fn a_directory_cleanup_retry_does_not_stop_a_completed_capture_twice() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let fake = Fake {
+        replace_directory_on_stop: Some(folder.clone()),
+        ..Fake::default()
+    };
+    recording
+        .start(&fake, WINDOW, &folder, false, &make)
+        .unwrap();
+
+    let error = recording.abort(&fake).unwrap_err();
+    assert!(
+        error.contains("capture directory cleanup failed"),
+        "{error}"
+    );
+    assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
+    assert!(folder.is_file());
+    assert_eq!(calls(&fake), ["open 7", "start", "wait", "stop"]);
+
+    std::fs::remove_file(&folder).unwrap();
+    recording
+        .abort(&fake)
+        .expect("abort did not retry directory cleanup");
+    assert_eq!(calls(&fake), ["open 7", "start", "wait", "stop"]);
+    assert_eq!(recording.running(), None);
+}
+
+// contract: recording.start.make-failure-preserves-unowned-path
+#[test]
+fn a_make_failure_preserves_a_path_that_recording_did_not_create() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("existing");
+    std::fs::create_dir(&folder).unwrap();
+    let sentinel = folder.join("owned-by-caller");
+    std::fs::write(&sentinel, "preserve").unwrap();
+    let recording = Recording::new();
+    let fake = Fake::default();
+
+    let error = recording
+        .start(&fake, WINDOW, &folder, false, &|_| {
+            Err("path is not available".into())
+        })
+        .unwrap_err();
+    assert!(error.contains("path is not available"), "{error}");
+    assert!(sentinel.is_file(), "the caller-owned path was deleted");
+    assert_eq!(recording.running(), None);
+    assert!(calls(&fake).is_empty());
 }
 
 // contract: recording.start.failed-start-removes-folder
@@ -207,9 +325,9 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
     );
 }
 
-// contract: recording.abort.reports-stop-failure-and-removes-folder
+// contract: recording.abort.stop-failure-preserves-retry-state
 #[test]
-fn an_abort_reports_a_stop_failure_and_still_removes_the_folder() {
+fn an_abort_reports_a_stop_failure_and_preserves_cleanup_state() {
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
@@ -222,8 +340,24 @@ fn an_abort_reports_a_stop_failure_and_still_removes_the_folder() {
         .unwrap();
     let error = recording.abort(&fake).unwrap_err();
     assert!(error.contains("stop failed"), "{error}");
-    assert!(!folder.exists(), "the aborted folder remains");
-    assert_eq!(recording.running(), None);
+    assert!(
+        folder.exists(),
+        "the folder was removed before capture stopped"
+    );
+    assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
+    let next = recording
+        .start(
+            &Fake::default(),
+            WINDOW,
+            &parent.path().join("next"),
+            false,
+            &make,
+        )
+        .unwrap_err();
+    assert!(
+        next.contains("is running"),
+        "another capture was allowed: {next}"
+    );
 }
 
 // contract: recording.target.different-target-reopened
@@ -336,38 +470,56 @@ fn the_stop_payload_preserves_layout_stages() {
     );
 }
 
-/// A recording device that panics while the state of the recording is locked.
-struct Panicking;
+/// A recording device that becomes active before its start call panics.
+struct Panicking {
+    active: Cell<bool>,
+    stops: Cell<usize>,
+    fail_first_stop: bool,
+}
 
 impl Capture for Panicking {
     fn open(&self, _target: Target) -> Result<(), String> {
         Ok(())
     }
     fn start(&self, _directory: &Path, _frame_identity: bool) -> Result<(), String> {
+        self.active.set(true);
         panic!("capture start panicked")
     }
     fn wait(&self) -> Result<bool, String> {
         Ok(true)
     }
     fn stop(&self) -> Result<i32, String> {
+        self.stops.set(self.stops.get() + 1);
+        if self.fail_first_stop && self.stops.get() == 1 {
+            return Err("first stop failed".into());
+        }
+        self.active.set(false);
         Ok(0)
     }
 }
 
-// contract: recording.state.poisoned-lock-is-recovered, host.locks.poisoned-state-is-recovered
+// contract: recording.start.panicking-capture-is-cleaned-up
 #[test]
-fn a_poisoned_recording_state_is_recovered_when_it_ends() {
+fn a_panicking_capture_start_stops_partial_capture_before_unwinding() {
     let config = folder::Folder::new();
     let writer = records::start_writer(config.path());
     let folder = config.path().join("frames");
     let recording = Recording::new();
+    let capture = Panicking {
+        active: Cell::new(false),
+        stops: Cell::new(0),
+        fail_first_stop: false,
+    };
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = recording.start(&Panicking, WINDOW, &folder, false, &make);
+        let _ = recording.start(&capture, WINDOW, &folder, false, &make);
     }));
     assert!(panicked.is_err());
-    recording
-        .abort(&Fake::default())
-        .expect("abort failed while the state lock was poisoned");
+    assert_eq!(capture.stops.get(), 1, "partial capture was not stopped");
+    assert!(
+        !capture.active.get(),
+        "capture remained active after start panicked"
+    );
+    assert!(!folder.exists(), "folder remained after start panicked");
     assert_eq!(recording.running(), None);
     writer.flush(std::time::Duration::from_secs(5)).unwrap();
     use_host_event_log(None);
@@ -379,4 +531,64 @@ fn a_poisoned_recording_state_is_recovered_when_it_ends() {
         .map(|event| event["fields"]["text"].as_str().unwrap().to_string())
         .collect();
     assert!(errors.is_empty(), "errors {errors:?}");
+}
+
+// contract: recording.start.panic-cleanup-failure-blocks-next-start
+#[test]
+fn a_failed_panic_cleanup_retains_state_until_abort_retries() {
+    let config = folder::Folder::new();
+    let writer = records::start_writer(config.path());
+    let folder = config.path().join("frames");
+    let next = config.path().join("next-frames");
+    let recording = Recording::new();
+    let capture = Panicking {
+        active: Cell::new(false),
+        stops: Cell::new(0),
+        fail_first_stop: true,
+    };
+    let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = recording.start(&capture, WINDOW, &folder, false, &make);
+    }));
+    assert!(panicked.is_err());
+    assert!(
+        capture.active.get(),
+        "failed stop was reported as a cleanup"
+    );
+    assert!(
+        folder.is_dir(),
+        "the owned folder was removed before capture stopped"
+    );
+    assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
+
+    let error = recording
+        .start(&Fake::default(), WINDOW, &next, false, &make)
+        .unwrap_err();
+    assert!(
+        error.contains("is running"),
+        "a new capture was allowed: {error}"
+    );
+    assert!(!next.exists());
+
+    recording
+        .abort(&capture)
+        .expect("abort did not retry capture cleanup");
+    assert_eq!(capture.stops.get(), 2);
+    assert!(!capture.active.get());
+    assert!(!folder.exists());
+    assert_eq!(recording.running(), None);
+    writer.flush(std::time::Duration::from_secs(5)).unwrap();
+    use_host_event_log(None);
+    let errors: Vec<String> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| {
+            event["event"] == "host.record.error" && event["fields"]["where"] == "recording"
+        })
+        .map(|event| event["fields"]["text"].as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("first stop failed")),
+        "cleanup failure was not reported: {errors:?}"
+    );
 }

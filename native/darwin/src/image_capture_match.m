@@ -835,7 +835,7 @@ static BOOL mapScreenROI(CGRect bounds, CGRect content_rect, CGRect screen_rect,
         || CGRectGetMinX(bounds) < CGRectGetMinX(screen_rect)
         || CGRectGetMaxX(bounds) > CGRectGetMaxX(screen_rect)
         || CGRectGetMinY(bounds) < CGRectGetMinY(screen_rect)
-        || CGRectGetMaxY(bounds) > CGRectGetMaxY(screen_rect)) return NO;
+        || CGRectGetMaxY(bounds) > CGRectGetMaxY(screen_rect)) return NO; // silent: an ROI outside the screen has no valid crop and the caller records it as unknown.
     double left = CGRectGetMinX(content_rect) + (CGRectGetMinX(bounds) - CGRectGetMinX(screen_rect)) * pixels_per_point;
     double top = CGRectGetMinY(content_rect) + (CGRectGetMinY(bounds) - CGRectGetMinY(screen_rect)) * pixels_per_point;
     double width = CGRectGetWidth(bounds) * pixels_per_point;
@@ -845,7 +845,7 @@ static BOOL mapScreenROI(CGRect bounds, CGRect content_rect, CGRect screen_rect,
     if (fabs(left - rounded_left) > 0.000001 || fabs(top - rounded_top) > 0.000001
         || fabs(width - rounded_width) > 0.000001 || fabs(height - rounded_height) > 0.000001
         || rounded_left < 0 || rounded_top < 0 || rounded_width <= 0 || rounded_height <= 0
-        || rounded_left + rounded_width > frame_width || rounded_top + rounded_height > frame_height) return NO;
+        || rounded_left + rounded_width > frame_width || rounded_top + rounded_height > frame_height) return NO; // silent: an ROI outside the frame has no valid crop and the caller records it as unknown.
     *crop = CGRectMake(rounded_left, rounded_top, rounded_width, rounded_height);
     return YES;
 }

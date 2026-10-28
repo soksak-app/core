@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Map, Value, json};
@@ -40,10 +40,26 @@ type PendingDocumentFrameIdentityStart = std::sync::mpsc::Receiver<Result<String
 static PENDING_DOCUMENT_FRAME_IDENTITY_START: Mutex<Option<PendingDocumentFrameIdentityStart>> =
     Mutex::new(None);
 
-fn with_document_frame_identity_lifecycle<T>(operation: impl FnOnce() -> T) -> T {
-    let _guard = DOCUMENT_FRAME_IDENTITY
+fn lifecycle_lock(lock: &Mutex<()>) -> Result<MutexGuard<'_, ()>, String> {
+    let guard = lock
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+        .map_err(|_| "document frame identity lifecycle was interrupted by a panic".to_string())?;
+    Ok(guard)
+}
+
+fn pending_frame_identity_lock(
+    lock: &Mutex<Option<PendingDocumentFrameIdentityStart>>,
+) -> Result<MutexGuard<'_, Option<PendingDocumentFrameIdentityStart>>, String> {
+    let guard = lock.lock().map_err(|_| {
+        "pending document frame identity start was interrupted by a panic".to_string()
+    })?;
+    Ok(guard)
+}
+
+fn with_document_frame_identity_lifecycle<T>(
+    operation: impl FnOnce() -> Result<T, Failure>,
+) -> Result<T, Failure> {
+    let _guard = lifecycle_lock(&DOCUMENT_FRAME_IDENTITY).map_err(internal)?;
     operation()
 }
 
@@ -315,9 +331,7 @@ fn capture_document_identity_start(
     params: &Map<String, Value>,
 ) -> Result<Value, Failure> {
     let request = parse_capture_document_identity_request(params)?;
-    let _guard = DOCUMENT_FRAME_IDENTITY
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _guard = lifecycle_lock(&DOCUMENT_FRAME_IDENTITY).map_err(internal)?;
     let (active, selected) = RECORDING.frame_identity_state();
     if !active {
         return Err(internal(
@@ -331,9 +345,8 @@ fn capture_document_identity_start(
     }
     let platform = platform::current().map_err(internal)?;
     {
-        let pending = PENDING_DOCUMENT_FRAME_IDENTITY_START
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let pending = pending_frame_identity_lock(&PENDING_DOCUMENT_FRAME_IDENTITY_START)
+            .map_err(internal)?;
         if pending.is_some() {
             return Err(internal(
                 "a previous document frame identity start is still pending",
@@ -348,9 +361,13 @@ fn capture_document_identity_start(
     let operation_window = window.clone();
     let operation_request = request.clone();
     let (sender, receiver) = std::sync::mpsc::channel();
-    *PENDING_DOCUMENT_FRAME_IDENTITY_START
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner) = Some(receiver);
+    match pending_frame_identity_lock(&PENDING_DOCUMENT_FRAME_IDENTITY_START) {
+        Ok(mut pending) => *pending = Some(receiver),
+        Err(error) => {
+            RECORDING.clear_frame_identity_source(&request.surface, request.generation);
+            return Err(internal(error));
+        }
+    }
     let scheduled = on_main(&scheduled_window, move || {
         let data = crate::windows::window_data(&operation_window)?;
         if data
@@ -382,12 +399,19 @@ fn capture_document_identity_start(
     match scheduled {
         Ok(()) => {}
         Err(error) => {
-            PENDING_DOCUMENT_FRAME_IDENTITY_START
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .take();
+            let cleanup_error =
+                match pending_frame_identity_lock(&PENDING_DOCUMENT_FRAME_IDENTITY_START) {
+                    Ok(mut pending) => {
+                        pending.take();
+                        None
+                    }
+                    Err(error) => Some(error),
+                };
             RECORDING.clear_frame_identity_source(&request.surface, request.generation);
-            return Err(internal(error));
+            return Err(internal(match cleanup_error {
+                Some(cleanup) => format!("{error}; pending start cleanup failed: {cleanup}"),
+                None => error,
+            }));
         }
     }
     let native = match receive_pending_document_frame_identity_start() {
@@ -460,9 +484,24 @@ fn validate_document_frame_identity_start_reply(
 }
 
 fn receive_pending_document_frame_identity_start() -> Result<Option<String>, String> {
-    let mut pending = PENDING_DOCUMENT_FRAME_IDENTITY_START
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
+    receive_pending_document_frame_identity_start_from(&PENDING_DOCUMENT_FRAME_IDENTITY_START)
+}
+
+fn pending_document_frame_identity_start(
+    lock: &Mutex<Option<PendingDocumentFrameIdentityStart>>,
+) -> Result<Option<String>, String> {
+    let has_pending = pending_frame_identity_lock(lock)?.is_some();
+    if has_pending {
+        receive_pending_document_frame_identity_start_from(lock)
+    } else {
+        Ok(None)
+    }
+}
+
+fn receive_pending_document_frame_identity_start_from(
+    lock: &Mutex<Option<PendingDocumentFrameIdentityStart>>,
+) -> Result<Option<String>, String> {
+    let mut pending = pending_frame_identity_lock(lock)?;
     let Some(receiver) = pending.as_ref() else {
         return Ok(None);
     };
@@ -485,11 +524,9 @@ fn receive_pending_document_frame_identity_start() -> Result<Option<String>, Str
     }
 }
 
-fn detach_pending_document_frame_identity_start() {
-    PENDING_DOCUMENT_FRAME_IDENTITY_START
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .take();
+fn detach_pending_document_frame_identity_start() -> Result<(), String> {
+    pending_frame_identity_lock(&PENDING_DOCUMENT_FRAME_IDENTITY_START)?.take();
+    Ok(())
 }
 
 fn log_late_document_frame_identity_result(result: Result<String, String>) {
@@ -1216,22 +1253,13 @@ fn capture_start(
 /// frames.
 fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
     let recorder = PlatformCapture(recorder()?.0, after);
-    let _guard = DOCUMENT_FRAME_IDENTITY
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
+    let _guard = lifecycle_lock(&DOCUMENT_FRAME_IDENTITY).map_err(internal)?;
     let (frame_identity, source) = RECORDING.frame_identity_state();
     let platform = recorder.0;
-    let prior_start_error = if PENDING_DOCUMENT_FRAME_IDENTITY_START
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .is_some()
-    {
-        receive_pending_document_frame_identity_start()
+    let prior_start_error =
+        pending_document_frame_identity_start(&PENDING_DOCUMENT_FRAME_IDENTITY_START)
             .err()
-            .map(|error| format!("wait for document frame identity start: {error}"))
-    } else {
-        None
-    };
+            .map(|error| format!("wait for document frame identity start: {error}"));
     let mut finished = None;
     let (issued_slots, removed, sequence_error) = document_identity_stop_sequence(
         frame_identity,
@@ -1260,9 +1288,17 @@ fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
             RECORDING.clear_frame_identity_source(surface, *generation);
         }
     }
-    detach_pending_document_frame_identity_start();
-    if let Some(error) = sequence_error {
-        let mut failures = vec![error];
+    let detach_error = detach_pending_document_frame_identity_start()
+        .err()
+        .map(|error| format!("detach pending document frame identity start: {error}"));
+    if sequence_error.is_some() || detach_error.is_some() {
+        let mut failures = Vec::new();
+        if let Some(error) = sequence_error {
+            failures.push(error);
+        }
+        if let Some(error) = detach_error {
+            failures.push(error);
+        }
         if let Err(layout_error) = on_main(window, move || platform.layout_trace_stop()) {
             failures.push(format!("stop layout trace: {layout_error}"));
         }

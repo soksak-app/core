@@ -428,6 +428,7 @@ func withViewSurface(request map[string]any, plugin, surface string) (map[string
 				return nil, fmt.Errorf("events[%d].fields cannot be serialized: %w", index, err)
 			}
 			if produced > 0 {
+				// silent: truncated already reports field loss; the additional head cut count is not part of the event contract.
 				head, _ := sok.CutText(text, EventHeadBytes)
 				copyFields = map[string]any{"head": head, "truncated": true, "surface": surface}
 			}

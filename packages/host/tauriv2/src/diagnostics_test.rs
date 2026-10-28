@@ -308,13 +308,17 @@ fn capture_start_waits_for_prior_identity_removal() {
             recording_started.send(()).unwrap();
             wait_for_trace.recv().unwrap();
             trace_started.send(()).unwrap();
+            Ok::<_, Failure>(())
         });
     });
     wait_recording_started
         .recv_timeout(Duration::from_secs(1))
         .unwrap();
     let stop = std::thread::spawn(move || {
-        super::with_document_frame_identity_lifecycle(|| stop_started.send(()).unwrap());
+        super::with_document_frame_identity_lifecycle(|| {
+            stop_started.send(()).unwrap();
+            Ok::<_, Failure>(())
+        });
     });
     assert!(
         wait_stop_started.try_recv().is_err(),

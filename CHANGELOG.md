@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-245: Preserve capture cleanup ownership after a start panic, stop failure or directory-removal failure. Retry directory cleanup without repeating a completed stop, and leave paths whose creation failed untouched. Reject poisoned document-frame lifecycle and pending-start locks explicitly, and release the pending lock before receiving. Recording owners pass 20/20 and targeted poison and reentry cases pass after their recorded failures. Recognize explicit lock-error propagation in the census while retaining findings for discarded errors and defaults; document the reasons for intentional boundary defaults. The panic policy records the original failure and terminates the host, so no separate recovery mode is introduced.
+
 - F239-246: Update the command-supervisor language adapter expectation from 20 to its 22 current cases. The integrated run passes all cases but rejects the stale count; the focused adapter passes after correction. The Rust, Go, Objective-C and shell cases retain their passing integrated results.
 
 - F239-244: Align published view-operation cases with API observations while retaining identifier progression, the first plugin event and cids propagation. Reject obsolete single-record surface logs in the fixture and acknowledge clock/batch delivery before observing events. All three SDK owner cases pass with no open calls or unexpected reports; affected consumer acceptance remains separate.

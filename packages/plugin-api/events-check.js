@@ -214,6 +214,36 @@ function matchClose(source, open) {
   throw new Error(`${source.path}:${source.lineAt(open)}: a bracket that opens here does not close`);
 }
 
+/** Whether a lock or condition-wait result is returned to the caller as an error. */
+function resultIsPropagated(source, from) {
+  const { code } = source;
+  let i = from;
+  while (i < code.length && /\s/.test(code[i])) i += 1;
+  if (code[i] === '?') return true;
+  if (!code.startsWith('.map_err', i)) return false;
+  i += '.map_err'.length;
+  while (i < code.length && /\s/.test(code[i])) i += 1;
+  if (code[i] !== '(') return false;
+  const close = matchClose(source, i);
+  i = close + 1;
+  while (i < code.length && /\s/.test(code[i])) i += 1;
+  return code[i] === '?';
+}
+
+/** Whether a lock error is recovered by restoring the guard contents after a poison. */
+function recoversPoisonedGuard(source, from) {
+  const { code } = source;
+  let i = from;
+  while (i < code.length && /\s/.test(code[i])) i += 1;
+  if (!code.startsWith('.unwrap_or_else', i)) return false;
+  i += '.unwrap_or_else'.length;
+  while (i < code.length && /\s/.test(code[i])) i += 1;
+  if (code[i] !== '(') return false;
+  const close = matchClose(source, i);
+  const recovery = code.slice(i + 1, close).trim();
+  return /^(?:(?:std::sync::)?PoisonError::into_inner|\|\s*([A-Za-z_]\w*)\s*\|\s*\1\.into_inner\(\))$/.test(recovery);
+}
+
 /** The ranges `[start, end)` of the parts of `from..to` that commas separate outside brackets and strings, without blanks. */
 function splitTop(source, from, to) {
   const { code, inString } = source;
@@ -351,6 +381,7 @@ export function sitesOf(path, text, emitters = {}) {
         levels: entrance.fixed ? [entrance.fixed] : entrance.levelGroup ? [match[entrance.levelGroup]] : levelsOf(source, args[entrance.level]),
         class: entrance.class === undefined ? null : classOf(source, args[entrance.class]),
         fields: fieldsOf(source, args[entrance.fields]),
+        // default: entrances without context fields contribute an empty context field list.
         contextFields: entrance.contextFields ?? [],
       });
     }
@@ -712,7 +743,19 @@ export function censusFindings(sources, config, rules = censusRules()) {
           const open = match.index + match[0].lastIndexOf('(');
           const close = matchClose(source, open);
           if (source.code.slice(open + 1, close).trim() === '') continue;
-          if (!/^\s*(?:\.\s*(?:map_err|expect|unwrap|ok)\s*\(|\?)/.test(source.code.slice(close + 1))) continue;
+          if (!/^\s*(?:\.\s*(?:map_err|expect|unwrap(?:_or_else|_or)?|or_else|ok)\s*\(|\?)/.test(source.code.slice(close + 1))) continue;
+          if (resultIsPropagated(source, close + 1)) continue;
+          if (recoversPoisonedGuard(source, close + 1)) continue;
+        }
+        if (rule.id === 'rs.lock-result' && match[0].endsWith('?')) continue;
+        if (rule.id === 'rs.lock-result' && match[0].endsWith('.map_err(')) {
+          if (resultIsPropagated(source, match.index + match[0].lastIndexOf('.map_err'))) continue;
+        }
+        if (rule.id === 'rs.lock-result' && match[0].endsWith('.unwrap_or_else(')) {
+          const open = match.index + match[0].length - 1;
+          const close = matchClose(source, open);
+          const recovery = source.code.slice(open + 1, close).trim();
+          if (/^(?:(?:std::sync::)?PoisonError::into_inner|\|\s*([A-Za-z_]\w*)\s*\|\s*\1\.into_inner\(\))$/.test(recovery)) continue;
         }
         const line = source.lineAt(match.index);
         // default: a rule that no declaration marks pending is enforced.

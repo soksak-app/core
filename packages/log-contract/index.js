@@ -228,6 +228,7 @@ function chainFindings(entries, catalog) {
       if (event.event !== "log.policy") continue;
       // default: a policy without a preceding change of the setting is in force from its own timestamp.
       const ts = changes.length > 0 ? changes.shift() : event.ts_us;
+      // default: the first policy for a process appends to an empty policy history.
       policies.set(process, [...(policies.get(process) ?? []), { ts, classes: event.fields.classes }]);
     }
   }

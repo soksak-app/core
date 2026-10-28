@@ -1,8 +1,8 @@
 //! The state of a diagnostic recording. It is included only by the cargo feature `diagnostics`.
 //!
-//! There is one recording at a time. Whichever stage a start fails in, and when a request fails before it returns the
-//! recording folder to the requester, the recording is stopped and the folder is deleted. A remaining recording blocks
-//! the next recording, and a remaining folder cannot be deleted by the requester.
+//! There is one recording at a time. A start failure removes its folder after capture cleanup; when stopping fails, the
+//! owned folder and stop state remain so `abort` can retry and block another start. A successful finish transfers the
+//! folder to the requester.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
@@ -64,9 +64,11 @@ pub struct Target {
 
 /// The recording device. A platform implementation or a fake of a check provides it.
 pub trait Capture {
-    /// Sets the window with the window server number target.window as the recording target.
+    /// Sets the window with the window server number target.window as the recording target. An error creates no
+    /// preparation and leaves any existing active recording unchanged.
     fn open(&self, target: Target) -> Result<(), String>;
-    /// Starts to record frames in directory.
+    /// Starts to record frames in directory. An error rolls back resources created by this attempt; a panic may
+    /// interrupt an active start, which the recording owner stops while unwinding.
     fn start(&self, directory: &Path, frame_identity: bool) -> Result<(), String>;
     /// Returns whether the first frame was recorded.
     fn wait(&self) -> Result<bool, String>;
@@ -76,6 +78,7 @@ pub trait Capture {
 
 struct State {
     directory: Option<PathBuf>,
+    capture_stopped: bool,
     frame_identity: bool,
     document_identity_allowed: bool,
     identity_source: Option<(String, u64)>,
@@ -97,6 +100,7 @@ impl Recording {
         Recording {
             state: Mutex::new(State {
                 directory: None,
+                capture_stopped: false,
                 frame_identity: false,
                 document_identity_allowed: false,
                 identity_source: None,
@@ -127,8 +131,8 @@ impl Recording {
         document_identity_allowed: bool,
         make: &dyn Fn(&Path) -> Result<(), String>,
     ) -> Result<(), String> {
-        // default: a lock that a panicking thread poisoned still holds the recording state, which the start reads and
-        // amends; the panic hook records the panic.
+        // default: poison paths preserve the owned directory and stop status before unwinding, so start can refuse a
+        // running or cleanup-pending capture.
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(running) = &state.directory {
             return Err(format!("a capture into {} is running", running.display()));
@@ -138,102 +142,188 @@ impl Recording {
                 "document frame identity cleanup for surface {surface:?} generation {generation} is incomplete"
             ));
         }
+        // The caller owns the path until creation succeeds; a failed `make` must not trigger directory removal here.
         make(directory)?;
-        let started = (|| -> Result<(), String> {
+        let mut capture_open_attempted = false;
+        let mut capture_stop_attempted = false;
+        let mut capture_stopped = false;
+        let started = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             // The preparation decides the output size from the window size at that time, so even the same target is
             // prepared again for every recording.
+            capture_open_attempted = true;
             capture.open(target)?;
             capture.start(directory, frame_identity)?;
             match capture.wait() {
                 Ok(true) => Ok(()),
-                Ok(false) => match capture.stop() {
-                    Ok(_) => Err("capture did not produce an initial frame".into()),
-                    Err(stop_error) => Err(format!(
-                        "capture did not produce an initial frame; stop failed: {stop_error}"
-                    )),
-                },
-                Err(error) => match capture.stop() {
-                    Ok(_) => Err(error),
-                    Err(stop_error) => Err(format!("{error}; capture stop failed: {stop_error}")),
-                },
+                Ok(false) => {
+                    capture_stop_attempted = true;
+                    match capture.stop() {
+                        Ok(_) => {
+                            capture_stopped = true;
+                            Err("capture did not produce an initial frame".into())
+                        }
+                        Err(stop_error) => Err(format!(
+                            "capture did not produce an initial frame; stop failed: {stop_error}"
+                        )),
+                    }
+                }
+                Err(error) => {
+                    capture_stop_attempted = true;
+                    match capture.stop() {
+                        Ok(_) => {
+                            capture_stopped = true;
+                            Err(error)
+                        }
+                        Err(stop_error) => {
+                            Err(format!("{error}; capture stop failed: {stop_error}"))
+                        }
+                    }
+                }
             }
-        })();
+        }));
         match started {
-            Ok(()) => {
+            Ok(Ok(())) => {
                 state.directory = Some(directory.to_path_buf());
+                state.capture_stopped = false;
                 state.frame_identity = frame_identity;
                 state.document_identity_allowed = document_identity_allowed;
                 state.identity_source = None;
                 Ok(())
             }
-            Err(error) => match std::fs::remove_dir_all(directory) {
+            Ok(Err(error)) if capture_stop_attempted && !capture_stopped => {
+                state.directory = Some(directory.to_path_buf());
+                state.capture_stopped = false;
+                state.frame_identity = frame_identity;
+                state.document_identity_allowed = false;
+                state.identity_source = None;
+                Err(error)
+            }
+            Ok(Err(error)) => match std::fs::remove_dir_all(directory) {
                 Ok(()) => Err(error),
-                Err(cleanup_error) => Err(format!(
-                    "{error}; capture directory cleanup failed: {cleanup_error}"
-                )),
+                Err(cleanup_error) => {
+                    state.directory = Some(directory.to_path_buf());
+                    state.capture_stopped = capture_stopped || !capture_stop_attempted;
+                    state.frame_identity = frame_identity;
+                    state.document_identity_allowed = false;
+                    state.identity_source = None;
+                    Err(format!(
+                        "{error}; capture directory cleanup failed: {cleanup_error}"
+                    ))
+                }
             },
+            Err(panic) => {
+                let mut cleanup_errors = Vec::new();
+                if !capture_open_attempted {
+                    capture_stopped = true;
+                }
+                if capture_open_attempted && !capture_stop_attempted {
+                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| capture.stop()))
+                    {
+                        Ok(Ok(_)) => capture_stopped = true,
+                        Ok(Err(error)) => {
+                            cleanup_errors.push(format!("capture stop failed: {error}"));
+                        }
+                        Err(_) => cleanup_errors.push("capture stop panicked".into()),
+                    }
+                }
+                if !capture_stopped && cleanup_errors.is_empty() {
+                    cleanup_errors.push("capture stop was not confirmed".into());
+                }
+                if capture_stopped {
+                    match std::fs::remove_dir_all(directory) {
+                        Ok(()) => {}
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(error) => cleanup_errors
+                            .push(format!("capture directory cleanup failed: {error}")),
+                    }
+                }
+                if cleanup_errors.is_empty() {
+                    state.directory = None;
+                    state.capture_stopped = false;
+                    state.frame_identity = false;
+                    state.document_identity_allowed = false;
+                    state.identity_source = None;
+                    self.state.clear_poison();
+                } else {
+                    state.directory = Some(directory.to_path_buf());
+                    state.capture_stopped = capture_stopped;
+                    state.frame_identity = frame_identity;
+                    state.document_identity_allowed = false;
+                    state.identity_source = None;
+                    crate::application_log::log_error("recording", cleanup_errors.join("; "));
+                }
+                drop(state);
+                std::panic::resume_unwind(panic)
+            }
         }
     }
 
     /// Stops the recording in progress and deletes the folder. It does nothing when there is no recording.
     pub fn abort(&self, capture: &dyn Capture) -> Result<(), String> {
-        let directory = {
-            let mut state = self
-                .state
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the recording state, which the stop amends; the
-                // panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner);
-            state.frame_identity = false;
-            state.document_identity_allowed = false;
-            state.identity_source = None;
-            state.directory.take()
-        };
-        if let Some(directory) = directory {
-            let stop_error = capture.stop().err();
-            let cleanup_error = std::fs::remove_dir_all(directory)
-                .err()
-                .map(|error| error.to_string());
-            match (stop_error, cleanup_error) {
-                (None, None) => {}
-                (Some(error), None) | (None, Some(error)) => return Err(error),
-                (Some(stop_error), Some(cleanup_error)) => {
-                    return Err(format!(
-                        "capture stop failed: {stop_error}; capture directory cleanup failed: {cleanup_error}"
-                    ));
+        let mut state = self
+            .state
+            .lock()
+            // default: a poisoned state retains the owned directory and stop status for an explicit cleanup retry.
+            .unwrap_or_else(PoisonError::into_inner);
+        if state.directory.is_some() {
+            if !state.capture_stopped {
+                capture.stop()?;
+                state.capture_stopped = true;
+            }
+            if let Some(directory) = state.directory.as_deref() {
+                match std::fs::remove_dir_all(directory) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => {
+                        return Err(format!("capture directory cleanup failed: {error}"));
+                    }
                 }
             }
         }
+        state.directory = None;
+        state.capture_stopped = false;
+        state.frame_identity = false;
+        state.document_identity_allowed = false;
+        state.identity_source = None;
+        self.state.clear_poison();
         Ok(())
     }
 
     /// Ends the recording in progress and returns the folder and the number of frames. The requester deletes the
     /// folder.
     pub fn finish(&self, capture: &dyn Capture) -> Result<(PathBuf, i32, bool), String> {
-        let (directory, frame_identity) = {
-            let mut state = self
-                .state
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the recording state, which the stop amends;
-                // the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner);
-            let directory = state.directory.take();
-            let frame_identity = std::mem::replace(&mut state.frame_identity, false);
-            if state.identity_source.is_none() {
-                state.document_identity_allowed = false;
-            }
-            (directory, frame_identity)
-        };
-        let directory = directory.ok_or_else(|| "no capture is running".to_string())?;
-        let count = match capture.stop() {
-            Ok(count) => count,
-            Err(error) => return Err(error),
-        };
+        let mut state = self
+            .state
+            .lock()
+            // default: a poisoned state retains its owned directory and stop status for finish or abort cleanup.
+            .unwrap_or_else(PoisonError::into_inner);
+        if state.capture_stopped {
+            return Err(
+                "capture has stopped but its directory cleanup is incomplete; abort is required"
+                    .into(),
+            );
+        }
+        if state.directory.is_none() {
+            return Err("no capture is running".into());
+        }
+        let count = capture.stop()?;
+        state.capture_stopped = true;
+        let directory = state
+            .directory
+            .take()
+            .ok_or_else(|| "capture directory disappeared while stopping".to_string())?;
+        state.capture_stopped = false;
+        let frame_identity = std::mem::replace(&mut state.frame_identity, false);
+        if state.identity_source.is_none() {
+            state.document_identity_allowed = false;
+        }
+        self.state.clear_poison();
         Ok((directory, count, frame_identity))
     }
 
     /// Returns the active identity-capture flag and its selected view root.
     pub fn frame_identity_state(&self) -> (bool, Option<(String, u64)>) {
+        // default: panic paths leave state unchanged until a stop succeeds; reading the retained state is safe for cleanup.
         let state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         (
             state.directory.is_some() && state.frame_identity && state.document_identity_allowed,
@@ -250,6 +340,7 @@ impl Recording {
         if surface.is_empty() || generation == 0 {
             return Err("document frame identity source requires a surface and generation".into());
         }
+        // default: source validation runs before allocation and assignment, so a panic leaves the prior state intact.
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         if state.directory.is_none() || !state.frame_identity || !state.document_identity_allowed {
             return Err("document frame identity requires an active frameIdentity capture".into());
@@ -265,6 +356,7 @@ impl Recording {
 
     /// Clears the selected source after native marker cleanup completes.
     pub fn clear_frame_identity_source(&self, surface: &str, generation: u64) -> bool {
+        // default: native cleanup completes before these non-panicking state-field updates run.
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         if state
             .identity_source
@@ -280,8 +372,7 @@ impl Recording {
 
     /// The folder of the recording in progress.
     pub fn running(&self) -> Option<PathBuf> {
-        // default: a lock that a panicking thread poisoned still holds the recording state, which is only read; the
-        // panic hook records the panic.
+        // default: panic paths leave state unchanged until capture stop succeeds; this read inspects the retained cleanup state.
         let state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         state.directory.clone()
     }

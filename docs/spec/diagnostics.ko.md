@@ -8,6 +8,8 @@
 
 Recording은 idle callback을 포함해 callback record 최대 4096개와 pending frame write 최대 64개를 수락한다. 별도 전체 frame 차단은 없다. Callback 용량 초과는 명시적 recording 오류로 이후 sample을 거부하고 `limited:true`를 보고한다. 수락한 frame 파일과 writer timing은 수락한 callback record 수로 제한된다.
 
+Diagnostic recording은 capture stop이 성공한 뒤 finish가 넘기거나 abort가 삭제할 때까지 출력 directory를 소유한다. Stop 실패는 cleanup 소유권을 유지하고 다음 start를 차단한다. Directory 삭제 실패는 이미 멈춘 capture를 다시 stop하지 않고 재시도할 수 있다. Start의 panic은 원래 panic을 다시 전달하기 전에 cleanup을 시도하고 cleanup 실패를 별도로 보고한다. Directory 생성 실패는 요청한 path의 소유권을 얻거나 삭제하지 않는다. Poison된 document-frame lifecycle 및 pending-start lock은 불확실한 상태로 진행하지 않고 명시적 오류를 반환한다.
+
 ## 폴더
 
 애플리케이션의 모든 진단 파일은 `<config-dir>/logs/` 아래에 있다. 결함을 만난 사람은 이 폴더를 넘기고, [debug view](debug.ko.md)가 이 폴더를 나열하고 저장한다. 진단 파일을 담는 다른 폴더는 없다. `process.lock` 같은 운영 파일은 기록이 아니므로 `logs/` 밖에 둔다.
@@ -150,7 +152,7 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | 문서 영역의 stream 메시지가 잘못되었거나 전달할 수 없거나, snapshot 확인이 거부된다 | `error host document stream <name>: <reason>`. 이름 `<name>`의 문서에서 실패한 stream 메시지마다 쓰며, 잘못된 메시지, 알 수 없는 stream이나 메시지 type, 거부된 `on`이나 확인, 없는 문서가 해당한다 |
 | 모달을 놓거나 모서리를 둥글게 하거나 위로 올리거나 포커스를 돌려줄 수 없거나, 모달 문서를 그리지 못한다 | `error host modal place`, `error host modal corners`, `error host modal raise`, `error host modal focus restoration`, `error host modal <id>`. 각각 뒤에 `: <reason>`이 붙는다 |
 | 사이드카를 멈추거나 교체하거나 창을 위해 유지할 수 없거나, 표면이 닫혔음을 알릴 수 없거나, Wails host의 native view 다리가 실패한다 | `error host sidecar stop`, `error host replace`, `error host sidecar retain`, `error host sidecar close <surface>`, `error host native message`, `error host native reply`. 각각 뒤에 `: <reason>`이 붙는다 |
-| recording 상태의 lock이 poisoned이다 | `error host recording: <reason>` |
+| recording start의 panic 뒤 cleanup이 capture를 멈추거나 소유한 directory를 삭제하지 못한다 | `error host recording: <reason>`; 원래 panic은 별도의 `host.panic` record로 유지한다 |
 | input reference의 reply가 요청 종료 후 도착한다 | `error host input reference: <reason>` |
 | 알림 센터가 실패를 알리거나, 이벤트를 읽지 못하거나, 알림의 종류를 모르거나, 창과 표면이 없거나, 닫힌 창을 가리킨다 | `error host notification: <reason>` |
 | 이전 실행의 crash report를 읽을 수 없거나, crash report 폴더를 나열하거나 알아낼 수 없다 | `error host crash reports: <reason>`, `error native diagnostic reports: the system names no Library folder for the user`. 이유는 파일이나 폴더를 밝히며, 읽을 수 없는 report는 한 번만 보고한다([로깅](logging.ko.md)) |

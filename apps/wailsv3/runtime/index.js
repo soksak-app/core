@@ -20,6 +20,7 @@ const SERVICE = "github.com/soksak-app/core/packages/host/wailsv3/src.Bindings";
 
 /* The runtime module is resolved once on first use, and every consumer shares its result. */
 let runtimePromise;
+// default: each consumer shares the first asynchronous runtime import result.
 const runtime = () => runtimePromise ??= import("/wails/runtime.js");
 
 /** A call of a bound method with its arguments and the correlation identifiers of the operation it carries out (docs/spec/logging.md#operation-chains). */
