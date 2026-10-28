@@ -11,9 +11,9 @@
 The source audits use the matching current SDK's public commands. Older installed SDK readers reject schema 3; their default command is not reported as passing. These are local development results. Publication and historical failure-closure tasks retain their own checklist states.
 
 
-The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 42 rows: 12 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
+The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 41 rows: 11 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
 
-- **Current measurement and check corrections: 6** — F239-223, F239-223-3, F239-233, F239-243, F239-245, F239-246
+- **Current measurement and check corrections: 5** — F239-223, F239-223-3, F239-233, F239-243, F239-245
 - **Reported failures and historical closure audits: 16** — F212.1-2-2; F212.10-hwp-2, F212.10-core-5; F212.12-2-2-4-8; F239-32; F266.1 through F266.3, F266.5 through F266.7 and F266.9 through F266.13
 - **Performance measurements: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package installation and publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -25,7 +25,7 @@ The most recent Terminal drag measurement before F239-241 and F239-242 fails cad
 
 The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains seven measured failures and one refused collection. Browser source-frame gaps are 51/34 ms on Wails/Tauri, Editor 50/34 ms, HWP 34/34 ms, and Wails Terminal 71 ms. Tauri Terminal refuses synthetic drag because its window is active and establishes no drag result. HWP footprint passes on both hosts: 571,791,024 bytes against 581,004,760 allowed on Wails, and 568,760,032 against 569,847,184 on Tauri. HWP adjusted first display still fails at 1616.594/1755.235 ms against 1001/1113 ms. Source gaps are observer intervals, not measured input-to-display latency. The independent F239-238 evaluator reports convergence passes for Browser and Editor on both hosts and failures for HWP on both hosts and Wails Terminal in a diagnostic replay of retained measurements. Tauri Terminal has no convergence result. This replay is not a new application acceptance run. Both hosts exit normally, error-log audits pass, and the original frontmost baseline is restored. F239-223 and F239-233 remain open; no product memory optimization or common latency cause is inferred.
 
-- [~] F239-246 — P1: Align the command-supervisor language adapter count with its 22 current owning cases. The integrated run passes all 22 tests but fails because the manifest expects 20. Recheck only this adapter and retain passing evidence for the other languages.
+- [o] F239-246 — P1: Align the command-supervisor language adapter count with its 22 current owning cases. The integrated run passes all 22 tests but fails because the manifest expects 20. Recheck only this adapter and retain passing evidence for the other languages.
 
 - [~] F239-245 — P1: Resolve the integrated census and fallback findings for defaults and error handling. Each site must provide an explicit contract-correct error path or a verified reason for recovery or an unobserved result. Preserve the audits, correct wrong behavior with owning Red/Green, and document actual reasons for correct behavior. Recheck only these owners without repeating the full suite.
 
