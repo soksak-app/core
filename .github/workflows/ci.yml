@@ -238,7 +238,6 @@ jobs:
           GOFLAGS: -mod=readonly
           CARGO_NET_OFFLINE: 'true'
           CARGO_INCREMENTAL: '0'
-          CARGO_BUILD_JOBS: '1'
           OFFLINE: '1'
         run: make -C core docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check events-check census-check
       - name: Host tests
@@ -248,7 +247,6 @@ jobs:
           GOFLAGS: -mod=readonly
           CARGO_NET_OFFLINE: 'true'
           CARGO_INCREMENTAL: '0'
-          CARGO_BUILD_JOBS: '1'
           OFFLINE: '1'
         run: make -C core host-contract-check
       - name: Cross-toolchain script tests
@@ -259,7 +257,6 @@ jobs:
           GOFLAGS: -mod=readonly
           CARGO_NET_OFFLINE: 'true'
           CARGO_INCREMENTAL: '0'
-          CARGO_BUILD_JOBS: '1'
           OFFLINE: '1'
         run: node core/scripts/node-tests.mjs --only scripts/
       - name: Reject lockfile changes

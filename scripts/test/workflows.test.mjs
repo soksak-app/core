@@ -222,6 +222,8 @@ test('ci keeps language host checks independent and gates release on every requi
   const eqChecks = equivalence.findIndex((step) => step.name === 'Host tests');
   assert.ok(eqFetch >= 0 && eqChecks > eqFetch, 'equivalence does not fetch native dependency before offline host checks');
   assert.match(equivalence[eqChecks].text, /OFFLINE: '1'/);
+  // A hosted runner serves one job, so its Rust builds use every processor; a one-job limit builds each crate on one processor.
+  assert.doesNotMatch(job('equivalence'), /CARGO_BUILD_JOBS/, 'equivalence limits its Rust builds to fewer jobs than the runner has processors');
 });
 
 test('CI JavaScript scopes cover every discovered test file exactly once', { timeout: 10_000 }, async () => {
