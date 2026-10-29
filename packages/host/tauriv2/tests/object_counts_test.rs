@@ -80,6 +80,46 @@ fn image_region_count_falls_back_when_removed() {
     assert_eq!(images.count(), 0);
 }
 
+// A surface is a sidecar session only of the sidecars to which it sent, and the sessions are ordered by sidecar and surface;
+// the Tauri host sends nothing to a sidecar for a surface on a page reload.
+// contract: diagnostics.objects.sidecar-sessions-agree
+#[test]
+fn sidecar_sessions_list_only_the_surfaces_that_sent() {
+    let directory = folder::Folder::new();
+    // The fixture keeps its standard input open, so the sessions stay running until the sidecars stop.
+    let program = directory.path().join("echo");
+    std::fs::write(&program, "#!/bin/sh\ncat > /dev/null\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let declarations = vec![SidecarDeclaration {
+        name: ECHO.to_string(),
+        folder: directory.path().to_path_buf(),
+        data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_vec(),
+        version: "0.0.1".to_string(),
+        dependents: Vec::new(),
+    }];
+    let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf()).unwrap();
+    let owner = FakeOwner {
+        key: "a".into(),
+        root: directory.path().display().to_string(),
+    };
+    for surface in ["terminal-b", "terminal-a"] {
+        sidecars
+            .send_with_cids(&owner, ECHO, surface, &raw("{}"), &[])
+            .unwrap();
+    }
+    assert_eq!(
+        sidecars.sessions(&owner),
+        ["terminal-a", "terminal-b"]
+            .map(|surface| SidecarSession {
+                sidecar: ECHO.to_string(),
+                surface: surface.to_string()
+            })
+            .to_vec()
+    );
+    sidecars.stop();
+}
+
 // contract: diagnostics.objects.counts-host-objects
 #[test]
 fn sidecar_session_and_pending_reply_counts_follow_the_owner() {

@@ -2056,55 +2056,6 @@ fn a_response_to_a_sidecar_that_ended_is_the_ended_error() {
     }
 }
 
-// The sidecars that a page reload reconnects for a surface skip a sidecar that no plugin declares: the plugin of that
-// sidecar was removed, so the surface ended with it, and a send to it fails and stopped the start of the page.
-// contract: surfaces.reload.reconnects-only-declared-sidecars
-#[test]
-fn a_page_reload_reconnects_only_the_declared_sidecars_of_a_surface() {
-    let declared = |name: &str| name != "@scope/sidecar-removed";
-    assert_eq!(
-        soksak_host_tauriv2::windows::reconnect_targets(
-            "s1",
-            vec![
-                "@scope/sidecar-removed".to_string(),
-                "@scope/sidecar-image".to_string()
-            ],
-            &[
-                (
-                    "@scope/sidecar-persistent".to_string(),
-                    vec!["s1".to_string()]
-                ),
-                ("@scope/sidecar-image".to_string(), vec!["s1".to_string()])
-            ],
-            declared,
-        ),
-        vec![
-            "@scope/sidecar-image".to_string(),
-            "@scope/sidecar-persistent".to_string()
-        ]
-    );
-}
-
-// A page reload reconnects a running persistent sidecar only for the surfaces that have sent to it: a send to it from
-// another surface, such as a surface of another card beside the surface that sent, would make that surface a sidecar session of
-// the persistent sidecar, which the Wails host does not count.
-// contract: diagnostics.objects.sidecar-sessions-agree
-#[test]
-fn a_page_reload_does_not_reconnect_a_persistent_sidecar_for_a_surface_that_never_sent_to_it() {
-    assert_eq!(
-        soksak_host_tauriv2::windows::reconnect_targets(
-            "tab-other",
-            Vec::new(),
-            &[(
-                "@scope/sidecar-persistent".to_string(),
-                vec!["tab-sender".to_string()]
-            )],
-            |_| true,
-        ),
-        Vec::<String>::new()
-    );
-}
-
 // contract: sidecars.trace.first-answer-after-spawn-is-recorded
 #[test]
 fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-300: Tauri 호스트는 이제 page reload 때 선언되지 않은 `reconnect` operation을 sidecar에 보내지 않으므로, surface composition 계약대로 두 호스트의 reload는 캡처한 각 image의 detach만 sidecar에 보낸다. Red: Tauri reload 시험이 표지보다 먼저 `reconnect`를 받았다. Green: 3회 중 3회 통과한다.
 - F239-295: page 시작은 더 이상 image detach를 기다리지 않으므로, 응답하지 않는 supplier는 자기 image의 surface만 붙잡는다: 두 호스트는 그 surface를 시작 문서의 `pendingSurfaces`에 나열하고, detach가 pending인 동안 그 image attach와 sidecar send를 거부하고, timeout을 한 번 쓰고 계속 기다리며, surface의 마지막 detach가 끝나면 `image-detach-ended {surface, error}`를 보낸다. page는 그 event 뒤에만 붙잡힌 tab을 mount하고 background session을 열며, 실패를 tab에 보인다. Red: Wails 시작 시험이 page 시작의 timeout으로 실패했고, attach 검사는 pending 거부를 찾지 못했으며, workbench와 browser 시험은 mount된 tab과 없는 `pendingSurfaces`를 찾았다. Green: 소유 Go, Rust, workbench, browser 시험이 통과한다. Tauri 응답 reader는 문자열이 아닌 `result`나 `error` member를 빈 값으로 읽지 않고 거부한다.
 - F239-299-4: 진단 terminal compose 검사는 terminal plugin이 요구하는 `markedRange`를 보내고 기록된 입력 연산의 preedit을 읽는다. 두 호스트에서 3회 중 3회 통과한다.
 - F239-298: 상대가 닫은 연결을 만난 답이나 알림은 두 호스트에서 오류 대신 보내지 않음으로 기록되고, Wails write queue는 연결이 닫힐 때 남은 frame을 기록한다. Red: Go와 Rust 소유 시험이 기록 없음과 쓰기 오류를 찾았다. Green: 3회 중 3회 통과한다.

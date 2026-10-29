@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, value::RawValue};
+use serde_json::Value;
 use tauri::ipc::Channel;
 use tauri::webview::Color;
 use tauri::{
@@ -162,30 +162,26 @@ pub(crate) fn register_declared_source_event_stream(
 #[path = "../tests/declared_source_stream/stream_test.rs"]
 mod declared_source_stream_test;
 
-/// A reload of the app DOM replaces all plugin documents but does not end the sessions.
-///
-/// The sidecars that a page reload reconnects for surface: the sidecars of its image regions and the running persistent
-/// sidecars to which surface has sent, each running persistent sidecar given with the surfaces that have sent to it,
-/// sorted and once each, without a sidecar that no plugin
-/// declares, whose surface ended with the removal of its plugin and to which a send fails.
-pub fn reconnect_targets(
-    surface: &str,
-    mut sidecars: Vec<String>,
-    running_persistent: &[(String, Vec<String>)],
-    declared: impl Fn(&str) -> bool,
-) -> Vec<String> {
-    // A send to a persistent sidecar from a surface that never sent to it would make that surface a sidecar session of
-    // the sidecar.
-    sidecars.extend(
-        running_persistent
-            .iter()
-            .filter(|(_, surfaces)| surfaces.iter().any(|sent| sent == surface))
-            .map(|(name, _)| name.clone()),
-    );
-    sidecars.retain(|name| declared(name));
-    sidecars.sort();
-    sidecars.dedup();
-    sidecars
+/// A reload of the app DOM replaces all plugin documents but does not end the sessions: the modules of the new page reach
+/// the same session owners (docs/spec/surface-composition.md). The reload sends the sidecars only the detach of each
+/// captured image of `surface` in `targets`, without waiting for the acknowledgements, so the surface stays pending until
+/// its detaches end (docs/spec/sidecars.md).
+pub fn reload_surface_sidecars<O: crate::sidecars::Owner>(
+    sidecars: &crate::sidecars::Sidecars<O>,
+    owner: &O,
+    images: &crate::images::Images,
+    targets: Vec<crate::images::DetachTarget>,
+    ended_event: crate::sidecars::image_detach::EndedEvent,
+) -> Result<(), String> {
+    crate::sidecars::image_detach::begin_image_detaches(
+        sidecars,
+        owner,
+        images,
+        targets,
+        crate::sidecars::image_detach::IMAGE_DETACH_TIMEOUT,
+        ended_event,
+    )?;
+    Ok(())
 }
 
 /// Tauri calls this from the main-webview `PageLoadEvent::Started` callback. The cleanup here is deliberately
@@ -215,9 +211,6 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         .iter()
         .map(|(id, handle)| (id.clone(), *handle))
         .collect();
-    let reconnect = RawValue::from_string(r#"{"operation":"reconnect"}"#.to_string())
-        .map_err(|error| error.to_string())?;
-    let running_persistent = window.state::<WindowSidecars>().running_persistent()?;
     let ended_window = window.clone();
     let ended_event: crate::sidecars::image_detach::EndedEvent = Arc::new(move |event| {
         if let Err(error) = emit_window(&ended_window, "image-detach-ended", event) {
@@ -226,12 +219,6 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     });
     for (surface, handle) in surfaces {
         let surface_detachments = data.images.begin_reload(&surface);
-        let sidecars = reconnect_targets(
-            &surface,
-            data.images.sidecars_for_surface(&surface),
-            &running_persistent,
-            |name| window.state::<WindowSidecars>().declared(name),
-        );
         platform.set_surface_hidden_handle(handle, true)?;
         crate::exposure::surface_closed(&window, &surface);
         let view_plugin = data.documents.views().plugin(&surface);
@@ -254,31 +241,13 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         for image in data.images.remove_surface(&surface) {
             platform.close_image(image)?;
         }
-        // Page startup does not wait for the acknowledgements; the surface stays pending until its detaches end
-        // (docs/spec/sidecars.md).
-        crate::sidecars::image_detach::begin_image_detaches(
+        reload_surface_sidecars(
             &window.state::<WindowSidecars>(),
             &window,
             &data.images,
             surface_detachments,
-            crate::sidecars::image_detach::IMAGE_DETACH_TIMEOUT,
             Arc::clone(&ended_event),
         )?;
-        // A persistent sidecar can send a new raster as soon as it receives the reconnect, so a sidecar whose detach of
-        // this surface is pending gets none: the supplier still owns the previous image, and the page mounts the surface
-        // when its image-detach-ended event arrives.
-        let pending = data.images.pending_detach_sidecars(&surface);
-        for sidecar in sidecars
-            .into_iter()
-            .filter(|sidecar| !pending.contains(sidecar))
-        {
-            window.state::<WindowSidecars>().send(
-                &window,
-                &sidecar,
-                &surface,
-                reconnect.as_ref(),
-            )?;
-        }
     }
     data.composition_revisions
         .lock()

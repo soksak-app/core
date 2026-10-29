@@ -60,11 +60,6 @@ fn a_poisoned_state_lock_still_answers_the_transport() {
     let folder = crate::test_folder::Folder::new();
     let sidecars = Sidecars::<TestOwner>::new(&[], folder.path().to_path_buf()).unwrap();
     poison(&sidecars.core.state);
-    assert_eq!(
-        sidecars.running_persistent().ok(),
-        Some(Vec::new()),
-        "the running persistent list was not read while the state lock was poisoned"
-    );
     let error = sidecars
         .send_with_cids(
             &TestOwner("main".to_string()),

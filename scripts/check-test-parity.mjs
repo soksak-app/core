@@ -200,6 +200,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-300",
+    implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
+    tests: [
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_page_reload_sends_no_message_to_a_persistent_sidecar_of_the_surface" },
+      { file: "packages/host/wailsv3/src/start_test.go", id: "TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending" },
+      { file: "packages/host/tauriv2/tests/object_counts_test.rs", id: "sidecar_sessions_list_only_the_surfaces_that_sent" },
+    ],
+    expected: "A page reload sends a sidecar only the detach of each captured image on both hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-295",
     implementation: [
       { file: "packages/host/wailsv3/src/image_detach.go", symbol: "func (s *Surfaces) beginImageDetaches(" },

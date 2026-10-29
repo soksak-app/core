@@ -177,6 +177,93 @@ fn sidecar_declaration_requires_one_display_name_component() {
     );
 }
 
+// A page reload sends a sidecar only the detach of each captured image: the persistent service echoes every line that it
+// receives, so a message that the reload sent would come back before the marker sent after the reload.
+// contract: surfaces.reload.sends-only-image-detaches
+#[test]
+fn a_page_reload_sends_no_message_to_a_persistent_sidecar_of_the_surface() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("reload.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "reload-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let service = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(hello["token"], "reload-token");
+        stream
+            .write_all(b"{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}\n")
+            .unwrap();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) | Err(_) => return,
+                Ok(_) => {}
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            if request["operation"] == "close-owner" {
+                let reply = serde_json::json!({
+                    "operation": "closed-owner",
+                    "request": request["request"],
+                    "ok": true
+                });
+                writeln!(stream, "{reply}").unwrap();
+                return;
+            }
+            stream.write_all(line.as_bytes()).unwrap();
+        }
+    });
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, events) = owner("first", "/projects/first");
+    sidecars
+        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let opened = events.recv_timeout(STALL).unwrap();
+    assert!(opened.body.get().contains("open"), "{}", opened.body.get());
+
+    soksak_host_tauriv2::windows::reload_surface_sidecars(
+        &sidecars,
+        &owner,
+        &soksak_host_tauriv2::images::Images::default(),
+        Vec::new(),
+        Arc::new(|_| {}),
+    )
+    .unwrap();
+    sidecars
+        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"marker"}"#))
+        .unwrap();
+    let next = events.recv_timeout(STALL).unwrap();
+    assert!(
+        next.body.get().contains("marker"),
+        "the reload sent {} to the persistent sidecar of the surface",
+        next.body.get()
+    );
+    sidecars.stop();
+    service.join().unwrap();
+}
+
 // contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one
 #[test]
 fn concurrent_hosts_share_an_authenticated_service_endpoint() {

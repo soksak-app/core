@@ -7,7 +7,7 @@ import (
 	"unsafe"
 )
 
-// contract: images.reload.start-sends-detach-without-waiting
+// contract: images.reload.start-sends-detach-without-waiting, surfaces.reload.sends-only-image-detaches
 func TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending(t *testing.T) {
 	c := sidecarSessionSurfaces(t).sidecars
 	c.stopped = false
@@ -56,5 +56,10 @@ func TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending(t *testi
 	}
 	if err := surfaces.pendingImageDetachError(key.Surface); err == nil {
 		t.Fatal("page start left no pending detach for the surface of the reloaded image")
+	}
+	select {
+	case line := <-service.outbox:
+		t.Fatalf("page start sent %s to the sidecar besides the image detach", line.bytes)
+	default:
 	}
 }

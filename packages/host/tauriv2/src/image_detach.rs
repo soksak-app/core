@@ -43,7 +43,7 @@ pub(crate) struct DetachWait {
 }
 
 /// Sends an image-detach-ended event `{surface, error}` to the page of the window.
-pub(crate) type EndedEvent = Arc<dyn Fn(serde_json::Value) + Send + Sync>;
+pub type EndedEvent = Arc<dyn Fn(serde_json::Value) + Send + Sync>;
 
 /// Names the target of a detach in its errors.
 pub(crate) fn detach_target_text(target: &DetachTarget) -> String {

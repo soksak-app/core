@@ -699,18 +699,6 @@ mod wait_boundary {
     }
 }
 
-// contract: tauriv2.images.detach.pending-sidecar-gets-no-reconnect
-#[test]
-fn a_sidecar_with_a_pending_detach_of_a_surface_is_named_for_the_reconnect_exclusion() {
-    let surface = "surface-reconnect";
-    let images = attached_images(surface);
-    let targets = images.begin_reload(surface);
-    images.add_pending_detach(&targets[0], "request-1");
-
-    assert_eq!(images.pending_detach_sidecars(surface), ["fixture-sidecar"]);
-    assert!(images.pending_detach_sidecars("surface-other").is_empty());
-}
-
 // contract: exposure.window.region-reports-presented-frame
 #[test]
 fn presenting_a_frame_notifies_after_its_identity_is_current() {

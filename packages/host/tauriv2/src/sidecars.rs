@@ -1649,37 +1649,6 @@ impl<O: Owner> Sidecars<O> {
         delivered
     }
 
-    /// Returns each persistent sidecar that is already running, with the surfaces that have sent to it, sorted by name.
-    ///
-    /// Even when the page removed the image registration from the host first, the recovery after a reload must
-    /// initialize the persistent surface work.
-    pub fn running_persistent(&self) -> Result<Vec<(String, Vec<String>)>, String> {
-        let state = self
-            .core
-            .state
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the panic
-            // hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner);
-        let mut running: Vec<_> = state
-            .running
-            .iter()
-            .filter(|(name, process)| {
-                // default: a sidecar that did not declare persistent runs for each window.
-                self.core
-                    .declaration(name)
-                    .is_some_and(|(_, persistent)| persistent)
-                    && process
-                        .persistent
-                        .as_ref()
-                        .is_some_and(|connection| connection.connected.load(Ordering::Acquire))
-            })
-            .map(|(name, process)| (name.clone(), process.surfaces.iter().cloned().collect()))
-            .collect();
-        running.sort();
-        Ok(running)
-    }
-
     /// Notifies all running sidecars of the surfaces of the window owner that are not in alive.
     /// Reports whether the plugin lists the sidecar in its dependencies (docs/spec/plugins.md, manifest).
     pub fn depends_on(&self, plugin: &str, name: &str) -> bool {
@@ -4306,7 +4275,7 @@ fn write_stderr_records(stderr: std::process::ChildStderr, name: &str) {
 }
 
 #[path = "image_detach.rs"]
-pub(crate) mod image_detach;
+pub mod image_detach;
 
 #[cfg(test)]
 #[path = "sidecars_lock_test.rs"]

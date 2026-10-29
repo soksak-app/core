@@ -8,7 +8,7 @@
 //! Commands run outside the main thread and native work runs on the main thread. A cleanup that started on the main
 //! thread is not awaited.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -39,7 +39,7 @@ pub type Key = (String, String);
 
 /// The image owner that a page reload must detach from its supplier before reconnecting the surface.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct DetachTarget {
+pub struct DetachTarget {
     pub surface: String,
     pub name: String,
     pub sidecar: String,
@@ -346,20 +346,6 @@ impl Images {
         }
     }
 
-    /// The sidecars that have a pending detach of surface.
-    pub(crate) fn pending_detach_sidecars(&self, surface: &str) -> Vec<String> {
-        let mut sidecars: Vec<_> = self
-            .lock()
-            .pending_detachments
-            .keys()
-            .filter(|(_, target_surface, _)| target_surface == surface)
-            .map(|(sidecar, _, _)| sidecar.clone())
-            .collect();
-        sidecars.sort();
-        sidecars.dedup();
-        sidecars
-    }
-
     /// Marks the page as not ready for image-detach-ended events, clears the events kept for the previous page, whose
     /// start document the new page does not read, and returns the failure texts of the cleared events, which no page
     /// shows.
@@ -550,18 +536,6 @@ impl Images {
             .filter(|&(_, &handle)| handle != 0)
             .map(|(key, &handle)| (handle, key.clone()))
             .collect()
-    }
-
-    /// Returns the sidecar that the surface uses before the reload.
-    pub fn sidecars_for_surface(&self, surface: &str) -> Vec<String> {
-        let inner = self.lock();
-        let mut sidecars = HashSet::new();
-        for key in inner.handles.keys().filter(|key| key.0 == surface) {
-            if let Some(sidecar) = inner.sidecars.get(key) {
-                sidecars.insert(sidecar.clone());
-            }
-        }
-        sidecars.into_iter().collect()
     }
 
     /// The addresses of created image regions.
