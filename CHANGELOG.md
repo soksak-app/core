@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-299-3-1: The presentation wait of native surfaces and the case `view.presentation-wait.joins` state that a view joins at each display that changes its frame, also during a continuing gesture, as both hosts do since F212.14-5-18.
 - F239-296-1: The refusal of a tab without an origin names the operation whose stored layout dropped the origin, with its space and project, so the drop that loses a view origin is found in the record of the refusal.
 - F239-299-3: The terminal divider drag check requires a `presented` phase of `view.presentation-join` for each terminal view in each set, read from the host trace of the event log, instead of a field of the page presentation request that no longer exists. The check runs in the integrated pass.
 - F239-299-1: The terminal window check of three terminals and two browsers counts one web view for the main page and one for each view surface, as the native window facts measure them, instead of one shared app web view; the specifications of the app DOM name the `dom` composition. The check runs in the integrated pass.
