@@ -794,6 +794,7 @@ fn invalid_json_closes_connection() {
 | `project.open.prepare-before-show` | 이미 보이는 project를 다시 열 때 page가 그 project의 root를 선택하기 전까지 commit된 root를 유지한다. | both |
 | `project.open.registers-owner-without-commit` | 새 project를 열 때 owner는 등록하지만 page가 표시된 project를 알릴 때까지 기존 commit 상태를 유지하고 project를 게시하지 않는다. | both |
 | `project.open.staged-until-shown` | project owner는 project를 여는 동안 staged 상태로 남고, page가 표시된 project를 알린 뒤에만 commit된다. | both |
+| `project.open.other-owner-is-shown-without-activation` | 다른 창이 가진 project를 열면 응용의 활성화를 요청하지 않은 채 그 창을 보인다. | both |
 | `projects.open.geometry-failure-closes-before-reservation` | 새 project window의 geometry 설정이 실패하면 host는 owner reservation을 추가하기 전에 그 window를 닫고 다른 project 상태는 유지한다. | tauriv2 only: Tauri window geometry operation은 오류 결과를 반환한다 |
 | `project.shown-commits-after-page-ready` | Page가 선택한 project를 알린 뒤 host가 해당 project를 commit한다. 게시되는 값은 commit된 상태를 반영하며, project 없음 선택은 그 상태를 지운다. | both |
 | `projects.shown.requires-project-field` | Project-shown 요청에는 `project` member가 필요하다. 명시적 `null`은 표시 project를 지우며, member를 생략하면 상태 변경 전에 거부한다. | both |

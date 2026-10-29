@@ -363,6 +363,8 @@ type Surfaces struct {
 	window        *application.WebviewWindow
 	// titles sets the title of the native window (windows.go setTitle). NewSurfaces sets the window, and a test sets a recorder.
 	titles titleSetter
+	// fronts shows the native window (windows.go windowFront). NewSurfaces sets the window, and a test sets a recorder.
+	fronts windowFront
 	// host is the host that created this window. name is the window identifier of the endpoint and title is the window title.
 	host  *Host
 	name  string
@@ -452,7 +454,7 @@ type Surfaces struct {
 
 func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 	s := &Surfaces{
-		window: win, titles: win, projects: map[string]string{}, sidecars: sidecars,
+		window: win, titles: win, fronts: win, projects: map[string]string{}, sidecars: sidecars,
 		views:                map[string]*nativeWebview{},
 		compositions:         map[string]SurfaceComposition{},
 		surfacePlugins:       map[string]string{},

@@ -29,6 +29,13 @@ type titleSetter interface {
 	SetTitle(title string) application.Window
 }
 
+// windowFront is the native window of a window record, which a project open or an activated notification shows. NewSurfaces
+// sets the real window, and a test sets a recorder in its place.
+type windowFront interface {
+	Show() application.Window
+	Focus()
+}
+
 // setTitle changes the window title and records it as the value that windows.list returns.
 func (s *Surfaces) setTitle(title string) {
 	s.mu.Lock()

@@ -177,7 +177,7 @@ fn event(app: &AppHandle, raw: String) {
                 );
             };
             if kind == "activated"
-                && let Err(error) = owner.show().and_then(|()| owner.set_focus())
+                && let Err(error) = crate::windows::show_notification_owner(&owner)
             {
                 return failed(
                     app,

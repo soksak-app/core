@@ -105,8 +105,8 @@ func HandleNotificationEvent(h *Host, raw string) {
 			return
 		}
 		if event.Type == "activated" {
-			owner.window.Show()
-			owner.window.Focus()
+			owner.fronts.Show()
+			owner.fronts.Focus()
 		}
 		owner.Emit("notification-"+event.Type, map[string]string{"surface": target[1]})
 	default:

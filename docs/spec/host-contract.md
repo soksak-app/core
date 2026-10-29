@@ -789,6 +789,7 @@ Items:
 | `project.open.prepare-before-show` | Opening the already shown project keeps its committed root until the page selects that project's root. | both |
 | `project.open.registers-owner-without-commit` | Opening a new project registers its owner while preserving the previously committed project and withholding project publication until the page reports the shown project. | both |
 | `project.open.staged-until-shown` | A project owner remains staged while opening the project and is committed only after the page reports the shown project. | both |
+| `project.open.other-owner-is-shown-without-activation` | Opening a project that another window owns shows that window without requesting the activation of the application. | both |
 | `projects.open.geometry-failure-closes-before-reservation` | If setting geometry of a newly opened project window fails, the host closes that window before adding its project-owner reservation and preserves other project state. | tauriv2 only: Tauri's window geometry operation returns an error result |
 | `project.shown-commits-after-page-ready` | The host commits the selected project after the page reports it; publication observes the committed project state, and a no-project selection clears that state. | both |
 | `projects.shown.requires-project-field` | A project-shown request requires the `project` member; explicit `null` clears the shown project, while an omitted member is rejected before state changes. | both |

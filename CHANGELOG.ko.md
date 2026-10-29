@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-291: 두 호스트에서 다른 창에서 연 project가 응용을 활성화하지 않고 소유 창을 앞에 놓으므로, 결과가 시스템의 활성화 허락에 달리지 않는다; 활성화된 알림은 계속 그 창에 focus를 준다. Red: 두 호스트가 show와 focus를 요청했다; Green: `project.open.other-owner-is-shown-without-activation`이 두 호스트에서 3회 중 3회 통과한다.
 - F239-290-1: F239-290 수정으로 build한 두 호스트에서 projects 창 검사 전체가 load average 23.4에서 14개 모두 통과한다; F239-32는 전체 실행 세 번 뒤 재현되지 않음으로 닫고, F239-291은 project 창이 한 실행에서는 한 호스트에서, 다른 실행에서는 두 호스트 모두에서 응용을 활성화했음을 기록한다.
 - F239-290: 두 호스트에서 다시 보인 표면이 presented frame을 새 raster부터 세므로, 그 raster의 첫 frame이 10초 timeout 대신 표시 장벽을 끝내고, presented frame을 올리지 못한 native presentation은 기록된다. Red: `images.visibility.shown-surface-presents-from-its-new-raster`가 두 호스트에서 `raster 2 sequence 1 presented 1/3`으로 실패했다; Green: Go와 Rust image 시험과 함께 두 호스트에서 3회 중 3회 통과한다.
 - F239-289: Tauri sidecar owner test 두 개가 끝나기 전에 performance trace를 꺼서 sampler와 그것이 시작한 `ps`가 check보다 오래 남지 않는다.

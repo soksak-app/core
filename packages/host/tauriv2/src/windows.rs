@@ -994,6 +994,35 @@ struct ShownProject {
 
 /// Opens a project. An already open project activates its owning window, and a separate request creates a new window
 /// when the requesting window owns another project.
+/// The operations that bring a window in front: a project open (`show_project_owner`) and an activated notification use
+/// them. The real window implements them, and a test supplies a recorder.
+pub trait WindowFront {
+    fn show(&self) -> tauri::Result<()>;
+    fn set_focus(&self) -> tauri::Result<()>;
+}
+
+impl WindowFront for Window {
+    fn show(&self) -> tauri::Result<()> {
+        Window::show(self)
+    }
+
+    fn set_focus(&self) -> tauri::Result<()> {
+        Window::set_focus(self)
+    }
+}
+
+/// Shows the window that owns a project opened from another window. The window comes in front of the other windows of
+/// the application as the key window; it does not activate the application, whose activation the system may refuse
+/// (docs/spec/projects.md).
+pub fn show_project_owner(owner: &impl WindowFront) -> Result<(), String> {
+    owner.show().map_err(|e| e.to_string())
+}
+
+/// Shows and focuses the window of a notification that the person activated.
+pub fn show_notification_owner(owner: &impl WindowFront) -> tauri::Result<()> {
+    owner.show().and_then(|()| owner.set_focus())
+}
+
 pub(crate) fn project_open(
     window: &Window,
     request: OpenProject,
@@ -1038,8 +1067,7 @@ fn project_open_on_main(
         let staged = register_project_open(&data, &request.id, &folder.root, false);
         if label != window.label() {
             emit_window(&owner, "project-activate", &request.id).map_err(|e| e.to_string())?;
-            owner.show().map_err(|e| e.to_string())?;
-            owner.set_focus().map_err(|e| e.to_string())?;
+            show_project_owner(&owner)?;
         }
         return Ok(serde_json::json!({
             "local": label == window.label(),

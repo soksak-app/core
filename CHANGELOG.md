@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-291: A project opened from another window brings its owner window in front without activating the application on both hosts, so the result no longer depends on whether the system grants an activation; an activated notification still focuses its window. Red: both hosts requested show and focus; Green: `project.open.other-owner-is-shown-without-activation` passes 3 of 3 runs on both hosts.
 - F239-290-1: The full projects window check passes 14 of 14 on both hosts built with the F239-290 correction at load average 23.4; F239-32 closes as not reproduced after three full runs, and F239-291 records that a project window activated the application on one host in one run and on both in another.
 - F239-290: A surface shown again counts its presented frames from the new raster in both hosts, so the first frame of that raster completes the presentation barrier instead of a 10 s timeout, and a native presentation that does not advance the presented frame is recorded. Red: `images.visibility.shown-surface-presents-from-its-new-raster` failed on both hosts with `raster 2 sequence 1 presented 1/3`; Green: it passes 3 of 3 runs on both hosts with the Go and Rust image tests.
 - F239-289: Two Tauri sidecar owner tests turn the performance trace off before they end, so the sampler and the `ps` it starts no longer outlive the check.

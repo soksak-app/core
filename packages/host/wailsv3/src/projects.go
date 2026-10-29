@@ -123,9 +123,10 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 		staged := owner.pendingProjects[req.ID]
 		h.mu.Unlock()
 		if !local {
-			owner.Emit("project-activate", req.ID)
-			owner.window.Show()
-			owner.window.Focus()
+			owner.windowEvent("project-activate", req.ID)
+			// The window comes in front of the other windows of the application as the key window; it does not activate the
+			// application, whose activation the system may refuse (docs/spec/projects.md).
+			owner.fronts.Show()
 		}
 		return ProjectOpened{Local: local, Staged: staged}, nil
 	}
