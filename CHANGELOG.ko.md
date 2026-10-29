@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F280: 창 검사 job은 멈춘 application이 끝나기를 기다리고 crash한 host의 crash report를 남긴다.
 - F279-2: 두 host는 `--registry-ca` 인증서가 parse되지 않는 이유를 보고한다.
 - F279-1: registry TLS target은 machine의 openssl 설정과 관계없이 자기가 선언한 인증서 확장만 쓴다.
 - F279: 창 검사의 registry TLS target은 openssl의 오류를 보고하고 인증서가 파싱되지 않으면 실패한다.

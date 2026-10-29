@@ -316,3 +316,14 @@ test('a window-check job without a run folder uploads no part of the checkout', 
     assert.match(text, /^\s+\$\{\{ steps\.run\.outputs\.path \}\}$/m, `${workflow} uploads no run folder path`);
   }
 });
+
+test('the window-check jobs wait for the applications to end and keep the crash report of an application that crashed', () => {
+  for (const workflow of ['.github/workflows/window-checks.yml', '.github/workflows/virtual-display-measure.yml']) {
+    const text = read(workflow);
+    assert.match(text, /while kill -0 "\$pid"/, `${workflow} does not wait for the stopped applications to end`);
+    assert.match(text, /- name: Keep the crash reports\n\s+if: always\(\)/, `${workflow} has no crash report step`);
+    assert.match(text, /error native fatal: [^\n]*host-\*\.stderr/, `${workflow} does not read the fatal record of each host`);
+    assert.match(text, /Library\/Logs\/DiagnosticReports/, `${workflow} does not read the crash reports of the system`);
+    assert.match(text, /^\s+\$\{\{ runner\.temp \}\}\/crash-reports$/m, `${workflow} uploads no crash reports`);
+  }
+});

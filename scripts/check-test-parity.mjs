@@ -7996,6 +7996,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F280",
+    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "- name: Keep the crash reports" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check jobs wait for the applications to end and keep the crash report of an application that crashed" }],
+    expected: "The window-check jobs wait for the stopped applications to end and keep the system crash report of each host that wrote a fatal record.",
+    levels: ["unit"],
+  },
+  {
     id: "F279-2",
     implementation: [
       { file: "packages/sok/wailsv3/src/diagnostics.go", symbol: "certificate %d does not parse" },

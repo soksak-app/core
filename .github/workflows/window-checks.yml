@@ -131,6 +131,36 @@ jobs:
           for app in wailsv3 tauriv2; do
             if [ -f "$RUNNER_TEMP/$app.pid" ]; then kill "$(cat "$RUNNER_TEMP/$app.pid")" || echo "$app had ended before the stop" >&2; fi
           done
+          # The step shell is not the parent of the applications, so no exit event reaches it; it reads their state every 0.2
+          # seconds for at most 60 seconds.
+          for app in wailsv3 tauriv2; do
+            if [ ! -f "$RUNNER_TEMP/$app.pid" ]; then continue; fi
+            pid="$(cat "$RUNNER_TEMP/$app.pid")"
+            waited=0
+            while kill -0 "$pid" 2>/dev/null; do
+              if [ "$waited" -ge 300 ]; then echo "$app did not end in 60 seconds after the stop" >&2; exit 1; fi
+              sleep 0.2
+              waited=$((waited + 1))
+            done
+          done
+      # A host that crashed wrote `error native fatal: <signal>` to its standard error; the stack of the crash is only in the
+      # report that the system writes after the process ends. The system sends no event for the report, so the step reads the
+      # folder every second for at most 60 seconds and fails with the name of the application whose report did not appear.
+      - name: Keep the crash reports
+        if: always()
+        run: |
+          reports="$HOME/Library/Logs/DiagnosticReports"
+          mkdir -p "$RUNNER_TEMP/crash-reports"
+          for app in wailsv3 tauriv2; do
+            if ! grep -qs ' error native fatal: ' "$RUNNER_TEMP/soksak-check-$app"/logs/host-*.stderr; then continue; fi
+            waited=0
+            until ls "$reports"/soksak-$app-*.ips > /dev/null 2>&1; do
+              if [ "$waited" -ge 60 ]; then echo "soksak-$app crashed and the system wrote no crash report in 60 seconds" >&2; exit 1; fi
+              sleep 1
+              waited=$((waited + 1))
+            done
+            cp "$reports"/soksak-$app-*.ips "$RUNNER_TEMP/crash-reports/"
+          done
       - name: Keep the run folder
         if: failure()
         uses: actions/upload-artifact@v4
@@ -138,11 +168,13 @@ jobs:
           name: window-checks-run
           # The run folder holds the output of each test and the marks; the event files of the applications are in the
           # configuration folders and are kept until every failure is classified. The output file of each application
-          # holds what it wrote before its event log opened, such as a start that writes no endpoint.
+          # holds what it wrote before its event log opened, such as a start that writes no endpoint. The crash reports hold
+          # the stack of a host that crashed.
           path: |
             ${{ steps.run.outputs.path }}
             ${{ runner.temp }}/soksak-check-wailsv3/logs
             ${{ runner.temp }}/soksak-check-tauriv2/logs
             ${{ runner.temp }}/wailsv3.out
             ${{ runner.temp }}/tauriv2.out
+            ${{ runner.temp }}/crash-reports
           if-no-files-found: error
