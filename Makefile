@@ -122,6 +122,7 @@ failures-check:
 	@node scripts/check-failure-table.mjs
 
 # The TLS certificates of the registry window check (docs/operations/examples.md). Creates a certificate authority owned by the check and a server certificate for 127.0.0.1.
+# openssl reads only the configuration file that the target writes, so no machine configuration adds an extension.
 # The check application of a diagnostic build starts with --registry-ca <folder>/ca.pem. An existing certificate is not replaced. Each certificate,
 # also an existing one, is parsed before the target ends, and a folder whose certificate does not parse is removed and the target fails, so a
 # later run creates it again.
@@ -131,12 +132,13 @@ e2e-registry-tls:
 	@test -n "$(or $(SOKSAK_CONFIG_ROOT),$(TMPDIR))" || { echo "e2e-registry-tls needs TMPDIR or SOKSAK_CONFIG_ROOT" >&2; exit 2; }
 	@if [ ! -f "$(E2E_REGISTRY_TLS)/ca.pem" ]; then \
 	  set -e; mkdir -p "$(E2E_REGISTRY_TLS)"; cd "$(E2E_REGISTRY_TLS)"; \
+	  printf '[req]\ndistinguished_name=name\nx509_extensions=authority\n[name]\n[authority]\nbasicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\n' > tls.cnf; \
 	  printf 'basicConstraints=CA:FALSE\nsubjectAltName=IP:127.0.0.1\nextendedKeyUsage=serverAuth\n' > server.ext; \
-	  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=soksak check registry authority" \
-	    -keyout ca-key.pem -out ca.pem -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign; \
-	  openssl req -newkey rsa:2048 -nodes -subj "/CN=127.0.0.1" -keyout server-key.pem -out server.csr; \
+	  openssl version; \
+	  openssl req -config tls.cnf -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=soksak check registry authority" -keyout ca-key.pem -out ca.pem; \
+	  openssl req -config tls.cnf -newkey rsa:2048 -nodes -subj "/CN=127.0.0.1" -keyout server-key.pem -out server.csr; \
 	  openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -days 3650 -extfile server.ext -out server.pem; \
-	  rm -f server.csr ca.srl server.ext; fi
+	  rm -f server.csr ca.srl server.ext tls.cnf; fi
 	@$(E2E_REGISTRY_TLS_PARSE) "$(E2E_REGISTRY_TLS)/ca.pem" "$(E2E_REGISTRY_TLS)/server.pem" || { rm -rf "$(E2E_REGISTRY_TLS)"; exit 1; }
 	@echo "$(E2E_REGISTRY_TLS)"
 

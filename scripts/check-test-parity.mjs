@@ -7996,6 +7996,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F279-1",
+    implementation: [{ file: "Makefile", symbol: "> tls.cnf" }],
+    tests: [{ file: "scripts/test/e2e-registry-tls.test.mjs", id: "the registry TLS target writes only its own extensions, whatever the openssl configuration of the machine adds" }],
+    expected: "The registry TLS target passes its own openssl configuration, so the certificates hold only the extensions that it declares.",
+    levels: ["unit"],
+  },
+  {
     id: "F279",
     implementation: [{ file: "Makefile", symbol: "E2E_REGISTRY_TLS_PARSE = node -e" }],
     tests: [{ file: "scripts/test/e2e-registry-tls.test.mjs", id: "the registry TLS target fails and names the file when openssl writes no certificate" }],

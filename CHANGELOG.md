@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F279-1: The registry TLS target writes only the certificate extensions that it declares, whatever the openssl configuration of the machine adds.
 - F279: The registry TLS target of the window checks reports the errors of openssl and fails when a certificate does not parse.
 - F278-1: A window-check job without a run folder uploads its logs and output files and no part of the checkout.
 - F278: The window-check jobs keep the output file of each application with the event logs.
