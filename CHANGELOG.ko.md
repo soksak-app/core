@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F272-4: release만 끝낼 수 있는 checklist 항목을 그것을 수행하는 `release.yml`의 단계와 함께 닫거나 그것을 맡는 저장소로 옮겨, 자기가 붙잡는 release를 기다리는 열린 항목이 없게 한다.
 - F273-1: `rs.lock-result` census 규칙은 condition variable wait 뒤에도 lock 뒤와 같은 보고 복구를 받아들인다.
 - F274: pre-push hook은 push가 게시하는 commit message만 검사한다. 그 밖의 검사는 push된 commit에서 CI가 실행한다.
 - F273: `rs.lock-result` census 규칙은 poison 오류의 `into_inner`로 guard를 얻는 closure를 받아들이므로 lock 복구는 guard를 돌려주기 전에 poison을 보고할 수 있다. Default 대입은 계속 지적된다.
