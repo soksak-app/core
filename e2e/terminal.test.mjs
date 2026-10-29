@@ -16,7 +16,7 @@ const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language
 
 
 import { APPS, drag, failure, open, within } from "@soksak/window-check/app.mjs";
-import { currentEventOffsets, readEvents, untilEventLine } from "@soksak/window-check/event-log.mjs";
+import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { fresh, reading } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
@@ -27,6 +27,7 @@ import {
   acceptedCurrentViewReplies, currentPageNativeViewCalls, currentPageViewCallCoverage,
 } from "./reload-view-reply.mjs";
 import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
+import { viewPresentationJoins } from "./view-display.mjs";
 import {
   cellBackgrounds, ensureTerminals, isColor, MEASURED_BACKGROUND, readScreenUntil, selectionBackground, setMeasuredBackground,
 } from "./terminal-screen.mjs";
@@ -920,19 +921,25 @@ for (const app of Object.values(APPS)) {
       const started = Date.now();
       t.diagnostic(`${app.name}: START ${roundLabel}`);
       await within((async () => {
-      const trace = await s.transcript();
+      const offsets = currentEventOffsets(s.app.configDir);
       const result = await drag(t, s, {
         axis: "x", line: cards[0].c1, dx: 500, dy: 0, ms: 96, times: roundTripsPerSet,
       }, { capture: true });
-      const traceLines = await trace.stop();
-      // The transcript lines are records of the one display path, so they carry its form: `info page page: host ...`.
-      const presented = (line) => line.startsWith("info page page: host presentSurfaces ");
-      const terminalPresentations = traceLines.filter((line) =>
-        presented(line) && line.includes('"waitForPresentation":true'));
-      assert.ok(terminalPresentations.length > 0,
-        `set ${set}: terminal capture had no DOM presentation barrier; ` +
-        `presentations=${traceLines.filter(presented).length}`);
-      t.diagnostic(`${app.name}: set ${set + 1} terminal presentation barriers ${terminalPresentations.length}`);
+      // Each terminal joins the presentation wait and ends it presented in this set; an abandoned wait fails at once, and a
+      // missing presentation fails at the deadline with the phases that were observed (docs/spec/native-surfaces.md#view-surfaces).
+      const joinsOf = (rows) => terminals.map((terminal) => ({ surface: terminal.surface, ...viewPresentationJoins(rows, terminal.surface) }));
+      const describe = (joins) => joins.map((entry) =>
+        `${entry.surface} phases=${JSON.stringify(entry.phases)} abandoned=${JSON.stringify(entry.abandoned)}`).join("; ");
+      const traceRowsNow = () => traceRows(readEvents(s.app.configDir, offsets).events);
+      await s.flushLog();
+      const joins = await untilFolderState(join(s.app.configDir, "logs"), () => {
+        const current = joinsOf(traceRowsNow());
+        const ended = current.find((entry) => entry.abandoned.length > 0 || entry.phases.includes("abandoned"));
+        if (ended) throw new Error(`set ${set}: ${ended.surface} presentation wait ended without presentation; ${describe(current)}`);
+        return current.every((entry) => entry.phases.includes("presented")) ? current : undefined;
+      }, 30000, () => new Error(`set ${set}: not every terminal presented within 30000 ms; ${describe(joinsOf(traceRowsNow()))}`));
+      t.diagnostic(`${app.name}: set ${set + 1} terminal presentations ${joins.map((entry) =>
+        entry.phases.filter((phase) => phase === "presented").length).join(",")}`);
       const edgeWidths = [];
       const times = [];
       const positions = frames(result.frameDir).map((file, index) => {

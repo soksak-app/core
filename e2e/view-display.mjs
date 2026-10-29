@@ -2,6 +2,32 @@
 import assert from "node:assert/strict";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
+const PRESENTATION_PHASES = new Set(["requested", "result", "presented", "abandoned"]);
+
+/**
+ * The presentation-join phases of one view surface and the reasons of its presentation-abandoned rows, from trace rows (the
+ * traceRows of the event log). `phases` lists the view.presentation-join rows of the surface in row order; `abandoned` lists
+ * the reasons of its view.presentation-abandoned rows (docs/spec/native-surfaces.md#view-surfaces).
+ */
+export function viewPresentationJoins(rows, surface) {
+  if (!Array.isArray(rows)) throw new TypeError("presentation trace rows must be an array");
+  if (typeof surface !== "string" || surface.length === 0) throw new TypeError("presentation surface must be nonempty");
+  const phases = [];
+  const abandoned = [];
+  for (const row of rows) {
+    if (row?.layer !== "host" || row.surface !== surface) continue;
+    if (row.event === "view.presentation-join") {
+      if (!PRESENTATION_PHASES.has(row.phase)) {
+        throw new Error(`presentation join of ${surface} has unknown phase: ${JSON.stringify(row)}`);
+      }
+      phases.push(row.phase);
+    } else if (row.event === "view.presentation-abandoned") {
+      abandoned.push(row.reason);
+    }
+  }
+  return { phases, abandoned };
+}
+
 /** Samples per axis of the surface area; colour variation measures only the sampled area, not plugin readiness. */
 const SAMPLES = 16;
 

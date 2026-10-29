@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { observeViewDisplay as checkViewDisplay, checkViewDisplay as acceptViewDisplay } from "../view-display.mjs";
+import {
+  checkViewDisplay as acceptViewDisplay, observeViewDisplay as checkViewDisplay, viewPresentationJoins,
+} from "../view-display.mjs";
 
 /** A window with two installed views but only one open card, and decoded frames of that card. */
 function fixture({ blank = false, offset = 0, terminalOnly = false } = {}) {
@@ -155,4 +157,34 @@ test("an explicit pixel verifier covers content between sparse colour samples", 
   await acceptViewDisplay(f.s, t, () => captured, new Map([["terminal", { ready: async () => async ({ captured: frames }) => {
     assert.deepEqual([...frames.at(-1).data.subarray(at, at + 3)], [0, 0, 0]);
   } }]]));
+});
+
+const traceRow = (event, fields) => ({ layer: "host", event, ts: "2026-10-29T00:00:00.000Z", ...fields });
+
+test("view presentation joins name the phases and abandonments of one surface in row order", { timeout: 5000 }, () => {
+  const rows = [
+    traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 4, phase: "requested" }),
+    traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 4, phase: "result", joined: true }),
+    traceRow("view.presentation-join", { surface: "terminal-b", generation: 1, ticket: 4, phase: "requested" }),
+    traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 4, phase: "presented" }),
+    { layer: "page", event: "view.presentation-join", surface: "terminal-a", phase: "presented" },
+  ];
+  assert.deepEqual(viewPresentationJoins(rows, "terminal-a"), {
+    phases: ["requested", "result", "presented"], abandoned: [],
+  });
+  assert.deepEqual(viewPresentationJoins(rows, "terminal-b"), { phases: ["requested"], abandoned: [] });
+  assert.deepEqual(viewPresentationJoins(rows, "terminal-c"), { phases: [], abandoned: [] });
+});
+
+test("view presentation joins report presentation-abandoned rows and reject unknown phases", { timeout: 5000 }, () => {
+  const rows = [
+    traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 5, phase: "abandoned", reason: "hidden" }),
+    traceRow("view.presentation-abandoned", { surface: "terminal-a", reason: "hidden" }),
+  ];
+  assert.deepEqual(viewPresentationJoins(rows, "terminal-a"), { phases: ["abandoned"], abandoned: ["hidden"] });
+  assert.throws(() => viewPresentationJoins([
+    traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 6, phase: "pending" }),
+  ], "terminal-a"), /unknown phase/);
+  assert.throws(() => viewPresentationJoins(rows, ""), /surface must be nonempty/);
+  assert.throws(() => viewPresentationJoins({}, "terminal-a"), /must be an array/);
 });

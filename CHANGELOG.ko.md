@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-299-3: terminal 구분선 끌기 검사는 더는 없는 page 표시 요청의 field 대신, event log의 host trace에서 읽은 `view.presentation-join`의 `presented` phase를 set마다 terminal view 각각에 요구한다. 검사는 통합 실행에서 돈다.
 - F239-299-1: terminal 셋과 browser 둘의 terminal 창 검사는 함께 쓰는 앱 웹뷰 하나 대신, native 창 사실이 재는 대로 main page 웹뷰 하나와 view 표면마다 웹뷰 하나를 센다. 앱 DOM 명세는 `dom` 합성을 밝힌다. 검사는 통합 실행에서 돈다.
 - F239-299-2: main page가 `page.log.clock`을 한 번만 적는다. page의 trace가 두 번째 clock을 적던 자기 writer 대신 page record의 writer로 event를 보낸다. Red: 소유 workbench 시험이 clock 기록 2개를 찾았다. Green: 통과한다.
 - F239-295-1: Tauri transport 시험이 page reload가 image detach 응답 전에 돌아온다는 것을 밝힌다. 이 시험은 F239-295 이전 코드에서 timeout으로 실패했고 지금은 통과한다.
