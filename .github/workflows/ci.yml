@@ -134,6 +134,13 @@ jobs:
         env:
           OFFLINE: '1'
         run: make -C core native-darwin
+      # The displays, the power state and the console session of the runner are recorded before the tests, because the tests
+      # that record windows or wait for presentation depend on them and the test output does not state them (F239-303).
+      - name: Record the display session
+        run: |
+          system_profiler SPDisplaysDataType
+          pmset -g
+          ioreg -n Root -d1 -k IOConsoleUsers
       - name: Native Darwin tests
         env:
           OFFLINE: '1'

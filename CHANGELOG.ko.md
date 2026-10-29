@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-303-1: `native-darwin` CI job이 native 시험 전에 runner의 display, 전원 상태, console session을 기록한다.
 - F239-297-1: native 기록 `native.window.first_responder`가 창 갱신마다 비교하는 대신 `window-responder`를 보내는 key-value observation에서 나온다.
 - F239-299-3-1: native surfaces의 presentation wait와 case `view.presentation-wait.joins`가, F212.14-5-18 이후 두 호스트가 하는 대로 view는 계속되는 gesture에서도 frame을 바꾸는 표시마다 참여한다고 적는다.
 - F239-296-1: origin 없는 탭의 거부가 그 origin을 저장 레이아웃으로 버린 동작을 space, project와 함께 밝히므로, view origin을 잃게 한 버림을 거부 기록에서 찾는다.
