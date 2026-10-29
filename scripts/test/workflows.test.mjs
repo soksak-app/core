@@ -157,8 +157,10 @@ test('ci keeps language host checks independent and gates release on every requi
   const ci = read('.github/workflows/ci.yml');
   const jobsText = /^jobs:\n([\s\S]*)$/m.exec(ci)?.[1] ?? '';
   const jobNames = [...jobsText.matchAll(/^  ([a-z][a-z0-9-]+):\s*$/gm)].map((match) => match[1]);
-  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'native-darwin', 'sok-linux-go', 'sok-linux-rust', 'equivalence', 'required'];
+  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'native-darwin', 'equivalence', 'required'];
   for (const name of required) assert.ok(jobNames.includes(name), `ci.yml has no required job ${name}`);
+  // Linux and Windows are not verified platforms, so CI runs no product check on them; the Sok CLI tests run in the macOS host jobs.
+  assert.deepEqual(jobNames.filter((name) => !required.includes(name)), [], 'ci.yml has a job outside the verified macOS scope');
   const job = (name) => {
     const start = jobsText.indexOf(`  ${name}:`);
     assert.notEqual(start, -1, `ci.yml has no job ${name}`);
@@ -170,32 +172,10 @@ test('ci keeps language host checks independent and gates release on every requi
   assert.match(job('core-node'), /node core\/scripts\/node-tests\.mjs --exclude scripts\/ --exclude native\//);
   assert.match(job('equivalence'), /node core\/scripts\/node-tests\.mjs --only scripts\//);
   assert.doesNotMatch(job('equivalence'), /needs:/, 'equivalence installs and builds its own inputs');
-  const nodeAction = 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020';
-  for (const name of ['sok-linux-go', 'sok-linux-rust']) {
-    const text = job(name);
-    assert.match(text, new RegExp(`uses: ${nodeAction}`), `${name}: Node runtime is missing`);
-    assert.match(text, new RegExp(`uses: ${nodeAction}\\n\\s+with:\\n\\s+node-version-file: core/\\.node-version`));
-    assert.doesNotMatch(text, /pnpm\/action-setup|pnpm install/, `${name}: pnpm is not required by its test runner`);
-  }
-  assert.doesNotMatch(job('sok-linux-go'), /setup-rust|cargo /, 'Linux Go installs or invokes the Rust toolchain');
-  assert.doesNotMatch(job('sok-linux-rust'), /setup-go|go mod download/, 'Linux Rust installs or fetches Go dependencies');
   assert.match(job('native-darwin'), /uses: \.\/core\/\.github\/actions\/setup-node[\s\S]*?root: core/,
     'native Darwin package tests need the Node and pnpm toolchains');
   assert.doesNotMatch(job('native-darwin'), /setup-go|setup-rust|pnpm install/,
     'native Darwin checks install unused language toolchains or workspace dependencies');
-  const goCli = steps(job('sok-linux-go'));
-  const goTests = goCli.find((step) => step.name === 'Run Go CLI tests with per-test limits');
-  assert.ok(goTests, 'Linux Go tests do not use the bounded owner runner');
-  assert.match(goTests.text, /node \.\.\/\.\.\/\.\.\/scripts\/go-tests\.mjs --package \.\/\.\.\. --count 1/);
-  assert.doesNotMatch(goTests.text, /go test /, 'Linux Go tests use the raw suite command');
-  assert.match(goTests.text, /GOPROXY: 'off'/);
-  assert.match(goTests.text, /GOFLAGS: -mod=readonly/);
-  const rustCli = steps(job('sok-linux-rust'));
-  const rustTests = rustCli.find((step) => step.name === 'Run Rust CLI tests with per-test limits');
-  assert.ok(rustTests, 'Linux Rust tests do not use the bounded owner runner');
-  assert.match(rustTests.text, /node scripts\/rust-tests\.mjs --manifest Cargo\.toml --package soksak-sok-tauriv2 --count 1/);
-  assert.doesNotMatch(rustTests.text, /cargo test /, 'Linux Rust tests use the raw suite command');
-  assert.match(rustTests.text, /CARGO_NET_OFFLINE: 'true'/);
   const wailsSteps = steps(job('macos-wailsv3'));
   assert.match(wailsSteps.find((step) => step.name === 'Go format checks')?.text ?? '', /make -C core go-format-check/);
   const tauriSteps = steps(job('macos-tauriv2'));
@@ -209,7 +189,7 @@ test('ci keeps language host checks independent and gates release on every requi
   const gate = job('required');
   for (const [name, variable] of [
     ['core-node', 'CORE_NODE'], ['macos-wailsv3', 'WAILS'], ['macos-tauriv2', 'TAURI'],
-    ['native-darwin', 'NATIVE'], ['sok-linux-go', 'SOK_GO'], ['sok-linux-rust', 'SOK_RUST'], ['equivalence', 'EQUIVALENCE'],
+    ['native-darwin', 'NATIVE'], ['equivalence', 'EQUIVALENCE'],
   ]) {
     assert.match(gate, new RegExp(`${variable}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`), `required gate does not read ${name}`);
   }
@@ -217,7 +197,7 @@ test('ci keeps language host checks independent and gates release on every requi
   const gateLoop = /for result in ([^;]+); do/.exec(gate);
   assert.ok(gateLoop, 'required gate does not loop over its job results');
   assert.deepEqual(gateLoop[1].match(/"\$([A-Z_]+)"/g),
-    ['"$CORE_NODE"', '"$WAILS"', '"$TAURI"', '"$NATIVE"', '"$SOK_GO"', '"$SOK_RUST"', '"$EQUIVALENCE"']);
+    ['"$CORE_NODE"', '"$WAILS"', '"$TAURI"', '"$NATIVE"', '"$EQUIVALENCE"']);
   for (const [host, jobName, testName] of [
     ['wailsv3', 'macos-wailsv3', 'Wails host tests'], ['tauriv2', 'macos-tauriv2', 'Tauri host tests'],
   ]) {

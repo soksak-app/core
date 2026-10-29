@@ -163,72 +163,6 @@ jobs:
         if: always()
         run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
-  sok-linux-go:
-    runs-on: ubuntu-26.04-arm
-    env:
-      GOWORK: off
-      GOTOOLCHAIN: local
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          path: core
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version-file: core/.node-version
-      - uses: ./core/.github/actions/setup-go
-        with:
-          root: core
-          module: packages/sok/wailsv3
-      - name: Fetch Go modules
-        working-directory: core/packages/sok/wailsv3
-        run: go mod download
-      - name: Build the Go CLI offline
-        working-directory: core
-        env:
-          GOPROXY: 'off'
-          GOSUMDB: 'off'
-          GOFLAGS: -mod=readonly
-        run: go build -C packages/sok/wailsv3 ./...
-      - name: Run Go CLI tests with per-test limits
-        working-directory: core/packages/sok/wailsv3
-        env:
-          GOPROXY: 'off'
-          GOSUMDB: 'off'
-          GOFLAGS: -mod=readonly
-        run: node ../../../scripts/go-tests.mjs --package ./... --count 1
-      - name: Reject lockfile changes
-        if: always()
-        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
-
-  sok-linux-rust:
-    runs-on: ubuntu-26.04-arm
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          path: core
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version-file: core/.node-version
-      - uses: ./core/.github/actions/setup-rust
-        with:
-          root: core
-      - name: Fetch locked Rust dependencies
-        working-directory: core
-        run: cargo fetch --locked
-      - name: Build the Rust CLI offline
-        working-directory: core
-        env:
-          CARGO_NET_OFFLINE: 'true'
-        run: cargo build --locked -p soksak-sok-tauriv2
-      - name: Run Rust CLI tests with per-test limits
-        working-directory: core
-        env:
-          CARGO_NET_OFFLINE: 'true'
-        run: node scripts/rust-tests.mjs --manifest Cargo.toml --package soksak-sok-tauriv2 --count 1
-      - name: Reject lockfile changes
-        if: always()
-        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
-
   equivalence:
     runs-on: macos-15
     env:
@@ -339,8 +273,6 @@ jobs:
       - macos-wailsv3
       - macos-tauriv2
       - native-darwin
-      - sok-linux-go
-      - sok-linux-rust
       - equivalence
     runs-on: ubuntu-26.04-arm
     steps:
@@ -350,10 +282,8 @@ jobs:
           WAILS: ${{ needs.macos-wailsv3.result }}
           TAURI: ${{ needs.macos-tauriv2.result }}
           NATIVE: ${{ needs.native-darwin.result }}
-          SOK_GO: ${{ needs.sok-linux-go.result }}
-          SOK_RUST: ${{ needs.sok-linux-rust.result }}
           EQUIVALENCE: ${{ needs.equivalence.result }}
         run: |
-          for result in "$CORE_NODE" "$WAILS" "$TAURI" "$NATIVE" "$SOK_GO" "$SOK_RUST" "$EQUIVALENCE"; do
+          for result in "$CORE_NODE" "$WAILS" "$TAURI" "$NATIVE" "$EQUIVALENCE"; do
             test "$result" = success || exit 1
           done
