@@ -20,6 +20,9 @@ export function createDocumentRegions() {
   const sessions = new Promise((resolve) => { resolveSessions = resolve; });
   // The listeners of a region that refused its restored interactionState, a restore failure.
   const refusals = new Set();
+  // tab id -> the outcome of the running place that leaves the surface of the tab out; a query of its regions waits for it,
+  // because the host closes those regions before the reply of the place.
+  const leaving = new Map();
 
   // default: a tab whose surface attached no region has no names.
   const namesOf = (tab) => [...(attachedNames.get(tab) ?? [])];
@@ -51,10 +54,25 @@ export function createDocumentRegions() {
       attachedNames.delete(tab);
     },
     /**
+     * Holds the queries of the regions of tab while a place that leaves its surface out runs. The returned function takes
+     * whether the place released the surface: a release forgets the regions, and a failed place keeps them for the queries.
+     */
+    leave(tab) {
+      let settle;
+      const outcome = new Promise((resolve) => { settle = resolve; });
+      leaving.set(tab, outcome);
+      return (released) => {
+        if (released) attachedNames.delete(tab);
+        if (leaving.get(tab) === outcome) leaving.delete(tab);
+        settle();
+      };
+    },
+    /**
      * The reasons of the regions of the tab: media for audible media, capture, form; a failed query gives media-unknown and
      * is logged.
      */
     async reasons(tab) {
+      await leaving.get(tab);
       const reasons = new Set();
       await Promise.all(namesOf(tab).map(async (name) => {
         try {
@@ -71,6 +89,7 @@ export function createDocumentRegions() {
     },
     /** The interactionState of each region of the tab that yields one, or undefined when none does. */
     async interaction(tab) {
+      await leaving.get(tab);
       const history = {};
       for (const name of namesOf(tab)) {
         const state = await documents.interactionState(tab, name);

@@ -1036,6 +1036,9 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
   traceComposition(entry, "dispose", "reason", mode === "unload" ? "unload" : released ? "released" : "close");
   if (!entry.compositionDeclared) entry.resolveCompositionDisposed({ disposed: true, failure: null });
   if (mounting.get(surfaceId) === entry.mountRegistration) mounting.delete(surfaceId);
+  // The host closes the document regions of a released surface, so a session write that starts during the disposal does
+  // not ask them for their state.
+  documentRegions.released(surfaceId);
   entry.disposing = Promise.resolve().then(async () => {
     // It does not wait for approval here. A removed tab must not keep a layout commit alive only because
     // the view was never permitted to mount.
@@ -1044,8 +1047,6 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
     entry.state();
     entry.host.removeAttribute("data-surface-suspended");
     entry.host.remove();
-    // The host closes the document regions of a released surface.
-    documentRegions.released(surfaceId);
     if (mode === "unload") unloadTab(surfaceId);
     else forgetTab(surfaceId);
     authorization.delete(surfaceId);
@@ -1089,19 +1090,23 @@ async function applySurfacePlacement(place, { retain, unload = [] }) {
   // The place leaves the regions of the surfaces it leaves out to the host, which closes them before the reply.
   const left = new Set(unload);
   for (const id of mounted.keys()) if (!retain.has(id)) left.add(id);
-  const leftOut = [...left].filter((id) => mounted.has(id)).map((id) => mounted.get(id));
+  const leftIds = [...left].filter((id) => mounted.has(id));
+  const leftOut = leftIds.map((id) => mounted.get(id));
   for (const entry of leftOut) entry.lifetime.suspended = true;
+  const settleRegions = leftIds.map((id) => documentRegions.leave(id));
   let answer;
   try {
     answer = await place();
   } catch (error) {
     // A failed place keeps the surfaces mounted and resumes their held requests.
+    for (const settle of settleRegions) settle(false);
     for (const entry of leftOut) {
       entry.lifetime.suspended = false;
       for (const held of entry.lifetime.held.splice(0)) held.run().then(held.resolve, held.reject);
     }
     throw error;
   }
+  for (const settle of settleRegions) settle(true);
   for (const entry of leftOut) {
     entry.lifetime.released = true;
     for (const held of entry.lifetime.held.splice(0)) held.resolve(null);

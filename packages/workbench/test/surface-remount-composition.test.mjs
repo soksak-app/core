@@ -772,3 +772,64 @@ test("a disposed pending listener setup cannot replace a newer attempt", { timeo
     dom.window.close();
   }
 });
+
+test("a disposing surface leaves the tabs with attached regions before its exposure disposal ends", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  let announceDisposal;
+  let releaseDisposal;
+  const disposalStarted = new Promise((resolve) => { announceDisposal = resolve; });
+  const disposalGate = new Promise((resolve) => { releaseDisposal = resolve; });
+  let holdDispose = false;
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      const exposure = runtime.exposure;
+      return { ...runtime, exposure: { ...exposure, dispose: async () => {
+        if (holdDispose) {
+          announceDisposal();
+          await disposalGate;
+        }
+        return exposure.dispose();
+      } }, native: { ...runtime.native, on: async () => () => {}, call: async () => null } };
+    },
+  } });
+  const { documentRegions } = await import("../document-regions.js");
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?dispose-regions");
+  const id = "fixture-dispose-regions";
+  recordOrigin(id, null, "test fixture");
+  registerPlugin({ id, surface: () => null });
+  const slot = document.querySelector("#slot");
+  slot.dataset.nativeSurfaceId = id;
+  const surface = {
+    module: null, surfaceId: id, pluginId: id,
+    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    composition: { kind: "view", page: "ui/page.html" },
+  };
+  try {
+    authorizeSurface(id);
+    await mountSurface(slot, surface);
+    await waitSurfaceCompositionDeclared(id);
+    documentRegions.attached(id, "page");
+    assert.ok(documentRegions.tabs().includes(id), "the fixture region did not attach");
+    holdDispose = true;
+    const disposal = disposeSurface(id, { released: true });
+    await disposalStarted;
+    // The host closes the regions with the released surface, so a session write that starts now must not ask them.
+    assert.ok(!documentRegions.tabs().includes(id),
+      `a disposing surface still lists attached regions: ${JSON.stringify(documentRegions.tabs())}`);
+    releaseDisposal();
+    await disposal;
+  } finally {
+    releaseDisposal();
+    await disposeSurface(id);
+    dom.window.close();
+  }
+});

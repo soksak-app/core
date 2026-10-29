@@ -22,6 +22,13 @@ for (const id of ["fixture-unload", "fixture-plain"]) registerPlugin({ id, surfa
 const { setSurfaceTextSize } = await import("../text-size.js");
 setSurfaceTextSize(() => 1);
 
+// The region queries of the document regions: the page loads the region record once, so every harness gives it this fake.
+const regionQueries = [];
+const documents = {
+  query: async (surface, document) => { regionQueries.push(["documentQuery", surface, document]); return { media: false, capture: false, form: false }; },
+  interactionState: async (surface, document) => { regionQueries.push(["documentInteractionState", surface, document]); return "AAAA"; },
+};
+
 let instance = 0;
 /** Mounts the view of a surface on a fake native host and returns the view call and host call records of that host. */
 async function harness(t) {
@@ -36,6 +43,7 @@ async function harness(t) {
   t.mock.module("../host.js", { exports: {
     ...actualHost,
     native: true,
+    documents,
     onSurfacePrepared: () => () => {},
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
@@ -150,6 +158,64 @@ test("the composition of a view places nothing while a place that leaves the vie
     assert.equal(h.calls.filter((call) => call.name === "compositionPlace").length, placed, "a placement was sent while the place runs");
     return null;
   }, { retain: new Set() });
+  await disposeSurface(id);
+  h.close();
+});
+
+test("a region query of a view that a running place leaves out waits for the place and asks no region of a released view", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, placeSurfaces } = h.modules;
+  const { documentRegions } = await import("../document-regions.js");
+  const reports = await import("../tab-reports.js");
+  const id = "view-place-regions";
+  reports.recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  authorizeSurface(id);
+  await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
+  await waitSurfaceCompositionDeclared(id);
+  documentRegions.attached(id, "page");
+  regionQueries.length = 0;
+  let interaction;
+  let reasons;
+  await placeSurfaces(async () => {
+    // The host closes the regions of the left-out view before its reply, so a query that starts now must not reach them.
+    interaction = documentRegions.interaction(id);
+    reasons = documentRegions.reasons(id);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(regionQueries, [], "a region query reached the host while the place that closes the region runs");
+    return null;
+  }, { retain: new Set() });
+  assert.equal(await interaction, undefined);
+  assert.deepEqual(await reasons, []);
+  assert.deepEqual(regionQueries, [], "a region query reached the regions of a released view");
+  await disposeSurface(id);
+  h.close();
+});
+
+test("a region query of a view waits for a failed place that left the view out and then asks its regions", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, placeSurfaces } = h.modules;
+  const { documentRegions } = await import("../document-regions.js");
+  const reports = await import("../tab-reports.js");
+  const id = "view-failed-place-regions";
+  reports.recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  authorizeSurface(id);
+  await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
+  await waitSurfaceCompositionDeclared(id);
+  documentRegions.attached(id, "page");
+  regionQueries.length = 0;
+  const failure = new Error("fixture placement rejected");
+  let interaction;
+  await assert.rejects(placeSurfaces(async () => {
+    interaction = documentRegions.interaction(id);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(regionQueries, [], "a region query reached the host while the place that closes the region runs");
+    throw failure;
+  }, { retain: new Set() }), (error) => error === failure);
+  // A failed place keeps the view and its regions, so the waiting query reads them.
+  assert.deepEqual(await interaction, { page: "AAAA" });
+  assert.deepEqual(regionQueries, [["documentInteractionState", id, "page"]]);
   await disposeSurface(id);
   h.close();
 });
