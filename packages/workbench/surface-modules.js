@@ -20,6 +20,7 @@ import { logGate } from "./log-gate.js";
 import { emitEvent, eventEnabled } from "./page-log.js";
 import shortcutTable from "./shortcuts.json" with { type: "json" };
 import { documentRegions } from "./document-regions.js";
+import { forgetViewFocus } from "./view-focus.js";
 import { trace, traceEnabled } from "./performance.js";
 const mounted = new Map();
 let placementTail = Promise.resolve();
@@ -580,6 +581,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   registrations.push(answering);
   const ending = scoped.native.on("view-process-ended", (event) => {
     if (event?.generation !== viewGeneration) return;
+    forgetViewFocus(surface.surfaceId);
     registry.unregisterSurface(surface.surfaceId);
     documentRegions.released(surface.surfaceId);
     documentGeneration += 1;
@@ -599,6 +601,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   });
   registrations.push(ending);
   closing.addEventListener("abort", () => {
+    forgetViewFocus(surface.surfaceId);
     for (const controller of pending.values()) controller.abort();
   }, { once: true });
   // The replies of the view to the commands of the page.

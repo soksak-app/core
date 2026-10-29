@@ -279,6 +279,7 @@ NATIVE_TESTS = observe_test \
   webview_input_records_test \
   window_facts_test \
   window_occlusion_test \
+  window_responder_test \
   window_reveal_test \
   window_release_test \
   modal_release_test \

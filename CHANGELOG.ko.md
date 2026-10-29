@@ -9,6 +9,7 @@
 - F239-299-1: terminal 셋과 browser 둘의 terminal 창 검사는 함께 쓰는 앱 웹뷰 하나 대신, native 창 사실이 재는 대로 main page 웹뷰 하나와 view 표면마다 웹뷰 하나를 센다. 앱 DOM 명세는 `dom` 합성을 밝힌다. 검사는 통합 실행에서 돈다.
 - F239-299-2: main page가 `page.log.clock`을 한 번만 적는다. page의 trace가 두 번째 clock을 적던 자기 writer 대신 page record의 writer로 event를 보낸다. Red: 소유 workbench 시험이 clock 기록 2개를 찾았다. Green: 통과한다.
 - F239-295-1: Tauri transport 시험이 page reload가 image detach 응답 전에 돌아온다는 것을 밝힌다. 이 시험은 F239-295 이전 코드에서 timeout으로 실패했고 지금은 통과한다.
+- F239-297: view가 first responder를 가지면 `core.focus`가 그 view surface에서 포커스를 가진 exposed element를 알린다. 두 호스트는 각 창의 first responder를 관찰해 page에 `window-responder`를 보내고, view는 포커스를 가진 element를 `tab.focus`로 알린다.
 - F239-302: 새 tab id가 저장된 layout의 tab, page가 만든 tab, pending image detach가 붙잡은 surface를 가리키면 다시 뽑으므로, 새 tab은 다른 tab의 detach를 기다리거나 persistent session에 들어가지 않는다. `issueId`는 사용 중인 id의 검사를 요구한다.
 - F239-301: 두 호스트는 잘못된 image detach 응답을 member를 밝히는 같은 text로 거부하고, Wails 호스트는 빠진 `ok`를 더 이상 실패로 읽지 않는다. Red: Go와 Rust 소유 시험이 case에서 실패했다. Green: 3회 중 3회 통과한다.
 - F239-300: Tauri 호스트는 이제 page reload 때 선언되지 않은 `reconnect` operation을 sidecar에 보내지 않으므로, surface composition 계약대로 두 호스트의 reload는 캡처한 각 image의 detach만 sidecar에 보낸다. Red: Tauri reload 시험이 표지보다 먼저 `reconnect`를 받았다. Green: 3회 중 3회 통과한다.

@@ -1,12 +1,8 @@
-// The keyboard focus of the main document. A surface module mounts inside a shadow root of the main document, so the activeElement of the document and the target of a focus
-// event appear as the shadow host. The focus follows the shadow root and is read from the actual element.
-
-/** The innermost element that has focus. It is null when nothing has focus. */
-function deepActive(document) {
-  let element = document.activeElement;
-  while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement;
-  return element;
-}
+// The keyboard focus of the window. A surface module mounts inside a shadow root of the main document, so the activeElement of the document and the target of a focus
+// event appear as the shadow host. The focus follows the shadow root and is read from the actual element. A view is a document of its own, which
+// reports its focused element (view-focus.js); the first responder of the window decides which document holds the focus (docs/spec/exposure.md#keyboard-focus).
+import { focusedExposedElement, focusedExposure } from "@soksak/plugin-api";
+import { currentResponder, viewFocusOf } from "./view-focus.js";
 
 /** The id of the surface that the element belongs to. It is null for an element of the main document. */
 function surfaceOf(element) {
@@ -18,15 +14,20 @@ function surfaceOf(element) {
 }
 
 /**
- * The name of the public element that has keyboard focus, its sequence number inside its document (or shadow root), and the surface id.
- * It is null when the focus is outside a public element.
+ * The name of the exposed element that has keyboard focus, its index inside its document (or shadow root), and the surface id. The first responder
+ * of the window selects the document: the main page reads its own focused element, a view surface the element that its view reported, and every
+ * other owner has no exposed focus. It is null when the focus is outside an exposed element.
  */
 export function focusState(document) {
-  const element = deepActive(document)?.closest("[data-expose]");
-  if (!element || element === document.body) return null;
-  const name = element.dataset.expose;
-  const root = element.getRootNode();
-  return { name, index: [...root.querySelectorAll(`[data-expose="${name}"]`)].indexOf(element), surface: surfaceOf(element) };
+  const responder = currentResponder();
+  if (responder.owner === "surface") {
+    const reported = viewFocusOf(responder.surface);
+    return reported === null ? null : { ...reported, surface: responder.surface };
+  }
+  if (responder.owner !== "page") return null;
+  const element = focusedExposedElement(document);
+  if (element === null) return null;
+  return { ...focusedExposure(document), surface: surfaceOf(element) };
 }
 
 /**

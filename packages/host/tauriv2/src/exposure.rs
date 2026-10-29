@@ -1662,6 +1662,15 @@ fn plugin_host_processes_for_facts(
 }
 
 /// Calculates the host.window value of a window. It is called from a thread that is not the main thread.
+/// The first responder of the window as host.window reports it, without its class: `{owner, surface, document}`.
+pub(crate) fn window_responder(window: &Window) -> Result<Value, String> {
+    let status = window_status(window).map_err(|error| error.message)?;
+    let responder = &status["responder"];
+    Ok(
+        json!({"owner": responder["owner"], "surface": responder["surface"], "document": responder["document"]}),
+    )
+}
+
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let target = window.clone();

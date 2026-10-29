@@ -107,6 +107,18 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 
 `core.library.search.focus`는 인자 없이 현재 표시된 library page의 검색 필드에 focus한다. Projects page에서는 `core.library.search`, plugins page에서는 `core.library.plugins.search`를 선택한다. Library가 표시되지 않으면 명시적으로 거부하며 library를 열거나 page를 바꾸지 않는다. Main-page keyboard handler와 전달된 shortcut command는 같은 동작을 사용한다. `core.focus.set`은 이름으로 노출 DOM을 선택하는 일반 명령으로 유지한다.
 
+## 키보드 포커스
+
+status `core.focus`는 창의 first responder를 가진 문서에서 키보드 포커스를 가진 exposed element를 `{name, index, surface}`나 `null`로 알린다. 호스트는 각 창의 first responder를 `firstResponder`의 key-value observing으로 관찰하고, page가 ready를 알릴 때와 그 뒤 바뀔 때마다 main page에 창 event `window-responder {owner, surface, document}`를 보낸다. `owner`, `surface`, `document`는 `host.window`의 `responder`와 같은 값이다. ready를 알리지 않은 page는 event를 받지 않는다. 그 page의 ready가 현재 값을 보내기 때문이다. view surface는 자기 문서를 가진다. 그 bridge는 문서의 포커스가 움직일 때마다 포커스를 가진 exposed element를 읽고, 값이 바뀌면 view call `tab.focus`로 `{name, index}`나 `null`을 알린다. page는 다른 값을 `view call tab.focus requires {name, index} or null, not <value>`로 거부하고, view 문서가 끝나거나 surface가 닫히면 그 값을 잊는다. page는 둘을 합친다:
+
+| first responder의 `owner` | `core.focus` |
+|---|---|
+| `page` | main 문서(shadow root 안의 surface module 포함)에서 포커스를 가진 exposed element. `surface`는 shadow root의 surface이거나 `null`이다 |
+| `surface` | `surface`의 view가 `tab.focus`로 마지막에 알린 값과 그 `surface`. 알린 것이 없으면 `null` |
+| `document`, `modal`, `webview`, `native` | `null`. document region, native modal, 등록되지 않은 web view, native view는 exposed focus를 알리지 않는다 |
+
+첫 `window-responder` event 전과 호스트가 없는 runtime에서는 main 문서가 포커스를 가진다. member가 문자열이나 `null`인 `{owner, surface, document}`가 아닌 `window-responder` event는 `error: window responder: invalid window-responder event <value>`로 알린다.
+
 ## 등록
 
 워크벤치는 코어 항목을 메인 페이지의 등록소에 등록한다. 플러그인 표면 페이지는 `@soksak/plugin-api/page`로 항목을 등록한다. 코어 명령은 handler가 시작한 비동기 작업까지 handler가 끝나고, 판이 가장 새 배치를 그린 뒤 답한다. 배치를 바꾸는 명령 뒤에 배치를 읽는 쪽은 그려진 배치를 읽는다. 기다림은 가장 새 배치를 기다리고, 기다리는 동안 더 새 배치가 예약되면 다시 기다린다. 더 새 배치가 대신한 배치는 그리지 않고 끝나기 때문이다. 그 뒤 그 그리기의 표면 slot을 읽고, slot이 가리키는 각 표면의 선언된 composition을 기다린다. 같은 표면의 이전 dispose를 기다리기 전에 mount 요청을 composition wait에 등록한다. replacement mount가 대기 중인 표면을 slot이 가리키면 그 mount를 기다리며 mount 실패를 그대로 보고한다. 이 명령이나 뒤의 명령이 제거한 표면은 기다림이 slot을 읽을 때 slot이 없다. 가장 새 그리기 뒤에 mount되지도 않고 mount 중도 아닌 표면을 가리키는 slot은 결함이며, 기다림은 `surface <id> is not mounted`로 실패한다. replacement가 없는 dispose는 mount된 상태나 대기 상태를 남기지 않는다. mounted surface entry에서 시작한 composition wait는 mount 등록이 pending이어도 해당 entry를 따른다. entry가 composition을 선언하기 전에 dispose가 시작되면 wait는 `surface <id> was disposed before declaring composition`으로 끝나며, mount 실패는 원래 오류를 반환한다. replacement mount를 기다리는 wait는 replacement entry를 따른다. 가장 새 배치가 실패하면 배치 대기열이 그 실패를 보이고, 그 배치는 표시되지 않았으므로 기다림은 slot을 읽지 않고 끝난다. 기다림 자체의 실패는 `exposure settled failed: <text>`로 쓴다. 두 경우 모두 명령은 handler의 결과로 답하며, 그 실패는 [애플리케이션 로그](hosts.ko.md#애플리케이션-로그)에 한 줄을 가진다.

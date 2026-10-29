@@ -430,6 +430,11 @@ export function onFilesDropped(listener) {
   if (native) bridge.on("files-dropped", listener);
 }
 
+/** Receives each window-responder event `{owner, surface, document}` of the host (docs/spec/exposure.md#keyboard-focus). */
+export function onWindowResponder(listener) {
+  if (native) bridge.on("window-responder", listener);
+}
+
 /** Receives each image-detach-ended event `{surface, error}` of the host (docs/spec/sidecars.md). */
 export function onImageDetachEnded(listener) {
   if (native) bridge.on("image-detach-ended", listener);

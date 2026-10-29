@@ -1869,7 +1869,7 @@
       },
       {
         "name": "core.focus",
-        "description": "The exposed element that has keyboard focus in the main document, including surface modules mounted in shadow roots: its name, its index within its own document or shadow root, and the surface id (null in the main document); null when focus is elsewhere. Changes with every focus transition.",
+        "description": "The exposed element that has keyboard focus in the document that holds the first responder of the window: the main document, including surface modules mounted in shadow roots, or the document of a view surface, which reports its element; its name, its index within its own document or shadow root, and the surface id (null in the main document); null when focus is elsewhere or a document region, modal or native view holds the first responder. Changes with every focus transition and first responder change.",
         "schema": {
           "type": [
             "object",

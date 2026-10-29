@@ -88,6 +88,7 @@ pub mod projects;
 pub mod quit;
 #[cfg(feature = "diagnostics")]
 pub mod recording;
+pub mod responder;
 #[path = "routine/routine.rs"]
 pub mod routine;
 pub mod running_calls;

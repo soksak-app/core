@@ -37,6 +37,9 @@ pub(crate) struct WindowData {
     pub running: Running,
     pub root: Mutex<String>,
     pub ready: AtomicBool,
+    /// The first responder that the page last received (window-responder). The lock also orders the reads and sends, so
+    /// a later change is never sent before an earlier one.
+    pub responder: Mutex<Option<serde_json::Value>>,
     /// The windows that received a close request that was not blocked. These windows disappear from the runtime before
     /// Destroyed, so they are not put in the list.
     pub closing: AtomicBool,
@@ -740,6 +743,9 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             }
         }),
     )?;
+    // The page combines the first responder with the focus of its documents in core.focus.
+    let responding = window.clone();
+    platform.observe_responder(owner, Box::new(move || responder_changed(&responding)))?;
     // Notifies the connections that watch host.window of the change of the occlusion state. Tauri does not send this
     // change as a window event.
     let occluded = window.clone();
@@ -815,6 +821,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                         );
                     }
                     log_failure("surface layout cancel", platform.cancel_layout(owner));
+                    platform.end_responder_observation(owner);
                     match closing {
                         Ok(data) => dispose_plugin_hosts_of(&closing_host, &data, false),
                         Err(error) => log_error("plugin host", error),
@@ -1639,6 +1646,40 @@ fn dispose_plugin_hosts_of(window: &Window, data: &WindowData, notify_page: bool
     }
 }
 
+/// Sends the first responder to the page when it changed since the last send. A page that has not reported ready receives
+/// none; its ready sends the current responder (docs/spec/exposure.md#core-focus). The native observation calls it on the
+/// main thread, and the status is read in another thread.
+fn responder_changed(window: &Window) {
+    crate::exposure::window_changed(window);
+    let window = window.clone();
+    crate::routine::spawn_named("window-responder", move || send_responder(&window, false));
+}
+
+/// Sends the current first responder to the page that reported ready.
+fn responder_page_ready(window: &Window) {
+    let window = window.clone();
+    crate::routine::spawn_named("window-responder", move || send_responder(&window, true));
+}
+
+fn send_responder(window: &Window, ready: bool) {
+    let data = match window_data(window) {
+        Ok(data) => data,
+        Err(error) => return log_error("window responder", error),
+    };
+    let result = crate::responder::send_changed_responder(
+        &data.responder,
+        ready,
+        || data.ready.load(Ordering::Relaxed),
+        || crate::exposure::window_responder(window),
+        |responder| {
+            emit_window(window, "window-responder", responder).map_err(|error| error.to_string())
+        },
+    );
+    if let Err(error) = result {
+        log_error("window responder", error);
+    }
+}
+
 pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     data.ready.store(true, Ordering::Relaxed);
@@ -1647,6 +1688,7 @@ pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
             log_error("image-detach-ended", error);
         }
     }
+    responder_page_ready(window);
     crate::exposure::replay_registrations(window);
     crate::exposure::windows_changed(window.app_handle());
     for ready in data

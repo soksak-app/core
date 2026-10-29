@@ -202,3 +202,27 @@ test("disposing document observation releases input, mutation and binding notifi
   assert.equal(documents, 0);
   assert.equal(state.input.read().length, 1);
 });
+
+// A view is a document of its own, so it reports its focused exposed element to the page, which combines it with the first
+// responder of the window in core.focus (docs/spec/exposure.md#keyboard-focus).
+test("the bridge reports each change of the focused exposed element of the view with tab.focus", { timeout: 5000 }, async (t) => {
+  const { view, posted } = setup(t);
+  const field = view.document.createElement("input");
+  field.dataset.expose = "probe.field";
+  const plain = view.document.createElement("input");
+  view.document.body.append(field, plain);
+  await turn();
+  const focusCalls = () => posted.filter((message) => message.command === "tab.focus").map((message) => message.params);
+  const button = view.document.querySelector("button");
+  button.focus();
+  await turn();
+  field.focus();
+  await turn();
+  field.blur();
+  field.focus();
+  await turn();
+  plain.focus();
+  await turn();
+  assert.deepEqual(focusCalls(), [{ name: "probe.button", index: 0 }, { name: "probe.field", index: 0 }, null],
+    "the view did not report each change of its focused exposed element once");
+});

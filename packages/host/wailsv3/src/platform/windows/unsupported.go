@@ -41,6 +41,12 @@ func (implementation) Fullscreen(unsafe.Pointer, bool, func()) error {
 	return unsupported("full screen")
 }
 
+func (implementation) ObserveResponder(unsafe.Pointer, func()) error {
+	return unsupported("first responder observation")
+}
+
+func (implementation) EndResponderObservation(unsafe.Pointer) {}
+
 func (implementation) TitlebarHeight(unsafe.Pointer) (float64, error) {
 	return 0, unsupported("window title bar")
 }

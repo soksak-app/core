@@ -15,6 +15,7 @@ import { createSnapshotSender, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } fr
 import { createSurfaceCompositionController } from "./surface-composition.js";
 import { createExpose } from "./index.js";
 import { observeSurfaceDocument, surfaceDocumentEntry } from "./surface-document.js";
+import { focusedExposure } from "./focus.js";
 
 const PLUGIN = /^[a-z][a-z0-9-]*$/;
 /** The code of a command that the view did not register: EXPOSURE_ERRORS.unregistered of index.js, which this module does not import. */
@@ -451,8 +452,30 @@ export function createViewBridge({ handler, report }) {
       expose.status("core.surface.input", state.input.read, state.input.subscribe),
       expose.command("core.surface.hit", state.hit),
     ]).catch(recordError("core surface entries"));
+    // The focused exposed element of the view document goes to the page with the view call tab.focus at each change; the page
+    // combines it with the first responder of the window in core.focus (docs/spec/exposure.md#keyboard-focus). A move between
+    // two elements fires focusout before focusin, so the value is read once after the move.
+    let reportedFocus = "null";
+    let focusRead = false;
+    const readFocus = () => {
+      focusRead = false;
+      const value = focusedExposure(view.document);
+      const text = JSON.stringify(value);
+      if (text === reportedFocus) return;
+      reportedFocus = text;
+      calls.request("tab.focus", value).catch(recordError("tab focus"));
+    };
+    const focusMoved = () => {
+      if (focusRead) return;
+      focusRead = true;
+      queueMicrotask(readFocus);
+    };
+    view.document.addEventListener("focusin", focusMoved, true);
+    view.document.addEventListener("focusout", focusMoved, true);
     view.addEventListener("pagehide", () => {
       if (eventBatcher !== null) eventBatcher.flush().catch(recordError("log batch flush"));
+      view.document.removeEventListener("focusin", focusMoved, true);
+      view.document.removeEventListener("focusout", focusMoved, true);
       state.dispose();
       expose.dispose().catch(recordError("core surface entries"));
     }, { once: true });

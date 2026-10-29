@@ -378,6 +378,8 @@ type Surfaces struct {
 	shown string
 	root  string
 	ready bool
+	// responder is the first responder that the page last received (window-responder).
+	responder responderState
 	// readied is the channel that waits for the next WindowReady. Host.mu protects it.
 	readied []chan struct{}
 	monitor uintptr

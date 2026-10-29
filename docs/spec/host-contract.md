@@ -108,6 +108,7 @@ Items:
 | `deep-link.parse.rejects-long-url` | A URL longer than 8192 characters is refused with `URL is longer than 8192 characters`. | both |
 | `deep-link.launch.kept-links-run-in-order-when-window-ready` | Links that arrive before the first window is ready run in arrival order when it becomes ready, and none of them runs before that. | both |
 | `deep-link.launch.later-link-runs-at-once` | A link that arrives after the first window is ready runs at once, and a second ready notification does not run a link again. | both |
+| `window.responder.sent-at-ready-and-on-each-change` | The host sends the first responder of the window as the window event `window-responder {owner, surface, document}` when the page reports ready and at each change after that, sends none to a page that is not ready, sends an unchanged value once, and returns the failure of the read. | both |
 | `links.open.accepts-web-and-mail-schemes` | Absolute `http`, `https`, and `mailto` URLs are accepted for opening. | both |
 | `links.open.rejects-other-schemes` | A URL with another scheme, a URL that does not parse, and a URL longer than 8192 characters are rejected. | both |
 | `notifications.request.accepts-tab-notices` | A notification with a surface and title of 1 to 256 characters and a body of 1 to 1024 characters without control characters is accepted, and a removal needs only the surface. | both |

@@ -411,3 +411,60 @@ bool sp_window_observe_occlusion(void *handle, void (^changed)(void)) {
     objc_setAssociatedObject(window, &occlusionObserverKey, observer, OBJC_ASSOCIATION_RETAIN);
     return true;
 }
+
+// Observation of the first responder of one window. It is an associated object of the window, so it is released with
+// the window; key-value observing unregisters an observer of an object that is released. A later observation of the
+// window removes it.
+@interface SPResponderObserver : NSObject
+@property(nonatomic, assign) NSWindow *window;
+@property(nonatomic, copy) void (^changed)(void);
+- (void)end;
+@end
+
+static char responderContext;
+
+@implementation SPResponderObserver
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    if (context != &responderContext) {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+        return;
+    }
+    _changed();
+}
+- (void)end {
+    [_window removeObserver:self forKeyPath:@"firstResponder" context:&responderContext];
+    _window = nil;
+}
+- (void)dealloc {
+    [_changed release];
+    [super dealloc];
+}
+@end
+
+static const char responderObserverKey;
+
+bool sp_window_observe_responder(void *handle, void (^changed)(void)) {
+    NSCAssert(NSThread.isMainThread, @"first responder observation requires the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    if (!window || !changed) {
+        sp_log_error("window facts", "the window or the callback of the first responder observation is missing");
+        return false;
+    }
+    [(SPResponderObserver *)objc_getAssociatedObject(window, &responderObserverKey) end];
+    SPResponderObserver *observer = [[SPResponderObserver new] autorelease];
+    observer.window = window;
+    observer.changed = changed;
+    if (!sp_observe_key_path("window_facts.responder", SP_OBSERVE_RECORD, window, observer, @"firstResponder", 0, &responderContext)) {
+        return false;
+    }
+    objc_setAssociatedObject(window, &responderObserverKey, observer, OBJC_ASSOCIATION_RETAIN);
+    return true;
+}
+
+void sp_window_end_responder_observation(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"first responder observation requires the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    if (!window) return;
+    [(SPResponderObserver *)objc_getAssociatedObject(window, &responderObserverKey) end];
+    objc_setAssociatedObject(window, &responderObserverKey, nil, OBJC_ASSOCIATION_RETAIN);
+}

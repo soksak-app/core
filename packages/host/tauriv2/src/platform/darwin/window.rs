@@ -95,6 +95,27 @@ pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn()>) -> Result<(), S
     }
 }
 
+/// Calls changed whenever the first responder of the window changes (key-value observing of firstResponder).
+pub fn observe_responder(window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
+    unsafe extern "C" {
+        fn sp_window_observe_responder(window: *mut c_void, changed: &Block<dyn Fn()>) -> bool;
+    }
+    let changed = RcBlock::new(changed);
+    if unsafe { sp_window_observe_responder(window as *mut c_void, &changed) } {
+        Ok(())
+    } else {
+        Err("the first responder of the window cannot be observed".into())
+    }
+}
+
+/// Ends the first responder observation of the window.
+pub fn end_responder_observation(window: Handle) {
+    unsafe extern "C" {
+        fn sp_window_end_responder_observation(window: *mut c_void);
+    }
+    unsafe { sp_window_end_responder_observation(window as *mut c_void) }
+}
+
 /// Returns the title bar height of the window. It returns an error for a window that cannot have a title bar.
 pub fn titlebar_height(window: Handle) -> Result<f64, String> {
     unsafe extern "C" {

@@ -14,6 +14,7 @@ package darwin
 #include "window_reveal.h"
 
 bool nativeWindowFullscreen(void *window, bool on, uintptr_t callback);
+bool nativeWindowObserveResponder(void *window, uintptr_t callback);
 #import <Cocoa/Cocoa.h>
 
 void nativeWindowPrepare(void *window);
@@ -46,6 +47,35 @@ func (implementation) Fullscreen(window unsafe.Pointer, on bool, done func()) er
 		return errors.New("the window does not support full screen")
 	}
 	return nil
+}
+
+// The observation callbacks by window. They are read and changed only on the UI thread.
+var responderObservers = map[unsafe.Pointer]cgo.Handle{}
+
+func (implementation) ObserveResponder(window unsafe.Pointer, changed func()) error {
+	handle := cgo.NewHandle(changed)
+	if !bool(C.nativeWindowObserveResponder(window, C.uintptr_t(handle))) {
+		handle.Delete()
+		return errors.New("the first responder of the window cannot be observed")
+	}
+	if previous, ok := responderObservers[window]; ok {
+		previous.Delete()
+	}
+	responderObservers[window] = handle
+	return nil
+}
+
+func (implementation) EndResponderObservation(window unsafe.Pointer) {
+	C.sp_window_end_responder_observation(window)
+	if handle, ok := responderObservers[window]; ok {
+		handle.Delete()
+		delete(responderObservers, window)
+	}
+}
+
+//export nativeResponderChanged
+func nativeResponderChanged(value C.uintptr_t) {
+	cgo.Handle(value).Value().(func())()
 }
 
 //export nativeFullscreenDone

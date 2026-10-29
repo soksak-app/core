@@ -64,6 +64,12 @@ impl Platform for Windows {
     fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
         unsupported::observe_occlusion(window, changed)
     }
+    fn observe_responder(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
+        unsupported::observe_responder(window, changed)
+    }
+    fn end_responder_observation(&self, window: Handle) {
+        unsupported::end_responder_observation(window)
+    }
 
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
         unsupported::fullscreen(window, on, done)

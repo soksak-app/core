@@ -2,6 +2,7 @@
 // the view-call event of the main page; answerViewCall answers it with the handlers that a DOM surface context uses.
 import { base64Of, bytesFrom, causeCids } from "@soksak/plugin-api";
 import { runCommandCall } from "./command-route.js";
+import { setViewFocus } from "./view-focus.js";
 
 /**
  * Answers one event of a view and resolves with its result. A call request {id, command, params} resolves with the result of its
@@ -246,6 +247,9 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       return null;
     case "tab.title":
       tab.title(params);
+      return null;
+    case "tab.focus":
+      setViewFocus(surface, params);
       return null;
     case "tab.footer":
       tab.footer(params);

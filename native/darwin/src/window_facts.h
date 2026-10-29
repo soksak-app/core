@@ -73,3 +73,14 @@ void sp_facts_free(char *text);
 #ifdef __BLOCKS__
 bool sp_window_observe_occlusion(void *window, void (^changed)(void));
 #endif
+
+// Calls changed on the main thread each time the first responder of the window changes, observed with key-value
+// observing of firstResponder, which AppKit declares key-value observing compliant. The observation ends when the window
+// is released. An existing observation of the window is replaced. Returns false when there is no window or no callback.
+#ifdef __BLOCKS__
+bool sp_window_observe_responder(void *window, void (^changed)(void));
+#endif
+
+// Ends the first responder observation of the window, so its callback is not called again. A window without an observation
+// is left unchanged.
+void sp_window_end_responder_observation(void *window);

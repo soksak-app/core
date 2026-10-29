@@ -228,6 +228,7 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	h.mu.Unlock()
 	s.first.Do(func() { s.Emit("page-ready") })
 	s.imageDetachPageReady()
+	s.responderPageReady()
 	s.replayRegistrations()
 	s.loadPluginHosts()
 	routine.Go("windows-changed", h.windowsChanged)
@@ -395,6 +396,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			application.InvokeSync(func() { titled = system.SetTitlebarHeight(win.NativeWindow(), initialTitlebarHeight) })
 			if titled != nil {
 				LogError("window title bar", titled)
+			}
+			// The page combines the first responder with the focus of its documents in core.focus.
+			var observed error
+			application.InvokeSync(func() { observed = system.ObserveResponder(win.NativeWindow(), s.responderChanged) })
+			if observed != nil {
+				fatalError("window responder", observed)
 			}
 			var failed error
 			application.InvokeSync(func() { failed = system.RevealAfterLoad(win.NativeWindow()) })
@@ -623,6 +630,7 @@ func (s *Surfaces) close() {
 	s.host.removals.Abandon(s.name)
 	application.InvokeSync(func() {
 		cancelLayout(s, s.window)
+		system.EndResponderObservation(s.window.NativeWindow())
 		if s.monitor != 0 {
 			system.UnwatchInput(s.monitor)
 		}

@@ -166,6 +166,12 @@ impl Platform for Darwin {
     fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
         window::observe_occlusion(window, changed)
     }
+    fn observe_responder(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
+        window::observe_responder(window, changed)
+    }
+    fn end_responder_observation(&self, window: Handle) {
+        window::end_responder_observation(window)
+    }
 
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
         window::fullscreen(window, on, done)
