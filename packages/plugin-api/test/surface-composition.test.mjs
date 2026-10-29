@@ -29,6 +29,9 @@ function fixture() {
   Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
   window.visualViewport = { get width() { return window.innerWidth; }, get height() { return window.innerHeight; } };
+  // The root has no classic scroll bar, so its client size is the viewport size.
+  Object.defineProperty(window.document.documentElement, "clientWidth", { get: () => window.innerWidth, configurable: true });
+  Object.defineProperty(window.document.documentElement, "clientHeight", { get: () => window.innerHeight, configurable: true });
   const rects = new Map();
   const element = (id, rect) => {
     const node = window.document.getElementById(id);
@@ -377,6 +380,9 @@ test("a shadow-root composition scopes the marker and measures from its viewport
   Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
   window.visualViewport = { get width() { return window.innerWidth; }, get height() { return window.innerHeight; } };
+  // The root has no classic scroll bar, so its client size is the viewport size.
+  Object.defineProperty(window.document.documentElement, "clientWidth", { get: () => window.innerWidth, configurable: true });
+  Object.defineProperty(window.document.documentElement, "clientHeight", { get: () => window.innerHeight, configurable: true });
   slot.getBoundingClientRect = () => ({ left: 100, top: 50, right: 500, bottom: 350, width: 400, height: 300 });
   host.getBoundingClientRect = () => slot.getBoundingClientRect();
   page.getBoundingClientRect = () => ({ left: 110, top: 70, right: 410, bottom: 170, width: 300, height: 100 });

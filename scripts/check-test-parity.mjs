@@ -231,6 +231,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-303-3",
+    implementation: [
+      { file: "packages/plugin-api/document-region.js", symbol: "regionInsets" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/document-region.test.mjs", id: "a classic scroll bar of the root keeps the insets measured from the frame edges" },
+    ],
+    expected: "Region insets are measured from the edges of the web view frame under classic scroll bars.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-297-1",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "static void emitResponderChange(NSInteger windowNumber, id from, id to)" },

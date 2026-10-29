@@ -25,6 +25,9 @@ function fixture() {
   Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
   window.visualViewport = { get width() { return window.innerWidth; }, get height() { return window.innerHeight; } };
+  // The root has no classic scroll bar, so its client size is the viewport size.
+  Object.defineProperty(window.document.documentElement, "clientWidth", { get: () => window.innerWidth, configurable: true });
+  Object.defineProperty(window.document.documentElement, "clientHeight", { get: () => window.innerHeight, configurable: true });
   const element = window.document.getElementById("region");
   let rect = { left: 10, top: 40, right: 510, bottom: 440, width: 500, height: 400 };
   element.getBoundingClientRect = () => rect;

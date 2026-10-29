@@ -41,7 +41,12 @@ async function runCase(testCase) {
     view.ResizeObserver = class { observe() {} disconnect() {} };
     view.requestAnimationFrame = () => 1;
     view.cancelAnimationFrame = () => {};
+    Object.defineProperty(view, "innerWidth", { value: 800, configurable: true });
+    Object.defineProperty(view, "innerHeight", { value: 600, configurable: true });
     view.visualViewport = { width: 800, height: 600 };
+    // The root has no classic scroll bar, so its client size is the viewport size.
+    Object.defineProperty(view.document.documentElement, "clientWidth", { get: () => view.innerWidth, configurable: true });
+    Object.defineProperty(view.document.documentElement, "clientHeight", { get: () => view.innerHeight, configurable: true });
     for (const [name, rect] of Object.entries(CONTRACT.elements)) {
       const { left, top, width, height } = rect;
       view.document.getElementById(name).getBoundingClientRect = () => ({

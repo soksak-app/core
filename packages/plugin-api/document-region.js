@@ -34,11 +34,15 @@ function isElementVisible(element, view) {
 /** The viewport margins of the element. visible is false when the element is not shown. */
 export function regionInsets(element, view) {
   const rect = element.getBoundingClientRect();
+  // The host places the region from the edges of the frame. visualViewport keeps a fractional frame size but excludes
+  // a classic scroll bar of the root, which the frame contains, so the scroll bar size (innerWidth less the client
+  // width of the root) is added back.
+  const root = view.document.documentElement;
   const insets = {
     left: rect.left,
     top: rect.top,
-    right: view.visualViewport.width - rect.right,
-    bottom: view.visualViewport.height - rect.bottom,
+    right: view.visualViewport.width + view.innerWidth - root.clientWidth - rect.right,
+    bottom: view.visualViewport.height + view.innerHeight - root.clientHeight - rect.bottom,
   };
   const shown = element.isConnected && rect.width > 0 && rect.height > 0
     && isElementVisible(element, view);

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-303-3: root가 classic scroll bar를 보일 때 document region의 inset을 웹뷰 frame의 가장자리에서 재므로, region이 더는 scroll bar 위로 넘어가지 않는다.
 - F239-303-2: `webview_geometry_test`가 frame 크기를 `innerWidth`와 `innerHeight`로 재고, classic scroll bar 아래에서 한 번 더 돈다.
 - F239-303-1: `native-darwin` CI job이 native 시험 전에 runner의 display, 전원 상태, console session을 기록한다.
 - F239-297-1: native 기록 `native.window.first_responder`가 창 갱신마다 비교하는 대신 `window-responder`를 보내는 key-value observation에서 나온다.

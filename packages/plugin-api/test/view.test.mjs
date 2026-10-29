@@ -612,7 +612,12 @@ function compositionSetup(t, replies) {
   view.ResizeObserver = class { observe() {} disconnect() {} };
   view.requestAnimationFrame = () => 1;
   view.cancelAnimationFrame = () => {};
+  Object.defineProperty(view, "innerWidth", { value: 800, configurable: true });
+  Object.defineProperty(view, "innerHeight", { value: 600, configurable: true });
   view.visualViewport = { width: 800, height: 600 };
+  // The root has no classic scroll bar, so its client size is the viewport size.
+  Object.defineProperty(view.document.documentElement, "clientWidth", { get: () => view.innerWidth, configurable: true });
+  Object.defineProperty(view.document.documentElement, "clientHeight", { get: () => view.innerHeight, configurable: true });
   const rect = (left, top, width, height) => ({ left, top, right: left + width, bottom: top + height, width, height });
   view.document.getElementById("doc").getBoundingClientRect = () => rect(10, 20, 300, 200);
   view.document.getElementById("picture").getBoundingClientRect = () => rect(320, 20, 400, 400);

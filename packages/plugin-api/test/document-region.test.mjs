@@ -24,6 +24,9 @@ function fixture() {
   Object.defineProperty(window, "innerWidth", { value: 800, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
   window.visualViewport = { get width() { return window.innerWidth; }, get height() { return window.innerHeight; } };
+  // The root has no classic scroll bar, so its client size is the viewport size.
+  Object.defineProperty(window.document.documentElement, "clientWidth", { get: () => window.innerWidth, configurable: true });
+  Object.defineProperty(window.document.documentElement, "clientHeight", { get: () => window.innerHeight, configurable: true });
   const element = window.document.getElementById("region");
   let rect = { left: 10, top: 40, right: 510, bottom: 440, width: 500, height: 400 };
   element.getBoundingClientRect = () => rect;
@@ -76,6 +79,20 @@ test("fractional viewport sizes do not create native region insets", () => {
   f.resize({ left: 0, top: 0, right: 597.5, bottom: 286.5, width: 597.5, height: 286.5 });
   assert.deepEqual(regionInsets(f.element, f.window).insets,
     { left: 0, top: 0, right: 0, bottom: 0 });
+});
+
+test("a classic scroll bar of the root keeps the insets measured from the frame edges", () => {
+  // A 300 x 200 point frame whose root scrolls both ways under classic scroll bars of 17 px: the visual viewport and
+  // the client size of the root exclude the scroll bars, which the frame contains.
+  const f = fixture();
+  f.window.visualViewport = { width: 283, height: 183 };
+  Object.defineProperty(f.window, "innerWidth", { value: 300 });
+  Object.defineProperty(f.window, "innerHeight", { value: 200 });
+  Object.defineProperty(f.window.document.documentElement, "clientWidth", { value: 283 });
+  Object.defineProperty(f.window.document.documentElement, "clientHeight", { value: 183 });
+  f.resize({ left: 0, top: 0, right: 283, bottom: 183, width: 283, height: 183 });
+  assert.deepEqual(regionInsets(f.element, f.window).insets,
+    { left: 0, top: 0, right: 17, bottom: 17 });
 });
 
 test("history tells whether the attach restored a session history", async () => {

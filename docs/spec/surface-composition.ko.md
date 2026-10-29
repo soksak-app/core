@@ -87,7 +87,7 @@ const view = composition.region("view");
 
 뷰포트나 관찰 중인 요소의 크기가 바뀌면 측정된 인셋이 그대로여도 항상 합성 스냅샷을 보낸다. 따라서 표면 전체를 차지하는 그림 영역도 표면 크기가 바뀔 때 새 래스터 설정을 받는다. 표시 중인 view 표면에는 선언된 표시 네이티브 영역마다 붙은 네이티브 영역이 정확히 하나 있어야 한다. 고아 영역이나 선언된 영역이 없는 표시 표면은 오류다.
 
-인셋은 현재 마운트된 뷰포트와 요소의 CSS 사각형으로 계산한다. 네이티브 표면·영역 프레임은 AppKit point를 사용하고 backing 배율은 래스터 크기에만 적용한다. WebKit은 소수점 AppKit 프레임을 whole CSS pixel로 노출할 수 있다(예: `2x`에서 `200.5pt`가 `200` CSS px로 보고될 수 있다). 이 플랫폼 양자화는 검사로 명시하며 네이티브 프레임이나 마지막 backing pixel을 바꾸면 안 된다. 정수 `innerWidth`·`innerHeight`는 네이티브 래스터 기하를 정의하지 않는다.
+인셋은 현재 마운트된 뷰포트와 요소의 CSS 사각형으로 계산하고, 웹뷰 frame의 가장자리에서 잰다. 오른쪽과 아래 인셋에는 root의 classic scroll bar(`innerWidth`에서 root `clientWidth`를 뺀 값, 높이도 같다)를 더한다. `visualViewport`는 scroll bar를 빼고 frame은 scroll bar를 포함하기 때문이다. 네이티브 표면·영역 프레임은 AppKit point를 사용하고 backing 배율은 래스터 크기에만 적용한다. WebKit은 소수점 AppKit 프레임을 whole CSS pixel로 노출할 수 있다(예: `2x`에서 `200.5pt`가 `200` CSS px로 보고될 수 있다). 이 플랫폼 양자화는 검사로 명시하며 네이티브 프레임이나 마지막 backing pixel을 바꾸면 안 된다. 정수 `innerWidth`·`innerHeight`는 네이티브 래스터 기하를 정의하지 않는다.
 
 반환한 영역 손잡이는 선언한 종류의 연산만 가진다. 문서 손잡이는 불러오기와 탐색을 수행하고, plugin 문서와 메시지를 주고받는다(`post(message)`, `onMessage(fn)`, [문서 영역](native-surfaces.ko.md#문서-영역)). 문서 손잡이는 `history`도 알린다. 이 값은 attach 답이 오기 전까지 null이고, 그 뒤에는 영역이 세션 기록을 restore했는지를 boolean으로 알린다. view 문서 손잡이는 page 문서 손잡이와 같은 `history`를 알리며, boolean `history`가 없는 attach 답은 영역 이름을 밝힌 오류로 합성을 거부한다. 그림 손잡이는 초점, 캐럿, 접근성 텍스트를 제어하고 공급자 이벤트를 받는다. 개별 영역 분리는 허용하지 않는다. 표면을 닫거나 탐색하면 완전한 합성을 제거한다.
 
