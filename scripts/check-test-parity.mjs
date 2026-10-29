@@ -200,6 +200,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-302",
+    implementation: [
+      { file: "packages/workbench/ids.js", symbol: "export function issueId(kind, taken)" },
+      { file: "packages/workbench/plane.js", symbol: "const tabTaken = " },
+    ],
+    tests: [
+      { file: "packages/workbench/test/ids.test.mjs", id: "an id that is taken is issued again" },
+      { file: "packages/workbench/test/plane-tab-ids.test.mjs", id: "a new tab avoids the ids of held surfaces, stored tabs and tabs issued before it" },
+    ],
+    expected: "A new tab takes no id of a stored tab, an issued tab or a held surface.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-300",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
     tests: [

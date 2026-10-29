@@ -19,13 +19,19 @@ const PREFIX = {
   tab: "tab-",
 };
 
-/** Generates and returns one identifier. */
-export function issueId(kind) {
+/**
+ * Generates and returns one identifier of `kind` for which `taken(id)` is false. Random ids of 30 bits can repeat, and
+ * an id that another target already holds would address both, so a taken id is drawn again.
+ */
+export function issueId(kind, taken) {
   const prefix = PREFIX[kind];
   if (!prefix) throw new Error(`unknown id kind: ${kind}`);
+  if (typeof taken !== "function") throw new TypeError(`issueId(${kind}) needs a check of the taken ids, not ${taken}`);
   const buf = new Uint8Array(LEN);
-  crypto.getRandomValues(buf);
-  let body = "";
-  for (const b of buf) body += ALPHABET[b % 32];
-  return prefix + body;
+  for (;;) {
+    crypto.getRandomValues(buf);
+    let body = "";
+    for (const b of buf) body += ALPHABET[b % 32];
+    if (!taken(prefix + body)) return prefix + body;
+  }
 }

@@ -80,6 +80,12 @@ function finishInitialProjectContext(error, rejected = false) {
   resolve(rejected ? { ok: false, reason: error } : { ok: true });
 }
 
+/** Whether a space of a known project holds the space id `id`. */
+const spaceTaken = (id) => projects.some((project) => project.spaces.some((space) => space.id === id));
+
+/** Whether a tab of a stored layout of a known project holds the tab id `id`; a persistent session belongs to such a tab. */
+export const storedTabTaken = (id) => projects.some((project) => projectTabs(project).has(id));
+
 /** The tab ids of the layouts of all spaces of project. */
 function projectTabs(project) {
   // default: a seat card has null data, so it has no tabs.
@@ -482,9 +488,9 @@ async function activateInTurn(id) {
 export async function open({ root, color, layout }) {
   if (!root.trim()) throw new Error("Project directory is empty");
   const folder = await windows.folder(root);
-  const space = { id: issueId("space"), title: "SPACE1", layout };
+  const space = { id: issueId("space", spaceTaken), title: "SPACE1", layout };
   const project = await store.add({
-    id: issueId("project"), ...folder, title: folder.root.split(/[\\/]/).filter(Boolean).at(-1), color,
+    id: issueId("project", (id) => projects.some((known) => known.id === id)), ...folder, title: folder.root.split(/[\\/]/).filter(Boolean).at(-1), color,
     named: 1, spaces: [space], activeSpaceId: space.id, settings: {},
   });
   await refresh();
@@ -534,7 +540,7 @@ function restore(path) {
 export function addSpace(layout) {
   const project = active();
   keep("add space");
-  const space = { id: issueId("space"), title: `SPACE${++project.named}`, layout };
+  const space = { id: issueId("space", spaceTaken), title: `SPACE${++project.named}`, layout };
   project.spaces.push(space);
   project.activeSpaceId = space.id;
   restore("add space");

@@ -65,6 +65,7 @@ test("a held tab is neither mounted nor given a background session until its det
     initialProjectContextReady: () => true,
     initialProjectContextFailed: () => false,
     waitForInitialProjectContext: () => Promise.resolve(),
+    storedTabTaken: () => false,
   } });
   t.mock.module("../environment.js", { exports: {
     environment: () => ({ workspace: { focus: "main", grid: {

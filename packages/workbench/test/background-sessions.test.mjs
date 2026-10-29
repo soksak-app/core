@@ -68,6 +68,7 @@ test("a background session opens only for a tab without a mounted surface and en
     initialProjectContextReady: () => projectContextReady,
     initialProjectContextFailed: () => projectContextFailed,
     waitForInitialProjectContext: () => projectContext,
+    storedTabTaken: () => false,
   } });
   // One card with two tabs of the plugin that declares the background session; the first is shown.
   t.mock.module("../environment.js", { exports: {

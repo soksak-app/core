@@ -36,7 +36,7 @@ import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, 
 import { hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
-import { initialProjectContextFailed, initialProjectContextReady, waitForInitialProjectContext } from "./projects.js";
+import { initialProjectContextFailed, initialProjectContextReady, storedTabTaken, waitForInitialProjectContext } from "./projects.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
   "splitToward", "replace"];
@@ -128,8 +128,15 @@ let named = 0;
    T4 Drop on an edge = a new slot is needed on that side.
    T5 When the last tab leaves, the card disappears — no empty card remains.        */
 // A tab stores params only when it was opened with them (docs/spec/plugins.md#pluginjson).
-const tab = (plugin, title, params) => (params === null
-  ? { id: issueId("tab"), plugin, title } : { id: issueId("tab"), plugin, title, params });
+// A new tab id is held by no tab that this page issued, no tab of a stored layout, and no surface that waits for its image
+// detach; the tabs of the plane are issued or stored tabs.
+const issuedTabIds = new Set();
+const tabTaken = (id) => issuedTabIds.has(id) || storedTabTaken(id) || imageDetachHold(id) !== null;
+function tab(plugin, title, params) {
+  const id = issueId("tab", tabTaken);
+  issuedTabIds.add(id);
+  return params === null ? { id, plugin, title } : { id, plugin, title, params };
+}
 // default: the fixed left and right sidebar cards have null data, so they have no surface tab.
 const tabsOf = (card) => card?.data?.tabs ?? [];
 const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId);
