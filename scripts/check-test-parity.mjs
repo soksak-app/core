@@ -200,6 +200,28 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-294",
+    implementation: [{ file: "e2e/library.test.mjs", symbol: "const removed = folder.replace(" }],
+    tests: [{ file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" }],
+    expected: "The library check declares the three texts of the files tree failure that its folder removal causes and passes on both hosts.",
+    levels: ["application"],
+  },
+  {
+    id: "F239-293",
+    implementation: [
+      { file: "packages/workbench/document-regions.js", symbol: "leave(tab) {" },
+      { file: "packages/workbench/surface-modules.js", symbol: "documentRegions.leave(id)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-remount-composition.test.mjs", id: "a disposing surface leaves the tabs with attached regions before its exposure disposal ends" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a region query of a view that a running place leaves out waits for the place and asks no region of a released view" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a region query of a view waits for a failed place that left the view out and then asks its regions" },
+      { file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" },
+    ],
+    expected: "A region query of a surface that a disposal or a running place closes asks no closed region, and a failed place leaves the regions to the query.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-291",
     implementation: [
       { file: "packages/host/wailsv3/src/projects.go", symbol: "func (h *Host) ProjectOpen(" },
