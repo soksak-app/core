@@ -109,6 +109,9 @@ function sok(binary, args) {
  * the target added and its sha256; a target that adds no file or more than one file is an error.
  */
 export function packPlugin(binary, repository, out, diagnostics) {
+  // make -C runs the target in the repository, so the paths that it receives are absolute.
+  binary = resolve(binary);
+  out = resolve(out);
   mkdirSync(out, { recursive: true });
   const before = new Set(readdirSync(out));
   execFileSync("make", ["-C", repository, "pack", `OUT=${out}`, `SOK=${binary}`, `PACK_FLAGS=${diagnostics ? "--diagnostics" : ""}`],

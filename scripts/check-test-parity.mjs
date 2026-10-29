@@ -8003,6 +8003,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F275-2",
+    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "// make -C runs the target in the repository, so the paths that it receives are absolute." }],
+    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a relative output folder and sok executable of a pack resolve from the working directory, not from the plugin repository" }],
+    expected: "The workspace registry passes absolute output and sok paths to the make pack target of a plugin repository.",
+    levels: ["unit"],
+  },
+  {
     id: "F275-1",
     implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function installFolders(" }],
     tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "the installation stage runs make install once in every declared repository before the window checks build" }],

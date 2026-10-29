@@ -4,7 +4,7 @@ import test from "node:test";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import { checkDeclaration, installFolders, packPlugin, pluginEntry, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
 
@@ -109,4 +109,15 @@ test("the installation stage runs make install once in every declared repository
     const install = text.indexOf("make registry-install");
     assert.ok(install > 0 && install < text.indexOf("make prepare"), `${workflow} runs make registry-install before make prepare`);
   }
+});
+
+test("a relative output folder and sok executable of a pack resolve from the working directory, not from the plugin repository", { timeout: 30000 }, (t) => {
+  const repository = mkdtempSync(join(tmpdir(), "workspace-pack-"));
+  const out = mkdtempSync(join(tmpdir(), "workspace-releases-"));
+  t.after(() => { rmSync(repository, { recursive: true, force: true }); rmSync(out, { recursive: true, force: true }); });
+  // make -C runs the target in the repository, so the target receives the paths that it writes and runs.
+  writeFileSync(join(repository, "Makefile"), 'pack:\n\t@printf "%s" "$(SOK)" > "$(OUT)/probe-0.0.1.tgz"\n');
+  const pack = packPlugin(relative(process.cwd(), "/opt/sok"), repository, relative(process.cwd(), out), false);
+  assert.equal(pack.release, join(out, "probe-0.0.1.tgz"));
+  assert.equal(readFileSync(pack.release, "utf8"), "/opt/sok");
 });

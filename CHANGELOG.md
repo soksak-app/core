@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F276: The release of core no longer checks the public registry; the registry checks the plugin versions that installation selects for each core version that it lists.
+- F275-2: The workspace registry passes absolute sok and output paths to the `make pack` target of each plugin repository.
 - F275-1: The window-check jobs run `make registry-install`, the installation stage of every declared plugin and sidecar repository, before they build.
 - F275: The workspace registry packs each plugin with the `make pack` target of its repository; the plugin specification states `make install`, the installation stage of a plugin or sidecar repository.
 - F272-4: The checklist items that only a release completes are closed with the step of `release.yml` that performs them or moved to the repository that owns them, so no open item waits for the release that it holds.
