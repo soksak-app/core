@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F283-1: The window-check jobs keep the memory pressure reports and the kernel records of ended processes.
 - F282: Both hosts report the first responder in the view of a view surface with the owner `surface`, which the page accepts.
 - F280: The window-check jobs wait for the stopped applications to end and keep the crash report of a host that crashed.
 - F279-2: Both hosts report why a `--registry-ca` certificate does not parse.

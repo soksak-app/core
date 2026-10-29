@@ -161,6 +161,10 @@ jobs:
             done
             cp "$reports"/soksak-$app-*.ips "$RUNNER_TEMP/crash-reports/"
           done
+          # A host that the system ended with SIGKILL writes no record; the memory pressure reports and the kernel records
+          # of ended processes name it.
+          find "$reports" -maxdepth 1 -name 'JetsamEvent-*.ips' -exec cp {} "$RUNNER_TEMP/crash-reports/" \;
+          log show --last 3h --style compact --predicate 'process == "kernel" AND eventMessage CONTAINS "memorystatus"' > "$RUNNER_TEMP/crash-reports/memorystatus.log"
       - name: Keep the run folder
         if: failure()
         uses: actions/upload-artifact@v4

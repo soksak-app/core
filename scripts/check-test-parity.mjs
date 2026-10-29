@@ -7996,6 +7996,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F283-1",
+    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "JetsamEvent-*.ips" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check jobs wait for the applications to end and keep the crash report of an application that crashed" }],
+    expected: "The window-check jobs keep the memory pressure reports and the kernel memorystatus records with the crash reports.",
+    levels: ["unit"],
+  },
+  {
     id: "F282",
     implementation: [
       { file: "packages/host/wailsv3/src/exposure.go", symbol: "func windowResponder(" },

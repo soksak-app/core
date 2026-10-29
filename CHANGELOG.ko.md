@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F283-1: 창 검사 job은 메모리 압박 report와 끝난 process의 kernel 기록을 남긴다.
 - F282: 두 host는 view surface의 view에 있는 first responder를 page가 받아들이는 owner `surface`로 보고한다.
 - F280: 창 검사 job은 멈춘 application이 끝나기를 기다리고 crash한 host의 crash report를 남긴다.
 - F279-2: 두 host는 `--registry-ca` 인증서가 parse되지 않는 이유를 보고한다.

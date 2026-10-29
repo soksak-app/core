@@ -325,5 +325,7 @@ test('the window-check jobs wait for the applications to end and keep the crash 
     assert.match(text, /error native fatal: [^\n]*host-\*\.stderr/, `${workflow} does not read the fatal record of each host`);
     assert.match(text, /Library\/Logs\/DiagnosticReports/, `${workflow} does not read the crash reports of the system`);
     assert.match(text, /^\s+\$\{\{ runner\.temp \}\}\/crash-reports$/m, `${workflow} uploads no crash reports`);
+    assert.match(text, /JetsamEvent-\*\.ips/, `${workflow} does not keep the memory pressure reports`);
+    assert.match(text, /log show [^\n]*memorystatus/, `${workflow} does not keep the kernel records of ended processes`);
   }
 });
