@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-296-1: origin 없는 탭의 거부가 그 origin을 저장 레이아웃으로 버린 동작을 space, project와 함께 밝히므로, view origin을 잃게 한 버림을 거부 기록에서 찾는다.
 - F239-299-3: terminal 구분선 끌기 검사는 더는 없는 page 표시 요청의 field 대신, event log의 host trace에서 읽은 `view.presentation-join`의 `presented` phase를 set마다 terminal view 각각에 요구한다. 검사는 통합 실행에서 돈다.
 - F239-299-1: terminal 셋과 browser 둘의 terminal 창 검사는 함께 쓰는 앱 웹뷰 하나 대신, native 창 사실이 재는 대로 main page 웹뷰 하나와 view 표면마다 웹뷰 하나를 센다. 앱 DOM 명세는 `dom` 합성을 밝힌다. 검사는 통합 실행에서 돈다.
 - F239-299-2: main page가 `page.log.clock`을 한 번만 적는다. page의 trace가 두 번째 clock을 적던 자기 writer 대신 page record의 writer로 event를 보낸다. Red: 소유 workbench 시험이 clock 기록 2개를 찾았다. Green: 통과한다.

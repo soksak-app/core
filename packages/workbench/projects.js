@@ -202,7 +202,7 @@ export function begin(snapshot) {
   const recreated = opened.spaces.find((s) => s.id === opened.activeSpaceId);
   const previousRecreated = recreated.layout;
   recreated.layout = listener.save("recreate");
-  forgetTabsLeft(previousRecreated.state.cards, recreated.layout.state.cards);
+  forgetTabsLeft(previousRecreated.state.cards, recreated.layout.state.cards, `recreate of space ${recreated.id}, project ${opened.id}`);
   savedLayout = JSON.stringify({ spaces: opened.spaces, activeSpaceId: opened.activeSpaceId, named: opened.named });
 }
 
@@ -348,7 +348,8 @@ export function keep(path) {
   const previous = space.layout;
   space.layout = listener.save(path);
   // The tabs that the previous stored layout of this space held and the saved one does not hold leave their origins (docs/spec/projects.md#tab-origin).
-  forgetTabsLeft(previous.state.cards, space.layout.state.cards);
+  // default: a keep without a writing path is the store of the drawn layout after a render.
+  forgetTabsLeft(previous.state.cards, space.layout.state.cards, `${path ?? "drawn layout"} of space ${space.id}, project ${project.id}`);
   const patch = { spaces: project.spaces, activeSpaceId: project.activeSpaceId, named: project.named };
   const key = JSON.stringify(patch);
   if (key === savedLayout) return writing;
@@ -571,7 +572,7 @@ export function closeSpace(id) {
   keep("saved layout");
   const [removed] = project.spaces.splice(at, 1);
   // The tabs of the removed space leave its stored layout, so their origins end (docs/spec/projects.md#tab-origin).
-  forgetTabsLeft(removed.layout.state.cards, []);
+  forgetTabsLeft(removed.layout.state.cards, [], `close space ${removed.id}, project ${project.id}`);
   if (next) project.activeSpaceId = next.id;
   restore("saved layout");
   // The tabs of the closed space are in no layout, so their sidecar sessions end.

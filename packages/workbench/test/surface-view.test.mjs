@@ -707,16 +707,18 @@ test("the start values of a view carry its params, origin, project and declarati
 });
 
 // A tab whose origin was pruned from the layout memory while it was out of the displayed layout is refused at its presentation. The
-// refusal names the tab, its plugin, space and project, the path that created it, and whether this session recorded its origin.
-test("a view whose origin is missing names the tab, its plugin, space, project, creation path and session history", async () => {
+// refusal names the tab, its plugin, space and project, the path that created it, whether this session recorded its origin, and the
+// operation whose stored layout dropped the origin.
+test("a view whose origin is missing names the tab, its plugin, space, project, creation path, session history and the drop", async () => {
   const { viewStartValues } = await import("../surface-modules.js?view-origin-record");
   const { forgetTabsLeft, recordOrigin, storedLayoutState } = await import("../tab-reports.js");
   recordOrigin("tab-pruned", null, "new tab");
   const previous = [{ id: "card-pruned", data: { tabs: [{ id: "tab-pruned", plugin: "fixture-view" }] } }];
   storedLayoutState({ cards: previous });
-  forgetTabsLeft(previous, []);
+  forgetTabsLeft(previous, [], "saved layout of space spc-pruned, project prj-pruned");
   assert.throws(() => viewStartValues({ surfaceId: "tab-pruned", pluginId: "fixture-view", declarations: {} }, null), (error) => {
-    assert.equal(error.message, "tab tab-pruned has no origin: plugin fixture-view, space none, project none, created by new tab, held by this session: yes");
+    assert.equal(error.message, "tab tab-pruned has no origin: plugin fixture-view, space none, project none, created by new tab, " +
+      "held by this session: yes, origin dropped by saved layout of space spc-pruned, project prj-pruned");
     return true;
   });
 });

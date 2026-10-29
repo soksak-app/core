@@ -12,6 +12,8 @@ const refusals = new Map();
 // The path that created each tab id, and the tab ids whose origin this session recorded: the history that the refusal of a missing origin names.
 const createdBy = new Map();
 const everHeld = new Set();
+// The operation whose stored layout last dropped the origin of each tab id (forgetTabsLeft), which the refusal of a missing origin names.
+const forgottenBy = new Map();
 const notices = new Map();
 const noticePolicies = new Map();
 const modified = new Set();
@@ -156,7 +158,9 @@ export function recordOrigin(tabId, fromTabId, path) {
 /** The history of a tab id for the refusal of a missing origin: its creation path and whether this session recorded its origin. */
 export function originHistory(tabId) {
   // default: a tab whose creation this session did not record is named so, which is the fact the record reports.
-  return `created by ${createdBy.get(tabId) ?? "no recorded path"}, held by this session: ${everHeld.has(tabId) ? "yes" : "no"}`;
+  // default: a tab whose origin no stored layout dropped is named so.
+  return `created by ${createdBy.get(tabId) ?? "no recorded path"}, held by this session: ${everHeld.has(tabId) ? "yes" : "no"}, ` +
+    `origin dropped by ${forgottenBy.get(tabId) ?? "no stored layout"}`;
 }
 
 /** The reading rule of a non-view tab without an origin member: the released format-1 origin {directory: null} (docs/spec/projects.md#tab-origin). */
@@ -256,9 +260,11 @@ export function storedLayoutState(state) {
 /**
  * Drops the origin of each tab that the previous stored layout of a space held and its next stored layout does not hold. Only the stored
  * layout of the tab's own space ends its origin, so a tab of another space keeps it (docs/spec/projects.md#tab-origin). A closed tab keeps
- * no origin, and an id is not reused, so dropping its record loses no value.
+ * no origin, and an id is not reused, so dropping its record loses no value. `operation` names the operation that stored the next layout,
+ * which the refusal of a missing origin names.
  */
-export function forgetTabsLeft(previousCards, nextCards) {
+export function forgetTabsLeft(previousCards, nextCards, operation) {
+  if (typeof operation !== "string" || operation === "") throw new TypeError("forgetTabsLeft requires the operation that stores the layout");
   // default: a card without tabs keeps no tab.
   const kept = new Set(nextCards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => tab.id)));
   for (const card of previousCards) {
@@ -268,6 +274,7 @@ export function forgetTabsLeft(previousCards, nextCards) {
       origins.delete(tab.id);
       loaded.delete(tab.id);
       refusals.delete(tab.id);
+      forgottenBy.set(tab.id, operation);
     }
   }
 }

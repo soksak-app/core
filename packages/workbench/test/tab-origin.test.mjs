@@ -87,8 +87,9 @@ test("a tab that its own space's previous stored layout held and its next stored
   recordOrigin("origin-left", null, "test fixture");
   const previous = [{ id: "c", data: { tabs: [{ id: "origin-left", plugin: "p" }] } }];
   storedLayoutState({ cards: previous });
-  forgetTabsLeft(previous, []);
+  forgetTabsLeft(previous, [], "saved layout of space spc-left, project prj-left");
   assert.throws(() => tabOrigin("origin-left"), /has no origin/);
+  assert.throws(() => forgetTabsLeft(previous, []), /requires the operation that stores the layout/);
 });
 
 test("a view tab whose origin is refused and then restored with a valid origin is not refused any more", () => {
