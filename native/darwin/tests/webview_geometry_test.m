@@ -117,11 +117,12 @@ static BOOL lastRowIsDocument(WKWebView *view, CGFloat scale) {
 
 // Presses the last device pixel of the surface with native input and returns the coordinates that the document
 // received.
-static NSDictionary *pressLastPixel(NSWindow *window, WKWebView *surface, CGFloat scale) {
+// Presses the surface at offset points below its top edge and returns the press that the document received.
+static NSDictionary *pressSurface(NSWindow *window, WKWebView *surface, double offset) {
     currentStep = __func__;
     double frame[4] = {0, 0, 0, 0};
     webviewGetFrame(surface, frame);
-    double x = frame[0] + frame[2] / 2, y = frame[1] + frame[3] - 0.5 / scale;
+    double x = frame[0] + frame[2] / 2, y = frame[1] + offset;
     NSView *content = window.contentView;
     NSPoint local = NSMakePoint(x, content.bounds.size.height - y);
     NSPoint inWindow = [content convertPoint:local toView:nil];
@@ -138,8 +139,8 @@ static NSDictionary *pressLastPixel(NSWindow *window, WKWebView *surface, CGFloa
     sp_input_result down = sp_input_pointer(window, x, y, 1, 0, 0, 0);
     sp_input_result up = sp_input_pointer(window, x, y, 3, 0, 0, 0);
     BOOL delivered = down == SP_INPUT_DELIVERED && up == SP_INPUT_DELIVERED;
-    check(delivered, [NSString stringWithFormat:@"press on the last device pixel delivered at scale %g "
-        "(down %d, up %d; AppKit button mask before %lu, after %lu)", scale, down, up,
+    check(delivered, [NSString stringWithFormat:@"press on the surface delivered at offset %g "
+        "(down %d, up %d; AppKit button mask before %lu, after %lu)", offset, down, up,
         (unsigned long)buttons, (unsigned long)NSEvent.pressedMouseButtons]);
     if (!delivered) {
         fprintf(stderr, "FAIL: the press was not delivered (step: %s)\n", currentStep);
@@ -301,8 +302,15 @@ static void verify(SPScaledWindow *window, WKWebView *surface, CGFloat scale, do
     double posted = scrollBy(window, surface, YES);
     check(posted == 120,
         [NSString stringWithFormat:@"%@: a three-line scroll from the event queue moves the document by 120 CSS pixels (%g; samples %@; app active %d)", when, posted, scrollSamples, NSApp.isActive]);
-    NSDictionary *pressed = pressLastPixel(window, surface, scale);
-    double expected = frame[3] - 0.5 / scale;
+    // The WebKit of macOS 15 reports whole CSS pixel pointer coordinates and a later one reports the fractional
+    // point, so a press inside the surface measures the precision of this WebKit, and the press on the last device
+    // pixel is expected at that precision.
+    NSDictionary *inside = pressSurface(window, surface, 10.25);
+    BOOL fractional = fabs([inside[@"y"] doubleValue] - 10.25) < 0.001;
+    check([inside[@"trusted"] boolValue] && (fractional || [inside[@"y"] doubleValue] == 10),
+        [NSString stringWithFormat:@"%@: a press at 10.25 points reports its point at the pointer precision of WebKit (%@)", when, inside]);
+    NSDictionary *pressed = pressSurface(window, surface, frame[3] - 0.5 / scale);
+    double expected = fractional ? frame[3] - 0.5 / scale : floor(frame[3] - 0.5 / scale);
     check([pressed[@"trusted"] boolValue] && fabs([pressed[@"y"] doubleValue] - expected) < 0.001,
         [NSString stringWithFormat:@"%@: the document receives input in the last device pixel at %g (%@)", when, expected, pressed]);
 }

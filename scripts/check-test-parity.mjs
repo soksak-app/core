@@ -266,6 +266,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-303-7",
+    implementation: [
+      { file: "native/darwin/tests/webview_geometry_test.m", symbol: "pressSurface" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "reports its point at the pointer precision of WebKit" },
+    ],
+    expected: "The last device pixel press is expected at the pointer precision that the WebKit of the run reports.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-297-1",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "static void emitResponderChange(NSInteger windowNumber, id from, id to)" },
