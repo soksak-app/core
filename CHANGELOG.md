@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-297-1: The native record `native.window.first_responder` comes from the key-value observation that sends `window-responder`, instead of a comparison at each window update.
 - F239-299-3-1: The presentation wait of native surfaces and the case `view.presentation-wait.joins` state that a view joins at each display that changes its frame, also during a continuing gesture, as both hosts do since F212.14-5-18.
 - F239-296-1: The refusal of a tab without an origin names the operation whose stored layout dropped the origin, with its space and project, so the drop that loses a view origin is found in the record of the refusal.
 - F239-299-3: The terminal divider drag check requires a `presented` phase of `view.presentation-join` for each terminal view in each set, read from the host trace of the event log, instead of a field of the page presentation request that no longer exists. The check runs in the integrated pass.

@@ -80,31 +80,5 @@ int main(void) { @autoreleasepool {
     check([activated[@"previous_pid"] intValue] == previous.processIdentifier && [activated[@"previous_bundle"] isEqual:previous.bundleIdentifier],
         [NSString stringWithFormat:@"the activation names the application that was frontmost before it (%@, want %d %@)", activated,
             previous.processIdentifier, previous.bundleIdentifier]);
-
-    // The first responder of a window changes without a notification: each change is an event with the classes before and after.
-    NSTextField *other = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 60, 100, 30)];
-    [window.contentView addSubview:other];
-    [NSNotificationCenter.defaultCenter postNotificationName:NSWindowDidUpdateNotification object:window];
-    NSArray<NSDictionary *> *moves = capturedEvents(^{
-        [window makeFirstResponder:other];
-        [NSNotificationCenter.defaultCenter postNotificationName:NSWindowDidUpdateNotification object:window];
-        [window makeFirstResponder:field];
-        [NSNotificationCenter.defaultCenter postNotificationName:NSWindowDidUpdateNotification object:window];
-    });
-    NSMutableArray<NSString *> *moved = [NSMutableArray array];
-    for (NSDictionary *event in moves) {
-        if ([event[@"name"] isEqual:@"native.window.first_responder"]) {
-            [moved addObject:[NSString stringWithFormat:@"%@>%@", event[@"fields"][@"from"], event[@"fields"][@"to"]]];
-        }
-    }
-    // AppKit passes through the window and the field editor of a text field, so the check requires a chain: it starts at the
-    // class of the first responder before the first move, each move starts where the earlier one ended, and it ends at the
-    // class of the view that was made the first responder last.
-    NSString *fieldClass = NSStringFromClass([field class]);
-    NSMutableArray<NSArray<NSString *> *> *chain = [NSMutableArray array];
-    for (NSString *move in moved) [chain addObject:[move componentsSeparatedByString:@">"]];
-    BOOL linked = chain.count >= 2 && [chain.firstObject.firstObject isEqual:fieldClass] && [chain.lastObject.lastObject isEqual:fieldClass];
-    for (NSUInteger index = 1; index < chain.count; index++) linked = linked && [chain[index].firstObject isEqual:chain[index - 1].lastObject];
-    check(linked, [NSString stringWithFormat:@"the first responder moves form a chain from and back to %@: %@", fieldClass, moved]);
     return failures == 0 ? 0 : 1;
 } }

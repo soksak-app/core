@@ -3867,7 +3867,7 @@
           "to"
         ]
       },
-      "description": "The first responder of a window changed, seen at its next update."
+      "description": "The first responder of a window that a host observes changed, from the key-value observation that also sends window-responder."
     },
     "native.capture.lifecycle": {
       "layer": "native",

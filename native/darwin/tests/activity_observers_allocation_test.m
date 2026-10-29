@@ -1,8 +1,7 @@
-// The records of the native library allocate no memory that they keep, and the update of a window whose first responder did not
-// change allocates nothing (docs/spec/logging.md#automatic-entrances). The sources are compiled with manual reference counting, so
-// the check counts the allocations of the measuring thread through the malloc logger: an allocation that is not freed by the end
-// of a run is a leak, and the allocations of an update with an unchanged first responder are compared with the allocations of the
-// same notification delivered to no observer. The observers and the records run on the thread that posts the notifications; other
+// The records of the native library allocate no memory that they keep (docs/spec/logging.md#automatic-entrances). The sources are
+// compiled with manual reference counting, so the check counts the allocations of the measuring thread through the malloc logger:
+// an allocation that is not freed by the end of a run is a leak, and the blocks held at the end of a run of activity events and of
+// log records are counted. The observers and the records run on the thread that posts the notifications; other
 // threads of the process are not counted, because the text input analytics of the system allocate on a queue of their own after a
 // text view becomes the first responder, at a moment that the check does not control.
 #import <Cocoa/Cocoa.h>
@@ -58,19 +57,6 @@ int main(void) { @autoreleasepool {
     sp_observe_activity();
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     const int rounds = 2000;
-
-    // An update with an unchanged first responder: the first update stores the state, the later ones compare it.
-    [center postNotificationName:NSWindowDidUpdateNotification object:window];
-    long updateMade = 0, updateHeld = 0, baseMade = 0, baseHeld = 0;
-    counted(^{
-        for (int index = 0; index < rounds; index++) @autoreleasepool { [center postNotificationName:NSWindowDidUpdateNotification object:window]; }
-    }, &updateMade, &updateHeld);
-    counted(^{
-        for (int index = 0; index < rounds; index++) @autoreleasepool { [center postNotificationName:@"ActivityAllocationUnobserved" object:window]; }
-    }, &baseMade, &baseHeld);
-    // The observer counts its deliveries and stores one summary event in each second; that summary is the only allocation allowed.
-    check(updateMade - baseMade <= rounds / 10, [NSString stringWithFormat:@"%d updates with an unchanged first responder allocate %ld blocks more than the same notifications without an observer (%ld against %ld)",
-        rounds, updateMade - baseMade, updateMade, baseMade]);
 
     // A record of the activity and a record of the log keep nothing: the ring is emptied before each run, so a stored event is
     // freed with its bytes.

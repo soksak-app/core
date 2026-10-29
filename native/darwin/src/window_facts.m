@@ -6,6 +6,7 @@
 #import "window_facts.h"
 #import "observe.h"
 #import "application_log.h"
+#import "event_ring.h"
 #import "webview_geometry.h"
 #import "private/webkit.h"
 #import "surface_layout.h"
@@ -423,12 +424,33 @@ bool sp_window_observe_occlusion(void *handle, void (^changed)(void)) {
 
 static char responderContext;
 
+// The class name of a responder, or an empty name when the change has no responder (KVO reports nil as NSNull).
+static NSString *responderClassName(id responder) {
+    return [responder isKindOfClass:NSResponder.class] ? NSStringFromClass([responder class]) : @"";
+}
+
+static void emitResponderChange(NSInteger windowNumber, id from, id to) {
+    NSDictionary *fields = @{@"window": @(windowNumber), @"from": responderClassName(from), @"to": responderClassName(to)};
+    NSError *error = nil;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:fields options:0 error:&error];
+    if (!json) {
+        NSLog(@"window facts event native.window.first_responder cannot be serialized: %@", error);
+        return;
+    }
+    NSString *text = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    sp_event(SP_CLASS_INPUT, SP_EVENT_INFO, "native.window.first_responder", text.UTF8String);
+    [text release];
+}
+
 @implementation SPResponderObserver
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
     if (context != &responderContext) {
         [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
         return;
     }
+    id from = change[NSKeyValueChangeOldKey];
+    id to = change[NSKeyValueChangeNewKey];
+    if (from != to) emitResponderChange(((NSWindow *)object).windowNumber, from, to);
     _changed();
 }
 - (void)end {
@@ -454,7 +476,7 @@ bool sp_window_observe_responder(void *handle, void (^changed)(void)) {
     SPResponderObserver *observer = [[SPResponderObserver new] autorelease];
     observer.window = window;
     observer.changed = changed;
-    if (!sp_observe_key_path("window_facts.responder", SP_OBSERVE_RECORD, window, observer, @"firstResponder", 0, &responderContext)) {
+    if (!sp_observe_key_path("window_facts.responder", SP_OBSERVE_RECORD, window, observer, @"firstResponder", NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew, &responderContext)) {
         return false;
     }
     objc_setAssociatedObject(window, &responderObserverKey, observer, OBJC_ASSOCIATION_RETAIN);

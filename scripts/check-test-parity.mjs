@@ -209,6 +209,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-297-1",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "static void emitResponderChange(NSInteger windowNumber, id from, id to)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_responder_test.m", id: "two moves record two changes of the first responder" },
+    ],
+    expected: "Each change of an observed first responder writes one native.window.first_responder record.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-296-1",
     implementation: [
       { file: "packages/workbench/tab-reports.js", symbol: "export function forgetTabsLeft(previousCards, nextCards, operation)" },
