@@ -435,7 +435,7 @@ type Surfaces struct {
 	// streams are the stream subscriptions of the document regions.
 	streams *DocumentStreams
 	// images are the image regions that the surface pages attached.
-	images               *Images
+	images *Images
 	// imageDetachMu guards the pending image detaches of the window, the failures of the detaches of each surface by image
 	// name, the ends told when the page reports ready, and whether the page is ready for them (docs/spec/sidecars.md).
 	imageDetachMu       sync.Mutex
