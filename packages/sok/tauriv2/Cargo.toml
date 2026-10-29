@@ -53,6 +53,9 @@ tar = "0.4"
 # https 위치를 읽는다(docs/spec/installation.md#fetching). 운영체제가 신뢰하는 인증 기관을 쓰므로 platform-verifier 를
 # 켜고, gzip 은 쓰지 않는다.
 ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier"] }
+# The diagnostic build parses each --registry-ca certificate with the parser that the TLS connection of ureq uses.
+rustls-pki-types = "1"
+webpki = { package = "rustls-webpki", version = "0.103", default-features = false, features = ["std"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

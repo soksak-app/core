@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F279-2: Both hosts report why a `--registry-ca` certificate does not parse.
 - F279-1: The registry TLS target writes only the certificate extensions that it declares, whatever the openssl configuration of the machine adds.
 - F279: The registry TLS target of the window checks reports the errors of openssl and fails when a certificate does not parse.
 - F278-1: A window-check job without a run folder uploads its logs and output files and no part of the checkout.

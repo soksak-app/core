@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
@@ -38,6 +39,18 @@ func TestADiagnosticBuildTrustsTheRegistryAuthority(t *testing.T) {
 	}
 	if err := host.ApplyArguments(options); err == nil || err.Error() != "--registry-ca "+empty+": the file holds no certificate" {
 		t.Fatalf("empty file: %v", err)
+	}
+	// A PEM certificate block whose bytes are not a certificate fails with the reason of the parser.
+	malformed := filepath.Join(folder, "malformed.pem")
+	if err := os.WriteFile(malformed, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("not a certificate")}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	options, err = host.ParseArguments([]string{"--registry-ca", malformed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := host.ApplyArguments(options); err == nil || !strings.HasPrefix(err.Error(), "--registry-ca "+malformed+": certificate 1 does not parse: ") {
+		t.Fatalf("malformed certificate: %v", err)
 	}
 	options, err = host.ParseArguments([]string{"--registry-ca=" + authority})
 	if err != nil {

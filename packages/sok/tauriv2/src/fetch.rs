@@ -40,6 +40,15 @@ pub fn use_registry_authorities(path: &std::path::Path) -> Result<(), String> {
         if let ureq::tls::PemItem::Certificate(certificate) =
             item.map_err(|error| format!("{}: {error}", path.display()))?
         {
+            // The TLS connection reads each authority with webpki, so a certificate that webpki rejects is reported here with its reason.
+            let der = rustls_pki_types::CertificateDer::from(certificate.der());
+            webpki::anchor_from_trusted_cert(&der).map_err(|error| {
+                format!(
+                    "{}: certificate {} does not parse: {error}",
+                    path.display(),
+                    authorities.len() + 1
+                )
+            })?;
             authorities.push(certificate.der().to_vec());
         }
     }

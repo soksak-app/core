@@ -7996,6 +7996,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F279-2",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/diagnostics.go", symbol: "certificate %d does not parse" },
+      { file: "packages/sok/tauriv2/src/fetch.rs", symbol: "webpki::anchor_from_trusted_cert" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/registry_ca_test.go", id: "TestADiagnosticBuildTrustsTheRegistryAuthority" },
+      { file: "packages/host/tauriv2/tests/registry_ca_test.rs", id: "a_diagnostic_build_reads_the_registry_authority" },
+    ],
+    expected: "Both hosts parse each --registry-ca certificate when the flag is applied and report the parser reason of a certificate that does not parse.",
+    levels: ["unit"],
+  },
+  {
     id: "F279-1",
     implementation: [{ file: "Makefile", symbol: "> tls.cnf" }],
     tests: [{ file: "scripts/test/e2e-registry-tls.test.mjs", id: "the registry TLS target writes only its own extensions, whatever the openssl configuration of the machine adds" }],

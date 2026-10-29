@@ -3309,6 +3309,8 @@ dependencies = [
  "memchr",
  "rcgen",
  "rustls",
+ "rustls-pki-types",
+ "rustls-webpki",
  "semver",
  "serde",
  "serde_json",

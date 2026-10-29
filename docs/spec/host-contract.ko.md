@@ -305,7 +305,7 @@ fn invalid_json_closes_connection() {
 | `view.overlays.reach-native-in-declared-order` | view surface의 DOM overlay는 배치가 어떤 순서로 도착하든 선언된 순서대로, 선언한 overlay마다 하나씩 자신의 insets와 표시 여부를 가지고 native surface에 전달된다. | both |
 | `view.overlays.native-mask-values` | view surface의 native overlay mask는 native 호출 순서대로 overlay마다 다섯 값을 받는다. left, top, right, bottom insets와, 보이는 overlay는 1, 숨긴 overlay는 0인 표시 flag다. | both |
 | `host.arguments.declared-only` | `--config-dir PATH`와 `--config-dir=PATH`는 설정 폴더를 정한다. 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag는 그 문장으로 실패한다. | both |
-| `host.arguments.registry-ca-in-diagnostic-builds` | 진단 build는 `--registry-ca PATH`를 받고, 그 뒤 registry 받기는 그 PEM 파일의 인증 기관만 신뢰한다. 인증서 없는 파일은 `--registry-ca <path>: <reason>`으로 실패한다. | both |
+| `host.arguments.registry-ca-in-diagnostic-builds` | 진단 build는 `--registry-ca PATH`를 받고, 그 뒤 registry 받기는 그 PEM 파일의 인증 기관만 신뢰한다. 인증서 없는 파일은 `--registry-ca <path>: <reason>`으로 실패하고, host의 TLS parser가 거부하는 인증서는 `--registry-ca <path>: certificate <n> does not parse: <reason>`으로 실패한다. n은 파일의 인증서 block을 1부터 센다. | both |
 | `host.memory-pressure.relays-level-and-seq` | host는 시작할 때 platform의 memory pressure source를 시작하고, 각 보고를 그 보고의 `{level, seq}`를 가진 page event `memory-pressure`로 `seq` 순서대로, 보고하는 thread를 붙잡지 않고 모든 창에 보낸다. platform이 거부한 source는 `failed to start the memory pressure source`로 시작을 실패시킨다. | both |
 | `endpoint.process.rejects-a-malformed-lock` | 잠금이 걸린 `process.lock`의 내용이 비었거나 다른 형식이면 엔드포인트는 `already owned by a live process`로 거부하며, 거부에 드는 내용은 256 바이트로 잘린다. 잠금 파일은 그대로 남는다. | both |
 | `endpoint.lock.empty-is-no-previous-run` | 시작할 때 비었고 잠기지 않은 `process.lock`은 event `host.run.unrecorded-end`를 저장하지 않고 넘겨받는다. 시작자가 잠그기 전에 파일을 만들고, 소유자는 잠금 아래에서만 기록을 쓰기 때문이다. | both |

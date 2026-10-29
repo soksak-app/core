@@ -5,6 +5,7 @@ package sok
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"os"
 )
@@ -24,8 +25,21 @@ func UseRegistryAuthorities(path string) error {
 	if err != nil {
 		return fileError(path, err)
 	}
+	// x509.CertPool.AppendCertsFromPEM skips a block that does not parse without its reason, so each block is parsed here.
 	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(data) {
+	count := 0
+	for block, rest := pem.Decode(data); block != nil; block, rest = pem.Decode(rest) {
+		if block.Type != "CERTIFICATE" {
+			continue
+		}
+		count++
+		certificate, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return fmt.Errorf("%s: certificate %d does not parse: %w", path, count, err)
+		}
+		pool.AddCert(certificate)
+	}
+	if count == 0 {
 		return fmt.Errorf("%s: the file holds no certificate", path)
 	}
 	DefaultFetcher.TLS = &tls.Config{RootCAs: pool}

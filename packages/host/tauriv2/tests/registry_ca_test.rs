@@ -27,6 +27,22 @@ fn a_diagnostic_build_reads_the_registry_authority() {
             empty.display()
         ))
     );
+    // A PEM certificate block whose bytes are not a certificate fails with the reason of the parser.
+    let malformed = folder.path().join("malformed.pem");
+    std::fs::write(
+        &malformed,
+        "-----BEGIN CERTIFICATE-----\nbm90IGEgY2VydGlmaWNhdGU=\n-----END CERTIFICATE-----\n",
+    )
+    .unwrap();
+    let error = apply_arguments(&parse(&["--registry-ca", malformed.to_str().unwrap()]))
+        .expect_err("malformed certificate");
+    assert!(
+        error.starts_with(&format!(
+            "--registry-ca {}: certificate 1 does not parse: ",
+            malformed.display()
+        )),
+        "{error}"
+    );
     let missing = folder.path().join("missing.pem");
     let error = apply_arguments(&parse(&[&format!("--registry-ca={}", missing.display())]))
         .expect_err("missing file");
