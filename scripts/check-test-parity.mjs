@@ -7996,6 +7996,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F278",
+    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "${{ runner.temp }}/wailsv3.out" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check jobs keep the output file of each application with the event logs" }],
+    expected: "The window-check jobs keep the output file of each application with the event logs.",
+    levels: ["unit"],
+  },
+  {
     id: "F277-1",
     implementation: [{ file: "native/darwin/process-identity/src/process_identity.m", symbol: "LaunchServices display name readback found %s, expected" }],
     tests: [{ file: "native/darwin/process-identity/tests/process_identity_test.m", id: "a mismatched display-name readback fails and names the value it found" }],

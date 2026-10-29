@@ -136,9 +136,12 @@ jobs:
         with:
           name: window-checks-run
           # The run folder holds the output of each test and the marks; the event files of the applications are in the
-          # configuration folders and are kept until every failure is classified.
+          # configuration folders and are kept until every failure is classified. The output file of each application
+          # holds what it wrote before its event log opened, such as a start that writes no endpoint.
           path: |
             core/${{ steps.run.outputs.folder }}
             ${{ runner.temp }}/soksak-check-wailsv3/logs
             ${{ runner.temp }}/soksak-check-tauriv2/logs
+            ${{ runner.temp }}/wailsv3.out
+            ${{ runner.temp }}/tauriv2.out
           if-no-files-found: error

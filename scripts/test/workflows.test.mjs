@@ -298,3 +298,12 @@ test('a push to main releases the declared version after the checks, the gate an
   const windows = read('.github/workflows/window-checks.yml');
   assert.match(windows, /^on:\n {2}workflow_call:\n {2}workflow_dispatch:\n/m, 'window-checks.yml runs for release.yml and on request');
 });
+
+test('the window-check jobs keep the output file of each application with the event logs', () => {
+  for (const workflow of ['.github/workflows/window-checks.yml', '.github/workflows/virtual-display-measure.yml']) {
+    const text = read(workflow);
+    for (const app of ['wailsv3', 'tauriv2']) {
+      assert.match(text, new RegExp(`\\$\\{\\{ runner\\.temp \\}\\}/${app}\\.out`), `${workflow} keeps no ${app}.out`);
+    }
+  }
+});

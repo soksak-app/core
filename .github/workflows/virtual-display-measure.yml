@@ -193,4 +193,6 @@ jobs:
             ${{ runner.temp }}/soksak-check-tauriv2/logs
             ${{ runner.temp }}/display.out
             ${{ runner.temp }}/display.err
+            ${{ runner.temp }}/wailsv3.out
+            ${{ runner.temp }}/tauriv2.out
           if-no-files-found: warn

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F278: The window-check jobs keep the output file of each application with the event logs.
 - F277-1: A failed display-name readback of the process identity package names the value that LaunchServices returned.
 - F276: The release of core no longer checks the public registry; the registry checks the plugin versions that installation selects for each core version that it lists.
 - F275-2: The workspace registry passes absolute sok and output paths to the `make pack` target of each plugin repository.
