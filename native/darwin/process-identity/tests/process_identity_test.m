@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #include <dlfcn.h>
+#include <errno.h>
 #import "soksak_process_identity.h"
 #import "private/process_identity_internal.h"
 
@@ -78,8 +79,18 @@ int main(void) { @autoreleasepool {
     CFRelease(copiedName);
     copiedName = CFStringCreateWithCString(kCFAllocatorDefault, "soksak://sidecar/other", kCFStringEncodingASCII);
     check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) != 0 &&
-        strstr(error, "LaunchServices display name readback") != NULL,
-        @"a mismatched display-name readback fails");
+        strstr(error, "LaunchServices display name readback found \"soksak://sidecar/other\", expected \"soksak://sidecar/probe\"") != NULL,
+        [NSString stringWithFormat:@"a mismatched display-name readback fails and names the value it found: %s", error]);
+    resetServices();
+    CFRelease(copiedName); copiedName = NULL;
+    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) == EIO &&
+        strstr(error, "LaunchServices display name readback found no value") != NULL,
+        [NSString stringWithFormat:@"a display-name readback without a value names the missing value: %s", error]);
+    resetServices();
+    CFRelease(copiedName); copiedName = CFRetain(kCFBooleanTrue);
+    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) == EIO &&
+        strstr(error, "LaunchServices display name readback found a value of type CFBoolean") != NULL,
+        [NSString stringWithFormat:@"a display-name readback of another type names the type: %s", error]);
     resetServices();
     check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) == 0 &&
         setValue != NULL && CFEqual(setValue, copiedName) && registerCalls == 1 && asnCalls == 1 && setCalls == 1 && copyCalls == 1,

@@ -60,12 +60,18 @@ static int processSetDisplayNameWithServices(const char *display_name, char *err
     }
     CFTypeRef copied = services->copy_application_information_item(SPLSDefaultSessionID, asn, _kLSDisplayNameKey);
     BOOL matches = copied != NULL && CFGetTypeID(copied) == CFStringGetTypeID() && CFEqual(copied, requested);
+    // The error names the value that LaunchServices returned, so a failed readback shows whether the value was missing,
+    // of another type or another name. The caller holds no autorelease pool, so the text is built in one.
+    if (!matches && error && error_capacity) @autoreleasepool {
+        NSString *found = copied == NULL ? @"no value"
+            : CFGetTypeID(copied) != CFStringGetTypeID()
+                ? [NSString stringWithFormat:@"a value of type %@", CFBridgingRelease(CFCopyTypeIDDescription(CFGetTypeID(copied)))]
+                : [NSString stringWithFormat:@"\"%@\"", (__bridge NSString *)copied];
+        snprintf(error, error_capacity, "LaunchServices display name readback found %s, expected \"%s\"", found.UTF8String, display_name);
+    }
     if (copied) CFRelease(copied);
     CFRelease(requested);
-    if (!matches) {
-        setError(error, error_capacity, "LaunchServices display name readback", EIO);
-        return EIO;
-    }
+    if (!matches) return EIO;
     return 0;
 }
 

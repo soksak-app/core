@@ -7996,6 +7996,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F277-1",
+    implementation: [{ file: "native/darwin/process-identity/src/process_identity.m", symbol: "LaunchServices display name readback found %s, expected" }],
+    tests: [{ file: "native/darwin/process-identity/tests/process_identity_test.m", id: "a mismatched display-name readback fails and names the value it found" }],
+    expected: "A failed display-name readback names the value that LaunchServices returned: no value, a value of another type, or another name.",
+    levels: ["unit"],
+  },
+  {
     id: "F276",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, window-checks, release-wailsv3, release-tauriv2]" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks, the gate and the window checks succeed" }],
