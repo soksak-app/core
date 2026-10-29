@@ -334,6 +334,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-304",
+    implementation: [{ file: "scripts/test/soksak-scripts.test.mjs", symbol: "const TREE_AUDIT_LIMIT_MS = 30000;" }],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "boundary audit reports a clean component graph" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" },
+    ],
+    expected: "A test that runs an audit of every tracked file has a limit that ends a stopped audit and does not judge its speed.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-299-2-1",
     implementation: [
       { file: "packages/plugin-api/view-start.js", symbol: "const page = crypto.randomUUID();" },
