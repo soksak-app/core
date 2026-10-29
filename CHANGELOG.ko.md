@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-303-4: document region의 inset이 웹뷰가 세로 scroll bar를 왼쪽에 놓는 오른쪽에서 왼쪽인 root에서 scroll bar 폭을 왼쪽 inset에 더하고, `webview_geometry_test`가 scroll bar의 쪽을 잰다.
 - F239-303-7: `webview_geometry_test`가 그 실행의 WebKit pointer 정밀도를 재고 마지막 device pixel press를 그 정밀도로 기대하므로, pointer 좌표를 정수 CSS pixel로 보고하는 macOS 15에서도 통과한다.
 - F239-303-6: native suite가 어떤 make target도 실행하지 않던 `document_cause_test`, `document_viewport_marker_test`, `presentation_order_test`, `window_cursor_rects_test`를 실행하고, `scripts/check-native-test-targets.mjs`는 어떤 target도 실행하지 않는 native 시험 source가 있으면 실패한다.
 - F239-303-5: native 시험의 모든 `NSWindow`가 할당 바로 뒤에 `releasedWhenClosed`를 NO로 두고, `scripts/check-native-windows.mjs`가 이것을 검사하므로, 닫은 창이 두 번 release되지 않는다. AppKit이 창을 먼저 놓아도 `webview_process_test`가 더는 SIGSEGV로 끝나지 않는다.

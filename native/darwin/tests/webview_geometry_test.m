@@ -117,12 +117,13 @@ static BOOL lastRowIsDocument(WKWebView *view, CGFloat scale) {
 
 // Presses the last device pixel of the surface with native input and returns the coordinates that the document
 // received.
-// Presses the surface at offset points below its top edge and returns the press that the document received.
-static NSDictionary *pressSurface(NSWindow *window, WKWebView *surface, double offset) {
+// Presses the surface at left points from its left edge and offset points below its top edge and returns the press
+// that the document received.
+static NSDictionary *pressSurfaceAt(NSWindow *window, WKWebView *surface, double left, double offset) {
     currentStep = __func__;
     double frame[4] = {0, 0, 0, 0};
     webviewGetFrame(surface, frame);
-    double x = frame[0] + frame[2] / 2, y = frame[1] + offset;
+    double x = frame[0] + left, y = frame[1] + offset;
     NSView *content = window.contentView;
     NSPoint local = NSMakePoint(x, content.bounds.size.height - y);
     NSPoint inWindow = [content convertPoint:local toView:nil];
@@ -155,6 +156,13 @@ static NSDictionary *pressSurface(NSWindow *window, WKWebView *surface, double o
     return pressed;
 }
 
+// Presses the horizontal middle of the surface at offset points below its top edge.
+static NSDictionary *pressSurface(NSWindow *window, WKWebView *surface, double offset) {
+    double frame[4] = {0, 0, 0, 0};
+    webviewGetFrame(surface, frame);
+    return pressSurfaceAt(window, surface, frame[2] / 2, offset);
+}
+
 static void scrollDone(void *context, sp_input_result result, const sp_input_held *held) { *(sp_input_result *)context = result; }
 
 static WKWebView *webViewAtTopPoint(NSWindow *window, double x, double y) {
@@ -164,6 +172,31 @@ static WKWebView *webViewAtTopPoint(NSWindow *window, double x, double y) {
     NSView *target = [content hitTest:[content convertPoint:inWindow fromView:nil]];
     while (target && ![target isKindOfClass:WKWebView.class]) target = target.superview;
     return (WKWebView *)target;
+}
+
+// Checks where the client origin of a scrolling root lies in the frame for a root direction. The page gives its root a
+// 17 point styled scroll bar, which takes layout width under both scroller styles of AppKit. WebKit places the
+// vertical scroll bar of a right-to-left root on the left, so the client origin lies the scroll bar width (innerWidth
+// less the root clientWidth) right of the frame edge; for a left-to-right root it is the frame edge. The check waits
+// until the layout has placed the scroll bar.
+static void checkScrollBarSide(NSWindow *window, WKWebView *surface, NSString *direction) {
+    load(surface, [NSString stringWithFormat:@"<!doctype html><html dir=%@ style='height:100%%'>"
+        "<style>html::-webkit-scrollbar{width:17px;background:#123}</style>"
+        "<body style='margin:0;height:100%%;background:#0d1a14'><div style='height:5000px'></div>"
+        "<script>addEventListener('pointerup', e => window.pressed = {trusted: e.isTrusted, x: e.clientX, y: e.clientY}, true)</script>"
+        "</body></html>", direction]);
+    __block NSDictionary *state = nil;
+    until(^BOOL {
+        state = evaluate(surface, @"({inner: innerWidth, client: document.documentElement.clientWidth,"
+            " direction: getComputedStyle(document.documentElement).direction})");
+        return [state[@"inner"] doubleValue] - [state[@"client"] doubleValue] == 17;
+    });
+    double left = [direction isEqualToString:@"rtl"] ? 17 : 0;
+    NSDictionary *pressed = pressSurfaceAt(window, surface, 20, 10);
+    check([state[@"direction"] isEqualToString:direction] && [pressed[@"trusted"] boolValue]
+        && [pressed[@"x"] doubleValue] == 20 - left,
+        [NSString stringWithFormat:@"a %@ root with a 17 point scroll bar has its client origin %g points right of the frame edge (press %@; %@)",
+            direction, left, pressed, state]);
 }
 
 // Waits while it takes events from the app event queue and handles them. Event monitors run when an event is taken.
@@ -481,7 +514,7 @@ int main(void) { @autoreleasepool {
     webviewInputRegister(surface);
     load(surface, @"<!doctype html><html style='height:100%'><body style='margin:0;height:100%;background:#0d1a14'>"
         "<div style='height:5000px'></div>"
-        "<script>addEventListener('pointerup', e => window.pressed = {trusted: e.isTrusted, y: e.clientY}, true)</script>"
+        "<script>addEventListener('pointerup', e => window.pressed = {trusted: e.isTrusted, x: e.clientX, y: e.clientY}, true)</script>"
         "</body></html>");
 
     // At 2x, a half-point height lies on a device pixel boundary. At 1x, it is fitted to the inner device pixel.
@@ -526,6 +559,9 @@ int main(void) { @autoreleasepool {
     verify(window, surface, 2, 200.5, @"after changing back to 2x");
     verifyRegion(region, 2, 260, 140.5, @"after changing back to 2x");
     sp_document_close(region);
+
+    checkScrollBarSide(window, surface, @"rtl");
+    checkScrollBarSide(window, surface, @"ltr");
 
     // The file drop view of the window: the only native drag target that accepts file URLs only; hit testing passes
     // to the view below.

@@ -36,12 +36,15 @@ export function regionInsets(element, view) {
   const rect = element.getBoundingClientRect();
   // The host places the region from the edges of the frame. visualViewport keeps a fractional frame size but excludes
   // a classic scroll bar of the root, which the frame contains, so the scroll bar size (innerWidth less the client
-  // width of the root) is added back.
+  // width of the root) is added back. The web view places the vertical scroll bar of a right-to-left root on the left,
+  // where it moves the client origin right of the frame edge.
   const root = view.document.documentElement;
+  const bar = view.innerWidth - root.clientWidth;
+  const leftBar = view.getComputedStyle(root).direction === "rtl" ? bar : 0;
   const insets = {
-    left: rect.left,
+    left: rect.left + leftBar,
     top: rect.top,
-    right: view.visualViewport.width + view.innerWidth - root.clientWidth - rect.right,
+    right: view.visualViewport.width + bar - leftBar - rect.right,
     bottom: view.visualViewport.height + view.innerHeight - root.clientHeight - rect.bottom,
   };
   const shown = element.isConnected && rect.width > 0 && rect.height > 0

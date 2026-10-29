@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-303-4: The insets of a document region add the scroll bar width to the left inset of a right-to-left root, whose vertical scroll bar the web view places on the left, and `webview_geometry_test` measures the scroll bar side.
 - F239-303-7: `webview_geometry_test` measures the pointer precision of the WebKit of the run and expects the last device pixel press at that precision, so it passes on macOS 15, whose WebKit reports whole CSS pixel pointer coordinates.
 - F239-303-6: The native suite runs `document_cause_test`, `document_viewport_marker_test`, `presentation_order_test` and `window_cursor_rects_test`, which no make target ran, and `scripts/check-native-test-targets.mjs` fails on a native test source that no target runs.
 - F239-303-5: Every `NSWindow` of the native tests sets `releasedWhenClosed` to NO right after its allocation, which `scripts/check-native-windows.mjs` checks, so a closed window is not released twice; `webview_process_test` no longer ends with SIGSEGV when AppKit lets its window go first.

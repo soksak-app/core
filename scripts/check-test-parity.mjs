@@ -244,6 +244,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-303-4",
+    implementation: [
+      { file: "packages/plugin-api/document-region.js", symbol: "regionInsets" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/document-region.test.mjs", id: "a scroll bar of a right-to-left root on the left keeps the insets measured from the frame edges" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "root with a 17 point scroll bar has its client origin" },
+    ],
+    expected: "The left inset of a right-to-left root adds the scroll bar that the web view places on the left.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-303-5",
     implementation: [
       { file: "scripts/check-native-windows.mjs", symbol: "findUnownedWindows" },

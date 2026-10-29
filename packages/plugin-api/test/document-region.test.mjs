@@ -95,6 +95,21 @@ test("a classic scroll bar of the root keeps the insets measured from the frame 
     { left: 0, top: 0, right: 17, bottom: 17 });
 });
 
+test("a scroll bar of a right-to-left root on the left keeps the insets measured from the frame edges", () => {
+  // The web view places the vertical scroll bar of a right-to-left root on the left, so the client origin lies the
+  // scroll bar width right of the frame edge.
+  const f = fixture();
+  f.window.document.documentElement.style.direction = "rtl";
+  f.window.visualViewport = { width: 283, height: 200 };
+  Object.defineProperty(f.window, "innerWidth", { value: 300 });
+  Object.defineProperty(f.window, "innerHeight", { value: 200 });
+  Object.defineProperty(f.window.document.documentElement, "clientWidth", { value: 283 });
+  Object.defineProperty(f.window.document.documentElement, "clientHeight", { value: 200 });
+  f.resize({ left: 0, top: 0, right: 283, bottom: 200, width: 283, height: 200 });
+  assert.deepEqual(regionInsets(f.element, f.window).insets,
+    { left: 17, top: 0, right: 0, bottom: 0 });
+});
+
 test("history tells whether the attach restored a session history", async () => {
   for (const history of [true, false]) {
     const f = fixture();
