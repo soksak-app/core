@@ -1176,6 +1176,114 @@ fn the_endpoint_records_why_a_connection_closes() {
     }
 }
 
+/// A page whose status.get does not reply until gate opens; entered receives a signal when the request arrives.
+struct HeldPage {
+    gate: Mutex<Option<Receiver<()>>>,
+    entered: Mutex<Sender<()>>,
+}
+
+impl Service for HeldPage {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
+    fn windows(&self) -> Result<Value, Failure> {
+        Ok(json!([]))
+    }
+
+    fn exists(&self, window: &str) -> bool {
+        window == "w1"
+    }
+
+    fn call(
+        &self,
+        _window: &str,
+        _method: &str,
+        _params: Map<String, Value>,
+    ) -> Result<Box<RawValue>, Failure> {
+        let _ = self.entered.lock().unwrap().send(());
+        let gate = self.gate.lock().unwrap().take();
+        if let Some(gate) = gate {
+            gate.recv().unwrap();
+        }
+        raw(&json!(7))
+    }
+}
+
+const PEER_CLOSED_CHILD: &str = "SOKSAK_ENDPOINT_PEER_CLOSED_CHILD";
+
+// A reply to a connection that the peer closed before the reply is not an error: the host records the reply as not sent.
+// contract: endpoint.close.reply-after-peer-close
+#[test]
+fn a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent() {
+    if let Some(config) = std::env::var_os(PEER_CLOSED_CHILD) {
+        let config = Path::new(&config);
+        soksak_host_tauriv2::application_log::start_standard_error(config, "com.soksak.test")
+            .unwrap();
+        let writer = records::start_writer(config);
+        let (open_gate, gate) = mpsc::channel();
+        let (entered_tx, entered) = mpsc::channel();
+        let page = Arc::new(HeldPage {
+            gate: Mutex::new(Some(gate)),
+            entered: Mutex::new(entered_tx),
+        });
+        let endpoint =
+            Endpoint::start(&config.join("sockets"), config, "test-peer-closed", page).unwrap();
+        endpoint.publish("w1").unwrap();
+        let mut connection = open(&endpoint);
+        send(
+            &mut connection,
+            json!({"jsonrpc": "2.0", "id": 9, "method": "status.get",
+                "params": {"window": "w1", "name": "core.layout"}}),
+        );
+        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        drop(connection);
+        // The serve loop records the close by the peer before the page replies, so the reply meets a closed connection.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let wait_for = |text: &str| loop {
+            writer.flush(Duration::from_secs(5)).unwrap();
+            let log = records::text_of(&records::read_events(&records::event_log_path(config)));
+            if log.contains(text) {
+                return log;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "no {text:?} in {log:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        wait_for("connection closed: peer closed");
+        open_gate.send(()).unwrap();
+        let log = wait_for("host endpoint: reply to 9 not sent: peer closed");
+        assert!(
+            !log.contains("error host endpoint reply"),
+            "the reply to a closed connection was an error: {log:?}"
+        );
+        endpoint.stop();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = folder::Folder::new();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(PEER_CLOSED_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}: {}",
+        output.status,
+        // The child sends its standard error to the event log, so the log holds its failure.
+        records::text_of(&records::read_events(&records::event_log_path(
+            config.path()
+        )))
+    );
+}
+
 const TIMEOUT_CHILD: &str = "SOKSAK_ENDPOINT_TIMEOUT_CHILD";
 
 // A request that ends with a timeout error writes the method and the reason to the application log before the client

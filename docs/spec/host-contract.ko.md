@@ -618,6 +618,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.reply.error-text-cut-is-marked` | 1,024바이트 한도에서 잘린 오류 글을 가진 `host.sidecar.reply`는 `truncated: true`를 가지며, 잘리지 않은 오류 글은 `truncated` member가 없다. | both |
 | `debug.rows.out-of-range-number-is-refused` | float64 범위 밖의 수를 가진 debug 로그 줄은 파일, 줄, 원문과 함께 `not JSON`으로 거부되며, 어떤 행도 그 수에 `undefined`를 보이지 않는다. | both |
 | `endpoint.accept.error-is-recorded` | endpoint가 서비스하는 동안 실패한 accept는 `error host endpoint accept: <reason>`을 쓰며, endpoint가 listener를 스스로 닫은 뒤 실패한 accept는 기록을 쓰지 않는다. | both |
+| `endpoint.close.reply-after-peer-close` | 상대가 닫은 연결을 만난 답이나 알림은, 닫힘을 먼저 읽었든 쓰기가 broken pipe나 reset으로 실패했든 오류가 아니다. 호스트는 `info host endpoint: reply to <id> not sent: peer closed` 또는 `info host endpoint: notification <method> not sent: peer closed`를 쓰고, 연결은 `peer closed`로 닫힌다. | both |
 | `endpoint.close.reason-of-read-error` | 프레임 중간에 끝난 연결은 `connection closed inside a length prefix` 또는 `connection closed inside a frame body`로 닫히고, 그 밖의 읽기 오류는 I/O 글로 닫히며, 프레임 경계에서의 끝이나 reset은 `peer closed`로 닫힌다. | both |
 | `host.document.creation-error-states-the-cause` | native layer가 만들지 못한 document region이나 plugin host web view는 native 원인을 밝히면 생성 오류 뒤에 `: <native cause>`를 붙인 오류로 실패하며, 원인이 없으면 생성 오류만 쓴다. | both |
 | `sidecars.stop.forgets-running-sidecars` | 중지는 입력을 끝내기 전에 모든 사이드카를 실행 목록에서 빼고 답하지 않은 닫기를 지우므로, 그 뒤 표면이나 소유 창을 닫아도 아무것도 보내지 않고 닫는 중인 표면을 알리지 않는다. | both |

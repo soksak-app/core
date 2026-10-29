@@ -287,7 +287,7 @@ impl Answer {
         // is written to; the panic hook records the panic.
         let mut writer = self.writer.lock().unwrap_or_else(PoisonError::into_inner);
         let written = match outcome {
-            Ok(result) => write_frame(
+            Ok(result) => write_to_peer(
                 &mut *writer,
                 &Success {
                     jsonrpc: "2.0",
@@ -295,14 +295,19 @@ impl Answer {
                     result: &result,
                 },
             ),
-            Err(failure) => write_frame(
+            Err(failure) => write_to_peer(
                 &mut *writer,
                 &json!({"jsonrpc": "2.0", "id": id,
                     "error": {"code": failure.code, "message": failure.message}}),
             ),
         };
-        if let Err(error) = written {
-            log_error("endpoint reply", error);
+        match written {
+            Ok(()) => {}
+            // The call record holds the outcome, and the serve loop records the close by the peer.
+            Err(Unsent::PeerClosed) => {
+                log_info("endpoint", format!("reply to {id} not sent: peer closed"))
+            }
+            Err(Unsent::Failed(error)) => log_error("endpoint reply", error),
         }
     }
 }
@@ -449,7 +454,11 @@ impl Notifier {
                 value,
             },
         };
-        self.send(|peer| peer.watches.contains(&key), &message);
+        self.send(
+            "status.changed",
+            |peer| peer.watches.contains(&key),
+            &message,
+        );
     }
 
     /// Sends `diagnostics.log` to the connections that requested the record of the window window.
@@ -457,10 +466,19 @@ impl Notifier {
     pub fn log(&self, window: &str, line: &str) {
         let message = json!({"jsonrpc": "2.0", "method": "diagnostics.log",
             "params": {"window": window, "line": line}});
-        self.send(|peer| peer.transcript.contains(window), &message);
+        self.send(
+            "diagnostics.log",
+            |peer| peer.transcript.contains(window),
+            &message,
+        );
     }
 
-    fn send<T: Serialize + ?Sized>(&self, wanted: impl Fn(&Peer) -> bool, message: &T) {
+    fn send<T: Serialize + ?Sized>(
+        &self,
+        method: &str,
+        wanted: impl Fn(&Peer) -> bool,
+        message: &T,
+    ) {
         let writers: Vec<_> = self
             .0
             .peers
@@ -476,8 +494,15 @@ impl Notifier {
             // default: a lock that a panicking thread poisoned still holds the connection, which is written as before; the panic
             // hook records the panic.
             let mut writer = writer.lock().unwrap_or_else(PoisonError::into_inner);
-            if let Err(error) = write_frame(&mut *writer, message) {
-                log_error("endpoint notification", error);
+            match write_to_peer(&mut *writer, message) {
+                Ok(()) => {}
+                Err(Unsent::PeerClosed) => {
+                    log_info(
+                        "endpoint",
+                        format!("notification {method} not sent: peer closed"),
+                    );
+                }
+                Err(Unsent::Failed(error)) => log_error("endpoint notification", error),
             }
         }
     }
@@ -906,6 +931,13 @@ pub fn write_frame<W: Write + ?Sized, T: Serialize + ?Sized>(
     writer: &mut W,
     message: &T,
 ) -> Result<(), String> {
+    let frame = frame_of(message)?;
+    writer.write_all(&frame).map_err(|e| e.to_string())?;
+    writer.flush().map_err(|e| e.to_string())
+}
+
+/// The length prefix and the body of one message.
+fn frame_of<T: Serialize + ?Sized>(message: &T) -> Result<Vec<u8>, String> {
     let body = serde_json::to_vec(message).map_err(|e| e.to_string())?;
     if body.len() > MAX_FRAME {
         return Err(format!(
@@ -916,8 +948,30 @@ pub fn write_frame<W: Write + ?Sized, T: Serialize + ?Sized>(
     let mut frame = Vec::with_capacity(body.len() + 4);
     frame.extend_from_slice(&(body.len() as u32).to_be_bytes());
     frame.extend_from_slice(&body);
-    writer.write_all(&frame).map_err(|e| e.to_string())?;
-    writer.flush().map_err(|e| e.to_string())
+    Ok(frame)
+}
+
+/// Why a frame was not written to a connection.
+enum Unsent {
+    /// The peer closed the connection: the write failed with a broken pipe or a reset.
+    PeerClosed,
+    /// Any other failure, with its text.
+    Failed(String),
+}
+
+/// Writes one message to the connection of a peer and tells a close by the peer from the other failures.
+fn write_to_peer<W: Write + ?Sized, T: Serialize + ?Sized>(
+    writer: &mut W,
+    message: &T,
+) -> Result<(), Unsent> {
+    let frame = frame_of(message).map_err(Unsent::Failed)?;
+    writer
+        .write_all(&frame)
+        .and_then(|()| writer.flush())
+        .map_err(|error| match error.kind() {
+            ErrorKind::BrokenPipe | ErrorKind::ConnectionReset => Unsent::PeerClosed,
+            _ => Unsent::Failed(error.to_string()),
+        })
 }
 
 /// The reason for a failure to read a message body.

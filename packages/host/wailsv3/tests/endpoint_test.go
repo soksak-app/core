@@ -1289,6 +1289,87 @@ func TestEndpointRecordsAReadErrorInsideAFrame(t *testing.T) {
 	}
 }
 
+// waitForLog reads the log until it holds text. The records are written by the connection goroutines, and no event reports
+// those writes, so the log is read until the record appears.
+func waitForLog(t *testing.T, written func() string, text string) string {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		log := written()
+		if strings.Contains(log, text) {
+			return log
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the log has no %q:\n%s", text, log)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// A reply to a connection that the peer closed before the reply is not an error: the host records the reply as not sent.
+// contract: endpoint.close.reply-after-peer-close
+func TestEndpointRecordsAReplyToAClosedConnectionAsNotSent(t *testing.T) {
+	written := captureLog(t)
+	backend := newFakeBackend()
+	backend.holdMethod = "status.get"
+	backend.held = make(chan struct{})
+	backend.entered = make(chan struct{}, 1)
+	_, address, _ := serve(t, backend)
+
+	conn := dial(t, address)
+	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 9, "method": "status.get", "params": map[string]any{"window": "main", "name": "core.layout"}})
+	<-backend.entered
+	_ = conn.Close()
+	waitForLog(t, written, "connection closed: peer closed")
+	close(backend.held)
+	log := waitForLog(t, written, "info host endpoint: reply to 9 not sent: peer closed")
+	if strings.Contains(log, "error host endpoint") {
+		t.Fatalf("the reply to a closed connection was an error:\n%s", log)
+	}
+}
+
+// brokenPipeListener accepts connections whose writes fail with a broken pipe, as a write to a socket that the peer closed
+// does before the read sees the end of the connection.
+type brokenPipeListener struct{ net.Listener }
+
+type brokenPipeConn struct{ net.Conn }
+
+func (l brokenPipeListener) Accept() (net.Conn, error) {
+	conn, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	return brokenPipeConn{conn}, nil
+}
+
+func (brokenPipeConn) Write([]byte) (int, error) {
+	return 0, &net.OpError{Op: "write", Net: "tcp", Err: os.NewSyscallError("write", syscall.EPIPE)}
+}
+
+// A write that fails because the peer closed the connection closes it as a peer close and records the frame as not sent.
+// contract: endpoint.close.reply-after-peer-close
+func TestEndpointRecordsAWriteThatThePeerClosedAsNotSent(t *testing.T) {
+	written := captureLog(t)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := host.NewEndpoint(newFakeBackend())
+	info := host.EndpointInfo{Transport: "unix", Address: listener.Addr().String(), PID: os.Getpid(),
+		Application: "wailsv3", Version: "0.0.2", Started: time.Now()}
+	if err := endpoint.Serve(brokenPipeListener{listener}, info, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = endpoint.Close() })
+	conn := dial(t, listener.Addr().String())
+	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 4, "method": "windows.list"})
+	log := waitForLog(t, written, "info host endpoint: reply to 4 not sent: peer closed")
+	closeRecord(t, written, "peer closed")
+	if strings.Contains(log, "error host endpoint") {
+		t.Fatalf("a write to a connection that the peer closed was an error:\n%s", log)
+	}
+}
+
 // acceptFault is a listener whose Accept fails with err, as a listener of the operating system does when it cannot accept.
 type acceptFault struct {
 	net.Listener

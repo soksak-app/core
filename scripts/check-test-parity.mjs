@@ -200,6 +200,20 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-298",
+    implementation: [
+      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "func (c *endpointConn) unsent(" },
+      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "fn write_to_peer<" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsAReplyToAClosedConnectionAsNotSent" },
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsAWriteThatThePeerClosedAsNotSent" },
+      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent" },
+    ],
+    expected: "Both hosts record a reply or a notification that meets a connection that the peer closed as not sent, and neither records an error.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-292",
     implementation: [{ file: "e2e/browser.test.mjs", symbol: "traceRows(readEvents(" }],
     tests: [

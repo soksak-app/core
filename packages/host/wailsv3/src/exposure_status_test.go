@@ -12,7 +12,7 @@ import (
 // contract: status.window.rewatch-notifies
 func TestAWatchStartedAfterAnUnwatchReceivesTheNextWindowStatus(t *testing.T) {
 	endpoint := NewEndpoint(nil)
-	conn := &endpointConn{topics: map[topic]bool{}, out: make(chan []byte, 4), done: make(chan struct{})}
+	conn := &endpointConn{topics: map[topic]bool{}, out: make(chan endpointFrame, 4), done: make(chan struct{})}
 	endpoint.conns[conn] = true
 	window := topic{"main", "host.window", ""}
 	open := map[string]any{"modal": "open"}
@@ -91,7 +91,7 @@ func TestRelayedViewRegistrationRefusalsRecordNothing(t *testing.T) {
 // contract: sidecars.close.answer-ends-closing
 func TestSidecarStatusNotificationDoesNotWaitForWindowRegistry(t *testing.T) {
 	endpoint := NewEndpoint(nil)
-	conn := &endpointConn{topics: map[topic]bool{}, out: make(chan []byte, 4), done: make(chan struct{})}
+	conn := &endpointConn{topics: map[topic]bool{}, out: make(chan endpointFrame, 4), done: make(chan struct{})}
 	endpoint.conns[conn] = true
 	endpoint.subscribe(conn, topic{"main", "host.sidecars", ""}, true)
 	c := sidecarSessionSurfaces(t).sidecars
@@ -113,7 +113,8 @@ func TestSidecarStatusNotificationDoesNotWaitForWindowRegistry(t *testing.T) {
 		}
 	})
 	select {
-	case data := <-conn.out:
+	case frame := <-conn.out:
+		data := frame.body
 		var got struct {
 			Method string
 			Params struct {

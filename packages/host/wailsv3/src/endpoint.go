@@ -524,7 +524,7 @@ func (e *Endpoint) accept(listener net.Listener) {
 			}
 			return
 		}
-		c := &endpointConn{conn: conn, topics: map[topic]bool{}, out: make(chan []byte, EndpointOutputFrames), done: make(chan struct{})}
+		c := &endpointConn{conn: conn, topics: map[topic]bool{}, out: make(chan endpointFrame, EndpointOutputFrames), done: make(chan struct{})}
 		e.mu.Lock()
 		e.conns[c] = true
 		e.mu.Unlock()
@@ -589,7 +589,7 @@ func (e *Endpoint) publish(t topic, method string, params any) {
 	}
 	e.mu.Unlock()
 	for _, c := range targets {
-		c.send(data)
+		c.send(data, "notification "+method)
 	}
 }
 
@@ -628,20 +628,33 @@ func (e *Endpoint) topics(window string) []topic {
 	return out
 }
 
+// endpointFrame is one frame of the write queue and the name that records it when it is not sent: "reply to <id>" or
+// "notification <method>".
+type endpointFrame struct {
+	body []byte
+	name string
+}
+
 // endpointConn is one connection and its subscriptions. topics is protected by Endpoint.mu.
 type endpointConn struct {
 	conn   net.Conn
 	topics map[topic]bool
-	out    chan []byte
+	out    chan endpointFrame
 	// queued is the number of bytes of the frames in out and in the write that is in progress.
 	queued atomic.Int64
 	done   chan struct{}
 	once   sync.Once
+	// reason is the reason of the first close, which a frame that is not sent afterwards names.
+	reasonMu sync.Mutex
+	reason   string
 }
 
 // close closes the connection. It records the reason reason of the first closer before it closes the socket, and later calls do nothing.
 func (c *endpointConn) close(reason string) {
 	c.once.Do(func() {
+		c.reasonMu.Lock()
+		c.reason = reason
+		c.reasonMu.Unlock()
 		LogInfo("endpoint", "connection closed: "+reason)
 		close(c.done)
 		if err := c.conn.Close(); err != nil {
@@ -652,8 +665,8 @@ func (c *endpointConn) close(reason string) {
 
 // send puts one frame into the write queue. The queue holds at most EndpointOutputFrames frames and EndpointOutputBytes
 // bytes. When the queue is full, the connection does not read, so the frame is refused, the refusal is the event
-// `host.buffer.dropped`, and the connection is closed.
-func (c *endpointConn) send(body []byte) {
+// `host.buffer.dropped`, and the connection is closed. A frame of a closed connection is recorded as not sent under its name.
+func (c *endpointConn) send(body []byte, name string) {
 	size := int64(len(body))
 	if c.queued.Add(size) > EndpointOutputBytes {
 		c.queued.Add(-size)
@@ -661,9 +674,17 @@ func (c *endpointConn) send(body []byte) {
 		return
 	}
 	select {
-	case c.out <- body:
 	case <-c.done:
 		c.queued.Add(-size)
+		c.unsent(name)
+		return
+	default:
+	}
+	select {
+	case c.out <- endpointFrame{body: body, name: name}:
+	case <-c.done:
+		c.queued.Add(-size)
+		c.unsent(name)
 	default:
 		c.queued.Add(-size)
 		c.refuse(len(body), fmt.Sprintf("%d messages", EndpointOutputFrames))
@@ -677,18 +698,45 @@ func (c *endpointConn) refuse(bytes int, limit string) {
 	c.close("the output queue is full")
 }
 
+// unsent records a frame that the connection did not send because it is closed.
+func (c *endpointConn) unsent(name string) {
+	LogInfo("endpoint", name+" not sent: "+c.closeReason())
+}
+
+// closeReason is the reason that closed the connection.
+func (c *endpointConn) closeReason() string {
+	c.reasonMu.Lock()
+	defer c.reasonMu.Unlock()
+	return c.reason
+}
+
+// write writes the frames of the queue. A write that fails because the peer closed the connection closes it as a peer
+// close; any other failure is an error. The frames that remain when the connection closes are recorded as not sent.
 func (c *endpointConn) write() {
 	for {
 		select {
 		case <-c.done:
-			return
-		case body := <-c.out:
-			c.queued.Add(-int64(len(body)))
-			frame := binary.BigEndian.AppendUint32(make([]byte, 0, 4+len(body)), uint32(len(body)))
-			if _, err := c.conn.Write(append(frame, body...)); err != nil {
-				LogError("endpoint connection write", err)
-				c.close("write failed")
-				return
+			for {
+				select {
+				case frame := <-c.out:
+					c.queued.Add(-int64(len(frame.body)))
+					c.unsent(frame.name)
+				default:
+					return
+				}
+			}
+		case frame := <-c.out:
+			c.queued.Add(-int64(len(frame.body)))
+			prefixed := binary.BigEndian.AppendUint32(make([]byte, 0, 4+len(frame.body)), uint32(len(frame.body)))
+			if _, err := c.conn.Write(append(prefixed, frame.body...)); err != nil {
+				if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+					c.close("peer closed")
+				} else {
+					LogError("endpoint connection write", err)
+					c.close("write failed")
+				}
+				c.unsent(frame.name)
+				continue
 			}
 		}
 	}
@@ -902,7 +950,7 @@ func (e *Endpoint) reply(c *endpointConn, req request, result any, err error) {
 		c.close("the reply cannot be encoded")
 		return
 	}
-	c.send(data)
+	c.send(data, "reply to "+string(req.ID))
 }
 
 func mustJSON(value any) json.RawMessage {
