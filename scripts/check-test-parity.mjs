@@ -209,6 +209,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-299-2",
+    implementation: [
+      { file: "packages/workbench/performance.js", symbol: "export function createTracer(call, events = null)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-clock.test.mjs", id: "the main page states its clock once for the events of its records and of its trace" },
+    ],
+    expected: "The main page states page.log.clock once for its records and its trace.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-302",
     implementation: [
       { file: "packages/workbench/ids.js", symbol: "export function issueId(kind, taken)" },

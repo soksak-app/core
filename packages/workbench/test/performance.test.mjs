@@ -3,8 +3,10 @@
 // call `performance`.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createEventBatcher } from "@soksak/plugin-api/log-batch.js";
 import { createTracer } from "../performance.js";
 import { withoutClock } from "./support/records.mjs";
+import { classOf } from "../event-classes.js";
 import { logGate } from "../log-gate.js";
 // The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
 // examine, so the state of every class at trace is set here.
@@ -14,14 +16,15 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 // The request for the clocks of the host is answered here; the batches are what the tests assert.
 const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 }) : inner(withoutClock(request)));
+/** The event writer of a document, as the page records have it, over the call log; report receives a failed relay. */
+const writer = (log, report) => createEventBatcher({ call: answering(log), report, classify: classOf, gate: logGate });
 
 /** A tracer whose switch calls and batch calls are recorded in the order they happen. */
 function recorded(overrides = {}) {
   const calls = [];
   const tracer = createTracer(
     overrides.switch ?? (async (request) => { calls.push(["switch", request.action]); }),
-    overrides.report ?? assert.ifError,
-    answering(overrides.log ?? (async (request) => { calls.push(["log", request.events]); })),
+    writer(overrides.log ?? (async (request) => { calls.push(["log", request.events]); }), overrides.report ?? assert.ifError),
   );
   return { calls, tracer };
 }
@@ -104,8 +107,7 @@ test("disabling stops new events at once and waits for the events that were acce
   const calls = [];
   const tracer = createTracer(
     async (request) => { calls.push(request.action); },
-    assert.ifError,
-    answering((request) => { calls.push("log"); return new Promise((resolve) => { release = resolve; }); }),
+    writer((request) => { calls.push("log"); return new Promise((resolve) => { release = resolve; }); }, assert.ifError),
   );
   await tracer.setEnabled(true);
   tracer.trace("focus", {});

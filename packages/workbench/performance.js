@@ -2,25 +2,20 @@
 // event contract (docs/spec/logging.md#writers): it is queued without waiting and relayed to the host in a batch through the
 // call `log`. The switch is the call `performance`; its requests run in the order they were made.
 import { host as bridge } from "@soksak/runtime";
-import { createEventBatcher } from "@soksak/plugin-api/log-batch.js";
 import { classOf } from "./event-classes.js";
-import { logGate } from "./log-gate.js";
-import { rawConsole } from "./page-log.js";
+import { emitEvent, flushEvents } from "./page-log.js";
 
-function reportRelayError(error) {
-  rawConsole.error("performance trace relay failed:", error);
-  if (typeof ErrorEvent === "function") {
-    // default: an execution environment without dispatchEvent (the unit tests under Node) keeps only the console.error report above.
-    globalThis.dispatchEvent?.(new ErrorEvent("error", { message: error.message, error }));
-  }
-}
-
-export function createTracer(call, report = reportRelayError, log = null) {
+/**
+ * `call` sends a request of the switch `performance`; `events` is the event writer of the document, `{emit, flush}`, or null in a page
+ * without a host. The events of the trace leave through the writer of the page records, which also reports a failed relay, so the
+ * document states its clock once (docs/spec/logging.md#writers).
+ */
+export function createTracer(call, events = null) {
   let enabled = false;
   let switching = false;
   let revision = 0;
   let pending = Promise.resolve();
-  const batcher = log ? createEventBatcher({ call: log, report, classify: classOf, gate: logGate }) : null;
+  const batcher = events;
   const enqueue = (work) => {
     // The failure of an earlier request reached the caller of that request.
     // A later explicit request has its own result and runs in order.
@@ -89,8 +84,7 @@ export function createTracer(call, report = reportRelayError, log = null) {
 
 const tracer = createTracer(
   bridge ? (request) => bridge.call("performance", request) : null,
-  reportRelayError,
-  bridge ? (request) => bridge.call("log", request) : null,
+  bridge ? { emit: emitEvent, flush: flushEvents } : null,
 );
 export const setTraceEnabled = tracer.setEnabled;
 export const reportTraceAtStart = tracer.reportAtStart;

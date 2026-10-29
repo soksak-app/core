@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-299-2: main page가 `page.log.clock`을 한 번만 적는다. page의 trace가 두 번째 clock을 적던 자기 writer 대신 page record의 writer로 event를 보낸다. Red: 소유 workbench 시험이 clock 기록 2개를 찾았다. Green: 통과한다.
 - F239-295-1: Tauri transport 시험이 page reload가 image detach 응답 전에 돌아온다는 것을 밝힌다. 이 시험은 F239-295 이전 코드에서 timeout으로 실패했고 지금은 통과한다.
 - F239-302: 새 tab id가 저장된 layout의 tab, page가 만든 tab, pending image detach가 붙잡은 surface를 가리키면 다시 뽑으므로, 새 tab은 다른 tab의 detach를 기다리거나 persistent session에 들어가지 않는다. `issueId`는 사용 중인 id의 검사를 요구한다.
 - F239-301: 두 호스트는 잘못된 image detach 응답을 member를 밝히는 같은 text로 거부하고, Wails 호스트는 빠진 `ok`를 더 이상 실패로 읽지 않는다. Red: Go와 Rust 소유 시험이 case에서 실패했다. Green: 3회 중 3회 통과한다.
