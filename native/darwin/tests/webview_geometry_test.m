@@ -79,13 +79,14 @@ static NSDictionary *documentState(WKWebView *view, CGFloat scale, double width,
     currentStep = __func__;
     // WebKit exposes the CSS viewport as integer CSS pixels. Therefore a 200.5pt AppKit frame is reported as 200 CSS
     // px at 2x even when the native backing is 401px. The native geometry and the last backing row are checked
-    // separately and match exactly.
+    // separately and match exactly. innerWidth and innerHeight include a classic scroll bar of the root, which
+    // visualViewport excludes, so they state the frame size under both scroller styles.
     double cssHeight = floor(height);
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     NSDictionary *state = nil;
     for (;;) {
-        state = evaluate(view, @"({ratio: devicePixelRatio, width: visualViewport.width,"
-            " height: visualViewport.height, body: document.body?.getBoundingClientRect().height})");
+        state = evaluate(view, @"({ratio: devicePixelRatio, width: innerWidth,"
+            " height: innerHeight, body: document.body?.getBoundingClientRect().height})");
         BOOL placed = [state[@"ratio"] doubleValue] == scale && [state[@"width"] doubleValue] == width
             && [state[@"height"] doubleValue] == cssHeight;
         if (placed) return state;

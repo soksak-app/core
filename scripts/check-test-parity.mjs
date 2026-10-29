@@ -220,6 +220,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-303-2",
+    implementation: [
+      { file: "native/darwin/Makefile", symbol: "webview_geometry_test,-AppleShowScrollBars,Always" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "the native surface keeps the fractional height" },
+    ],
+    expected: "The web view geometry test measures the frame size under both scroller styles.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-297-1",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "static void emitResponderChange(NSInteger windowNumber, id from, id to)" },

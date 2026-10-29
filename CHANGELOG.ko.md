@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-303-2: `webview_geometry_test`가 frame 크기를 `innerWidth`와 `innerHeight`로 재고, classic scroll bar 아래에서 한 번 더 돈다.
 - F239-303-1: `native-darwin` CI job이 native 시험 전에 runner의 display, 전원 상태, console session을 기록한다.
 - F239-297-1: native 기록 `native.window.first_responder`가 창 갱신마다 비교하는 대신 `window-responder`를 보내는 key-value observation에서 나온다.
 - F239-299-3-1: native surfaces의 presentation wait와 case `view.presentation-wait.joins`가, F212.14-5-18 이후 두 호스트가 하는 대로 view는 계속되는 gesture에서도 frame을 바꾸는 표시마다 참여한다고 적는다.

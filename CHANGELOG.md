@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-303-2: `webview_geometry_test` measures the frame size with `innerWidth` and `innerHeight` and runs a second time under classic scroll bars.
 - F239-303-1: The `native-darwin` CI job records the displays, the power state and the console session of its runner before the native tests.
 - F239-297-1: The native record `native.window.first_responder` comes from the key-value observation that sends `window-responder`, instead of a comparison at each window update.
 - F239-299-3-1: The presentation wait of native surfaces and the case `view.presentation-wait.joins` state that a view joins at each display that changes its frame, also during a continuing gesture, as both hosts do since F212.14-5-18.
