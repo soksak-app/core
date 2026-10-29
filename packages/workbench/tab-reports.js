@@ -157,10 +157,11 @@ export function recordOrigin(tabId, fromTabId, path) {
 
 /** The history of a tab id for the refusal of a missing origin: its creation path and whether this session recorded its origin. */
 export function originHistory(tabId) {
+  // default: a tab whose origin no stored layout dropped is named so, which is the fact the record reports.
+  const dropped = forgottenBy.get(tabId) ?? "no stored layout";
   // default: a tab whose creation this session did not record is named so, which is the fact the record reports.
-  // default: a tab whose origin no stored layout dropped is named so.
   return `created by ${createdBy.get(tabId) ?? "no recorded path"}, held by this session: ${everHeld.has(tabId) ? "yes" : "no"}, ` +
-    `origin dropped by ${forgottenBy.get(tabId) ?? "no stored layout"}`;
+    `origin dropped by ${dropped}`;
 }
 
 /** The reading rule of a non-view tab without an origin member: the released format-1 origin {directory: null} (docs/spec/projects.md#tab-origin). */
