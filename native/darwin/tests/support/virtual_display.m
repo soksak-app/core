@@ -1,8 +1,9 @@
 // Adds a virtual display to the window server for the native presentation tests on a machine whose display presents no frames,
 // such as a hosted CI runner, and keeps it until the program receives SIGTERM or SIGINT. Usage: virtual_display <width> <height>
-// in points; the display has two pixels per point and a refresh rate of 60 Hz. The program prints `virtual display <id> online
-// <width>x<height> scale <scale>` when the display is online and an NSScreen reports it, and exits with status 1 and the reason when
-// the display cannot be created or the window server ends it.
+// in points; the display has two pixels per point and a refresh rate of 60 Hz. The program places the display at the origin, so it is
+// the main display on which AppKit opens new windows, and the other displays to its right. It prints one `display <id> ...` line per
+// active display and then `virtual display <id> online <width>x<height> scale <scale>` when the display is online, main and reported
+// by an NSScreen, and exits with status 1 and the reason when the display cannot be created or placed or the window server ends it.
 #import <AppKit/AppKit.h>
 #include <signal.h>
 #include <stdio.h>
@@ -22,6 +23,48 @@ static unsigned int dimension(const char *text, const char *name) {
     fail([NSString stringWithFormat:@"%s must be a whole number of points from 320 to 4096, found %s", name, text]);
   }
   return (unsigned int)value;
+}
+
+// Places the display at the origin and every other active display to its right, for the session of this program.
+static void placeMain(CGDirectDisplayID main, unsigned int width) {
+  CGDirectDisplayID displays[16];
+  uint32_t count = 0;
+  CGError error = CGGetActiveDisplayList(16, displays, &count);
+  if (error != kCGErrorSuccess) fail([NSString stringWithFormat:@"CGGetActiveDisplayList failed with %d", error]);
+  CGDisplayConfigRef config = NULL;
+  error = CGBeginDisplayConfiguration(&config);
+  if (error != kCGErrorSuccess) fail([NSString stringWithFormat:@"CGBeginDisplayConfiguration failed with %d", error]);
+  int32_t x = (int32_t)width;
+  for (uint32_t index = 0; index < count && error == kCGErrorSuccess; index++) {
+    if (displays[index] == main) {
+      error = CGConfigureDisplayOrigin(config, main, 0, 0);
+    } else {
+      error = CGConfigureDisplayOrigin(config, displays[index], x, 0);
+      x += (int32_t)CGDisplayPixelsWide(displays[index]);
+    }
+  }
+  if (error != kCGErrorSuccess) {
+    CGCancelDisplayConfiguration(config);
+    fail([NSString stringWithFormat:@"CGConfigureDisplayOrigin failed with %d", error]);
+  }
+  error = CGCompleteDisplayConfiguration(config, kCGConfigureForSession);
+  if (error != kCGErrorSuccess) fail([NSString stringWithFormat:@"CGCompleteDisplayConfiguration failed with %d", error]);
+}
+
+// Prints each active display with its bounds in points, its refresh rate and whether it is the main display.
+static void printDisplays(void) {
+  CGDirectDisplayID displays[16];
+  uint32_t count = 0;
+  CGError error = CGGetActiveDisplayList(16, displays, &count);
+  if (error != kCGErrorSuccess) fail([NSString stringWithFormat:@"CGGetActiveDisplayList failed with %d", error]);
+  for (uint32_t index = 0; index < count; index++) {
+    CGRect bounds = CGDisplayBounds(displays[index]);
+    CGDisplayModeRef mode = CGDisplayCopyDisplayMode(displays[index]);
+    double refresh = mode == NULL ? 0 : CGDisplayModeGetRefreshRate(mode);
+    if (mode != NULL) CGDisplayModeRelease(mode);
+    printf("display %u bounds %.0f,%.0f %.0fx%.0f refresh %.1f main %s\n", displays[index], bounds.origin.x, bounds.origin.y,
+           bounds.size.width, bounds.size.height, refresh, CGMainDisplayID() == displays[index] ? "yes" : "no");
+  }
 }
 
 static NSScreen *screenOf(CGDirectDisplayID display) {
@@ -65,7 +108,12 @@ int main(int argc, const char **argv) {
     void (^announce)(void) = ^{
       NSScreen *screen = screenOf(identifier);
       if (announced || !CGDisplayIsOnline(identifier) || screen == nil) return;
+      if (CGMainDisplayID() != identifier) {
+        placeMain(identifier, width);
+        return;
+      }
       announced = YES;
+      printDisplays();
       printf("virtual display %u online %.0fx%.0f scale %.0f\n", identifier, screen.frame.size.width, screen.frame.size.height,
              screen.backingScaleFactor);
       fflush(stdout);
