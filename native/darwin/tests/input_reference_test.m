@@ -43,12 +43,20 @@ static NSTextView *reference(NSWindow *window) {
     for (NSView *view in window.contentView.subviews) if ([view isKindOfClass:NSTextView.class]) return (NSTextView *)view;
     return nil;
 }
+// Dispatches AppKit events until a marker block that follows every block already on the main queue has run. The main queue
+// runs its blocks in order, so the document checks that earlier notifications scheduled have run when the marker runs; the
+// marker posts an application-defined event so that the wait for the next event ends.
 static void drain(void) {
-    NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:0.05];
-    while ([limit timeIntervalSinceNow] > 0) {
+    __block BOOL passed = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        passed = YES;
+        [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0
+            timestamp:0 windowNumber:0 context:nil subtype:0 data1:0 data2:0] atStart:NO];
+    });
+    while (!passed) {
         NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:limit inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
+            untilDate:NSDate.distantFuture inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event && event.type != NSEventTypeApplicationDefined) [NSApp sendEvent:event];
     }
 }
 static NSString *currentSourceID(void) {
@@ -203,9 +211,13 @@ int main(int argc, const char *argv[]) {
     SPReferenceReply *emptyWait = request(window, "wait", "");
     check(emptyWait.count == 0, @"an empty expected document remains distinct from a missing document");
     check([request(window, "wait", "another").failure containsString:@"pending"], @"a concurrent wait fails explicitly");
-    [view setString:@""];
-    drain();
-    check(emptyWait.count == 1 && emptyWait.failure == nil, @"the empty expected document completes exactly once");
+    NSArray<NSDictionary *> *emptyEvents = capturedEvents(^{
+        [view setString:@""];
+        drain();
+    });
+    check(emptyWait.count == 1 && emptyWait.failure == nil,
+        [NSString stringWithFormat:@"the empty expected document completes exactly once (count %lu, failure %@, document %@, events %@)",
+            (unsigned long)emptyWait.count, emptyWait.failure, view.string, emptyEvents]);
     check([request(window, "wait", NULL).failure containsString:@"wait-document and wait"],
         @"wait rejects a missing document");
     check([request(window, "wait-document", NULL).failure containsString:@"wait-document and wait"],
