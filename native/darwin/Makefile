@@ -179,6 +179,10 @@ $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(PROCE
 	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 # Vision reads captured pixels only in this check executable, outside application rendering.
+# The program that adds a virtual display for the presentation tests on a machine whose display presents no frames.
+$(BUILD)/virtual_display: tests/support/virtual_display.m src/private/coregraphics.h | $(BUILD)
+	@clang $(CFLAGS) -I$(CURDIR)/src $< -framework AppKit -framework CoreGraphics -o $@
+
 $(BUILD)/capture_text_test: tests/capture_text_test.m tests/support/no_activation.m | $(BUILD)
 	@clang $(CFLAGS) $< tests/support/no_activation.m -framework Foundation -framework AppKit -framework Vision -framework CoreText -o $@
 
