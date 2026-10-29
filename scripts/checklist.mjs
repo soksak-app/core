@@ -61,7 +61,11 @@ export function checklist(text, file, errors) {
     if (!match) continue;
     const [, indent, state, label] = match;
     if (![" ", "~", "o", "!", "-"].includes(state)) errors.push(`${file}:${index + 1}: invalid checklist state [${state}]`);
-    const id = label.match(/^([A-Z]\d+(?:[.-]\d+[a-z]?)*)\s+—\s+/)?.[1] ?? null;
+    // An identifier is a letter prefix and a number followed by dot or hyphen segments of letters and digits
+    // (F212.10-core-3-16, F238-c-11, F212.6a-1). A label that starts with one states it as `<identifier> — `.
+    const leading = label.match(/^([A-Z]+\d+[a-z]?(?:[.-][0-9A-Za-z]+)*)(?=[\s:(]|$)/)?.[1] ?? null;
+    const id = leading && label.slice(leading.length).match(/^\s+—\s+/) ? leading : null;
+    if (leading && !id) errors.push(`${file}:${index + 1}: checklist item ${leading} must state its identifier as \`${leading} — \``);
     if (state === "!") {
       const korean = file.endsWith(".ko.md");
       const cause = korean ? /원인:\s*(.*?)\s+재시도 조건:/u : /Cause:\s*(.*?)\s+Retry when:/i;
@@ -119,6 +123,10 @@ export function checkCompletedItems(previous, current, file, retiredIds = new Se
     }
     if (entry.id && entry.state === "-" && after.get(entry.id)?.state !== "-" && !retiredIds.has(entry.id)) {
       errors.push(`${file}: closed checklist item ${entry.id} must remain closed; add a linked follow-up identifier`);
+    }
+    // An open item leaves the checklist only through a recorded state or a retirement record, so no work disappears unrecorded.
+    if (entry.id && [" ", "~", "!"].includes(entry.state) && !after.has(entry.id) && !retiredIds.has(entry.id)) {
+      errors.push(`${file}: open checklist item ${entry.id} was removed; record its completion or closure, or retire it`);
     }
   }
   return errors;

@@ -200,6 +200,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-288",
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "export function checklist(" }, { file: "scripts/checklist.mjs", symbol: "export function checkCompletedItems(" }],
+    tests: [
+      { file: "scripts/test/checklist.test.mjs", id: "a checklist identifier that two lines of one file state is refused with both lines, in any identifier form" },
+      { file: "scripts/test/checklist.test.mjs", id: "a checklist item whose label starts with an identifier states it as `<identifier> — `" },
+      { file: "scripts/test/checklist.test.mjs", id: "open, active and blocked checklist items cannot be removed without a paired retirement record" },
+    ],
+    expected: "Every identifier form is checked for duplicates and states, an identifier is stated as `<identifier> — `, and an open item leaves the checklist only through a recorded state or a retirement record.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-283",
     implementation: [{ file: "packages/plugin-api/package.json", symbol: '"contract/"' }],
     tests: [{ file: "packages/plugin-api/test/package-files.test.mjs", id: "the packed SDK contains every current contract file" }],

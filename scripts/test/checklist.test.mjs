@@ -14,6 +14,21 @@ test("a checklist identifier that two lines of one file state is refused with bo
   const plain = [];
   checklist("- [o] F9-1 — P2: first\n- [ ] F9-1 — P2: second\n", "docs/features.md", plain);
   assert.deepEqual(plain, ["docs/features.md:2: duplicate checklist identifier F9-1 (first stated on line 1)"]);
+  for (const id of ["F212.10-core-3-16", "F238-c-11", "F212.6a-1", "F212.12-1-10-6g", "F212.10-hwp-2"]) {
+    const named = [];
+    checklist(`- [o] ${id} — P2: first\n- [ ] ${id} — P2: second\n`, "docs/features.md", named);
+    assert.deepEqual(named, [`docs/features.md:2: duplicate checklist identifier ${id} (first stated on line 1)`]);
+  }
+});
+
+test("a checklist item whose label starts with an identifier states it as `<identifier> — `", () => {
+  const errors = [];
+  checklist("- [o] F212.12-2-2-4-8-2-3 (owner: core): P1: second form\n- [o] F7-1: P1: colon form\n- [o] E2E measurement restoration: text\n",
+    "docs/features.md", errors);
+  assert.deepEqual(errors, [
+    "docs/features.md:1: checklist item F212.12-2-2-4-8-2-3 must state its identifier as `F212.12-2-2-4-8-2-3 — `",
+    "docs/features.md:2: checklist item F7-1 must state its identifier as `F7-1 — `",
+  ]);
 });
 
 const checker = fileURLToPath(new URL("../check-docs.mjs", import.meta.url));
@@ -70,6 +85,14 @@ test("completed checklist items cannot be removed without a paired retirement re
   const result = check(t, "- [~] G2 — task\n", "- [~] G2 — 작업\n", "- [o] G1 — completed\n");
   assert.notEqual(result.status, 0, "documentation audit accepted an undocumented removal");
   assert.match(result.stderr, /completed checklist item G1 must remain complete/);
+});
+
+test("open, active and blocked checklist items cannot be removed without a paired retirement record", { timeout: 3000 }, (t) => {
+  for (const state of [" ", "~", "!"]) {
+    const result = check(t, "- [~] G2 — task\n", "- [~] G2 — 작업\n", `- [${state}] G1 — open work\n- [~] G2 — task\n`);
+    assert.notEqual(result.status, 0, `documentation audit accepted the removal of a [${state}] item`);
+    assert.match(result.stderr, /open checklist item G1 was removed; record its completion or closure, or retire it/);
+  }
 });
 
 test("retirement records require a reason and the same IDs in both translations", () => {

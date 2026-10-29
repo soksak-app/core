@@ -8,6 +8,7 @@
 - F239-279: 양 host argument-message owner test의 sync-request 예제에 필수 빈 `declarations` table을 넣어 각 test가 기대하는 거부가 실제로 나오게 한다. 변경 전 Tauri owner는 declarations 거부로 실패했고, 변경 뒤 두 owner가 1/1 통과한다.
 - F239-286: `equivalence` CI job의 Cargo job 1개 제한을 뺀다. Host tests step이 Tauri run을 crate 하나씩 build하며 2459초를 썼다.
 - F239-285: Linux는 검증 대상 platform이 아니므로 Linux Sok CLI job을 CI와 required gate에서 뺀다. Sok CLI test는 macOS host job에서 계속 실행된다.
+- F239-288: checklist audit가 문자 segment가 있는 identifier를 읽고 `<identifier> — ` 형식을 요구하며 기록 없는 열린 항목 삭제를 거부한다. 지워진 active `F212.12-2-2-4-8-2-2`를 복원하고 canonical 항목을 중복한 register 두 줄이 그것을 가리키게 한다.
 - F239-282: `document_throttle_test` window을 명시적으로 소유해 명시적 release 뒤 예약된 autorelease가 다시 실행되지 않게 한다. 실패 시 마지막 완료 단계를 보존하도록 assertion과 측정 출력을 flush한다. 보존된 CI 실행은 원인 귀속 없이 SIGSEGV를 관측했고 변경 전 local owner는 한 번 통과했다. 수정된 owner는 macOS 26.6.2 arm64에서 10.154초에 1/1 통과하며 `make docs-check`도 통과한다.
 - F239-283: `@soksak/plugin-api/contract/` 전체를 게시한다. Packed SDK owner는 release 파일에서 `contract/view-operations.json`을 찾지 못해 실패했고, 이제 현재 contract 파일 전체를 pack하며 1/1 통과한다. `make docs-check`가 통과하고 F239-283 parity link에는 finding이 없다. 전체 parity는 F239-277과 F239-278의 누락 link를 보고한다. Package tree가 바뀌므로 release 전에 SDK pin과 candidate proof identity를 갱신해야 한다. 여기서는 pin이나 publication을 주장하지 않는다.
 
