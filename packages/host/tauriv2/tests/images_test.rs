@@ -998,6 +998,49 @@ fn shown_surface_reconfigures_its_raster() {
     );
 }
 
+// contract: images.visibility.shown-surface-presents-from-its-new-raster
+#[test]
+fn shown_surface_presents_from_its_new_raster() {
+    let images = Images::default();
+    let key: Key = ("returning".into(), "view".into());
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 100));
+    let present = |raster: &Configure, sequence: i32| {
+        assert!(handle_envelope(
+            &configured_envelope(raster, sequence),
+            "sidecar-a",
+            &key.0,
+            &images,
+            |_work| Ok(()),
+            |_image, _value| Ok(()),
+        ));
+    };
+    let first = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    for sequence in 1..=3 {
+        present(&first, sequence);
+    }
+    assert_eq!(
+        images.presented_frame(&key).map(|frame| frame.sequence),
+        Some(3)
+    );
+    // The sequence of the new raster starts again at 1, below the presented sequence of the first raster.
+    images.set_surface_visible(&key.0, false);
+    images.set_surface_visible(&key.0, true);
+    let shown = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("the shown surface did not configure a raster");
+    present(&shown, 1);
+    assert!(
+        images.current_presented(),
+        "the presented first frame of the new raster did not complete the barrier; pending {}",
+        images.pending_rasters()
+    );
+}
+
 // contract: images.present.replaced-frame-is-logged-as-invalidated
 #[test]
 fn presentation_outcome_logs_a_replaced_frame_as_invalidated() {

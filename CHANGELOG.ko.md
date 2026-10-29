@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-290: 두 호스트에서 다시 보인 표면이 presented frame을 새 raster부터 세므로, 그 raster의 첫 frame이 10초 timeout 대신 표시 장벽을 끝내고, presented frame을 올리지 못한 native presentation은 기록된다. Red: `images.visibility.shown-surface-presents-from-its-new-raster`가 두 호스트에서 `raster 2 sequence 1 presented 1/3`으로 실패했다; Green: Go와 Rust image 시험과 함께 두 호스트에서 3회 중 3회 통과한다.
 - F239-289: Tauri sidecar owner test 두 개가 끝나기 전에 performance trace를 꺼서 sampler와 그것이 시작한 `ps`가 check보다 오래 남지 않는다.
 - F239-287: input-reference owner test가 실행이 밀린 thread가 건너뛸 수 있는 50 ms 간격 대신 marker block으로 main-queue document 확인을 기다린다.
 - F239-279: 양 host argument-message owner test의 sync-request 예제에 필수 빈 `declarations` table을 넣어 각 test가 기대하는 거부가 실제로 나오게 한다. 변경 전 Tauri owner는 declarations 거부로 실패했고, 변경 뒤 두 owner가 1/1 통과한다.

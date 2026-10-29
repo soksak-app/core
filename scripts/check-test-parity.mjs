@@ -200,6 +200,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-290",
+    implementation: [
+      { file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) SetSurfaceVisible(" },
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn set_surface_visible(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestShownSurfacePresentsFromItsNewRaster" },
+      { file: "packages/host/tauriv2/tests/images_test.rs", id: "shown_surface_presents_from_its_new_raster" },
+    ],
+    expected: "Both hosts count the presented frames of a surface shown again from its new raster, so the first frame of that raster completes the presentation barrier.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-288",
     implementation: [{ file: "scripts/checklist.mjs", symbol: "export function checklist(" }, { file: "scripts/checklist.mjs", symbol: "export function checkCompletedItems(" }],
     tests: [

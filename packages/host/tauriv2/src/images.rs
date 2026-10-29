@@ -310,6 +310,8 @@ impl Images {
                     state.raster += 1;
                     state.configured = false;
                     state.last_sequence = 0;
+                    state.presented_sequence = 0;
+                    state.presentation_error = None;
                 }
             }
         }
@@ -1615,6 +1617,15 @@ where
                         None => {
                             if images.mark_presented(&key, generation, raster, sequence) {
                                 presented();
+                            } else {
+                                crate::application_log::log_info(
+                                    "image present",
+                                    format!(
+                                        "presented frame did not advance the region: surface={} name={name} generation={generation} raster={raster} sequence={sequence} current {}",
+                                        key.0,
+                                        images.frame_state(&key)
+                                    ),
+                                );
                             }
                             after_present(Ok(()), &name, generation, raster, sequence)
                         }

@@ -508,6 +508,7 @@ Items:
 | `images.visibility.survives-first-document-navigation` | A surface hidden before its first document navigation stays hidden afterwards. | both |
 | `images.visibility.hidden-surface-defers-configuration` | Configuring an image of a hidden surface returns no configuration until the surface is shown. | both |
 | `images.visibility.shown-surface-reconfigures-its-raster` | A surface shown again after it was hidden configures a new raster revision even at the same size, so the presentation barrier does not wait for frames of the hidden period. | both |
+| `images.visibility.shown-surface-presents-from-its-new-raster` | The presented sequence of a surface shown again starts with its new raster, so the native presentation of the first frame of that raster completes the presentation barrier although the previous raster presented higher sequences. | both |
 | `images.visibility.refresh-list-excludes-hidden` | The refresh list leaves out images of hidden surfaces and hidden images. | both |
 | `images.present.rejects-frame-superseded-during-main-thread` | A frame whose raster is reconfigured before main-thread presentation is answered with stale. | both |
 | `images.present.rejects-frame-detached-during-main-thread` | A frame whose surface images are removed before main-thread presentation is answered with stale. | both |

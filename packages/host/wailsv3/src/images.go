@@ -202,6 +202,8 @@ func (i *Images) SetSurfaceVisible(surface string, visible bool) {
 			state.Raster++
 			state.Configured = false
 			state.LastSequence = 0
+			state.PresentedSequence = 0
+			state.PresentationError = ""
 		}
 	}
 	i.changedLocked()
@@ -970,6 +972,9 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		} else {
 			if images.MarkPresented(key, d.Generation, d.Raster, d.Sequence) {
 				presented()
+			} else {
+				LogInfo("image present", fmt.Sprintf("presented frame did not advance the region: surface=%s name=%s generation=%d raster=%d sequence=%d current %s",
+					surface, d.Name, d.Generation, d.Raster, d.Sequence, images.FrameState(key)))
 			}
 			response := AfterPresent(true, "", d.Name, d.Generation, d.Raster, d.Sequence)
 			logAnswerError("image response "+d.Name, sendResponse(d.Name, response))

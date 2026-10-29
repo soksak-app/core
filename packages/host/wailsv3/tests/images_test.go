@@ -1110,6 +1110,39 @@ func TestShownSurfaceReconfiguresItsRaster(t *testing.T) {
 	}
 }
 
+// contract: images.visibility.shown-surface-presents-from-its-new-raster
+func TestShownSurfacePresentsFromItsNewRaster(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "returning", Name: "view"}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	var handle int
+	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatalf("attach image: %v", err)
+	}
+	first := configureImage(t, images, key, 800, 600, 2)
+	for sequence := 1; sequence <= 3; sequence++ {
+		if _, ok := host.Decide(configuredEnvelope(t, first, sequence), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+			t.Fatalf("frame %d of the first raster was rejected", sequence)
+		}
+		if !images.MarkPresented(key, first.Generation, first.Raster, sequence) {
+			t.Fatalf("frame %d of the first raster did not advance the presented frame", sequence)
+		}
+	}
+	// The sequence of the new raster starts again at 1, below the presented sequence of the first raster.
+	images.SetSurfaceVisible(key.Surface, false)
+	images.SetSurfaceVisible(key.Surface, true)
+	shown := configureImage(t, images, key, 800, 600, 2)
+	if _, ok := host.Decide(configuredEnvelope(t, shown, 1), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+		t.Fatal("the first frame of the new raster was rejected")
+	}
+	if !images.MarkPresented(key, shown.Generation, shown.Raster, 1) {
+		t.Fatalf("the first frame of the new raster did not advance the presented frame; pending %s", images.PendingRasters())
+	}
+	if !images.CurrentPresented() {
+		t.Fatalf("the presented first frame of the new raster did not complete the barrier; pending %s", images.PendingRasters())
+	}
+}
+
 // contract: images.present.replaced-frame-is-logged-as-invalidated
 func TestPresentationOutcomeLogsAReplacedFrameAsInvalidated(t *testing.T) {
 	for _, detail := range []string{"stale", "notAttached", "staleRaster native=1520x573@2 frame=760x192@2", "staleRaster native=none"} {
