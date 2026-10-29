@@ -387,6 +387,15 @@ fn an_invalid_detach_acknowledgement_keeps_its_waiter() {
             .unwrap_err(),
         r#"failed image detach acknowledgement "request-a" has no error for surface surface-a"#
     );
+    let numeric_error = ack(serde_json::json!({"image":{"detached":{
+        "request":"request-a", "name":"region-a", "generation":7, "ok":false, "error":5
+    }}}));
+    assert_eq!(
+        sidecars
+            .acknowledge_image_detach("fixture-sidecar", "surface-a", &numeric_error)
+            .unwrap_err(),
+        "image detach acknowledgement request-a has no string error"
+    );
     assert!(receiver.try_recv().is_err());
     assert!(has_waiter(&sidecars, "request-a"));
 }

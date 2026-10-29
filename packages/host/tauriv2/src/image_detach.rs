@@ -321,13 +321,14 @@ impl<O: Owner> Sidecars<O> {
             .ok_or_else(|| {
                 format!("image detach acknowledgement {request} has no boolean result")
             })?;
-        let text = |value: Option<&RawValue>| {
-            value
-                // default: a missing or non-string member reads as empty, which the checks below reject.
-                .and_then(|value| serde_json::from_str::<String>(value.get()).ok())
-                .unwrap_or_default()
+        // An absent member is empty, which the checks below reject where the member is required.
+        let text = |member: &str, value: Option<&RawValue>| match value {
+            None => Ok(String::new()),
+            Some(value) => serde_json::from_str::<String>(value.get()).map_err(|_| {
+                format!("image detach acknowledgement {request} has no string {member}")
+            }),
         };
-        let (result, error) = (text(ack.result), text(ack.error));
+        let (result, error) = (text("result", ack.result)?, text("error", ack.error)?);
         let outcome = if ok {
             if !error.is_empty()
                 || !matches!(
