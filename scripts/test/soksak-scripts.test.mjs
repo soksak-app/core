@@ -54,6 +54,11 @@ function diagnosticApi(program, onClose = () => {}) {
   };
 }
 
+// The limit of a test that runs an audit of every tracked file in a process of its own. The limit ends a stopped audit and does
+// not judge its speed: an audit takes about 2 seconds alone and more than 5 seconds at the load of the pre-push checks, which
+// run beside the builds of both hosts.
+const TREE_AUDIT_LIMIT_MS = 30000;
+
 test("bounded command propagates success and reports its deadline", { timeout: 5000 }, async () => {
   const quick = await run(node, [
     join(packageRoot, "scripts/bounded.mjs"),
@@ -117,7 +122,7 @@ test("DOM declaration emitter is idempotent and preserves the declaration", { ti
   assert.equal(await readFile(join(dist, "dom.d.ts"), "utf8"), expected);
 });
 
-test("boundary audit reports a clean component graph", { timeout: 5000 }, async () => {
+test("boundary audit reports a clean component graph", { timeout: TREE_AUDIT_LIMIT_MS }, async () => {
   const result = await run(node, [join(root, "scripts/check-boundaries.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Boundary checks passed:/);
@@ -198,7 +203,7 @@ test("native and host contract tests stage the frontend without resetting an app
   }
 });
 
-test("host structure audit reports a clean paired-host graph", { timeout: 5000 }, async () => {
+test("host structure audit reports a clean paired-host graph", { timeout: TREE_AUDIT_LIMIT_MS }, async () => {
   const result = await run(node, [join(root, "scripts/check-hosts.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Host structure checks passed:/);
@@ -333,7 +338,7 @@ test("stub audit reads every product source file and reports a file it cannot re
     /native\/darwin\/src\/a\.m: EACCES: permission denied/);
 });
 
-test("window-source audit rejects forbidden control paths", { timeout: 5000 }, async () => {
+test("window-source audit rejects forbidden control paths", { timeout: TREE_AUDIT_LIMIT_MS }, async () => {
   const result = await run(node, [join(root, "scripts/check-e2e.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Window check sources use only the endpoint/);
@@ -610,7 +615,7 @@ test("window-source audit allows activation in the real-input tier and input pac
   assert.deepEqual(auditE2ESource(pacing, "e2e/probe.test.mjs"), ["e2e/probe.test.mjs:1: uses a fixed sleep"]);
 });
 
-test("exposure audit verifies every declared core entry", { timeout: 5000 }, async () => {
+test("exposure audit verifies every declared core entry", { timeout: TREE_AUDIT_LIMIT_MS }, async () => {
   const result = await run(node, [join(root, "scripts/check-exposure.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Exposure checks passed: core/);
@@ -682,7 +687,7 @@ test("release marker scanner finds capture code in an executable without symbols
   assert.match(errors[0], /window capture/);
 });
 
-test("platform audit finds no selectors outside platform directories", { timeout: 5000 }, async () => {
+test("platform audit finds no selectors outside platform directories", { timeout: TREE_AUDIT_LIMIT_MS }, async () => {
   const result = await run(node, [join(root, "scripts/check-platforms.mjs")]);
   const output = `${result.stdout}\n${result.stderr}`;
   assert.equal(result.code, 0, output);
