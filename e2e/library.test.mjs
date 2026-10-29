@@ -353,6 +353,10 @@ for (const app of Object.values(APPS)) {
     // This check shows the missing folder in the library and makes the project unopenable. Both errors are shown on the screen and recorded.
     s.expectError(new RegExp(`^error page library project ${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: `));
     s.expectError(/^error page library: project directory does not exist: /);
+    // The files tree of the project window reads the removed folder and shows that failure. The text depends on the step
+    // that meets the removal first: the read of the folder, git in its removed working directory, or git changing into it.
+    const removed = folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    s.expectError(new RegExp(`^error page plugin files files tree: (lstat ${removed}: no such file or directory|git rev-parse --show-toplevel: exit status 128: fatal: (Unable to read current working directory|cannot change to '${removed}'): No such file or directory)$`));
 
     await s.run("core.projects.browse");
     const library = await s.until("core.library", (state) => state.folderErrors?.[missing.id] !== undefined,
