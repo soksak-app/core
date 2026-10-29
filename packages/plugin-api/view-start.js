@@ -64,11 +64,15 @@
     reportFailure(`unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
   });
 
-  const page = String(performance.timeOrigin);
-  handler.postMessage({ event: "view.ready", plugin, document: crypto.randomUUID(), page });
+  // The page identity of the document is a UUID that it draws once: two documents can start in the same millisecond of
+  // performance.timeOrigin, so the time origin does not identify a document (docs/spec/logging.md#event).
+  const page = crypto.randomUUID();
+  const timeOrigin = performance.timeOrigin;
+  handler.postMessage({ event: "view.ready", plugin, document: page, time_origin: timeOrigin });
 
   window.sokView = Object.freeze({
     page,
+    timeOrigin,
     attach(next) {
       if (typeof next !== "function") throw new TypeError("attach requires a listener function");
       if (listener) throw new Error(`view channel for ${plugin} already has a message listener`);

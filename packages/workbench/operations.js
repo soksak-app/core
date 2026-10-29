@@ -6,12 +6,13 @@
 // the event `page.call` of the page and the event `host.binding.call` of the host carry it too, and the audit joins them.
 
 import { createOperationCids } from "@soksak/plugin-api";
+import { pageIdentity } from "./page-identity.js";
 
 // The sink that stores an event with its identifiers. The log of the page installs it (page-log.js); this module imports no host,
 // so the modules that start operations load without the application host.
 let sink = null;
 // The identifiers of the operations of this page (the form is in plugin-api operation.js).
-const nextOperationCids = createOperationCids();
+const nextOperationCids = createOperationCids(pageIdentity);
 
 /** Installs the function that stores `(event, fields, cids)`. */
 export function installOperationSink(next) {

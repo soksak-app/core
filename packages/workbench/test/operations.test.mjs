@@ -31,7 +31,7 @@ test("an operation starts with an identifier of the page and the first event of 
   const first = beginOperation("page.plugin.operation", { action: "install", plugin: "term" });
   const second = beginOperation("page.plugin.operation", { action: "remove", plugin: "term" });
   await settled();
-  assert.match(first[0], /^p\d+\.\d+$/);
+  assert.match(first[0], /^p[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d+$/);
   assert.notEqual(first[0], second[0]);
   assert.deepEqual(events().map(({ level, event, fields, cids }) => [level, event, fields, cids]), [
     ["info", "page.plugin.operation", { action: "install", plugin: "term" }, first],

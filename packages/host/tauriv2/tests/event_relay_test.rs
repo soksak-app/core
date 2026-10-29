@@ -257,23 +257,31 @@ fn a_view_batch_is_bound_to_its_ready_page_plugin_and_surface() {
     let directory = folder::Folder::new();
     let log = start(directory.path());
     let request = json!({"action": "batch", "events": [
-        {"ts_us": 1_791_000_000_000_001u64, "mono_ns": 5_000_000_001u64, "level": "info", "event": "page.start", "page": "1791948729050.5", "fields": {"time_origin": 1791948729050.5, "url": "soksak://probe/"}},
-        {"ts_us": 1_791_000_000_000_002u64, "mono_ns": 5_000_000_002u64, "level": "info", "event": "plugin.probe.saved", "page": "1791948729050.5", "fields": {"value": 7}}
+        {"ts_us": 1_791_000_000_000_001u64, "mono_ns": 5_000_000_001u64, "level": "info", "event": "page.start", "page": "doc-1", "fields": {"time_origin": 1791948729050.5, "url": "soksak://probe/"}},
+        {"ts_us": 1_791_000_000_000_002u64, "mono_ns": 5_000_000_002u64, "level": "info", "event": "plugin.probe.saved", "page": "doc-1", "fields": {"value": 7}}
     ]});
 
     assert_eq!(
-        view_log_command(&log, request, "probe", "surface-1", "1791948729050.5").unwrap(),
+        view_log_command(
+            &log,
+            request,
+            "probe",
+            "surface-1",
+            "doc-1",
+            1791948729050.5
+        )
+        .unwrap(),
         Value::Null
     );
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 4, "{events:?}");
-    assert_eq!(events[2]["page"], "1791948729050.5");
+    assert_eq!(events[2]["page"], "doc-1");
     assert_eq!(events[2]["event"], "page.start");
     assert_eq!(events[3]["layer"], "plugin");
     assert_eq!(events[3]["event"], "plugin.probe.saved");
-    assert_eq!(events[3]["page"], "1791948729050.5");
+    assert_eq!(events[3]["page"], "doc-1");
     assert_eq!(events[3]["fields"]["surface"], "surface-1");
 }
 
@@ -283,13 +291,20 @@ fn a_view_batch_rejects_a_foreign_source_without_writing_earlier_events() {
     let directory = folder::Folder::new();
     let log = start(directory.path());
     let request = json!({"action": "batch", "events": [
-        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.saved", "page": "1791948729050.5", "fields": {}},
-        {"ts_us": 2, "mono_ns": 2, "level": "info", "event": "plugin.probe.other", "page": "1791948729051.5", "fields": {}}
+        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.saved", "page": "doc-1", "fields": {}},
+        {"ts_us": 2, "mono_ns": 2, "level": "info", "event": "plugin.probe.other", "page": "doc-2", "fields": {}}
     ]});
-    let error =
-        view_log_command(&log, request, "probe", "surface-1", "1791948729050.5").unwrap_err();
+    let error = view_log_command(
+        &log,
+        request,
+        "probe",
+        "surface-1",
+        "doc-1",
+        1791948729050.5,
+    )
+    .unwrap_err();
     assert!(
-        error.contains("events[1]: page \"1791948729051.5\" does not match the ready view page"),
+        error.contains("events[1]: page \"doc-2\" does not match the ready view page \"doc-1\""),
         "{error}"
     );
     let path = log.path().to_path_buf();
@@ -303,13 +318,20 @@ fn a_view_batch_rejects_a_page_start_for_another_time_origin_without_partial_wri
     let directory = folder::Folder::new();
     let log = start(directory.path());
     let request = json!({"action": "batch", "events": [
-        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.saved", "page": "1791948729050.5", "fields": {}},
-        {"ts_us": 2, "mono_ns": 2, "level": "info", "event": "page.start", "page": "1791948729050.5", "fields": {"time_origin": 1791948729051.5, "url": "soksak://probe/"}}
+        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.saved", "page": "doc-1", "fields": {}},
+        {"ts_us": 2, "mono_ns": 2, "level": "info", "event": "page.start", "page": "doc-1", "fields": {"time_origin": 1791948729051.5, "url": "soksak://probe/"}}
     ]});
-    let error =
-        view_log_command(&log, request, "probe", "surface-1", "1791948729050.5").unwrap_err();
+    let error = view_log_command(
+        &log,
+        request,
+        "probe",
+        "surface-1",
+        "doc-1",
+        1791948729050.5,
+    )
+    .unwrap_err();
     assert!(
-        error.contains("page.start time_origin 1791948729051.5 does not match ready page"),
+        error.contains("page.start time_origin 1791948729051.5 does not match the time origin 1791948729050.5 of the ready view document \"doc-1\""),
         "{error}"
     );
     let path = log.path().to_path_buf();
@@ -323,11 +345,18 @@ fn a_view_batch_rejects_an_empty_page_start_url_without_partial_write() {
     let directory = folder::Folder::new();
     let log = start(directory.path());
     let request = json!({"action": "batch", "events": [
-        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.saved", "page": "1791948729050.5", "fields": {}},
-        {"ts_us": 2, "mono_ns": 2, "level": "info", "event": "page.start", "page": "1791948729050.5", "fields": {"time_origin": 1791948729050.5, "url": ""}}
+        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.saved", "page": "doc-1", "fields": {}},
+        {"ts_us": 2, "mono_ns": 2, "level": "info", "event": "page.start", "page": "doc-1", "fields": {"time_origin": 1791948729050.5, "url": ""}}
     ]});
-    let error =
-        view_log_command(&log, request, "probe", "surface-1", "1791948729050.5").unwrap_err();
+    let error = view_log_command(
+        &log,
+        request,
+        "probe",
+        "surface-1",
+        "doc-1",
+        1791948729050.5,
+    )
+    .unwrap_err();
     assert!(
         error.contains("events[1]: page.start url must be non-empty text"),
         "{error}"
@@ -343,10 +372,17 @@ fn a_view_batch_refuses_a_plugin_surface_field_instead_of_trusting_it() {
     let directory = folder::Folder::new();
     let log = start(directory.path());
     let request = json!({"action": "batch", "events": [
-        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.saved", "page": "1791948729050.5", "fields": {"surface": "surface-1"}}
+        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.saved", "page": "doc-1", "fields": {"surface": "surface-1"}}
     ]});
-    let error =
-        view_log_command(&log, request, "probe", "surface-1", "1791948729050.5").unwrap_err();
+    let error = view_log_command(
+        &log,
+        request,
+        "probe",
+        "surface-1",
+        "doc-1",
+        1791948729050.5,
+    )
+    .unwrap_err();
     assert!(error.contains("cannot set its owning surface"), "{error}");
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -359,10 +395,17 @@ fn a_view_batch_rejects_an_event_with_another_plugin_prefix() {
     let directory = folder::Folder::new();
     let log = start(directory.path());
     let request = json!({"action": "batch", "events": [
-        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.other.saved", "page": "1791948729050.5", "fields": {}}
+        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.other.saved", "page": "doc-1", "fields": {}}
     ]});
-    let error =
-        view_log_command(&log, request, "probe", "surface-1", "1791948729050.5").unwrap_err();
+    let error = view_log_command(
+        &log,
+        request,
+        "probe",
+        "surface-1",
+        "doc-1",
+        1791948729050.5,
+    )
+    .unwrap_err();
     assert!(
         error.contains("event \"plugin.other.saved\" is not allowed for plugin \"probe\""),
         "{error}"
@@ -391,10 +434,18 @@ fn a_view_batch_keeps_injected_plugin_fields_within_the_page_bound() {
         "fixture injection did not cross the page bound: {injected_size}"
     );
     let request = json!({"action": "batch", "events": [
-        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.large", "page": "1791948729050.5", "fields": fields}
+        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.large", "page": "doc-1", "fields": fields}
     ]});
 
-    view_log_command(&log, request, "probe", "surface-1", "1791948729050.5").unwrap();
+    view_log_command(
+        &log,
+        request,
+        "probe",
+        "surface-1",
+        "doc-1",
+        1791948729050.5,
+    )
+    .unwrap();
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
@@ -430,7 +481,7 @@ fn a_view_log_rejects_unknown_clock_and_batch_request_fields() {
         ),
         (
             json!({"action": "batch", "events": [
-                {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.saved", "page": "1791948729050.5", "fields": {}}
+                {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "plugin.probe.saved", "page": "doc-1", "fields": {}}
             ], "unexpected": true}),
             "runtime.log batch request accepts only action and events",
         ),
@@ -444,7 +495,8 @@ fn a_view_log_rejects_unknown_clock_and_batch_request_fields() {
             request.clone(),
             "probe",
             "surface-1",
-            "1791948729050.5",
+            "doc-1",
+            1791948729050.5,
         );
         let path = log.path().to_path_buf();
         log.flush(Duration::from_secs(5)).unwrap();
@@ -467,7 +519,8 @@ fn a_view_clock_answers_without_accepting_policy_or_writing_records() {
         json!({"action": "clock"}),
         "probe",
         "surface-1",
-        "1791948729050.5",
+        "doc-1",
+        1791948729050.5,
     )
     .unwrap();
     assert!(clock["ts_us"].as_u64().unwrap() > 1_700_000_000_000_000);
@@ -478,7 +531,8 @@ fn a_view_clock_answers_without_accepting_policy_or_writing_records() {
             json!({"action": "policy-read"}),
             "probe",
             "surface-1",
-            "1791948729050.5",
+            "doc-1",
+            1791948729050.5,
         )
         .unwrap_err()
         .contains("action must be batch or clock")
@@ -489,7 +543,8 @@ fn a_view_clock_answers_without_accepting_policy_or_writing_records() {
             json!({"level": "info", "event": "plugin.probe.saved", "fields": {}}),
             "probe",
             "surface-1",
-            "1791948729050.5",
+            "doc-1",
+            1791948729050.5,
         )
         .unwrap_err()
         .contains("action must be batch or clock")

@@ -7,9 +7,9 @@ import {
 const pageEvent = (page, event, fields) => ({ ts_us: 10, level: "debug", layer: "page", page, event, fields });
 const dispatch = (fields) => ({ ts_us: 1, level: "debug", layer: "host", event: "host.view.reply.dispatch", fields });
 const query = { window: "main", page: "page-after-reload", plugin: "terminal", surface: "terminal-tab" };
-const coverageQuery = { ...query, page: "1000" };
+const coverageQuery = { ...query, page: "6f1d2a3e-1111-4a2b-8c3d-00000000000a" };
 const start = (page = coverageQuery.page, mono_ns = 1_000_000_000) => ({ ts_us: 2, mono_ns, seq: 2, level: "info", layer: "page",
-  page, event: "page.start", fields: { time_origin: Number(page) } });
+  page, event: "page.start", fields: { time_origin: 1000.5 } });
 const clock = (page = coverageQuery.page, trip_us = 100, resolution_us = 10) => ({ ts_us: 2, mono_ns: 1_000_000_000, seq: 3,
   level: "info", layer: "page", page, event: "page.log.clock", fields: { trip_us, resolution_us } });
 const nativeCall = (id, mono_ns = 1_000_200_000, plugin = "terminal", surface = "terminal-tab") => ({ ts_us: 3,
@@ -114,13 +114,13 @@ test("a rounded zero page-clock trip is valid when its resolution is positive", 
   ]);
 });
 
-test("page identity matches the exact positive time-origin text without integer coercion", () => {
-  const page = "1000.5";
+test("page identity matches the page of the page.start record exactly", () => {
+  const page = "6f1d2a3e-1111-4a2b-8c3d-00000000000b";
   const events = [start(page), clock(page, 0, 10), nativeCall(25, 1_000_020_000)];
   assert.deepEqual(currentPageNativeViewCalls(events, { page }), [
     { plugin: "terminal", surface: "terminal-tab", id: 25, mono_ns: 1_000_020_000 },
   ]);
-  assert.throws(() => currentPageNativeViewCalls(events, { page: "01000.5" }), /no unique valid page.start record/);
+  assert.throws(() => currentPageNativeViewCalls(events, { page: "6F1D2A3E-1111-4A2B-8C3D-00000000000B" }), /no unique valid page.start record/);
 });
 
 test("a sealed native call stays pending until its delayed current-page reply is posted", () => {

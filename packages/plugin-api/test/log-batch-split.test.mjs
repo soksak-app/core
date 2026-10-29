@@ -5,6 +5,9 @@ import assert from "node:assert/strict";
 import { createEventBatcher } from "../log-batch.js";
 import { withoutClock } from "./support/logging.mjs";
 
+// The page identity of the document of the batcher.
+const PAGE = "6f1d2a3e-1111-4a2b-8c3d-00000000000a";
+
 const hostClock = { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
 const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve(hostClock) : inner(withoutClock(request)));
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -12,7 +15,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 test("a batch carries at most 256 queued events, and the rest is sent in the next call, in order", async () => {
   const sizes = [];
   const indexes = [];
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: answering(async (request) => { sizes.push(request.events.length); indexes.push(...request.events.map((e) => e.fields.index)); }),
     report: assert.ifError,
   });
@@ -27,7 +30,7 @@ test("each emitAndWait ends with the batch that carries its record, across a spl
   let release;
   const held = new Promise((resolve) => { release = resolve; });
   let calls = 0;
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: answering(async () => { calls += 1; if (calls === 2) await held; }),
     report: assert.ifError,
   });

@@ -62,7 +62,7 @@ export function currentPageNativeViewCalls(events, { page }) {
   const starts = events.filter((event) => event.layer === "page" && event.event === "page.start" && event.page === page);
   const timeOrigin = starts[0]?.fields?.time_origin;
   if (starts.length !== 1 || !integer(starts[0].mono_ns) || starts[0].mono_ns === 0 ||
-      typeof timeOrigin !== "number" || !Number.isFinite(timeOrigin) || timeOrigin <= 0 || String(timeOrigin) !== page) {
+      typeof timeOrigin !== "number" || !Number.isFinite(timeOrigin) || timeOrigin <= 0) {
     throw new Error(`the current page ${page} has no unique valid page.start record`);
   }
   const clocks = events.filter((event) => event.layer === "page" && event.event === "page.log.clock" && event.page === page);

@@ -5,12 +5,15 @@ import assert from "node:assert/strict";
 import { createEventBatcher } from "../log-batch.js";
 import { hostClock, withoutClock } from "./support/logging.mjs";
 
+// The page identity of the document of the batcher.
+const PAGE = "6f1d2a3e-1111-4a2b-8c3d-00000000000a";
+
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 test("a queue over its byte bound refuses events and the next batch starts with the counted loss and its bytes", async () => {
   const calls = [];
   let acknowledge;
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: (request) => { if (request.action === "clock") return Promise.resolve(hostClock); calls.push(withoutClock(request)); return new Promise((resolve) => { acknowledge = resolve; }); },
     report: assert.ifError,
     maxBytes: 1000,

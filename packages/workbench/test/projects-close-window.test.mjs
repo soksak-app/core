@@ -178,7 +178,7 @@ test("opening a project, removing it, opening a window and closing it are operat
   const [newWindow] = operation("page.window.operation", "new");
   const [closed] = operation("page.window.operation", "close");
   const [closedKept] = operation("page.window.operation", "close_kept");
-  for (const cids of [opened, removed, newWindow, closed, closedKept]) assert.match(cids?.[0] ?? "", /^p\d+\.\d+$/);
+  for (const cids of [opened, removed, newWindow, closed, closedKept]) assert.match(cids?.[0] ?? "", /^p[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d+$/);
   assert.equal(new Set([opened, removed, newWindow, closed, closedKept].map((cids) => cids[0])).size, 5, "an operation took the identifier of another");
   const cidsOf = (name) => hostCids.filter(([called]) => called === name).map(([, cids]) => cids);
   assert.deepEqual(cidsOf("openProject")[0], opened);

@@ -52,7 +52,7 @@ mod view_decode {
             json!({"reply": 1, "result": {"items": [1, 2, 3]}}),
             json!({"id": 2, "command": "probe.run", "params": {"items": [1, 2, 3]}}),
             json!({"event": "declared-ui.snapshot", "plugin": "probe", "status": "state", "seq": 1, "skipped": 0, "value": {"items": [1, 2, 3]}}),
-            json!({"event": "view.ready", "plugin": "probe", "document": "doc-1", "page": "1791948729050"}),
+            json!({"event": "view.ready", "plugin": "probe", "document": "doc-1", "time_origin": 1791948729050.0}),
         ] {
             let channels = ViewChannels::default();
             channels.register("surface", "probe", 1);
@@ -96,7 +96,7 @@ mod view_decode {
             )
             .unwrap();
         assert!(matches!(canceled, ViewDispatch::Call(value) if value["cancel"] == true));
-        let ready = channels.dispatch("surface", r#"{"message":{"command":null,"cancel":null,"event":"view.ready","plugin":"probe","document":"doc-1","page":"1791948729050"}}"#);
+        let ready = channels.dispatch("surface", r#"{"message":{"command":null,"cancel":null,"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1791948729050}}"#);
         assert_eq!(ready, Ok(ViewDispatch::Ready(Ok(true))));
         let invalid = channels
             .dispatch(
@@ -198,7 +198,7 @@ fn a_runtime_log_call_is_not_forwarded_to_the_workbench() {
     channels.register_origin("surface", "probe", 1);
     channels.dispatch(
         "surface",
-        r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1791948729050"}}"#,
+        r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1791948729050}}"#,
     ).expect("the view page is ready");
     let before = buffered_fields("host.view.call").len();
 
@@ -247,7 +247,7 @@ fn a_retired_log_request_does_not_match_the_replacement_page() {
     channels
         .dispatch(
             "surface",
-            r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-old","page":"1791948729050"}}"#,
+            r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-old","time_origin":1791948729050}}"#,
         )
         .expect("the old page is ready");
     let result = channels.dispatch(
@@ -264,7 +264,7 @@ fn a_retired_log_request_does_not_match_the_replacement_page() {
     channels
         .dispatch(
             "surface",
-            r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-new","page":"1791948729051"}}"#,
+            r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-new","time_origin":1791948729051}}"#,
         )
         .expect("the replacement page is ready");
     assert!(
@@ -281,7 +281,7 @@ fn a_view_log_request_is_refused_after_a_new_navigation_starts() {
     channels
         .dispatch(
             "surface",
-            r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1791948729050"}}"#,
+            r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1791948729050}}"#,
         )
         .expect("the view page is ready");
     channels
@@ -318,20 +318,28 @@ fn a_view_writer_reply_keeps_the_call_id_for_results_and_errors() {
     );
 }
 
-// contract: view.ready.binds-writer-page-to-positive-time-origin
+// contract: view.ready.requires-document-and-positive-time-origin
 #[test]
-fn view_ready_requires_a_positive_numeric_page_identity() {
+fn view_ready_requires_a_document_and_a_positive_time_origin() {
     let channels = ViewChannels::default();
     channels.register("surface", "probe", 1);
-    for page in ["", "0", "NaN", "Infinity", "not-a-page"] {
-        let message = serde_json::json!({
-            "message": {"event": "view.ready", "plugin": "probe", "document": "doc-1", "page": page}
-        })
-        .to_string();
+    for fields in [
+        serde_json::json!({"time_origin": 1234.5}),
+        serde_json::json!({"document": "", "time_origin": 1234.5}),
+        serde_json::json!({"document": "doc-1"}),
+        serde_json::json!({"document": "doc-1", "time_origin": 0}),
+        serde_json::json!({"document": "doc-1", "time_origin": -1}),
+        serde_json::json!({"document": "doc-1", "time_origin": "1234.5"}),
+    ] {
+        let mut ready = serde_json::json!({"event": "view.ready", "plugin": "probe"});
+        for (key, value) in fields.as_object().unwrap() {
+            ready[key] = value.clone();
+        }
+        let message = serde_json::json!({"message": ready}).to_string();
         let result = channels.dispatch("surface", &message).unwrap();
         assert!(
             matches!(result, super::ViewDispatch::Ready(Err(_))),
-            "invalid page identity {page:?} was accepted: {result:?}"
+            "view.ready {fields} was accepted: {result:?}"
         );
         assert_eq!(
             channels.check_post("surface"),

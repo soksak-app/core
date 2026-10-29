@@ -3,10 +3,13 @@
     "status": [
       {
         "name": "core.window.document",
-        "description": "The main document's time origin, ready state, visibility, applied color scheme, background blur, device pixel ratio, and viewport size.",
+        "description": "The main document's page identity, time origin, ready state, visibility, applied color scheme, background blur, device pixel ratio, and viewport size.",
         "schema": {
           "type": "object",
           "properties": {
+            "page": {
+              "type": "string"
+            },
             "timeOrigin": {
               "type": "number"
             },

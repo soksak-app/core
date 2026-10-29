@@ -11,6 +11,7 @@ import { classOf } from "./event-classes.js";
 import { logGate } from "./log-gate.js";
 import { installOperationSink } from "./operations.js";
 import { recordOf } from "./report-record.js";
+import { pageIdentity } from "./page-identity.js";
 
 // The console as the page had it before the capture: a failure to relay cannot be reported through the relay, and what it
 // writes to the console must not become an event again.
@@ -24,7 +25,7 @@ export const rawConsole = {
 };
 
 const batcher = host
-  ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => rawConsole.error(error.message), classify: classOf, gate: logGate })
+  ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => rawConsole.error(error.message), classify: classOf, gate: logGate, page: pageIdentity })
   : null;
 
 // The longest place and text of a record in an event, in bytes; a longer one is cut on a character boundary and the event says

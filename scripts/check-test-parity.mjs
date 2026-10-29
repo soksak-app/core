@@ -331,6 +331,22 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/page-clock.test.mjs", id: "the main page states its clock once for the events of its records and of its trace" },
     ],
     expected: "The main page states page.log.clock once for its records and its trace.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-299-2-1",
+    implementation: [
+      { file: "packages/plugin-api/view-start.js", symbol: "const page = crypto.randomUUID();" },
+      { file: "packages/workbench/page-identity.js", symbol: "export const pageIdentity = crypto.randomUUID();" },
+      { file: "packages/host/wailsv3/src/event_relay.go", symbol: "func validViewTimeOrigin(value float64) bool" },
+      { file: "packages/host/tauriv2/src/documents.rs", symbol: "time_origin: Option<Value>," },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "two documents that start in the same millisecond have different page identities" },
+      { file: "packages/host/wailsv3/src/view_call_record_test.go", id: "TestViewReadyRequiresDocumentAndPositiveTimeOrigin" },
+      { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "view_ready_requires_a_document_and_a_positive_time_origin" },
+    ],
+    expected: "Every document has a UUID page identity, and both hosts require a document and a positive finite time origin in view.ready.",
     id: "F239-297",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "bool sp_window_observe_responder(" },
@@ -5395,13 +5411,13 @@ const FEATURE_LINKS = [
   {
     id: "F184",
     implementation: [
-      { file: "packages/plugin-api/log-batch.js", symbol: "page = String(performance.timeOrigin)" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "createEventBatcher requires the page identity of the document" },
       { file: "packages/host/wailsv3/src/running_calls.go", symbol: "func ReloadTimeoutText" },
       { file: "packages/host/tauriv2/src/running_calls.rs", symbol: "pub fn reload_timeout_text" },
     ],
     tests: [
       { file: "packages/log-contract/test/audit.test.mjs", id: "an event of the layer page or plugin names the page that wrote it, and an event of another layer names none" },
-      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "every event of a batch names the page that wrote it by its time origin, the anchor of its clock included" },
+      { file: "packages/plugin-api/test/log-batch.test.mjs", id: "every event of a batch names the page that wrote it by its page identity, the anchor of its clock included" },
       { file: "packages/host/wailsv3/tests/running_calls_test.go", id: "TestAReloadThatTimesOutNamesTheHostCallsOfItsWindowThatStillRun" },
       { file: "packages/host/tauriv2/tests/running_calls_test.rs", id: "a_reload_that_times_out_names_the_host_calls_of_its_window_that_still_run" },
     ],
@@ -9124,7 +9140,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-270",
     implementation: [
-      { file: "packages/plugin-api/view-start.js", symbol: "const page = String(performance.timeOrigin);" },
+      { file: "packages/plugin-api/view-start.js", symbol: "const page = crypto.randomUUID();" },
       { file: "packages/plugin-api/view.js", symbol: "page: window.sokView.page," },
     ],
     tests: [

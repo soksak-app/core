@@ -7,6 +7,7 @@ import { viewCommandGenerationOf } from "../view-commands.js";
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 import { chooseSource } from "../declared-section.js";
+import { pageIdentity } from "../page-identity.js";
 
 setSurfaceTextSize(() => 1);
 
@@ -25,7 +26,7 @@ function seedViewSource(plugin, surface, generation = 1) {
 }
 
 function pageOf(dom) {
-  return String(dom.window.performance.timeOrigin);
+  return pageIdentity;
 }
 
 test("a queued view call from a retired source generation does not reach the replacement command layer", { timeout: 5000 }, async (t) => {
@@ -920,7 +921,7 @@ test("a view watch of a status that the exposure does not declare is refused wit
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.deepEqual(calls.filter(({ name }) => name === "viewReply"), [{
       name: "viewReply",
-      payload: { id: 3, error: { code: -32000, message: `view call runtime.status.watch ${pluginId}.missing is not a declared status` }, generation: 1, surface: surfaceId, page: String(dom.window.performance.timeOrigin) },
+      payload: { id: 3, error: { code: -32000, message: `view call runtime.status.watch ${pluginId}.missing is not a declared status` }, generation: 1, surface: surfaceId, page: pageIdentity },
     }]);
   } finally {
     await disposeSurface(surfaceId);

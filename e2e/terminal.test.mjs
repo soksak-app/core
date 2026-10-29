@@ -808,12 +808,12 @@ for (const app of Object.values(APPS)) {
     const shells = terminalProcessSnapshot(app.configDir).shells;
 
     const offsets = currentEventOffsets(s.app.configDir);
-    const document = (await s.get("core.window.document")).timeOrigin;
+    const document = (await s.get("core.window.document")).page;
     await s.run("host.window.reload");
     const reloadedDocument = await s.until("core.window.document", (value) =>
-      value.timeOrigin !== document && value.readyState === "complete",
+      value.page !== document && value.readyState === "complete",
       "the main document did not reload");
-    const currentPage = String(reloadedDocument.timeOrigin);
+    const currentPage = reloadedDocument.page;
     await untilEventLine(s.app.configDir, offsets, (line) => {
       if (!line.startsWith("info page page.start: ")) return false;
       const fields = JSON.parse(line.slice(line.indexOf("{")));

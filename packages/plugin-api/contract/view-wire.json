@@ -8,8 +8,8 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000001" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000001", "page": "1700000000000.5" }],
-            "state": { "sokView": { "page": "1700000000000.5" } },
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000001", "time_origin": 1700000000000.5 }],
+            "state": { "sokView": { "page": "6f1d2a3e-1111-4a2b-8c3d-000000000001" } },
             "delivered": [],
             "throws": null
           }
@@ -26,8 +26,8 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000002" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000002", "page": "1700000000000.5" }],
-            "state": { "sokView": { "page": "1700000000000.5" } },
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000002", "time_origin": 1700000000000.5 }],
+            "state": { "sokView": { "page": "6f1d2a3e-1111-4a2b-8c3d-000000000002" } },
             "delivered": [],
             "throws": null
           }
@@ -48,8 +48,8 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000003" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000003", "page": "1700000000000.5" }],
-            "state": { "sokView": { "page": "1700000000000.5" } },
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000003", "time_origin": 1700000000000.5 }],
+            "state": { "sokView": { "page": "6f1d2a3e-1111-4a2b-8c3d-000000000003" } },
             "delivered": [],
             "throws": null
           }
@@ -82,8 +82,8 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000004" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000004", "page": "1700000000000.5" }],
-            "state": { "sokView": { "page": "1700000000000.5" } },
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000004", "time_origin": 1700000000000.5 }],
+            "state": { "sokView": { "page": "6f1d2a3e-1111-4a2b-8c3d-000000000004" } },
             "delivered": [],
             "throws": null
           }
@@ -108,8 +108,8 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000005" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000005", "page": "1700000000000.5" }],
-            "state": { "sokView": { "page": "1700000000000.5" } },
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000005", "time_origin": 1700000000000.5 }],
+            "state": { "sokView": { "page": "6f1d2a3e-1111-4a2b-8c3d-000000000005" } },
             "delivered": [],
             "throws": null
           }
@@ -142,8 +142,8 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000006" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000006", "page": "1700000000000.5" }],
-            "state": { "sokView": { "page": "1700000000000.5" } },
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000006", "time_origin": 1700000000000.5 }],
+            "state": { "sokView": { "page": "6f1d2a3e-1111-4a2b-8c3d-000000000006" } },
             "delivered": [],
             "throws": null
           }
@@ -173,8 +173,8 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000007" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000007", "page": "1700000000000.5" }],
-            "state": { "sokView": { "page": "1700000000000.5" } },
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000007", "time_origin": 1700000000000.5 }],
+            "state": { "sokView": { "page": "6f1d2a3e-1111-4a2b-8c3d-000000000007" } },
             "delivered": [],
             "throws": null
           }
@@ -195,8 +195,8 @@
         {
           "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000008" },
           "output": {
-            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000008", "page": "1700000000000.5" }],
-            "state": { "sokView": { "page": "1700000000000.5" } },
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000008", "time_origin": 1700000000000.5 }],
+            "state": { "sokView": { "page": "6f1d2a3e-1111-4a2b-8c3d-000000000008" } },
             "delivered": [],
             "throws": null
           }

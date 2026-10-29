@@ -14,6 +14,7 @@ import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar }
 import { registerSurfacePort, registry } from "./exposure.js";
 import { pluginSessionOf } from "./plugin-host.js";
 import { logGate } from "./log-gate.js";
+import { pageIdentity } from "./page-identity.js";
 import { surfaceSyncRequestWithDeclarationTable } from "./surface-sync-request.js";
 
 /**
@@ -391,7 +392,7 @@ async function syncSurfaces(request, surfaceModules, declarationBytes) {
       .map(({ id }) => ({ surface: id, attempt: surfaceModules.mountedSurface(id)?.mountRegistration?.attempt ?? null }));
     const bytes = declarationBytes();
     trace("surface.sync", {
-      page: String(document.defaultView.performance.timeOrigin), requestId, views, outcome,
+      page: pageIdentity, requestId, views, outcome,
       declarationInlineBytes: bytes.declarationInlineBytes,
       declarationTableBytes: bytes.declarationTableBytes,
     });

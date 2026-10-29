@@ -7,6 +7,7 @@ import { memoryPlacement } from "../memory-placement.js";
 import { setSurfaceTextSize } from "../text-size.js";
 import { logGate } from "../log-gate.js";
 import { byteLength } from "@soksak/plugin-api/bounded-json.js";
+import { pageIdentity } from "../page-identity.js";
 const emptySurfaceDeclarations = { status: [], commands: [], dom: [] };
 
 setSurfaceTextSize(() => 1);
@@ -91,7 +92,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
       ["visible-view", "retained-view", "cold-view"], "the host request did not preserve retained views or prepare the cold loaded view");
     assert.deepEqual(traceEvents.find(({ event }) => event === "surface.sync"), {
       event: "surface.sync",
-      fields: { page: String(document.defaultView.performance.timeOrigin), requestId: 1, views: [
+      fields: { page: pageIdentity, requestId: 1, views: [
         { surface: "visible-view", attempt: 1 },
         { surface: "retained-view", attempt: 2 },
         { surface: "cold-view", attempt: 3 },
@@ -242,7 +243,7 @@ test("surface sync traces its result only while the frame log gate is open", { t
       /composition missing in current page/);
     assert.deepEqual(traceEvents.filter(({ event }) => event === "surface.sync"), [{
       event: "surface.sync",
-      fields: { page: String(document.defaultView.performance.timeOrigin), requestId: 1,
+      fields: { page: pageIdentity, requestId: 1,
         views: [{ surface: view.id, attempt: 7 }], outcome: "rejected",
         declarationInlineBytes: byteLength(JSON.stringify(emptySurfaceDeclarations)),
         declarationTableBytes: byteLength(JSON.stringify(emptySurfaceDeclarations)) + 2 },

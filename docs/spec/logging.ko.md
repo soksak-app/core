@@ -35,7 +35,7 @@ event는 한 줄의 JSON 객체 하나다.
 | `layer` | `native`, `host`, `page`, `plugin`, `sidecar`, `sok`. |
 | `event` | catalog가 선언한 `<layer>.<subsystem>.<event>`. writer 자신의 event는 `log.<event>`(`log.open`, `log.dropped`)라 부르며 `layer`는 그것을 쓰는 프로세스의 층이다. |
 | `window`, `surface`, `session` | event가 어떤 대상에 관한 것이면 그 대상의 식별자. |
-| `page` | event를 쓴 문서의 time origin을 글로 적은 것으로, 그 문서의 `page.start`가 `time_origin`에 적는 값이다. layer `page`와 `plugin`의 모든 event가 가지며(`page.log.clock` 포함) 다른 layer의 event는 갖지 않고, 감사는 이를 어긴 줄을 거부한다. 문서의 event를 그 문서의 시계 anchor와 그 문서의 다른 event에 잇는다. |
+| `page` | event를 쓴 문서의 page identity로, 문서가 시작할 때 한 번 뽑는 UUID(`crypto.randomUUID()`)다. 두 문서가 `performance.timeOrigin`의 같은 millisecond에 시작할 수 있으므로 time origin은 문서를 식별하지 않는다. layer `page`와 `plugin`의 모든 event가 가지며(`page.log.clock` 포함) 다른 layer의 event는 갖지 않고, 감사는 이를 어긴 줄을 거부한다. 문서의 event를 시계의 origin을 적는 그 문서의 `page.start`와 그 문서의 다른 event에 잇는다. |
 | `cids` | event가 속한 입력의 상관 식별자 목록. 없으면 생략한다. |
 | `fields` | catalog가 선언한 event의 값. |
 | `truncated` | event의 fields 글이 event 크기 상한을 넘었을 때만 있다. 자르기 전 그 글의 바이트 크기다. 이런 event의 `fields`는 글의 첫 바이트인 `head`만 담는다([상한](#상한)). |
@@ -329,7 +329,7 @@ task의 종료처럼 어떤 입구도 덮지 못하는 원천은 소스 lint가 
 
 ### 작업 사슬
 
-page가 애플리케이션을 바꾸는 작업은 상관 식별자 `p<page의 time origin>.<n>`으로 묶인 event 사슬이다. page는 작업이 시작될 때 식별자를 부여하고(`beginOperation`, `packages/workbench/operations.js`), 사슬의 첫 event를 그 식별자와 함께 저장하며, 작업을 수행하는 host 호출에 `host.call(name, arg, {cids})`로 식별자를 함께 넘긴다. Wails page는 목록을 바인딩 메서드 `Bindings.Call`의 네 번째 인자(`method`, `args`, `cids`)로 보내고, Tauri page는 command의 인자 옆 key `cids`로 보낸다. page는 호출을 식별자와 함께 `page.call`로, host는 같은 식별자와 함께 `host.binding.call`로 기록하며, 호출이 성공했는지는 묻지 않는다. 줄이 담을 수 있는 식별자의 목록이 아닌 목록(빈 식별자, 따옴표, 역슬래시, 제어 문자가 든 식별자)은 그 식별자를 밝힌 오류로 거절한다. 메서드는 실행되지 않고, 실패한 `host.binding.call`은 식별자를 담지 않는다.
+page가 애플리케이션을 바꾸는 작업은 상관 식별자 `p<page identity>.<n>`으로 묶인 event 사슬이다. page는 작업이 시작될 때 식별자를 부여하고(`beginOperation`, `packages/workbench/operations.js`), 사슬의 첫 event를 그 식별자와 함께 저장하며, 작업을 수행하는 host 호출에 `host.call(name, arg, {cids})`로 식별자를 함께 넘긴다. Wails page는 목록을 바인딩 메서드 `Bindings.Call`의 네 번째 인자(`method`, `args`, `cids`)로 보내고, Tauri page는 command의 인자 옆 key `cids`로 보낸다. page는 호출을 식별자와 함께 `page.call`로, host는 같은 식별자와 함께 `host.binding.call`로 기록하며, 호출이 성공했는지는 묻지 않는다. 줄이 담을 수 있는 식별자의 목록이 아닌 목록(빈 식별자, 따옴표, 역슬래시, 제어 문자가 든 식별자)은 그 식별자를 밝힌 오류로 거절한다. 메서드는 실행되지 않고, 실패한 `host.binding.call`은 식별자를 담지 않는다.
 
 | 사슬 | 첫 event(필드) | 작업을 수행하는 host 호출 |
 | --- | --- | --- |
@@ -341,7 +341,7 @@ page가 애플리케이션을 바꾸는 작업은 상관 식별자 `p<page의 ti
 
 사슬 `window`는 첫 event와 `host.binding.call`이다. 창을 닫는 호출은 page가 그 완료를 기록하기 전에 page를 끝내고 host는 사라진 창의 batch를 거부하므로, page는 호출 앞에서 첫 event를 저장하고 대기열을 비우며 그 사슬은 `page.call`을 요구하지 않는다. 그 외의 사슬은 첫 event, `page.call`, `host.binding.call`이며, 감사는 첫 event의 식별자마다 나머지에 나타나면 사슬이 완전하다고 본다. 자기 창을 닫는 것은 page를 끝내므로, page는 창을 닫는 host 호출 앞에서 자기 event 대기열을 비우고, 닫기 사슬의 첫 event가 page가 끝나기 전에 host의 writer에 도달한다. 첫 event는 작업이 시작될 때, 그리고 host 호출이 따를 때만 저장한다. 남은 탭이 거절한 제거와 잘못된 값으로 거절된 설정 변경은 작업을 시작하지 않는다. 설정 변경의 `actor`는 바꾼 주체이며 선언된 command(`core.settings.set`, `core.settings.theme`, `core.text.larger`)다. 변경의 모든 경로가 actor를 넘기고, `set`은 actor 없는 변경을 거절한다. `keys`는 바뀐 key를 쉼표로 이은 것이며 값은 담지 않는다(값의 기록은 설정 파일이다). 프로젝트 창을 닫는 것은 `window` 사슬이고, 프로젝트가 registry에서 빠지는 것은 `project` 사슬이다.
 
-view 안에서 시작하는 작업(자기 클릭이나 키)은 view page가 `p<view page의 time origin>.<n>` 형식으로 식별자를 정한다. view 브리지의 `runtime.beginOperation(event, fields)`가 이를 하며, view는 첫 event를 그 식별자로 `runtime.log`에 저장하고, 작업의 sidecar send, 명령 호출, log 호출에 목록을 싣는다([view 작업](native-surfaces.ko.md#view-표면)). 식별자는 main page에서 가져오지 않는다.
+view 안에서 시작하는 작업(자기 클릭이나 키)은 view page가 `p<view page의 page identity>.<n>` 형식으로 식별자를 정한다. view 브리지의 `runtime.beginOperation(event, fields)`가 이를 하며, view는 첫 event를 그 식별자로 `runtime.log`에 저장하고, 작업의 sidecar send, 명령 호출, log 호출에 목록을 싣는다([view 작업](native-surfaces.ko.md#view-표면)). 식별자는 main page에서 가져오지 않는다.
 
 workbench가 view로 전달하는 명령 요청은 그 요청을 일으킨 작업이나 입력의 식별자를 가진다(요청의 멤버 `cids`, [view 명령](native-surfaces.ko.md#view-표면)). view는 이를 명령의 handler에 context로 넘기므로, handler가 그것으로 남기는 기록은 사슬에 이어진다.
 
@@ -425,7 +425,7 @@ emitter는 catalog 검사에서 하나의 지점이고(이름, level, 리터럴 
 
 View는 공통 bounded event batcher를 사용해 record마다 workbench document를 거치지 않고 host writer로 직접 log를 보낸다. View에는 policy gate가 없어 모든 record를 만들고 host writer가 설치된 event catalog와 policy를 적용한다. Queue bound, clock anchor, correlation identifier, field truncation, loss report 및 전달 실패 보고는 page batcher와 공유한다.
 
-주입하는 `view.ready` message에는 document UUID와 함께 정확히 `String(performance.timeOrigin)`인 `page`가 들어 있다. Host는 두 identity를 native surface generation에 묶는다. View batcher는 비어 있지 않은 document URL을 담은 `page.start`와 해당 document의 `page.log.clock`을 내보내며 plugin record는 workbench document 대신 그 view document identity를 가진다. Bootstrap은 page 값을 한 번 읽고 read-only `window.sokView.page`로 공개한다. View writer는 batch identity에 정확히 이 값을 사용하고 `page.start.time_origin`에는 이 값의 숫자 값을 사용하며 time origin을 다시 읽지 않는다.
+주입하는 `view.ready` message는 `document`에 view의 page identity인 document UUID를, `time_origin`에 `performance.timeOrigin`을 적는다. Host는 document와 time origin을 native surface generation에 묶고, `time_origin`이 ready message의 time origin과 다른 view의 `page.start`를 거부한다. View batcher는 비어 있지 않은 document URL을 담은 `page.start`와 해당 document의 `page.log.clock`을 내보내며 plugin record는 workbench document 대신 그 view document identity를 가진다. Bootstrap은 두 값을 한 번 읽고 read-only `window.sokView.page`와 `window.sokView.timeOrigin`으로 공개한다. View writer는 batch identity에 page identity를, `page.start.time_origin`에 time origin을 사용하며 time origin을 다시 읽지 않는다.
 
 View channel은 기존 writer request인 `action: "clock"`과 `action: "batch"`만으로 `runtime.log`를 직접 처리한다. Batch는 등록된 page와 소유 plugin prefix를 이름으로 가져야 한다. Plugin record의 caller-provided `fields.surface`는 거부하며 host가 source에 묶인 surface를 더한다. Writer가 만드는 lifecycle, clock 및 loss record는 선언한 이름으로 제한한다. Host는 전체 batch를 검증한 뒤에만 기록한다. Policy 변경, identity 불일치와 이전 단일 record payload는 오류다. Clock은 `{ts_us, mono_ns}`로, batch는 `null`로 답하고 오류는 같은 ID에 `{code: -32000, message}`로 답한다. 처리 전과 result 또는 error reply를 post하기 전에 generation을 검사한다. 종료된 document는 대체 generation으로 기록할 수 없다.
 

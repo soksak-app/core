@@ -55,7 +55,8 @@ const UNGATED = new Set(["page.start"]);
  * the host at its own reading, so the layers of one input compare (docs/spec/logging.md#limits).
  */
 export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES,
-  now = () => performance.now(), classify = () => undefined, gate = null, page = String(performance.timeOrigin) }) {
+  now = () => performance.now(), classify = () => undefined, gate = null, page }) {
+  if (typeof page !== "string" || page === "") throw new TypeError("createEventBatcher requires the page identity of the document");
   let queue = [];
   let queueBytes = 0;
   // The refused events by the bound that refused them: {count, bytes} for each reason.
@@ -136,7 +137,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
           events.unshift({ at: base.at, level: "info", event: "page.log.clock",
             fields: { trip_us: Math.round(base.trip * 1000), resolution_us: base.resolution_us } });
         }
-        // Every event names the document that wrote it by its time origin, as page.start states it (docs/spec/logging.md#event).
+        // Every event names the document that wrote it by its page identity (docs/spec/logging.md#event).
         const stamped = events.map(({ at, cids, charge, waiter, ...rest }) => ({
           ts_us: Math.round(base.ts_us + (at - base.at) * 1000),
           mono_ns: Math.round(base.mono_ns + (at - base.at) * 1e6),

@@ -7,6 +7,7 @@ import { callEvent, failureOf } from "./host-calls.js";
 import { createEventBatcher } from "@soksak/plugin-api/log-batch.js";
 import { classOf } from "./event-classes.js";
 import { logGate } from "./log-gate.js";
+import { pageIdentity } from "./page-identity.js";
 
 /**
  * `send(name, ...args)` sends one host call by its name and arguments and returns its answer; `log(request)` sends the request
@@ -21,7 +22,7 @@ import { logGate } from "./log-gate.js";
  */
 export function surfaceCalls({ send, log, listen }) {
   const report = (error) => console.error(error.message);
-  const batcher = createEventBatcher({ call: log, report, classify: classOf, gate: logGate });
+  const batcher = createEventBatcher({ call: log, report, classify: classOf, gate: logGate, page: pageIdentity });
   const apply = (classes) => {
     try {
       logGate.set(classes);

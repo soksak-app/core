@@ -47,7 +47,16 @@ test("the injected script posts the ready message with a document identifier at 
   assert.equal(posted[0].event, "view.ready");
   assert.equal(posted[0].plugin, "probe");
   assert.match(posted[0].document, UUID);
-  assert.equal(posted[0].page, String(globalThis.window.performance.timeOrigin));
+  assert.equal(posted[0].time_origin, globalThis.window.performance.timeOrigin);
+  assert.equal("page" in posted[0], false, "the document identifier is the page identity");
+});
+
+test("two documents that start in the same millisecond have different page identities", (t) => {
+  const first = setup(t, { timeOrigins: [1_700_000_000_000.5] });
+  const firstPage = globalThis.window.sokView.page;
+  const second = setup(t, { timeOrigins: [1_700_000_000_000.5] });
+  assert.equal(first.posted[0].time_origin, second.posted[0].time_origin);
+  assert.notEqual(firstPage, globalThis.window.sokView.page);
 });
 
 test("each page has its own document identifier", (t) => {
@@ -57,9 +66,10 @@ test("each page has its own document identifier", (t) => {
 });
 
 test("the injected script exposes one global, sokView, whose attach is the only reader of host messages", (t) => {
-  const { host } = setup(t);
-  assert.deepEqual(Object.keys(globalThis.window.sokView), ["page", "attach"]);
-  assert.equal(globalThis.window.sokView.page, globalThis.window.performance.timeOrigin.toString());
+  const { host, posted } = setup(t);
+  assert.deepEqual(Object.keys(globalThis.window.sokView), ["page", "timeOrigin", "attach"]);
+  assert.equal(globalThis.window.sokView.page, posted[0].document);
+  assert.equal(globalThis.window.sokView.timeOrigin, globalThis.window.performance.timeOrigin);
   assert.equal(Object.getOwnPropertyDescriptor(globalThis.window.sokView, "page").writable, false);
   assert.equal(Object.isFrozen(globalThis.window.sokView), true);
   host({ sok: 1, id: 1, result: "queued" });
@@ -417,7 +427,7 @@ test("the view writer reuses the document-start page identity when later clock r
   assert.ok(batch, "the view did not send a batch request");
   host({ sok: 1, id: batch.id, result: null });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.ok(batch.params.events.every(({ page }) => page === "1700000000000.5"), "batch identity differs from document-start ready identity");
+  assert.ok(batch.params.events.every(({ page }) => page === posted[0].document), "batch identity differs from document-start ready identity");
   assert.deepEqual(batch.params.events.find(({ event }) => event === "page.start").fields,
     { time_origin: 1_700_000_000_000.5, url: "soksak://probe/" });
   assert.equal(calls.openCalls().count, 0, "the batch call remained open after its reply");
@@ -442,8 +452,8 @@ test("the view bridge keeps the public log API and batches source-clocked record
   const batch = posted.find(({ command, params }) => command === "runtime.log" && params?.action === "batch");
   assert.ok(batch, "the view did not send a batch request");
   assert.deepEqual(batch.params.events.map(({ event }) => event), ["page.log.clock", "page.start", "plugin.probe.saved"]);
-  assert.ok(batch.params.events.every(({ page }) => page === posted[0].page), "the batch does not use the ready page identity");
-  assert.deepEqual(batch.params.events[1].fields, { time_origin: Number(posted[0].page), url: "soksak://probe/" });
+  assert.ok(batch.params.events.every(({ page }) => page === posted[0].document), "the batch does not use the ready page identity");
+  assert.deepEqual(batch.params.events[1].fields, { time_origin: posted[0].time_origin, url: "soksak://probe/" });
   assert.deepEqual(batch.params.events[2].fields, { n: 1 });
   assert.deepEqual(batch.params.events[2].cids, ["b.1"]);
   host({ sok: 1, id: batch.id, result: null });

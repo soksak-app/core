@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -30,7 +29,7 @@ type relayedEvent struct {
 	fields   json.RawMessage
 	// layer is `page` or `plugin`, the prefix of the name of the event.
 	layer string
-	// page is the time origin of the document that wrote the event (docs/spec/logging.md#event).
+	// page is the page identity of the document that wrote the event (docs/spec/logging.md#event).
 	page string
 	// record is the record of the page that the event carries, when it is a `page.record.<level>` event.
 	record *Entry
@@ -212,14 +211,9 @@ const viewLogFailureCode = -32000
 
 const viewLogFieldsLimitBytes = 65536
 
-var viewPageIdentityPattern = regexp.MustCompile(`^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$`)
-
-func validViewPageIdentity(page string) bool {
-	if !viewPageIdentityPattern.MatchString(page) {
-		return false
-	}
-	value, err := strconv.ParseFloat(page, 64)
-	return err == nil && value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
+// validViewTimeOrigin reports whether value is the performance.timeOrigin of a document: a positive finite number.
+func validViewTimeOrigin(value float64) bool {
+	return value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 func (s *Surfaces) viewLogRequest(surface, plugin string, generation uint64, call map[string]any) error {
@@ -227,7 +221,7 @@ func (s *Surfaces) viewLogRequest(surface, plugin string, generation uint64, cal
 	if !ok || channel.plugin != plugin || channel.generation != generation {
 		return nil
 	}
-	if channel.document == "" || channel.page == "" {
+	if channel.document == "" || channel.timeOrigin == 0 {
 		return fmt.Errorf("%s: runtime.log has no ready document", surface)
 	}
 	if s.host == nil || s.host.events == nil {
@@ -239,7 +233,7 @@ func (s *Surfaces) viewLogRequest(surface, plugin string, generation uint64, cal
 	}
 	params, ok := call["params"].(json.RawMessage)
 	if !ok || len(params) == 0 {
-		return s.replyViewLog(surface, generation, channel.document, channel.page, id, nil,
+		return s.replyViewLog(surface, generation, channel.document, id, nil,
 			fmt.Errorf("runtime.log params must be an object"))
 	}
 	var request map[string]any
@@ -247,37 +241,37 @@ func (s *Surfaces) viewLogRequest(surface, plugin string, generation uint64, cal
 		if err == nil {
 			err = errors.New("params must be an object")
 		}
-		return s.replyViewLog(surface, generation, channel.document, channel.page, id, nil,
+		return s.replyViewLog(surface, generation, channel.document, id, nil,
 			fmt.Errorf("runtime.log params are invalid: %w", err))
 	}
-	requestReply, err := viewLogCommand(s.host.events, plugin, surface, channel.page, request)
+	requestReply, err := viewLogCommand(s.host.events, plugin, surface, channel.document, channel.timeOrigin, request)
 	if err != nil {
-		return s.replyViewLog(surface, generation, channel.document, channel.page, id, nil, err)
+		return s.replyViewLog(surface, generation, channel.document, id, nil, err)
 	}
 	var result any
 	if requestReply.Clock != nil {
 		result = requestReply.Clock
 	}
-	return s.replyViewLog(surface, generation, channel.document, channel.page, id, result, nil)
+	return s.replyViewLog(surface, generation, channel.document, id, result, nil)
 }
 
-func (s *Surfaces) replyViewLog(surface string, generation uint64, document, page string, id uint64, result any, requestErr error) error {
+func (s *Surfaces) replyViewLog(surface string, generation uint64, document string, id uint64, result any, requestErr error) error {
 	var reply ViewReplyRequest
 	if requestErr != nil {
-		reply = ViewReplyRequest{Page: page, Surface: surface, Generation: generation, ID: id,
+		reply = ViewReplyRequest{Page: document, Surface: surface, Generation: generation, ID: id,
 			Error: &ViewReplyError{Code: viewLogFailureCode, Message: requestErr.Error()}}
 	} else {
 		data, err := json.Marshal(result)
 		if err != nil {
 			return fmt.Errorf("%s: encode runtime.log reply: %w", surface, err)
 		}
-		reply = ViewReplyRequest{Page: page, Surface: surface, Generation: generation, ID: id, Result: data}
+		reply = ViewReplyRequest{Page: document, Surface: surface, Generation: generation, ID: id, Result: data}
 	}
 	message, err := ViewReplyMessage(reply)
 	if err != nil {
 		return err
 	}
-	posted, stale, postErr := s.postViewDocumentGeneration(surface, generation, document, page, message)
+	posted, stale, postErr := s.postViewDocumentGeneration(surface, generation, document, message)
 	if stale {
 		return nil
 	}
@@ -295,7 +289,7 @@ func (s *Surfaces) replyViewLog(surface string, generation uint64, document, pag
 }
 
 // postViewDocumentGeneration checks the ready document identity and generation in the UI task that posts the reply.
-func (s *Surfaces) postViewDocumentGeneration(surface string, generation uint64, document, page string, message map[string]any) (bool, bool, error) {
+func (s *Surfaces) postViewDocumentGeneration(surface string, generation uint64, document string, message map[string]any) (bool, bool, error) {
 	message["sok"] = viewChannelMarker
 	data, err := json.Marshal(message)
 	if err != nil {
@@ -305,7 +299,7 @@ func (s *Surfaces) postViewDocumentGeneration(surface string, generation uint64,
 	var postErr error
 	s.invoke(func() {
 		channel, ok := s.documents.view(surface)
-		if !ok || channel.generation != generation || channel.document != document || channel.page != page {
+		if !ok || channel.generation != generation || channel.document != document {
 			stale = true
 			return
 		}
@@ -323,7 +317,7 @@ func (s *Surfaces) postViewDocumentGeneration(surface string, generation uint64,
 	return posted, stale, postErr
 }
 
-func viewLogCommand(log *EventLog, plugin, surface, page string, request map[string]any) (LogReply, error) {
+func viewLogCommand(log *EventLog, plugin, surface, page string, timeOrigin float64, request map[string]any) (LogReply, error) {
 	action, ok := request["action"].(string)
 	if !ok {
 		return LogReply{}, errors.New("runtime.log action must be batch or clock")
@@ -337,7 +331,7 @@ func viewLogCommand(log *EventLog, plugin, surface, page string, request map[str
 		if len(request) != 2 {
 			return LogReply{}, errors.New("runtime.log batch request accepts only action and events")
 		}
-		if err := validateViewLogBatch(plugin, surface, page, request); err != nil {
+		if err := validateViewLogBatch(plugin, surface, page, timeOrigin, request); err != nil {
 			return LogReply{}, err
 		}
 		var err error
@@ -351,22 +345,25 @@ func viewLogCommand(log *EventLog, plugin, surface, page string, request map[str
 	return LogCommand(log, request)
 }
 
-func validateViewLogBatch(plugin, surface, page string, request map[string]any) error {
+func validateViewLogBatch(plugin, surface, page string, timeOrigin float64, request map[string]any) error {
 	items, ok := request["events"].([]any)
 	if !ok {
 		return errors.New("events must be an array")
 	}
-	pageOrigin, err := strconv.ParseFloat(page, 64)
-	if err != nil || pageOrigin <= 0 || math.IsNaN(pageOrigin) || math.IsInf(pageOrigin, 0) {
-		return errors.New("registered view page is not a positive finite time origin")
+	if page == "" || !validViewTimeOrigin(timeOrigin) {
+		return errors.New("the registered view document has no page identity and positive finite time origin")
 	}
 	for index, item := range items {
 		event, ok := item.(map[string]any)
 		if !ok {
 			return fmt.Errorf("events[%d]: the event must be an object", index)
 		}
-		if eventPage, ok := event["page"].(string); !ok || eventPage != page {
-			return fmt.Errorf("events[%d]: page must match the ready view document", index)
+		eventPage, ok := event["page"].(string)
+		if !ok {
+			return fmt.Errorf("events[%d]: page must name the document that wrote the event", index)
+		}
+		if eventPage != page {
+			return fmt.Errorf("events[%d]: page %s does not match the ready view page %s", index, strconv.Quote(eventPage), strconv.Quote(page))
 		}
 		name, ok := event["event"].(string)
 		if !ok || name == "" {
@@ -378,9 +375,13 @@ func validateViewLogBatch(plugin, surface, page string, request map[string]any) 
 		}
 		switch name {
 		case "page.start":
-			timeOrigin, ok := fields["time_origin"].(float64)
-			if !ok || timeOrigin != pageOrigin {
-				return fmt.Errorf("events[%d]: page.start time_origin must match the ready page identity", index)
+			started, ok := fields["time_origin"].(float64)
+			if !ok {
+				return fmt.Errorf("events[%d]: page.start time_origin must be a number", index)
+			}
+			if started != timeOrigin {
+				return fmt.Errorf("events[%d]: page.start time_origin %s does not match the time origin %s of the ready view document %s", index,
+					strconv.FormatFloat(started, 'f', -1, 64), strconv.FormatFloat(timeOrigin, 'f', -1, 64), strconv.Quote(page))
 			}
 			if url, ok := fields["url"].(string); !ok || url == "" {
 				return fmt.Errorf("events[%d]: page.start url must be non-empty text", index)
@@ -438,4 +439,12 @@ func withViewSurface(request map[string]any, plugin, surface string) (map[string
 	}
 	copyRequest["events"] = copyEvents
 	return copyRequest, nil
+}
+
+// viewTimeOriginText is the time origin of a view.ready message for an error: the number, or absent.
+func viewTimeOriginText(value *float64) string {
+	if value == nil {
+		return "absent"
+	}
+	return strconv.FormatFloat(*value, 'g', -1, 64)
 }

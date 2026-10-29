@@ -47,6 +47,7 @@ import { onTextScope } from "./text-size.js";
 import { foldSection, onSectionsChange, selectSection, sidebarsState } from "./sidebar-sections.js";
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
+import { pageIdentity } from "./page-identity.js";
 
 /* Receivers of the watched core statuses. */
 const watchers = new Set();
@@ -275,6 +276,7 @@ function need(project, id) {
 export async function installCoreExposure({ library, renames, chrome, drawn, memorySaver }) {
   memory = memorySaver;
   status("core.window.document", () => ({
+    page: pageIdentity,
     timeOrigin: performance.timeOrigin,
     readyState: document.readyState,
     visibility: document.visibilityState,

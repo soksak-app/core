@@ -5,6 +5,7 @@ import { registerPlugin } from "../registry.js";
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 import { viewCommandsOf } from "../view-commands.js";
+import { pageIdentity } from "../page-identity.js";
 
 setSurfaceTextSize(() => 1);
 
@@ -105,7 +106,7 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
     await waitSurfaceCompositionDeclared(id);
     assert.deepEqual(traceEvents.filter(({ event }) => event === "surface.composition"), [{
       event: "surface.composition",
-      fields: { page: String(document.defaultView.performance.timeOrigin), surface: id, attempt: 1, action: "declare", outcome: "accepted" },
+      fields: { page: pageIdentity, surface: id, attempt: 1, action: "declare", outcome: "accepted" },
     }], "the accepted native composition declaration was not correlated with its page and mount attempt");
     inspectRelease = false;
     holdDispose = true;
@@ -113,7 +114,7 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
     await disposalStarted;
     assert.deepEqual(traceEvents.filter(({ event, fields }) => event === "surface.composition" && fields.action === "dispose").at(-1), {
       event: "surface.composition",
-      fields: { page: String(document.defaultView.performance.timeOrigin), surface: id, attempt: 1, action: "dispose", reason: "released" },
+      fields: { page: pageIdentity, surface: id, attempt: 1, action: "dispose", reason: "released" },
     }, "page disposal was not recorded distinctly from native composition removal");
     assert.equal(mountedSurface(id)?.disposed, true, "the test did not hold the retired entry during cleanup");
     try {
@@ -152,11 +153,11 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
     await assert.rejects(failedWait, /the host refused the replacement composition/);
     assert.deepEqual(traceEvents.filter(({ event, fields }) => event === "surface.composition" && fields.action === "declare").at(-1), {
       event: "surface.composition",
-      fields: { page: String(document.defaultView.performance.timeOrigin), surface: id, attempt: 4, action: "declare", outcome: "rejected" },
+      fields: { page: pageIdentity, surface: id, attempt: 4, action: "declare", outcome: "rejected" },
     }, "a rejected native declaration was not recorded with the failed mount attempt");
     assert.deepEqual(traceEvents.filter(({ event, fields }) => event === "surface.composition" && fields.action === "dispose").at(-1), {
       event: "surface.composition",
-      fields: { page: String(document.defaultView.performance.timeOrigin), surface: id, attempt: 4, action: "dispose", reason: "mount-failure" },
+      fields: { page: pageIdentity, surface: id, attempt: 4, action: "dispose", reason: "mount-failure" },
     }, "failed mount disposal did not preserve its page-local reason");
     await assert.rejects(waitSurfaceCompositionDeclared(id), /surface fixture-remount-composition mount attempt 4 failed during mount: the host refused the replacement composition/,
       "a failed replacement must preserve its original failure after releasing its mounted entry");

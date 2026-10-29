@@ -117,8 +117,8 @@ function lineFindings(entry, catalog, validators, channel = "other") {
   if (!Number.isInteger(event.mono_ns) || event.mono_ns <= 0) report("mono_ns must be a positive integer");
   if (!LEVELS.has(event.level)) report(`level ${event.level} is not one of ${[...LEVELS].join(", ")}`);
   if (!LAYERS.has(event.layer)) report(`layer ${event.layer} is not one of ${[...LAYERS].join(", ")}`);
-  // An event of a document names the document that wrote it, its time origin as page.start states it, so the anchor of its
-  // clock (page.log.clock of the same page) is found from the line.
+  // An event of a document names the document that wrote it by its page identity, so the anchor of its clock
+  // (page.log.clock of the same page) is found from the line.
   if (PAGE_LAYERS.has(event.layer)) {
     if (typeof event.page !== "string" || event.page === "") report(`an event of the layer ${event.layer} names the page that wrote it in page`);
   } else if (event.page !== undefined) {

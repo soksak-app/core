@@ -673,12 +673,13 @@ pub(crate) fn view_channel() -> Result<&'static str, String> {
         .ok_or_else(|| "the view channel script is not loaded".to_string())
 }
 
-/// The view channel of one view surface: the plugin, ready document and page identity. Empty document and page values mean that no
-/// ready document is recorded (docs/spec/plugin-processes.md, rule 4).
+/// The view channel of one view surface: the plugin, the ready document, which is the page identity of the view, and the
+/// performance.timeOrigin that the ready document states. An empty document and a zero time origin mean that no ready document
+/// is recorded (docs/spec/plugin-processes.md, rule 4).
 struct ViewChannel {
     plugin: String,
     document: String,
-    page: String,
+    time_origin: f64,
     origin: ViewOrigin,
     /// Set by the first ready message of the view, which writes host.trace.view.process-ready once.
     process_ready: bool,
@@ -842,8 +843,10 @@ struct ViewEvent {
     plugin: String,
     #[serde(default)]
     document: String,
+    // The time origin stays a JSON value here, so a value of another type reaches the view.ready error instead of failing the
+    // decoding of every view event.
     #[serde(default)]
-    page: String,
+    time_origin: Option<Value>,
     #[serde(default)]
     reason: String,
 }
@@ -873,7 +876,7 @@ struct ViewLogCall {
     surface: String,
     generation: u64,
     document: String,
-    page: String,
+    time_origin: f64,
     request: Value,
     request_error: Option<String>,
 }
@@ -966,7 +969,7 @@ impl ViewChannels {
         let channel = channels.get(surface).ok_or_else(|| {
             format!("{surface}: view channel message of a surface without a view")
         })?;
-        if (channel.document.is_empty() || channel.page.is_empty()) && request_error.is_none() {
+        if (channel.document.is_empty() || channel.time_origin == 0.0) && request_error.is_none() {
             request_error = Some(format!("{surface}: runtime.log call has no ready page"));
         }
         Ok(ViewLogCall {
@@ -975,7 +978,7 @@ impl ViewChannels {
             surface: surface.to_string(),
             generation: channel.origin.generation,
             document: channel.document.clone(),
-            page: channel.page.clone(),
+            time_origin: channel.time_origin,
             request,
             request_error,
         })
@@ -990,7 +993,7 @@ impl ViewChannels {
                 && std::sync::Arc::ptr_eq(&channel.origin.instance, &origin.instance)
                 && channel.plugin == call.plugin
                 && channel.document == call.document
-                && channel.page == call.page
+                && channel.time_origin == call.time_origin
         })
     }
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, ViewChannel>> {
@@ -1017,7 +1020,7 @@ impl ViewChannels {
             ViewChannel {
                 plugin: plugin.to_string(),
                 document: String::new(),
-                page: String::new(),
+                time_origin: 0.0,
                 origin: origin.clone(),
                 process_ready: false,
                 navigations: 0,
@@ -1187,20 +1190,27 @@ impl ViewChannels {
             })?;
         match event.event.as_str() {
             "view.ready" => {
-                // silent: a malformed origin becomes None and the validation below returns an explicit view.ready error.
-                let time_origin = event.page.parse::<f64>().ok();
-                if event.plugin != plugin
-                    || event.document.is_empty()
-                    || time_origin.is_none_or(|value| !value.is_finite() || value <= 0.0)
-                {
+                let time_origin = event
+                    .time_origin
+                    .as_ref()
+                    .and_then(Value::as_f64)
+                    .filter(|value| value.is_finite() && *value > 0.0);
+                let Some(time_origin) =
+                    time_origin.filter(|_| event.plugin == plugin && !event.document.is_empty())
+                else {
                     return Err(format!(
-                        "{surface}: view.ready names plugin {:?}, document {:?}, and page {:?}, want plugin {plugin:?} and a positive page time origin",
-                        event.plugin, event.document, event.page
+                        "{surface}: view.ready names plugin {:?}, document {:?}, and time origin {}, want plugin {plugin:?}, a document and a positive finite time origin",
+                        event.plugin,
+                        event.document,
+                        event
+                            .time_origin
+                            .as_ref()
+                            .map_or_else(|| "absent".to_string(), Value::to_string)
                     ));
-                }
+                };
                 if let Some(channel) = self.lock().get_mut(surface) {
                     channel.document = event.document;
-                    channel.page = event.page;
+                    channel.time_origin = time_origin;
                 }
                 Ok(true)
             }
@@ -1464,7 +1474,7 @@ impl ViewChannels {
         if navigations > channel.navigations {
             channel.navigations = navigations;
             channel.document.clear();
-            channel.page.clear();
+            channel.time_origin = 0.0;
         }
         Ok(())
     }
@@ -1942,7 +1952,8 @@ fn view_log_message(
             call.request.clone(),
             &call.plugin,
             &call.surface,
-            &call.page,
+            &call.document,
+            call.time_origin,
         ),
     };
     if !data.documents.views().is_current_log_source(&call, origin) {

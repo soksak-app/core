@@ -19,7 +19,7 @@ struct Relayed {
     layer: &'static str,
     /// The record of the page that the event carries, when it is a `page.record.<level>` event.
     record: Option<crate::application_log::Entry>,
-    /// The time origin of the document that wrote the event (docs/spec/logging.md#event).
+    /// The page identity of the document that wrote the event (docs/spec/logging.md#event).
     page: String,
 }
 
@@ -220,6 +220,7 @@ pub fn view_log_command(
     plugin: &str,
     surface: &str,
     page: &str,
+    time_origin: f64,
 ) -> Result<Value, String> {
     match request.get("action").and_then(Value::as_str) {
         Some("clock") => {
@@ -239,14 +240,12 @@ pub fn view_log_command(
                 .and_then(Value::as_array)
                 .ok_or_else(|| "events must be an array".to_string())?;
             let plugin_prefix = format!("plugin.{plugin}.");
-            let page_time_origin = page
-                .parse::<f64>()
-                // silent: a parse failure becomes no valid origin and the request is rejected below.
-                .ok()
-                .filter(|value| value.is_finite() && *value > 0.0)
-                .ok_or_else(|| {
-                    "the registered page is not a positive numeric time origin".to_string()
-                })?;
+            if page.is_empty() || !time_origin.is_finite() || time_origin <= 0.0 {
+                return Err(
+                    "the registered view document has no page identity and positive finite time origin"
+                        .to_string(),
+                );
+            }
             for (index, item) in events.iter().enumerate() {
                 let object = item
                     .as_object()
@@ -276,15 +275,15 @@ pub fn view_log_command(
                     }
                 } else if matches!(event, "page.start" | "page.log.clock" | "page.log.dropped") {
                     if event == "page.start" {
-                        let time_origin = fields
+                        let started = fields
                             .get("time_origin")
                             .and_then(Value::as_f64)
                             .ok_or_else(|| {
                                 format!("events[{index}]: page.start time_origin must be a number")
                             })?;
-                        if time_origin != page_time_origin {
+                        if started != time_origin {
                             return Err(format!(
-                                "events[{index}]: page.start time_origin {time_origin} does not match ready page {page:?}"
+                                "events[{index}]: page.start time_origin {started} does not match the time origin {time_origin} of the ready view document {page:?}"
                             ));
                         }
                         if fields

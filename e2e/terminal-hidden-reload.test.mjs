@@ -56,14 +56,14 @@ for (const app of Object.values(APPS)) {
     const oldGeneration = hiddenRegion.presented.generation;
 
     const since = await tailOf(s);
-    const oldDocument = (await s.get("core.window.document")).timeOrigin;
+    const oldDocument = (await s.get("core.window.document")).page;
     await s.run("host.window.reload");
-    const document = await s.until("core.window.document", (value) => value.timeOrigin !== oldDocument
+    const document = await s.until("core.window.document", (value) => value.page !== oldDocument
       && value.readyState === "complete", "the replacement main document did not complete");
-    const replacementPage = String(document.timeOrigin);
+    const replacementPage = document.page;
     let rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "page.start"
-      && row.event.fields.time_origin === document.timeOrigin), "the replacement page did not record page.start");
-    const start = rows.find((row) => row.event.event === "page.start" && row.event.fields.time_origin === document.timeOrigin);
+      && row.event.page === replacementPage), "the replacement page did not record page.start");
+    const start = rows.find((row) => row.event.event === "page.start" && row.event.page === replacementPage);
     assert.ok(start, `no page.start for ${replacementPage}`);
 
     rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "page.background.session"

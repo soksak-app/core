@@ -597,7 +597,7 @@ func viewGeneration(s *Surfaces, surface string) uint64 {
 func TestViewChannelRecordsReadyDocumentPostsThemeAndClearsOnNavigation(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
 	s.theme = Theme{Scheme: "dark", Tokens: map[string]string{"bg": "#000000"}}
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
 	if err := s.viewMessage("probe-surface", ready); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}
@@ -635,7 +635,7 @@ func TestViewStateKeepsTheReadyDocumentThroughProgressOfTheSameNavigation(t *tes
 	if err := s.viewState("probe-surface", start); err != nil {
 		t.Fatalf("start state: %v", err)
 	}
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
 	if err := s.viewMessage("probe-surface", ready); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}
@@ -815,7 +815,7 @@ func TestViewDeclaredSnapshotInvalidFieldsAreErrorsNotForwarded(t *testing.T) {
 // contract: view.call.reply
 func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
 	if err := s.viewMessage("probe-surface", ready); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}
@@ -853,7 +853,7 @@ func TestViewReplyRecordsTheNativePostResultAfterPosting(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
 	s.name = "main"
 	const id = uint64(991)
-	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
+	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}
 	before := len(fake.posted)
@@ -904,7 +904,7 @@ func TestViewReplyRecordsTheNativePostResultAfterPosting(t *testing.T) {
 func TestStaleViewReplyRecordsDiscardWithoutPosting(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
 	s.name = "main"
-	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
+	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}
 	before := len(fake.posted)
@@ -930,7 +930,7 @@ func TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost(t *testing.T) {
 	isolateTraceRecords(t)
 	s, fake := newViewChannelSurfaces(t)
 	s.name = "main"
-	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
+	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}
 	const id = uint64(994)
@@ -994,7 +994,7 @@ func TestLateOldGenerationReplyKeepsReplacementSameIDCall(t *testing.T) {
 // contract: view.call.reply
 func TestViewReplyPostRefusalLeavesCallOpenForProcessEnd(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
-	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
+	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}
 	const id = uint64(995)
@@ -1015,7 +1015,7 @@ func TestViewReplyPostRefusalLeavesCallOpenForProcessEnd(t *testing.T) {
 func TestViewReplyPostRefusalReturnsErrorWithoutPostedRecord(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
 	s.name = "main"
-	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
+	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}
 	fake.rejectPost = true
@@ -1166,7 +1166,7 @@ func TestViewEventPostsTheEventWithItsDataToTheReadyDocument(t *testing.T) {
 	if _, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "probe.changed", Data: json.RawMessage(`{"count":1}`)}); err == nil || err.Error() != "probe-surface has no ready document" {
 		t.Fatalf("event before ready: %v, want probe-surface has no ready document", err)
 	}
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
 	if err := s.viewMessage("probe-surface", ready); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}
@@ -1209,7 +1209,7 @@ func TestViewStatusWatchIsForwardedAndStatusValueIsPosted(t *testing.T) {
 		t.Fatalf("forwarded call %s, want the command and params of the watch", forwarded)
 	}
 	s, fake := newViewChannelSurfaces(t)
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
 	if err := s.viewMessage("probe-surface", ready); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}
@@ -1236,7 +1236,7 @@ func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
 	if _, err := s.pushViewRequest(request); err == nil || err.Error() != "probe-surface has no ready document" {
 		t.Fatalf("request before ready: %v, want probe-surface has no ready document", err)
 	}
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
 	if err := s.viewMessage("probe-surface", ready); err != nil {
 		t.Fatalf("ready message: %v", err)
 	}

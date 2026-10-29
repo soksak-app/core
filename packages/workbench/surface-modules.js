@@ -7,6 +7,7 @@ import { createViewCommands, keepViewCommands } from "./view-commands.js";
 import { onSourceOriginEnded, onSourceOriginRegistered, sourceOrigin } from "./source-origins.js";
 import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
+import { pageIdentity } from "./page-identity.js";
 import { pluginDiagnostics } from "./environment.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
@@ -70,7 +71,7 @@ function recordMountFailure(entry, phase, error) {
 function traceComposition(entry, action, field, value) {
   if (!traceEnabled()) return;
   trace("surface.composition", {
-    page: String(document.defaultView.performance.timeOrigin),
+    page: pageIdentity,
     surface: entry.surfaceId,
     attempt: entry.mountRegistration?.attempt ?? null, // default: a surface without an active mount attempt has no attempt number.
     action,
@@ -560,7 +561,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
         return null;
       }
       return scoped.native.call("viewReply", {
-        ...reply, page: String(document.defaultView.performance.timeOrigin), generation: receivedSourceGeneration,
+        ...reply, page: pageIdentity, generation: receivedSourceGeneration,
       }).then(() => {
         emitEvent("debug", "page.view.reply", {
           plugin: surface.pluginId, surface: surface.surfaceId, generation: receivedSourceGeneration,

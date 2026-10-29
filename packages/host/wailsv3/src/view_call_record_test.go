@@ -142,7 +142,7 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 		s.host = &Host{events: log}
 		var events []hostEvent
 		s.events = func(name string, data any) { events = append(events, hostEvent{name, data}) }
-		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
+		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 			t.Fatalf("view ready: %v", err)
 		}
 		fake.posted = nil
@@ -178,11 +178,11 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 		}
 
 		batch := map[string]any{"action": "batch", "events": []any{
-			map[string]any{"ts_us": 1234567, "mono_ns": 1234567890, "page": "1234.5", "level": "info", "event": "page.start",
+			map[string]any{"ts_us": 1234567, "mono_ns": 1234567890, "page": "doc-1", "level": "info", "event": "page.start",
 				"fields": map[string]any{"time_origin": 1234.5, "url": "soksak://probe/ui/page.html"}},
-			map[string]any{"ts_us": 1234568, "mono_ns": 1234568890, "page": "1234.5", "level": "info", "event": "page.log.clock",
+			map[string]any{"ts_us": 1234568, "mono_ns": 1234568890, "page": "doc-1", "level": "info", "event": "page.log.clock",
 				"fields": map[string]any{"trip_us": 1000, "resolution_us": 1}},
-			map[string]any{"ts_us": 1234569, "mono_ns": 1234569890, "page": "1234.5", "level": "info", "event": "plugin.probe.measurement",
+			map[string]any{"ts_us": 1234569, "mono_ns": 1234569890, "page": "doc-1", "level": "info", "event": "plugin.probe.measurement",
 				"fields": map[string]any{"sample": "accepted"}},
 		}}
 		s.viewRuntimeLogForTest(t, fake, &events, 8, batch)
@@ -204,12 +204,12 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 			switch event["event"] {
 			case "page.start":
 				fields := event["fields"].(map[string]any)
-				seenStart = event["page"] == "1234.5" && fields["time_origin"] == 1234.5
+				seenStart = event["page"] == "doc-1" && fields["time_origin"] == 1234.5
 			case "page.log.clock":
-				seenClock = event["page"] == "1234.5"
+				seenClock = event["page"] == "doc-1"
 			case "plugin.probe.measurement":
 				fields := event["fields"].(map[string]any)
-				seenPlugin = event["page"] == "1234.5" && fields["surface"] == "probe-surface" && event["undeclared"] == true
+				seenPlugin = event["page"] == "doc-1" && fields["surface"] == "probe-surface" && event["undeclared"] == true
 			}
 		}
 		if !seenStart || !seenClock || !seenPlugin {
@@ -218,9 +218,9 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 		beforeRecords := len(stored)
 
 		invalid := map[string]any{"action": "batch", "events": []any{
-			map[string]any{"ts_us": 1234570, "mono_ns": 1234570890, "page": "1234.5", "level": "info", "event": "plugin.probe.atomic",
+			map[string]any{"ts_us": 1234570, "mono_ns": 1234570890, "page": "doc-1", "level": "info", "event": "plugin.probe.atomic",
 				"fields": map[string]any{"sample": "must-not-write"}},
-			map[string]any{"ts_us": 1234571, "mono_ns": 1234571890, "page": "1234.5", "level": "info", "event": "plugin.other.foreign",
+			map[string]any{"ts_us": 1234571, "mono_ns": 1234571890, "page": "doc-1", "level": "info", "event": "plugin.other.foreign",
 				"fields": map[string]any{"sample": "foreign"}},
 		}}
 		s.viewRuntimeLogForTest(t, fake, &events, 9, invalid)
@@ -247,16 +247,16 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 			{"action": "clock", "unexpected": true},
 			{"action": "batch", "events": []any{}, "unexpected": true},
 			{"action": "batch", "events": []any{
-				map[string]any{"ts_us": 1234583, "mono_ns": 1234583890, "page": "1234.5", "level": "info", "event": "page.start", "fields": map[string]any{"time_origin": 1234.5, "url": ""}},
+				map[string]any{"ts_us": 1234583, "mono_ns": 1234583890, "page": "doc-1", "level": "info", "event": "page.start", "fields": map[string]any{"time_origin": 1234.5, "url": ""}},
 			}},
 			{"action": "batch", "events": []any{
 				map[string]any{"ts_us": 1234580, "mono_ns": 1234580890, "page": "9999", "level": "info", "event": "plugin.probe.wrong-page", "fields": map[string]any{}},
 			}},
 			{"action": "batch", "events": []any{
-				map[string]any{"ts_us": 1234581, "mono_ns": 1234581890, "page": "1234.5", "level": "info", "event": "plugin.probe.supplied-surface", "fields": map[string]any{"surface": "probe-surface"}},
+				map[string]any{"ts_us": 1234581, "mono_ns": 1234581890, "page": "doc-1", "level": "info", "event": "plugin.probe.supplied-surface", "fields": map[string]any{"surface": "probe-surface"}},
 			}},
 			{"action": "batch", "events": []any{
-				map[string]any{"ts_us": 1234582, "mono_ns": 1234582890, "page": "1234.5", "level": "info", "event": "page.start", "fields": map[string]any{"time_origin": 1234.6, "url": "soksak://probe/ui/page.html"}},
+				map[string]any{"ts_us": 1234582, "mono_ns": 1234582890, "page": "doc-1", "level": "info", "event": "page.start", "fields": map[string]any{"time_origin": 1234.6, "url": "soksak://probe/ui/page.html"}},
 			}},
 			{"action": "policy-read"},
 			{"action": "policy", "classes": map[string]any{"lifecycle": "off"}},
@@ -298,7 +298,7 @@ func TestViewRuntimeLogSurfaceKeepsPluginFieldsWithinPageBound(t *testing.T) {
 		s, fake := newViewChannelSurfaces(t)
 		s.host = &Host{events: log}
 		var events []hostEvent
-		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
+		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 			t.Fatal(err)
 		}
 		fields := map[string]any{"payload": strings.Repeat("x", 65520)}
@@ -318,7 +318,7 @@ func TestViewRuntimeLogSurfaceKeepsPluginFieldsWithinPageBound(t *testing.T) {
 			t.Fatalf("test fields plus host surface are %d bytes, want more than 65536", len(injected))
 		}
 		batch := map[string]any{"action": "batch", "events": []any{
-			map[string]any{"ts_us": 1234569, "mono_ns": 1234569890, "page": "1234.5", "level": "info", "event": "plugin.probe.near-limit", "fields": fields},
+			map[string]any{"ts_us": 1234569, "mono_ns": 1234569890, "page": "doc-1", "level": "info", "event": "plugin.probe.near-limit", "fields": fields},
 		}}
 		s.viewRuntimeLogForTest(t, fake, &events, 31, batch)
 		if err := log.Flush(5 * time.Second); err != nil {
@@ -358,25 +358,32 @@ func TestViewRuntimeLogSurfaceKeepsPluginFieldsWithinPageBound(t *testing.T) {
 	}
 }
 
-// contract: view.ready.binds-writer-page-to-positive-time-origin
-func TestViewReadyRequiresFiniteDecimalPageIdentity(t *testing.T) {
-	for _, page := range []string{"", "0", "-1", "NaN", "Infinity", "0x1p4"} {
-		t.Run(page, func(t *testing.T) {
+// contract: view.ready.requires-document-and-positive-time-origin
+func TestViewReadyRequiresDocumentAndPositiveTimeOrigin(t *testing.T) {
+	for name, fields := range map[string]map[string]any{
+		"no document":      {"time_origin": 1234.5},
+		"empty document":   {"document": "", "time_origin": 1234.5},
+		"no time origin":   {"document": "doc-1"},
+		"zero time origin": {"document": "doc-1", "time_origin": 0},
+		"negative":         {"document": "doc-1", "time_origin": -1},
+		"text time origin": {"document": "doc-1", "time_origin": "1234.5"},
+	} {
+		t.Run(name, func(t *testing.T) {
 			s, fake := newViewChannelSurfaces(t)
-			ready := map[string]any{"event": "view.ready", "plugin": "probe", "document": "doc-1"}
-			if page != "" {
-				ready["page"] = page
+			ready := map[string]any{"event": "view.ready", "plugin": "probe"}
+			for key, value := range fields {
+				ready[key] = value
 			}
 			message, err := json.Marshal(map[string]any{"message": ready})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if err := s.ViewMessage("probe-surface", string(message)); err == nil {
-				t.Fatalf("view.ready page %q was accepted", page)
+				t.Fatalf("view.ready %v was accepted", fields)
 			}
 			channel, ok := s.documents.view("probe-surface")
-			if !ok || channel.document != "" || channel.page != "" || len(fake.posted) != 0 {
-				t.Fatalf("view channel after invalid page %q: %+v, posts %v", page, channel, fake.posted)
+			if !ok || channel.document != "" || channel.timeOrigin != 0 || len(fake.posted) != 0 {
+				t.Fatalf("view channel after view.ready %v: %+v, posts %v", fields, channel, fake.posted)
 			}
 		})
 	}
@@ -388,18 +395,18 @@ func TestViewRuntimeLogReplyDoesNotReachANavigatedDocument(t *testing.T) {
 		log := startViewRecordWriter(t, config)
 		s, fake := newViewChannelSurfaces(t)
 		s.host = &Host{events: log}
-		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
+		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 			t.Fatal(err)
 		}
 		fake.posted = nil
 		generation := viewGeneration(s, "probe-surface")
 		fake.beforeUITask = func() {
-			if !s.documents.setReadyDocument("probe-surface", generation, "doc-2", "2345.5") {
+			if !s.documents.setReadyDocument("probe-surface", generation, "doc-2", 2345.5) {
 				t.Error("could not replace the ready document before its reply post")
 			}
 		}
 		request := map[string]any{"action": "batch", "events": []any{
-			map[string]any{"ts_us": 1234569, "mono_ns": 1234569890, "page": "1234.5", "level": "info", "event": "plugin.probe.before-navigation",
+			map[string]any{"ts_us": 1234569, "mono_ns": 1234569890, "page": "doc-1", "level": "info", "event": "plugin.probe.before-navigation",
 				"fields": map[string]any{"sample": "processed-before-navigation"}},
 		}}
 		message, err := json.Marshal(map[string]any{"message": map[string]any{"sok": 1, "id": 17, "command": "runtime.log", "params": request}})
@@ -419,7 +426,7 @@ func TestViewRuntimeLogReplyDoesNotReachANavigatedDocument(t *testing.T) {
 		for _, event := range viewRecordEvents(t, config) {
 			if event["event"] == "plugin.probe.before-navigation" {
 				fields := event["fields"].(map[string]any)
-				found = event["page"] == "1234.5" && fields["surface"] == "probe-surface"
+				found = event["page"] == "doc-1" && fields["surface"] == "probe-surface"
 			}
 		}
 		if !found {
@@ -441,7 +448,7 @@ func TestViewRuntimeLogNativeReplyPostFailureIsReported(t *testing.T) {
 		log := startViewRecordWriter(t, config)
 		s, fake := newViewChannelSurfaces(t)
 		s.host = &Host{events: log}
-		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
+		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 			t.Fatal(err)
 		}
 		fake.rejectPost = true
@@ -478,7 +485,7 @@ func TestRetiredViewRuntimeLogDoesNotWriteThroughReplacement(t *testing.T) {
 		log := startViewRecordWriter(t, config)
 		s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 		s.host.events = log
-		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","page":"1234.5"}}`); err != nil {
+		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 			t.Fatal(err)
 		}
 		retired, oldGeneration := retireAndReplaceView(t, s, fake)
@@ -487,7 +494,7 @@ func TestRetiredViewRuntimeLogDoesNotWriteThroughReplacement(t *testing.T) {
 		}
 		before := len(viewRecordEvents(t, config))
 		s.viewReceived("probe-surface", retired, "probe", oldGeneration,
-			`{"message":{"sok":1,"id":19,"command":"runtime.log","params":{"action":"batch","events":[{"ts_us":1234569,"mono_ns":1234569890,"page":"1234.5","level":"info","event":"plugin.probe.retired","fields":{}}]}}}`)
+			`{"message":{"sok":1,"id":19,"command":"runtime.log","params":{"action":"batch","events":[{"ts_us":1234569,"mono_ns":1234569890,"page":"doc-1","level":"info","event":"plugin.probe.retired","fields":{}}]}}}`)
 		if err := log.Flush(5 * time.Second); err != nil {
 			t.Fatal(err)
 		}

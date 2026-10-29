@@ -8,6 +8,7 @@ import { createTracer } from "../performance.js";
 import { withoutClock } from "./support/records.mjs";
 import { classOf } from "../event-classes.js";
 import { logGate } from "../log-gate.js";
+import { pageIdentity } from "../page-identity.js";
 // The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
 // examine, so the state of every class at trace is set here.
 logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
@@ -17,7 +18,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 // The request for the clocks of the host is answered here; the batches are what the tests assert.
 const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 }) : inner(withoutClock(request)));
 /** The event writer of a document, as the page records have it, over the call log; report receives a failed relay. */
-const writer = (log, report) => createEventBatcher({ call: answering(log), report, classify: classOf, gate: logGate });
+const writer = (log, report) => createEventBatcher({ page: pageIdentity, call: answering(log), report, classify: classOf, gate: logGate });
 
 /** A tracer whose switch calls and batch calls are recorded in the order they happen. */
 function recorded(overrides = {}) {

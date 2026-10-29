@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-299-2-1: 모든 문서는 한 번 뽑는 UUID page identity(`crypto.randomUUID()`)로 event를 적으므로, 같은 millisecond에 시작한 두 문서가 더 이상 `page` 값을 함께 쓰지 않는다. `view.ready`는 `{event, plugin, document, time_origin}`이고, 두 호스트는 document와 양의 유한수 time origin을 요구하며 그 값을 view의 `page.start`와 비교한다.
 - F239-304: 모든 추적 파일을 읽는 audit를 자기 프로세스로 돌리는 시험의 한도는 30000 ms다. 이 한도는 멈춘 audit를 끝내며, push 전 검사의 부하로 느려진 audit를 실패시키지 않는다.
 - F239-303-8: display의 presentation time과 ScreenCaptureKit frame이 필요한 native 시험은 desktop runner의 `window-checks` job에서 돌고(`make -C native/darwin test-presentation`), hosted runner의 `native-darwin` job은 나머지 native 시험을 돌린다(`test-without-presentation`).
 - F239-303-4: document region의 inset이 웹뷰가 세로 scroll bar를 왼쪽에 놓는 오른쪽에서 왼쪽인 root에서 scroll bar 폭을 왼쪽 inset에 더하고, `webview_geometry_test`가 scroll bar의 쪽을 잰다.

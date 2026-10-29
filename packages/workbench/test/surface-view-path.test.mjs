@@ -7,6 +7,7 @@ import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
 import { openTabStates } from "../tab-state.js";
 import { endSourceOrigin, registerSourceOrigin, seedSourceOrigins } from "../source-origins.js";
+import { pageIdentity } from "../page-identity.js";
 
 // The tab state store of the memory saver is opened by projects.initialise; this file opens it over a fake store.
 const UNLOAD = { format: 2, maxBytes: 64 };
@@ -69,7 +70,7 @@ async function harness(t) {
     }
     throw new Error(`view call ${command} got no reply`);
   };
-  return { modules, calls, viewCall, page: String(dom.window.performance.timeOrigin), slot: document.querySelector("#slot"), close: () => dom.window.close() };
+  return { modules, calls, viewCall, page: pageIdentity, slot: document.querySelector("#slot"), close: () => dom.window.close() };
 }
 
 const expectedReply = (host, id, result) => ({ id, result, page: host.page, generation: 1 });

@@ -28,6 +28,7 @@
     "section-address.js",
     "view-calls.js",
     "view-focus.js",
+    "page-identity.js",
     "command-route.js",
     "shortcuts.json",
     "view-events.js",

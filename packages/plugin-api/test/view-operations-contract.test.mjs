@@ -12,11 +12,11 @@ const EXPECTED_IDS = [
   "view.operation.begin-logs-first-event-and-carries-cids",
   "view.operation.each-begin-takes-the-next-identifier",
 ];
-// The time origin of the page that the view module reads: the identifiers of the output name it as $ORIGIN.
-const ORIGIN = Math.round(performance.timeOrigin);
-const IDENTIFIER = /^p\d+\.\d+$/;
+// An operation identifier: p, the page identity of the document (a UUID), a point and the count of its operations.
+const IDENTIFIER = /^p[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d+$/;
 
-const normalize = (value) => JSON.parse(JSON.stringify(value).replaceAll(`p${ORIGIN}.`, "p$ORIGIN."));
+// The identifiers of the output name the page identity of the test page as $PAGE.
+const normalize = (value, page) => JSON.parse(JSON.stringify(value).replaceAll(`p${page}.`, "p$PAGE."));
 
 async function runCase(testCase) {
   const dom = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" });
@@ -118,7 +118,7 @@ async function runCase(testCase) {
         outputs.push({ request: requests.pop() ?? null, result, throws });
       }
     }
-    return { outputs, reports, openCalls: bridge.calls.openCalls() };
+    return { outputs, reports, openCalls: bridge.calls.openCalls(), page: dom.window.sokView.page };
   } finally {
     delete globalThis.window;
     dom.window.close();
@@ -131,8 +131,8 @@ test("view operation contract publishes the required cases in order", { timeout:
 
 for (const testCase of CONTRACT.cases) {
   test(`view operation ${testCase.id} matches each ordered step`, { timeout: 5000 }, async () => {
-    const { outputs, reports, openCalls } = await runCase(testCase);
-    assert.deepEqual(normalize(outputs), testCase.steps.map(({ output }) => output));
+    const { outputs, reports, openCalls, page } = await runCase(testCase);
+    assert.deepEqual(normalize(outputs, page), testCase.steps.map(({ output }) => output));
     assert.equal(openCalls.count, 0, "all view calls have settled before the page closes");
     assert.equal(reports.at(-1)?.kind, "open-calls");
     assert.equal(reports.at(-1)?.count, 0, "the final open-calls report is empty");

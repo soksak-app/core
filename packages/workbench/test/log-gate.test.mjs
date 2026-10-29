@@ -7,6 +7,7 @@ import { createLogGate, logPolicyOf } from "../log-gate.js";
 import { createEventBatcher } from "@soksak/plugin-api/log-batch.js";
 import { classOf } from "../event-classes.js";
 import { withoutClock } from "./support/records.mjs";
+import { pageIdentity } from "../page-identity.js";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const hostClock = { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
@@ -68,7 +69,7 @@ test("a closed gate builds no fields, relays nothing, and reports the exact coun
   const gate = createLogGate();
   gate.set({ ...everything, call: "info", io: "off" });
   const batches = [];
-  const batcher = createEventBatcher({ call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate });
+  const batcher = createEventBatcher({ page: pageIdentity, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate });
   let built = 0;
   const fields = () => { built += 1; return { name: "x" }; };
   for (let index = 0; index < 4; index += 1) assert.equal(batcher.emit("debug", "page.call", fields), false);
@@ -92,7 +93,7 @@ test("an event that the catalog does not declare is not gated, and the report of
   const gate = createLogGate();
   gate.set({ ...everything, lifecycle: "off", call: "off" });
   const batches = [];
-  const batcher = createEventBatcher({ call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate });
+  const batcher = createEventBatcher({ page: pageIdentity, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate });
   assert.equal(batcher.emit("debug", "plugin.editor.opened", { file: "a" }), true);
   assert.equal(batcher.emit("debug", "page.call", { name: "x" }), false);
   await batcher.flush();
@@ -105,7 +106,7 @@ test("the counts of a closed gate leave each second and at a flush, not with eac
   gate.set({ ...everything, call: "info" });
   const batches = [];
   let clock = 0;
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: pageIdentity,
     call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate, now: () => clock,
   });
   const gatedOf = () => batches.flatMap((request) => request.events).filter((event) => event.event === "page.log.gated").map((event) => event.fields);
@@ -138,11 +139,11 @@ test("the counts of a closed gate leave each second and at a flush, not with eac
 test("page.start passes the gate before a policy is set and a gate that turns the class lifecycle off", async () => {
   const batches = [];
   const unset = createLogGate();
-  const first = createEventBatcher({ call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate: unset });
+  const first = createEventBatcher({ page: pageIdentity, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate: unset });
   assert.equal(first.emit("info", "page.start", { time_origin: 1, url: "http://localhost/" }), true);
   const off = createLogGate();
   off.set({ ...everything, lifecycle: "off" });
-  const second = createEventBatcher({ call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate: off });
+  const second = createEventBatcher({ page: pageIdentity, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate: off });
   assert.equal(second.emit("info", "page.start", { time_origin: 2, url: "http://localhost/" }), true);
   await first.flush();
   await second.flush();

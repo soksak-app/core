@@ -4,6 +4,9 @@ import assert from "node:assert/strict";
 import { createEventBatcher } from "../log-batch.js";
 import { withoutClock } from "./support/logging.mjs";
 
+// The page identity of the document of the batcher.
+const PAGE = "6f1d2a3e-1111-4a2b-8c3d-00000000000a";
+
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 // The clocks of the host as the request `{action: "clock"}` answers them, and a call that answers them and passes the batches on.
@@ -13,7 +16,7 @@ const answering = (inner) => (request) => (request.action === "clock" ? Promise.
 
 test("events emitted in one turn are relayed in one call, in order", async () => {
   const calls = [];
-  const batcher = createEventBatcher({ call: answering(async (request) => { calls.push(request); }), report: assert.ifError });
+  const batcher = createEventBatcher({ page: PAGE, call: answering(async (request) => { calls.push(request); }), report: assert.ifError });
   batcher.emit("info", "page.test.first", { index: 1 });
   batcher.emit("error", "page.test.second", { index: 2 });
   assert.equal(calls.length, 0, "an event was relayed before the turn ended");
@@ -30,7 +33,7 @@ test("the shared batcher applies only the classifier and gate supplied by its co
   const calls = [];
   const refused = [];
   const gate = { enabled: (klass, level) => { refused.push([klass, level]); return false; } };
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: answering(async (request) => { calls.push(request); }),
     report: assert.ifError,
     classify: (event) => event === "page.call" ? "call" : undefined,
@@ -47,7 +50,7 @@ test("the shared batcher applies only the classifier and gate supplied by its co
 
 test("a view batcher without a local gate sends plugin records for the host writer to decide", async () => {
   const calls = [];
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: answering(async (request) => { calls.push(request); }),
     report: assert.ifError,
     classify: () => "call",
@@ -60,7 +63,7 @@ test("a view batcher without a local gate sends plugin records for the host writ
 test("an event takes the wall clock and the monotonic clock of the host at its own reading, in microseconds and nanoseconds", async () => {
   let reading = 100;
   const calls = [];
-  const batcher = createEventBatcher({ call: answering(async (request) => { calls.push(request); }), report: assert.ifError, now: () => reading });
+  const batcher = createEventBatcher({ page: PAGE, call: answering(async (request) => { calls.push(request); }), report: assert.ifError, now: () => reading });
   batcher.emit("info", "page.test.first", {});
   reading = 102.25;
   batcher.emit("info", "page.test.second", {});
@@ -83,7 +86,7 @@ test("the clocks of the host are requested five times before the first batch, th
   let sample = 0;
   const requests = [];
   const batches = [];
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: async (request) => {
       if (request.action === "clock") {
         requests.push(request);
@@ -116,7 +119,7 @@ test("the first batch states the round trip of the anchor as page.log.clock, onc
   const trips = [8, 2, 6, 4, 10];
   let sample = 0;
   const batches = [];
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: async (request) => {
       if (request.action === "clock") {
         reading += trips[sample];
@@ -148,7 +151,7 @@ test("the first batch states the resolution that the steps of the clock of the p
   // The clock advances one millisecond at every third reading: the first step that the anchor observes is one millisecond.
   const step = () => { calls += 1; if (calls % 3 === 0) reading += 1; return reading; };
   const batches = [];
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: async (request) => {
       if (request.action === "clock") return { ts_us: 1_791_000_000_000_000, mono_ns: 5_000_000_000 };
       batches.push(request);
@@ -167,7 +170,7 @@ test("a clock answer that is not two positive integers is reported with the numb
   const reports = [];
   const batches = [];
   let answer = { ts_us: "now" };
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: async (request) => {
       if (request.action === "clock") return answer;
       batches.push(request);
@@ -189,7 +192,7 @@ test("a clock answer that is not two positive integers is reported with the numb
 test("correlation identifiers travel with their event, and a list that the host would refuse is reported and left out", async () => {
   const reports = [];
   const calls = [];
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: answering(async (request) => { calls.push(request); }),
     report: (error) => reports.push(error.message),
   });
@@ -214,7 +217,7 @@ test("flush ends only when the batch of every queued event left, also behind an 
   let gate = null;
   const open = () => new Promise((resolve) => { gate = resolve; });
   let held = open();
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: (request) => (request.action === "clock"
       ? Promise.resolve({ ts_us: 1_791_000_000_000_000, mono_ns: 5_000_000_000 })
       : held.then(() => { batches.push(request); })),
@@ -240,7 +243,7 @@ test("flush ends only when the batch of every queued event left, also behind an 
 test("events emitted while a call is in flight wait for it and keep their order", async () => {
   const calls = [];
   let acknowledge;
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: answering((request) => { calls.push(request); return new Promise((resolve) => { acknowledge = resolve; }); }),
     report: assert.ifError,
   });
@@ -260,7 +263,7 @@ test("events emitted while a call is in flight wait for it and keep their order"
 test("a full queue refuses events and the next batch starts with the counted loss", async () => {
   const calls = [];
   let acknowledge;
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: answering((request) => { calls.push(request); return new Promise((resolve) => { acknowledge = resolve; }); }),
     report: assert.ifError,
     maxEvents: 3,
@@ -284,7 +287,7 @@ test("a failed call is reported with the number of events and does not block the
   const reports = [];
   let attempt = 0;
   const calls = [];
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: answering(async (request) => { calls.push(request); if (++attempt === 1) throw new Error("host closed"); }),
     report: (error) => reports.push(error.message),
   });
@@ -299,14 +302,14 @@ test("a failed call is reported with the number of events and does not block the
 });
 
 test("an event with a level outside the contract is refused with an error", () => {
-  const batcher = createEventBatcher({ call: answering(async () => {}), report: assert.ifError });
+  const batcher = createEventBatcher({ page: PAGE, call: answering(async () => {}), report: assert.ifError });
   assert.throws(() => batcher.emit("loud", "page.test.event", {}), /level/);
 });
 
 test("emitAndWait ends when the batch that carries the event was relayed, and the events of one turn share the batch", async () => {
   const calls = [];
   let release;
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: answering((request) => { calls.push(request.events.map((event) => event.event)); return new Promise((resolve) => { release = resolve; }); }),
     report: assert.ifError,
   });
@@ -326,7 +329,7 @@ test("emitAndWait ends when the batch that carries the event was relayed, and th
 test("emitAndWait ends for an event that the full queue refused and for a batch whose call failed", async () => {
   const reports = [];
   let attempt = 0;
-  const batcher = createEventBatcher({
+  const batcher = createEventBatcher({ page: PAGE,
     call: answering(async () => { if (++attempt === 1) throw new Error("host closed"); }),
     report: (error) => reports.push(error.message),
     maxEvents: 1,
@@ -341,13 +344,13 @@ test("emitAndWait ends for an event that the full queue refused and for a batch 
   assert.equal(attempt, 2, "the next event was relayed after the failure");
 });
 
-test("every event of a batch names the page that wrote it by its time origin, the anchor of its clock included", async () => {
+test("every event of a batch names the page that wrote it by its page identity, the anchor of its clock included", async () => {
   const calls = [];
   // The batch is read whole, the anchor of the clock included.
   const call = async (request) => (request.action === "clock" ? hostClock : calls.push(request));
-  const batcher = createEventBatcher({ call, report: assert.ifError, page: "1791948729050.5" });
+  const batcher = createEventBatcher({ call, report: assert.ifError, page: PAGE });
   batcher.emit("info", "page.start", { time_origin: 1791948729050.5, url: "u" });
   await settle();
   const events = calls.flatMap((request) => request.events);
-  assert.deepEqual(events.map((event) => [event.event, event.page]), [["page.log.clock", "1791948729050.5"], ["page.start", "1791948729050.5"]]);
+  assert.deepEqual(events.map((event) => [event.event, event.page]), [["page.log.clock", PAGE], ["page.start", PAGE]]);
 });

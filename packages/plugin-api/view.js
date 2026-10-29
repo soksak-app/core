@@ -152,7 +152,7 @@ export function createViewBridge({ handler, report }) {
     runtime.error(where, text).catch((failure) => report({ where, text, error: failure }));
   };
   // The identifiers of the operations that start in this view page (docs/spec/logging.md#operation-chains).
-  const nextOperationCids = createOperationCids();
+  const nextOperationCids = createOperationCids(window.sokView.page);
   let eventBatcher = null;
   const writeLog = (level, event, fields, cids) => {
     // A plugin-host page uses the host's declared single-record runtime.log call; only surface pages use the view batch writer.
@@ -169,7 +169,7 @@ export function createViewBridge({ handler, report }) {
         now: () => window.performance.now(),
         page: window.sokView.page,
       });
-      eventBatcher.emit("info", "page.start", { time_origin: Number(window.sokView.page), url: window.location.href });
+      eventBatcher.emit("info", "page.start", { time_origin: window.sokView.timeOrigin, url: window.location.href });
     }
     eventBatcher.emit(level, event, fields, cids);
   };
