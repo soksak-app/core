@@ -8052,6 +8052,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F272",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs.gate.outputs.release == 'true'" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks, the gate and the window checks succeed" }],
+    expected: "A push to main runs the checks once and releases the declared version only when the gate finds no tag and no open item and every job succeeds.",
+    levels: ["unit"],
+  },
+  {
     id: "F272-1",
     implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "export function itemIdentifier(" }, { file: "packages/plugin-api/records-check.js", symbol: "itemIdentifier(label)" }],
     tests: [
