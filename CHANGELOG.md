@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-289: Two Tauri sidecar owner tests turn the performance trace off before they end, so the sampler and the `ps` it starts no longer outlive the check.
 - F239-287: The input-reference owner test waits for its main-queue document checks with a marker block instead of a 50 ms interval that a descheduled thread could skip.
 - F239-279: Give the sync-request examples of the paired host argument-message owner tests the required empty `declarations` table, so each expected refusal is the one the test names. The Tauri owner failed with the declarations refusal before the change and both owners pass 1/1 after it.
 - F239-286: Remove the one-job Cargo limit from the `equivalence` CI job, whose Host tests step spent 2459 s building the Tauri runs one crate at a time.

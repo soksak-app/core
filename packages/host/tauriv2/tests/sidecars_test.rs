@@ -917,9 +917,15 @@ fn the_relay_records_every_message_with_its_whole_body() {
         .expect("no event; the test stalled");
     assert_eq!(event.surface, "s1");
     sidecars.stop();
+    // Turning the trace off joins the sampler, so no process that it started outlives the check.
+    soksak_host_tauriv2::performance::command(serde_json::json!({"action": "off"})).unwrap();
     writer.flush(STALL).unwrap();
     let records_of_the_run = records::read_events(writer.path());
     soksak_host_tauriv2::event_record::use_host_event_log(None);
+    assert!(
+        !soksak_host_tauriv2::performance::sampler_running(),
+        "the check left the sampler of the trace running"
+    );
     let find = |name: &str| {
         records_of_the_run
             .iter()
@@ -2136,9 +2142,15 @@ fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
         .recv_timeout(STALL)
         .expect("no event; the test stalled");
     sidecars.stop();
+    // Turning the trace off joins the sampler, so no process that it started outlives the check.
+    soksak_host_tauriv2::performance::command(serde_json::json!({"action": "off"})).unwrap();
     writer.flush(STALL).unwrap();
     let records_of_the_run = records::read_events(writer.path());
     soksak_host_tauriv2::event_record::use_host_event_log(None);
+    assert!(
+        !soksak_host_tauriv2::performance::sampler_running(),
+        "the check left the sampler of the trace running"
+    );
     let ready = records_of_the_run
         .iter()
         .find(|record| record["event"] == "host.trace.sidecar.ready")

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-289: Tauri sidecar owner test 두 개가 끝나기 전에 performance trace를 꺼서 sampler와 그것이 시작한 `ps`가 check보다 오래 남지 않는다.
 - F239-287: input-reference owner test가 실행이 밀린 thread가 건너뛸 수 있는 50 ms 간격 대신 marker block으로 main-queue document 확인을 기다린다.
 - F239-279: 양 host argument-message owner test의 sync-request 예제에 필수 빈 `declarations` table을 넣어 각 test가 기대하는 거부가 실제로 나오게 한다. 변경 전 Tauri owner는 declarations 거부로 실패했고, 변경 뒤 두 owner가 1/1 통과한다.
 - F239-286: `equivalence` CI job의 Cargo job 1개 제한을 뺀다. Host tests step이 Tauri run을 crate 하나씩 build하며 2459초를 썼다.
