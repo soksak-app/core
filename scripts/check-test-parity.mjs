@@ -8031,6 +8031,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F275",
+    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function packPlugin(" }],
+    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a plugin is packed by the make pack target of its repository with the sok executable and the pack flags" }],
+    expected: "The workspace registry packs each plugin with the make pack target of its repository and records the one release that the target adds.",
+    levels: ["unit"],
+  },
+  {
     id: "F274",
     implementation: [{ file: "Makefile", symbol: "because a published commit message is kept" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],

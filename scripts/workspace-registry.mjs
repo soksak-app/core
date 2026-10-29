@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The workspace registry (docs/spec/plugins.md#repositories). Packs the plugin repositories that scripts/workspace-registry.json declares as folders
-// relative to the core checkout, builds every declared sidecar from its repository and releases them
+// relative to the core checkout with their `make pack`, builds every declared sidecar from its repository and releases them
 // for the current platform, then writes the registry files from the result and creates index.json with `sok registry build`
 // (docs/spec/cli.md). Builds and window checks install plugins from this registry. It uses no network.
 //
@@ -9,7 +9,8 @@
 // --diagnostics packs the plugins as diagnostic packages. Diagnostic builds and window checks install from this registry.
 import { parseArgs } from "node:util";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -67,7 +68,7 @@ export function repositoryText(repository) {
 }
 
 /**
- * The registry entry of one plugin. pack is the output of `sok plugin pack`, and sidecars is the set of the package names of
+ * The registry entry of one plugin. pack is the release that packPlugin returns, and sidecars is the set of the package names of
  * the sidecars of the registry: the index lists only the dependencies on sidecars, and a dependency on a plugin stays in the
  * plugin.json of the release (contract case `cli.registry.checks-plugin-dependencies` of docs/spec/host-contract.md).
  */
@@ -98,6 +99,22 @@ export function sidecarEntry(pkg, declaration, release) {
 
 function sok(binary, args) {
   return JSON.parse(execFileSync(binary, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }));
+}
+
+/**
+ * `make pack OUT=<folder> SOK=<sok> PACK_FLAGS=<flags>` of the plugin repository writes its release into the folder
+ * (docs/spec/plugins.md#repositories), so a repository builds what its release needs before it packs. Returns the release that
+ * the target added and its sha256; a target that adds no file or more than one file is an error.
+ */
+export function packPlugin(binary, repository, out, diagnostics) {
+  mkdirSync(out, { recursive: true });
+  const before = new Set(readdirSync(out));
+  execFileSync("make", ["-C", repository, "pack", `OUT=${out}`, `SOK=${binary}`, `PACK_FLAGS=${diagnostics ? "--diagnostics" : ""}`],
+    { stdio: ["ignore", "inherit", "inherit"] });
+  const added = readdirSync(out).filter((name) => !before.has(name));
+  if (added.length !== 1) throw new Error(`make pack of ${repository} wrote ${added.length} new files into ${out}; expected 1`);
+  const release = join(out, added[0]);
+  return { release, sha256: createHash("sha256").update(readFileSync(release)).digest("hex") };
 }
 
 /** `make build` of the sidecar repository writes the executable that sidecar.json points to. */
@@ -146,7 +163,7 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
     const dir = folder(relative);
     const manifest = read(pathToFileURL(join(dir, "plugin.json")));
     const pkg = read(pathToFileURL(join(dir, "package.json")));
-    const pack = sok(binary, ["plugin", "pack", dir, releases, ...(diagnostics ? ["--diagnostics"] : [])]);
+    const pack = packPlugin(binary, dir, releases, diagnostics);
     write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack, new Set(declared.keys())));
     manifests.push(manifest);
   }

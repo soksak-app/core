@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { checkDeclaration, pluginEntry, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
+import { checkDeclaration, packPlugin, pluginEntry, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
 
 const SHA = "a".repeat(64);
 
@@ -80,4 +83,18 @@ test("a declared repository folder resolves from the main checkout, also when th
   // The git common directory of a worktree under <main>/.claude/worktrees/ is <main>/.git, so the main checkout is its parent.
   assert.equal(repositoryFolder("../plugins/probe", "/work/core/.git"), "/work/plugins/probe");
   assert.equal(repositoryFolder("../sidecars/probe", "/work/core/.git"), "/work/sidecars/probe");
+});
+
+test("a plugin is packed by the make pack target of its repository with the sok executable and the pack flags", { timeout: 30000 }, (t) => {
+  const repository = mkdtempSync(join(tmpdir(), "workspace-pack-"));
+  const out = mkdtempSync(join(tmpdir(), "workspace-releases-"));
+  t.after(() => { rmSync(repository, { recursive: true, force: true }); rmSync(out, { recursive: true, force: true }); });
+  // The pack target of the repository writes the release that names the sok executable and the flags it received.
+  writeFileSync(join(repository, "Makefile"), 'pack:\n\t@printf "%s %s" "$(SOK)" "$(PACK_FLAGS)" > "$(OUT)/probe-0.0.1.tgz"\n');
+  const pack = packPlugin("/opt/sok", repository, out, true);
+  const release = join(out, "probe-0.0.1.tgz");
+  assert.equal(readFileSync(release, "utf8"), "/opt/sok --diagnostics");
+  assert.deepEqual(pack, { release, sha256: createHash("sha256").update("/opt/sok --diagnostics").digest("hex") });
+  // A release that the folder already holds is not a new release of this run.
+  assert.throws(() => packPlugin("/opt/sok", repository, out, false), /make pack of .* wrote 0 new files into .*; expected 1/);
 });

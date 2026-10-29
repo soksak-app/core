@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F275: workspace registry는 plugin마다 그 저장소의 `make pack` target으로 pack한다. plugin 명세는 plugin이나 sidecar 저장소의 설치 단계 `make install`을 적는다.
 - F272-4: release만 끝낼 수 있는 checklist 항목을 그것을 수행하는 `release.yml`의 단계와 함께 닫거나 그것을 맡는 저장소로 옮겨, 자기가 붙잡는 release를 기다리는 열린 항목이 없게 한다.
 - F273-1: `rs.lock-result` census 규칙은 condition variable wait 뒤에도 lock 뒤와 같은 보고 복구를 받아들인다.
 - F274: pre-push hook은 push가 게시하는 commit message만 검사한다. 그 밖의 검사는 push된 commit에서 CI가 실행한다.
