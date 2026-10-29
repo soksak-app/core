@@ -5,7 +5,9 @@
 // (docs/spec/cli.md). Builds and window checks install plugins from this registry. It uses no network.
 //
 //   node scripts/workspace-registry.mjs --sok <sok executable> --out <registry folder> [--diagnostics]
+//   node scripts/workspace-registry.mjs --install
 //
+// --install runs `make install`, the installation stage, once in every declared plugin and sidecar repository.
 // --diagnostics packs the plugins as diagnostic packages. Diagnostic builds and window checks install from this registry.
 import { parseArgs } from "node:util";
 import { execFileSync } from "node:child_process";
@@ -117,6 +119,20 @@ export function packPlugin(binary, repository, out, diagnostics) {
   return { release, sha256: createHash("sha256").update(readFileSync(release)).digest("hex") };
 }
 
+/** The declared plugin and sidecar repository folders, each once, in declaration order. folder resolves a declared folder. */
+export function installFolders(declaration, folder) {
+  return [...new Set([...declaration.plugins, ...declaration.sidecars.map((item) => item.repository)].map(folder))];
+}
+
+/** Runs `make install` of every declared repository (docs/spec/plugins.md#repositories). */
+export function installWorkspace(root = ROOT) {
+  const declaration = checkDeclaration(read(new URL(DECLARATION, root)));
+  const commonDir = gitCommonDir(fileURLToPath(root));
+  for (const dir of installFolders(declaration, (relative) => repositoryFolder(relative, commonDir))) {
+    execFileSync("make", ["-C", dir, "install"], { stdio: ["ignore", "inherit", "inherit"] });
+  }
+}
+
 /** `make build` of the sidecar repository writes the executable that sidecar.json points to. */
 function buildSidecar(repository) {
   execFileSync("make", ["-C", repository, "build"], { stdio: ["ignore", "inherit", "inherit"] });
@@ -185,7 +201,12 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { values } = parseArgs({ options: { sok: { type: "string" }, out: { type: "string" }, diagnostics: { type: "boolean", default: false } }, strict: true });
+  const { values } = parseArgs({ options: { sok: { type: "string" }, out: { type: "string" }, diagnostics: { type: "boolean", default: false },
+    install: { type: "boolean", default: false } }, strict: true });
+  if (values.install) {
+    installWorkspace();
+    process.exit(0);
+  }
   for (const name of ["sok", "out"]) if (!values[name]) throw new Error(`--${name} is required`);
   const result = buildWorkspaceRegistry(values.sok, values.out, values.diagnostics);
   console.log(`Workspace registry: ${result.index} (${result.plugins} plugins, ${result.sidecars} sidecars, ${result.packs} packs)`);

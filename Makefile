@@ -281,7 +281,7 @@ verify: prepare docs-check exposure-check parity-check host-parity-check
 COMMA := ,
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: native-darwin native-darwin-fetch registry install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-wailsv3-core frontend-tauriv2-core host-test-wailsv3 host-test-tauriv2 host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
+.PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-wailsv3-core frontend-tauriv2-core host-test-wailsv3 host-test-tauriv2 host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
@@ -350,6 +350,11 @@ REGISTRY = target/registry
 registry:
 	@$(CARGO_ENV) cargo build --locked -p soksak-sok-tauriv2
 	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) --diagnostics
+
+# The installation stage of the workspace: `make install` of every plugin and sidecar repository that scripts/workspace-registry.json
+# declares. A fresh checkout runs it once before make registry builds and packs those repositories.
+registry-install:
+	@node scripts/workspace-registry.mjs --install
 
 # Installs every plugin of the workspace registry into the CONFIG configuration folder. Applications do not hold plugins in the bundle, so
 # window checks and development runs install with this target before they start the application. Workspace plugins are changed without changing

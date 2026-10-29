@@ -8031,6 +8031,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F275-1",
+    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function installFolders(" }],
+    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "the installation stage runs make install once in every declared repository before the window checks build" }],
+    expected: "The window-check jobs run make install once in every declared plugin and sidecar repository before they build.",
+    levels: ["unit"],
+  },
+  {
     id: "F275",
     implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function packPlugin(" }],
     tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a plugin is packed by the make pack target of its repository with the sok executable and the pack flags" }],

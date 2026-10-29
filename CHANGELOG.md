@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F275-1: The window-check jobs run `make registry-install`, the installation stage of every declared plugin and sidecar repository, before they build.
 - F275: The workspace registry packs each plugin with the `make pack` target of its repository; the plugin specification states `make install`, the installation stage of a plugin or sidecar repository.
 - F272-4: The checklist items that only a release completes are closed with the step of `release.yml` that performs them or moved to the repository that owns them, so no open item waits for the release that it holds.
 - F273-1: The `rs.lock-result` census rule accepts the same reporting recovery after a condition variable wait as after a lock.

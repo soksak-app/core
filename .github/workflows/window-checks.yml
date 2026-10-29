@@ -65,6 +65,9 @@ jobs:
         with:
           go-version-file: core/packages/host/wailsv3/go.mod
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install the plugin and sidecar repositories
+        working-directory: core
+        run: make registry-install
       - name: Build both applications
         working-directory: core
         run: make prepare wailsv3-build tauriv2-build

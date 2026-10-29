@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { checkDeclaration, packPlugin, pluginEntry, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
+import { checkDeclaration, installFolders, packPlugin, pluginEntry, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
 
 const SHA = "a".repeat(64);
 
@@ -97,4 +97,16 @@ test("a plugin is packed by the make pack target of its repository with the sok 
   assert.deepEqual(pack, { release, sha256: createHash("sha256").update("/opt/sok --diagnostics").digest("hex") });
   // A release that the folder already holds is not a new release of this run.
   assert.throws(() => packPlugin("/opt/sok", repository, out, false), /make pack of .* wrote 0 new files into .*; expected 1/);
+});
+
+test("the installation stage runs make install once in every declared repository before the window checks build", { timeout: 1000 }, () => {
+  const declaration = { plugins: ["../plugins/a", "../plugins/b"],
+    sidecars: [{ repository: "../sidecars/s", folder: "one" }, { repository: "../sidecars/s", folder: "two" }], packs: [] };
+  assert.deepEqual(installFolders(declaration, (relative) => `/work/${relative.slice(3)}`),
+    ["/work/plugins/a", "/work/plugins/b", "/work/sidecars/s"]);
+  for (const workflow of ["window-checks.yml", "virtual-display-measure.yml"]) {
+    const text = readFileSync(new URL(`../../.github/workflows/${workflow}`, import.meta.url), "utf8");
+    const install = text.indexOf("make registry-install");
+    assert.ok(install > 0 && install < text.indexOf("make prepare"), `${workflow} runs make registry-install before make prepare`);
+  }
 });
