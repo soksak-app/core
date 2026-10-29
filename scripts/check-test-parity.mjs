@@ -8038,8 +8038,15 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F273-1",
+    implementation: [{ file: "packages/plugin-api/events-check.js", symbol: "return takesPoisonedGuard(code.slice" }],
+    tests: [{ file: "packages/plugin-api/test/events-check.test.mjs", id: "a wait recovery closure that reports the poison and ends with the recovered guard recovers it" }],
+    expected: "A condition variable wait whose recovery takes the guard with into_inner of its poison error is accepted as a lock recovery is, and a default substitution stays a finding.",
+    levels: ["unit"],
+  },
+  {
     id: "F273",
-    implementation: [{ file: "packages/plugin-api/events-check.js", symbol: "of its poison error recovers it" }],
+    implementation: [{ file: "packages/plugin-api/events-check.js", symbol: "function takesPoisonedGuard" }],
     tests: [{ file: "packages/plugin-api/test/events-check.test.mjs", id: "a recovery closure that reports the poison and ends with the recovered guard recovers it" }],
     expected: "A lock recovery that takes the guard with into_inner of its poison error is accepted, also when it reports the poison first, and a default substitution stays a finding.",
     levels: ["unit"],

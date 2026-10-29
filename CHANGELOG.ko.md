@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F273-1: `rs.lock-result` census 규칙은 condition variable wait 뒤에도 lock 뒤와 같은 보고 복구를 받아들인다.
 - F274: pre-push hook은 push가 게시하는 commit message만 검사한다. 그 밖의 검사는 push된 commit에서 CI가 실행한다.
 - F273: `rs.lock-result` census 규칙은 poison 오류의 `into_inner`로 guard를 얻는 closure를 받아들이므로 lock 복구는 guard를 돌려주기 전에 poison을 보고할 수 있다. Default 대입은 계속 지적된다.
 

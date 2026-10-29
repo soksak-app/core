@@ -230,6 +230,14 @@ function resultIsPropagated(source, from) {
   return code[i] === '?';
 }
 
+/**
+ * Whether the argument of `unwrap_or_else` takes the guard with `into_inner` of its poison error: `PoisonError::into_inner`, or a
+ * closure that calls `into_inner` of its parameter, also when it reports the poison and returns that guard through a binding or a call.
+ */
+function takesPoisonedGuard(recovery) {
+  return /^(?:(?:std::sync::)?PoisonError::into_inner$|\|\s*([A-Za-z_]\w*)\s*\|[\s\S]*\b\1\.into_inner\(\))/.test(recovery);
+}
+
 /** Whether a lock error is recovered by restoring the guard contents after a poison. */
 function recoversPoisonedGuard(source, from) {
   const { code } = source;
@@ -240,8 +248,7 @@ function recoversPoisonedGuard(source, from) {
   while (i < code.length && /\s/.test(code[i])) i += 1;
   if (code[i] !== '(') return false;
   const close = matchClose(source, i);
-  const recovery = code.slice(i + 1, close).trim();
-  return /^(?:(?:std::sync::)?PoisonError::into_inner|\|\s*([A-Za-z_]\w*)\s*\|\s*\1\.into_inner\(\))$/.test(recovery);
+  return takesPoisonedGuard(code.slice(i + 1, close).trim());
 }
 
 /** The ranges `[start, end)` of the parts of `from..to` that commas separate outside brackets and strings, without blanks. */
@@ -754,11 +761,7 @@ export function censusFindings(sources, config, rules = censusRules()) {
         if (rule.id === 'rs.lock-result' && match[0].endsWith('.unwrap_or_else(')) {
           const open = match.index + match[0].length - 1;
           const close = matchClose(source, open);
-          const recovery = source.code.slice(open + 1, close).trim();
-          if (/^(?:(?:std::sync::)?PoisonError::into_inner|\|\s*([A-Za-z_]\w*)\s*\|\s*\1\.into_inner\(\))$/.test(recovery)) continue;
-          // A closure that takes the guard with `into_inner` of its poison error recovers it, also when it reports the poison
-          // and returns that guard through a binding or a call.
-          if (/^\|\s*([A-Za-z_]\w*)\s*\|[\s\S]*\b\1\.into_inner\(\)/.test(recovery)) continue;
+          if (takesPoisonedGuard(source.code.slice(open + 1, close).trim())) continue;
         }
         const line = source.lineAt(match.index);
         // default: a rule that no declaration marks pending is enforced.

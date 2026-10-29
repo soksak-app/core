@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F273-1: The `rs.lock-result` census rule accepts the same reporting recovery after a condition variable wait as after a lock.
 - F274: The pre-push hook checks only the commit messages that a push publishes; CI runs every other check on the pushed commits.
 - F273: The `rs.lock-result` census rule accepts a closure that takes the guard with `into_inner` of its poison error, so a lock recovery may report the poison before it returns the guard; a default substitution stays a finding.
 
