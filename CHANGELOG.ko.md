@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F278-1: run 폴더가 없는 창 검사 job은 log와 출력 파일만 올리고 checkout은 올리지 않는다.
 - F278: 창 검사 job은 event log와 함께 application마다 출력 파일을 남긴다.
 - F277-1: process identity package의 display name readback이 실패하면 LaunchServices가 돌려준 값을 밝힌다.
 - F276: core의 release는 더 이상 공개 registry를 검사하지 않는다. registry가 자기가 올린 core version마다 설치가 고르는 plugin version을 검사한다.

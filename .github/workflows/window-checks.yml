@@ -118,8 +118,9 @@ jobs:
         if: always()
         working-directory: core
         run: |
+          # Without a run folder the outputs stay empty, so the upload holds no part of the checkout.
           folder="$(ls -td target/test-runs/*/ | head -n 1)"
-          echo "folder=${folder%/}" >> "$GITHUB_OUTPUT"
+          if [ -n "$folder" ]; then printf 'folder=%s\npath=core/%s\n' "${folder%/}" "${folder%/}"; fi >> "$GITHUB_OUTPUT"
       - name: Audit of the logs
         if: always() && steps.run.outputs.folder != ''
         working-directory: core
@@ -139,7 +140,7 @@ jobs:
           # configuration folders and are kept until every failure is classified. The output file of each application
           # holds what it wrote before its event log opened, such as a start that writes no endpoint.
           path: |
-            core/${{ steps.run.outputs.folder }}
+            ${{ steps.run.outputs.path }}
             ${{ runner.temp }}/soksak-check-wailsv3/logs
             ${{ runner.temp }}/soksak-check-tauriv2/logs
             ${{ runner.temp }}/wailsv3.out

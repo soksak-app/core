@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F278-1: A window-check job without a run folder uploads its logs and output files and no part of the checkout.
 - F278: The window-check jobs keep the output file of each application with the event logs.
 - F277-1: A failed display-name readback of the process identity package names the value that LaunchServices returned.
 - F276: The release of core no longer checks the public registry; the registry checks the plugin versions that installation selects for each core version that it lists.

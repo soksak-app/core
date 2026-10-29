@@ -81,11 +81,11 @@ test('the window-check workflow names the window checks, the audit step and the 
   const keep = list[index('Keep the run folder')];
   assert.match(keep.text, /if: failure\(\)/);
   assert.match(keep.text, /uses: actions\/upload-artifact@v4/);
-  assert.match(keep.text, /core\/\$\{\{ steps\.run\.outputs\.folder \}\}/, 'the artifact holds the run folder');
+  assert.match(keep.text, /\$\{\{ steps\.run\.outputs\.path \}\}/, 'the artifact holds the run folder');
   assert.ok(index('Keep the run folder') > index('Audit of the logs'), 'the artifact is taken after the audit');
 });
 
-test('release builds, migrates, and packages each host after reusable CI and registry checks succeed', () => {
+test('release builds, migrates, and packages each host after the reusable CI checks succeed', () => {
   const text = read('.github/workflows/release.yml');
   assert.match(text, /checks:\n\s+uses: \.\/\.github\/workflows\/ci\.yml/, 'release checks reuse the independent CI jobs');
   const job = (name) => {
@@ -305,5 +305,14 @@ test('the window-check jobs keep the output file of each application with the ev
     for (const app of ['wailsv3', 'tauriv2']) {
       assert.match(text, new RegExp(`\\$\\{\\{ runner\\.temp \\}\\}/${app}\\.out`), `${workflow} keeps no ${app}.out`);
     }
+  }
+});
+
+test('a window-check job without a run folder uploads no part of the checkout', () => {
+  for (const workflow of ['.github/workflows/window-checks.yml', '.github/workflows/virtual-display-measure.yml']) {
+    const text = read(workflow);
+    assert.doesNotMatch(text, /core\/\$\{\{ steps\.run\.outputs\.folder \}\}/, `${workflow} uploads core/ when no run folder exists`);
+    assert.match(text, /if \[ -n "\$folder" \]; then[^\n]*path=core\//, `${workflow} names the run folder path only when it exists`);
+    assert.match(text, /^\s+\$\{\{ steps\.run\.outputs\.path \}\}$/m, `${workflow} uploads no run folder path`);
   }
 });

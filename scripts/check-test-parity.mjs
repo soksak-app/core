@@ -1985,7 +1985,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI rejects an unselected ${other} bundle in ${host} mode" },
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI preserves the default audit of both host bundles" },
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
-      { file: "scripts/test/workflows.test.mjs", id: "release builds, migrates, and packages each host after reusable CI and registry checks succeed" },
+      { file: "scripts/test/workflows.test.mjs", id: "release builds, migrates, and packages each host after the reusable CI checks succeed" },
     ],
     expected: "Each release host builds and audits only its selected bundle and migrates its data before packaging. Publication requires both host jobs, reusable CI and registry validation; the CLI without a host selection continues to audit both bundles.",
     levels: ["unit"],
@@ -5286,7 +5286,7 @@ const FEATURE_LINKS = [
   {
     id: "F183",
     implementation: [{ file: "Makefile", symbol: "release-check: wailsv3-build-release tauriv2-build-release" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds, migrates, and packages each host after reusable CI and registry checks succeed" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds, migrates, and packages each host after the reusable CI checks succeed" }],
     expected: "A release publishes both bundles from a tag whose CI passed and runs a release-built host once on the stored data of the earlier release.",
     levels: ["unit"],
   },
@@ -5339,7 +5339,7 @@ const FEATURE_LINKS = [
   {
     id: "F189",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "Migrate stored data with the Wails release host" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds, migrates, and packages each host after reusable CI and registry checks succeed" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds, migrates, and packages each host after the reusable CI checks succeed" }],
     expected: "A release runs a release-built host once on the stored data of the earlier release, and the chain, the format mentions and the step are checked mechanically.",
     levels: ["unit"],
   },
@@ -7993,6 +7993,13 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "function checklist(" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a platform-excluded item only with a named unavailable platform and unverified result" }],
     expected: "A platform-excluded checklist item names the unavailable platform and states that runtime behavior remains unverified.",
+    levels: ["unit"],
+  },
+  {
+    id: "F278-1",
+    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "${{ steps.run.outputs.path }}" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a window-check job without a run folder uploads no part of the checkout" }],
+    expected: "A window-check job that has no run folder uploads the logs and output files and no part of the checkout.",
     levels: ["unit"],
   },
   {
