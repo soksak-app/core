@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-292: The browser empty state check expects the root document of the browser view at the empty state, and the placement check reads the applied placements from `host.trace.surface`; the placement check passes on both hosts in 3 of 3 runs.
 - F239-294: The library window check declares the files tree failure that its folder removal causes in each of its three texts, so it passes on both hosts.
 - F239-293: A tab session write no longer reads the regions of a surface that the host already closed: a disposal forgets the regions of its surface when it starts, and a region query of a surface that a running place leaves out waits for the outcome of the place, then asks no region after a success and the remaining regions after a failure. Red: the three owning workbench tests failed on the unchanged page; Green: they pass 3 of 3 runs.
 - F239-291: A project opened from another window brings its owner window in front without activating the application on both hosts, so the result no longer depends on whether the system grants an activation; an activated notification still focuses its window. Red: both hosts requested show and focus; Green: `project.open.other-owner-is-shown-without-activation` passes 3 of 3 runs on both hosts.

@@ -200,6 +200,16 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-292",
+    implementation: [{ file: "e2e/browser.test.mjs", symbol: "traceRows(readEvents(" }],
+    tests: [
+      { file: "e2e/browser.test.mjs", id: "a placement that keeps a shown document in place does not hide it" },
+      { file: "e2e/browser.test.mjs", id: "a browser without an address hides its document region and shows the empty state" },
+    ],
+    expected: "The placement check reads the applied placements from host.trace.surface and the empty state check expects the root document of the browser view at the empty state.",
+    levels: ["application"],
+  },
+  {
     id: "F239-294",
     implementation: [{ file: "e2e/library.test.mjs", symbol: "const removed = folder.replace(" }],
     tests: [{ file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" }],

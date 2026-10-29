@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-292: browser empty state 검사는 empty state 위치에서 browser view의 root 문서를 기대하고, placement 검사는 적용된 배치를 `host.trace.surface`에서 읽는다. placement 검사는 두 호스트에서 3회 중 3회 통과한다.
 - F239-294: library 창 검사가 폴더를 지워 생기는 files tree 실패를 세 문구 모두 선언하므로 두 호스트에서 통과한다.
 - F239-293: tab session 쓰기가 호스트가 이미 닫은 표면의 영역을 더 이상 읽지 않는다. dispose는 시작할 때 그 표면의 영역을 잊고, 도는 place가 빼는 표면의 영역 질의는 place 결과를 기다린 뒤 성공이면 아무 영역에도 묻지 않고 실패면 남은 영역에 묻는다. Red: 소유 workbench 시험 셋이 바꾸기 전 page에서 실패했다. Green: 3회 중 3회 통과한다.
 - F239-291: 두 호스트에서 다른 창에서 연 project가 응용을 활성화하지 않고 소유 창을 앞에 놓으므로, 결과가 시스템의 활성화 허락에 달리지 않는다; 활성화된 알림은 계속 그 창에 focus를 준다. Red: 두 호스트가 show와 focus를 요청했다; Green: `project.open.other-owner-is-shown-without-activation`이 두 호스트에서 3회 중 3회 통과한다.

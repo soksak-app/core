@@ -16,6 +16,7 @@ const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
+import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 /** A red block of CSS size 120x60 placed at the upper left of the block document. Its pixels grow with the page zoom. */
@@ -249,8 +250,10 @@ for (const app of Object.values(APPS)) {
 
     // Pressing the empty state focuses the address bar and opens the typed address.
     const point = { x: empty.document.x + empty.x + empty.width / 2, y: empty.document.y + empty.y + empty.height / 2 };
-    assert.deepEqual(await s.run("host.hit", point), { kind: "page" },
-      "the empty state point does not belong to the page");
+    // The empty state is an element of the browser view, so the point belongs to the root document of that surface and not to its
+    // hidden page document.
+    assert.deepEqual(await s.run("host.hit", point), { kind: "document", surface, document: "" },
+      "the empty state point does not belong to the browser view");
     await s.click(point.x, point.y);
     // A press on the empty state focuses the address bar through the browser.address.select command. That command runs asynchronously after the press,
     // so the check confirms through core.focus that the focus has moved, and then types.
@@ -408,7 +411,8 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a placement that keeps a shown document in place does not hide it`, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    // The host records each applied surface placement as host.trace.surface while the performance trace is on.
+    await fresh(s, { performanceTrace: true });
     const base = await serve(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
@@ -423,18 +427,19 @@ for (const app of Object.values(APPS)) {
     // A prepare request is applied inside the layer transaction of the window and does not appear on screen before the commit. While that, a surface that is visible on screen
     // is hidden, a press at its position goes to the page instead of the surface. Turning the inner sidebar of the terminal card off and on moves only the terminal surface
     // and the browser surface stays in place, so a layout request must not hide the browser surface.
-    const log = await s.transcript();
+    const offsets = currentEventOffsets(s.app.configDir);
     for (const set of ["off", "inherit", "off"]) {
       await s.run("core.card.sidebar.set", { card: "terminal", side: "left", set });
       await s.presented();
     }
-    const lines = await log.stop();
-    const requests = lines.map((line) => /^info page page: host syncSurfaces (\{.*\}) ->/.exec(line)).filter(Boolean)
-      .map((found) => JSON.parse(found[1]));
-    assert.ok(requests.length >= 3,
-      `the terminal sidebar changes made ${requests.length} placement requests among ${lines.length} transcript lines:\n${lines.slice(0, 10).map((line) => line.slice(0, 200)).join("\n")}`);
-    const hiding = requests.filter((request) => request.surfaces.some((item) => item.id === surface && item.visible === false));
-    assert.equal(hiding.length, 0, `a placement request hid the shown browser surface: ${JSON.stringify(hiding[0])}`);
+    await s.flushLog();
+    const placements = traceRows(readEvents(s.app.configDir, offsets).events)
+      .filter((row) => row.layer === "host" && row.event === "surface" && row.phase === "placed");
+    const others = placements.filter((row) => row.surface !== surface);
+    assert.ok(others.length >= 3,
+      `the terminal sidebar changes placed ${others.length} other surfaces among ${placements.length} placements: ${JSON.stringify(placements.slice(0, 10))}`);
+    const hiding = placements.filter((row) => row.surface === surface && row.visible === false);
+    assert.equal(hiding.length, 0, `a placement hid the shown browser surface: ${JSON.stringify(hiding[0])}`);
   });
 
   test(`${app.name}: browser document focus and isolation`, async (t) => {
