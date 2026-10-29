@@ -122,18 +122,23 @@ failures-check:
 	@node scripts/check-failure-table.mjs
 
 # The TLS certificates of the registry window check (docs/operations/examples.md). Creates a certificate authority owned by the check and a server certificate for 127.0.0.1.
-# The check application of a diagnostic build starts with --registry-ca <folder>/ca.pem. An existing certificate is not replaced.
+# The check application of a diagnostic build starts with --registry-ca <folder>/ca.pem. An existing certificate is not replaced. Each certificate,
+# also an existing one, is parsed before the target ends, and a folder whose certificate does not parse is removed and the target fails, so a
+# later run creates it again.
 E2E_REGISTRY_TLS = $(or $(SOKSAK_CONFIG_ROOT),$(TMPDIR))/soksak-check-registry-tls
+E2E_REGISTRY_TLS_PARSE = node -e 'const { X509Certificate } = require("node:crypto"); for (const file of process.argv.slice(1)) { try { new X509Certificate(require("node:fs").readFileSync(file)); } catch (error) { console.error(`$${file} holds no certificate: $${error.message}`); process.exit(1); } }'
 e2e-registry-tls:
 	@test -n "$(or $(SOKSAK_CONFIG_ROOT),$(TMPDIR))" || { echo "e2e-registry-tls needs TMPDIR or SOKSAK_CONFIG_ROOT" >&2; exit 2; }
-	@if [ -f "$(E2E_REGISTRY_TLS)/ca.pem" ]; then echo "$(E2E_REGISTRY_TLS)"; exit 0; fi; \
+	@if [ ! -f "$(E2E_REGISTRY_TLS)/ca.pem" ]; then \
 	  set -e; mkdir -p "$(E2E_REGISTRY_TLS)"; cd "$(E2E_REGISTRY_TLS)"; \
 	  printf 'basicConstraints=CA:FALSE\nsubjectAltName=IP:127.0.0.1\nextendedKeyUsage=serverAuth\n' > server.ext; \
 	  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=soksak check registry authority" \
-	    -keyout ca-key.pem -out ca.pem -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign 2>/dev/null; \
-	  openssl req -newkey rsa:2048 -nodes -subj "/CN=127.0.0.1" -keyout server-key.pem -out server.csr 2>/dev/null; \
-	  openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -days 3650 -extfile server.ext -out server.pem 2>/dev/null; \
-	  rm -f server.csr ca.srl server.ext; echo "$(E2E_REGISTRY_TLS)"
+	    -keyout ca-key.pem -out ca.pem -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign; \
+	  openssl req -newkey rsa:2048 -nodes -subj "/CN=127.0.0.1" -keyout server-key.pem -out server.csr; \
+	  openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -days 3650 -extfile server.ext -out server.pem; \
+	  rm -f server.csr ca.srl server.ext; fi
+	@$(E2E_REGISTRY_TLS_PARSE) "$(E2E_REGISTRY_TLS)/ca.pem" "$(E2E_REGISTRY_TLS)/server.pem" || { rm -rf "$(E2E_REGISTRY_TLS)"; exit 1; }
+	@echo "$(E2E_REGISTRY_TLS)"
 
 # Checks that window checks use only the declared entries of the endpoint and native input.
 # Opens a project in the staged browser example and checks with headless Chrome that no page error occurs.
