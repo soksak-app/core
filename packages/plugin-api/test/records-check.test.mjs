@@ -10,6 +10,10 @@ test("a checklist that states one identifier on two lines is refused, in any ide
   assert.deepEqual(checklistViolations("- [o] F218-2.4 — P2: a\n- [ ] F218-2.4 — P2: b\n", "docs/features.md"), ["docs/features.md:2: duplicate checklist identifier F218-2.4 (first stated on line 1)"]);
   assert.deepEqual(checklistViolations("- [o] F212.7b-1 — P0: a\n  - [ ] F212.7b-1 — P0: b\n", "docs/features.ko.md"), ["docs/features.ko.md:2: duplicate checklist identifier F212.7b-1 (first stated on line 1)"]);
   assert.deepEqual(checklistViolations("- [o] F1-1 — P0: a\n- [o] F1-2 — P0: b\n", "docs/features.md"), []);
+  for (const id of ["F238-c-11", "F212.10-core-3", "F239-77-files", "F212.12-1-10-6g"]) {
+    assert.deepEqual(checklistViolations(`- [o] ${id} — P2: a\n- [ ] ${id} — P2: b\n`, "docs/features.md"),
+      [`docs/features.md:2: duplicate checklist identifier ${id} (first stated on line 1)`], id);
+  }
 });
 
 test("record checks report each statement that is not a fact about the repository", () => {

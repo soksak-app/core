@@ -47,6 +47,8 @@
     "log-batch.js",
     "bounded-json.js",
     "exposure-check.js",
+    "checklist.js",
+    "release-gate.js",
     "engines-check.js",
     "core-exposure.json",
     "records-check.js",
@@ -62,6 +64,7 @@
     "soksak-records": "./records-check.js",
     "soksak-events": "./events-check.js",
     "soksak-commits": "./commits-check.js",
+    "soksak-release-gate": "./release-gate.js",
     "soksak-view-check": "./view-check.js"
   },
   "scripts": {

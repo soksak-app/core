@@ -114,9 +114,9 @@ test('release builds, migrates, and packages each host after reusable CI and reg
   }
   assert.match(job('registry-manifest'), /node scripts\/check-registry-manifests\.mjs/);
   const publish = job('publish');
-  assert.match(publish, /needs: \[checks, release-wailsv3, release-tauriv2, registry-manifest\]/);
-  assert.match(publish, /if: always\(\)/);
-  for (const [name, env] of [['checks', 'CHECKS_RESULT'], ['release-wailsv3', 'WAILS_RESULT'],
+  assert.match(publish, /needs: \[checks, gate, window-checks, release-wailsv3, release-tauriv2, registry-manifest\]/);
+  assert.match(publish, /if: always\(\) && needs\.gate\.outputs\.release == 'true'/);
+  for (const [name, env] of [['checks', 'CHECKS_RESULT'], ['gate', 'GATE_RESULT'], ['window-checks', 'WINDOW_RESULT'], ['release-wailsv3', 'WAILS_RESULT'],
     ['release-tauriv2', 'TAURI_RESULT'], ['registry-manifest', 'REGISTRY_RESULT']]) {
     assert.match(publish, new RegExp(`${env}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`));
     assert.match(publish, new RegExp(`test \\"\\$${env}\\" = success`), `${name}: publication is not gated on success`);
@@ -279,4 +279,23 @@ test('the native tests that need display presentation run in the desktop job and
   assert.notEqual(presentation, -1, `the window-check workflow has no step named Native presentation tests: ${desktop.map((step) => step.name).join(', ')}`);
   assert.match(desktop[presentation].text, /run: make -C native\/darwin test-presentation$/m);
   assert.ok(presentation > desktop.findIndex((step) => step.name === 'Build both applications'), 'the native library is built first');
+});
+
+test('a push to main releases the declared version after the checks, the gate and the window checks succeed', () => {
+  const release = read('.github/workflows/release.yml');
+  assert.match(release, /^on:\n {2}push:\n {4}branches: \[main\]\n/m, 'release.yml starts on a push to main');
+  assert.doesNotMatch(release, /tags: \['v\*'\]/, 'release.yml does not start on a tag push');
+  assert.match(release, /^concurrency:\n {2}group: release\n {2}cancel-in-progress: false$/m);
+  assert.match(release, /run: node packages\/plugin-api\/release-gate\.js packages\/plugin-api\/package\.json docs\/features\.md/);
+  assert.match(release, /window-checks:\n {4}needs: gate\n {4}if: needs\.gate\.outputs\.release == 'true'\n {4}uses: \.\/\.github\/workflows\/window-checks\.yml/);
+  for (const job of ['release-wailsv3', 'release-tauriv2', 'registry-manifest']) {
+    assert.match(release, new RegExp(`  ${job}:\\n {4}needs: gate\\n {4}if: needs\\.gate\\.outputs\\.release == 'true'\\n`), `${job} runs only on a release`);
+  }
+  assert.match(release, /git ls-remote origin refs\/heads\/main/, 'publication requires the commit to be the head of main');
+  assert.match(release, /tag_name: v\$\{\{ needs\.gate\.outputs\.version \}\}/);
+  assert.match(release, /target_commitish: \$\{\{ github\.sha \}\}/);
+  const ci = read('.github/workflows/ci.yml');
+  assert.match(ci, /^on:\n {2}workflow_call:\n {2}pull_request:\n/m, 'ci.yml runs for a pull request and for release.yml only');
+  const windows = read('.github/workflows/window-checks.yml');
+  assert.match(windows, /^on:\n {2}workflow_call:\n {2}workflow_dispatch:\n/m, 'window-checks.yml runs for release.yml and on request');
 });

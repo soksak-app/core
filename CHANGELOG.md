@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F272: Core releases itself. `release.yml` starts on a push to `main`, calls `ci.yml`, and `soksak-release-gate` releases the version that `packages/plugin-api/package.json` declares when the remote has no tag of it and the checklist has no open item; the release then runs the window checks, both host release jobs and the registry check, and `publish` creates the tag with the release on the head of `main`. The checklist grammar has one owner, `packages/plugin-api/checklist.js`, so the duplicate check of `records-check.js` now reads identifiers such as `F238-c-11`.
+
 - F239-299-2-1: Every document names its events with a UUID page identity that it draws once (`crypto.randomUUID()`), so two documents that start in the same millisecond no longer share a `page` value; `view.ready` is `{event, plugin, document, time_origin}`, and both hosts require a document and a positive finite time origin and compare it with the `page.start` of the view.
 - F239-304: The tests that run an audit of every tracked file in a process of their own have a 30000 ms limit, which ends a stopped audit instead of failing an audit that the load of the pre-push checks slows.
 - F239-303-8: The native tests that need the presentation times and the ScreenCaptureKit frames of a display run in the `window-checks` job of the desktop runner (`make -C native/darwin test-presentation`), and the `native-darwin` job of the hosted runner runs the other native tests (`test-without-presentation`).

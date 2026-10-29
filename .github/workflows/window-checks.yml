@@ -3,9 +3,9 @@ name: window-checks
 # Runs the window checks of both applications and the audit of their logs. The checks need a signed-in desktop, so the job runs
 # on a self-hosted runner with the labels in docs/operations/examples.md#continuous-integration and not on a hosted runner.
 
+# release.yml calls this workflow when a push releases a version.
 on:
-  push:
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
 
 # One run at a time: the checks share the display and the focus of the runner.

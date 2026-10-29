@@ -3,6 +3,7 @@
 // and violations are reported as `path:line`. Each repository checks its own records with this command.
 //
 //   soksak-records [repository]
+import { itemIdentifier } from "./checklist.js";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -87,13 +88,14 @@ export function recordViolations(text, file, kind = "document") {
 
 /**
  * The checklist lines of a features file that state an identifier which an earlier line of the same file states, as
- * `file:line: duplicate checklist identifier <id> (first stated on line <n>)`. The identifier grammar matches scripts/checklist.mjs.
+ * `file:line: duplicate checklist identifier <id> (first stated on line <n>)`. The identifier is the one of checklist.js.
  */
 export function checklistViolations(text, file) {
   const errors = [];
   const first = new Map();
   text.split("\n").forEach((line, index) => {
-    const id = line.match(/^\s*- \[[^\]]*\] ([A-Z]\d+(?:[.-]\d+[a-z]?)*)\s+—\s+/)?.[1];
+    const label = line.match(/^\s*- \[[^\]]*\] (.*)$/)?.[1];
+    const id = label === undefined ? null : itemIdentifier(label).id;
     if (!id) return;
     if (first.has(id)) errors.push(`${file}:${index + 1}: duplicate checklist identifier ${id} (first stated on line ${first.get(id)})`);
     else first.set(id, index + 1);

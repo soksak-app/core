@@ -509,10 +509,10 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-288",
-    implementation: [{ file: "scripts/checklist.mjs", symbol: "export function checklist(" }, { file: "scripts/checklist.mjs", symbol: "export function checkCompletedItems(" }],
+    implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "export function checklist(" }, { file: "scripts/checklist.mjs", symbol: "export function checkCompletedItems(" }],
     tests: [
-      { file: "scripts/test/checklist.test.mjs", id: "a checklist identifier that two lines of one file state is refused with both lines, in any identifier form" },
-      { file: "scripts/test/checklist.test.mjs", id: "a checklist item whose label starts with an identifier states it as `<identifier> — `" },
+      { file: "packages/plugin-api/test/checklist.test.mjs", id: "a checklist identifier that two lines of one file state is refused with both lines, in any identifier form" },
+      { file: "packages/plugin-api/test/checklist.test.mjs", id: "a checklist item whose label starts with an identifier states it as `<identifier> — `" },
       { file: "scripts/test/checklist.test.mjs", id: "open, active and blocked checklist items cannot be removed without a paired retirement record" },
     ],
     expected: "Every identifier form is checked for duplicates and states, an identifier is stated as `<identifier> — `, and an open item leaves the checklist only through a recorded state or a retirement record.",
@@ -2102,7 +2102,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-208",
-    implementation: [{ file: "scripts/checklist.mjs", symbol: "function unavailableEvidenceErrors(" }],
+    implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "function unavailableEvidenceErrors(" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a fully specified unavailable-evidence record in both translations" }],
     expected: "Unavailable historical evidence records require scoped evidence, an explicitly unverified result and a follow-up condition without claiming a functional pass.",
     levels: ["unit"],
@@ -8025,9 +8025,36 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-83",
-    implementation: [{ file: "scripts/checklist.mjs", symbol: "function checklist(" }],
+    implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "function checklist(" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a platform-excluded item only with a named unavailable platform and unverified result" }],
     expected: "A platform-excluded checklist item names the unavailable platform and states that runtime behavior remains unverified.",
+    levels: ["unit"],
+  },
+  {
+    id: "F272-1",
+    implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "export function itemIdentifier(" }, { file: "packages/plugin-api/records-check.js", symbol: "itemIdentifier(label)" }],
+    tests: [
+      { file: "packages/plugin-api/test/checklist.test.mjs", id: "an identifier is a letter prefix and a number with dot or hyphen segments, stated as `<identifier> — `" },
+      { file: "packages/plugin-api/test/records-check.test.mjs", id: "a checklist that states one identifier on two lines is refused, in any identifier form" },
+    ],
+    expected: "One identifier grammar decides the items of every checklist, and the duplicate check of the record checks reads every identifier form.",
+    levels: ["unit"],
+  },
+  {
+    id: "F272-2",
+    implementation: [{ file: "packages/plugin-api/release-gate.js", symbol: "export function releaseDecision(" }],
+    tests: [
+      { file: "packages/plugin-api/test/release-gate.test.mjs", id: "a repository releases its declared version when the remote has no tag of it and no checklist item is open" },
+      { file: "packages/plugin-api/test/release-gate.test.mjs", id: "an item that is waiting, active or bypassed holds the release" },
+    ],
+    expected: "A repository releases its declared version only when the remote has no tag of it and its checklist has no item in the state [ ], [~] or [!].",
+    levels: ["unit"],
+  },
+  {
+    id: "F272-3",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "release-gate.js packages/plugin-api/package.json docs/features.md" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks, the gate and the window checks succeed" }],
+    expected: "A push to main runs the checks once, and the release jobs and the tag follow only a gate that releases.",
     levels: ["unit"],
   },
   {

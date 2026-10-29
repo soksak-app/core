@@ -1,18 +1,47 @@
 name: release
-# build-machine: skip smoke reason=the window checks need a signed-in desktop and run before a release on the development Mac (docs/operations/examples.md)
+# build-machine: skip smoke reason=the window checks of a release run in window-checks.yml on the desktop runner (docs/operations/examples.md#release)
 
+# A push to main runs the checks, and the repository releases itself when they succeed and `soksak-release-gate` finds no tag
+# of the declared version and no open checklist item (docs/operations/examples.md#release). The tag is created with the release.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
 
 permissions:
   contents: read
+
+# One run at a time, so two pushes never release one version twice.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   checks:
     uses: ./.github/workflows/ci.yml
 
+  gate:
+    needs: checks
+    runs-on: ubuntu-26.04-arm
+    outputs:
+      release: ${{ steps.gate.outputs.release }}
+      version: ${{ steps.gate.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/setup-node
+        with:
+          root: .
+      - name: Decide the release
+        id: gate
+        run: node packages/plugin-api/release-gate.js packages/plugin-api/package.json docs/features.md
+
+  window-checks:
+    needs: gate
+    if: needs.gate.outputs.release == 'true'
+    uses: ./.github/workflows/window-checks.yml
+
   release-wailsv3:
+    needs: gate
+    if: needs.gate.outputs.release == 'true'
     runs-on: macos-15
     env:
       GOTOOLCHAIN: local
@@ -56,7 +85,7 @@ jobs:
         run: bash scripts/release-step.sh "target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3"
       - name: Package Wails release bundle
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${{ needs.gate.outputs.version }}"
           mkdir -p dist
           ditto -c -k --keepParent target/release/wailsv3/soksak.app "dist/soksak-$version-darwin-arm64-wailsv3.zip"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -70,6 +99,8 @@ jobs:
         run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
   release-tauriv2:
+    needs: gate
+    if: needs.gate.outputs.release == 'true'
     runs-on: macos-15
     permissions:
       contents: read
@@ -106,7 +137,7 @@ jobs:
         run: bash scripts/release-step.sh "target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2"
       - name: Package Tauri release bundle
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${{ needs.gate.outputs.version }}"
           mkdir -p dist
           ditto -c -k --keepParent target/release/tauriv2/soksak.app "dist/soksak-$version-darwin-arm64-tauriv2.zip"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -120,6 +151,8 @@ jobs:
         run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
   registry-manifest:
+    needs: gate
+    if: needs.gate.outputs.release == 'true'
     runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -141,23 +174,35 @@ jobs:
 
   publish:
     runs-on: ubuntu-26.04-arm
-    needs: [checks, release-wailsv3, release-tauriv2, registry-manifest]
-    if: always()
+    needs: [checks, gate, window-checks, release-wailsv3, release-tauriv2, registry-manifest]
+    if: always() && needs.gate.outputs.release == 'true'
     permissions:
       contents: write
     steps:
       - name: Require every release gate to succeed
         env:
           CHECKS_RESULT: ${{ needs.checks.result }}
+          GATE_RESULT: ${{ needs.gate.result }}
+          WINDOW_RESULT: ${{ needs.window-checks.result }}
           WAILS_RESULT: ${{ needs.release-wailsv3.result }}
           TAURI_RESULT: ${{ needs.release-tauriv2.result }}
           REGISTRY_RESULT: ${{ needs.registry-manifest.result }}
         run: |
           test "$CHECKS_RESULT" = success
+          test "$GATE_RESULT" = success
+          test "$WINDOW_RESULT" = success
           test "$WAILS_RESULT" = success
           test "$TAURI_RESULT" = success
           test "$REGISTRY_RESULT" = success
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      # A later push or a tag of the version that appeared while the run built makes this run stale, so it publishes nothing.
+      - name: Require the commit to be the head of main and the tag to be absent
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          head="$(git ls-remote origin refs/heads/main | cut -f1)"
+          test "$head" = "$GITHUB_SHA" || { echo "main is at $head, not at $GITHUB_SHA" >&2; exit 1; }
+          test -z "$(git ls-remote --tags origin "refs/tags/v$VERSION")" || { echo "the tag v$VERSION exists" >&2; exit 1; }
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-wailsv3
@@ -168,5 +213,7 @@ jobs:
           path: dist
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
+          tag_name: v${{ needs.gate.outputs.version }}
+          target_commitish: ${{ github.sha }}
           files: dist/*
           body_path: docs/operations/install.md
