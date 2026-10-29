@@ -671,3 +671,31 @@ test('the emitter declaration of the repository counts the trace call of the wor
   const family = { schema: 3, layers: ['page'], events: { 'page.trace.<event>': { layer: 'page', class: 'call', level: 'debug', fields: fieldSchema({}, []) } } };
   assert.deepEqual(checker.emitFindings(family, source('trace("surface.registration", { phase, names, extra: 1 })'), CATALOG, declared), []);
 });
+
+test('a recovery closure that reports the poison and ends with the recovered guard recovers it', () => {
+  const source = [
+    'fn run(state: &Mutex<State>, log: &Log) {',
+    '    // default: poison retains a valid state; the recovery is reported before the guard is used.',
+    '    let guard = state.lock().unwrap_or_else(|poisoned| {',
+    '        log.error("the state lock was poisoned");',
+    '        poisoned.into_inner()',
+    '    });',
+    '    // default: use empty state after poison.',
+    '    let other = state.lock().unwrap_or_else(|poisoned| {',
+    '        log.error("the state lock was poisoned");',
+    '        State::default()',
+    '    });',
+    '    // default: poison retains a valid state; the recovery is reported before the guard is returned.',
+    '    let kept = state.lock().unwrap_or_else(|error| {',
+    '        let value = error.into_inner();',
+    '        log.error("the state lock was poisoned");',
+    '        value',
+    '    });',
+    '    // default: the helper reports the poison and returns the recovered guard.',
+    '    let named = state.lock().unwrap_or_else(|error| recovered(error.into_inner(), "state"));',
+    '}',
+  ].join('\n');
+  const findings = checker.censusFindings(new Map([['report.rs', source]]), noConfig())
+    .filter(({ rule }) => rule === 'rs.lock-result');
+  assert.deepEqual(findings.map(({ line }) => line), [8]);
+});

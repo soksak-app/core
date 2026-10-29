@@ -756,6 +756,9 @@ export function censusFindings(sources, config, rules = censusRules()) {
           const close = matchClose(source, open);
           const recovery = source.code.slice(open + 1, close).trim();
           if (/^(?:(?:std::sync::)?PoisonError::into_inner|\|\s*([A-Za-z_]\w*)\s*\|\s*\1\.into_inner\(\))$/.test(recovery)) continue;
+          // A closure that takes the guard with `into_inner` of its poison error recovers it, also when it reports the poison
+          // and returns that guard through a binding or a call.
+          if (/^\|\s*([A-Za-z_]\w*)\s*\|[\s\S]*\b\1\.into_inner\(\)/.test(recovery)) continue;
         }
         const line = source.lineAt(match.index);
         // default: a rule that no declaration marks pending is enforced.
