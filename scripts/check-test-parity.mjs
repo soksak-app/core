@@ -209,6 +209,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-303-1",
+    implementation: [
+      { file: ".github/workflows/ci.yml", symbol: "- name: Record the display session" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "the native-darwin job records the display session before the native tests" },
+    ],
+    expected: "The native-darwin job records the display session before the native tests.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-297-1",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "static void emitResponderChange(NSInteger windowNumber, id from, id to)" },

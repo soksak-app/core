@@ -253,3 +253,17 @@ test('the window-check workflow sets every variable that a window check of the r
   assert.match(text, /SOKSAK_CANDIDATE_REGISTRY=file:\/\/\$GITHUB_WORKSPACE\/core\/target\/registry\/index\.json/,
     'the window-check workflow does not pass the candidate registry built by make install-plugins');
 });
+
+test('the native-darwin job records the display session before the native tests', () => {
+  const text = read('.github/workflows/ci.yml');
+  const job = text.split(/^ {2}(?=[a-z-]+:$)/m).find((part) => part.startsWith('native-darwin:'));
+  assert.ok(job, 'ci.yml has no native-darwin job');
+  const list = steps(job);
+  const record = list.findIndex((step) => step.name === 'Record the display session');
+  const tests = list.findIndex((step) => step.name === 'Native Darwin tests');
+  assert.ok(record >= 0, `the native-darwin job has no step that records the display session: ${list.map((step) => step.name).join(', ')}`);
+  assert.ok(record < tests, 'the display session is recorded before the native tests');
+  for (const command of ['system_profiler SPDisplaysDataType', 'pmset -g', 'ioreg -n Root -d1 -k IOConsoleUsers']) {
+    assert.ok(list[record].text.includes(command), `the session record runs ${command}`);
+  }
+});
