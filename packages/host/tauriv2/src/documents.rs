@@ -1490,7 +1490,7 @@ impl ViewChannels {
 
 /// The name of the view web view of a view surface. No composition region has an empty name, so the view cannot collide with a
 /// region, and the view closes with the other documents of its surface.
-const VIEW_NAME: &str = "";
+pub(crate) const VIEW_NAME: &str = "";
 /// The event name of a declared UI snapshot of a view (docs/spec/plugin-processes.md, messages and events).
 /// The event name of a declared UI snapshot message that a view sends (docs/spec/plugin-host.md#declared-ui-snapshots).
 pub const DECLARED_SNAPSHOT_MESSAGE: &str = "declared-ui.snapshot";

@@ -41,3 +41,20 @@ func TestTheResponderEventFollowsTheFirstResponderAfterThePageIsReady(t *testing
 		t.Fatalf("a failed read returned %v", err)
 	}
 }
+
+// The view of a view surface is registered as the document "" of its surface, and a first responder in it is the owner
+// surface with that surface and no document; a first responder in a document region is the owner document.
+// contract: window.responder.view-is-owner-surface
+func TestTheFirstResponderInTheViewOfAViewSurfaceIsOwnerSurface(t *testing.T) {
+	named := map[uint64]string{10: "tab-view"}
+	documents := map[uint64]DocumentKey{20: {Surface: "tab-view", Name: viewRegionName}, 30: {Surface: "tab-view", Name: "page"}}
+	text := func(value string) *string { return &value }
+	view := windowResponder("WKWebView", 20, 10, false, named, documents, 0)
+	if want := (WindowResponder{Class: "WKWebView", Owner: "surface", Surface: text("tab-view")}); !reflect.DeepEqual(view, want) {
+		t.Fatalf("view responder %+v, want %+v", view, want)
+	}
+	region := windowResponder("WKWebView", 30, 10, false, named, documents, 0)
+	if want := (WindowResponder{Class: "WKWebView", Owner: "document", Surface: text("tab-view"), Document: text("page")}); !reflect.DeepEqual(region, want) {
+		t.Fatalf("region responder %+v, want %+v", region, want)
+	}
+}

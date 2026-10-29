@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F282: 두 host는 view surface의 view에 있는 first responder를 page가 받아들이는 owner `surface`로 보고한다.
 - F280: 창 검사 job은 멈춘 application이 끝나기를 기다리고 crash한 host의 crash report를 남긴다.
 - F279-2: 두 host는 `--registry-ca` 인증서가 parse되지 않는 이유를 보고한다.
 - F279-1: registry TLS target은 machine의 openssl 설정과 관계없이 자기가 선언한 인증서 확장만 쓴다.

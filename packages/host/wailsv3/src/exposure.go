@@ -1290,6 +1290,36 @@ type WindowResponder struct {
 	Document *string `json:"document"`
 }
 
+// windowResponder is the first responder of host.window: the class of the responder view, the web view that holds it (0 for
+// a view outside the web views), the surface host that contains it (0 for none) and whether it is the main web view, read
+// against the surface hosts, the documents and the modal web view of the window.
+func windowResponder(class string, view, surface uint64, main bool, named map[uint64]string, documents map[uint64]DocumentKey, modalHandle uint64) WindowResponder {
+	out := WindowResponder{Class: class, Owner: "native"}
+	if id, ok := named[surface]; ok && surface != 0 {
+		out.Surface = &id
+	}
+	if view != 0 {
+		key, document := documents[view]
+		switch {
+		case document && key.Name == viewRegionName:
+			// The view of a view surface is the document "" of its surface, and its responder is the owner surface
+			// (docs/spec/exposure.md#core-focus).
+			out.Owner, out.Surface = "surface", &key.Surface
+		case document:
+			out.Owner, out.Surface, out.Document = "document", &key.Surface, &key.Name
+		case out.Surface != nil:
+			out.Owner = "surface"
+		case modalHandle != 0 && modalHandle == view:
+			out.Owner = "modal"
+		case main:
+			out.Owner = "page"
+		default:
+			out.Owner = "webview"
+		}
+	}
+	return out
+}
+
 // WindowStatus is the value of host.window.
 type WindowStatus struct {
 	Responder           WindowResponder  `json:"responder"`
@@ -1481,25 +1511,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 				Frame: view.frame, Visible: !view.Hidden, Focused: view.Focused, Order: order, Process: view.Process})
 		}
 	}
-	out.Responder = WindowResponder{Class: facts.Responder.Class, Owner: "native"}
-	if id, ok := named[facts.Responder.Surface]; ok && facts.Responder.Surface != 0 {
-		out.Responder.Surface = &id
-	}
-	if view := facts.Responder.Webview; view != 0 {
-		key, document := documents[view]
-		switch {
-		case document:
-			out.Responder.Owner, out.Responder.Surface, out.Responder.Document = "document", &key.Surface, &key.Name
-		case out.Responder.Surface != nil:
-			out.Responder.Owner = "surface"
-		case modalHandle != 0 && modalHandle == view:
-			out.Responder.Owner = "modal"
-		case facts.Responder.Main:
-			out.Responder.Owner = "page"
-		default:
-			out.Responder.Owner = "webview"
-		}
-	}
+	out.Responder = windowResponder(facts.Responder.Class, facts.Responder.Webview, facts.Responder.Surface, facts.Responder.Main, named, documents, modalHandle)
 	sort.Slice(out.Regions, func(a, b int) bool {
 		if out.Regions[a].Surface != out.Regions[b].Surface {
 			return out.Regions[a].Surface < out.Regions[b].Surface

@@ -7996,6 +7996,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F282",
+    implementation: [
+      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func windowResponder(" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn responder_of(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/responder_test.go", id: "TestTheFirstResponderInTheViewOfAViewSurfaceIsOwnerSurface" },
+      { file: "packages/host/tauriv2/src/exposure_status_test.rs", id: "the_first_responder_in_the_view_of_a_view_surface_is_owner_surface" },
+    ],
+    expected: "Both hosts report a first responder in the view of a view surface as the owner surface with no document.",
+    levels: ["unit"],
+  },
+  {
     id: "F280",
     implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "- name: Keep the crash reports" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check jobs wait for the applications to end and keep the crash report of an application that crashed" }],

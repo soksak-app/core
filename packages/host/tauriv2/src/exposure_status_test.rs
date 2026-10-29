@@ -138,3 +138,29 @@ fn the_pending_count_is_read_when_the_pending_lock_is_poisoned() {
         "the waiting requests of a poisoned lock were not counted"
     );
 }
+
+/// The view of a view surface is registered as the document "" of its surface, and a first responder in it is the owner
+/// surface with that surface and no document; a first responder in a document region is the owner document.
+// contract: window.responder.view-is-owner-surface
+#[test]
+fn the_first_responder_in_the_view_of_a_view_surface_is_owner_surface() {
+    let named = HashMap::from([(10, "tab-view".to_string())]);
+    let documents = HashMap::from([
+        (
+            20,
+            (
+                "tab-view".to_string(),
+                crate::documents::VIEW_NAME.to_string(),
+            ),
+        ),
+        (30, ("tab-view".to_string(), "page".to_string())),
+    ]);
+    assert_eq!(
+        responder_of("WKWebView", 20, 10, false, &named, &documents, None),
+        json!({"class": "WKWebView", "owner": "surface", "surface": "tab-view", "document": null})
+    );
+    assert_eq!(
+        responder_of("WKWebView", 30, 10, false, &named, &documents, None),
+        json!({"class": "WKWebView", "owner": "document", "surface": "tab-view", "document": "page"})
+    );
+}

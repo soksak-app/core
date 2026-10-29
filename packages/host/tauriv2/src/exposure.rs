@@ -1671,6 +1671,44 @@ pub(crate) fn window_responder(window: &Window) -> Result<Value, String> {
     )
 }
 
+/// The first responder of host.window: the class of the responder view, the web view that holds it (0 for a view outside the
+/// web views), the surface host that contains it (0 for none) and whether it is the main web view, read against the surface
+/// hosts, the documents and the modal web view of the window.
+fn responder_of(
+    class: &str,
+    owner: platform::Handle,
+    container: platform::Handle,
+    main: bool,
+    named: &HashMap<platform::Handle, String>,
+    documents: &HashMap<platform::Handle, crate::documents::Key>,
+    modal_view: Option<platform::Handle>,
+) -> Value {
+    let surface = if container == 0 {
+        None
+    } else {
+        named.get(&container).cloned()
+    };
+    if owner == 0 {
+        json!({"class": class, "owner": "native", "surface": surface, "document": null})
+    } else if let Some((surface, document)) = documents.get(&owner) {
+        if document == crate::documents::VIEW_NAME {
+            // The view of a view surface is the document "" of its surface, and its responder is the owner surface
+            // (docs/spec/exposure.md#core-focus).
+            json!({"class": class, "owner": "surface", "surface": surface, "document": null})
+        } else {
+            json!({"class": class, "owner": "document", "surface": surface, "document": document})
+        }
+    } else if surface.is_some() {
+        json!({"class": class, "owner": "surface", "surface": surface, "document": null})
+    } else if modal_view == Some(owner) {
+        json!({"class": class, "owner": "modal", "surface": null, "document": null})
+    } else if main {
+        json!({"class": class, "owner": "page", "surface": null, "document": null})
+    } else {
+        json!({"class": class, "owner": "webview", "surface": null, "document": null})
+    }
+}
+
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let target = window.clone();
@@ -1821,24 +1859,9 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let main = responder_facts["main"]
         .as_bool()
         .ok_or_else(|| internal("window facts missing responder main"))?;
-    let surface = if container == 0 {
-        None
-    } else {
-        named.get(&container).cloned()
-    };
-    let responder = if owner == 0 {
-        json!({"class": class, "owner": "native", "surface": surface, "document": null})
-    } else if let Some((surface, document)) = documents.get(&owner) {
-        json!({"class": class, "owner": "document", "surface": surface, "document": document})
-    } else if surface.is_some() {
-        json!({"class": class, "owner": "surface", "surface": surface, "document": null})
-    } else if modal_view == Some(owner) {
-        json!({"class": class, "owner": "modal", "surface": null, "document": null})
-    } else if main {
-        json!({"class": class, "owner": "page", "surface": null, "document": null})
-    } else {
-        json!({"class": class, "owner": "webview", "surface": null, "document": null})
-    };
+    let responder = responder_of(
+        class, owner, container, main, &named, &documents, modal_view,
+    );
     Ok(json!({
         "responder": responder,
         "frame": facts["frame"],
