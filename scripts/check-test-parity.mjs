@@ -200,6 +200,15 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-295-1",
+    implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
+    tests: [
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_page_reload_returns_before_the_image_detach_acknowledgement" },
+    ],
+    expected: "A Tauri page reload returns before the image detach acknowledgement.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-302",
     implementation: [
       { file: "packages/workbench/ids.js", symbol: "export function issueId(kind, taken)" },

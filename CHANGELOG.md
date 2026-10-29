@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-295-1: A Tauri transport test states that a page reload returns before the image detach acknowledgement; it failed with a timeout on the code before F239-295 and passes now.
 - F239-302: A new tab id is drawn again while it names a tab of a stored layout, a tab that the page issued, or a surface held by a pending image detach, so a new tab never waits for the detach or joins the persistent session of another tab; `issueId` requires the check of the taken ids.
 - F239-301: Both hosts refuse a malformed image detach acknowledgement with the same text that names its member, and the Wails host no longer reads a missing `ok` as a failure. Red: the Go and Rust owning tests failed in their cases; Green: they pass 3 of 3 runs.
 - F239-300: The Tauri host no longer sends the undeclared `reconnect` operation to sidecars at a page reload, so a reload on both hosts sends a sidecar only the detach of each captured image, as the surface composition contract states. Red: the Tauri reload test received `reconnect` before its marker; Green: it passes 3 of 3 runs.

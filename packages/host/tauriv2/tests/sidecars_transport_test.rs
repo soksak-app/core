@@ -3482,3 +3482,97 @@ fn image_detach_acknowledgements_are_not_delivered_as_surface_messages() {
     );
     sidecars.stop();
 }
+
+// A page reload sends the detach of each captured image and returns without its acknowledgement: the service echoes each
+// line and never acknowledges, so a reload that waited for the acknowledgement would fail with a timeout.
+// contract: images.reload.start-sends-detach-without-waiting
+#[test]
+fn a_page_reload_returns_before_the_image_detach_acknowledgement() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("detach.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "detach-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let service = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(hello["token"], "detach-token");
+        stream
+            .write_all(b"{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}\n")
+            .unwrap();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) | Err(_) => return,
+                Ok(_) => {}
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            if request["operation"] == "close-owner" {
+                let reply = serde_json::json!({
+                    "operation": "closed-owner",
+                    "request": request["request"],
+                    "ok": true
+                });
+                writeln!(stream, "{reply}").unwrap();
+                return;
+            }
+            stream.write_all(line.as_bytes()).unwrap();
+        }
+    });
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, events) = owner("first", "/projects/first");
+    sidecars
+        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    let opened = events.recv_timeout(STALL).unwrap();
+    assert!(opened.body.get().contains("open"), "{}", opened.body.get());
+
+    let target = soksak_host_tauriv2::images::DetachTarget {
+        surface: "s1".to_string(),
+        name: "image-a".to_string(),
+        sidecar: ECHO.to_string(),
+        generation: 1,
+    };
+    let reloaded = soksak_host_tauriv2::windows::reload_surface_sidecars(
+        &sidecars,
+        &owner,
+        &soksak_host_tauriv2::images::Images::default(),
+        vec![target],
+        Arc::new(|_| {}),
+    );
+    assert_eq!(
+        reloaded,
+        Ok(()),
+        "the reload waited for the image detach acknowledgement"
+    );
+    let detach = events.recv_timeout(STALL).unwrap();
+    assert!(
+        detach.body.get().contains(r#""detach""#) && detach.body.get().contains("image-a"),
+        "the reload sent {} instead of the image detach",
+        detach.body.get()
+    );
+    sidecars.stop();
+    service.join().unwrap();
+}
