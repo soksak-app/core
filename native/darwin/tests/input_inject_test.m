@@ -321,8 +321,10 @@ static void checkPointerTargetAcrossViews(void) {
 static void checkIndependentWindowKeys(void) {
     NSWindow *first = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(240, 120))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [first setReleasedWhenClosed:NO];
     NSWindow *second = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(240, 120))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [second setReleasedWhenClosed:NO];
     WKWebView *firstView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 240, 120)];
     WKWebView *secondView = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 240, 120)];
     first.contentView = firstView;
@@ -366,6 +368,8 @@ static void checkIndependentWindowKeys(void) {
         @"the first window does not receive the second window's Escape");
     [first close];
     [second close];
+    [first release];
+    [second release];
 }
 
 int main(void) { @autoreleasepool {

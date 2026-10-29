@@ -96,6 +96,7 @@ int main(void) { @autoreleasepool {
                   styleMask:NSWindowStyleMaskTitled
                     backing:NSBackingStoreBuffered
                       defer:NO] autorelease];
+    [window setReleasedWhenClosed:NO];
     WKWebView *view = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:view];
     [window orderBack:nil];

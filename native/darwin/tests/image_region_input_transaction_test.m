@@ -60,8 +60,8 @@ int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 240, 160)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
-    testWindowNumber = window.windowNumber;
     [window setReleasedWhenClosed:NO];
+    testWindowNumber = window.windowNumber;
     window.contentView = [[[NSView alloc] initWithFrame:window.contentView.bounds] autorelease];
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];

@@ -20,6 +20,7 @@ int main(void) {
         [NSApplication sharedApplication];
         NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 100, 100)
             styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+        [window setReleasedWhenClosed:NO];
         void *host = sp_plugin_host_create((__bridge void *)window, "/dev/null/soksak-store", "/tmp", "probe", "", changed, NULL);
         check(host == NULL, @"a data store under a file is not created");
         NSString *cause = [NSString stringWithUTF8String:sp_document_last_error()];

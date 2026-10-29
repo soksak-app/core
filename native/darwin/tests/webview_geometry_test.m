@@ -384,6 +384,7 @@ static void checkHitTesting(WKWebView *main) {
     moved.hidden = NO;
     NSWindow *otherWindow = [[[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 120, 100)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
+    [otherWindow setReleasedWhenClosed:NO];
     otherWindow.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 120, 100)] autorelease];
     WKWebView *otherMain = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 120, 100)] autorelease];
     [otherWindow.contentView addSubview:otherMain];

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-303-5: Every `NSWindow` of the native tests sets `releasedWhenClosed` to NO right after its allocation, which `scripts/check-native-windows.mjs` checks, so a closed window is not released twice; `webview_process_test` no longer ends with SIGSEGV when AppKit lets its window go first.
 - F239-303-3: The insets of a document region are measured from the edges of the web view frame when the root shows a classic scroll bar, so the region no longer extends over the scroll bar.
 - F239-303-2: `webview_geometry_test` measures the frame size with `innerWidth` and `innerHeight` and runs a second time under classic scroll bars.
 - F239-303-1: The `native-darwin` CI job records the displays, the power state and the console session of its runner before the native tests.

@@ -68,6 +68,7 @@ lane("language test adapter manifest", "declaration", ["scripts/language-test-ca
 lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/test-evidence.test.mjs"]),
   lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
+  lane("native window ownership audit", "js-ts", ["scripts/check-native-windows.mjs"], ["scripts/test/native-windows.test.mjs"]),
   lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   lane("registry manifest release check", "js-ts", ["scripts/check-registry-manifests.mjs"], ["scripts/test/registry-manifests.test.mjs"]),
@@ -239,6 +240,17 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/document-region.test.mjs", id: "a classic scroll bar of the root keeps the insets measured from the frame edges" },
     ],
     expected: "Region insets are measured from the edges of the web view frame under classic scroll bars.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303-5",
+    implementation: [
+      { file: "scripts/check-native-windows.mjs", symbol: "findUnownedWindows" },
+    ],
+    tests: [
+      { file: "scripts/test/native-windows.test.mjs", id: "every NSWindow of the native package is owned by its creator" },
+    ],
+    expected: "Every NSWindow of the native package is owned by its creator alone.",
     levels: ["unit"],
   },
   {
