@@ -290,9 +290,11 @@ NATIVE_TESTS = observe_test \
   memory_pressure_test \
   webview_navigation_test \
   window_controls_test \
+  window_cursor_rects_test \
   window_titlebar_layout_test \
   window_titlebar_reload_test \
   surface_layout_test \
+  presentation_order_test \
   webview_focus_test \
   webview_geometry_test \
   webview_geometry_test,-AppleShowScrollBars,Always \
@@ -301,6 +303,7 @@ NATIVE_TESTS = observe_test \
   webview_process_end_test \
   webview_responsiveness_test \
   document_view_test \
+  document_viewport_marker_test \
   document_menu_key_equivalent_test \
   document_throttle_test \
   document_processes_test \
@@ -308,6 +311,7 @@ NATIVE_TESTS = observe_test \
   document_backforward_test \
   document_form_state_test \
   document_report_test \
+  document_cause_test \
   document_plugin_test \
   core_root_cors_test \
   view_import_map_test \

@@ -69,6 +69,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
   lane("native window ownership audit", "js-ts", ["scripts/check-native-windows.mjs"], ["scripts/test/native-windows.test.mjs"]),
+  lane("native test target audit", "js-ts", ["scripts/check-native-test-targets.mjs"], ["scripts/test/native-test-targets.test.mjs"]),
   lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   lane("registry manifest release check", "js-ts", ["scripts/check-registry-manifests.mjs"], ["scripts/test/registry-manifests.test.mjs"]),
@@ -251,6 +252,17 @@ const FEATURE_LINKS = [
       { file: "scripts/test/native-windows.test.mjs", id: "every NSWindow of the native package is owned by its creator" },
     ],
     expected: "Every NSWindow of the native package is owned by its creator alone.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303-6",
+    implementation: [
+      { file: "scripts/check-native-test-targets.mjs", symbol: "findUnrunTests" },
+    ],
+    tests: [
+      { file: "scripts/test/native-test-targets.test.mjs", id: "every native test source is run by a make target" },
+    ],
+    expected: "Every native test source is run by a make target.",
     levels: ["unit"],
   },
   {

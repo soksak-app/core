@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-303-6: native suite가 어떤 make target도 실행하지 않던 `document_cause_test`, `document_viewport_marker_test`, `presentation_order_test`, `window_cursor_rects_test`를 실행하고, `scripts/check-native-test-targets.mjs`는 어떤 target도 실행하지 않는 native 시험 source가 있으면 실패한다.
 - F239-303-5: native 시험의 모든 `NSWindow`가 할당 바로 뒤에 `releasedWhenClosed`를 NO로 두고, `scripts/check-native-windows.mjs`가 이것을 검사하므로, 닫은 창이 두 번 release되지 않는다. AppKit이 창을 먼저 놓아도 `webview_process_test`가 더는 SIGSEGV로 끝나지 않는다.
 - F239-303-3: root가 classic scroll bar를 보일 때 document region의 inset을 웹뷰 frame의 가장자리에서 재므로, region이 더는 scroll bar 위로 넘어가지 않는다.
 - F239-303-2: `webview_geometry_test`가 frame 크기를 `innerWidth`와 `innerHeight`로 재고, classic scroll bar 아래에서 한 번 더 돈다.
