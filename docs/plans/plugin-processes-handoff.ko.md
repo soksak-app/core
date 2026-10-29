@@ -46,7 +46,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 
 ### 모든 항목
 
-개발이 먼저다. 항목은 바꾼 것의 소유 검사만 돌린다. 단위 시험(Red와 Green)과 그 항목이 건드리는 구조 검사다. 그다음 `[o]`로 표시하고 다음 항목으로 넘어간다. main에 합칠 때는 충돌 해결의 소유 검사와 pre-push hook이 도는 push 관문(`make push-check`)을 돌린다. 전체 모음(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`), 창 검사, 측정(F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12~F212.14)은 활성 체크리스트의 모든 항목이 끝났을 때 한 번 돌린다. 항목마다, 수정마다, 재귀적으로 돌리지 않는다.
+개발이 먼저다. 항목은 바꾼 것의 소유 검사만 돌린다. 단위 시험(Red와 Green)과 그 항목이 건드리는 구조 검사다. 그다음 `[o]`로 표시하고 다음 항목으로 넘어간다. main에 합칠 때는 충돌 해결의 소유 검사를 돌린다. push된 main의 구조, 형식, clippy 검사는 CI가 돌린다. 전체 모음(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`), 창 검사, 측정(F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12~F212.14)은 활성 체크리스트의 모든 항목이 끝났을 때 한 번 돌린다. 항목마다, 수정마다, 재귀적으로 돌리지 않는다.
 
 시험 시간 한도와 긴 실행의 진행 출력은 [AGENTS.ko.md](../../AGENTS.ko.md)(검증)의 규칙을 따른다.
 
@@ -54,7 +54,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 2. 요청을 분류하고 항목을 등록한다(EN과 KO). 계약이 바뀌면 명세를 먼저 고친다.
 3. 소유 module에 시험을 쓴다. 바꾸지 않은 코드에서 돌려 실패한 assertion을 기록한다(Red). module이 없거나 compile 오류, link 오류는 Red가 아니다. 코드가 이미 그 동작을 하면, 사본에서 그 동작을 끄고 assertion 실패를 본 뒤 파일을 되돌린다.
 4. 구현하고 같은 시험을 돌린다(Green).
-5. 커밋된 tree에서 변경이 닿는 소유 시험과 구조 검사를 돌린다. 전체 모음과 push 관문은 여기서 돌리지 않는다. push 관문은 main에 합칠 때, 전체 모음은 체크리스트 완료 때 한 번 돌린다.
+5. 커밋된 tree에서 변경이 닿는 소유 시험과 구조 검사를 돌린다. 전체 모음은 여기서 돌리지 않는다. 전체 모음은 체크리스트 완료 때 한 번 돌린다.
 6. 항목을 Red와 Green과 함께 `[o]`로 표시하고 CHANGELOG에 EN과 KO 항목을 더한다.
 7. author `min-0-max <max@blue.tools>`, `type(scope): Subject (#ID)` 형식으로 커밋한다. 제목은 50자 이하다. 본문은 무엇을 왜 바꿨는지 72열로 감싸 적는다. footer와 trailer는 없다. commit-msg hook이 다른 형식을 거부한다. 경로를 명시해 stage하고 `git add -A`는 쓰지 않는다.
 
@@ -77,7 +77,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 - CHANGELOG 충돌은 양쪽 항목을 모두 남긴다. `docs/operations/examples.md`의 기록된 수가 충돌하면 합친 tree에서 `make parity-check`가 출력하는 수를 쓴다.
 - worktree를 옮기면 Tauri build cache가 옛 경로를 갖고 있어 clippy가 실패한다. 그 worktree에서 `cargo clean -p tauri -p soksak-tauriv2`를 돌린다.
 - 관문 명령은 `&&`로 잇고, pipe로 잇지 않는다(`make x | tail && ...`). pipe는 마지막 명령의 상태를 돌려주므로 실패해도 이어진 명령이 멈추지 않는다. 출력은 log 파일에 쓰고 종료 상태로 판정하거나 `pipefail`을 켠다.
-- 계약 case나 `packages/host`, `packages/sok`의 시험을 더하거나 건드리는 변경은 개발 중에 소유 Go 또는 Rust 시험을 돌린다. `make host-contract-check`는 체크리스트 완료 때 다른 전체 모음과 함께 한 번 돌린다. 어떤 push 관문도 이 검사를 돌리지 않으므로, merge 뒤 이 검사가 처음 도는 곳은 CI다(F220).
+- 계약 case나 `packages/host`, `packages/sok`의 시험을 더하거나 건드리는 변경은 개발 중에 소유 Go 또는 Rust 시험을 돌린다. `make host-contract-check`는 체크리스트 완료 때 다른 전체 모음과 함께 한 번 돌린다. merge 뒤 이 검사가 처음 도는 곳은 CI다(F220).
 
 ### 시험 파일을 더할 때
 
@@ -102,7 +102,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 | 시험 목록 | `make parity-check` |
 | core가 plugin 이름을 쓰지 않음 | `make boundaries` |
 | census 규칙 | `make census-check` |
-| push 관문(기록, 구조, 형식, clippy, 관문 시험) | `make push-check` |
+| push 관문(commit message) | `make push-check` |
 | view 프로세스 benchmark | `make -C native/darwin benchmark-view-processes` |
 
 전체 suite(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, 창 suite)는 항목 완료에 쓰지 않고 활성 체크리스트의 모든 항목이 완료된 뒤 배포 전에 한 번 돌린다. 개발 중에는 바꾼 것의 단위 시험만 돌리고, 간헐 실패의 반복 대상도 그 마지막 통과까지 기다린다.

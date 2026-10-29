@@ -46,7 +46,7 @@ Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays op
 
 ### Every item
 
-Development comes first. An item runs only the owning checks of what it changed: its unit tests (Red and Green) and the structural checks it touches. Then it is marked `[o]` and the work moves to the next item. A merge into main runs the owning checks of the conflict resolution and the push gate that the pre-push hook runs (`make push-check`). The full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`), the window checks and the measurements (F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12 to F212.14) run once, when every item of the active checklist is complete. They never run per fix, per item, or recursively.
+Development comes first. An item runs only the owning checks of what it changed: its unit tests (Red and Green) and the structural checks it touches. Then it is marked `[o]` and the work moves to the next item. A merge into main runs the owning checks of the conflict resolution; CI runs the structure, format and clippy checks of the pushed main. The full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`), the window checks and the measurements (F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12 to F212.14) run once, when every item of the active checklist is complete. They never run per fix, per item, or recursively.
 
 Time limits and the progress output of long runs follow the rules in [AGENTS.md](../../AGENTS.md) (Verification).
 
@@ -54,7 +54,7 @@ Time limits and the progress output of long runs follow the rules in [AGENTS.md]
 2. Classify the request, register the item (EN and KO), and update the specification first when the contract changes.
 3. Write the test at the owning module. Run it on the unchanged code and record the failing assertion (Red). A missing module, a compile error or a link error is not Red. When the code already has the behavior, disable it on a copy to see the assertion fail, then restore the file.
 4. Implement, then run the same test (Green).
-5. Run the owning tests and the structural checks the change touches on the committed tree. Do not run the full suites or the push gate here; the push gate runs at the merge into main, and the full suites run once at checklist completion.
+5. Run the owning tests and the structural checks the change touches on the committed tree. Do not run the full suites here; they run once at checklist completion.
 6. Mark the item `[o]` with its Red and Green, and add CHANGELOG entries in EN and KO.
 7. Commit with author `min-0-max <max@blue.tools>` and `type(scope): Subject (#ID)`. The subject has at most 50 characters. The body states what changed and why, wrapped at 72 columns. There is no footer and no trailer. The commit-msg hook rejects other forms. Stage explicit paths only; never use `git add -A`.
 
@@ -77,7 +77,7 @@ Time limits and the progress output of long runs follow the rules in [AGENTS.md]
 - On a CHANGELOG conflict keep both entries. On a conflict of the recorded counts in `docs/operations/examples.md`, use the count that `make parity-check` prints for the merged tree.
 - After a worktree moves, the Tauri build cache keeps old paths and clippy fails. Run `cargo clean -p tauri -p soksak-tauriv2` in the worktree.
 - Gate commands with `&&`, and never pipe a gate command (`make x | tail && ...`): the pipe returns the status of its last command, so a failure does not stop the chain. Write the output to a log file and judge by the exit status, or set `pipefail`.
-- A change that adds or touches a contract case or a test of `packages/host` or `packages/sok` runs the owning Go or Rust test during development. `make host-contract-check` runs once at checklist completion with the other full suites. No push gate runs it, so CI is the first place it runs after a merge (F220).
+- A change that adds or touches a contract case or a test of `packages/host` or `packages/sok` runs the owning Go or Rust test during development. `make host-contract-check` runs once at checklist completion with the other full suites. CI is the first place it runs after a merge (F220).
 
 ### Adding a test file
 
@@ -102,7 +102,7 @@ Time limits and the progress output of long runs follow the rules in [AGENTS.md]
 | Test inventory | `make parity-check` |
 | Core names no plugin | `make boundaries` |
 | Census rules | `make census-check` |
-| Push gate (records, structure, format, clippy, gate tests) | `make push-check` |
+| Push gate (commit messages) | `make push-check` |
 | View process benchmark | `make -C native/darwin benchmark-view-processes` |
 
 Full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, the window suites) are not run to complete an item; they run once when every item of the active checklist is complete, before the release. During development run only the unit tests of what changed; repeat targets of an intermittent failure also wait for that final pass.

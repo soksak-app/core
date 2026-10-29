@@ -130,26 +130,23 @@ test('release builds, migrates, and packages each host after reusable CI and reg
   assert.match(step, /"format": ?3/, 'the script requires the migrated file');
 });
 
-test('the push check runs every check of the structure step and the format and clippy checks of ci', () => {
+test('the push check runs only the commit message check, and ci runs the structure, format and clippy checks', () => {
   const ci = read('.github/workflows/ci.yml');
   const targets = (name) => {
     const step = steps(ci).find((item) => item.name === name);
     assert.ok(step, `ci.yml has no step ${name}`);
     return /run:\s*make -C core (.+)$/m.exec(step.text)[1].trim().split(/\s+/);
   };
-  const wanted = [
-    ...targets('Structure checks'),
-    ...targets('Host tests').filter((target) => target !== 'host-contract-check'),
-    ...targets('Go format checks'),
-    ...targets('Rust format and clippy checks'),
-  ];
-  // The event catalog and census audits are structure checks: a source change that removes an emitter must fail before it is pushed.
+  // The event catalog and census audits are structure checks of CI: a source change that removes an emitter fails its run.
   assert.deepEqual(['events-check', 'census-check'].filter((target) => !targets('Structure checks').includes(target)), [],
     'the structure step of ci.yml does not run the event catalog and census audits');
+  for (const name of ['Go format checks', 'Rust format and clippy checks']) assert.ok(targets(name).length > 0, `ci.yml step ${name} runs no target`);
+  // A published commit message is kept, so the push checks it before it leaves the checkout; a later commit corrects any other
+  // failure, and the release gate releases only a green run of CI.
   const recipe = /^push-check:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
   assert.ok(recipe, 'the Makefile has no push-check target');
-  const named = recipe[0];
-  assert.deepEqual(wanted.filter((target) => !named.includes(target)), [], `push-check does not run: ${wanted.join(' ')}`);
+  assert.deepEqual(recipe[1].trim().split('\n').map((line) => line.trim()),
+    ['@$(MAKE) --no-print-directory commits-check RANGE="$(or $(RANGE),origin/main..HEAD)"'], 'push-check runs a check other than the commit messages');
   assert.match(read('.githooks/pre-push'), /make -C "\$\(git rev-parse --show-toplevel\)" push-check/);
 });
 

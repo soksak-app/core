@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F274: pre-push hook은 push가 게시하는 commit message만 검사한다. 그 밖의 검사는 push된 commit에서 CI가 실행한다.
 - F273: `rs.lock-result` census 규칙은 poison 오류의 `into_inner`로 guard를 얻는 closure를 받아들이므로 lock 복구는 guard를 돌려주기 전에 poison을 보고할 수 있다. Default 대입은 계속 지적된다.
 
 - F272: Core는 스스로 release한다. `release.yml`은 `main` push로 시작해 `ci.yml`을 호출하고, `soksak-release-gate`는 원격에 tag가 없고 checklist에 열린 항목이 없을 때 `packages/plugin-api/package.json`이 선언한 version을 release한다. 그러면 창 검사, 두 host release job, registry 검사가 돌고 `publish`가 `main` head에 release와 함께 tag를 만든다. Checklist 문법은 `packages/plugin-api/checklist.js` 하나가 맡으므로 `records-check.js`의 중복 검사가 이제 `F238-c-11` 같은 식별자를 읽는다.

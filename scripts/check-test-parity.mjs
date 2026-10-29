@@ -4824,7 +4824,7 @@ const FEATURE_LINKS = [
   {
     id: "F222",
     implementation: [{ file: ".githooks/pre-push", symbol: "push-check" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs every check of the structure step and the format and clippy checks of ci" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
     expected: "The pre-push hook runs make -C with the form the workflow test requires, with the range of the pushed refs.",
     levels: ["unit"],
   },
@@ -4832,7 +4832,7 @@ const FEATURE_LINKS = [
     id: "F220",
     implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "auditDeclarations" }],
     tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "the static audit fails a marker that names an undefined case, a case outside its scope, or no case, without running tests" }],
-    expected: "The static host contract check fails a test marker that names an undefined case, a case outside its host scope, or no case, and a case in a host scope that no test declares; push-check runs it.",
+    expected: "The static host contract check fails a test marker that names an undefined case, a case outside its host scope, or no case, and a case in a host scope that no test declares; CI runs it.",
     levels: ["unit"],
   },
   {
@@ -5522,9 +5522,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F173",
-    implementation: [{ file: "Makefile", symbol: "census.test.mjs scripts/test/fallbacks.test.mjs" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs every check of the structure step and the format and clippy checks of ci" }],
-    expected: "A push runs the census and fallback tests of the sources, so a registration outside its entrance or an unexplained default does not reach main.",
+    implementation: [{ file: ".github/workflows/ci.yml", symbol: "node-tests.mjs --only scripts/" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" }],
+    expected: "CI runs the census and fallback tests of the sources on each pushed commit, so a registration outside its entrance or an unexplained default fails the run and is not released.",
     levels: ["unit"],
   },
   {
@@ -5537,8 +5537,8 @@ const FEATURE_LINKS = [
   {
     id: "F170",
     implementation: [{ file: "Makefile", symbol: "push-check:" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs every check of the structure step and the format and clippy checks of ci" }],
-    expected: "A push runs the commit, structure, format and clippy checks of CI before it leaves the checkout.",
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
+    expected: "A push checks only its commit messages before it leaves the checkout, and CI runs the structure, format and clippy checks.",
     levels: ["unit"],
   },
   {
@@ -8028,6 +8028,13 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "function checklist(" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a platform-excluded item only with a named unavailable platform and unverified result" }],
     expected: "A platform-excluded checklist item names the unavailable platform and states that runtime behavior remains unverified.",
+    levels: ["unit"],
+  },
+  {
+    id: "F274",
+    implementation: [{ file: "Makefile", symbol: "because a published commit message is kept" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
+    expected: "A push checks only its commit messages before it leaves the checkout, and CI runs every other check.",
     levels: ["unit"],
   },
   {

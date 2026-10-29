@@ -20,18 +20,13 @@ commits-check:
 hooks:
 	@git config core.hooksPath .githooks
 
-# Runs before a push (the pre-push hook of `make hooks`): the commit messages of RANGE, the checks of the structure step of ci.yml,
-# its format and clippy checks, and the census and fallback tests of the sources. The host tests, the package tests and the window checks are left
-# to CI. The pre-push hook sets RANGE to the commits of each pushed ref (scripts/push-range.mjs). Without RANGE, the commits are origin/main..HEAD:
+# Runs before a push (the pre-push hook of `make hooks`): the commit messages of RANGE, because a published commit message is kept.
+# CI runs every other check on the pushed commits, a later commit corrects a failure, and the release gate releases only a green run.
+# The pre-push hook sets RANGE to the commits of each pushed ref (scripts/push-range.mjs). Without RANGE, the commits are origin/main..HEAD:
 # the commits that the remote main branch does not have. This range exists on every branch, while @{upstream}..HEAD fails with git exit 128
 # on a branch without an upstream, which a new branch has until its first push.
 push-check:
 	@$(MAKE) --no-print-directory commits-check RANGE="$(or $(RANGE),origin/main..HEAD)"
-	@$(MAKE) --no-print-directory docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check migrations-check events-check census-check
-	@$(MAKE) --no-print-directory rust-format-check go-format-check rust-clippy-check
-	@node scripts/check-host-contract.mjs --static
-	@node scripts/gate-tests.mjs scripts/test/census.test.mjs scripts/test/fallbacks.test.mjs scripts/test/comment-language.test.mjs scripts/test/event-classes.test.mjs scripts/test/package-bins.test.mjs scripts/test/check-host-contract.test.mjs
-	@node scripts/node-tests.mjs --changed "$(or $(RANGE),origin/main..HEAD)"
 
 # Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
 release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check
