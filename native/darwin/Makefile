@@ -112,7 +112,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: all fetch capture-text-path test test-capture-frame-identity test-capture-stop-intake test-activation test-input-reference-readiness test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
+.PHONY: all fetch capture-text-path test test-without-presentation test-presentation test-capture-frame-identity test-capture-stop-intake test-activation test-input-reference-readiness test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
 
 all: fetch $(LIBRARY) $(PKGCONFIG)
 
@@ -291,9 +291,6 @@ NATIVE_TESTS = observe_test \
   webview_navigation_test \
   window_controls_test \
   window_cursor_rects_test \
-  window_titlebar_layout_test \
-  window_titlebar_reload_test \
-  surface_layout_test \
   presentation_order_test \
   webview_focus_test \
   webview_geometry_test \
@@ -348,13 +345,11 @@ NATIVE_TESTS = observe_test \
   capture_pressure_test \
   capture_storage_test \
   capture_metadata_test \
-  capture_presentation_test \
   image_region_capture_presentation_test \
   image_capture_match_test \
   capture_frame_identity_test \
   capture_frame_identity_capture_test \
   capture_source_writer_test \
-  capture_resize_test \
   capture_frame_test \
   capture_text_test \
   dock_menu_test \
@@ -362,14 +357,30 @@ NATIVE_TESTS = observe_test \
   notifications_test \
   notifications_test.app/Contents/MacOS/notifications_test,--bundled
 
+# The native tests that need the presentation times and the ScreenCaptureKit frames of a display. The virtual machine of
+# a hosted runner reports no display, so CI runs them in the job of the desktop runner
+# (docs/operations/examples.md#continuous-integration), and test runs them after NATIVE_TESTS.
+NATIVE_PRESENTATION_TESTS = window_titlebar_layout_test \
+  window_titlebar_reload_test \
+  surface_layout_test \
+  capture_presentation_test \
+  capture_resize_test
+
 comma := ,
-NATIVE_TEST_EXECUTABLES := $(foreach entry,$(NATIVE_TESTS),$(firstword $(subst $(comma), ,$(entry))))
+executables = $(foreach entry,$(1),$(firstword $(subst $(comma), ,$(entry))))
+NATIVE_TEST_EXECUTABLES := $(call executables,$(NATIVE_TESTS) $(NATIVE_PRESENTATION_TESTS))
 NATIVE_TEST_RUNNER := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../scripts/native-tests.mjs)
 # The shared cases of the view page insertion, which the plugin-api test and the native tests run (docs/spec/plugin-processes.md, rule 4).
 VIEW_PAGE_CASES := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../packages/plugin-api/contract/view-page.json)
 
 test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS) $(NATIVE_PRESENTATION_TESTS)
+
+test-without-presentation: $(addprefix $(BUILD)/,$(call executables,$(NATIVE_TESTS)))
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS)
+
+test-presentation: $(addprefix $(BUILD)/,$(call executables,$(NATIVE_PRESENTATION_TESTS)))
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_PRESENTATION_TESTS)
 
 benchmark-webview-resize-cadence: $(BUILD)/webview_resize_cadence_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) webview_resize_cadence_test
@@ -464,7 +475,7 @@ repeat-suite: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-suite requires a positive COUNT" >&2; exit 2;; esac
 	@i=1; while [ $$i -le $(COUNT) ]; do \
 	  echo "START: test suite run $$i of $(COUNT)"; \
-	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS) || { echo "FAIL: test suite run $$i of $(COUNT) ($$(uptime))" >&2; exit 1; }; \
+	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS) $(NATIVE_PRESENTATION_TESTS) || { echo "FAIL: test suite run $$i of $(COUNT) ($$(uptime))" >&2; exit 1; }; \
 	  i=$$((i + 1)); \
 	done; echo "PASS: test suite passed $(COUNT) consecutive runs"
 

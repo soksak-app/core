@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Finds native tests that no make target runs. A test source `native/darwin/tests/<name>_test.m` is run when the native
-// suite variable NATIVE_TESTS lists it or a recipe line of native/darwin/Makefile names it; a test that neither names is
-// built by no check and passes or fails unseen.
+// Finds native tests that no make target runs. A test source `native/darwin/tests/<name>_test.m` is run when a native
+// suite variable (NATIVE_TESTS, or NATIVE_PRESENTATION_TESTS for the tests that need a display) lists it or a recipe
+// line of native/darwin/Makefile names it; a test that neither names is built by no check and passes or fails unseen.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -16,7 +16,7 @@ export function runTestNames(makefile) {
   const names = new Set();
   const lines = makefile.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    if (/^NATIVE_TESTS\s*:?=/.test(lines[i])) {
+    if (/^NATIVE_\w*TESTS\s*:?=/.test(lines[i])) {
       for (let j = i; j < lines.length; j++) {
         for (const match of lines[j].matchAll(TEST_NAME)) names.add(match[1]);
         if (!lines[j].endsWith("\\")) break;

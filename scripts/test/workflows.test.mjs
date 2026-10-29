@@ -267,3 +267,16 @@ test('the native-darwin job records the display session before the native tests'
     assert.ok(list[record].text.includes(command), `the session record runs ${command}`);
   }
 });
+
+test('the native tests that need display presentation run in the desktop job and the others in the hosted job', () => {
+  const job = read('.github/workflows/ci.yml').split(/^ {2}(?=[a-z-]+:$)/m).find((part) => part.startsWith('native-darwin:'));
+  assert.ok(job, 'ci.yml has no native-darwin job');
+  const hosted = steps(job).find((step) => step.name === 'Native Darwin tests');
+  assert.ok(hosted, 'the native-darwin job has no step named Native Darwin tests');
+  assert.match(hosted.text, /run: make -C core\/native\/darwin test-without-presentation$/m);
+  const desktop = steps(read('.github/workflows/window-checks.yml'));
+  const presentation = desktop.findIndex((step) => step.name === 'Native presentation tests');
+  assert.notEqual(presentation, -1, `the window-check workflow has no step named Native presentation tests: ${desktop.map((step) => step.name).join(', ')}`);
+  assert.match(desktop[presentation].text, /run: make -C native\/darwin test-presentation$/m);
+  assert.ok(presentation > desktop.findIndex((step) => step.name === 'Build both applications'), 'the native library is built first');
+});

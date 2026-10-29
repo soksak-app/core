@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-303-8: display의 presentation time과 ScreenCaptureKit frame이 필요한 native 시험은 desktop runner의 `window-checks` job에서 돌고(`make -C native/darwin test-presentation`), hosted runner의 `native-darwin` job은 나머지 native 시험을 돌린다(`test-without-presentation`).
 - F239-303-4: document region의 inset이 웹뷰가 세로 scroll bar를 왼쪽에 놓는 오른쪽에서 왼쪽인 root에서 scroll bar 폭을 왼쪽 inset에 더하고, `webview_geometry_test`가 scroll bar의 쪽을 잰다.
 - F239-303-7: `webview_geometry_test`가 그 실행의 WebKit pointer 정밀도를 재고 마지막 device pixel press를 그 정밀도로 기대하므로, pointer 좌표를 정수 CSS pixel로 보고하는 macOS 15에서도 통과한다.
 - F239-303-6: native suite가 어떤 make target도 실행하지 않던 `document_cause_test`, `document_viewport_marker_test`, `presentation_order_test`, `window_cursor_rects_test`를 실행하고, `scripts/check-native-test-targets.mjs`는 어떤 target도 실행하지 않는 native 시험 source가 있으면 실패한다.

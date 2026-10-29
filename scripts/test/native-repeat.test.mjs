@@ -19,17 +19,21 @@ function fake(directory, relative, body) {
   return path;
 }
 
-// The entries of NATIVE_TESTS in the Makefile, as `<executable>[,<argument>...]`.
+// The entries of the suite lists NATIVE_TESTS and NATIVE_PRESENTATION_TESTS in the Makefile, which repeat-suite runs,
+// as `<executable>[,<argument>...]`.
 function nativeTestEntries() {
   const lines = readFileSync(join(native, 'Makefile'), 'utf8').split('\n');
-  const start = lines.findIndex((line) => line.startsWith('NATIVE_TESTS = '));
   const entries = [];
-  for (let i = start; i < lines.length; i += 1) {
-    const text = (i === start ? lines[i].slice('NATIVE_TESTS = '.length) : lines[i]).trim();
-    const continues = text.endsWith('\\');
-    const entry = text.replace(/\\$/, '').trim();
-    if (entry !== '') entries.push(entry);
-    if (!continues) break;
+  for (const list of ['NATIVE_TESTS = ', 'NATIVE_PRESENTATION_TESTS = ']) {
+    const start = lines.findIndex((line) => line.startsWith(list));
+    assert.notEqual(start, -1, `the Makefile has no ${list.trim()} list`);
+    for (let i = start; i < lines.length; i += 1) {
+      const text = (i === start ? lines[i].slice(list.length) : lines[i]).trim();
+      const continues = text.endsWith('\\');
+      const entry = text.replace(/\\$/, '').trim();
+      if (entry !== '') entries.push(entry);
+      if (!continues) break;
+    }
   }
   return entries;
 }

@@ -68,6 +68,13 @@ jobs:
       - name: Build both applications
         working-directory: core
         run: make prepare wailsv3-build tauriv2-build
+      # The native tests that need the presentation times and the ScreenCaptureKit frames of a display run in this
+      # job, whose runner provides the display (docs/operations/examples.md#continuous-integration).
+      - name: Native presentation tests
+        working-directory: core
+        env:
+          SOKSAK_NATIVE_TEST_RUN_FOLDER: ${{ runner.temp }}/soksak-native-presentation
+        run: make -C native/darwin test-presentation
       - name: Prepare the check configurations
         working-directory: core
         run: |

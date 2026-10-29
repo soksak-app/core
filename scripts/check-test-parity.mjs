@@ -244,6 +244,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-303-8",
+    implementation: [
+      { file: "native/darwin/Makefile", symbol: "NATIVE_PRESENTATION_TESTS" },
+      { file: ".github/workflows/window-checks.yml", symbol: "- name: Native presentation tests" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "the native tests that need display presentation run in the desktop job and the others in the hosted job" },
+    ],
+    expected: "The native tests that need a display run in the desktop job and the others in the hosted job.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-303-4",
     implementation: [
       { file: "packages/plugin-api/document-region.js", symbol: "regionInsets" },

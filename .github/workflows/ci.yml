@@ -145,7 +145,7 @@ jobs:
         env:
           OFFLINE: '1'
           SOKSAK_NATIVE_TEST_RUN_FOLDER: ${{ runner.temp }}/soksak-native-darwin
-        run: make -C core/native/darwin test
+        run: make -C core/native/darwin test-without-presentation
       - name: Native process identity package tests
         env:
           OFFLINE: '1'
