@@ -27,21 +27,27 @@ fn arguments_are_refused_with_the_shared_messages() {
     let surface = json!({"id": "tab-1", "x": 0, "y": 0, "w": 1, "h": null, "visible": true, "dim": false, "plugin": "page",
         "composition": {"kind": "web"}});
     assert_eq!(
-        refusal::<SyncRequest>("request", json!({"settled": true})),
+        refusal::<SyncRequest>("request", json!({"settled": true, "declarations": []})),
         "argument request.surfaces is missing"
     );
     assert_eq!(
-        refusal::<SyncRequest>("request", json!({"settled": true, "surfaces": []})),
+        refusal::<SyncRequest>(
+            "request",
+            json!({"settled": true, "declarations": [], "surfaces": []})
+        ),
         "argument request.titlebar is missing"
     );
     assert_eq!(
-        refusal::<SyncRequest>("request", json!({"settled": true, "surfaces": [surface]})),
+        refusal::<SyncRequest>(
+            "request",
+            json!({"settled": true, "declarations": [], "surfaces": [surface]})
+        ),
         "argument request.surfaces[0].h is missing"
     );
     assert_eq!(
         refusal::<SyncRequest>(
             "request",
-            json!({"settled": true, "surfaces": [], "overlays": [{"x": "1", "y": 0, "w": 1, "h": 1}]})
+            json!({"settled": true, "declarations": [], "surfaces": [], "overlays": [{"x": "1", "y": 0, "w": 1, "h": 1}]})
         ),
         "argument request.overlays[0].x must be a number, not a string"
     );

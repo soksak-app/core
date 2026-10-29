@@ -61,19 +61,19 @@ func TestArgumentRefusalMessages(t *testing.T) {
 		want string
 	}{
 		{"missing field", func() error {
-			_, err := h.SyncSurfaces(background, raw(`{"settled":true}`))
+			_, err := h.SyncSurfaces(background, raw(`{"settled":true,"declarations":[]}`))
 			return err
 		}, "argument request.surfaces is missing"},
 		{"missing title bar", func() error {
-			_, err := h.SyncSurfaces(background, raw(`{"settled":true,"surfaces":[]}`))
+			_, err := h.SyncSurfaces(background, raw(`{"settled":true,"declarations":[],"surfaces":[]}`))
 			return err
 		}, "argument request.titlebar is missing"},
 		{"null field", func() error {
-			_, err := h.SyncSurfaces(background, raw(`{"settled":true,"surfaces":[`+surface+`]}`))
+			_, err := h.SyncSurfaces(background, raw(`{"settled":true,"declarations":[],"surfaces":[`+surface+`]}`))
 			return err
 		}, "argument request.surfaces[0].h is missing"},
 		{"another type", func() error {
-			_, err := h.SyncSurfaces(background, raw(`{"settled":true,"surfaces":[],"overlays":[{"x":"1","y":0,"w":1,"h":1}]}`))
+			_, err := h.SyncSurfaces(background, raw(`{"settled":true,"declarations":[],"surfaces":[],"overlays":[{"x":"1","y":0,"w":1,"h":1}]}`))
 			return err
 		}, "argument request.overlays[0].x must be a number, not a string"},
 		{"null argument", func() error {
