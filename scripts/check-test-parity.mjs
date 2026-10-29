@@ -200,6 +200,13 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-299-4",
+    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "markedRange: { location: 0, length: 2 }" }],
+    tests: [{ file: "e2e/terminal.test.mjs", id: "diagnostic terminal entries inject preedit and record terminal input" }],
+    expected: "The compose check sends the markedRange that the terminal plugin requires and reads the preedit of the recorded input operation.",
+    levels: ["application"],
+  },
+  {
     id: "F239-298",
     implementation: [
       { file: "packages/host/wailsv3/src/endpoint.go", symbol: "func (c *endpointConn) unsent(" },

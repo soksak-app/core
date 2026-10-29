@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-299-4: The diagnostic terminal compose check sends the `markedRange` that the terminal plugin requires and reads the preedit of the recorded input operation; it passes on both hosts in 3 of 3 runs.
 - F239-298: A reply or a notification that meets a connection that the peer closed is recorded as not sent instead of an error on both hosts, and the Wails write queue records the frames that remain when its connection closes. Red: the Go and Rust owning tests found no record and a write error; Green: they pass 3 of 3 runs.
 - F239-292: The browser empty state check expects the root document of the browser view at the empty state, and the placement check reads the applied placements from `host.trace.surface`; the placement check passes on both hosts in 3 of 3 runs.
 - F239-294: The library window check declares the files tree failure that its folder removal causes in each of its three texts, so it passes on both hosts.

@@ -1737,15 +1737,18 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(await s.run("terminal.ime.trace", { action: "start" }, surface),
       { enabled: true, overflow: false, entries: [] });
     s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
-    await s.run("terminal.compose.update", { text: "글은", selectedRange: { location: 2, length: 0 } }, surface);
+    // The plugin requires markedRange: the marked text of an input method, or null when nothing is marked.
+    await s.run("terminal.compose.update",
+      { text: "글은", markedRange: { location: 0, length: 2 }, selectedRange: { location: 2, length: 0 } }, surface);
     await s.until("terminal.compose", (compose) => compose.text === "글은" && compose.selectedRange?.location === 2,
       "the injected preedit did not reach terminal.compose", { surface });
-    await s.run("terminal.compose.update", { text: "" }, surface);
+    await s.run("terminal.compose.update", { text: "", markedRange: null }, surface);
     await s.until("terminal.compose", (compose) => compose.text === "",
       "the empty preedit did not clear terminal.compose", { surface });
     const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
-    assert.deepEqual(trace.entries.map((entry) => [entry.kind, entry.input?.type, entry.input?.text]),
-      [["terminal-input", "compose", "글은"], ["terminal-input", "compose", ""]]);
+    // Each injected preedit reaches the session as an input operation that carries the preedit.
+    assert.deepEqual(trace.entries.map((entry) => [entry.kind, entry.input?.operation, entry.input?.preedit?.text]),
+      [["terminal-input", "input", "글은"], ["terminal-input", "input", ""]]);
   });
 
   // An unrelated event (a theme check) does not clear a session error; only the event that resolves the error (a new trace) clears it.
