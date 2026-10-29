@@ -587,3 +587,51 @@ func TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending(t *testing.T) {
 		t.Fatalf("image attach of the pending surface returned %v, want the pending detach", err)
 	}
 }
+
+// A malformed acknowledgement is refused with an error that names its member, the same text as the Tauri host, and the
+// pending detach keeps waiting for a valid one (docs/spec/sidecars.md).
+// contract: images.detach.malformed-ack-names-its-member
+func TestAMalformedImageDetachAcknowledgementNamesItsMember(t *testing.T) {
+	cases := []struct {
+		name     string
+		detached string
+		want     string
+	}{
+		{"detached that is not an object", `5`, "image detach acknowledgement has no object payload"},
+		{"missing request", `{"name":"view","generation":7,"ok":true,"result":"detached"}`, "image detach acknowledgement has no request id"},
+		{"empty request", `{"request":"","name":"view","generation":7,"ok":true,"result":"detached"}`, "image detach acknowledgement has no request id"},
+		{"request that is not a string", `{"request":5,"name":"view","generation":7,"ok":true,"result":"detached"}`, "image detach acknowledgement has no request id"},
+		{"missing name", `{"request":"REQ","generation":7,"ok":true,"result":"detached"}`, "image detach acknowledgement REQ has no image name"},
+		{"zero generation", `{"request":"REQ","name":"view","generation":0,"ok":true,"result":"detached"}`, "image detach acknowledgement REQ has no valid generation"},
+		{"generation that is not a number", `{"request":"REQ","name":"view","generation":"7","ok":true,"result":"detached"}`, "image detach acknowledgement REQ has no valid generation"},
+		{"missing ok", `{"request":"REQ","name":"view","generation":7,"result":"detached"}`, "image detach acknowledgement REQ has no boolean result"},
+		{"ok that is not a boolean", `{"request":"REQ","name":"view","generation":7,"ok":"true","result":"detached"}`, "image detach acknowledgement REQ has no boolean result"},
+		{"result that is not a string", `{"request":"REQ","name":"view","generation":7,"ok":true,"result":5}`, "image detach acknowledgement REQ has no string result"},
+		{"error that is not a string", `{"request":"REQ","name":"view","generation":7,"ok":false,"error":5}`, "image detach acknowledgement REQ has no string error"},
+		{"current generation that is not a number", `{"request":"REQ","name":"view","generation":7,"ok":false,"error":"staleGeneration","currentGeneration":"8"}`, "image detach acknowledgement REQ has no valid current generation"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			isolateTraceRecords(t)
+			surfaces, services := imageDetachFixture(t, "fixture-sidecar")
+			c := surfaces.sidecars
+			target := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces}
+			if err := surfaces.beginImageDetaches([]imageDetachTarget{target}); err != nil {
+				t.Fatalf("begin image detach: %v", err)
+			}
+			request := sentImageDetachRequest(t, services["fixture-sidecar"])
+			body := `{"image":{"detached":` + strings.ReplaceAll(tc.detached, "REQ", request) + `}}`
+			if !c.tryHandleImageEnvelope(surfaces, target.Sidecar, target.Surface, json.RawMessage(body)) {
+				t.Fatal("host did not consume the malformed acknowledgement")
+			}
+			want := strings.ReplaceAll(tc.want, "REQ", request)
+			errors := bufferedTraces(t, "host.record.error")
+			if len(errors) != 1 || errors[0]["where"] != "sidecar fixture-sidecar" || errors[0]["text"] != want {
+				t.Fatalf("error records %v, want %q", errors, want)
+			}
+			if err := surfaces.pendingImageDetachError(target.Surface); err == nil {
+				t.Fatal("a malformed acknowledgement ended the pending detach")
+			}
+		})
+	}
+}

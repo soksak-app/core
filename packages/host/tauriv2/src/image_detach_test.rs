@@ -683,3 +683,74 @@ fn a_supplier_acknowledgement_is_consumed_by_the_host_and_ends_the_detach() {
     );
     fixture.sidecars.stop();
 }
+
+// A malformed acknowledgement is refused with an error that names its member, the same text as the Wails host, and the
+// pending detach keeps waiting for a valid one (docs/spec/sidecars.md).
+// contract: images.detach.malformed-ack-names-its-member
+#[test]
+fn a_malformed_detach_acknowledgement_names_its_member() {
+    let cases = [
+        (
+            serde_json::json!(5),
+            "image detach acknowledgement has no object payload",
+        ),
+        (
+            serde_json::json!({"name":"region-a","generation":7,"ok":true,"result":"detached"}),
+            "image detach acknowledgement has no request id",
+        ),
+        (
+            serde_json::json!({"request":"","name":"region-a","generation":7,"ok":true,"result":"detached"}),
+            "image detach acknowledgement has no request id",
+        ),
+        (
+            serde_json::json!({"request":5,"name":"region-a","generation":7,"ok":true,"result":"detached"}),
+            "image detach acknowledgement has no request id",
+        ),
+        (
+            serde_json::json!({"request":"request-a","generation":7,"ok":true,"result":"detached"}),
+            "image detach acknowledgement request-a has no image name",
+        ),
+        (
+            serde_json::json!({"request":"request-a","name":"region-a","generation":0,"ok":true,"result":"detached"}),
+            "image detach acknowledgement request-a has no valid generation",
+        ),
+        (
+            serde_json::json!({"request":"request-a","name":"region-a","generation":"7","ok":true,"result":"detached"}),
+            "image detach acknowledgement request-a has no valid generation",
+        ),
+        (
+            serde_json::json!({"request":"request-a","name":"region-a","generation":7,"result":"detached"}),
+            "image detach acknowledgement request-a has no boolean result",
+        ),
+        (
+            serde_json::json!({"request":"request-a","name":"region-a","generation":7,"ok":"true","result":"detached"}),
+            "image detach acknowledgement request-a has no boolean result",
+        ),
+        (
+            serde_json::json!({"request":"request-a","name":"region-a","generation":7,"ok":true,"result":5}),
+            "image detach acknowledgement request-a has no string result",
+        ),
+        (
+            serde_json::json!({"request":"request-a","name":"region-a","generation":7,"ok":false,"error":5}),
+            "image detach acknowledgement request-a has no string error",
+        ),
+        (
+            serde_json::json!({"request":"request-a","name":"region-a","generation":7,"ok":false,"error":"staleGeneration","currentGeneration":"8"}),
+            "image detach acknowledgement request-a has no valid current generation",
+        ),
+    ];
+    for (detached, want) in cases {
+        let (_config, sidecars) = manager();
+        let receiver = pending(&sidecars, "request-a");
+        let body = ack(serde_json::json!({"image": {"detached": detached}}));
+        assert_eq!(
+            sidecars
+                .acknowledge_image_detach("fixture-sidecar", "surface-a", &body)
+                .unwrap_err(),
+            want,
+            "acknowledgement {detached}"
+        );
+        assert!(receiver.try_recv().is_err());
+        assert!(has_waiter(&sidecars, "request-a"));
+    }
+}

@@ -472,6 +472,7 @@ fn invalid_json_closes_connection() {
 | `images.detach.ack-consumed` | 유효한 `image.detached` 응답은 root, `image` 내부, acknowledgement object 내부의 무관한 더 깊은 JSON member가 `Value` materialization 깊이를 초과해도 host가 소비하며 page에 전달하지 않는다. | both |
 | `images.relay.preserves-compose-marked-range` | image event를 전달할 때 compose `markedRange`와 소유 surface 및 region을 보존한다. | both |
 | `images.detach.ack-exact-owner` | request, supplier, surface, image name, generation이 일치하는 응답만 detach를 완료한다. 불일치 응답은 대기를 끝내지 않는다. | both |
+| `images.detach.malformed-ack-names-its-member` | member가 없거나 다른 type인 응답은 그 member를 밝히는, 두 호스트에서 같은 오류 text로 거부되고 그 pending detach는 계속 기다린다. | both |
 | `images.detach.refusal-ends-pending` | supplier 거부는 pending detach를 끝낸다. 그 surface의 `image-detach-ended` event는 supplier가 알리면 현재 generation을 담은 `... rejected: <reason>`을 담고, 여러 image의 실패는 이름의 byte 순서로 `; `로 이어지며, 호스트는 그 실패의 오류 기록을 쓰지 않는다. | both |
 | `images.detach.timeout-keeps-waiting` | 10초 안에 응답이 없는 detach는 `... timed out` 오류를 한 번 쓰고 계속 기다린다. reload는 pending image에 두 번째 detach를 보내지 않고, 늦은 응답은 detach를 끝내고 그 surface의 ended event를 보낸다. | both |
 | `images.detach.surface-ends-after-its-last-detach` | surface는 그 image detach가 모두 끝날 때까지 pending이고, 창 event `image-detach-ended {surface, error}`는 마지막 detach가 끝난 뒤에 온다. | both |

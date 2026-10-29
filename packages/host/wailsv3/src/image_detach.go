@@ -3,6 +3,7 @@ package host
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -39,13 +40,66 @@ const (
 )
 
 type imageDetachAck struct {
-	Request           string  `json:"request"`
-	Name              string  `json:"name"`
-	Generation        uint64  `json:"generation"`
-	OK                bool    `json:"ok"`
-	Result            string  `json:"result"`
-	Error             string  `json:"error"`
-	CurrentGeneration *uint64 `json:"currentGeneration,omitempty"`
+	Request    string
+	Name       string
+	Generation uint64
+	OK         bool
+	Result     string
+	Error      string
+	// CurrentGeneration is the member as the supplier wrote it, read only for a refusal.
+	CurrentGeneration json.RawMessage
+}
+
+// parseImageDetachAck reads the members of an image.detached acknowledgement. Each member is read only when it is present,
+// so a missing member and a member of another type are refused with the member they name instead of being read as a zero
+// value; an absent result or error is empty, which handleImageDetachAck rejects where the member is required.
+func parseImageDetachAck(detached json.RawMessage) (imageDetachAck, error) {
+	var members struct {
+		Request           json.RawMessage `json:"request"`
+		Name              json.RawMessage `json:"name"`
+		Generation        json.RawMessage `json:"generation"`
+		OK                json.RawMessage `json:"ok"`
+		Result            json.RawMessage `json:"result"`
+		Error             json.RawMessage `json:"error"`
+		CurrentGeneration json.RawMessage `json:"currentGeneration"`
+	}
+	if err := json.Unmarshal(detached, &members); err != nil {
+		return imageDetachAck{}, errors.New("image detach acknowledgement has no object payload")
+	}
+	text := func(member json.RawMessage) (string, bool) {
+		var value string
+		if member == nil || json.Unmarshal(member, &value) != nil {
+			return "", false
+		}
+		return value, true
+	}
+	ack := imageDetachAck{CurrentGeneration: members.CurrentGeneration}
+	var present bool
+	if ack.Request, present = text(members.Request); !present || ack.Request == "" {
+		return imageDetachAck{}, errors.New("image detach acknowledgement has no request id")
+	}
+	if ack.Name, present = text(members.Name); !present || ack.Name == "" {
+		return imageDetachAck{}, fmt.Errorf("image detach acknowledgement %s has no image name", ack.Request)
+	}
+	if members.Generation == nil || json.Unmarshal(members.Generation, &ack.Generation) != nil || ack.Generation == 0 {
+		return imageDetachAck{}, fmt.Errorf("image detach acknowledgement %s has no valid generation", ack.Request)
+	}
+	if members.OK == nil || json.Unmarshal(members.OK, &ack.OK) != nil {
+		return imageDetachAck{}, fmt.Errorf("image detach acknowledgement %s has no boolean result", ack.Request)
+	}
+	for _, member := range []struct {
+		name  string
+		raw   json.RawMessage
+		value *string
+	}{{"result", members.Result, &ack.Result}, {"error", members.Error, &ack.Error}} {
+		if member.raw == nil {
+			continue
+		}
+		if *member.value, present = text(member.raw); !present {
+			return imageDetachAck{}, fmt.Errorf("image detach acknowledgement %s has no string %s", ack.Request, member.name)
+		}
+	}
+	return ack, nil
 }
 
 // imageDetachKey names one image of a supplier; a window keeps at most one pending detach for it.
@@ -99,6 +153,15 @@ func (c *Sidecars) handleImageDetachAck(owner SidecarOwner, sidecar, surface str
 		LogError("sidecar "+sidecar, fmt.Sprintf("failed image detach acknowledgement %q has no error for surface %s", ack.Request, surface))
 		return true
 	}
+	var currentGeneration *uint64
+	if !ack.OK && ack.CurrentGeneration != nil {
+		var current uint64
+		if json.Unmarshal(ack.CurrentGeneration, &current) != nil {
+			LogError("sidecar "+sidecar, fmt.Sprintf("image detach acknowledgement %s has no valid current generation", ack.Request))
+			return true
+		}
+		currentGeneration = &current
+	}
 	c.mu.Lock()
 	waiter, found := c.imageDetachRequests[ack.Request]
 	if !found {
@@ -114,7 +177,7 @@ func (c *Sidecars) handleImageDetachAck(owner SidecarOwner, sidecar, surface str
 	}
 	delete(c.imageDetachRequests, ack.Request)
 	c.mu.Unlock()
-	waiter.result <- imageDetachResult{ok: ack.OK, result: ack.Result, error: ack.Error, currentGeneration: ack.CurrentGeneration}
+	waiter.result <- imageDetachResult{ok: ack.OK, result: ack.Result, error: ack.Error, currentGeneration: currentGeneration}
 	return true
 }
 

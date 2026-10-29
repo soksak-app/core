@@ -213,6 +213,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-301",
+    implementation: [
+      { file: "packages/host/wailsv3/src/image_detach.go", symbol: "func parseImageDetachAck(" },
+      { file: "packages/host/tauriv2/src/image_detach.rs", symbol: "pub(super) fn acknowledge_image_detach(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/image_detach_test.go", id: "TestAMalformedImageDetachAcknowledgementNamesItsMember" },
+      { file: "packages/host/tauriv2/src/image_detach_test.rs", id: "a_malformed_detach_acknowledgement_names_its_member" },
+    ],
+    expected: "Both hosts refuse a malformed image detach acknowledgement with the same text that names its member and keep the pending detach.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-300",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
     tests: [

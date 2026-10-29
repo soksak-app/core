@@ -2516,9 +2516,9 @@ func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surfa
 		} `json:"image"`
 	}
 	if err := json.Unmarshal(body, &envelope); err == nil && envelope.Image != nil && envelope.Image.Detached != nil {
-		var ack imageDetachAck
-		if err := json.Unmarshal(envelope.Image.Detached, &ack); err != nil || ack.Request == "" || ack.Name == "" || ack.Generation == 0 {
-			LogError("sidecar "+sidecarName, fmt.Sprintf("invalid image detach acknowledgement for surface %s", surface))
+		ack, err := parseImageDetachAck(envelope.Image.Detached)
+		if err != nil {
+			LogError("sidecar "+sidecarName, err.Error())
 			return true
 		}
 		return c.handleImageDetachAck(owner, sidecarName, surface, ack)

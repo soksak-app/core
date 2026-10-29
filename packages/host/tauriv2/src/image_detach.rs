@@ -290,10 +290,9 @@ impl<O: Owner> Sidecars<O> {
         let detached = detach_acknowledgement_body(body)
             .map_err(|error| format!("invalid image detach acknowledgement: {error}"))?
             .ok_or_else(|| "image detach acknowledgement has no object payload".to_string())?;
-        let ack: DetachAcknowledgementFields<'_> =
-            serde_json::from_str(detached.get()).map_err(|error| {
-                format!("image detach acknowledgement has no object payload: {error}")
-            })?;
+        // A payload that is not an object has no member to name, so its error names the payload.
+        let ack: DetachAcknowledgementFields<'_> = serde_json::from_str(detached.get())
+            .map_err(|_| "image detach acknowledgement has no object payload".to_string())?;
         let request = ack
             .request
             // default: malformed, missing, and empty request ids share the explicit no-request-id protocol error below.
