@@ -49,6 +49,7 @@ fn the_page_start_sends_the_image_detach_and_lists_its_surface_without_waiting()
     assert_eq!(*order.lock().unwrap(), ["page started", "parts", "pending"]);
 }
 
+// contract: page.start.requires-window
 #[test]
 fn a_page_start_failure_builds_no_start_document() {
     let mut built = false;
