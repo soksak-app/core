@@ -112,12 +112,11 @@ test('release builds, migrates, and packages each host after reusable CI and reg
     assert.ok(nativeFetch >= 0 && build > nativeFetch, `${host}: native dependency fetch must precede its offline build`);
     assert.match(list[build].text, /OFFLINE: '1'/);
   }
-  assert.match(job('registry-manifest'), /node scripts\/check-registry-manifests\.mjs/);
   const publish = job('publish');
-  assert.match(publish, /needs: \[checks, gate, window-checks, release-wailsv3, release-tauriv2, registry-manifest\]/);
+  assert.match(publish, /needs: \[checks, gate, window-checks, release-wailsv3, release-tauriv2\]/);
   assert.match(publish, /if: always\(\) && needs\.gate\.outputs\.release == 'true'/);
   for (const [name, env] of [['checks', 'CHECKS_RESULT'], ['gate', 'GATE_RESULT'], ['window-checks', 'WINDOW_RESULT'], ['release-wailsv3', 'WAILS_RESULT'],
-    ['release-tauriv2', 'TAURI_RESULT'], ['registry-manifest', 'REGISTRY_RESULT']]) {
+    ['release-tauriv2', 'TAURI_RESULT']]) {
     assert.match(publish, new RegExp(`${env}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`));
     assert.match(publish, new RegExp(`test \\"\\$${env}\\" = success`), `${name}: publication is not gated on success`);
   }
@@ -285,10 +284,13 @@ test('a push to main releases the declared version after the checks, the gate an
   assert.match(release, /^concurrency:\n {2}group: release\n {2}cancel-in-progress: false$/m);
   assert.match(release, /run: node packages\/plugin-api\/release-gate\.js packages\/plugin-api\/package\.json docs\/features\.md/);
   assert.match(release, /window-checks:\n {4}needs: gate\n {4}if: needs\.gate\.outputs\.release == 'true'\n {4}uses: \.\/\.github\/workflows\/window-checks\.yml/);
-  for (const job of ['release-wailsv3', 'release-tauriv2', 'registry-manifest']) {
+  for (const job of ['release-wailsv3', 'release-tauriv2']) {
     assert.match(release, new RegExp(`  ${job}:\\n {4}needs: gate\\n {4}if: needs\\.gate\\.outputs\\.release == 'true'\\n`), `${job} runs only on a release`);
   }
   assert.match(release, /git ls-remote origin refs\/heads\/main/, 'publication requires the commit to be the head of main');
+  // The registry lists a core release in its core.json; the release of core has no condition on the registry state.
+  assert.doesNotMatch(release, /registry/i, 'release.yml reads no registry');
+  assert.doesNotMatch(read('Makefile').match(/^release-check:.*$/m)[0], /registry/, 'release-check reads no registry');
   assert.match(release, /tag_name: v\$\{\{ needs\.gate\.outputs\.version \}\}/);
   assert.match(release, /target_commitish: \$\{\{ github\.sha \}\}/);
   const ci = read('.github/workflows/ci.yml');

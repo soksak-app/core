@@ -73,7 +73,7 @@ test("per-host checks build only the selected host and core frontend", { timeout
     });
     assert.match(output, new RegExp(`soksak-stage src/frontend --diagnostics`), output);
     assert.match(output, new RegExp(`check-host-contract\\.mjs --host ${host}`), output);
-    assert.doesNotMatch(output, /workspace-registry\.mjs|registry-manifest-check/, output);
+    assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
     assert.doesNotMatch(output, new RegExp(`--host ${host === "wailsv3" ? "tauriv2" : "wailsv3"}`), output);
   }
 });
@@ -84,7 +84,7 @@ test("Rust clippy stages only the core frontend and avoids the workspace registr
   });
   assert.match(output, /soksak-stage src\/frontend --diagnostics/, output);
   assert.match(output, /cargo clippy --locked/, output);
-  assert.doesNotMatch(output, /workspace-registry\.mjs|registry-manifest-check/, output);
+  assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
 });
 
 test("native and paired host contract checks use core-only frontend stages", { timeout: 10000 }, () => {
@@ -94,7 +94,7 @@ test("native and paired host contract checks use core-only frontend stages", { t
     });
     assert.match(output, /soksak-stage src\/frontend --diagnostics/, output);
     assert.match(output, /check-host-contract\.mjs/, output);
-    assert.doesNotMatch(output, /workspace-registry\.mjs|registry-manifest-check/, output);
+    assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
   }
 });
 
@@ -108,6 +108,6 @@ test("release host checks audit only their own optimized bundle", { timeout: 100
     });
     assert.ok(output.includes(`check-release.mjs --host ${host} --macos-minimum 14.4 ${bundle}`), output);
     assert.doesNotMatch(output, new RegExp(host === "wailsv3" ? "--tauriv2-bundle" : "--wailsv3-bundle"), output);
-    assert.doesNotMatch(output, /registry-manifest-check|workspace-registry\.mjs/, output);
+    assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
   }
 });

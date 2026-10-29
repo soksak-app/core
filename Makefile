@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check declared-ui-benchmark benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check declared-ui-benchmark benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -29,13 +29,8 @@ push-check:
 	@$(MAKE) --no-print-directory commits-check RANGE="$(or $(RANGE),origin/main..HEAD)"
 
 # Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
-release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check
+release-check: wailsv3-build-release tauriv2-build-release
 	@node scripts/check-release.mjs --macos-minimum $(MACOS_MINIMUM) --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)" --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
-
-# Checks that the core of this checkout accepts the manifest of every plugin version of the public registry that it
-# installs (docs/operations/examples.md).
-registry-manifest-check:
-	@node scripts/check-registry-manifests.mjs
 
 # Measures the memory of the main page process of a running application at start, idle, and after reload (docs/operations/examples.md).
 # APP is wailsv3 or tauriv2, CONFIG is the configuration folder of that application, BUILD is release (default) or debug.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F276: core의 release는 더 이상 공개 registry를 검사하지 않는다. registry가 자기가 올린 core version마다 설치가 고르는 plugin version을 검사한다.
 - F275-1: 창 검사 job은 build 전에 선언된 plugin과 sidecar 저장소의 설치 단계 `make registry-install`을 실행한다.
 - F275: workspace registry는 plugin마다 그 저장소의 `make pack` target으로 pack한다. plugin 명세는 plugin이나 sidecar 저장소의 설치 단계 `make install`을 적는다.
 - F272-4: release만 끝낼 수 있는 checklist 항목을 그것을 수행하는 `release.yml`의 단계와 함께 닫거나 그것을 맡는 저장소로 옮겨, 자기가 붙잡는 release를 기다리는 열린 항목이 없게 한다.

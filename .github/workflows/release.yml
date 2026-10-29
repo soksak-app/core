@@ -150,31 +150,9 @@ jobs:
         if: always()
         run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
-  registry-manifest:
-    needs: gate
-    if: needs.gate.outputs.release == 'true'
-    runs-on: ubuntu-26.04-arm
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          path: core
-      - uses: ./core/.github/actions/setup-node
-        with:
-          root: core
-      - name: Install locked Node dependencies
-        working-directory: core
-        run: CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile
-      - name: Check manifests from the public registry
-        working-directory: core
-        run: node scripts/check-registry-manifests.mjs
-      - name: Verify lockfiles remain unchanged
-        if: always()
-        working-directory: core
-        run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
-
   publish:
     runs-on: ubuntu-26.04-arm
-    needs: [checks, gate, window-checks, release-wailsv3, release-tauriv2, registry-manifest]
+    needs: [checks, gate, window-checks, release-wailsv3, release-tauriv2]
     if: always() && needs.gate.outputs.release == 'true'
     permissions:
       contents: write
@@ -186,14 +164,12 @@ jobs:
           WINDOW_RESULT: ${{ needs.window-checks.result }}
           WAILS_RESULT: ${{ needs.release-wailsv3.result }}
           TAURI_RESULT: ${{ needs.release-tauriv2.result }}
-          REGISTRY_RESULT: ${{ needs.registry-manifest.result }}
         run: |
           test "$CHECKS_RESULT" = success
           test "$GATE_RESULT" = success
           test "$WINDOW_RESULT" = success
           test "$WAILS_RESULT" = success
           test "$TAURI_RESULT" = success
-          test "$REGISTRY_RESULT" = success
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       # A later push or a tag of the version that appeared while the run built makes this run stale, so it publishes nothing.
       - name: Require the commit to be the head of main and the tag to be absent

@@ -40,6 +40,9 @@ pull request의 검사는 base branch의 script로 pull request의 파일을 데
 - 항목이 항목 규칙을 어긴다.
 - pull request가 더하거나 바꾸는 항목을 작성자가 소유하지 않는다.
 - pull request의 registry 전체에서 `sok registry build`가 실패한다. 모든 release를 https로 읽어 `sha256`과 비교하고, 각 plugin release는 그 항목의 `plugin.json`과 `package.json`을 담아야 한다.
+- `core.json`이 올린 core version에 대해 설치가 고르는 plugin version([version 선택](installation.ko.md#version-선택))의 manifest를 그 core release의 `@soksak/plugin-api`의 `validateManifest`가 거절한다.
+
+게시는 `main`의 파일에 같은 검사를 실행한다. core version은 설치가 그것에 고르는 plugin version이 모두 통과할 때만 `core.json`에 들어간다. 그래서 [설치](installation.ko.md#애플리케이션-업데이트)의 애플리케이션 업데이트는 core version을 그것이 받아들이는 plugin과 함께만 제공한다. core의 release는 registry를 읽지 않으며, `core.json`이 아직 올리지 않은 게시된 core release는 제공되지 않는다.
 
 ## Merge와 게시
 

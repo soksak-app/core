@@ -72,7 +72,6 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("native test target audit", "js-ts", ["scripts/check-native-test-targets.mjs"], ["scripts/test/native-test-targets.test.mjs"]),
   lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
-  lane("registry manifest release check", "js-ts", ["scripts/check-registry-manifests.mjs"], ["scripts/test/registry-manifests.test.mjs"]),
   lane("candidate registry proof check", "js-ts", ["scripts/check-candidate-registry.mjs"], ["scripts/test/candidate-registry.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
@@ -3539,33 +3538,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F125",
-    implementation: [
-      { file: "scripts/check-registry-manifests.mjs", symbol: "export async function registryManifestErrors" },
-    ],
-    tests: [
-      { file: "scripts/test/registry-manifests.test.mjs", id: "each plugin version that the new core installs and whose manifest it rejects is reported" },
-    ],
-    expected: "The core of this checkout reads the published registry index, which holds the versions as release and releases, and reports each plugin version whose manifest it rejects.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-269",
-    implementation: [
-      { file: "scripts/check-registry-manifests.mjs", symbol: "if (values.sha256 !== undefined && values.index === undefined)" },
-      { file: "scripts/check-registry-manifests.mjs", symbol: 'createHash("sha256").update(bytes).digest("hex")' },
-    ],
-    tests: [
-      { file: "scripts/test/registry-manifests.test.mjs", id: "an explicit index remains supported without a sha256" },
-      { file: "scripts/test/registry-manifests.test.mjs", id: "an expected index sha256 requires an explicit nonempty index URL" },
-      { file: "scripts/test/registry-manifests.test.mjs", id: "the explicit index sha256 must be 64 lowercase hexadecimal characters" },
-      { file: "scripts/test/registry-manifests.test.mjs", id: "the explicit index sha256 is checked before parsing index bytes" },
-      { file: "scripts/test/registry-manifests.test.mjs", id: "the explicit index is accepted when its sha256 matches" },
-    ],
-    expected: "An explicit index may retain the existing URL-only mode. When an expected SHA-256 is supplied, require a nonempty explicit URL and a 64-character lowercase hexadecimal digest, compare the fetched bytes before parsing, and reject mismatches.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-273",
     implementation: [
       { file: "scripts/check-candidate-registry.mjs", symbol: "export function verifyCandidateRegistry" },
@@ -4556,13 +4528,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F141",
-    implementation: [{ file: "packages/sok/wailsv3/src/install.go", symbol: "func ValidateRegistryPlugin" }],
-    tests: [{ file: "scripts/test/registry-manifests.test.mjs", id: "each plugin version that the new core installs and whose manifest it rejects is reported" }],
-    expected: "The hwp plugin is listed in the registry with the files sidecar it requires.",
-    levels: ["unit"],
-  },
-  {
     id: "F124",
     implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.debug.save"' }],
     tests: [{ file: "packages/host/tauriv2/tests/debug_test.rs", id: "debug_copy_copies_a_file_of_the_logs_folder_only" }],
@@ -5320,7 +5285,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F183",
-    implementation: [{ file: "Makefile", symbol: "release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check" }],
+    implementation: [{ file: "Makefile", symbol: "release-check: wailsv3-build-release tauriv2-build-release" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds, migrates, and packages each host after reusable CI and registry checks succeed" }],
     expected: "A release publishes both bundles from a tag whose CI passed and runs a release-built host once on the stored data of the earlier release.",
     levels: ["unit"],
@@ -8031,6 +7996,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F276",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, window-checks, release-wailsv3, release-tauriv2]" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks, the gate and the window checks succeed" }],
+    expected: "The release of core has no condition on the registry state; the registry checks the plugin versions of each core version that it lists.",
+    levels: ["unit"],
+  },
+  {
     id: "F275-1",
     implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function installFolders(" }],
     tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "the installation stage runs make install once in every declared repository before the window checks build" }],
@@ -9782,15 +9754,17 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 const NON_CAPABILITY_COMPLETIONS = new Set(["F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
-// moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read
+// moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
 // those repositories, so they have no link here and each repository checks its own evidence.
-const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210"]);
+const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
 
 // Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22
 // removed with the start that ended the recorded processes.
 // F60, F91, F114 and F116 wrote the module mount and dispose of a surface, which F212.11-2b removes with the module mount; their
 // tests and symbols are removed with it.
-const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116"]);
+// F125 and F239-269 wrote the registry manifest check of the core release, which F276 removes: the registry checks the
+// plugin versions of each core version that it lists.
+const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116", "F125", "F239-269"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));
