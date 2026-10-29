@@ -1,23 +1,57 @@
-use std::sync::PoisonError;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::sync_channel;
-use std::time::{Duration, Instant};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError, sync_channel};
+use std::sync::{Arc, PoisonError};
+use std::thread::JoinHandle;
+use std::time::Duration;
 
 use serde::Deserialize;
 use serde_json::value::RawValue;
 
 use super::{ImageDetachWaiter, Owner, Sidecars};
+use crate::application_log::log_error;
+use crate::images::{DetachTarget, Images};
 
-struct PendingImageDetach {
-    request: String,
-    receiver: std::sync::mpsc::Receiver<Result<(), String>>,
-    target: crate::images::DetachTarget,
-}
-
-const IMAGE_DETACH_TIMEOUT: Duration = Duration::from_secs(10);
-const IMAGE_DETACH_LIMIT: usize = 1024;
+/// The deadline after which an unacknowledged detach writes its error; the wait continues after it.
+pub(crate) const IMAGE_DETACH_TIMEOUT: Duration = Duration::from_secs(10);
 /// One service can serve multiple windows, so request ids share one process-wide sequence.
 static NEXT_IMAGE_DETACH_REQUEST: AtomicU64 = AtomicU64::new(1);
+
+/// The end of one image detach request.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum DetachOutcome {
+    /// The supplier released the image.
+    Detached,
+    /// The supplier refused the detach with this reason.
+    Rejected(String),
+    /// The supplier connection or the host ended before an acknowledgement.
+    SupplierEnded,
+    /// The surface session ended with its tab before an acknowledgement.
+    SessionEnded,
+}
+
+/// The wait of one detach that `begin_image_detaches` started. `timed_out` disconnects when the deadline error is
+/// recorded, or when the wait ends without it, and `thread` ends when the wait ends; they are the interface through
+/// which a check observes the wait.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "only a check observes the wait of a detach")
+)]
+pub(crate) struct DetachWait {
+    pub timed_out: Receiver<()>,
+    pub thread: JoinHandle<()>,
+}
+
+/// Sends an image-detach-ended event `{surface, error}` to the page of the window.
+pub(crate) type EndedEvent = Arc<dyn Fn(serde_json::Value) + Send + Sync>;
+
+/// Names the target of a detach in its errors.
+pub(crate) fn detach_target_text(target: &DetachTarget) -> String {
+    format!(
+        "image detach sidecar {} surface {} image {} generation {}",
+        target.sidecar, target.surface, target.name, target.generation
+    )
+}
 
 #[derive(Deserialize)]
 struct DetachAcknowledgement<'a> {
@@ -45,6 +79,13 @@ struct DetachAcknowledgementFields<'a> {
     result: Option<&'a RawValue>,
     #[serde(borrow, default, deserialize_with = "raw_value_present")]
     error: Option<&'a RawValue>,
+    #[serde(
+        borrow,
+        default,
+        deserialize_with = "raw_value_present",
+        rename = "currentGeneration"
+    )]
+    current_generation: Option<&'a RawValue>,
 }
 
 fn raw_value_present<'de, D>(deserializer: D) -> Result<Option<&'de RawValue>, D::Error>
@@ -62,143 +103,181 @@ pub(super) fn detach_acknowledgement_body(
     Ok(envelope.image.and_then(|image| image.detached))
 }
 
-impl<O: Owner> Sidecars<O> {
-    /// Sends every image detach before waiting for the exact acknowledgements under one deadline.
-    pub(crate) fn detach_images(
-        &self,
-        owner: &O,
-        targets: &[crate::images::DetachTarget],
-    ) -> Result<(), String> {
-        self.detach_images_until(owner, targets, IMAGE_DETACH_TIMEOUT)
-    }
-
-    fn detach_images_until(
-        &self,
-        owner: &O,
-        targets: &[crate::images::DetachTarget],
-        timeout: Duration,
-    ) -> Result<(), String> {
-        if targets.is_empty() {
-            return Ok(());
-        }
-        let deadline = Instant::now() + timeout;
-        let mut pending = Vec::with_capacity(targets.len());
-        for target in targets {
-            if target.surface.is_empty()
-                || target.name.is_empty()
-                || target.sidecar.is_empty()
-                || target.generation == 0
-            {
-                self.cancel_image_detaches(&pending);
-                return Err("image detach target is incomplete".to_string());
-            }
-            let serial = match NEXT_IMAGE_DETACH_REQUEST.fetch_update(
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-                |value| value.checked_add(1),
-            ) {
-                Ok(serial) => serial,
-                Err(_) => {
-                    self.cancel_image_detaches(&pending);
-                    return Err("image detach request identifiers are exhausted".to_string());
-                }
-            };
-            let request = format!("image-detach-{}-{serial}", std::process::id());
-            let (sender, receiver) = sync_channel(1);
-            {
-                let mut waiters = self
-                    .core
-                    .image_detaches
-                    .lock()
-                    // default: a thread that stopped while holding the lock leaves each pending acknowledgement
-                    // independently addressable; the panic hook records the stop.
-                    .unwrap_or_else(PoisonError::into_inner);
-                if waiters.len() >= IMAGE_DETACH_LIMIT {
-                    drop(waiters);
-                    self.cancel_image_detaches(&pending);
-                    return Err(format!(
-                        "image detach acknowledgements reached the limit of {IMAGE_DETACH_LIMIT}"
-                    ));
-                }
-                waiters.insert(
-                    request.clone(),
-                    ImageDetachWaiter {
-                        sidecar: target.sidecar.clone(),
-                        surface: target.surface.clone(),
-                        name: target.name.clone(),
-                        generation: target.generation,
-                        result: sender,
-                    },
-                );
-            }
-            pending.push(PendingImageDetach {
-                request: request.clone(),
-                receiver,
-                target: target.clone(),
-            });
-            let body = serde_json::json!({"image":{"detach":{
-                "request": request,
-                "name": target.name,
-                "generation": target.generation,
-            }}});
-            let body = match RawValue::from_string(body.to_string()) {
-                Ok(body) => body,
-                Err(error) => {
-                    self.cancel_image_detaches(&pending);
-                    return Err(format!("image detach serialization: {error}"));
-                }
-            };
-            if let Err(error) = self.send(owner, &target.sidecar, &target.surface, &body) {
-                self.cancel_image_detaches(&pending);
-                return Err(format!(
-                    "image detach {}/{} request {request}: {error}",
-                    target.surface, target.name
-                ));
-            }
-        }
-
-        let mut failures = Vec::new();
-        for request in &pending {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            let result = if remaining.is_zero() {
-                Err("timed out".to_string())
-            } else {
-                match request.receiver.recv_timeout(remaining) {
-                    Ok(result) => result,
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err("timed out".to_string()),
-                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                        Err("acknowledgement waiter ended".to_string())
-                    }
-                }
-            };
-            if let Err(error) = result {
-                failures.push(format!(
-                    "image detach {}/{} request {}: {error}",
-                    request.target.surface, request.target.name, request.request
-                ));
-            }
-        }
-        self.cancel_image_detaches(&pending);
-        if failures.is_empty() {
-            Ok(())
+/// Ends the pending detaches whose waiter matches accepts because the supplier connection, the surface session or the
+/// host ended. The caller holds the sidecar state lock; each result channel has one free slot, so the delivery does not
+/// block.
+pub(super) fn release_image_detaches(
+    waiters: &mut HashMap<String, ImageDetachWaiter>,
+    session: bool,
+    matches: impl Fn(&ImageDetachWaiter) -> bool,
+) {
+    let outcome = || {
+        if session {
+            DetachOutcome::SessionEnded
         } else {
-            Err(failures.join("; "))
+            DetachOutcome::SupplierEnded
         }
-    }
-
-    fn cancel_image_detaches(&self, pending: &[PendingImageDetach]) {
-        for request in pending {
-            self.cancel_image_detach(&request.request);
+    };
+    waiters.retain(|request, waiter| {
+        if !matches(waiter) {
+            return true;
         }
-    }
+        if let Err(TrySendError::Disconnected(_) | TrySendError::Full(_)) =
+            waiter.result.try_send(outcome())
+        {
+            log_error(
+                "image detach",
+                format!("image detach request {request} has no wait to release"),
+            );
+        }
+        false
+    });
+}
 
-    fn cancel_image_detach(&self, request: &str) {
+/// Sends the detach of each target and returns without waiting. A thread waits for each acknowledgement, and the
+/// surface of the target stays pending in images until its detach ends (docs/spec/sidecars.md). ended_event sends the
+/// image-detach-ended event of a surface whose last pending detach ended while the page is ready for it.
+pub(crate) fn begin_image_detaches<O: Owner>(
+    sidecars: &Sidecars<O>,
+    owner: &O,
+    images: &Images,
+    targets: Vec<DetachTarget>,
+    timeout: Duration,
+    ended_event: EndedEvent,
+) -> Result<Vec<DetachWait>, String> {
+    let mut waits = Vec::with_capacity(targets.len());
+    for target in targets {
+        let (request, result) = sidecars.begin_image_detach(owner, &target)?;
+        images.add_pending_detach(&target, &request);
+        let (timed_out_sender, timed_out) = sync_channel(1);
+        let images = images.clone();
+        let ended_event = Arc::clone(&ended_event);
+        let thread = std::thread::Builder::new()
+            .name("image-detach-wait".to_string())
+            .spawn(move || {
+                wait_image_detach(
+                    &images,
+                    &target,
+                    &request,
+                    &result,
+                    timeout,
+                    timed_out_sender,
+                    &*ended_event,
+                )
+            })
+            .map_err(|error| format!("image detach wait thread: {error}"))?;
+        waits.push(DetachWait { timed_out, thread });
+    }
+    Ok(waits)
+}
+
+/// Waits for the end of one pending detach. The deadline is a timer because a supplier that does not answer sends no
+/// event; it records that failure and does not end the wait.
+fn wait_image_detach(
+    images: &Images,
+    target: &DetachTarget,
+    request: &str,
+    result: &Receiver<DetachOutcome>,
+    timeout: Duration,
+    timed_out: SyncSender<()>,
+    ended_event: &dyn Fn(serde_json::Value),
+) {
+    let text = detach_target_text(target);
+    let outcome = match result.recv_timeout(timeout) {
+        Ok(outcome) => Ok(outcome),
+        Err(RecvTimeoutError::Timeout) => {
+            log_error(
+                "image detach",
+                format!("{text} request {request} timed out"),
+            );
+            drop(timed_out);
+            result.recv().map_err(|_| ())
+        }
+        Err(RecvTimeoutError::Disconnected) => Err(()),
+    };
+    let (failure, session) = match outcome {
+        Ok(DetachOutcome::Detached) => (None, false),
+        Ok(DetachOutcome::Rejected(reason)) => (
+            Some(format!("{text} request {request} rejected: {reason}")),
+            false,
+        ),
+        Ok(DetachOutcome::SupplierEnded) => (
+            Some(format!(
+                "{text} request {request} ended: the supplier connection ended"
+            )),
+            false,
+        ),
+        // The tab of the surface is gone, so its end is told to no page.
+        Ok(DetachOutcome::SessionEnded) => (None, true),
+        Err(()) => (
+            Some(format!("{text} request {request} ended without an outcome")),
+            false,
+        ),
+    };
+    if let Some(event) = images.end_pending_detach(target, request, failure, session) {
+        ended_event(event);
+    }
+}
+
+impl<O: Owner> Sidecars<O> {
+    /// Registers the waiter of one detach request and sends the request to its supplier.
+    fn begin_image_detach(
+        &self,
+        owner: &O,
+        target: &DetachTarget,
+    ) -> Result<(String, Receiver<DetachOutcome>), String> {
+        let text = detach_target_text(target);
+        if target.surface.is_empty()
+            || target.name.is_empty()
+            || target.sidecar.is_empty()
+            || target.generation == 0
+        {
+            return Err(format!("{text} has an incomplete target"));
+        }
+        let serial = NEXT_IMAGE_DETACH_REQUEST
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            })
+            .map_err(|_| format!("{text}: image detach request identifiers are exhausted"))?;
+        let request = format!("image-detach-{}-{serial}", std::process::id());
+        let (sender, receiver) = sync_channel(1);
         self.core
-            .image_detaches
+            .state
             .lock()
-            // default: cancellation removes only the exact opaque request, and a poisoned lock retains other requests.
+            // default: a thread that stopped while holding the lock leaves each pending acknowledgement
+            // independently addressable; the panic hook records the stop.
             .unwrap_or_else(PoisonError::into_inner)
-            .remove(request);
+            .image_detaches
+            .insert(
+                request.clone(),
+                ImageDetachWaiter {
+                    sidecar: target.sidecar.clone(),
+                    surface: target.surface.clone(),
+                    name: target.name.clone(),
+                    generation: target.generation,
+                    result: sender,
+                },
+            );
+        let sent = serde_json::to_string(&serde_json::json!({"image":{"detach":{
+            "request": request,
+            "name": target.name,
+            "generation": target.generation,
+        }}}))
+        .map_err(|error| error.to_string())
+        .and_then(|body| RawValue::from_string(body).map_err(|error| error.to_string()))
+        .and_then(|body| self.send(owner, &target.sidecar, &target.surface, &body));
+        if let Err(error) = sent {
+            self.core
+                .state
+                .lock()
+                // default: removing the exact request leaves the other waiters of a poisoned lock in place; the panic
+                // hook records the stop.
+                .unwrap_or_else(PoisonError::into_inner)
+                .image_detaches
+                .remove(&request);
+            return Err(format!("{text} request {request}: {error}"));
+        }
+        Ok((request, receiver))
     }
 
     /// Validates and consumes one acknowledgement against its exact pending supplier request.
@@ -235,72 +314,81 @@ impl<O: Owner> Sidecars<O> {
             .ok_or_else(|| {
                 format!("image detach acknowledgement {request} has no valid generation")
             })?;
-        let mut waiters = self
+        let ok = ack
+            .ok
+            // default: a missing or non-boolean status becomes the explicit no-boolean-result error below.
+            .and_then(|value| serde_json::from_str::<bool>(value.get()).ok())
+            .ok_or_else(|| {
+                format!("image detach acknowledgement {request} has no boolean result")
+            })?;
+        let text = |value: Option<&RawValue>| {
+            value
+                // default: a missing or non-string member reads as empty, which the checks below reject.
+                .and_then(|value| serde_json::from_str::<String>(value.get()).ok())
+                .unwrap_or_default()
+        };
+        let (result, error) = (text(ack.result), text(ack.error));
+        let outcome = if ok {
+            if !error.is_empty()
+                || !matches!(
+                    result.as_str(),
+                    "detached" | "alreadyDetached" | "alreadyAbsent"
+                )
+            {
+                return Err(format!(
+                    "invalid successful image detach acknowledgement {request:?} for surface {surface}"
+                ));
+            }
+            DetachOutcome::Detached
+        } else {
+            if error.is_empty() {
+                return Err(format!(
+                    "failed image detach acknowledgement {request:?} has no error for surface {surface}"
+                ));
+            }
+            match ack.current_generation {
+                Some(value) => {
+                    let current = serde_json::from_str::<u64>(value.get()).map_err(|_| {
+                        format!(
+                            "image detach acknowledgement {request} has no valid current generation"
+                        )
+                    })?;
+                    DetachOutcome::Rejected(format!("{error} (current generation {current})"))
+                }
+                None => DetachOutcome::Rejected(error),
+            }
+        };
+        let mut state = self
             .core
-            .image_detaches
+            .state
             .lock()
             // default: removing the matching waiter settles only the request named by the supplier; a poisoned lock
             // retains its other waiters and the panic hook records the stop.
             .unwrap_or_else(PoisonError::into_inner);
-        let Some(waiter) = waiters.get(&request) else {
+        let Some(waiter) = state.image_detaches.get(&request) else {
             return Err(format!(
-                "image detach acknowledgement {request} has no pending request"
+                "image detach acknowledgement has no pending request {request:?} for surface {surface}"
             ));
         };
-        let tuple_matches = waiter.sidecar == sidecar
-            && waiter.surface == surface
-            && waiter.name == name
-            && waiter.generation == generation;
-        if !tuple_matches {
+        if waiter.sidecar != sidecar
+            || waiter.surface != surface
+            || waiter.name != name
+            || waiter.generation != generation
+        {
             return Err(format!(
-                "image detach acknowledgement {request} does not match its sidecar, surface, image, or generation"
+                "image detach acknowledgement {request:?} does not match its owner, surface, name, or generation"
             ));
         }
-        let waiter = waiters.remove(&request).ok_or_else(|| {
-            format!("image detach acknowledgement {request} has no pending request")
-        })?;
-        drop(waiters);
-        let result = match ack
-            .ok
-            // default: a missing or non-boolean status becomes the explicit no-boolean-result error below.
-            .and_then(|value| serde_json::from_str::<bool>(value.get()).ok())
-        {
-            Some(true) => match ack
-                .result
-                // default: a missing or malformed success result becomes the explicit no-result error below.
-                .and_then(|value| serde_json::from_str::<String>(value.get()).ok())
-                .as_deref()
-            {
-                Some("detached" | "alreadyDetached" | "alreadyAbsent") => Ok(()),
-                Some(result) => Err(format!(
-                    "image detach acknowledgement {request} has invalid result {result:?}"
-                )),
-                None => Err(format!(
-                    "image detach acknowledgement {request} has no result"
-                )),
-            },
-            Some(false) => match ack
-                .error
-                // default: a missing or malformed rejection reason becomes the explicit no-rejection-reason error below.
-                .and_then(|value| serde_json::from_str::<String>(value.get()).ok())
-                .as_deref()
-            {
-                Some(error) if !error.is_empty() => {
-                    Err(format!("supplier rejected image detach {request}: {error}"))
-                }
-                _ => Err(format!(
-                    "image detach acknowledgement {request} has no rejection reason"
-                )),
-            },
-            _ => Err(format!(
-                "image detach acknowledgement {request} has no boolean result"
-            )),
+        let Some(waiter) = state.image_detaches.remove(&request) else {
+            return Err(format!(
+                "image detach acknowledgement has no pending request {request:?} for surface {surface}"
+            ));
         };
+        drop(state);
         waiter
             .result
-            .send(result.clone())
-            .map_err(|_| format!("image detach acknowledgement {request} has no waiting reload"))?;
-        result
+            .try_send(outcome)
+            .map_err(|_| format!("image detach acknowledgement {request:?} has no wait to end"))
     }
 }
 

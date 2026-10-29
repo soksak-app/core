@@ -30,6 +30,7 @@ import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
+import { imageDetachHold } from "./image-detach-waits.js";
 import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
   tabModified, tabNotice } from "./tab-reports.js";
 import { hideError, showError } from "./shown-errors.js";
@@ -376,13 +377,28 @@ function updateCard(el, card, rect) {
   const shown = activeTab(card);
   const paramsProblem = hasPlugin(shown.plugin) ? storedParamsProblem(shown.plugin,
     pluginUnits().find((unit) => unit.id === shown.plugin).version, plugin(shown.plugin).params, shown.params) : null;
+  // A tab whose image detach is pending is not placed, so the host creates no view for it, and it shows its starting state;
+  // a tab whose detach failed shows that error until it is opened again (docs/spec/sidecars.md).
+  const held = imageDetachHold(shown.id);
+  if (held !== null) {
+    clearSlotSurface(slot);
+    for (const key of ["nativeSurface", "nativeSurfaceId", "nativeLayer", "nativePlugin", "nativeTitle", "nativeDim"]) delete slot.dataset[key];
+    const state = held === "waiting" ? { phase: "loading", error: null } : { phase: "error", error: held.error };
+    slot.dataset.surfaceStatus = state.phase;
+    setSurfaceStatus(status, shown.id, state);
+    surfaceStates.set(shown.id, state);
+    surfaceStateChanged();
+    cardFolds.set(card.id, folded);
+    setText(statusText, cardStatusText(card, tabs, folded));
+    return;
+  }
   if (!hasPlugin(shown.plugin) || paramsProblem) {
     // The tab of a plugin that is not loaded is a placeholder and not a surface. The surface mark is cleared so the compositor does not treat it as a surface.
     clearSlotSurface(slot);
     for (const key of ["nativeSurface", "nativeSurfaceId", "nativeLayer", "nativePlugin", "nativeTitle", "nativeDim"]) delete slot.dataset[key];
     placePluginPlaceholder(slot, shown.id, pluginPlaceholder(shown, paramsProblem));
     slot.dataset.surfaceStatus = "ready";
-    setSurfaceStatus(status, { phase: "ready" });
+    setSurfaceStatus(status, shown.id, { phase: "ready" });
     surfaceStates.set(shown.id, { phase: "ready", error: null });
     surfaceStateChanged();
     cardFolds.set(card.id, folded);
@@ -401,7 +417,7 @@ function updateCard(el, card, rect) {
   mountSurface(slot, surface, {
     onState: (state) => {
       slot.dataset.surfaceStatus = state.phase;
-      setSurfaceStatus(status, state);
+      setSurfaceStatus(status, shown.id, state);
       surfaceStates.set(shown.id, {
         phase: state.phase,
         error: state.phase === "error" ? surfaceErrorText(state) : null,
@@ -1109,6 +1125,8 @@ function syncBackgroundSessions() {
     // The tab of a plugin that is not loaded has no background session.
     const descriptor = hasPlugin(tab.plugin) ? plugin(tab.plugin).background : null;
     if (!descriptor || tabs.get(tab.id) !== tab) continue;
+    // A tab whose image detach is pending or failed opens no session until its supplier released the previous owner.
+    if (imageDetachHold(tab.id) !== null) continue;
     const owner = grid.cards.find((card) => tabsOf(card).some((item) => item.id === tab.id));
     const active = owner?.data?.activeId === tab.id;
     const surface = mountedSurface(tab.id) ? "mounted" : "absent";

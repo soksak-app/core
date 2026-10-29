@@ -25,27 +25,37 @@ pub const PAGE_ORIGIN: &str = "tauri://localhost";
 pub const NO_WINDOW: &str = "the start document request names no window";
 
 /// The start document that holds the workspace snapshot and the window button reply.
-pub fn start_document(workspace: &Value, controls: &Value) -> Result<Vec<u8>, String> {
+pub fn start_document(
+    workspace: &Value,
+    controls: &Value,
+    pending_surfaces: &[String],
+) -> Result<Vec<u8>, String> {
     #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
     struct Document<'a> {
         workspace: &'a Value,
         controls: &'a Value,
+        pending_surfaces: &'a [String],
     }
     serde_json::to_vec(&Document {
         workspace,
         controls,
+        pending_surfaces,
     })
     .map_err(|error| error.to_string())
 }
 
-/// Runs the page cleanup and its detach barriers before constructing a successful start document.
-pub(crate) fn after_page_started<P, D>(
-    page_started: impl FnOnce() -> Result<P, String>,
-    document: impl FnOnce() -> Result<D, String>,
-) -> Result<(P, D), String> {
-    let state = page_started()?;
-    let document = document()?;
-    Ok((state, document))
+/// Runs the page start, which sends the image detaches without waiting for them, then builds the parts of the document,
+/// and reads the pending surfaces last, so a detach that ends later is told by its image-detach-ended event.
+pub(crate) fn after_page_started(
+    page_started: impl FnOnce() -> Result<(), String>,
+    parts: impl FnOnce() -> Result<(Value, Value), String>,
+    pending_surfaces: impl FnOnce() -> Result<Vec<String>, String>,
+) -> Result<Vec<u8>, String> {
+    page_started()?;
+    let (workspace, controls) = parts()?;
+    let pending = pending_surfaces()?;
+    start_document(&workspace, &controls, &pending)
 }
 
 /// Passes a start document request to start with the label of the requesting webview. Another owner or path is not
@@ -96,7 +106,7 @@ pub(crate) fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, Stri
         .get_window(webview)
         .filter(|window| window.label() == webview)
         .ok_or_else(|| NO_WINDOW.to_string())?;
-    let (detachments, document) = after_page_started(
+    after_page_started(
         || crate::windows::page_started(&window),
         || {
             let snapshot = crate::workspace::handle(
@@ -114,13 +124,14 @@ pub(crate) fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, Stri
             crate::windows::start_titlebar(&window, common)?;
             let controls = serde_json::to_value(crate::windows::window_chrome(&window)?)
                 .map_err(|error| error.to_string())?;
-            start_document(&snapshot, &controls)
+            Ok((snapshot, controls))
         },
-    )?;
-    crate::windows::window_data(&window)?
-        .images
-        .complete_detachments(&detachments);
-    Ok(document)
+        || {
+            Ok(crate::windows::window_data(&window)?
+                .images
+                .pending_detach_surfaces())
+        },
+    )
 }
 
 #[cfg(test)]

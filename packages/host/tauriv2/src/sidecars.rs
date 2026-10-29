@@ -941,6 +941,8 @@ struct State<O> {
     clock: Arc<dyn Fn() -> Instant + Send + Sync>,
     /// The restart-limit record of each sidecar that has a counted failure.
     restarts: HashMap<String, RestartRecord>,
+    /// The exact image detach requests waiting for supplier acknowledgements.
+    image_detaches: HashMap<String, ImageDetachWaiter>,
 }
 
 /// The record of a stopping standard-I/O sidecar. The read thread reads the output to its end even after stop emptied
@@ -966,8 +968,6 @@ struct Core<O> {
     declarations: RwLock<Declarations>,
     config_directory: PathBuf,
     state: Arc<Mutex<State<O>>>,
-    /// The exact image detach requests waiting for supplier acknowledgements.
-    image_detaches: Mutex<HashMap<String, ImageDetachWaiter>>,
     /// Announces every end of a start. The requests and stop of the same sidecar wait for it.
     started: Condvar,
     /// The upper limit of the time until a newly started persistent service prints its endpoint.
@@ -984,7 +984,7 @@ struct ImageDetachWaiter {
     surface: String,
     name: String,
     generation: u64,
-    result: SyncSender<Result<(), String>>,
+    result: SyncSender<image_detach::DetachOutcome>,
 }
 
 /// A sidecar that uses the executable of a declared sidecar, whether it is persistent, and the basename of the
@@ -1158,8 +1158,8 @@ impl<O: Owner> Sidecars<O> {
                     requests: RequestLedger::default(),
                     clock: Arc::new(Instant::now),
                     restarts: HashMap::new(),
+                    image_detaches: HashMap::new(),
                 })),
-                image_detaches: Mutex::new(HashMap::new()),
                 started: Condvar::new(),
                 ready_timeout: READY_TIMEOUT,
                 retain_sending: None,
@@ -1750,6 +1750,10 @@ impl<O: Owner> Sidecars<O> {
             } else {
                 state.owners.remove(&surface);
                 state.persistent_surfaces.remove(&surface);
+                // The session of the surface ends, which ends its pending image detaches.
+                image_detach::release_image_detaches(&mut state.image_detaches, true, |waiter| {
+                    waiter.surface == surface
+                });
                 state.roots.remove(&surface)
             };
 
@@ -2303,6 +2307,8 @@ impl<O: Owner> Sidecars<O> {
                 // amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             state.stopped = true;
+            // The host stops before the pending image detaches are acknowledged.
+            image_detach::release_image_detaches(&mut state.image_detaches, false, |_| true);
             // A sidecar that is starting is registered when it ends, so the list of running sidecars is emptied after
             // waiting for that start.
             while !state.starting.is_empty() {
@@ -4088,13 +4094,17 @@ fn record_reply<O>(state: &Arc<Mutex<State<O>>>, sidecar: &str, event: &Event) {
 /// Stores `host.sidecar.reply` as a failure for each surface of the sidecar that has requests waiting, with their identifiers and
 /// the reason that the failure of the sidecar gives the page.
 fn fail_requests<O>(state: &Arc<Mutex<State<O>>>, sidecar: &str, reason: &str) {
-    let surfaces = state
+    let mut state = state
         .lock()
         // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call amends; the
         // panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .requests
-        .failed(sidecar);
+        .unwrap_or_else(PoisonError::into_inner);
+    // The end of the supplier connection ends its pending image detaches.
+    image_detach::release_image_detaches(&mut state.image_detaches, false, |waiter| {
+        waiter.sidecar == sidecar
+    });
+    let surfaces = state.requests.failed(sidecar);
+    drop(state);
     record_request_failures(sidecar, reason, surfaces);
 }
 
@@ -4296,7 +4306,7 @@ fn write_stderr_records(stderr: std::process::ChildStderr, name: &str) {
 }
 
 #[path = "image_detach.rs"]
-mod image_detach;
+pub(crate) mod image_detach;
 
 #[cfg(test)]
 #[path = "sidecars_lock_test.rs"]

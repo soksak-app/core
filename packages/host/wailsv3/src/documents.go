@@ -879,8 +879,16 @@ func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
 	if err != nil {
 		return err
 	}
+	return s.attachCheckedImage(key, req)
+}
+
+// attachCheckedImage creates the image region of key, which checkImage accepted for the caller.
+func (s *Surfaces) attachCheckedImage(key ImageKey, req ImageRequest) error {
 	if req.Sidecar == "" {
 		return fmt.Errorf("image %q: attach requires a sidecar", req.Name)
+	}
+	if err := s.pendingImageDetachError(key.Surface); err != nil {
+		return err
 	}
 	if err := s.requireRegion(key.Surface, key.Name, "image", req.Sidecar); err != nil {
 		return err
@@ -889,6 +897,7 @@ func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
 		return err
 	}
 	var handle unsafe.Pointer
+	var err error
 	application.InvokeSync(func() {
 		view := s.views[key.Surface]
 		if view == nil || view.handle == nil {

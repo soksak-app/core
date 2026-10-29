@@ -68,7 +68,8 @@ import { verify } from "./verify.js";
 import { createErrorDisplay, createPageLayout, reportUncaught } from "./page-layout.js";
 
 /* Application interface. When it is absent, an implementation that does nothing is used. */
-import { chrome, log, onDocumentState, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
+import { chrome, log, onDocumentState, onImageDetachEnded, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
+import { holdImageDetachSurfaces, imageDetachEnded } from "./image-detach-waits.js";
 import { setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
@@ -627,6 +628,11 @@ const library = createLibrary(document.getElementById("library"), coreChanged);
    the native preparation. The plugin content and the native surfaces are filled in afterwards. */
 projects.onChange(() => { drawBars(); drawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
 prepareDeclaredSnapshotIngress();
+// The surfaces whose image detach is pending wait for its end before they mount (docs/spec/sidecars.md).
+holdImageDetachSurfaces(start.pendingSurfaces);
+onImageDetachEnded((event) => {
+  if (imageDetachEnded(event)) settle();
+});
 projects.begin(start.workspace);
 // The first draw of the plane writes the frame scale to the document. The first screen without a plane (library) has no such draw, so it is written here.
 applyFrameText(value("textSize"));

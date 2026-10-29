@@ -6,8 +6,10 @@ export function surfaceErrorText(state) {
   return state.error instanceof Error ? state.error.message : String(state.error);
 }
 
-export function setSurfaceStatus(status, state) {
+/** Shows the state of the surface `surface` (its tab id) in the card status row `status`. */
+export function setSurfaceStatus(status, surface, state) {
   if (!status) return;
+  if (typeof surface !== "string" || surface === "") throw new TypeError(`a surface status needs a surface id, not ${surface}`);
   let indicator = status.querySelector("[data-surface-status]");
   if (!indicator) {
     indicator = document.createElement("span");
@@ -27,8 +29,6 @@ export function setSurfaceStatus(status, state) {
   // default: a status row that does not belong to a card is written without a place name.
   const card = status.closest("[data-card-id]");
   // Several projects use the same card id, so the surface id is written too.
-  // default: a status row that does not belong to a card, or a card without a surface place, is written without that name.
-  const surface = card?.querySelector("[data-native-surface-id]")?.dataset.nativeSurfaceId ?? "without a surface";
   // default: a status row that does not belong to a card is written without a card name.
   const where = `surface status ${card?.dataset.cardId ?? "outside a card"} ${surface}`;
   if (phase === "error") {

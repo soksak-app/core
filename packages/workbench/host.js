@@ -430,6 +430,11 @@ export function onFilesDropped(listener) {
   if (native) bridge.on("files-dropped", listener);
 }
 
+/** Receives each image-detach-ended event `{surface, error}` of the host (docs/spec/sidecars.md). */
+export function onImageDetachEnded(listener) {
+  if (native) bridge.on("image-detach-ended", listener);
+}
+
 /**
  * The notification center of the operating system (docs/spec/plugins.md#tab-reports). It is null without an application.
  * onState receives {authorization, error}, onPosted receives the notification that the notification center accepted, and onActivated receives the

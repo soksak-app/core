@@ -9,12 +9,14 @@ fn start_document_carries_the_workspace_and_the_window_controls() {
     let data = start::start_document(
         &json!({"common": {}, "projects": []}),
         &json!({"controls": {"x": 7.0, "y": 8.0, "w": 52.0, "h": 14.0}, "row": 32.0}),
+        &["tab-a".to_string()],
     )
     .unwrap();
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&data).unwrap(),
         json!({"workspace": {"common": {}, "projects": []},
-            "controls": {"controls": {"x": 7.0, "y": 8.0, "w": 52.0, "h": 14.0}, "row": 32.0}})
+            "controls": {"controls": {"x": 7.0, "y": 8.0, "w": 52.0, "h": 14.0}, "row": 32.0},
+            "pendingSurfaces": ["tab-a"]})
     );
     assert!(
         String::from_utf8(data)

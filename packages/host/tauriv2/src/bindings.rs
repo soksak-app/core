@@ -353,6 +353,9 @@ fn sidecar_send(
     let Argument(body) = body;
     let Argument(cids) = cids;
     crate::plugin_host_sidecar::refuse_surface_send(&surface)?;
+    crate::windows::window_data(&window)?
+        .images
+        .pending_detach_error(&surface)?;
     window
         .state::<WindowSidecars>()
         .send_with_cids(&window, &sidecar, &surface, &body, &cids)

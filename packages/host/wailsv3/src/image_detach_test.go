@@ -47,8 +47,11 @@ func TestReloadSurfaceImagesRetainsOldDetachTargetThroughGenerationAdvance(t *te
 		t.Fatalf("surface generation after native close: %d, want newer than %d", newGeneration, oldGeneration)
 	}
 
-	done := make(chan error, 1)
-	go func() { done <- surfaces.awaitImageDetaches(targets) }()
+	surfaces.imageDetachPageReady()
+	ends := recordImageDetachEnds(surfaces)
+	if err := surfaces.beginImageDetaches(targets); err != nil {
+		t.Fatalf("begin image detach: %v", err)
+	}
 	line := <-service.outbox
 	var sent sidecarRequest
 	if err := json.Unmarshal(line.bytes, &sent); err != nil {
@@ -72,125 +75,22 @@ func TestReloadSurfaceImagesRetainsOldDetachTargetThroughGenerationAdvance(t *te
 	if !c.tryHandleImageEnvelope(surfaces, "fixture-sidecar", key.Surface, ack) {
 		t.Fatal("host did not consume the supplier acknowledgement")
 	}
-	if err := <-done; err != nil {
-		t.Fatalf("image-less page start barrier: %v", err)
-	}
-}
-
-// contract: images.detach.timeout-retains-target
-func TestFailedImageDetachRemainsPendingForTheNextPageStart(t *testing.T) {
-	surfaces := sidecarSessionSurfaces(t)
-	c := surfaces.sidecars
-	c.stopped = false
-	c.imageDetachTimeout = 10 * time.Millisecond
-	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 4),
-		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
-	c.running["fixture-sidecar"] = service
-	target := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces}
-	if err := surfaces.awaitImageDetaches([]imageDetachTarget{target}); err == nil {
-		t.Fatal("missing supplier acknowledgement did not fail page startup")
-	}
-	if len(surfaces.pendingImageDetaches) != 1 || surfaces.pendingImageDetaches[0] != target {
-		t.Fatalf("pending detach targets %+v, want the exact target retained for retry", surfaces.pendingImageDetaches)
-	}
-	<-service.outbox
-
-	done := make(chan error, 1)
-	go func() { done <- surfaces.awaitImageDetaches(nil) }()
-	line := <-service.outbox
-	var sent sidecarRequest
-	if err := json.Unmarshal(line.bytes, &sent); err != nil {
-		t.Fatalf("decode retried detach request: %v", err)
-	}
-	var body struct {
-		Image struct {
-			Detach imageDetachAck `json:"detach"`
-		} `json:"image"`
-	}
-	if err := json.Unmarshal(sent.Body, &body); err != nil {
-		t.Fatalf("decode retried detach body: %v", err)
-	}
-	ack, _ := json.Marshal(map[string]any{"image": map[string]any{"detached": map[string]any{
-		"request": body.Image.Detach.Request, "name": target.Name, "generation": target.Generation,
-		"ok": true, "result": "alreadyDetached",
-	}}})
-	c.tryHandleImageEnvelope(surfaces, target.Sidecar, target.Surface, ack)
-	if err := <-done; err != nil {
-		t.Fatalf("retried image detach: %v", err)
-	}
-	if len(surfaces.pendingImageDetaches) != 0 {
-		t.Fatalf("pending detach targets after acknowledgement %+v, want none", surfaces.pendingImageDetaches)
-	}
-}
-
-// contract: images.detach.waits-for-every-region
-func TestPageStartWaitsForEveryImageDetachAcknowledgement(t *testing.T) {
-	surfaces := sidecarSessionSurfaces(t)
-	c := surfaces.sidecars
-	c.stopped = false
-	c.declared["other-sidecar"] = "build/other-worker"
-	c.persistent["other-sidecar"] = true
-	services := map[string]*sidecar{}
-	for _, name := range []string{"fixture-sidecar", "other-sidecar"} {
-		service := &sidecar{name: name, persistent: true, outbox: make(chan queuedLine, 4),
-			closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
-		c.running[name] = service
-		services[name] = service
-	}
-	targets := []imageDetachTarget{
-		{Surface: "surface-a", Name: "view-a", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces},
-		{Surface: "surface-a", Name: "view-b", Sidecar: "other-sidecar", Generation: 8, Owner: surfaces},
-	}
-	done := make(chan error, 1)
-	go func() { done <- c.detachImages(targets) }()
-	acks := make(map[string]json.RawMessage, len(targets))
-	for _, target := range targets {
-		line := <-services[target.Sidecar].outbox
-		var sent sidecarRequest
-		if err := json.Unmarshal(line.bytes, &sent); err != nil {
-			t.Fatalf("decode detach request for %s: %v", target.Sidecar, err)
-		}
-		var body struct {
-			Image struct {
-				Detach imageDetachAck `json:"detach"`
-			} `json:"image"`
-		}
-		if err := json.Unmarshal(sent.Body, &body); err != nil {
-			t.Fatalf("decode detach body for %s: %v", target.Sidecar, err)
-		}
-		ack, err := json.Marshal(map[string]any{"image": map[string]any{"detached": map[string]any{
-			"request": body.Image.Detach.Request, "name": target.Name, "generation": target.Generation,
-			"ok": true, "result": "detached",
-		}}})
-		if err != nil {
-			t.Fatalf("encode detach acknowledgement: %v", err)
-		}
-		acks[target.Sidecar] = ack
-	}
-	c.tryHandleImageEnvelope(surfaces, "fixture-sidecar", targets[0].Surface, acks["fixture-sidecar"])
 	select {
-	case err := <-done:
-		t.Fatalf("page start completed after only one of two detach acknowledgements: %v", err)
-	default:
-	}
-	c.tryHandleImageEnvelope(surfaces, "other-sidecar", targets[1].Surface, acks["other-sidecar"])
-	if err := <-done; err != nil {
-		t.Fatalf("page start after all image detach acknowledgements: %v", err)
+	case <-ends:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the acknowledgement of the old image sent no ended event")
 	}
 }
 
-// contract: images.detach.refusal-fails-start
-func TestRejectedImageDetachFailsPageStartAndRetainsTheTarget(t *testing.T) {
-	surfaces := sidecarSessionSurfaces(t)
-	c := surfaces.sidecars
-	c.stopped = false
-	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 4),
-		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
-	c.running["fixture-sidecar"] = service
-	target := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces}
-	done := make(chan error, 1)
-	go func() { done <- surfaces.awaitImageDetaches([]imageDetachTarget{target}) }()
-	line := <-service.outbox
+// sentImageDetachRequest reads the detach request that the supplier service received and returns its request id.
+func sentImageDetachRequest(t *testing.T, service *sidecar) string {
+	t.Helper()
+	var line queuedLine
+	select {
+	case line = <-service.outbox:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("supplier %s received no image detach request", service.name)
+	}
 	var sent sidecarRequest
 	if err := json.Unmarshal(line.bytes, &sent); err != nil {
 		t.Fatalf("decode detach request: %v", err)
@@ -203,24 +103,319 @@ func TestRejectedImageDetachFailsPageStartAndRetainsTheTarget(t *testing.T) {
 	if err := json.Unmarshal(sent.Body, &body); err != nil {
 		t.Fatalf("decode detach body: %v", err)
 	}
-	ack, err := json.Marshal(map[string]any{"image": map[string]any{"detached": map[string]any{
-		"request": body.Image.Detach.Request, "name": target.Name, "generation": target.Generation,
-		"ok": false, "error": "staleGeneration", "currentGeneration": 8,
-	}}})
+	return body.Image.Detach.Request
+}
+
+// acknowledgeImageDetach sends the supplier acknowledgement fields of request for target.
+func acknowledgeImageDetach(t *testing.T, c *Sidecars, owner SidecarOwner, target imageDetachTarget, request string, fields map[string]any) {
+	t.Helper()
+	detached := map[string]any{"request": request, "name": target.Name, "generation": target.Generation}
+	for name, value := range fields {
+		detached[name] = value
+	}
+	ack, err := json.Marshal(map[string]any{"image": map[string]any{"detached": detached}})
 	if err != nil {
 		t.Fatalf("encode detach acknowledgement: %v", err)
 	}
-	c.tryHandleImageEnvelope(surfaces, target.Sidecar, target.Surface, ack)
-	select {
-	case err := <-done:
-		if err == nil || !strings.Contains(err.Error(), "staleGeneration") || !strings.Contains(err.Error(), "current generation 8") {
-			t.Fatalf("page start failure %v, want explicit stale-generation error", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("supplier rejection did not fail page startup")
+	if !c.tryHandleImageEnvelope(owner, target.Sidecar, target.Surface, ack) {
+		t.Fatal("host did not consume the supplier acknowledgement")
 	}
-	if len(surfaces.pendingImageDetaches) != 1 || surfaces.pendingImageDetaches[0] != target {
-		t.Fatalf("pending detach targets %+v, want the exact rejected target retained", surfaces.pendingImageDetaches)
+}
+
+// recordImageDetachEnds records the image-detach-ended events of the window on a channel.
+func recordImageDetachEnds(surfaces *Surfaces) <-chan any {
+	ends := make(chan any, 8)
+	surfaces.events = func(name string, data any) {
+		if name == "image-detach-ended" {
+			ends <- data
+		}
+	}
+	return ends
+}
+
+// endedEvent is the image-detach-ended data of surface with error, which is nil for a surface whose detaches all succeeded.
+func endedEvent(surface string, failure any) string {
+	return fmt.Sprint(map[string]any{"surface": surface, "error": failure})
+}
+
+// pendingImageDetachOf returns the pending detach of an image.
+func pendingImageDetachOf(t *testing.T, surfaces *Surfaces, target imageDetachTarget) *pendingImageDetach {
+	t.Helper()
+	surfaces.imageDetachMu.Lock()
+	defer surfaces.imageDetachMu.Unlock()
+	entry := surfaces.imageDetaches[imageDetachKey{Sidecar: target.Sidecar, Surface: target.Surface, Name: target.Name}]
+	if entry == nil {
+		t.Fatalf("image %s of surface %s has no pending detach", target.Name, target.Surface)
+	}
+	return entry
+}
+
+// waitClosed waits for a channel that the waiter of a pending detach closes.
+func waitClosed(t *testing.T, done <-chan struct{}, what string) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("%s did not occur", what)
+	}
+}
+
+func imageDetachFixture(t *testing.T, names ...string) (*Surfaces, map[string]*sidecar) {
+	t.Helper()
+	surfaces := sidecarSessionSurfaces(t)
+	c := surfaces.sidecars
+	c.stopped = false
+	services := map[string]*sidecar{}
+	for _, name := range names {
+		if _, declared := c.declared[name]; !declared {
+			c.declared[name] = "build/" + name
+			c.persistent[name] = true
+		}
+		service := &sidecar{name: name, persistent: true, outbox: make(chan queuedLine, 8),
+			closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
+		c.running[name] = service
+		services[name] = service
+	}
+	surfaces.imageDetachPageReady()
+	return surfaces, services
+}
+
+// contract: images.detach.timeout-keeps-waiting
+func TestATimedOutImageDetachIsRecordedOnceAndALateAcknowledgementEndsIt(t *testing.T) {
+	isolateTraceRecords(t)
+	surfaces, services := imageDetachFixture(t, "fixture-sidecar")
+	c := surfaces.sidecars
+	c.imageDetachTimeout = 10 * time.Millisecond
+	ends := recordImageDetachEnds(surfaces)
+	target := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces}
+	if err := surfaces.beginImageDetaches([]imageDetachTarget{target}); err != nil {
+		t.Fatalf("begin image detach: %v", err)
+	}
+	request := sentImageDetachRequest(t, services["fixture-sidecar"])
+	want := fmt.Sprintf("image detach sidecar fixture-sidecar surface surface-a image view generation 7 request %s timed out", request)
+	entry := pendingImageDetachOf(t, surfaces, target)
+	waitClosed(t, entry.timedOut, "the image detach timeout")
+	if err := surfaces.pendingImageDetachError("surface-a"); err == nil {
+		t.Fatal("the surface stopped waiting at the timeout")
+	}
+	if err := surfaces.beginImageDetaches([]imageDetachTarget{target}); err != nil {
+		t.Fatalf("begin image detach on the next page start: %v", err)
+	}
+	select {
+	case line := <-services["fixture-sidecar"].outbox:
+		t.Fatalf("a page start sent a second detach for a pending image: %s", line.bytes)
+	default:
+	}
+	acknowledgeImageDetach(t, c, surfaces, target, request, map[string]any{"ok": true, "result": "detached"})
+	select {
+	case data := <-ends:
+		if fmt.Sprint(data) != endedEvent("surface-a", nil) {
+			t.Fatalf("ended event data %v, want surface-a without error", data)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a late acknowledgement sent no ended event")
+	}
+	errors := bufferedTraces(t, "host.record.error")
+	if len(errors) != 1 || errors[0]["where"] != "image detach" || errors[0]["text"] != want {
+		t.Fatalf("error records %v, want one timeout record %q", errors, want)
+	}
+}
+
+// contract: images.detach.surface-ends-after-its-last-detach
+func TestASurfaceEndsItsDetachesOnlyAfterTheAcknowledgementOfEachOfItsImages(t *testing.T) {
+	surfaces, services := imageDetachFixture(t, "fixture-sidecar", "other-sidecar")
+	c := surfaces.sidecars
+	ends := recordImageDetachEnds(surfaces)
+	targets := []imageDetachTarget{
+		{Surface: "surface-a", Name: "view-a", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces},
+		{Surface: "surface-a", Name: "view-b", Sidecar: "other-sidecar", Generation: 8, Owner: surfaces},
+	}
+	if err := surfaces.beginImageDetaches(targets); err != nil {
+		t.Fatalf("begin image detaches: %v", err)
+	}
+	first := sentImageDetachRequest(t, services["fixture-sidecar"])
+	second := sentImageDetachRequest(t, services["other-sidecar"])
+	firstEntry := pendingImageDetachOf(t, surfaces, targets[0])
+	acknowledgeImageDetach(t, c, surfaces, targets[0], first, map[string]any{"ok": true, "result": "detached"})
+	waitClosed(t, firstEntry.ended, "the end of the first detach")
+	if err := surfaces.pendingImageDetachError("surface-a"); err == nil || !strings.Contains(err.Error(), "image view-b") {
+		t.Fatalf("pending detach of surface-a after the first acknowledgement: %v, want image view-b", err)
+	}
+	select {
+	case data := <-ends:
+		t.Fatalf("the surface sent an ended event with one of two detaches pending: %v", data)
+	default:
+	}
+	acknowledgeImageDetach(t, c, surfaces, targets[1], second, map[string]any{"ok": true, "result": "alreadyAbsent"})
+	select {
+	case <-ends:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the surface sent no ended event after the acknowledgement of each image")
+	}
+	if err := surfaces.pendingImageDetachError("surface-a"); err != nil {
+		t.Fatalf("pending detach after both acknowledgements: %v", err)
+	}
+}
+
+// contract: images.detach.refusal-ends-pending
+func TestARejectedImageDetachEndsThePendingDetachWithItsErrorInTheEndedEvent(t *testing.T) {
+	isolateTraceRecords(t)
+	surfaces, services := imageDetachFixture(t, "fixture-sidecar")
+	c := surfaces.sidecars
+	ends := recordImageDetachEnds(surfaces)
+	target := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces}
+	if err := surfaces.beginImageDetaches([]imageDetachTarget{target}); err != nil {
+		t.Fatalf("begin image detach: %v", err)
+	}
+	request := sentImageDetachRequest(t, services["fixture-sidecar"])
+	entry := pendingImageDetachOf(t, surfaces, target)
+	acknowledgeImageDetach(t, c, surfaces, target, request, map[string]any{"ok": false, "error": "staleGeneration", "currentGeneration": 8})
+	waitClosed(t, entry.ended, "the end of the rejected detach")
+	if err := surfaces.pendingImageDetachError("surface-a"); err != nil {
+		t.Fatalf("pending detach after the rejection: %v", err)
+	}
+	want := fmt.Sprintf("image detach sidecar fixture-sidecar surface surface-a image view generation 7 request %s rejected: staleGeneration (current generation 8)", request)
+	select {
+	case data := <-ends:
+		if fmt.Sprint(data) != endedEvent("surface-a", want) {
+			t.Fatalf("ended event data %v, want the rejection %q", data, want)
+		}
+	default:
+		t.Fatal("a rejected detach sent no ended event")
+	}
+	// The page shows the rejection through its error display, which writes its one record.
+	if errors := bufferedTraces(t, "host.record.error"); len(errors) != 0 {
+		t.Fatalf("error records %v, want none from the host", errors)
+	}
+}
+
+// contract: images.detach.refusal-ends-pending
+func TestTheEndedEventOfASurfaceCarriesEachRejectionInImageNameOrder(t *testing.T) {
+	surfaces, services := imageDetachFixture(t, "fixture-sidecar")
+	c := surfaces.sidecars
+	ends := recordImageDetachEnds(surfaces)
+	targets := []imageDetachTarget{
+		{Surface: "surface-a", Name: "view-b", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces},
+		{Surface: "surface-a", Name: "view-a", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces},
+	}
+	if err := surfaces.beginImageDetaches(targets); err != nil {
+		t.Fatalf("begin image detaches: %v", err)
+	}
+	requests := []string{sentImageDetachRequest(t, services["fixture-sidecar"]), sentImageDetachRequest(t, services["fixture-sidecar"])}
+	for index, target := range targets {
+		acknowledgeImageDetach(t, c, surfaces, target, requests[index], map[string]any{"ok": false, "error": "imageNameMismatch"})
+	}
+	want := fmt.Sprintf("image detach sidecar fixture-sidecar surface surface-a image view-a generation 7 request %s rejected: imageNameMismatch; "+
+		"image detach sidecar fixture-sidecar surface surface-a image view-b generation 7 request %s rejected: imageNameMismatch", requests[1], requests[0])
+	select {
+	case data := <-ends:
+		if fmt.Sprint(data) != endedEvent("surface-a", want) {
+			t.Fatalf("ended event data %v, want both rejections %q", data, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the surface sent no ended event after both rejections")
+	}
+}
+
+// contract: images.detach.session-end-releases
+func TestTheEndOfTheSupplierOrTheSurfaceSessionEndsThePendingDetach(t *testing.T) {
+	surfaces, services := imageDetachFixture(t, "fixture-sidecar")
+	c := surfaces.sidecars
+	ends := recordImageDetachEnds(surfaces)
+	supplier := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces}
+	session := imageDetachTarget{Surface: "surface-b", Name: "view", Sidecar: "fixture-sidecar", Generation: 3, Owner: surfaces}
+	if err := surfaces.beginImageDetaches([]imageDetachTarget{supplier, session}); err != nil {
+		t.Fatalf("begin image detaches: %v", err)
+	}
+	sentImageDetachRequest(t, services["fixture-sidecar"])
+	sentImageDetachRequest(t, services["fixture-sidecar"])
+	supplierEntry, sessionEntry := pendingImageDetachOf(t, surfaces, supplier), pendingImageDetachOf(t, surfaces, session)
+	c.owners["surface-b"] = surfaces
+	c.closeSurface("surface-b")
+	waitClosed(t, sessionEntry.ended, "the end of the detach of surface-b")
+	if err := surfaces.pendingImageDetachError("surface-b"); err != nil {
+		t.Fatalf("pending detach of surface-b after its session ended: %v", err)
+	}
+	if err := surfaces.pendingImageDetachError("surface-a"); err == nil {
+		t.Fatal("the end of the session of surface-b ended the detach of surface-a")
+	}
+	select {
+	case data := <-ends:
+		t.Fatalf("the end of a surface session sent an ended event: %v", data)
+	default:
+	}
+	c.failImageDetaches("fixture-sidecar")
+	waitClosed(t, supplierEntry.ended, "the end of the detach of surface-a")
+	if err := surfaces.pendingImageDetachError("surface-a"); err != nil {
+		t.Fatalf("pending detach of surface-a after its supplier ended: %v", err)
+	}
+	want := fmt.Sprintf("image detach sidecar fixture-sidecar surface surface-a image view generation 7 request %s ended: the supplier connection ended", supplierEntry.id)
+	select {
+	case data := <-ends:
+		if fmt.Sprint(data) != endedEvent("surface-a", want) {
+			t.Fatalf("ended event data %v, want the supplier end %q", data, want)
+		}
+	default:
+		t.Fatal("the end of the supplier sent no ended event")
+	}
+}
+
+// contract: images.detach.ended-event-waits-for-ready
+func TestAnEndedEventBeforeThePageIsReadyIsSentWhenThePageReportsReady(t *testing.T) {
+	surfaces, services := imageDetachFixture(t, "fixture-sidecar")
+	c := surfaces.sidecars
+	ends := recordImageDetachEnds(surfaces)
+	surfaces.imageDetachPageStarting()
+	target := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces}
+	if err := surfaces.beginImageDetaches([]imageDetachTarget{target}); err != nil {
+		t.Fatalf("begin image detach: %v", err)
+	}
+	request := sentImageDetachRequest(t, services["fixture-sidecar"])
+	entry := pendingImageDetachOf(t, surfaces, target)
+	acknowledgeImageDetach(t, c, surfaces, target, request, map[string]any{"ok": true, "result": "detached"})
+	waitClosed(t, entry.ended, "the end of the detach")
+	select {
+	case data := <-ends:
+		t.Fatalf("the ended event was sent to a page that is not ready: %v", data)
+	default:
+	}
+	surfaces.imageDetachPageReady()
+	select {
+	case data := <-ends:
+		if fmt.Sprint(data) != endedEvent("surface-a", nil) {
+			t.Fatalf("ended event data %v, want surface-a without error", data)
+		}
+	default:
+		t.Fatal("the ready page did not receive the ended event")
+	}
+}
+
+// contract: images.detach.ended-event-waits-for-ready
+func TestAPageStartRecordsTheFailuresOfTheEndsItClears(t *testing.T) {
+	isolateTraceRecords(t)
+	surfaces, services := imageDetachFixture(t, "fixture-sidecar")
+	c := surfaces.sidecars
+	ends := recordImageDetachEnds(surfaces)
+	surfaces.imageDetachPageStarting()
+	target := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces}
+	if err := surfaces.beginImageDetaches([]imageDetachTarget{target}); err != nil {
+		t.Fatalf("begin image detach: %v", err)
+	}
+	request := sentImageDetachRequest(t, services["fixture-sidecar"])
+	entry := pendingImageDetachOf(t, surfaces, target)
+	acknowledgeImageDetach(t, c, surfaces, target, request, map[string]any{"ok": false, "error": "imageNameMismatch"})
+	waitClosed(t, entry.ended, "the end of the rejected detach")
+	surfaces.imageDetachPageStarting()
+	surfaces.imageDetachPageReady()
+	select {
+	case data := <-ends:
+		t.Fatalf("a cleared end reached the next page: %v", data)
+	default:
+	}
+	want := fmt.Sprintf("image detach sidecar fixture-sidecar surface surface-a image view generation 7 request %s rejected: imageNameMismatch", request)
+	errors := bufferedTraces(t, "host.record.error")
+	if len(errors) != 1 || errors[0]["where"] != "image detach" || errors[0]["text"] != want {
+		t.Fatalf("error records %v, want the cleared rejection %q", errors, want)
 	}
 }
 
@@ -359,5 +554,36 @@ func TestImageDetachRequestIdentityDoesNotRestartWithTheApplication(t *testing.T
 			t.Fatalf("application restart reused detach request %q for another surface", request)
 		}
 		requests[request] = true
+	}
+}
+
+// A detach that its supplier does not acknowledge keeps only its own surface pending: the page start does not fail, a page
+// send of that surface is refused with the pending detach, and a send of another surface passes.
+// contract: images.detach.pending-surface-is-refused
+func TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending(t *testing.T) {
+	surfaces := sidecarSessionSurfaces(t)
+	c := surfaces.sidecars
+	c.stopped = false
+	c.imageDetachTimeout = 10 * time.Millisecond
+	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 8),
+		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
+	c.running["fixture-sidecar"] = service
+	target := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: surfaces}
+	if err := surfaces.beginImageDetaches([]imageDetachTarget{target}); err != nil {
+		t.Fatalf("an unacknowledged image detach failed the page start: %v", err)
+	}
+	<-service.outbox
+	err := surfaces.SidecarSend("fixture-sidecar", "surface-a", json.RawMessage(`{"open":{}}`), nil)
+	if err == nil || !strings.Contains(err.Error(), "image detach sidecar fixture-sidecar surface surface-a image view generation 7") ||
+		!strings.HasSuffix(err.Error(), "is pending") {
+		t.Fatalf("send of the pending surface returned %v, want the pending detach", err)
+	}
+	if err := surfaces.SidecarSend("fixture-sidecar", "surface-b", json.RawMessage(`{"open":{}}`), nil); err != nil {
+		t.Fatalf("send of another surface: %v", err)
+	}
+	err = surfaces.attachCheckedImage(ImageKey{Surface: "surface-a", Name: "view"}, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"})
+	if err == nil || !strings.HasPrefix(err.Error(), "image detach sidecar fixture-sidecar surface surface-a image view generation 7") ||
+		!strings.HasSuffix(err.Error(), "is pending") {
+		t.Fatalf("image attach of the pending surface returned %v, want the pending detach", err)
 	}
 }

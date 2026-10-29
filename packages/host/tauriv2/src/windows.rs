@@ -191,9 +191,7 @@ pub fn reconnect_targets(
 /// Tauri calls this from the main-webview `PageLoadEvent::Started` callback. The cleanup here is deliberately
 /// synchronous: while the previous image handle waits for removal in the same AppKit run loop, the replacement page
 /// must not attach a new native image.
-pub(crate) fn reload_surface_documents(
-    window: &Window,
-) -> Result<Vec<crate::images::DetachTarget>, String> {
+pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     let owner = native_owner(window)?;
     let platform = platform::current()?;
@@ -220,7 +218,12 @@ pub(crate) fn reload_surface_documents(
     let reconnect = RawValue::from_string(r#"{"operation":"reconnect"}"#.to_string())
         .map_err(|error| error.to_string())?;
     let running_persistent = window.state::<WindowSidecars>().running_persistent()?;
-    let mut completed_detachments = Vec::new();
+    let ended_window = window.clone();
+    let ended_event: crate::sidecars::image_detach::EndedEvent = Arc::new(move |event| {
+        if let Err(error) = emit_window(&ended_window, "image-detach-ended", event) {
+            log_error("image-detach-ended", error);
+        }
+    });
     for (surface, handle) in surfaces {
         let surface_detachments = data.images.begin_reload(&surface);
         let sidecars = reconnect_targets(
@@ -251,13 +254,24 @@ pub(crate) fn reload_surface_documents(
         for image in data.images.remove_surface(&surface) {
             platform.close_image(image)?;
         }
-        window
-            .state::<WindowSidecars>()
-            .detach_images(&window, &surface_detachments)?;
-        // A persistent sidecar can send a new raster as soon as it receives the reconnect. All previous native images
-        // are removed first, and the old supplier generation is detached and acknowledged, so the replacement page
-        // cannot configure a new image while the supplier still owns the previous image.
-        for sidecar in sidecars {
+        // Page startup does not wait for the acknowledgements; the surface stays pending until its detaches end
+        // (docs/spec/sidecars.md).
+        crate::sidecars::image_detach::begin_image_detaches(
+            &window.state::<WindowSidecars>(),
+            &window,
+            &data.images,
+            surface_detachments,
+            crate::sidecars::image_detach::IMAGE_DETACH_TIMEOUT,
+            Arc::clone(&ended_event),
+        )?;
+        // A persistent sidecar can send a new raster as soon as it receives the reconnect, so a sidecar whose detach of
+        // this surface is pending gets none: the supplier still owns the previous image, and the page mounts the surface
+        // when its image-detach-ended event arrives.
+        let pending = data.images.pending_detach_sidecars(&surface);
+        for sidecar in sidecars
+            .into_iter()
+            .filter(|sidecar| !pending.contains(sidecar))
+        {
             window.state::<WindowSidecars>().send(
                 &window,
                 &sidecar,
@@ -265,7 +279,6 @@ pub(crate) fn reload_surface_documents(
                 reconnect.as_ref(),
             )?;
         }
-        completed_detachments.extend(surface_detachments);
     }
     data.composition_revisions
         .lock()
@@ -275,7 +288,7 @@ pub(crate) fn reload_surface_documents(
         .clear();
     crate::surfaces::clear_page_compositions(&data.compositions, &data.surface_plugins);
     crate::exposure::window_changed(&window);
-    Ok(completed_detachments)
+    Ok(())
 }
 
 /// The window registry and the project-owned windows of the application.
@@ -1445,12 +1458,16 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
 /// Records that the main page started. Call it before the start document request answers. It leaves the window not
 /// ready, ends the requests sent to the previous page, and cleans up the surface documents, the image regions and the
 /// modals of the previous page.
-pub(crate) fn page_started(window: &Window) -> Result<Vec<crate::images::DetachTarget>, String> {
+pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     let cleanup = (|| {
         data.ready.store(false, Ordering::Relaxed);
+        // No page shows the failures of the cleared ends, so the host writes them.
+        for failure in data.images.detach_page_starting() {
+            log_error("image detach", failure);
+        }
         crate::exposure::page_reloaded(window);
-        let detachments = reload_surface_documents(window)?;
+        reload_surface_documents(window)?;
         dispose_plugin_hosts(window);
         // The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md
         // rule 7).
@@ -1459,7 +1476,7 @@ pub(crate) fn page_started(window: &Window) -> Result<Vec<crate::images::DetachT
             window,
         )?;
         data.overlay.discard()?;
-        Ok(detachments)
+        Ok(())
     })();
     data.declared_source_events.retire();
     cleanup
@@ -1656,6 +1673,11 @@ fn dispose_plugin_hosts_of(window: &Window, data: &WindowData, notify_page: bool
 pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     data.ready.store(true, Ordering::Relaxed);
+    for event in data.images.detach_page_ready() {
+        if let Err(error) = emit_window(window, "image-detach-ended", event) {
+            log_error("image-detach-ended", error);
+        }
+    }
     crate::exposure::replay_registrations(window);
     crate::exposure::windows_changed(window.app_handle());
     for ready in data

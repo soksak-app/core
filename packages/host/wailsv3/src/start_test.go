@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
-	"time"
 	"unsafe"
 )
 
-// contract: images.reload.start-document-waits-for-detach
-func TestStartPageWaitsForReloadedImageDetachment(t *testing.T) {
+// contract: images.reload.start-sends-detach-without-waiting
+func TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending(t *testing.T) {
 	c := sidecarSessionSurfaces(t).sidecars
 	c.stopped = false
 	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 4),
@@ -32,22 +31,17 @@ func TestStartPageWaitsForReloadedImageDetachment(t *testing.T) {
 	owner := &Host{windows: map[uint]*Surfaces{1: surfaces}, workspace: NewWorkspace(t.TempDir()),
 		relay: &Relay[relayTarget]{waiting: map[uint64]*relayWaiter[relayTarget]{}}}
 	surfaces.host = owner
-	done := make(chan error, 1)
-	go func() {
-		_, err := owner.startPage(1)
-		done <- err
-	}()
-
+	if _, err := owner.startPage(1); !errors.Is(err, errNoWindow) {
+		t.Fatalf("page start with an unacknowledged image detach: %v, want the later no-window test boundary", err)
+	}
 	var sent sidecarRequest
 	select {
 	case line := <-service.outbox:
 		if err := json.Unmarshal(line.bytes, &sent); err != nil {
 			t.Fatalf("decode image detach request: %v", err)
 		}
-	case err := <-done:
-		t.Fatalf("page start returned before the old image owner detached: %v", err)
-	case <-time.After(time.Second):
-		t.Fatal("page start neither sent the image detach request nor returned")
+	default:
+		t.Fatal("page start did not send the image detach request")
 	}
 	var body struct {
 		Image struct {
@@ -60,22 +54,7 @@ func TestStartPageWaitsForReloadedImageDetachment(t *testing.T) {
 	if sent.Surface != key.Surface || body.Image.Detach.Name != key.Name || body.Image.Detach.Generation == 0 || body.Image.Detach.Request == "" {
 		t.Fatalf("image detach request %q/%s, want the old image identity", sent.Surface, sent.Body)
 	}
-	select {
-	case err := <-done:
-		t.Fatalf("page start completed before its detach acknowledgement: %v", err)
-	default:
-	}
-	ack, _ := json.Marshal(map[string]any{"image": map[string]any{"detached": map[string]any{
-		"request": body.Image.Detach.Request, "name": key.Name, "generation": body.Image.Detach.Generation,
-		"ok": true, "result": "detached",
-	}}})
-	c.tryHandleImageEnvelope(surfaces, "fixture-sidecar", key.Surface, ack)
-	select {
-	case err := <-done:
-		if !errors.Is(err, errNoWindow) {
-			t.Fatalf("page start after the matching detach acknowledgement: %v, want later no-window test boundary", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("page start did not continue after the matching detach acknowledgement")
+	if err := surfaces.pendingImageDetachError(key.Surface); err == nil {
+		t.Fatal("page start left no pending detach for the surface of the reloaded image")
 	}
 }

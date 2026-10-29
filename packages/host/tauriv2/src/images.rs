@@ -46,6 +46,13 @@ pub(crate) struct DetachTarget {
     pub generation: u64,
 }
 
+/// A detach that a page start sent and whose acknowledgement has not ended it.
+#[derive(Clone, Debug)]
+struct PendingDetach {
+    generation: u64,
+    request: String,
+}
+
 /// The sidecar owner that registered the image region.
 pub struct Owner {
     pub sidecar_owner: String,
@@ -90,8 +97,15 @@ struct Inner {
     /// counts from the next raster, because the sidecar treats a configuration whose (generation, raster) did not grow
     /// as an old configuration and ignores it. It is cleared when the generation of the surface changes.
     detached_rasters: HashMap<Key, (u64, u64)>,
-    /// Old supplier owners whose detach acknowledgement has not yet allowed a replacement page to start.
-    pending_detachments: HashMap<(String, String, u64), String>,
+    /// The pending detach of each image, by (sidecar, surface, image name); a window keeps at most one for an image
+    /// (docs/spec/sidecars.md).
+    pending_detachments: HashMap<(String, String, String), PendingDetach>,
+    /// The failures of the ended detaches of each surface that still has a pending detach, by image name.
+    detach_failures: HashMap<String, std::collections::BTreeMap<String, String>>,
+    /// The image-detach-ended events that wait for the page to report ready.
+    ended_detachments: Vec<serde_json::Value>,
+    /// Whether the page is ready to receive image-detach-ended events.
+    detach_page_ready: bool,
     next_generation: u64,
 }
 
@@ -211,48 +225,24 @@ impl Images {
         generation
     }
 
-    /// Captures every current or retryable supplier owner before advancing a page generation.
+    /// Captures the supplier owner of each image of surface that has no pending detach before advancing the page
+    /// generation. A pending detach covers its image, because no newer generation of it can have been attached.
     pub(crate) fn begin_reload(&self, surface: &str) -> Vec<DetachTarget> {
         let mut inner = self.lock();
-        let current: Vec<_> = inner
+        let mut targets: Vec<_> = inner
             .states
             .iter()
             .filter(|(key, _)| key.0 == surface)
             .filter_map(|(key, state)| {
-                if inner
-                    .pending_detachments
-                    .keys()
-                    .any(|(target_surface, target_name, _)| {
-                        target_surface == &key.0 && target_name == &key.1
-                    })
-                {
-                    return None;
-                }
-                Some((
-                    key.0.clone(),
-                    key.1.clone(),
-                    state.generation,
-                    inner.sidecars.get(key)?.clone(),
-                ))
+                let sidecar = inner.sidecars.get(key)?.clone();
+                let pending = (sidecar.clone(), key.0.clone(), key.1.clone());
+                (!inner.pending_detachments.contains_key(&pending)).then(|| DetachTarget {
+                    surface: key.0.clone(),
+                    name: key.1.clone(),
+                    sidecar,
+                    generation: state.generation,
+                })
             })
-            .collect();
-        for (surface, name, generation, sidecar) in current {
-            inner
-                .pending_detachments
-                .insert((surface, name, generation), sidecar);
-        }
-        let mut targets: Vec<_> = inner
-            .pending_detachments
-            .iter()
-            .filter(|((target_surface, _, _), _)| target_surface == surface)
-            .map(
-                |((target_surface, name, generation), sidecar)| DetachTarget {
-                    surface: target_surface.clone(),
-                    name: name.clone(),
-                    sidecar: sidecar.clone(),
-                    generation: *generation,
-                },
-            )
             .collect();
         targets.sort_by(|left, right| left.name.cmp(&right.name));
         inner.begin_generation(surface);
@@ -261,19 +251,132 @@ impl Images {
         targets
     }
 
-    /// Clears only the exact owners whose detach batch received every acknowledgement.
-    pub(crate) fn complete_detachments(&self, targets: &[DetachTarget]) {
-        let mut inner = self.lock();
-        for target in targets {
-            let key = (
+    /// Records the sent detach request of target.
+    pub(crate) fn add_pending_detach(&self, target: &DetachTarget, request: &str) {
+        self.lock().pending_detachments.insert(
+            (
+                target.sidecar.clone(),
                 target.surface.clone(),
                 target.name.clone(),
-                target.generation,
-            );
-            if inner.pending_detachments.get(&key) == Some(&target.sidecar) {
-                inner.pending_detachments.remove(&key);
-            }
+            ),
+            PendingDetach {
+                generation: target.generation,
+                request: request.to_string(),
+            },
+        );
+    }
+
+    /// Ends the pending detach of target when request is still its request. failure is the text of a rejection or of the
+    /// supplier end, and session states that the surface session ended with its tab. When the last pending detach of the
+    /// surface ends, the image-detach-ended event `{surface, error}` is built; error carries the failures of every
+    /// detach of the surface joined in byte-wise image-name order, or null. The event is returned when the page is ready
+    /// for it and kept until the page reports ready otherwise; a session end builds none (docs/spec/sidecars.md).
+    pub(crate) fn end_pending_detach(
+        &self,
+        target: &DetachTarget,
+        request: &str,
+        failure: Option<String>,
+        session: bool,
+    ) -> Option<serde_json::Value> {
+        let mut inner = self.lock();
+        let key = (
+            target.sidecar.clone(),
+            target.surface.clone(),
+            target.name.clone(),
+        );
+        if inner.pending_detachments.get(&key)?.request != request {
+            return None;
         }
+        inner.pending_detachments.remove(&key);
+        if let Some(failure) = failure {
+            inner
+                .detach_failures
+                .entry(target.surface.clone())
+                .or_default()
+                .insert(target.name.clone(), failure);
+        }
+        if inner
+            .pending_detachments
+            .keys()
+            .any(|(_, surface, _)| surface == &target.surface)
+        {
+            return None;
+        }
+        let failures = inner.detach_failures.remove(&target.surface);
+        if session {
+            return None;
+        }
+        // The page shows the failures through its error display, which writes the one record of each.
+        let error = failures.map(|failures| failures.into_values().collect::<Vec<_>>().join("; "));
+        let event = serde_json::json!({ "surface": target.surface, "error": error });
+        if inner.detach_page_ready {
+            return Some(event);
+        }
+        inner.ended_detachments.push(event);
+        None
+    }
+
+    /// The surfaces that have a pending detach, in order, for the start document.
+    pub(crate) fn pending_detach_surfaces(&self) -> Vec<String> {
+        let mut surfaces: Vec<_> = self
+            .lock()
+            .pending_detachments
+            .keys()
+            .map(|(_, surface, _)| surface.clone())
+            .collect();
+        surfaces.sort();
+        surfaces.dedup();
+        surfaces
+    }
+
+    /// Refuses an image attach or a page send of a surface that has a pending detach.
+    pub(crate) fn pending_detach_error(&self, surface: &str) -> Result<(), String> {
+        let inner = self.lock();
+        let pending = inner
+            .pending_detachments
+            .iter()
+            .filter(|((_, target_surface, _), _)| target_surface == surface)
+            .min_by(|left, right| left.0.cmp(right.0));
+        match pending {
+            Some(((sidecar, surface, name), detach)) => Err(format!(
+                "image detach sidecar {sidecar} surface {surface} image {name} generation {} request {} is pending",
+                detach.generation, detach.request
+            )),
+            None => Ok(()),
+        }
+    }
+
+    /// The sidecars that have a pending detach of surface.
+    pub(crate) fn pending_detach_sidecars(&self, surface: &str) -> Vec<String> {
+        let mut sidecars: Vec<_> = self
+            .lock()
+            .pending_detachments
+            .keys()
+            .filter(|(_, target_surface, _)| target_surface == surface)
+            .map(|(sidecar, _, _)| sidecar.clone())
+            .collect();
+        sidecars.sort();
+        sidecars.dedup();
+        sidecars
+    }
+
+    /// Marks the page as not ready for image-detach-ended events, clears the events kept for the previous page, whose
+    /// start document the new page does not read, and returns the failure texts of the cleared events, which no page
+    /// shows.
+    pub(crate) fn detach_page_starting(&self) -> Vec<String> {
+        let mut inner = self.lock();
+        inner.detach_page_ready = false;
+        std::mem::take(&mut inner.ended_detachments)
+            .into_iter()
+            .filter_map(|event| event["error"].as_str().map(str::to_string))
+            .collect()
+    }
+
+    /// Marks the page as ready and returns the image-detach-ended events that occurred while it was starting.
+    pub(crate) fn detach_page_ready(&self) -> Vec<serde_json::Value> {
+        let mut inner = self.lock();
+        inner.detach_page_ready = true;
+        std::mem::take(&mut inner.ended_detachments)
     }
 
     /// Ends the current generation of a removed surface. The number is not reused.
@@ -281,9 +384,6 @@ impl Images {
         let mut inner = self.lock();
         inner.generations.remove(surface);
         inner.forget_detached_rasters(surface);
-        inner
-            .pending_detachments
-            .retain(|(target_surface, _, _), _| target_surface != surface);
         if inner.states.keys().any(|key| key.0 == surface) {
             inner.surface_visibility.insert(surface.to_string(), false);
         } else {
@@ -461,13 +561,6 @@ impl Images {
                 sidecars.insert(sidecar.clone());
             }
         }
-        sidecars.extend(
-            inner
-                .pending_detachments
-                .iter()
-                .filter(|((target_surface, _, _), _)| target_surface == surface)
-                .map(|(_, sidecar)| sidecar.clone()),
-        );
         sidecars.into_iter().collect()
     }
 
@@ -1089,6 +1182,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     let Ok(data) = window_data(&window) else {
         return Err("cannot get window data".to_string());
     };
+    data.images.pending_detach_error(&key.0)?;
     require_region(&data.compositions, &key.0, &key.1, "image", Some(sidecar))?;
 
     // The name is taken first. The lock is not held while waiting for native work.

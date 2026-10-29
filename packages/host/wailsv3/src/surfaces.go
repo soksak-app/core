@@ -436,8 +436,13 @@ type Surfaces struct {
 	streams *DocumentStreams
 	// images are the image regions that the surface pages attached.
 	images               *Images
-	imageDetachMu        sync.Mutex
-	pendingImageDetaches []imageDetachTarget
+	// imageDetachMu guards the pending image detaches of the window, the failures of the detaches of each surface by image
+	// name, the ends told when the page reports ready, and whether the page is ready for them (docs/spec/sidecars.md).
+	imageDetachMu       sync.Mutex
+	imageDetaches       map[imageDetachKey]*pendingImageDetach
+	imageDetachFailures map[string]map[string]string
+	endedImageDetaches  []map[string]any
+	detachPageReady     bool
 	// reload hooks replace native calls only in owning host tests; production uses the platform operations.
 	reloadCancelLayout func() error
 	reloadHideSurface  func(unsafe.Pointer, bool)
@@ -519,6 +524,9 @@ func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage, cids 
 	// A plugin session is reached only through the plugin host call (docs/plans/plugin-host-routes.md rule 2).
 	if strings.HasPrefix(surface, "plugin:") {
 		return fmt.Errorf("sidecar session %s is reserved for a plugin host", surface)
+	}
+	if err := s.pendingImageDetachError(surface); err != nil {
+		return err
 	}
 	return s.sidecars.SendWithCids(s, name, surface, body, cids)
 }

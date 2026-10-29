@@ -472,11 +472,15 @@ fn invalid_json_closes_connection() {
 | `images.detach.ack-consumed` | 유효한 `image.detached` 응답은 root, `image` 내부, acknowledgement object 내부의 무관한 더 깊은 JSON member가 `Value` materialization 깊이를 초과해도 host가 소비하며 page에 전달하지 않는다. | both |
 | `images.relay.preserves-compose-marked-range` | image event를 전달할 때 compose `markedRange`와 소유 surface 및 region을 보존한다. | both |
 | `images.detach.ack-exact-owner` | request, supplier, surface, image name, generation이 일치하는 응답만 detach를 완료한다. 불일치 응답은 대기를 끝내지 않는다. | both |
-| `images.detach.refusal-fails-start` | supplier 거부는 명시적 이유와 함께 page 시작을 실패시키며 정확한 detach 대상을 다음 시작 시도까지 보존한다. | both |
-| `images.detach.timeout-retains-target` | 응답이 선언된 제한 시간 안에 오지 않으면 page 시작이 실패하며 정확한 detach 대상을 재시도용으로 보존한다. | both |
-| `images.detach.waits-for-every-region` | 이미지 영역마다 일치하는 detach 응답을 받을 때까지 page 시작이 대기한다. | both |
+| `images.detach.refusal-ends-pending` | supplier 거부는 pending detach를 끝낸다. 그 surface의 `image-detach-ended` event는 supplier가 알리면 현재 generation을 담은 `... rejected: <reason>`을 담고, 여러 image의 실패는 이름의 byte 순서로 `; `로 이어지며, 호스트는 그 실패의 오류 기록을 쓰지 않는다. | both |
+| `images.detach.timeout-keeps-waiting` | 10초 안에 응답이 없는 detach는 `... timed out` 오류를 한 번 쓰고 계속 기다린다. reload는 pending image에 두 번째 detach를 보내지 않고, 늦은 응답은 detach를 끝내고 그 surface의 ended event를 보낸다. | both |
+| `images.detach.surface-ends-after-its-last-detach` | surface는 그 image detach가 모두 끝날 때까지 pending이고, 창 event `image-detach-ended {surface, error}`는 마지막 detach가 끝난 뒤에 온다. | both |
 | `images.reload.captures-old-image-owner` | Reload는 native 영역을 닫고 surface generation을 올리기 전에 각 이미지의 supplier와 현재 generation을 캡처한다. | both |
-| `images.reload.start-document-waits-for-detach` | native image를 닫은 뒤 캡처한 모든 image detach 응답을 받을 때까지 start document를 성공적으로 반환하지 않는다. | both |
+| `images.reload.start-sends-detach-without-waiting` | reload는 native image를 닫은 뒤 캡처한 각 image의 detach를 보내고, 응답을 기다리지 않고 start document를 돌려준다. 각 image의 surface는 pending으로 남는다. | both |
+| `images.detach.pending-surface-is-refused` | surface의 detach가 pending인 동안 그 surface의 `imageAttach`와 page의 모든 sidecar send는 `... is pending`으로 거부되고, 다른 surface는 거부되지 않는다. | both |
+| `images.detach.session-end-releases` | supplier 연결이 끝나면 그 supplier의 pending detach가 끝나고 각 surface의 ended event가 `... ended: the supplier connection ended`를 담는다. surface session이 끝나면 그 surface의 pending detach가 ended event 없이 끝난다. | both |
+| `images.detach.ended-event-waits-for-ready` | page가 ready를 알리기 전의 ended event는 ready를 알릴 때 보낸다. page 시작은 이전 page가 받지 못한 event를 버리고 그 실패를 오류 기록으로 쓴다. | both |
+| `tauriv2.images.detach.pending-sidecar-gets-no-reconnect` | reload는 그 surface의 detach가 pending인 sidecar에 host `reconnect` operation을 보내지 않는다. | tauriv2 only: Wails 호스트는 reload 때 host `reconnect`를 보내지 않는다 |
 | `images.envelope.rejects-unattached-image` | 연결된 적 없는 이미지 이름의 봉투에 notAttached로 응답한다. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | 거부 응답은 봉투의 name과 sequence를 담는다. | both |
 | `images.envelope.refusal-preserves-quoted-name` | 따옴표가 든 이름의 거부 응답은 올바른 JSON이며 이름을 유지한다. | both |
@@ -937,7 +941,7 @@ fn invalid_json_closes_connection() {
 | `installed.plugin-json.invalid-text` | 켜진 plugin의 `plugin.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
 | `installed.json.invalid-text` | `installed.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
 | `installed.package-json.invalid-text` | 켜진 plugin의 `package.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
-| `page.start.document` | 시작 문서는 작업 공간 스냅샷과 window의 `windowControls` 답을 이 순서로 담은 `{"workspace":...,"controls":...}`다. | both |
+| `page.start.document` | 시작 문서는 작업 공간 스냅샷, window의 `windowControls` 답, pending image detach가 있는 surface의 byte 순서 목록을 이 순서로 담은 `{"workspace":...,"controls":...,"pendingSurfaces":[...]}`다. | both |
 | `page.start.requires-window` | 시작 문서 요청은 요청한 window를 시작한 뒤 문서를 `no-store`인 `application/json`으로 답하고, 요청이 window를 가리키지 않으면 아무것도 시작하지 않고 400과 `the start document request names no window`로 실패하며, 시작이 실패하면 500과 그 이유로 실패한다. | both |
 | `page.start.sok-core-owner` | Tauri는 시작 문서를 `soksak://core/start.json`에서 내보낸다. 다른 owner의 `soksak` 주소는 창을 시작하지 않고 404와 `soksak://<owner>/start.json not found`로 답한다. | tauriv2 only: Wails는 시작 문서를 asset server의 `/start.json`에서 내보낸다 |
 | `plugins.state.reports-registry-and-installed` | `pluginsState`는 `plugins/registry.json`이 없으면 `registry`와 `index`를 `null`로, 있으면 index URL과 검사한 index를, 읽거나 검사하지 못한 index는 `index`를 `{"error":...}`로 돌려주고, `installed.json`의 내용 또는 없을 때 빈 format 1 문서를 돌려준다. | both |

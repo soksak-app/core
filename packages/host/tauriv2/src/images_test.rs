@@ -39,26 +39,158 @@ fn reload_captures_each_image_supplier_before_advancing_generation() {
     );
 }
 
-// contract: images.detach.timeout-retains-target
-#[test]
-fn a_timed_out_detach_target_remains_for_the_next_page_start() {
+fn attached_images(surface: &str) -> super::Images {
     let images = super::Images::default();
-    let surface = "surface-retry";
-    let old_generation = images.begin_generation(surface);
+    images.begin_generation(surface);
     let key = (surface.to_string(), "region".to_string());
     images.reserve(&key, "owner", "fixture-sidecar").unwrap();
     assert!(images.set(&key, 1));
+    images
+}
 
-    let timed_out = images.begin_reload(surface);
-    assert_eq!(images.begin_reload(surface), timed_out);
+// contract: images.detach.timeout-keeps-waiting
+#[test]
+fn a_reload_sends_no_second_detach_for_a_pending_image() {
+    let surface = "surface-retry";
+    let images = attached_images(surface);
+    let first = images.begin_reload(surface);
+    assert_eq!(first.len(), 1);
+    images.add_pending_detach(&first[0], "request-1");
     images.remove_surface(surface);
-    let retried = images.begin_reload(surface);
+    let key = (surface.to_string(), "region".to_string());
+    images.reserve(&key, "owner", "fixture-sidecar").unwrap();
+    assert!(images.set(&key, 2));
 
-    assert_eq!(retried, timed_out);
-    assert_eq!(retried[0].generation, old_generation);
-
-    images.complete_detachments(&retried);
     assert!(images.begin_reload(surface).is_empty());
+    images.detach_page_ready();
+    assert!(
+        images
+            .end_pending_detach(&first[0], "request-1", None, false)
+            .is_some()
+    );
+    let next = images.begin_reload(surface);
+    assert_eq!(next.len(), 1);
+    assert!(next[0].generation > first[0].generation);
+}
+
+// contract: images.detach.pending-surface-is-refused
+#[test]
+fn a_pending_detach_refuses_only_its_surface() {
+    let images = attached_images("surface-a");
+    let targets = images.begin_reload("surface-a");
+    images.add_pending_detach(&targets[0], "request-1");
+
+    assert_eq!(
+        images.pending_detach_error("surface-a"),
+        Err(format!(
+            "image detach sidecar fixture-sidecar surface surface-a image region generation {} request request-1 is pending",
+            targets[0].generation
+        ))
+    );
+    assert_eq!(images.pending_detach_error("surface-b"), Ok(()));
+}
+
+// contract: images.detach.surface-ends-after-its-last-detach, images.detach.refusal-ends-pending
+#[test]
+fn the_last_end_of_a_surface_carries_each_failure_in_byte_wise_image_name_order() {
+    let images = super::Images::default();
+    images.begin_generation("surface-a");
+    for (handle, name) in [(1, "b"), (2, "B"), (3, "a")] {
+        let key = ("surface-a".to_string(), name.to_string());
+        images.reserve(&key, "owner", "fixture-sidecar").unwrap();
+        assert!(images.set(&key, handle));
+    }
+    images.detach_page_ready();
+    let targets = images.begin_reload("surface-a");
+    for (index, target) in targets.iter().enumerate() {
+        images.add_pending_detach(target, &format!("request-{index}"));
+    }
+    let named = |name: &str| {
+        targets
+            .iter()
+            .position(|target| target.name == name)
+            .unwrap()
+    };
+
+    assert_eq!(
+        images.end_pending_detach(&targets[named("b")], "request-other", None, false),
+        None
+    );
+    assert_eq!(
+        images.end_pending_detach(
+            &targets[named("b")],
+            &format!("request-{}", named("b")),
+            Some("failure b".into()),
+            false
+        ),
+        None
+    );
+    assert_eq!(
+        images.end_pending_detach(
+            &targets[named("a")],
+            &format!("request-{}", named("a")),
+            None,
+            false
+        ),
+        None
+    );
+    assert_eq!(
+        images.end_pending_detach(
+            &targets[named("B")],
+            &format!("request-{}", named("B")),
+            Some("failure B".into()),
+            false
+        ),
+        Some(serde_json::json!({"surface": "surface-a", "error": "failure B; failure b"}))
+    );
+}
+
+// contract: images.detach.session-end-releases
+#[test]
+fn a_session_end_builds_no_ended_event() {
+    let images = attached_images("surface-a");
+    images.detach_page_ready();
+    let targets = images.begin_reload("surface-a");
+    images.add_pending_detach(&targets[0], "request-1");
+
+    assert_eq!(
+        images.end_pending_detach(&targets[0], "request-1", None, true),
+        None
+    );
+    assert_eq!(images.pending_detach_error("surface-a"), Ok(()));
+}
+
+// contract: images.detach.ended-event-waits-for-ready
+#[test]
+fn an_end_before_the_page_is_ready_is_returned_when_it_reports_ready() {
+    let images = attached_images("surface-a");
+    images.detach_page_starting();
+    let targets = images.begin_reload("surface-a");
+    images.add_pending_detach(&targets[0], "request-1");
+
+    assert_eq!(images.pending_detach_surfaces(), ["surface-a"]);
+    assert_eq!(
+        images.end_pending_detach(&targets[0], "request-1", None, false),
+        None
+    );
+    assert_eq!(
+        images.detach_page_ready(),
+        [serde_json::json!({"surface": "surface-a", "error": null})]
+    );
+    assert!(images.detach_page_ready().is_empty());
+}
+
+// contract: images.detach.ended-event-waits-for-ready
+#[test]
+fn a_page_start_returns_the_failures_of_the_ends_it_clears() {
+    let images = attached_images("surface-a");
+    images.detach_page_starting();
+    let targets = images.begin_reload("surface-a");
+    images.add_pending_detach(&targets[0], "request-1");
+    images.end_pending_detach(&targets[0], "request-1", Some("failure".into()), false);
+
+    assert_eq!(images.detach_page_starting(), ["failure"]);
+    assert!(images.detach_page_ready().is_empty());
 }
 
 mod presentation_queue {
@@ -567,45 +699,18 @@ mod wait_boundary {
     }
 }
 
-// contract: images.detach.timeout-retains-target
+// contract: tauriv2.images.detach.pending-sidecar-gets-no-reconnect
 #[test]
-fn a_timed_out_detach_keeps_its_supplier_in_the_next_reconnect_targets() {
-    let images = super::Images::default();
-    let surface = "surface-reconnect-retry";
-    images.begin_generation(surface);
-    let key = (surface.to_string(), "region".to_string());
-    images.reserve(&key, "owner", "fixture-sidecar").unwrap();
-    assert!(images.set(&key, 1));
+fn a_sidecar_with_a_pending_detach_of_a_surface_is_named_for_the_reconnect_exclusion() {
+    let surface = "surface-reconnect";
+    let images = attached_images(surface);
+    let targets = images.begin_reload(surface);
+    images.add_pending_detach(&targets[0], "request-1");
 
-    let _unacknowledged = images.begin_reload(surface);
-    images.remove_surface(surface);
-
-    let mut sidecars = images.sidecars_for_surface(surface);
-    sidecars.sort();
-    assert_eq!(
-        sidecars,
-        ["fixture-sidecar"],
-        "a timeout retains the supplier needed by the next page reload"
-    );
+    assert_eq!(images.pending_detach_sidecars(surface), ["fixture-sidecar"]);
+    assert!(images.pending_detach_sidecars("surface-other").is_empty());
 }
 
-// contract: images.detach.timeout-retains-target
-#[test]
-fn ending_a_surface_clears_its_unacknowledged_detach_targets() {
-    let images = super::Images::default();
-    let surface = "surface-ended";
-    images.begin_generation(surface);
-    let key = (surface.to_string(), "region".to_string());
-    images.reserve(&key, "owner", "fixture-sidecar").unwrap();
-    assert!(images.set(&key, 1));
-    images.begin_reload(surface);
-    images.remove_surface(surface);
-
-    images.end_generation(surface);
-
-    assert!(images.sidecars_for_surface(surface).is_empty());
-    assert!(images.begin_reload(surface).is_empty());
-}
 // contract: exposure.window.region-reports-presented-frame
 #[test]
 fn presenting_a_frame_notifies_after_its_identity_is_current() {

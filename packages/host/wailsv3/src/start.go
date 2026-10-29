@@ -25,11 +25,12 @@ const windowIDHeader = "x-wails-window-id"
 var ErrNoStartWindow = errors.New("the start document request names no window")
 
 // StartDocument is the start document that carries the workspace snapshot and the window button reply.
-func StartDocument(workspace any, controls Chrome) ([]byte, error) {
+func StartDocument(workspace any, controls Chrome, pendingSurfaces []string) ([]byte, error) {
 	return json.Marshal(struct {
-		Workspace any    `json:"workspace"`
-		Controls  Chrome `json:"controls"`
-	}{workspace, controls})
+		Workspace       any      `json:"workspace"`
+		Controls        Chrome   `json:"controls"`
+		PendingSurfaces []string `json:"pendingSurfaces"`
+	}{workspace, controls, pendingSurfaces})
 }
 
 // StartAssets passes a start document request to start with the number of the requesting window and passes other paths to next. When the window is not found, it answers 400 without starting
@@ -75,6 +76,9 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 		s.ready = false
 	}
 	h.mu.Unlock()
+	if s != nil {
+		s.imageDetachPageStarting()
+	}
 	if s == nil {
 		return nil, ErrNoStartWindow
 	}
@@ -91,7 +95,7 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 	if reloadErr != nil {
 		return nil, fmt.Errorf("page reload: %w", reloadErr)
 	}
-	if err := s.awaitImageDetaches(detachments); err != nil {
+	if err := s.beginImageDetaches(detachments); err != nil {
 		return nil, fmt.Errorf("page reload image detach: %w", err)
 	}
 	// The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md rule 7).
@@ -115,5 +119,6 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return StartDocument(snapshot, controls)
+	// The list is read after the detaches start, so a detach that ends later is told by its image-detach-ended event.
+	return StartDocument(snapshot, controls, s.pendingImageDetachSurfaces())
 }

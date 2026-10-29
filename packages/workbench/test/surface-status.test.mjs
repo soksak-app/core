@@ -8,19 +8,19 @@ test("surface loading status is visible until the module becomes ready", async (
   const { setSurfaceStatus } = await import("../surface-status.js");
   const status = document.querySelector(".status");
 
-  setSurfaceStatus(status, { phase: "loading" });
+  setSurfaceStatus(status, "tab-a", { phase: "loading" });
   const indicator = status.querySelector("[data-surface-status]");
   assert.equal(status.dataset.surfaceStatus, "loading");
   assert.equal(indicator.hidden, false);
   assert.equal(indicator.textContent, "불러오는 중");
   assert.equal(status.getAttribute("aria-busy"), "true");
 
-  setSurfaceStatus(status, { phase: "ready" });
+  setSurfaceStatus(status, "tab-a", { phase: "ready" });
   assert.equal(status.dataset.surfaceStatus, "ready");
   assert.equal(indicator.hidden, true, "ready must hide the loading indicator");
   assert.equal(status.getAttribute("aria-busy"), "false");
 
-  setSurfaceStatus(status, { phase: "error", error: "network" });
+  setSurfaceStatus(status, "tab-a", { phase: "error", error: "network" });
   assert.equal(status.dataset.surfaceStatus, "error");
   assert.equal(indicator.hidden, false);
   assert.match(indicator.textContent, /network/);
@@ -32,9 +32,10 @@ test("a surface status without a phase or an error state without an error is rej
   globalThis.document = dom.window.document;
   const { setSurfaceStatus } = await import("../surface-status.js");
   const status = document.querySelector(".status");
-  assert.throws(() => setSurfaceStatus(status, {}), /invalid surface phase/);
-  assert.throws(() => setSurfaceStatus(status, { phase: "error", error: null }), /carries no error/);
-  setSurfaceStatus(status, { phase: "error", error: new Error("broken") });
+  assert.throws(() => setSurfaceStatus(status, "tab-a", {}), /invalid surface phase/);
+  assert.throws(() => setSurfaceStatus(status, undefined, { phase: "ready" }), /a surface status needs a surface id, not undefined/);
+  assert.throws(() => setSurfaceStatus(status, "tab-a", { phase: "error", error: null }), /carries no error/);
+  setSurfaceStatus(status, "tab-a", { phase: "error", error: new Error("broken") });
   assert.match(status.querySelector("[data-surface-status]").textContent, /broken/);
   dom.window.close();
 });

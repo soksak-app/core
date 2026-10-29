@@ -227,6 +227,7 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	s.readied = nil
 	h.mu.Unlock()
 	s.first.Do(func() { s.Emit("page-ready") })
+	s.imageDetachPageReady()
 	s.replayRegistrations()
 	s.loadPluginHosts()
 	routine.Go("windows-changed", h.windowsChanged)

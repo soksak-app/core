@@ -822,6 +822,8 @@ func (c *Sidecars) closeSurfaceMode(surface string, nativeView bool) bool {
 		delete(c.owners, surface)
 		delete(c.roots, surface)
 		delete(c.persistentSurfaces, surface)
+		// The session of the surface ends, which ends its pending image detaches.
+		c.releaseImageDetachesLocked(releasedBySession, func(target imageDetachTarget) bool { return target.Surface == surface })
 	}
 
 	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Closed: true})
@@ -1135,7 +1137,7 @@ func (c *Sidecars) stop(detach bool) {
 		c.closingChanged()
 	}
 	c.mu.Unlock()
-	c.failImageDetaches("", "the host stopped before the image detach acknowledgement arrived")
+	c.failImageDetaches("")
 	if changed {
 		c.closingInvalidated()
 	}

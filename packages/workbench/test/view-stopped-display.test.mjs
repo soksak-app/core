@@ -15,8 +15,8 @@ test("the stop of a view shows its reason on the card and the reopened card clea
   const { setSurfaceStatus } = await import("../surface-status.js?display");
   const status = document.querySelector(".status");
   try {
-    setSurfaceStatus(status, { phase: "loading" });
-    setSurfaceStatus(status, viewStopState({ surface: "probe-surface", plugin: "probe", reason: REASON }));
+    setSurfaceStatus(status, "probe-surface", { phase: "loading" });
+    setSurfaceStatus(status, "probe-surface", viewStopState({ surface: "probe-surface", plugin: "probe", reason: REASON }));
     const indicator = status.querySelector("[data-surface-status]");
     assert.equal(status.dataset.surfaceStatus, "error");
     assert.equal(indicator.hidden, false, "the error is visible on the card");
@@ -24,7 +24,7 @@ test("the stop of a view shows its reason on the card and the reopened card clea
     assert.equal(indicator.dataset.error, "surface status card-1 probe-surface", "the error uses the display path of its card");
     assert.deepEqual(reports, ["surface status card-1 probe-surface: 표면 오류 · " + REASON]);
 
-    setSurfaceStatus(status, { phase: "loading" });
+    setSurfaceStatus(status, "probe-surface", { phase: "loading" });
     assert.equal(indicator.dataset.error, undefined, "showing the card again clears the error");
     assert.equal(indicator.textContent, "불러오는 중");
   } finally {

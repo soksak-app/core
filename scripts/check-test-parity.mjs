@@ -200,6 +200,22 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-295",
+    implementation: [
+      { file: "packages/host/wailsv3/src/image_detach.go", symbol: "func (s *Surfaces) beginImageDetaches(" },
+      { file: "packages/host/tauriv2/src/image_detach.rs", symbol: "pub(crate) fn begin_image_detaches<" },
+      { file: "packages/workbench/image-detach-waits.js", symbol: "export function imageDetachHold(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/image_detach_test.go", id: "TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending" },
+      { file: "packages/host/wailsv3/src/image_detach_test.go", id: "TestASurfaceEndsItsDetachesOnlyAfterTheAcknowledgementOfEachOfItsImages" },
+      { file: "packages/host/tauriv2/src/image_detach_test.rs", id: "a_surface_ends_its_detaches_only_after_the_acknowledgement_of_each_of_its_images" },
+      { file: "packages/workbench/test/image-detach-waits.test.mjs", id: "a held tab is neither mounted nor given a background session until its detach ends" },
+    ],
+    expected: "A pending image detach holds only its surface: the page start returns at once, the host refuses that surface until the ended event, and the page mounts the surface only after the event.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-299-4",
     implementation: [{ file: "e2e/terminal.test.mjs", symbol: "markedRange: { location: 0, length: 2 }" }],
     tests: [{ file: "e2e/terminal.test.mjs", id: "diagnostic terminal entries inject preedit and record terminal input" }],
