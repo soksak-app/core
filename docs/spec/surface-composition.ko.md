@@ -10,7 +10,7 @@ Continuous layout 대기는 대신 현재 generation과 raster의 완전한 snap
 
 ## 모델
 
-창마다 앱 DOM 웹뷰 하나를 둔다. 표면마다 논리적 `SurfaceHost` 하나가 네이티브 콘텐츠를 클리핑하고 이동하고 숨기고 어둡게 하고 닫는다. 플러그인 DOM은 해당 창의 DOM 평면 안에 마운트한다. 단일 DOM 구현은 진행 중이며 [기능 상태](../features.ko.md)가 검증을 별도로 기록한다.
+창마다 앱 DOM 웹뷰 하나를 둔다. 표면마다 논리적 `SurfaceHost` 하나가 네이티브 콘텐츠를 클리핑하고 이동하고 숨기고 어둡게 하고 닫는다. `dom` 합성의 플러그인 DOM은 해당 창의 DOM 평면 안에 마운트하고, `view` 합성의 표면은 자기 웹뷰에서 페이지를 실행한다([plugins](plugins.ko.md#view-표면)). 단일 DOM 구현은 진행 중이며 [기능 상태](../features.ko.md)가 검증을 별도로 기록한다.
 
 ```text
 창 합성기

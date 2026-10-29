@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F239-299-1: The terminal window check of three terminals and two browsers counts one web view for the main page and one for each view surface, as the native window facts measure them, instead of one shared app web view; the specifications of the app DOM name the `dom` composition. The check runs in the integrated pass.
 - F239-299-2: The main page states `page.log.clock` once: the trace of the page sends its events through the writer of the page records instead of a writer of its own, which stated a second clock. Red: the owning workbench test found 2 clock records; Green: it passes.
 - F239-295-1: A Tauri transport test states that a page reload returns before the image detach acknowledgement; it failed with a timeout on the code before F239-295 and passes now.
 - F239-302: A new tab id is drawn again while it names a tab of a stored layout, a tab that the page issued, or a surface held by a pending image detach, so a new tab never waits for the detach or joins the persistent session of another tab; `issueId` requires the check of the taken ids.

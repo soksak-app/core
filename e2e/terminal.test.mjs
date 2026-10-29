@@ -253,7 +253,7 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS injected presentation failure`);
   });
 
-  test(`${app.name}: three terminals and two browsers share one app DOM and one terminal service`, async (t) => {
+  test(`${app.name}: three terminals and two browsers keep one view web view each and one terminal service`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const initial = await s.get("core.grid");
@@ -273,7 +273,15 @@ for (const app of Object.values(APPS)) {
     }
     await s.presented();
     const window = await s.get("host.window");
-    assert.equal(window.appDomWebviews, 1, "all plugin DOM must share the window's single app WebView");
+    // The app DOM webviews are the main page and one view web view per visible view surface. A view web view is
+    // not a document region, so it is counted in appDomWebviews and not in documentWebviews.
+    const viewSurfaces = (await s.get("core.surfaces")).filter((item) =>
+      item.visible && (item.plugin === "terminal" || item.plugin === "browser"));
+    assert.equal(viewSurfaces.length, 5, `the fixture must show five view surfaces, found ${JSON.stringify(viewSurfaces)}`);
+    const expectedAppDom = 1 + viewSurfaces.length;
+    assert.equal(window.webviews.filter((webview) => webview.main).length, 1, "the main page must be one webview of the window");
+    assert.equal(window.appDomWebviews, expectedAppDom,
+      `expected the main page and ${viewSurfaces.length} view web views (${expectedAppDom} app DOM webviews), measured ${window.appDomWebviews}`);
     assert.equal(window.documentWebviews, 2, "external browser documents must have independent native WebViews");
     const processes = terminalProcessSnapshot(app.configDir);
     if (processes.shells.length !== 3) {
@@ -293,7 +301,8 @@ for (const app of Object.values(APPS)) {
       await s.run("core.projects.browse");
       await s.run("core.library.open", { id: project.id });
       const returned = await s.get("host.window");
-      assert.equal(returned.appDomWebviews, 1, `return ${round} created an extra app WebView`);
+      assert.equal(returned.appDomWebviews, expectedAppDom,
+        `return ${round} changed the app DOM webviews: expected ${expectedAppDom}, measured ${returned.appDomWebviews}`);
       assert.equal(returned.documentWebviews, 2, `return ${round} duplicated or lost a browser document`);
       assert.deepEqual(terminalProcessSnapshot(app.configDir), processes,
         `return ${round} changed the service or shell processes`);

@@ -2,7 +2,7 @@
 
 [한국어](native-surfaces.ko.md)
 
-The approved single-DOM model is defined by [surface composition](surface-composition.md) and [plugin modules](plugins.md#surface-ownership). A logical surface is not a WebView. Native window facts identify the app DOM by its registered native view, not by its drawing order; document WebViews are below the app DOM. `appDomWebviews` and `documentWebviews` are measured from the native hierarchy. Counting a constant or inferring the main view from the first child is invalid. [Features](../features.md) tracks integration and verification separately.
+The approved single-DOM model is defined by [surface composition](surface-composition.md) and [plugin modules](plugins.md#surface-ownership). A logical surface is not a WebView. Native window facts identify the app DOM by its registered native view, not by its drawing order; document WebViews are below the app DOM. `appDomWebviews` and `documentWebviews` are measured from the native hierarchy: `documentWebviews` counts the web views of document regions, and `appDomWebviews` counts every other web view of the window, which is the app DOM and one web view for each view surface. Counting a constant or inferring the main view from the first child is invalid. [Features](../features.md) tracks integration and verification separately.
 
 This specification defines surface placement in the example applications. Implementation and validation status are recorded in [features](../features.md).
 
@@ -68,7 +68,7 @@ Native layer transactions are shared by the UI thread. Preparations from differe
 
 The host controls native view geometry. Each content webview renders its document independently; a delayed web document renderer must not stop the main window's layout updates.
 
-The app DOM contains every mounted plugin DOM. Its presentation callback confirms that DOM plane, not another webview's content. Document regions retain independent content rendering; as subviews of their surface, their native frames still follow the card geometry in the transaction. URL-origin matching must not determine presentation ownership.
+The app DOM contains every mounted plugin DOM of the `dom` composition; a view surface runs its page in its own web view ([view surfaces](#view-surfaces)). The presentation callback of the app DOM confirms that DOM plane, not another webview's content. Document regions retain independent content rendering; as subviews of their surface, their native frames still follow the card geometry in the transaction. URL-origin matching must not determine presentation ownership.
 
 A view surface is authorized only after the host has prepared the corresponding native surface handle. The authorization notification is delivered exactly once for each current surface generation before the view may declare composition, attach an image region, or open its sidecar session. A missing authorization is a lifecycle failure, not an indefinite loading state; the host must report an attributable error within the operation's bound.
 

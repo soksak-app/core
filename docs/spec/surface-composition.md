@@ -10,7 +10,7 @@ This specification defines the ownership boundary between a surface page and nat
 
 ## Model
 
-Each window has one application DOM webview. Each surface has one logical `SurfaceHost` that clips, moves, hides, dims, and closes its native content. Plugin DOM is mounted inside that window's DOM plane. The single-DOM implementation is in progress; [features](../features.md) records validation separately.
+Each window has one application DOM webview. Each surface has one logical `SurfaceHost` that clips, moves, hides, dims, and closes its native content. Plugin DOM of the `dom` composition is mounted inside that window's DOM plane, and a surface of the `view` composition runs its page in a web view of its own ([plugins](plugins.md#view-surfaces)). The single-DOM implementation is in progress; [features](../features.md) records validation separately.
 
 ```text
 Window compositor
