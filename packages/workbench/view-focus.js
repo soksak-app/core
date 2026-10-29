@@ -46,4 +46,5 @@ export function setResponder(event) {
 export const currentResponder = () => responder;
 
 /** The recorded focus of the view of surface, or null. */
+// default: a view that reported no focus has no focused exposed element, which core.focus states as null.
 export const viewFocusOf = (surface) => viewFocus.get(surface) ?? null;
