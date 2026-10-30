@@ -325,6 +325,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-296",
+    implementation: [
+      { file: "packages/workbench/tab-reports.js", symbol: "export function forgetTabsLeft(previousCards, nextCards, operation)" },
+      { file: "packages/workbench/tab-reports.js", symbol: "export function settleLeftTabs()" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/tab-origin.test.mjs", id: "a view tab of a stored layout keeps its origin through the drawn layout of its space while its surface is mounted" },
+    ],
+    expected: "A view tab of a stored layout keeps its origin through the drawn layout of its space until its surface is disposed.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-299-2",
     implementation: [
       { file: "packages/workbench/performance.js", symbol: "export function createTracer(call, events = null)" },
