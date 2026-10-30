@@ -34,7 +34,8 @@ function settingsAboveSurfaces(state) {
     assert.ok(modal.order > surface.order, `native surface ${surface.id} covers settings: ${JSON.stringify(state.surfaces)}`);
   }
   for (const region of state.documents) {
-    assert.ok(modal.order > region.order, `document region ${region.surface}/${region.document} covers settings`);
+    assert.ok(modal.order > region.order,
+      `document region ${region.surface}/${region.document} covers settings: modal order ${modal.order}, region order ${region.order}`);
   }
   assert.equal(state.children, 0, "settings must not create a child OS window");
   transparent(modal);
