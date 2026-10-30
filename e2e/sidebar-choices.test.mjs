@@ -32,7 +32,7 @@ for (const app of Object.values(APPS)) {
 
     // The saved space holds the choice.
     const project = await s.get("core.project");
-    const record = read(join(dirname(project.root), "projects.json")).find((item) => item.id === project.id);
+    const record = read(join(dirname(project.root), "projects.json")).projects.find((item) => item.id === project.id);
     const layout = record.spaces.find((space) => space.id === record.activeSpaceId).layout;
     assert.deepEqual(layout.sidebars["terminal:left"], { tab: "files.bookmarks", folded: [] });
     assert.deepEqual(layout.sidebars.left.folded, ["files.bookmarks"]);

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-4: sidebar 선택 검사는 `projects.json`을 현재 형식 `{format, projects}`로 읽는다.
 - F292-2: geometry 검사는 표면의 마지막 device pixel 줄을 메인 페이지가 아니라 표면의 view가 가진다고 기대한다.
 - F292-7: 두 호스트의 `host.window`는 plugin host 웹뷰를 `pluginHostWebviews`로 보고하고 그 행에 `pluginHost`를 표시한다. `appDomWebviews`는 그것을 더 세지 않는다.
 - F292-5: 창 검사 session이 표면의 status를 기다리는 일은 표면이 그 status를 등록한 뒤에 시작한다. view는 phase `ready` 뒤에 exposure를 등록한다.

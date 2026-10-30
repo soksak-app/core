@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-4: The sidebar choice check reads `projects.json` in its current form `{format, projects}`.
 - F292-2: The geometry check expects the view of a surface, not the main page, to own the last device pixel row of the surface.
 - F292-7: `host.window` of both hosts reports the plugin host web views as `pluginHostWebviews` and marks their rows with `pluginHost`; `appDomWebviews` no longer counts them.
 - F292-5: A wait of the window-check session on a status of a surface starts when the surface has registered the status; a view registers its exposure after its phase `ready`.
