@@ -1470,6 +1470,8 @@ export function elementRect(element) {
 function effectiveZoom(element) {
   const view = element.ownerDocument.defaultView;
   let zoom = 1;
+  // default: each step takes the next flat-tree parent: the slot of a slotted element, else the parent element, else the host
+  // of a shadow root; the document element has none of them, so null ends the walk at the root of the flat tree.
   for (let node = element; node; node = node.assignedSlot ?? node.parentElement ?? node.getRootNode().host ?? null) {
     const computed = view.getComputedStyle(node).zoom;
     const value = Number(computed);
