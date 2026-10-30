@@ -357,6 +357,9 @@ for (const app of Object.values(APPS)) {
     // that meets the removal first: the read of the folder, git in its removed working directory, or git changing into it.
     const removed = folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     s.expectError(new RegExp(`^error page plugin files files tree: (lstat ${removed}: no such file or directory|git rev-parse --show-toplevel: exit status 128: fatal: (Unable to read current working directory|cannot change to '${removed}'): No such file or directory)$`));
+    // The plugin host page of the files plugin meets the same removal and reports its unhandled rejection to the host, which writes it
+    // as the plugin host channel error (docs/spec/plugin-host.md#channel). The host relay is the only record of that page.
+    s.expectError(new RegExp(`^error host plugin host channel: plugin files: unhandled rejection: (lstat ${removed}: no such file or directory|git rev-parse --show-toplevel: exit status 128: fatal: (Unable to read current working directory|cannot change to '${removed}'): No such file or directory)$`));
 
     await s.run("core.projects.browse");
     const library = await s.until("core.library", (state) => state.folderErrors?.[missing.id] !== undefined,
