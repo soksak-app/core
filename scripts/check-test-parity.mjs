@@ -69,6 +69,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
   lane("native window ownership audit", "js-ts", ["scripts/check-native-windows.mjs"], ["scripts/test/native-windows.test.mjs"]),
+  lane("Tauri command thread audit", "js-ts", ["scripts/check-tauri-commands.mjs"], ["scripts/test/tauri-commands.test.mjs"]),
   lane("native test target audit", "js-ts", ["scripts/check-native-test-targets.mjs"], ["scripts/test/native-test-targets.test.mjs"]),
   lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
@@ -7993,6 +7994,16 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "function checklist(" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a platform-excluded item only with a named unavailable platform and unverified result" }],
     expected: "A platform-excluded checklist item names the unavailable platform and states that runtime behavior remains unverified.",
+    levels: ["unit"],
+  },
+  {
+    id: "F285-1",
+    implementation: [
+      { file: "packages/host/tauriv2/src/bindings.rs", symbol: "tauri::async_runtime::spawn_blocking(body)" },
+      { file: "scripts/check-tauri-commands.mjs", symbol: "export function findWorkerBodies(source)" },
+    ],
+    tests: [{ file: "scripts/test/tauri-commands.test.mjs", id: "every async command of the Tauri host runs its body on the blocking threads of the async runtime" }],
+    expected: "A Tauri command that waits runs on the blocking threads of the async runtime and holds no worker of it.",
     levels: ["unit"],
   },
   {
