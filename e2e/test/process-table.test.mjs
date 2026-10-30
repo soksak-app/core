@@ -5,7 +5,8 @@ import { processTable } from "../process-table.mjs";
 
 test("the process table is read whole while other processes carry commands larger than a read buffer", { timeout: 20000 }, (t) => {
   // Three processes carry arguments of 450 KB each, so the commands of all processes exceed the 1 MiB output buffer of execFileSync.
-  const large = Array.from({ length: 3 }, () => spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "x".repeat(450 * 1024)], { stdio: "ignore" }));
+  // Each process waits on its open standard input until the cleanup ends it.
+  const large = Array.from({ length: 3 }, () => spawn(process.execPath, ["-e", "process.stdin.resume()", "x".repeat(450 * 1024)], { stdio: ["pipe", "ignore", "ignore"] }));
   t.after(() => { for (const child of large) child.kill("SIGKILL"); });
   const rows = processTable("pid=,command=").split("\n");
   for (const child of large) {
