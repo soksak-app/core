@@ -27,7 +27,7 @@ import {
   acceptedCurrentViewReplies, currentPageNativeViewCalls, currentPageViewCallCoverage,
 } from "./reload-view-reply.mjs";
 import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
-import { viewPresentationJoins } from "./view-display.mjs";
+import { expectedPresentations, rasterIdentity, viewPresentationJoins } from "./view-display.mjs";
 import {
   cellBackgrounds, ensureTerminals, isColor, MEASURED_BACKGROUND, readScreenUntil, selectionBackground, setMeasuredBackground,
 } from "./terminal-screen.mjs";
@@ -885,7 +885,7 @@ for (const app of Object.values(APPS)) {
       const hidden = after.regions.find((region) => region.surface === terminal.surface);
       assert.ok(hidden && !hidden.visible, `${terminal.surface} did not hide`);
       assert.deepEqual(hidden.frame, shown.frame, `hiding ${terminal.surface} changed its native frame`);
-      assert.deepEqual(hidden.presented, shown.presented, `hiding ${terminal.surface} changed its raster`);
+      assert.deepEqual(rasterIdentity(hidden.presented), rasterIdentity(shown.presented), `hiding ${terminal.surface} changed its raster`);
     }
   });
 
@@ -916,30 +916,38 @@ for (const app of Object.values(APPS)) {
     const returnSets = 3;
     const roundTripsPerSet = 5;
     const roundTimeout = 60000;
+    // The placed rows from this point are the baseline of each drag set: the last placed row of a surface before a window is its placement at the window start.
+    const placementRowsFrom = currentEventOffsets(s.app.configDir);
     for (let set = 0; set < returnSets; set++) {
       const roundLabel = `set ${set + 1}/${returnSets}, ${roundTripsPerSet} uninterrupted round trips`;
       const started = Date.now();
       t.diagnostic(`${app.name}: START ${roundLabel}`);
       await within((async () => {
+      await s.flushLog();
+      const baselineRows = traceRows(readEvents(s.app.configDir, placementRowsFrom).events);
       const offsets = currentEventOffsets(s.app.configDir);
       const result = await drag(t, s, {
         axis: "x", line: cards[0].c1, dx: 500, dy: 0, ms: 96, times: roundTripsPerSet,
       }, { capture: true });
-      // Each terminal joins the presentation wait and ends it presented in this set; an abandoned wait fails at once, and a
-      // missing presentation fails at the deadline with the phases that were observed (docs/spec/native-surfaces.md#view-surfaces).
-      const joinsOf = (rows) => terminals.map((terminal) => ({ surface: terminal.surface, ...viewPresentationJoins(rows, terminal.surface) }));
       const describe = (joins) => joins.map((entry) =>
         `${entry.surface} phases=${JSON.stringify(entry.phases)} abandoned=${JSON.stringify(entry.abandoned)}`).join("; ");
       const traceRowsNow = () => traceRows(readEvents(s.app.configDir, offsets).events);
       await s.flushLog();
+      // Only a terminal whose placement changed in this gesture joins its presentation wait (docs/spec/plugin-processes.md, rule 6);
+      // a terminal that stayed in place adds no join. Each awaited terminal ends presented in this set; an abandoned wait fails at once,
+      // and a missing presentation fails at the deadline with the phases that were observed (docs/spec/native-surfaces.md#view-surfaces).
+      // The frames below measure the boxes of every terminal either way.
+      const awaited = expectedPresentations(baselineRows, traceRowsNow(), terminals.map((terminal) => terminal.surface));
+      const joinsOf = (rows) => awaited.map((surface) => ({ surface, ...viewPresentationJoins(rows, surface) }));
+      // untilFolderState re-reads the trace at each change of the logs folder; the deadline is the only timer.
       const joins = await untilFolderState(join(s.app.configDir, "logs"), () => {
         const current = joinsOf(traceRowsNow());
         const ended = current.find((entry) => entry.abandoned.length > 0 || entry.phases.includes("abandoned"));
         if (ended) throw new Error(`set ${set}: ${ended.surface} presentation wait ended without presentation; ${describe(current)}`);
         return current.every((entry) => entry.phases.includes("presented")) ? current : undefined;
-      }, 30000, () => new Error(`set ${set}: not every terminal presented within 30000 ms; ${describe(joinsOf(traceRowsNow()))}`));
-      t.diagnostic(`${app.name}: set ${set + 1} terminal presentations ${joins.map((entry) =>
-        entry.phases.filter((phase) => phase === "presented").length).join(",")}`);
+      }, 30000, () => new Error(`set ${set}: not every awaited terminal presented within 30000 ms; ${describe(joinsOf(traceRowsNow()))}`));
+      t.diagnostic(`${app.name}: set ${set + 1} awaited terminals ${awaited.length}, presentations ${joins.map((entry) =>
+        entry.phases.filter((phase) => phase === "presented").length).join(",") || "none"}`);
       const edgeWidths = [];
       const times = [];
       const positions = frames(result.frameDir).map((file, index) => {
@@ -997,7 +1005,7 @@ for (const app of Object.values(APPS)) {
         const after = hidden.regions.find((region) => region.surface === terminal.surface);
         assert.ok(after, `hiding ${terminal.surface} must retain its native region`);
         assert.deepEqual(after.frame, before.frame, `hiding ${terminal.surface} must not resize or move its native frame`);
-        assert.deepEqual(after.presented, before.presented, `hiding ${terminal.surface} must retain its raster`);
+        assert.deepEqual(rasterIdentity(after.presented), rasterIdentity(before.presented), `hiding ${terminal.surface} must retain its raster`);
       }
       try {
         await s.run("core.library.open", { id: project.id });

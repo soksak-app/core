@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  checkViewDisplay as acceptViewDisplay, observeViewDisplay as checkViewDisplay, viewPresentationJoins,
+  checkViewDisplay as acceptViewDisplay, expectedPresentations, observeViewDisplay as checkViewDisplay, rasterIdentity,
+  viewPresentationJoins,
 } from "../view-display.mjs";
 
 /** A window with two installed views but only one open card, and decoded frames of that card. */
@@ -187,4 +188,43 @@ test("view presentation joins report presentation-abandoned rows and reject unkn
   ], "terminal-a"), /unknown phase/);
   assert.throws(() => viewPresentationJoins(rows, ""), /surface must be nonempty/);
   assert.throws(() => viewPresentationJoins({}, "terminal-a"), /must be an array/);
+});
+
+test("a hidden region keeps its raster identity when a later frame of the same raster is presented", { timeout: 5000 }, () => {
+  // The values that the hiding check of terminal.test.mjs recorded for one terminal: the same generation and raster, with a later sequence.
+  const shown = { generation: 311, height: 286, raster: 1, scale: 1, sequence: 2, width: 180 };
+  const hidden = { ...shown, sequence: 4 };
+  assert.deepEqual(rasterIdentity(hidden), rasterIdentity(shown), "hiding changed its raster");
+  assert.notEqual(hidden.sequence, shown.sequence, "the fixture must hold a later sequence");
+});
+
+test("the raster identity changes when the generation, raster or size of the raster changes", { timeout: 5000 }, () => {
+  const shown = { generation: 311, height: 286, raster: 1, scale: 1, sequence: 2, width: 180 };
+  for (const change of [{ generation: 312 }, { raster: 2 }, { width: 181 }, { height: 287 }, { scale: 2 }]) {
+    assert.notDeepEqual(rasterIdentity({ ...shown, ...change }), rasterIdentity(shown), JSON.stringify(change));
+  }
+  assert.throws(() => rasterIdentity({ generation: 311 }), /has no raster/);
+});
+
+const placedAt = (surface, x) => traceRow("surface", { phase: "placed", surface, x, y: 0, w: 200, h: 300, visible: true });
+
+test("a terminal whose placement does not change in a divider drag is not awaited", { timeout: 5000 }, () => {
+  const baseline = [placedAt("terminal-a", 0), placedAt("terminal-b", 200)];
+  const window = [
+    placedAt("terminal-a", 0), placedAt("terminal-b", 260),
+    placedAt("terminal-a", 0), placedAt("terminal-b", 320),
+  ];
+  assert.deepEqual(expectedPresentations(baseline, window, ["terminal-a", "terminal-b"]), ["terminal-b"]);
+});
+
+test("a terminal that moves once from its placement before the drag is awaited", { timeout: 5000 }, () => {
+  const baseline = [placedAt("terminal-a", 0), placedAt("terminal-b", 200)];
+  const window = [placedAt("terminal-a", 0), placedAt("terminal-b", 260)];
+  assert.deepEqual(expectedPresentations(baseline, window, ["terminal-a", "terminal-b"]), ["terminal-b"]);
+});
+
+test("a terminal without a placed row before the drag is awaited", { timeout: 5000 }, () => {
+  const baseline = [placedAt("terminal-a", 0)];
+  const window = [placedAt("terminal-a", 0), placedAt("terminal-b", 200)];
+  assert.deepEqual(expectedPresentations(baseline, window, ["terminal-a", "terminal-b"]), ["terminal-b"]);
 });

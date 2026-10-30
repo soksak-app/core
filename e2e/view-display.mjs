@@ -28,6 +28,62 @@ export function viewPresentationJoins(rows, surface) {
   return { phases, abandoned };
 }
 
+/** The placement of a host surface row with phase `placed` (the frame and visibility of a view), validated at the boundary. */
+function placementOf(row) {
+  for (const key of ["x", "y", "w", "h"]) {
+    if (!Number.isFinite(row[key])) throw new Error(`placed row of ${row.surface} has no finite ${key}: ${JSON.stringify(row)}`);
+  }
+  if (typeof row.visible !== "boolean") throw new Error(`placed row of ${row.surface} has no boolean visible: ${JSON.stringify(row)}`);
+  return `${row.x},${row.y},${row.w},${row.h},${row.visible}`;
+}
+
+/**
+ * The surfaces of `surfaces` whose committed placement changed during a drag window. `baselineRows` are the trace rows before the
+ * window and `windowRows` the rows of the window, in trace order. The placement of a surface is the frame and visibility of its last
+ * `placed` row; its first row in the window is compared with the placement of its last row in the baseline. A surface with no earlier
+ * placed row is a change, and so is a surface with a `created` row, which starts a new root-view generation
+ * (docs/spec/plugin-processes.md, rule 6). A surface without a row in the window is not a change.
+ */
+export function expectedPresentations(baselineRows, windowRows, surfaces) {
+  if (!Array.isArray(baselineRows)) throw new TypeError("baseline rows must be an array");
+  if (!Array.isArray(windowRows)) throw new TypeError("window rows must be an array");
+  if (!Array.isArray(surfaces)) throw new TypeError("surfaces must be an array");
+  const isSurfaceRow = (row) => row?.layer === "host" && row.event === "surface" && (row.phase === "placed" || row.phase === "created");
+  const last = new Map();
+  for (const row of baselineRows) {
+    if (!isSurfaceRow(row)) continue;
+    if (row.phase === "created") last.delete(row.surface);
+    else last.set(row.surface, placementOf(row));
+  }
+  const changed = new Set();
+  for (const row of windowRows) {
+    if (!isSurfaceRow(row)) continue;
+    if (row.phase === "created") {
+      changed.add(row.surface);
+      last.delete(row.surface);
+      continue;
+    }
+    const placement = placementOf(row);
+    if (last.get(row.surface) !== placement) changed.add(row.surface);
+    last.set(row.surface, placement);
+  }
+  return surfaces.filter((surface) => changed.has(surface));
+}
+
+/**
+ * The raster identity of a presented image region: its generation, raster, and the size and scale of that raster. A later sequence of
+ * the same raster keeps this identity (docs/spec/host-contract.md, images.wait.continuous-raster-snapshot).
+ */
+export function rasterIdentity(presented) {
+  if (presented === null || typeof presented !== "object") throw new TypeError("presented raster must be an object");
+  const identity = {};
+  for (const key of ["generation", "raster", "width", "height", "scale"]) {
+    if (presented[key] === undefined) throw new TypeError(`presented raster has no ${key}: ${JSON.stringify(presented)}`);
+    identity[key] = presented[key];
+  }
+  return identity;
+}
+
 /** Samples per axis of the surface area; colour variation measures only the sampled area, not plugin readiness. */
 const SAMPLES = 16;
 
