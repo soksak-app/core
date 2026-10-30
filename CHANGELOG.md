@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-70-1: While `diagnostics.fixture` runs, each awaited step inside the project operations that it runs is recorded as `page.fixture.step` with the name `projects.<operation>.<step>`, so a fixture step that does not end names the step of the operation that it waits for. Validation: the two new tests of `packages/workbench` failed before the step runner existed and pass after.
 - F292-72: `docs/spec/logging.md` states once which events pass every gate; the copy that still named the removed migration record `log.migrated` is gone, and the remaining sentence names `log.plugins`.
 - F292-10: The check that a window reads the registry again when it becomes the key window runs in the activation tier (`e2e/activation/registry-active.test.mjs`) and activates the application first, because only a window of the active application becomes the key window and the hosted runner does not activate the application.
 - F292-71: The page sends each line of the diagnostic transcript with the action `transcript` of the host call `log`; both hosts store it as a record cut to its bound and send the whole line to the connections of the transcript, so a long call no longer reaches a check split and without its reply.

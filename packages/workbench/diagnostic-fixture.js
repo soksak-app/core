@@ -25,11 +25,18 @@ export async function prepareFixture({ root, settings: overrides }, { projects, 
   if (overrides !== undefined && (typeof overrides !== "object" || overrides === null || Array.isArray(overrides))) {
     throw new Error("diagnostics.fixture settings must be an object");
   }
-  await step("projects.flush", emitEvent, () => projects.flush());
-  for (const project of [...projects.all()]) await step("projects.close", emitEvent, () => projects.close(project.id));
-  // The common settings given by the check are applied together with the defaults in one step. A surface that opens starts with those values, and the change notification is sent once.
-  await step("settings.set", emitEvent, () => settings.set({ ...structuredClone(settings.defaults), ...overrides }, "common", "diagnostics.fixture"));
-  await step("projects.open", emitEvent, () => projects.open({ root, color: "#ffb36b", layout: plane.fresh() }));
-  await step("projects.flush", emitEvent, () => projects.flush());
+  // The awaited steps inside the project operations are steps of the fixture too, so a project step that does not end names the
+  // step of the operation that it waits for.
+  projects.runSteps((name, work) => step(name, emitEvent, work));
+  try {
+    await step("projects.flush", emitEvent, () => projects.flush());
+    for (const project of [...projects.all()]) await step("projects.close", emitEvent, () => projects.close(project.id));
+    // The common settings given by the check are applied together with the defaults in one step. A surface that opens starts with those values, and the change notification is sent once.
+    await step("settings.set", emitEvent, () => settings.set({ ...structuredClone(settings.defaults), ...overrides }, "common", "diagnostics.fixture"));
+    await step("projects.open", emitEvent, () => projects.open({ root, color: "#ffb36b", layout: plane.fresh() }));
+    await step("projects.flush", emitEvent, () => projects.flush());
+  } finally {
+    projects.runSteps(null);
+  }
   return { root };
 }

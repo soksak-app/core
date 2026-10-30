@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-70-1: `diagnostics.fixture`가 도는 동안, 그것이 실행하는 project 작업 안의 각 await 단계가 `projects.<operation>.<step>` 이름의 `page.fixture.step`으로 기록되므로, 끝나지 않은 fixture 단계는 그 작업이 기다리는 단계를 밝힌다. 검증: `packages/workbench`의 새 시험 두 개는 단계 실행기가 없을 때 실패했고 그 뒤 통과한다.
 - F292-72: `docs/spec/logging.md`는 모든 gate를 지나는 event를 한 번만 적는다. 제거된 migration 기록 `log.migrated`를 아직 들던 사본은 없어졌고, 남은 문장은 `log.plugins`를 든다.
 - F292-10: 창이 key window가 될 때 registry를 다시 읽는지 보는 check는 activation tier(`e2e/activation/registry-active.test.mjs`)에서 실행되고 먼저 application을 활성화한다. active application의 창만 key window가 되고 hosted runner는 application을 활성화하지 않기 때문이다.
 - F292-71: page는 진단 transcript의 각 줄을 host call `log`의 action `transcript`로 보낸다. 두 host는 그것을 상한에서 자른 record로 저장하고 전체 줄을 transcript의 연결에 보낸다. 그래서 긴 call이 더 이상 나뉘고 응답이 빠진 채 check에 닿지 않는다.

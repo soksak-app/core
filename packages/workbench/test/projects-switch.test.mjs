@@ -110,6 +110,8 @@ projects.onSwitch({
   // Cleans up the surface modules outside the tabs of the remaining layout. It also records the order relative to the session cleanup in retained.
   retain: async (surfaceIds) => { retained.push({ modules: [...surfaceIds] }); },
   presented: async () => {},
+  // The plane of this test holds no modified tab.
+  settleTabs: async () => true,
   empty: async (show) => {
     plane.events.push("empty started");
     await plane.gate;
@@ -498,4 +500,31 @@ test("a reopened project restores inactive-space origins before retained views c
   await projects.initialise({ ...store, snapshot: async () => structuredClone(snapshot), patch: async () => {} });
   assert.equal(projects.local().some((p) => p.id === project.id), true);
   assert.deepEqual(tabOrigin("tab-retained-origin"), { directory: "/work/retained-source" });
+});
+
+test("a project close that waits names each awaited step it started and has not ended", { timeout: 5000 }, async () => {
+  let listed = [structuredClone(PROJECT)];
+  await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: structuredClone(listed), open: [] }),
+    remove: async (id) => { listed = listed.filter((item) => item.id !== id); } });
+  await projects.activate(PROJECT.id);
+  const records = [];
+  projects.runSteps(async (step, work) => {
+    records.push([step, "start"]);
+    try {
+      return await work();
+    } finally {
+      records.push([step, "end"]);
+    }
+  });
+  plane.hold();
+  const closing = projects.close(PROJECT.id);
+  // The fake store and the fake runtime finish within microtasks, so after the next macrotask only the held clearing waits.
+  await new Promise((resolve) => setImmediate(resolve));
+  const pending = records.filter(([step, phase]) => phase === "start" && !records.some((item) => item[0] === step && item[1] === "end"))
+    .map(([step]) => step);
+  assert.deepEqual(pending, ["projects.close.refresh", "projects.read.empty"],
+    `the close named no pending step: ${JSON.stringify(records)}`);
+  plane.release();
+  assert.equal(await closing, true);
+  projects.runSteps(null);
 });

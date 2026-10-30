@@ -6052,7 +6052,7 @@ const FEATURE_LINKS = [
   {
     id: "F44",
     implementation: [
-      { file: "packages/workbench/projects.js", symbol: "await listener.retain(new Set(remaining.map((item) => item.surface)))" },
+      { file: "packages/workbench/projects.js", symbol: "listener.retain(new Set(remaining.map((item) => item.surface)))" },
     ],
     tests: [
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "the surfaces of every layout are listed with their project root, and removing a project retains the rest" },

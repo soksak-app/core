@@ -113,9 +113,20 @@ export const isOpen = (id) => openProjects.has(id) || owned.has(id);
  *
  * Opening the library waits while the plane is emptied. If an activation started meanwhile filled the plane first, the emptying that finished later would erase the plane of the active project.
  */
+/*
+ * Runs an awaited step of a project operation. While diagnostics.fixture runs, the fixture records each step as the event
+ * page.fixture.step (docs/spec/logging.md#bounds), so a step that does not end is named by its start without an end; otherwise the
+ * step runs without a record. runSteps(null) restores that default.
+ */
+const runStep = (name, work) => work();
+let stepRunner = runStep;
+export function runSteps(runner) { stepRunner = runner ?? runStep; } // default: null restores the runner that records no step.
+const awaited = (name, work) => stepRunner(name, work);
+
 let switching = Promise.resolve();
 function inTurn(run) {
-  const done = switching.then(run);
+  const turn = switching;
+  const done = awaited("projects.turn", () => turn).then(run);
   // The caller that received done reports a failure (command, library, window activation, start document). The next transition runs regardless of an earlier failure.
   switching = done.then(undefined, () => undefined);
   return done;
@@ -131,7 +142,7 @@ function showLibrary() {
 
 /** Empties the plane and shows the library in that drawing. Even if the drawing fails, the transition ends at the library. The layout queue reported the failure. */
 async function emptyToLibrary() {
-  await listener.empty(showLibrary);
+  await awaited("projects.read.empty", () => listener.empty(showLibrary));
   browsing = true;
 }
 
@@ -307,11 +318,11 @@ async function reread() {
 }
 
 async function readProjects() {
-  const snapshot = await store.snapshot();
+  const snapshot = await awaited("projects.read.snapshot", () => store.snapshot());
   const listed = new Set(snapshot.projects.map((p) => p.id));
   const removedProjects = projects.some((p) => !listed.has(p.id));
   // The cleanup below keeps only the tabs of the stored layouts. If the plane of the remaining active project has tabs that are not stored yet, they are stored first so that their surfaces remain too. The removed project is not stored.
-  if (removedProjects && listed.has(activeProjectId)) await keep("saved layout");
+  if (removedProjects && listed.has(activeProjectId)) await awaited("projects.read.keep", () => keep("saved layout"));
   // default: the store of the browser example has no other window, so it carries no open.
   openProjects = new Set(snapshot.open ?? []);
   const previous = new Map(projects.map((p) => [p.id, p]));
@@ -326,15 +337,15 @@ async function readProjects() {
     activeProjectId = null;
     history.replaceState(null, "", location.pathname);
     savedLayout = "";
-    await selectProject(null);
-    await showData(null);
+    await awaited("projects.read.selectProject", () => selectProject(null));
+    await awaited("projects.read.showData", () => showData(null));
     await inTurn(emptyToLibrary);
   } else if (removed.length && !browsing) listener?.update();
   if (removedProjects) {
     // The tabs of a removed project are in no layout. Whether this window removed the project or only showed it, this window first cleans up the surface modules of those surfaces and ends the sidecar sessions. If a module remains, it reopens the ended session, and when the folder of the removed project does not exist, that opening fails (F44). The host keeps the surface sessions of the remaining modules in retain (docs/spec/persistent-services.md).
     const remaining = layoutSurfaces();
-    await listener.retain(new Set(remaining.map((item) => item.surface)));
-    await retainSidecarSessions(remaining);
+    await awaited("projects.read.retain", () => listener.retain(new Set(remaining.map((item) => item.surface))));
+    await awaited("projects.read.retainSidecarSessions", () => retainSidecarSessions(remaining));
   }
   changed();
   return ended;
@@ -387,17 +398,17 @@ async function showProject(id, prepared = null, openedProject = null, stagedOwne
     return;
   }
   if (!openedProject) {
-    await keep("library replacement");
-    await refresh();
+    await awaited("projects.show.keep", () => keep("library replacement"));
+    await awaited("projects.show.refresh", refresh);
   }
   const project = openedProject ?? projects.find((p) => p.id === id); // default: when no opened record was supplied, resolve it from the refreshed project list.
   if (!project) throw new Error(`Unknown project: ${id}`);
   if (!openedProject) checkProject(project);
-  const nextContext = prepared ?? await prepareData({ id, root: project.root }); // default: prepare data when the caller did not provide a staged context.
+  const nextContext = prepared ?? await awaited("projects.show.prepareData", () => prepareData({ id, root: project.root })); // default: prepare data when the caller did not provide a staged context.
   const previous = { id: activeProjectId, browsing };
   try {
-    await selectProject(id);
-    await publishProjectData(nextContext, project);
+    await awaited("projects.show.selectProject", () => selectProject(id));
+    await awaited("projects.show.publishProjectData", () => publishProjectData(nextContext, project));
   } catch (error) {
     try { await selectProject(previous.browsing ? null : previous.id); } catch (restoreError) { failed(restoreError); }
     if (stagedOwner) {
@@ -422,7 +433,7 @@ async function showProject(id, prepared = null, openedProject = null, stagedOwne
   if (begun === id) finishInitialProjectContext();
   // A project command completes only after the loaded layout has reached the native compositor.
   // If it returned earlier, the previous frame would be exposed to the caller, and a state with empty regions would be reported as a successful project restore.
-  await listener.presented();
+  await awaited("projects.show.presented", () => listener.presented());
 }
 
 async function publishProjectData(context, project) {
@@ -459,15 +470,15 @@ async function activateInTurn(id) {
   checkProject(project);
   // Activating the project drawn on the first screen has no previous project, so the window position is not stored.
   const resumed = begun === id;
-  await keep("library replacement");
-  if (!resumed) await saveGeometry();
-  const folder = await windows.folder(project.root);
+  await awaited("projects.activate.keep", () => keep("library replacement"));
+  if (!resumed) await awaited("projects.activate.saveGeometry", saveGeometry);
+  const folder = await awaited("projects.activate.folder", () => windows.folder(project.root));
   if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
-  const result = await windows.openProject({
+  const result = await awaited("projects.activate.openProject", () => windows.openProject({
     // default: a project whose window was never closed has no stored window position (null).
     id, root: project.root, geometry: project.geometry ?? null,
     separate: value("projectOpening") === "windows", current: active() && !owned.has(id) ? activeProjectId : null,
-  }, beginOperation("page.project.operation", { action: "open", project: id }));
+  }, beginOperation("page.project.operation", { action: "open", project: id })));
   if (!result.local) {
     if (active()) await showProject(activeProjectId);
     await store.patch(id, { lastOpened: Date.now() });
@@ -475,7 +486,7 @@ async function activateInTurn(id) {
   }
   let prepared;
   try {
-    prepared = await prepareData({ id, root: project.root });
+    prepared = await awaited("projects.activate.prepareData", () => prepareData({ id, root: project.root }));
   } catch (error) {
     if (result.staged) {
       try { await windows.releaseProject(id); } catch (cleanupError) { failed(cleanupError); }
@@ -483,18 +494,18 @@ async function activateInTurn(id) {
     throw error;
   }
   await showProject(id, prepared, project, result.staged);
-  await store.patch(id, { lastOpened: Date.now() });
+  await awaited("projects.activate.patch", () => store.patch(id, { lastOpened: Date.now() }));
 }
 
 export async function open({ root, color, layout }) {
   if (!root.trim()) throw new Error("Project directory is empty");
-  const folder = await windows.folder(root);
+  const folder = await awaited("projects.open.folder", () => windows.folder(root));
   const space = { id: issueId("space", spaceTaken), title: "SPACE1", layout };
-  const project = await store.add({
+  const project = await awaited("projects.open.add", () => store.add({
     id: issueId("project", (id) => projects.some((known) => known.id === id)), ...folder, title: folder.root.split(/[\\/]/).filter(Boolean).at(-1), color,
     named: 1, spaces: [space], activeSpaceId: space.id, settings: {},
-  });
-  await refresh();
+  }));
+  await awaited("projects.open.refresh", refresh);
   await activate(project.id);
   return project;
 }
@@ -511,15 +522,16 @@ export async function close(id) {
     return cids;
   };
   // The window that shows the project asks here; another window shows it, the host asks that window.
-  const asked = id === activeProjectId && !browsing ? await listener.settleTabs() : await windows.askRemoveProject(id, operation());
+  const asked = id === activeProjectId && !browsing ? await awaited("projects.close.settleTabs", () => listener.settleTabs())
+    : await awaited("projects.close.askRemoveProject", () => windows.askRemoveProject(id, operation()));
   if (!asked) return false;
   // The cleanup below keeps the tabs of the stored layouts. If the plane of the active project has tabs that are not stored yet, they are stored first so that their surfaces remain too.
-  await keep("saved layout");
-  await windows.releaseProject(id, operation());
+  await awaited("projects.close.keep", () => keep("saved layout"));
+  await awaited("projects.close.releaseProject", () => windows.releaseProject(id, operation()));
   owned.delete(id);
-  await store.remove(id);
+  await awaited("projects.close.remove", () => store.remove(id));
   // Ending the removed project is done by the same readProjects as in other windows. If the change notification of the store read before this refresh, the reread of that notification opens the next project. That activation passes through the same transition order, so the activate below finishes after it.
-  await refresh();
+  await awaited("projects.close.refresh", refresh);
   if (active() && !browsing) listener.update();
   if (!active()) {
     const next = local()[0];

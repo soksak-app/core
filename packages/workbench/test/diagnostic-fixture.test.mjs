@@ -5,7 +5,10 @@ import { prepareFixture } from "../diagnostic-fixture.js";
 // The real `set` of the settings refuses a change that names no actor (settings.js), and a window check starts from this fixture.
 function modules(calls) {
   return {
-    projects: { flush: async () => {}, all: () => [], close: async () => {}, open: async (project) => { calls.push(["open", project.root]); } },
+    projects: {
+      flush: async () => {}, all: () => [], close: async () => {}, open: async (project) => { calls.push(["open", project.root]); },
+      runSteps: () => {},
+    },
     settings: {
       defaults: { mode: "dark" },
       set: async (patch, scope, actor) => {
@@ -49,4 +52,22 @@ test("each awaited step of the fixture records its start and its end with the el
   await assert.rejects(prepareFixture({ root: "/tmp/project" }, { ...failing, emitEvent: (level, event, fields) => records.push([event, fields]) }), /settings refused/);
   const last = records.at(-1);
   assert.deepEqual([last[0], last[1].step, last[1].phase, last[1].error], ["page.fixture.step", "settings.set", "end", "settings refused"]);
+});
+
+test("the awaited steps of the project operations that the fixture runs are recorded as steps of the fixture", async () => {
+  const records = [];
+  const runners = [];
+  const base = modules([]);
+  const projects = {
+    ...base.projects,
+    runSteps: (runner) => runners.push(runner),
+    // The open of the fixture runs one awaited step of the project operation through the installed runner.
+    open: async () => runners.at(-1)("projects.open.refresh", async () => {}),
+  };
+  await prepareFixture({ root: "/tmp/project" }, { ...base, projects, emitEvent: (level, event, fields) => records.push([event, fields.step, fields.phase]) });
+  assert.deepEqual(records.slice(4, 8), [
+    ["page.fixture.step", "projects.open", "start"], ["page.fixture.step", "projects.open.refresh", "start"],
+    ["page.fixture.step", "projects.open.refresh", "end"], ["page.fixture.step", "projects.open", "end"],
+  ]);
+  assert.equal(runners.at(-1), null, "the fixture left its step runner installed after it ended");
 });
