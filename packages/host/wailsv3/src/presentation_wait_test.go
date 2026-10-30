@@ -142,3 +142,36 @@ func TestAHideAfterAPresentedCallbackEndsNoWait(t *testing.T) {
 		}
 	}
 }
+
+// contract: view.presentation-wait.invisible-present-defers-end
+// An invisible root placement at a presentation joins nothing and ends no wait; the wait of a view that is shown ends at the sync that
+// applies its invisibility, with one abandoned record.
+func TestAnInvisiblePlacementAtPresentEndsNoWaitUntilItsSync(t *testing.T) {
+	isolateTraceRecords(t)
+	s, fake, native := newLifecycleSurfaces(t, &fakeClock{})
+	window := unsafe.Pointer(new(int))
+	shown := []Placement{{ID: "probe-surface", Visible: true}}
+	if err := s.joinShownViews(window, 7, shown); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	hidden := []Placement{{ID: "probe-surface", Visible: false}}
+	if err := s.joinShownViews(window, 8, hidden); err != nil {
+		t.Fatalf("present an invisible placement: %v", err)
+	}
+	if !s.presentation.waits("probe-surface") {
+		t.Fatalf("the presentation of an invisible placement ended the wait before its sync")
+	}
+	if got := bufferedTraces(t, "host.trace.view.presentation-abandoned"); len(got) != 0 {
+		t.Fatalf("abandoned records at present: %v, want none", got)
+	}
+	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", false, nullOriginStart()); err != nil {
+		t.Fatalf("sync the hidden view: %v", err)
+	}
+	got := bufferedTraces(t, "host.trace.view.presentation-abandoned")
+	if len(got) != 1 || got[0]["surface"] != "probe-surface" || got[0]["reason"] != "hidden" {
+		t.Fatalf("abandoned records at sync: %v, want one hidden record for probe-surface", got)
+	}
+	if fake.joins[0].abandons != 1 {
+		t.Fatalf("the sync abandoned the native join %d times, want 1", fake.joins[0].abandons)
+	}
+}

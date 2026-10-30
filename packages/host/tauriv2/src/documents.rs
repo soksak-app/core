@@ -3283,27 +3283,21 @@ pub(crate) fn join_shown_views(
 ) -> Result<ViewJoinOutcome, String> {
     let data = window_data(window)?;
     let mut outcome = ViewJoinOutcome::default();
-    for placement in placements {
-        let surface = placement.id.as_str();
-        if !placement.visible {
-            end_surface_presentation_wait(window, surface, "hidden");
-            continue;
-        }
+    let requested: Vec<(&str, Option<u64>, ViewPlacement)> = placements
+        .iter()
+        .map(|placement| {
+            (
+                placement.id.as_str(),
+                data.documents.views().generation(placement.id.as_str()),
+                ViewPlacement {
+                    frame: [placement.x, placement.y, placement.w, placement.h],
+                    visible: placement.visible,
+                },
+            )
+        })
+        .collect();
+    for (surface, generation) in data.documents.presentation().joinable(&requested) {
         if data.documents.lifecycle().spec(surface).is_none() {
-            continue;
-        }
-        let Some(generation) = data.documents.views().generation(surface) else {
-            continue;
-        };
-        let view_placement = ViewPlacement {
-            frame: [placement.x, placement.y, placement.w, placement.h],
-            visible: placement.visible,
-        };
-        if !data
-            .documents
-            .presentation()
-            .needs_join(surface, generation, view_placement)
-        {
             continue;
         }
         let key: Key = (surface.to_string(), VIEW_NAME.to_string());

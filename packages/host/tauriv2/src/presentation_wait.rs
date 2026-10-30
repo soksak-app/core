@@ -77,6 +77,9 @@ struct State {
     committed: BTreeMap<String, CommittedPlacement>,
 }
 
+/// A root placement of a presentation request: the surface, the generation of its view when the surface has one, and the placement.
+pub type RequestedPlacement<'a> = (&'a str, Option<u64>, ViewPlacement);
+
 /// The views that wait for presentation, by surface, view generation and layout ticket.
 #[derive(Default)]
 pub struct PresentationWait(Mutex<State>);
@@ -119,6 +122,20 @@ impl PresentationWait {
     /// Removes the committed placement of a closed surface.
     pub fn forget_surface(&self, surface: &str) {
         self.lock().committed.remove(surface);
+    }
+
+    /// Selects the placements that join the open layout transaction, in request order: a visible placement of a view with a
+    /// generation whose placement differs from the committed one. An invisible placement is not selected and ends no wait at
+    /// presentation; its wait ends at the sync that applies the invisibility (documents.rs sync_view).
+    pub fn joinable<'a>(&self, placements: &[RequestedPlacement<'a>]) -> Vec<(&'a str, u64)> {
+        placements
+            .iter()
+            .filter_map(|(surface, generation, placement)| {
+                let generation = (*generation)?;
+                self.needs_join(surface, generation, *placement)
+                    .then_some((*surface, generation))
+            })
+            .collect()
     }
 
     /// Starts one native join. The ticket and view generation form its identity.

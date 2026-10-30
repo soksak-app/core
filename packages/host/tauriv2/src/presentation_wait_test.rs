@@ -263,3 +263,26 @@ fn a_hide_after_a_presented_callback_ends_no_wait() {
         .count();
     assert_eq!(abandoned_after, abandoned_before);
 }
+
+// contract: view.presentation-wait.invisible-present-defers-end
+// An invisible root placement is not joinable and ends no wait at presentation: the wait of the view stays open until the sync that
+// applies the invisibility ends it.
+#[test]
+fn an_invisible_placement_is_not_joinable_and_leaves_its_wait_open() {
+    let wait = PresentationWait::default();
+    assert!(wait.begin(ABANDON_SURFACE, GENERATION, TICKET));
+    let visible = placement([1.0, 2.0, 3.0, 4.0], true);
+    let hidden = placement(visible.frame, false);
+    assert!(
+        wait.joinable(&[(ABANDON_SURFACE, Some(GENERATION), hidden)])
+            .is_empty()
+    );
+    assert!(wait.waits(ABANDON_SURFACE, GENERATION, TICKET));
+    assert_eq!(
+        wait.joinable(&[
+            (ABANDON_SURFACE, None, visible),
+            (ABANDON_SURFACE, Some(GENERATION), visible),
+        ]),
+        vec![(ABANDON_SURFACE, GENERATION)]
+    );
+}
