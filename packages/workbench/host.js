@@ -11,7 +11,7 @@ import { trace } from "./performance.js";
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
-import { registerSurfacePort, registry } from "./exposure.js";
+import { gatedExposureReply, registerSurfacePort, registry } from "./exposure.js";
 import { pluginSessionOf } from "./plugin-host.js";
 import { logGate } from "./log-gate.js";
 import { pageIdentity } from "./page-identity.js";
@@ -212,7 +212,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
   const invoke = (name, payload) => {
     if (name === "report") return reportRecord("error", payload);
     // A view answers a forwarded exposure request through this call, so its reply passes the gate of the surface replies.
-    if (name === "exposureReply" && replyGate !== null) return replyGate(surfaceId, () => call(name, payload));
+    if (name === "exposureReply") return gatedExposureReply(surfaceId, () => call(name, payload));
     return call(name, payload);
   };
   const listeners = new Map();
@@ -246,7 +246,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     },
     reply: (id, payload) => {
       const send = () => bridge.call("exposureReply", { id, ...payload, surface: surfaceId });
-      return replyGate === null ? send() : replyGate(surfaceId, send);
+      return gatedExposureReply(surfaceId, send);
     },
     report: (message) => reportRecord("error", message),
     unregister: () => {
@@ -310,17 +310,6 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     // Opening a link notifies the call observer (watchCalls) like other host requests.
     links: createLinkBridge((name, payload) => tell(name, payload)),
   };
-}
-
-/* The function that sends the exposure reply of a surface. Only the diagnostic module of a diagnostic build installs it, to intercept the reply of the surface. */
-let replyGate = null;
-
-/**
- * Sends the exposure reply of a surface through fn(surface, send). send() sends the reply to the host and returns the response, and fn
- * returns that result. null removes the installed function.
- */
-export function gateSurfaceReplies(fn) {
-  replyGate = fn;
 }
 
 /* The function that receives calls and their replies. Only the diagnostic module of a diagnostic build installs it. */

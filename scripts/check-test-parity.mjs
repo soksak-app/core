@@ -8131,7 +8131,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F294",
-    implementation: [{ file: "packages/workbench/host.js", symbol: "if (name === \"exposureReply\" && replyGate !== null)" }],
+    implementation: [{ file: "packages/workbench/host.js", symbol: "if (name === \"exposureReply\") return gatedExposureReply(surfaceId, () => call(name, payload));" }],
     tests: [{ file: "packages/workbench/test/surface-runtime.test.mjs", id: "an installed reply gate decides when the exposure reply of a view is sent" }],
     expected: "The diagnostic reply gate holds the exposureReply call of a view surface as it holds the reply of a mounted surface.",
     levels: ["unit"],

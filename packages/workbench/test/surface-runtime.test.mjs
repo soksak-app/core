@@ -127,7 +127,8 @@ test("surface exposure replies retain the logical surface scope", async () => {
 test("an installed reply gate decides when a surface exposure reply is sent", async () => {
   const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
-  const { gateSurfaceReplies, surfaceContextRuntime } = await import("../host.js");
+  const { surfaceContextRuntime } = await import("../host.js");
+  const { gateSurfaceReplies } = await import("../exposure.js");
   const { dispatchSurfaceRequest, registry } = await import("../exposure.js");
   const surface = "gated-reply-surface";
   const plugin = "gated-reply-plugin";
@@ -161,7 +162,8 @@ test("an installed reply gate decides when a surface exposure reply is sent", as
 test("an installed reply gate decides when the exposure reply of a view is sent", async () => {
   // A view answers a forwarded exposure request through the native call exposureReply of its surface
   // (docs/spec/native-surfaces.md#view-surfaces), so that reply passes the same gate as a reply of a mounted surface.
-  const { gateSurfaceReplies, surfaceContextRuntime } = await import("../host.js");
+  const { surfaceContextRuntime } = await import("../host.js");
+  const { gateSurfaceReplies } = await import("../exposure.js");
   const surface = "gated-view-surface";
   const gated = [];
   gateSurfaceReplies((id, send) => new Promise((resolve) => gated.push({ id, send: () => resolve(send()) })));

@@ -674,6 +674,22 @@ export const registry = createRegistry(host
   ? { call: (name, arg) => host.call(name, arg), report: (error) => Promise.reject(error) }
   : {});
 
+/* The function that sends the exposure reply of a surface. Only the diagnostic module of a diagnostic build installs it, to intercept the reply of the surface. */
+let replyGate = null;
+
+/**
+ * Sends the exposure reply of a surface through fn(surface, send). send() sends the reply to the host and returns the response, and fn
+ * returns that result. null removes the installed function.
+ */
+export function gateSurfaceReplies(fn) {
+  replyGate = fn;
+}
+
+/** Sends one exposure reply of surface through the installed gate. A reply without a surface is the reply of the main page and is sent at once. */
+export function gatedExposureReply(surface, send) {
+  return replyGate === null || surface === undefined ? send() : replyGate(surface, send);
+}
+
 export function registerSurfacePort(surface, port) {
   if (surfacePorts.has(surface)) throw new Error(`surface ${surface} already has an exposure port`);
   surfacePorts.set(surface, port);
@@ -764,7 +780,10 @@ export async function connectExposure({ report, projectData, ...values }) {
     unanswered++;
     dispatchSurfaceRequest(request).then((handled) => {
       if (handled) return;
-      return registry.handle(request).then((payload) => host.call("exposureReply", { id: request.id, ...payload }));
+      return registry.handle(request)
+        .then((payload) => gatedExposureReply(request.surface, () => host.call("exposureReply", { id: request.id, ...payload })))
+        // default: a request whose answer fails, or whose reply the host refuses, is reported with its text, as the other failures of the page are.
+        .catch((error) => report(`exposure reply: ${errorText(error)}`));
     }).finally(requestAnswered);
   });
   await host.on("exposure-registered", (event) => {

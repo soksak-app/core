@@ -7,8 +7,8 @@
 //
 // Both applications run this file, so how to drive a drag is written only once.
 // It does not run unless the host requests it.
-import { registry } from "./exposure.js";
-import { gateSurfaceReplies, log, native, watchCalls } from "./host.js";
+import { gateSurfaceReplies, registry } from "./exposure.js";
+import { log, native, watchCalls } from "./host.js";
 import { createTranscript } from "./transcript.js";
 import { createSurfaceReplyHold } from "./surface-reply-hold.js";
 import { mountedSurface } from "./surface-modules.js";

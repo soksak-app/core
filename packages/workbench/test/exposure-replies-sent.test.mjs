@@ -56,3 +56,25 @@ test("a command request is the event page.command with its name, duration and ou
   ]);
   for (const { fields } of events) assert.ok(Number.isInteger(fields.micros) && fields.micros >= 0);
 });
+
+test("the reply of a surface request without a view mark or surface port passes the reply gate", async () => {
+  // A view whose page has not mounted has neither mark nor port, so the page answers its request itself; that reply is a reply of the surface.
+  const { gateSurfaceReplies } = await import("../exposure.js");
+  registry.declare("core", { status: [], dom: [], commands: [{
+    name: "core.fixture.gated", description: "Answers for the gate.",
+    params: { type: "object", properties: {} }, result: { type: "string" },
+  }] });
+  registry.command("core.fixture.gated", () => "gated");
+  await connectExposure({ settled: async () => {}, report: () => {} });
+  const gated = [];
+  gateSurfaceReplies((surface, send) => { gated.push(surface); return send(); });
+  try {
+    calls.length = 0;
+    handlers.get("exposure-request")({ id: 31, surface: "fixture-view", method: "command.run", params: { name: "core.fixture.gated", params: {} } });
+    await whenRepliesSent();
+    assert.deepEqual(gated, ["fixture-view"], "the reply of the surface request did not pass the reply gate");
+    assert.deepEqual(calls.filter(([name]) => name === "exposureReply"), [["exposureReply", { id: 31, result: "gated" }]]);
+  } finally {
+    gateSurfaceReplies(null);
+  }
+});

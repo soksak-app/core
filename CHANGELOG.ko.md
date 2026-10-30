@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F294-1-1: page가 view 표시도 port도 없는 표면 요청에 답할 때 마운트된 표면의 답처럼 표면 답의 gate를 지나므로, `diagnostics.surface.held`의 hold가 그 답을 센다. 전에는 page가 그 답을 host로 바로 보냈고, 거부된 답은 처리되지 않았다. 이제 거부된 답은 page의 report 경로로 간다. 검증: `packages/workbench/test/exposure-replies-sent.test.mjs`의 단위 시험이 변경 전 코드에서 `the reply of the surface request did not pass the reply gate`로 실패했고 변경 후 통과한다.
 - F292-22-1-2: origin이 없는 commit candidate의 거부는 그 tab을 candidate로 만든 holder로 끝난다. holder는 drawn record, current plane, 또는 이름이 붙은 space와 project의 stored layout이다. 전에는 거부가 origin을 버린 layout만 밝혀서, 어느 layout이 tab을 candidate로 남겼는지 보여 주는 기록이 없었다. 검증: `packages/workbench/test/surface-view.test.mjs`의 unit test가 변경 전에는 holder가 없는 메시지를 읽었고 변경 후에는 통과한다.
 - F292-33: view의 core status watch가 main page의 core 표에서 그 status를 따라 값과 각 변경을 전달한다. 전에는 registry가 그 이름을 등록한 surface를 찾다가 `null`을 전달해서, browser tabs section이 빈 목록을 보였다. 검증: `packages/workbench/test/surface-view.test.mjs`의 단위 시험이 변경 전에는 `null`을 읽었고 변경 후 통과한다.
 - F292-32: view call `document.subscribe`가 게시된 case `view.composition.stream-subscribe-and-close`대로 호스트 답 `{handle}`의 handle 숫자로 답하고, handle이 없는 호스트 답은 거부한다. 전에는 page가 객체로 답해서 view의 region record가 stream 메시지를 전달하지 못하고 그 객체로 구독을 닫았다. 검증: `packages/workbench/test/view-calls.test.mjs`의 단위 시험이 변경 전에는 `{handle: 7}`을 읽었고 변경 후 통과한다.
