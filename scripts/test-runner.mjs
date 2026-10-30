@@ -5,9 +5,11 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
 import { groupMembers, runningMembers } from './test-command.mjs';
+import { EVENT_PREFIX } from './test-event-reporter.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
 export const MAX_TEST_TIMEOUT_MS = 600_000;
@@ -32,6 +34,10 @@ function validate(options) {
     // that the process has no limit of the runner.
     if (item.timeoutMs !== undefined && (!Number.isInteger(item.timeoutMs) || item.timeoutMs < 1 || item.timeoutMs > MAX_TEST_TIMEOUT_MS)) {
       throw new TypeError(`${item.name}: timeoutMs must be an integer from 1 through ${MAX_TEST_TIMEOUT_MS}`);
+    }
+    // The event watchdog of a process that reports its test events (runOne). A process without the field has no watchdog.
+    if (item.eventLimitMs !== undefined && (!Number.isInteger(item.eventLimitMs) || item.eventLimitMs < 1 || item.eventLimitMs > MAX_TEST_TIMEOUT_MS)) {
+      throw new TypeError(`${item.name}: eventLimitMs must be an integer from 1 through ${MAX_TEST_TIMEOUT_MS}`);
     }
   }
 }
@@ -108,22 +114,55 @@ function runOne(item, limitMs, env, outputPath) {
       cwd: item.cwd, env: { ...process.env, ...env, ...item.env },
       detached: true, stdio: ['ignore', 'pipe', 'pipe'],
     });
-    let timedOut = false;
-    let timedOutElapsedMs = 0;
-    let timeoutLeftovers = [];
+    // The limit that ended the group, with the time of the stop and the reason; the leftovers are named when the group is ended.
+    let limit = null;
     let exitLeftovers = [];
     // A failure to end the group is kept and reported in the result of the test.
     let groupError = null;
+    // The event watchdog of a process with `eventLimitMs` (AGENTS.md Verification: a test file that reports its events). Every test
+    // event of the process re-arms it, and the start of the process arms it, so a file whose events stop for the limit holds a test that
+    // blocks the event loop, which the test's own limit cannot end. The last event names the test that the stop follows.
+    let lastEvent = 'none';
+    let eventError = null;
+    let watchdog = null;
+    const endAtLimit = (reason) => {
+      if (limit !== null) return;
+      limit = { elapsedMs: performance.now() - started, reason, leftovers: [] };
+      clearTimeout(watchdog);
+      try { limit.leftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
+    };
+    const arm = () => {
+      if (item.eventLimitMs === undefined) return;
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => endAtLimit(`no test event for ${item.eventLimitMs} ms, the largest limit of a test; last event: ${lastEvent}`), item.eventLimitMs);
+    };
     // At the limit the group is stopped first, and the elapsed time is taken at that stop, so a slow listing of the leftovers does not
     // move the time of the timeout.
     // A process without a declared limit has no timer; its tests end by their own limits.
-    const timer = limitMs === undefined ? null : setTimeout(() => {
-      timedOut = true;
-      timedOutElapsedMs = performance.now() - started;
-      try { timeoutLeftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
-    }, limitMs);
+    const timer = limitMs === undefined ? null : setTimeout(() => endAtLimit(`exceeded ${seconds(limitMs)}s and was killed`), limitMs);
+    arm();
+    // The standard error carries the event lines of the reporter and the TAP form of the tests. A line is read when it is complete.
+    const decoder = new StringDecoder('utf8');
+    let pending = '';
+    child.stderr.on('data', (chunk) => {
+      pending += decoder.write(chunk);
+      for (let end = pending.indexOf('\n'); end !== -1; end = pending.indexOf('\n')) {
+        const line = pending.slice(0, end);
+        pending = pending.slice(end + 1);
+        if (!line.startsWith(EVENT_PREFIX)) continue;
+        try {
+          const event = JSON.parse(line.slice(EVENT_PREFIX.length));
+          lastEvent = event.name === '' ? event.type : `${event.type} ${event.name}`;
+          arm();
+        } catch (error) {
+          // The line is kept in the output of the file, and the file fails with the reason; the reporter writes only well-formed lines.
+          eventError ??= new Error(`the test event line ${JSON.stringify(line)} is not JSON: ${error.message}`);
+        }
+      }
+    });
     child.once('exit', () => {
-      if (timedOut) return;
+      clearTimeout(watchdog);
+      if (limit !== null) return;
       try { exitLeftovers = endGroup(child.pid, null); } catch (error) { groupError = error; }
     });
     // A file of the run receives the output as it arrives, so a run that stops leaves the output of the test it stopped in.
@@ -135,18 +174,22 @@ function runOne(item, limitMs, env, outputPath) {
     child.stderr.on('data', keep);
     child.once('error', (error) => {
       clearTimeout(timer);
+      clearTimeout(watchdog);
       resolve({ status: 'fail', elapsedMs: performance.now() - started, output: error.message, detail: `could not start: ${error.message}` });
     });
     child.once('close', (code, signal) => {
       clearTimeout(timer);
+      clearTimeout(watchdog);
       const elapsedMs = performance.now() - started;
-      const output = Buffer.concat(chunks).toString('utf8');
+      // The event lines are the reporter's record for the runner, so they are not part of the output of the test.
+      const output = Buffer.concat(chunks).toString('utf8').split('\n').filter((line) => !line.startsWith(EVENT_PREFIX)).join('\n');
       if (groupError) {
-        resolve({ status: 'fail', elapsedMs: timedOut ? timedOutElapsedMs : elapsedMs, output, detail: `could not end the process group: ${groupError.message}` });
-      } else if (timedOut) {
-        const left = timeoutLeftovers.length > 0 ? `; left running: ${timeoutLeftovers.join('; ')}` : '';
-        resolve({ status: 'timeout', elapsedMs: timedOutElapsedMs, output, detail: `exceeded ${seconds(limitMs)}s and was killed${left}` });
-      } else if (exitLeftovers.length > 0) resolve({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
+        resolve({ status: 'fail', elapsedMs: limit ? limit.elapsedMs : elapsedMs, output, detail: `could not end the process group: ${groupError.message}` });
+      } else if (limit !== null) {
+        const left = limit.leftovers.length > 0 ? `; left running: ${limit.leftovers.join('; ')}` : '';
+        resolve({ status: 'timeout', elapsedMs: limit.elapsedMs, output, detail: `${limit.reason}${left}` });
+      } else if (eventError !== null) resolve({ status: 'fail', elapsedMs, output, detail: eventError.message });
+      else if (exitLeftovers.length > 0) resolve({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
       else if (code === 0) resolve({ status: 'pass', elapsedMs, output, detail: '' });
       else resolve({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });
     });
@@ -154,7 +197,8 @@ function runOne(item, limitMs, env, outputPath) {
 }
 
 /**
- * Runs `tests` (`{name, command, args, cwd?, env?, timeoutMs?}`) with at most `concurrency` processes at once. `write(line)`
+ * Runs `tests` (`{name, command, args, cwd?, env?, timeoutMs?, eventLimitMs?}`) with at most `concurrency` processes at once. `eventLimitMs`
+ * is the event watchdog of a process that reports its test events (scripts/test-event-reporter.mjs). `write(line)`
  * receives one line per event: `RUN`, `PASS`, `FAIL`, `TIME`, a `RUNNING` line every `heartbeatMs` that names the tests in
  * flight with their running time, the `SLOWEST` tests, and the `TOTAL`. Resolves with `{results, slowest}`; a result is
  * `{status, elapsedMs, output}` with the status `pass`, `fail` or `timeout`. `beforeEach(item)`, when given, is awaited before each test

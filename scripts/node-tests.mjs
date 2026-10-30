@@ -95,7 +95,10 @@ function filesOf(folder, path) {
 }
 
 /** The reporters of a test file: the spec form on the standard output and the TAP form on the standard error. */
-const REPORTERS = ['--test-reporter=spec', '--test-reporter-destination=stdout', '--test-reporter=tap', '--test-reporter-destination=stderr'];
+// The event reporter writes one line per test event to the standard error, which the runner reads for the event watchdog of the file.
+const EVENT_REPORTER = fileURLToPath(new URL('./test-event-reporter.mjs', import.meta.url));
+const REPORTERS = ['--test-reporter=spec', '--test-reporter-destination=stdout', '--test-reporter=tap', '--test-reporter-destination=stderr',
+  `--test-reporter=${EVENT_REPORTER}`, '--test-reporter-destination=stderr'];
 
 /**
  * The packages that hold the changed files (paths relative to the root). A file belongs to the deepest package folder that contains
@@ -154,9 +157,11 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test',
     for (const file of files) {
       // The spec reporter writes the errors of the failed tests at the end of the file, so a file that is killed keeps none;
       // the TAP reporter on the standard error writes the error of each test when the test ends. --test-force-exit ends the file
-      // process when its tests end, so a test that timed out with an open handle does not keep the file running.
+      // process when its tests end, so a test that timed out with an open handle does not keep the file running. The event watchdog
+      // of the file is the largest limit of a test: a file whose events stop for that long holds a test that its own limit did not end.
       tests.push({ name: relative(root, file).split('\\').join('/'), command: process.execPath,
-        args: ['--test', ...REPORTERS, `--test-timeout=${testTimeoutMs}`, '--test-force-exit', ...script.flags, file], cwd: directory });
+        args: ['--test', ...REPORTERS, `--test-timeout=${testTimeoutMs}`, '--test-force-exit', ...script.flags, file], cwd: directory,
+        eventLimitMs: MAX_TEST_TIMEOUT_MS });
     }
   }
   return { tests, before };

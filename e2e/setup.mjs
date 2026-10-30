@@ -18,12 +18,17 @@ export function targetDirectory(run = (command, args) => spawnSync(command, args
   return directory;
 }
 
+/** The limit of the core window-check setup: the declaration of the binaries and the start of the harness, each of which has its own limit. */
+export const E2E_SETUP_LIMIT_MS = 300_000;
+
 export async function globalSetup() {
-  const declared = debugBinaries(targetDirectory());
-  if (!process.env.SOKSAK_CAPTURE_TEXT) {
-    process.env.SOKSAK_CAPTURE_TEXT = captureTextCommand();
-  }
-  for (const [variable, path] of Object.entries(declared)) process.env[variable] ??= path;
-  const { globalSetup: harness } = await import("@soksak/window-check/session.mjs");
-  await harness();
+  const { globalSetup: harness, withSetupLimit } = await import("@soksak/window-check/session.mjs");
+  await withSetupLimit("e2e setup", E2E_SETUP_LIMIT_MS, async () => {
+    const declared = debugBinaries(targetDirectory());
+    if (!process.env.SOKSAK_CAPTURE_TEXT) {
+      process.env.SOKSAK_CAPTURE_TEXT = captureTextCommand();
+    }
+    for (const [variable, path] of Object.entries(declared)) process.env[variable] ??= path;
+    await harness();
+  });
 }

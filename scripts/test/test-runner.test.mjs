@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 
@@ -238,5 +239,42 @@ test("a test file whose tests each pass within their own limits is not ended by 
     assert.equal(result.status, "pass", result.detail);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+// The reporter that writes each test event of a node --test file to the runner (scripts/test-event-reporter.mjs).
+const EVENT_REPORTER = fileURLToPath(new URL("../test-event-reporter.mjs", import.meta.url));
+// The file runs without NODE_TEST_CONTEXT, which would make node --test skip it (the same variable as nodeTestFile).
+const eventsOf = (file, extra = {}) => ({ name: "events", command: "/usr/bin/env",
+  args: ["-u", "NODE_TEST_CONTEXT", process.execPath, "--test", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", file], ...extra });
+
+test("a test file whose test events stop for the event limit is ended near that limit, and the failure names the last event", async () => {
+  // The first test ends after 50 ms, so the events of the file stop after it; the second test blocks the event loop for 3 s.
+  const { file, folder } = await nodeTestFile([
+    'import test from "node:test";',
+    'test("quick first", () => new Promise((resolve) => setTimeout(resolve, 50)));',
+    'test("blocks second", () => { const end = Date.now() + 3000; while (Date.now() < end) {} });',
+  ].join("\n") + "\n");
+  try {
+    const { results } = await run([eventsOf(file, { eventLimitMs: 300 })], { concurrency: 1 });
+    const result = results.get("events");
+    assert.equal(result.status, "timeout", result.output);
+    assert.match(result.detail, /^no test event for 300 ms, the largest limit of a test; last event: test:[a-z]+/, result.detail);
+    assert.ok(result.elapsedMs < 2000, `the file ran ${result.elapsedMs} ms, through the blocking test that ends after 3000 ms`);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("a test file whose test events keep arriving is not ended at the event limit, though it runs longer than the limit", async () => {
+  // Five tests of 200 ms each run 1000 ms in all, and the events of the file do not stop for 300 ms.
+  const body = "() => new Promise((resolve) => setTimeout(resolve, 200))";
+  const source = ['import test from "node:test";', ...[1, 2, 3, 4, 5].map((n) => `test("step ${n}", ${body});`)].join("\n") + "\n";
+  const { file, folder } = await nodeTestFile(source);
+  try {
+    const { results } = await run([eventsOf(file, { eventLimitMs: 300 })], { concurrency: 1 });
+    assert.equal(results.get("events").status, "pass", results.get("events").detail);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
   }
 });
