@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
-import { fresh, reading } from "./fixture.mjs";
+import { fresh, reading, recordCatalog } from "./fixture.mjs";
 
 /** The records that the first check reads. */
 const RECORDS = ["host.record.info", "page.record.info"];
@@ -21,7 +21,7 @@ for (const app of Object.values(APPS)) {
     // When the focus moves, the page writes the transition to the host log as a report.
     await s.run("core.projects.browse");
     await s.until("core.library", (library) => library.shown.length > 0, "the library did not open");
-    const transcript = await s.transcript();
+    const transcript = await s.transcript(recordCatalog(s.app));
     s.cleanup(() => transcript.stop());
     const line = "focus in core.library.search";
     const offsets = currentEventOffsets(s.app.configDir);

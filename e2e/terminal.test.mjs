@@ -18,7 +18,7 @@ const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language
 import { APPS, drag, failure, open, PERSON, RECORDING, within } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
-import { fresh, reading } from "./fixture.mjs";
+import { fresh, reading, recordCatalog } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertHeldStatesShown } from "./drag-measurement.mjs";
@@ -1613,7 +1613,8 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: native terminal selection renders and copies through one explicit paste`, RECORDING, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    // The failure report holds the transcript lines, which are records of the page at the level info.
+    await fresh(s, { log: { lifecycle: "info" }, reads: ["page.record.info"] });
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     s.cleanup(() => closeTerminalTabs(s));
@@ -1623,7 +1624,7 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", (state) => Boolean(state?.sessionId),
       "terminal selection session did not open", { surface });
 
-    const transcript = await s.transcript();
+    const transcript = await s.transcript(recordCatalog(s.app));
     s.cleanup(() => transcript.stop());
     // Writes into the failure report whether the terminal screen changed during the selection gesture.
     const screens = [];

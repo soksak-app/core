@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
-import { fresh } from "../fixture.mjs";
+import { fresh, recordCatalog } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "../terminal-screen.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
@@ -78,10 +78,11 @@ async function blankCellsWithPixels(s, surface) {
 }
 
 // Writes one line to the terminal and returns the row of that line and the screen origin. The check brings the window to the front and then sends real input.
-async function prepare(t, app, line, { fullscreen = false } = {}) {
+// `log` and `reads` are the log policy and the records that the check declares (prepareFixture).
+async function prepare(t, app, line, { fullscreen = false, log = {}, reads = [] } = {}) {
   requireTrusted();
   const s = await open(t, app);
-  await fresh(s);
+  await fresh(s, { log, reads });
   const [terminal] = await ensureTerminals(s, 1);
   const surface = terminal.surface;
   if (fullscreen) {
@@ -451,12 +452,14 @@ const LINK = "https://example.com/soksak-link-check";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a real Command-click on an OSC 8 link opens it through the host and a plain click does not`, { timeout: 90000 }, async (t) => {
-    const { s, surface, session, origin, row } = await prepare(t, app, "LINKROW");
+    const { s, surface, session, origin, row } = await prepare(t, app, "LINKROW",
+      // The transcript lines are records of the page at the level info.
+      { log: { lifecycle: "info" }, reads: ["page.record.info"] });
     await s.run("terminal.input", { bytes: `clear; printf '\\033]8;;${LINK}\\007LINKTEXT\\033]8;;\\007\\n'\r` }, surface);
     const lines = await readScreenUntil(s, surface, (screen) => screen.includes("LINKTEXT"), "the link did not render");
     const linkRow = lines.indexOf("LINKTEXT");
     const point = cellPoint(origin, session, 3, linkRow);
-    const log = await s.transcript();
+    const log = await s.transcript(recordCatalog(s.app));
     s.cleanup(() => log.stop());
     // A move without a press reports a hand-shaped pointer and the link under the pointer.
     const cells = (await s.get("terminal.screen", surface))[linkRow].slice(0, 8).map((cell) => cell.link ?? null);
@@ -469,11 +472,11 @@ for (const app of Object.values(APPS)) {
     click(point.x, point.y);
     await s.until("terminal.session", (value) => value.selectionReleases > session.selectionReleases,
       "the plain click did not end as a selection click", { surface });
-    assert.equal(log.lines.some((line) => line.startsWith("host linkOpen")), false, "a plain click opened the link");
+    assert.equal(log.lines.some((line) => line.startsWith("info page page: host linkOpen")), false, "a plain click opened the link");
     click(point.x, point.y, ["command"]);
-    const opened = await log.until((all) => all.some((line) => line.startsWith("host linkOpen") && line.includes(LINK) && / -> /.test(line)),
+    const opened = await log.until((all) => all.some((line) => line.startsWith("info page page: host linkOpen") && line.includes(LINK) && / -> /.test(line)),
       "the host did not answer a linkOpen request", 10000);
-    const answer = opened.find((line) => line.startsWith("host linkOpen"));
+    const answer = opened.find((line) => line.startsWith("info page page: host linkOpen"));
     assert.doesNotMatch(answer, /error|reject/i, `the host rejected the link: ${answer}`);
     assert.equal((await s.get("terminal.session", surface)).error ?? null, null, "the link open left a session error");
   });

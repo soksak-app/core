@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, failure, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, recordCatalog } from "./fixture.mjs";
 import { readEventLines } from "@soksak/window-check/event-log.mjs";
 import { heldRepliesSent, lateReplyFindings } from "./late-reply.mjs";
 
@@ -16,8 +16,9 @@ const holder = (grid, tab) => grid?.cards.find((card) => card.tabs.some((entry) 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a surface reply that arrives after its surface closed is discarded as an observation`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    // The observation of the late reply is a record of the host at the level info.
-    await fresh(s, { log: { lifecycle: "info" }, reads: ["host.record.info"] });
+    // The observation of the late reply is a record of the host at the level info, and the transcript lines are records of the
+    // page at the level info.
+    await fresh(s, { log: { lifecycle: "info" }, reads: ["host.record.info", "page.record.info"] });
     const { tab } = await s.run("core.card.add-tab", { card: "browser", plugin: "browser" });
     // If the check fails before it closes the tab, it closes the remaining tab. The hold of the closed surface ends then as well.
     s.cleanup(async () => {
@@ -28,7 +29,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
       item.surface === tab && item.visible && item.status.phase === "ready" && item.exposes.includes("command core.surface.hit")),
     "the new browser tab did not become ready with its command core.surface.hit");
-    const transcript = await s.transcript();
+    const transcript = await s.transcript(recordCatalog(s.app));
     s.cleanup(() => transcript.stop());
     const offsets = s.eventStart;
 

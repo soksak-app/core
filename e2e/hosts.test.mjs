@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, drag, open, RECORDING, requiresBoth } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, recordCatalog } from "./fixture.mjs";
 import { textDifference } from "@soksak/window-check/text-difference.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -120, dy: 0, ms: 48, times: 2 };
@@ -92,14 +92,15 @@ if (requiresBoth(process.env)) test("both hosts answer the same page the same wa
   const logs = {};
   const states = {};
   for (const [name, s] of Object.entries(sessions)) {
-    // The call records show which phase of presentSurfaces held a commit that does not settle.
-    await fresh(s, { log: { call: "debug" }, reads: ["page.call"] });
+    // The call records show which phase of presentSurfaces held a commit that does not settle. The settled-commit wait reads
+    // the transcript lines, which the page sends as the record page.record.info of the class lifecycle.
+    await fresh(s, { log: { call: "debug", lifecycle: "info" }, reads: ["page.call", "page.record.info"] });
     states[name] = { fresh: await layoutState(s) };
     // The settled layout of the drag is taken by stopping the recording before the settings modal opens. The modal is an overlay of the whole window and changes the next layout,
     // and the moment at which that layout enters the recording differs per host.
     const start = (await s.get("host.window")).surfaces.find((item) => item.frame.width > 0)?.frame.x;
     const expectedFrames = states[name].fresh.window.surfaces.filter((item) => item.visible).map((item) => item.frame);
-    const dragLog = await s.transcript();
+    const dragLog = await s.transcript(recordCatalog(s.app));
     results[name] = await drag(t, s, PLAN);
     // A settled layout also occurs at a moment where the drag is stopped. The drag returns to its place, so the check waits until the last settled layout equals the layout
     // before the drag.
@@ -122,7 +123,7 @@ if (requiresBoth(process.env)) test("both hosts answer the same page the same wa
     }
     dragged[name] = await dragLog.stop();
     states[name].afterDrag = await layoutState(s);
-    const log = await s.transcript();
+    const log = await s.transcript(recordCatalog(s.app));
     await s.run("core.settings.open");
     const { controls } = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
     assert.ok(controls.some((c) => c.key === "nav:sidebars"), "settings must have a sidebars section");
@@ -174,9 +175,10 @@ if (requiresBoth(process.env)) test("both hosts lay out the same page the same w
   const sessions = await both(t);
   const rested = {};
   for (const [name, s] of Object.entries(sessions)) {
-    // The call records show which phase of presentSurfaces held a commit that does not settle.
-    await fresh(s, { log: { call: "debug" }, reads: ["page.call"] });
-    const log = await s.transcript();
+    // The call records show which phase of presentSurfaces held a commit that does not settle. The settled-commit wait reads
+    // the transcript lines, which the page sends as the record page.record.info of the class lifecycle.
+    await fresh(s, { log: { call: "debug", lifecycle: "info" }, reads: ["page.call", "page.record.info"] });
+    const log = await s.transcript(recordCatalog(s.app));
     await s.run("host.window.resize", SIZE);
     await s.until("host.window", (w) => w.content.width === SIZE.width && w.content.height === SIZE.height,
       "the window did not resize");

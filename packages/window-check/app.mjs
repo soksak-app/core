@@ -12,7 +12,7 @@ import { activateApp, coveringWindows } from "./frontmost.mjs";
 import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
-import { policyOfSetting, requireStored, untilPolicy } from "./log-policy.mjs";
+import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restoreFailure, writePasteboard } from "./pasteboard.mjs";
 
@@ -801,9 +801,13 @@ export class Session {
 
   /**
    * Collects the transcript lines that the page reports. stop() turns the transcript off and returns the collected
-   * lines.
+   * lines. The page sends each line as the record page.record.info, declared in `catalog`; a policy file of the configuration
+   * folder that does not store that record is an error at once that names the record and the policy
+   * (docs/spec/logging.md#policy), because a wait on the lines would end only at its deadline.
    */
-  async transcript() {
+  async transcript(catalog) {
+    if (catalog === undefined) throw new Error("transcript: give the catalog that declares page.record.info, the record of the transcript lines");
+    requireStored(readPolicy(this.app.configDir), catalog, ["page.record.info"], policyFile(this.app.configDir));
     const lines = [];
     const off = this.client.on("diagnostics.log", (params) => {
       if (params?.window === this.window) lines.push(params.line);
