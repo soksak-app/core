@@ -90,7 +90,7 @@ func TestAPluginEventBelowTheLevelOfItsClassIsRefusedByTheWriterAndCounted(t *te
 		t.Fatal(err)
 	}
 	defer log.Close()
-	log.SetPluginClasses(map[string]sok.Class{"plugin.probe.frame": sok.ClassFrame})
+	log.AddPluginClasses(map[string]sok.Class{"plugin.probe.frame": sok.ClassFrame})
 	policy, err := sok.ParseLogPolicy("log-policy.json", []byte(`{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"error"}}`))
 	if err != nil {
 		t.Fatal(err)

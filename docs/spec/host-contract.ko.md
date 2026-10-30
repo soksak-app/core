@@ -1028,6 +1028,7 @@ fn invalid_json_closes_connection() {
 | `log.plugin-catalog.reads-the-enabled-plugins` | plugin class는 활성화된 설치 plugin의 catalog가 선언한 class이며, 비활성 plugin은 아무것도 더하지 않는다. | both |
 | `log.plugin-catalog.refuses-a-catalog` | 없거나 JSON이 아니거나 `plugin.<plugin>.` 밖의 이름이나 모르는 class를 선언한 catalog는 plugin id 순서로 그 파일을 밝히는 오류이고, 다른 plugin은 class를 유지한다. | both |
 | `log.plugin-catalog.host-applies-the-installed-catalogs` | host는 설치된 catalog의 class를 writer에 주고, 쓸 수 없는 catalog를 장소 `plugin catalog`의 오류 기록으로 남긴다. | both |
+| `log.plugin-catalog.keeps-the-catalogs-of-earlier-plugins` | 변경이 plugin을 제거한 뒤에도 writer는 그 plugin의 event를 그 catalog의 class로 저장한다. plugin을 load한 page는 reload할 때까지 그 code를 실행하기 때문이다. | both |
 | `bounds.producer.fields-are-cut-while-serialized` | host event의 fields는 1,048,576바이트까지만 직렬화한다. 상한을 넘는 값은 `fields` `{"head": <첫 4,096바이트>}`와 상한을 막 넘은 `truncated`(직렬화가 멈출 때까지 쓴 바이트 수)로 저장하고, 상한에 들어가는 fields는 그 JSON으로 저장한다. | both |
 | `bounds.producer.record-text-is-cut` | host record의 `text`는 최대 8,192바이트, `where`는 최대 1,024바이트이며 각각 문자 경계에서 자르고, 둘 중 하나라도 잘렸으면 fields에 `truncated: true`가 있다. | both |
 | `bounds.start-buffer.holds-at-most-four-mebibytes` | record의 시작 buffer는 record 1,024개 외에 최대 4,194,304바이트를 담고, writer는 거절한 record와 그 바이트를 `log.dropped`로 센다. | both |

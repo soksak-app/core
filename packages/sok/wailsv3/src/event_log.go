@@ -183,13 +183,28 @@ type EventLog struct {
 	closeOnce   sync.Once
 	onWrite     atomic.Pointer[func(path string, size int64)]
 	// pluginClasses holds the classes that the catalogs of the installed plugins declare (docs/spec/logging.md#plugin-catalogs).
-	pluginClasses atomic.Pointer[map[string]Class]
+	// AddPluginClasses replaces the map under pluginClassesAdding, so classify reads it without a lock.
+	pluginClasses       atomic.Pointer[map[string]Class]
+	pluginClassesAdding sync.Mutex
 }
 
-// SetPluginClasses replaces the classes of the plugin events, which the host reads from the catalogs of the enabled installed
-// plugins when it starts and after each change of the installed plugins.
-func (l *EventLog) SetPluginClasses(classes map[string]Class) {
-	l.pluginClasses.Store(&classes)
+// AddPluginClasses adds the classes of the plugin events, which the host reads from the catalogs of the enabled installed
+// plugins when it starts and after each change of the installed plugins. A later class of a name replaces the earlier one,
+// and no name is removed: a page that loaded a plugin before a change runs its code until the page reloads, and a page that
+// keeps its plugins keeps it longer (docs/spec/logging.md#plugin-catalogs).
+func (l *EventLog) AddPluginClasses(classes map[string]Class) {
+	l.pluginClassesAdding.Lock()
+	defer l.pluginClassesAdding.Unlock()
+	merged := map[string]Class{}
+	if current := l.pluginClasses.Load(); current != nil {
+		for name, class := range *current {
+			merged[name] = class
+		}
+	}
+	for name, class := range classes {
+		merged[name] = class
+	}
+	l.pluginClasses.Store(&merged)
 }
 
 // SetOnWrite sets the observer that the writer calls after it wrote a batch, with the path of the file and its size. It is

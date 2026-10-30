@@ -15,7 +15,7 @@ import (
 // contract: log.plugin-catalog.classifies-plugin-events
 func TestAPluginEventHasTheClassThatTheCatalogOfItsPluginDeclares(t *testing.T) {
 	lines := writeEvents(t, func(log *sok.EventLog) {
-		log.SetPluginClasses(map[string]sok.Class{"plugin.probe.frame": sok.ClassFrame})
+		log.AddPluginClasses(map[string]sok.Class{"plugin.probe.frame": sok.ClassFrame})
 		log.Emit(sok.LevelInfo, "plugin.probe.frame", map[string]any{"sequence": 1})
 		log.Emit(sok.LevelInfo, "plugin.probe.other", map[string]any{})
 	})

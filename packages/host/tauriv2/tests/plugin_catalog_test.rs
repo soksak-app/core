@@ -88,3 +88,54 @@ fn the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_cat
         "{record}"
     );
 }
+
+// contract: log.plugin-catalog.keeps-the-catalogs-of-earlier-plugins
+#[test]
+fn the_host_keeps_the_classes_of_a_plugin_that_a_change_removed() {
+    let directory = folder::Folder::new();
+    let log = Arc::new(
+        records::start_every_level(Options {
+            directory: directory.path().join("logs"),
+            role: "host".into(),
+            boot: "b1".into(),
+            queue_events: 64,
+            queue_bytes: 64 << 20,
+            batch_interval: Duration::from_millis(20),
+            rotate_bytes: 1 << 30,
+            pull: None,
+            pull_loss: None,
+            policy_path: None,
+            retention_bytes: 1 << 40,
+        })
+        .unwrap(),
+    );
+    let config = directory.path().join("config");
+    write_plugin(
+        &config,
+        "probe",
+        r#"{"schema":3,"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"sequence":{"type":"number"}},"required":["sequence"]}}}}"#,
+    );
+    let installed = config.join("plugins/installed.json");
+    fs::write(
+        &installed,
+        r#"{"format":3,"plugins":{"probe":{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{}}},"sidecars":{}}"#,
+    )
+    .unwrap();
+    apply_plugin_event_classes(&log, &config);
+    // The change removes the plugin; a page that loaded it before the change still runs its code until it reloads.
+    fs::write(&installed, r#"{"format":3,"plugins":{},"sidecars":{}}"#).unwrap();
+    apply_plugin_event_classes(&log, &config);
+    log.emit(Level::Info, "plugin.probe.frame", &json!({"sequence": 1}));
+    log.flush(Duration::from_secs(5)).unwrap();
+    let events: Vec<Value> = fs::read_to_string(log.path())
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let frame = events
+        .iter()
+        .find(|event| event["event"] == "plugin.probe.frame")
+        .unwrap_or_else(|| panic!("no plugin event in {events:?}"));
+    assert_eq!(frame["class"], "frame", "{frame}");
+    assert!(frame.get("undeclared").is_none(), "{frame}");
+}

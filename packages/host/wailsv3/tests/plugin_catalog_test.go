@@ -61,3 +61,33 @@ func TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogIt
 		t.Fatalf("the record is %v, want the error %q of plugin catalog", record, want)
 	}
 }
+
+// contract: log.plugin-catalog.keeps-the-catalogs-of-earlier-plugins
+func TestTheHostKeepsTheClassesOfAPluginThatAChangeRemoved(t *testing.T) {
+	log := useEventLog(t)
+	config := t.TempDir()
+	writeCatalogPlugin(t, config, "probe", `{"schema":3,"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"sequence":{"type":"number"}},"required":["sequence"]}}}}`)
+	installed := filepath.Join(config, "plugins", "installed.json")
+	if err := os.WriteFile(installed, []byte(`{"format":3,"plugins":{"probe":{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{}}},"sidecars":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	host.ApplyPluginEventClasses(log, config)
+	// The change removes the plugin; a page that loaded it before the change still runs its code until it reloads.
+	if err := os.WriteFile(installed, []byte(`{"format":3,"plugins":{},"sidecars":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	host.ApplyPluginEventClasses(log, config)
+	log.Emit(host.LevelInfo, "plugin.probe.frame", map[string]any{"sequence": 1})
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var frame map[string]any
+	for _, event := range readEventLog(t, log.Path()) {
+		if event["event"] == "plugin.probe.frame" {
+			frame = event
+		}
+	}
+	if frame == nil || frame["class"] != "frame" || frame["undeclared"] != nil {
+		t.Fatalf("the event of the removed plugin is %v, want the class frame of its catalog", frame)
+	}
+}

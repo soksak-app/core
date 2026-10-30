@@ -30,7 +30,7 @@ fn a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares() {
     let dir = temp("classify");
     support::store_every_level(dir.path());
     let log = soksak_sok::start_tool_event_log(dir.path()).unwrap();
-    log.set_plugin_classes(HashMap::from([(
+    log.add_plugin_classes(HashMap::from([(
         "plugin.probe.frame".to_string(),
         Class::Frame,
     )]));

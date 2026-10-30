@@ -420,14 +420,16 @@ impl EventLog {
         })
     }
 
-    /// Replaces the classes of the plugin events, which the host reads from the catalogs of the enabled installed plugins
-    /// when it starts and after each change of the installed plugins.
-    pub fn set_plugin_classes(&self, classes: HashMap<String, Class>) {
-        *self
-            .plugin_classes
+    /// Adds the classes of the plugin events, which the host reads from the catalogs of the enabled installed plugins when it
+    /// starts and after each change of the installed plugins. A later class of a name replaces the earlier one, and no name is
+    /// removed: a page that loaded a plugin before a change runs its code until the page reloads, and a page that keeps its
+    /// plugins keeps it longer (docs/spec/logging.md#plugin-catalogs).
+    pub fn add_plugin_classes(&self, classes: HashMap<String, Class>) {
+        self.plugin_classes
             .write()
             // default: the map holds only whole values, so a panic of another thread leaves no partial state.
-            .unwrap_or_else(PoisonError::into_inner) = classes;
+            .unwrap_or_else(PoisonError::into_inner)
+            .extend(classes);
     }
 
     /// The class that the catalog declares for `event`: the core catalog, or the catalog of the installed plugin of a plugin
