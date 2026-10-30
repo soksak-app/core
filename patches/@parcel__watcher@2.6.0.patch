@@ -1,0 +1,43 @@
+diff --git a/package.json b/package.json
+index dbdfab2d65b65c10a2ad68a7c1f1a30627fccb75..124128fd7db75f8325a4145bc98587a5a4209c67 100644
+--- a/package.json
++++ b/package.json
+@@ -32,7 +32,7 @@
+     "prebuild": "prebuildify --napi --strip --tag-libc",
+     "format": "prettier --write \"./**/*.{js,mjs,json,md,ts,flow}\"",
+     "build": "node-gyp rebuild",
+-    "install": "node scripts/build-from-source.js",
++    "install": "node-gyp rebuild",
+     "test": "mocha"
+   },
+   "engines": {
+diff --git a/src/macos/FSEventsBackend.cc b/src/macos/FSEventsBackend.cc
+index cfda9625fc7d9beb00a0014d87333bf97c130c84..d7a46091a7bfef68ee0ec5cf1db6312696867e71 100644
+--- a/src/macos/FSEventsBackend.cc
++++ b/src/macos/FSEventsBackend.cc
+@@ -246,6 +246,13 @@ void FSEventsBackend::startStream(WatcherRef watcher, FSEventStreamEventId id) {
+ 
+   FSEventStreamSetExclusionPaths(stream, exclusions);
+ 
++  // FSEventsCallback can run on the run loop thread as soon as the stream is scheduled, before FSEventStreamStart
++  // returns, and it uses the tree of the state, so the state is complete before the stream is scheduled.
++  auto stateGuard = watcher->state;
++  State* s = static_cast<State*>(stateGuard.get());
++  s->tree = std::make_shared<DirTree>(watcher->mDir);
++  s->stream = stream;
++
+   FSEventStreamScheduleWithRunLoop(stream, mRunLoop, kCFRunLoopDefaultMode);
+   bool started = FSEventStreamStart(stream);
+ 
+@@ -256,11 +263,6 @@ void FSEventsBackend::startStream(WatcherRef watcher, FSEventStreamEventId id) {
+     FSEventStreamRelease(stream);
+     throw WatcherError("Error starting FSEvents stream", watcher);
+   }
+-
+-  auto stateGuard = watcher->state;
+-  State* s = static_cast<State*>(stateGuard.get());
+-  s->tree = std::make_shared<DirTree>(watcher->mDir);
+-  s->stream = stream;
+ }
+ 
+ void FSEventsBackend::start() {

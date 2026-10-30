@@ -8,6 +8,12 @@
 // the call and that moment has no notification and a read made before it does not see the change. The promise of
 // @parcel/watcher `subscribe` resolves after FSEventStreamStart returned, so a read after it sees every earlier change and
 // every later change notifies; its file events also report content appended to a file of the folder.
+//
+// The workspace builds @parcel/watcher 2.6.0 from its source with patches/@parcel__watcher@2.6.0.patch instead of using
+// its prebuilt binaries. The FSEvents backend of 2.6.0 assigns the tree of a new watch only after FSEventStreamStart
+// returned, while the run loop thread already runs the callback of the started stream, so a change that arrives during
+// the start ends the process with SIGSEGV in DirTree::remove or DirTree::add; the patch assigns the tree before the stream
+// is scheduled (test/folder-wait-stream-start.test.mjs).
 import { subscribe } from "@parcel/watcher";
 
 /**

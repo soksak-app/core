@@ -5,5 +5,20 @@ packages:
   - e2e
   - native/darwin/process-identity
 allowBuilds:
-  '@parcel/watcher': false
+  '@parcel/watcher': true
   esbuild: true
+patchedDependencies:
+  '@parcel/watcher@2.6.0': patches/@parcel__watcher@2.6.0.patch
+overrides:
+  '@parcel/watcher-android-arm64': '-'
+  '@parcel/watcher-darwin-arm64': '-'
+  '@parcel/watcher-darwin-x64': '-'
+  '@parcel/watcher-freebsd-x64': '-'
+  '@parcel/watcher-linux-arm-glibc': '-'
+  '@parcel/watcher-linux-arm-musl': '-'
+  '@parcel/watcher-linux-arm64-glibc': '-'
+  '@parcel/watcher-linux-arm64-musl': '-'
+  '@parcel/watcher-linux-x64-glibc': '-'
+  '@parcel/watcher-linux-x64-musl': '-'
+  '@parcel/watcher-win32-arm64': '-'
+  '@parcel/watcher-win32-x64': '-'
