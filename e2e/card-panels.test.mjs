@@ -431,7 +431,9 @@ for (const app of Object.values(APPS)) {
     const card = grid.cards.find((item) => item.id === "terminal");
     const edge = grid.plane.x + card.x + card.w;
     const y = grid.plane.y + card.y + card.h / 2;
-    // The divider receives the area up to the outer border of the card (the gap), and the sidebar handle receives the collapsed band inside it. Pressing the band expands the sidebar.
+    // The divider receives the gap up to the outer edge of the card, and the sidebar handle receives the collapsed band inside the card border.
+    // The divider widens into the card edge only when the gap is narrower than the grab size (docs/spec/example-model.md), so the border
+    // between the gap and the band is the card's own input. Pressing the band expands the sidebar.
     const press = async (x) => {
       const before = (await s.get("core.pointer")).sequence;
       await s.click(x, y);
@@ -443,7 +445,7 @@ for (const app of Object.values(APPS)) {
     const measured = {};
     for (const offset of [grid.gap / 2, 1, -0.5, -1.5, -3, -5]) measured[offset] = await press(edge + offset);
     assert.deepEqual(measured, {
-      [grid.gap / 2]: ["core.divider", false], 1: ["core.divider", false], "-0.5": ["core.divider", false],
+      [grid.gap / 2]: ["core.divider", false], 1: ["core.divider", false], "-0.5": ["core.card", false],
       "-1.5": ["core.card.sidebar.grip", true], "-3": ["core.card.sidebar.grip", true], "-5": ["core.card.sidebar.grip", true],
     }, `the gap and the folded strip do not keep their own input: ${JSON.stringify({ edge, gap: grid.gap, measured })}`);
   });
