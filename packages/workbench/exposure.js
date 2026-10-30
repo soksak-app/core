@@ -695,9 +695,14 @@ export function whenRepliesSent() {
   return unanswered === 0 ? Promise.resolve() : new Promise((resolve) => answeredWaiters.push(resolve));
 }
 
-/** Marks a surface as a view for the lifetime of its mount. The returned function ends the mark. */
-export function markViewSurface(surface) {
-  const mark = {};
+/**
+ * Marks a surface as a view for the lifetime of its mount. pageAnswers(request) tells a request that the page answers for the view:
+ * the run of a command that the view registered with runtime.command.register, whose forwarding handler is on the surface port. The
+ * returned function ends the mark.
+ */
+export function markViewSurface(surface, pageAnswers = () => false) {
+  if (typeof pageAnswers !== "function") throw new TypeError("markViewSurface requires pageAnswers(request)");
+  const mark = (request) => pageAnswers(request);
   if (!viewSurfaces.has(surface)) viewSurfaces.set(surface, new Set());
   viewSurfaces.get(surface).add(mark);
   return () => {
@@ -709,8 +714,10 @@ export function markViewSurface(surface) {
 }
 
 export async function dispatchSurfaceRequest(request) {
-  // A view answers its own request through its subscription, so the request is consumed here and is not forwarded to the view again.
-  if (viewSurfaces.has(request.surface)) return true;
+  // A view answers its own request through its subscription, so the request is consumed here and is not forwarded to the view again;
+  // a request that the page answers for the view runs on the surface port.
+  const marks = viewSurfaces.get(request.surface);
+  if (marks !== undefined && ![...marks].some((pageAnswers) => pageAnswers(request))) return true;
   const port = surfacePorts.get(request.surface);
   if (!port) return false;
   await port(request);

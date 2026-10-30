@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-11-1: view가 `runtime.command.register`로 등록한 command의 전달된 실행은 surface의 forwarding handler에서 실행되어 command 요청으로 view에 간다. 전에는 main page가 그것을 view가 답하는 요청으로 소비해서 command가 답하지 않았다.
 - F292-14-2: unload probe fixture가 snapshot을 plugin-local status 이름 `location`으로 push한다. qualified 이름은 snapshot ingress가 선언되지 않은 것으로 보고했다.
 - F292-12-1: native window facts가 `blurred`를 JSON boolean으로 보고한다. 숫자 값은 두 호스트의 `host.window`을 실패시켰다.
 - F292-22-1-1: 없는 view origin의 거부가 origin을 버린 동작이 저장한 layout의 tab을 적는다.

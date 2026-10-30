@@ -362,8 +362,11 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   let documentGeneration = 0;
   // The event subscriptions of the view. Each event is pushed to the view as viewEvent, and the subscriptions end with the answers.
   const subscriptions = createViewSubscriptions({
-    // All exposure requests belong to the actual view document, including its core entries.
-    native: (name, listener) => gate.on(name, listener),
+    // The exposure requests belong to the actual view document, including its core entries, except the runs of the commands that
+    // the page answers for the view.
+    native: (name, listener) => gate.on(name, name === "exposure-request"
+      ? (request) => { if (!pageAnswers(request)) listener(request); }
+      : listener),
     // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
     sidecar: {
       on: (id, listener) => page.sidecar().on(id, listener),
@@ -392,6 +395,9 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   // Listener installation is synchronous; the ordered registration event makes the generation available before calls arrive.
   let viewGeneration = sourceOrigin(surface.pluginId, surface.surfaceId);
   const registeredViewCommands = new Map();
+  // A command that the view registered with runtime.command.register is answered by its forwarding handler on the surface port, which
+  // sends it to the view as a command request; its forwarded run is not an exposure request of the view.
+  const pageAnswers = (request) => request?.method === "command.run" && registeredViewCommands.has(request.params?.name);
   let viewCommands;
   let forgetCommands;
   const installViewCommands = (generation) => {
@@ -428,7 +434,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   // The exposure of the view. A forwarded exposure request of the view reaches the view through its exposure-request subscription and is
   // answered through exposureReply of the surface (docs/spec/native-surfaces.md#view-surfaces, view exposure), so the page does not
   // forward it again (docs/spec/exposure.md#relay). The mark is set here and not through a main-page placeholder.
-  const unmarkView = markViewSurface(surface.surfaceId);
+  const unmarkView = markViewSurface(surface.surfaceId, pageAnswers);
   // The mark ends at the dispose of the mount, which is synchronous. The listener registrations below settle later, so their teardown
   // is not the end of the mark: a mount of the same surface that follows the dispose marks it again.
   closing.addEventListener("abort", unmarkView, { once: true });

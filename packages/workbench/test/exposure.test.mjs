@@ -304,7 +304,7 @@ test("a view rectangle uses the selected surface's current applied origin once",
     ["tab-a", { x: 215.25, y: 116.5, w: 400, h: 300, visible: true }],
     ["tab-b", { x: 700, y: 95, w: 200, h: 100, visible: true }],
   ]);
-  const unmarks = [...placements.keys()].map(markViewSurface);
+  const unmarks = [...placements.keys()].map((surface) => markViewSurface(surface));
   made.configure({ surfacePlugin: () => "probe", preferred: () => ["tab-b"],
     surfaceFrame: (surface) => placements.get(surface) });
   for (const surface of placements.keys()) made.registered({ surface, kind: "dom", name: "probe.lines" });

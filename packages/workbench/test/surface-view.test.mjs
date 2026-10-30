@@ -1643,3 +1643,76 @@ test("a view mount, its core registration and its command registration share one
     dom.window.close();
   }
 });
+
+// A command that the view registers with runtime.command.register is answered by the forwarding handler of the page: its forwarded
+// request runs on the surface port and reaches the view as a command request, and the exposure-request listener of the view does not
+// receive it, while the other requests of the view surface still reach the view.
+test("a forwarded run of a command that the view registered runs on the page port and not as an exposure request of the view", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = sourceListenerMap();
+  const calls = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async (name, payload) => { calls.push([name, payload]); return null; } } };
+    },
+  } });
+  const exposureFile = (await import("../exposure.json", { with: { type: "json" } })).default;
+  const { installExposure, registry, dispatchSurfaceRequest } = await import("../exposure.js");
+  // The core declarations are installed once per document; an earlier test of this file may have installed them.
+  if (!registry.declared("status", "core.surface.document")) installExposure(structuredClone(exposureFile));
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-page-command");
+  const pluginId = "fixture-page-command-view";
+  const surfaceId = "fixture-page-command-view-surface";
+  const command = `${pluginId}.run`;
+  const commands = [{ name: command, description: "Runs the fixture.", params: { type: "object" }, result: { type: "null" } }];
+  recordOrigin(surfaceId, null, "test fixture");
+  registry.configure({ surfacePlugin: () => pluginId });
+  registry.declare(pluginId, { status: [], dom: [], commands });
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands, dom: [] }, sidecars: [], composition };
+  try {
+    authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    await waitSurfaceCompositionDeclared(surfaceId);
+    assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 1, method: "status.get", params: { name: "core.surface.document" } }),
+      true, "the core entry of the view surface is not served by its page");
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 2, command: "runtime.command.register", params: { name: command } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.ok(registry.namesOf(surfaceId).includes(`command ${command}`), `the view command is not registered: ${JSON.stringify(registry.namesOf(surfaceId))}`);
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 3, command: "runtime.native.on", params: { name: "exposure-request" } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const forwarded = listeners.get("exposure-request");
+    assert.equal(typeof forwarded, "function", "the view did not subscribe to its exposure requests");
+    calls.length = 0;
+    const run = { surface: surfaceId, id: 4, method: "command.run", params: { name: command, params: {} } };
+    forwarded(run);
+    assert.equal(await dispatchSurfaceRequest(run), true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(calls.filter(([name]) => name === "viewRequest").map(([, payload]) => payload.command), [command],
+      "the forwarded command run did not reach the view as a command request");
+    assert.deepEqual(calls.filter(([name, payload]) => name === "viewEvent" && payload.event === "exposure-request"), [],
+      "the command run that the page answers was pushed to the view as an exposure request");
+    const status = { surface: surfaceId, id: 5, method: "status.get", params: { name: "core.surface.document" } };
+    forwarded(status);
+    assert.equal(await dispatchSurfaceRequest(status), true);
+    assert.deepEqual(calls.filter(([name, payload]) => name === "viewEvent" && payload.event === "exposure-request").map(([, payload]) => payload.data.id), [5],
+      "a request that the view answers did not reach the view");
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
