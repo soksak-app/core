@@ -131,7 +131,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 요청의 `expanded`는 받아들인 plugin 값에 현재 있는 가지 상태의 반대다. 출처는 이 희망 값으로 plugin 값을 갱신한다.
 
 비활성 요소(`enabled: false`)는 `disabled` 속성으로 그려지므로 어떤 클릭도 그 묶기에 닿지 않는다.
-다시 그릴 때 남는 address의 각 루트 요소, list 행, tree 노드, 펼침 제어는 같은 요소를 유지한다. [exposure](exposure.ko.md#사용자-인터페이스)가 모든 다시 그리기에 요구하는 규칙이며, 명령 실행 뒤에도 키보드 초점이 제어에 남게 한다. 그런 각 제어는 명령에 한 번만 묶이며, 다시 그릴 때는 매개변수만 갱신한다. `command`가 바뀐 list 행이나 tree 노드는 새 요소다. key에 명령이 포함되기 때문이다.
+다시 그릴 때 남는 address의 각 루트 요소, list 행, tree 노드, 펼침 제어는 같은 요소를 유지한다. [exposure](exposure.ko.md#사용자-인터페이스)가 모든 다시 그리기에 요구하는 규칙이며, 명령 실행 뒤에도 키보드 초점이 제어에 남게 한다. 그런 각 제어는 명령에 한 번만 묶이며, 다시 그릴 때는 매개변수만 갱신한다. `command`가 바뀐 list 행이나 tree 노드는 새 요소다. key에 명령이 포함되기 때문이다. icon, label, 펼침 상태가 그대로인 제어는 그 안의 node도 유지한다. 누름과 놓음이 서로 다른 node에 닿으면 click은 문서 안의 공통 조상에서만 생기므로, 그 사이의 다시 그리기가 pointer 아래의 node를 바꾸면 click이 사라진다.
 네이티브 `button` 요소를 가지는 요소는 `button`, `command`가 있는 list 항목, `command` 또는 `open`이 있는 tree 노드, tree action, tree 가지의 펼침 제어다. 정적 list 행과 status line은 button을 가지지 않는다. 가지의 펼침 제어는 가지가 접혀 있으면 core의 chevron-right 아이콘을, 펼쳐 있으면 chevron-down 아이콘을 보인다.
 
 

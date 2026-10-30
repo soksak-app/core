@@ -377,7 +377,17 @@ function childOf(el, name) {
 }
 
 /** Writes the icon and the text of an element. */
+/**
+ * The icon and label that paintContent last wrote into each element. A press and its release that land on different nodes make a
+ * click only at a common ancestor in the document, so a redraw that replaced the icon under the pointer between them would lose
+ * the click; an unchanged content keeps its nodes.
+ */
+const drawnContent = new WeakMap();
+
 function paintContent(el, entry) {
+  const content = JSON.stringify([Object.hasOwn(entry, "icon") ? entry.icon : null, entry.label]);
+  if (drawnContent.get(el) === content) return;
+  drawnContent.set(el, content);
   el.replaceChildren();
   if (Object.hasOwn(entry, "icon")) {
     const mark = document.createElement("span");
@@ -488,11 +498,14 @@ function paintExpand(control, { statusId, tree, path, expanded, bind }) {
   control.dataset.path = JSON.stringify(path);
   control.dataset.role = "expand";
   control.dataset.expose = CONTROL_NAME;
-  const mark = document.createElement("span");
-  mark.className = "declared-icon";
-  mark.innerHTML = icon(expanded ? "chevron-down" : "chevron-right");
-  control.dataset.expanded = String(expanded);
-  control.replaceChildren(mark);
+  // An unchanged state keeps the icon, which is the node under the pointer of a press (paintContent).
+  if (control.dataset.expanded !== String(expanded)) {
+    const mark = document.createElement("span");
+    mark.className = "declared-icon";
+    mark.innerHTML = icon(expanded ? "chevron-down" : "chevron-right");
+    control.dataset.expanded = String(expanded);
+    control.replaceChildren(mark);
+  }
   connect(control, EXPAND, { status: statusId, tree, path, expanded: !expanded }, bind);
 }
 

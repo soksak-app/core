@@ -648,6 +648,45 @@ test("a redraw keeps the expand control of a branch and binds it once", async ()
   assert.equal(s.calls.length, bound, "the control or the tree was bound again by the redraw");
 });
 
+// A press and its release that land on different nodes make a click only at a common ancestor in the document, so a redraw
+// that replaces the node under the pointer between them loses the click (F292-49).
+test("a redraw of an unchanged value keeps the nodes inside the controls, where a press lands", async () => {
+  const module = await load("keep-press-nodes");
+  const s = section(module);
+  const value = () => ({ elements: [
+    { kind: "tree", key: "t1", empty: "none", nodes: [branch("b", [leaf("c")]), leaf("l", { command: "demo.select", icon: "star" })] },
+    button("go", { icon: "star" }),
+  ] });
+  s.show(value());
+  const pressed = () => ({
+    expand: s.body.querySelector('[data-role="expand"] svg'),
+    label: s.body.querySelector('[data-role="label"] svg'),
+    button: s.body.querySelector(".declared-button svg"),
+  });
+  const before = pressed();
+  for (const [name, node] of Object.entries(before)) assert.ok(node, `the ${name} control draws no icon`);
+  s.show(value());
+  const after = pressed();
+  for (const name of Object.keys(before)) {
+    assert.equal(after[name], before[name], `the redraw replaced the icon of the ${name} control`);
+    assert.equal(s.body.contains(before[name]), true, `the icon of the ${name} control left the section`);
+  }
+});
+
+test("a redraw replaces the icon of a control whose drawn state changed", async () => {
+  const module = await load("change-press-nodes");
+  const s = section(module);
+  s.show(tree([branch("b", [leaf("c")])]));
+  const control = s.body.querySelector('[data-role="expand"]');
+  const collapsed = control.innerHTML;
+  s.show(tree([branch("b", [leaf("c")], { expanded: true })]));
+  assert.equal(s.body.querySelector('[data-role="expand"]'), control, "the expand control was replaced");
+  assert.notEqual(control.innerHTML, collapsed, "the expanded branch kept the collapsed icon");
+  s.show(tree([leaf("l", { command: "demo.select", icon: "star" })]));
+  s.show(tree([leaf("l", { command: "demo.select", label: "m", icon: "star" })]));
+  assert.equal(s.body.querySelector('[data-role="label"]').textContent, "m", "the label text was not updated");
+});
+
 test("the expand control keeps keyboard focus after its command draws the tree again", async () => {
   const module = await load("keep-focus");
   const s = section(module);
