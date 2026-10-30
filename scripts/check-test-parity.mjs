@@ -9539,6 +9539,18 @@ const FEATURE_LINKS = [
     expected: "The catch-up limit of 150 ms and the idle tab limit of 51200 KB are judged by the benchmark cases, and the settled documents of a tab are counted; the window checks keep the behavior and the measured values, and their window run is pending the release candidate.",
     levels: ["unit"],
   },
+  {
+    id: "F297-1",
+    implementation: [
+      { file: "e2e/benchmark/cases/split-load.mjs", symbol: "export const SPLIT_LOAD_GROWTH_BOUND_KB = 128 * 1024;" },
+      { file: "e2e/benchmark/cases/split-load.mjs", symbol: "export function assertSplitLoadWithinBound(growth)" },
+    ],
+    tests: [
+      { file: "e2e/test/split-load-case.test.mjs", id: "the split load limit is 128 MB, and a measured growth at or above it fails the benchmark" },
+    ],
+    expected: "The host RSS growth limit of 128 MB over the split, resize, reload and WebView churn rounds is judged by the benchmark case; the window check runs one round and judges only the behavior.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
