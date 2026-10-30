@@ -196,6 +196,7 @@ export async function open(t, app) {
     throw error;
   }
   const session = new Session(app, client);
+  session.test = t;
   // Check-specific cleanups and released presses run before pasteboard and frontmost-baseline restoration. Input-source
   // restoration is inserted at the start of this list and runs after the baseline restoration.
   const pasteboard = readPasteboard();
@@ -335,6 +336,20 @@ export async function finishSession(t, session, close) {
   if (failures.length) throw new AggregateError(failures, `${failures.length} cleanup steps failed`);
 }
 
+/** The reason of a check that a run without a display skips. */
+const NO_DISPLAY = "the check records the screen, which needs a display that presents frames; the local window checks run it";
+
+/**
+ * Whether the run has a display that presents frames: SOKSAK_CHECK_DISPLAY is unset on a computer with a display, and
+ * `absent` on a runner whose display presents no frames (docs/operations/examples.md#continuous-integration). Another value
+ * is an error.
+ */
+export function displayPresents(env) {
+  if (env.SOKSAK_CHECK_DISPLAY === undefined) return true;
+  if (env.SOKSAK_CHECK_DISPLAY === "absent") return false;
+  throw new Error(`SOKSAK_CHECK_DISPLAY is ${JSON.stringify(env.SOKSAK_CHECK_DISPLAY)}; it is unset or absent`);
+}
+
 /** The connection to one application. A request targets one window. */
 export class Session {
   constructor(app, client) {
@@ -439,6 +454,7 @@ export class Session {
     other.failedRecordings = this.failedRecordings;
     other.expectedErrors = this.expectedErrors;
     other.testName = this.testName;
+    other.test = this.test;
     other.presses = this.presses;
     other.started = this.started;
     other.window = window;
@@ -447,6 +463,12 @@ export class Session {
 
   request(method, params = {}, { timeout = REQUEST } = {}) {
     const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
+    // A recording needs presented frames, so a run without a display skips the check that starts one, with its reason, and
+    // the error ends the check; node:test reports a check that called skip as skipped.
+    if (method === "diagnostics.capture.start" && !displayPresents(process.env)) {
+      this.test.skip(NO_DISPLAY);
+      return Promise.reject(new Error(`${what}: ${NO_DISPLAY}`));
+    }
     this.step(`${method} ${params.name ?? ""}`.trimEnd());
     // When the host does not answer, the check records at that moment the threads of this host and of its page process
     // in the logs of the configuration folder (F69).

@@ -246,12 +246,12 @@ const FEATURE_LINKS = [
     id: "F239-303-8",
     implementation: [
       { file: "native/darwin/Makefile", symbol: "NATIVE_PRESENTATION_TESTS" },
-      { file: ".github/workflows/window-checks.yml", symbol: "- name: Native presentation tests" },
+      { file: ".github/workflows/ci.yml", symbol: "test-without-presentation" },
     ],
     tests: [
-      { file: "scripts/test/workflows.test.mjs", id: "the native tests that need display presentation run in the desktop job and the others in the hosted job" },
+      { file: "scripts/test/workflows.test.mjs", id: "the native tests that need display presentation run in no workflow and the others in the hosted job" },
     ],
-    expected: "The native tests that need a display run in the desktop job and the others in the hosted job.",
+    expected: "The native tests that need display presentation run in the local checks only and the others in the hosted job.",
     levels: ["unit"],
   },
   {
@@ -4052,8 +4052,8 @@ const FEATURE_LINKS = [
       { file: ".github/workflows/window-checks.yml", symbol: "pnpm verify:windows --when-idle 45" },
     ],
     tests: [
-      { file: "scripts/test/workflows.test.mjs", id: "every runner label of a workflow is hosted or declared in examples.md" },
-      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow runs on the declared self-hosted labels" },
+      { file: "scripts/test/workflows.test.mjs", id: "every runner label of a workflow is a hosted label" },
+      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow runs on a hosted runner with a virtual display and skips the checks that record the screen" },
       { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow names the window checks, the audit step and the artifact of a failed job" },
     ],
     expected: "The window-check workflow runs on the labels that the operations document declares, runs the window checks, audits the run folder also after a failed check, and keeps the run folder of a failed job.",
@@ -7993,6 +7993,27 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "function checklist(" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a platform-excluded item only with a named unavailable platform and unverified result" }],
     expected: "A platform-excluded checklist item names the unavailable platform and states that runtime behavior remains unverified.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-303",
+    implementation: [{ file: ".github/workflows/ci.yml", symbol: "test-without-presentation" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the native tests that need display presentation run in no workflow and the others in the hosted job" }],
+    expected: "The native-darwin job runs every native test that a hosted runner can run, and the presentation tests run in the local checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F286",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export function displayPresents(env)" },
+      { file: ".github/workflows/window-checks.yml", symbol: "SOKSAK_CHECK_DISPLAY: absent" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/display.test.mjs", id: "a recording of a run without a display skips its check with the reason and sends no request" },
+      { file: "packages/window-check/test/display.test.mjs", id: "a run with a display sends a recording, and another value of SOKSAK_CHECK_DISPLAY is an error" },
+      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow runs on a hosted runner with a virtual display and skips the checks that record the screen" },
+    ],
+    expected: "The window checks of CI run on a hosted runner with a virtual display and skip the checks that record the screen, which run in the local window checks.",
     levels: ["unit"],
   },
   {

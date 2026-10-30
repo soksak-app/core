@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F286: The window checks run on a hosted runner with a virtual display; the checks that record the screen and the native presentation tests run only in the local window checks.
 - F284: The view pages of the window-check fixture plugins hold no import map, which the native view handler refuses.
 - F281-1: A first responder change of a window that closed sends nothing and stores no error in either host.
 - F281: The Tauri and Wails hosts end the first responder observation of a closing window without using the window, which AppKit may have released; the Tauri host no longer crashes with SIGSEGV when a window closes.

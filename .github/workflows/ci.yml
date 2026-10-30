@@ -1,5 +1,5 @@
 name: ci
-# build-machine: skip smoke reason=window checks need a signed-in desktop and run before release on the development Mac (docs/operations/examples.md)
+# build-machine: skip smoke reason=window checks run in window-checks.yml, which release.yml calls (docs/operations/examples.md#continuous-integration)
 
 # release.yml calls this workflow on each push to main, so a push runs the checks once.
 on:

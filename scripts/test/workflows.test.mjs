@@ -16,13 +16,6 @@ const RUNNER_ENVIRONMENT = new Set(['SOKSAK_RUN_ID', 'SOKSAK_RUN_FOLDER']);
 
 const read = (path) => readFileSync(join(ROOT, path), 'utf8');
 
-/** The labels that examples.md declares for the self-hosted runner: the three backticked words after `the labels`. */
-function declaredLabels() {
-  const match = /the labels `([^`]+)`, `([^`]+)` and `([^`]+)`/.exec(read('docs/operations/examples.md'));
-  assert.ok(match, 'docs/operations/examples.md does not declare the labels of the self-hosted runner');
-  return match.slice(1);
-}
-
 /** The labels that a workflow names after `runs-on:`, as a flow list `[a, b]` or one word. */
 function runnerLabels(text) {
   return [...text.matchAll(/^\s*runs-on:\s*(.+)$/gm)].map((match) => match[1].trim().replace(/^\[|\]$/g, '').split(',').map((label) => label.trim()));
@@ -33,13 +26,13 @@ function steps(text) {
   return text.split(/^ {6}- /m).slice(1).map((step) => ({ name: /^name:\s*(.+)$/m.exec(step)?.[1] ?? step.split('\n')[0], text: step }));
 }
 
-test('every runner label of a workflow is hosted or declared in examples.md', () => {
-  const allowed = new Set([...HOSTED, ...declaredLabels()]);
+test('every runner label of a workflow is a hosted label', () => {
+  const allowed = new Set(HOSTED);
   const files = readdirSync(WORKFLOWS).filter((name) => name.endsWith('.yml'));
   assert.ok(files.length > 0, 'no workflow file');
   for (const file of files) {
     for (const labels of runnerLabels(readFileSync(join(WORKFLOWS, file), 'utf8'))) {
-      for (const label of labels) assert.ok(allowed.has(label), `${file}: the runner label ${label} is neither hosted nor declared in docs/operations/examples.md`);
+      for (const label of labels) assert.ok(allowed.has(label), `${file}: the runner label ${label} is not a hosted label`);
     }
   }
 });
@@ -57,9 +50,15 @@ test('CI and release workflows pin each external action to an immutable revision
   }
 });
 
-test('the window-check workflow runs on the declared self-hosted labels', () => {
-  const [labels] = runnerLabels(read('.github/workflows/window-checks.yml'));
-  assert.deepEqual(labels, declaredLabels());
+test('the window-check workflow runs on a hosted runner with a virtual display and skips the checks that record the screen', () => {
+  const text = read('.github/workflows/window-checks.yml');
+  assert.deepEqual(runnerLabels(text), [['macos-15']]);
+  assert.match(text, /^\s+SOKSAK_CHECK_DISPLAY: absent$/m, 'the job does not declare that its display presents no frames');
+  const list = steps(text);
+  const at = (name) => list.findIndex((step) => step.name === name);
+  assert.ok(at('Start the virtual display') >= 0 && at('Start the virtual display') < at('Start both applications'),
+    'the virtual display does not start before the applications');
+  assert.doesNotMatch(text, /test-presentation/, 'the job runs the native presentation tests, which need presented frames');
 });
 
 test('the window-check workflow names the window checks, the audit step and the artifact of a failed job', () => {
@@ -264,17 +263,16 @@ test('the native-darwin job records the display session before the native tests'
   }
 });
 
-test('the native tests that need display presentation run in the desktop job and the others in the hosted job', () => {
+test('the native tests that need display presentation run in no workflow and the others in the hosted job', () => {
   const job = read('.github/workflows/ci.yml').split(/^ {2}(?=[a-z-]+:$)/m).find((part) => part.startsWith('native-darwin:'));
   assert.ok(job, 'ci.yml has no native-darwin job');
   const hosted = steps(job).find((step) => step.name === 'Native Darwin tests');
   assert.ok(hosted, 'the native-darwin job has no step named Native Darwin tests');
   assert.match(hosted.text, /run: make -C core\/native\/darwin test-without-presentation$/m);
-  const desktop = steps(read('.github/workflows/window-checks.yml'));
-  const presentation = desktop.findIndex((step) => step.name === 'Native presentation tests');
-  assert.notEqual(presentation, -1, `the window-check workflow has no step named Native presentation tests: ${desktop.map((step) => step.name).join(', ')}`);
-  assert.match(desktop[presentation].text, /run: make -C native\/darwin test-presentation$/m);
-  assert.ok(presentation > desktop.findIndex((step) => step.name === 'Build both applications'), 'the native library is built first');
+  // A hosted display presents no frames, so the presentation tests run in the local checks only.
+  for (const file of readdirSync(WORKFLOWS).filter((name) => name.endsWith('.yml'))) {
+    assert.doesNotMatch(readFileSync(join(WORKFLOWS, file), 'utf8'), /test-presentation\b/, `${file} runs the native presentation tests`);
+  }
 });
 
 test('a push to main releases the declared version after the checks, the gate and the window checks succeed', () => {
@@ -300,7 +298,7 @@ test('a push to main releases the declared version after the checks, the gate an
 });
 
 test('the window-check jobs keep the output file of each application with the event logs', () => {
-  for (const workflow of ['.github/workflows/window-checks.yml', '.github/workflows/virtual-display-measure.yml']) {
+  for (const workflow of ['.github/workflows/window-checks.yml']) {
     const text = read(workflow);
     for (const app of ['wailsv3', 'tauriv2']) {
       assert.match(text, new RegExp(`\\$\\{\\{ runner\\.temp \\}\\}/${app}\\.out`), `${workflow} keeps no ${app}.out`);
@@ -309,7 +307,7 @@ test('the window-check jobs keep the output file of each application with the ev
 });
 
 test('a window-check job without a run folder uploads no part of the checkout', () => {
-  for (const workflow of ['.github/workflows/window-checks.yml', '.github/workflows/virtual-display-measure.yml']) {
+  for (const workflow of ['.github/workflows/window-checks.yml']) {
     const text = read(workflow);
     assert.doesNotMatch(text, /core\/\$\{\{ steps\.run\.outputs\.folder \}\}/, `${workflow} uploads core/ when no run folder exists`);
     assert.match(text, /if \[ -n "\$folder" \]; then[^\n]*path=core\//, `${workflow} names the run folder path only when it exists`);
@@ -318,7 +316,7 @@ test('a window-check job without a run folder uploads no part of the checkout', 
 });
 
 test('the window-check jobs wait for the applications to end and keep the crash report of an application that crashed', () => {
-  for (const workflow of ['.github/workflows/window-checks.yml', '.github/workflows/virtual-display-measure.yml']) {
+  for (const workflow of ['.github/workflows/window-checks.yml']) {
     const text = read(workflow);
     assert.match(text, /while kill -0 "\$pid"/, `${workflow} does not wait for the stopped applications to end`);
     assert.match(text, /- name: Keep the crash reports\n\s+if: always\(\)/, `${workflow} has no crash report step`);
