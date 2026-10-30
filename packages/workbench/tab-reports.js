@@ -14,6 +14,11 @@ const createdBy = new Map();
 const everHeld = new Set();
 // The operation whose stored layout last dropped the origin of each tab id (forgetTabsLeft), which the refusal of a missing origin names.
 const forgottenBy = new Map();
+// The tabs that left their stored layout while their surface was mounted, with the operation that stored the layout that left them.
+// Their origin ends when the surface is disposed (settleLeftTabs). A tab that returns to a stored layout leaves this map.
+const leftWhileMounted = new Map();
+// Whether the surface of a tab id is mounted and not disposed. The page sets it (setMountedTab) because the surface modules import this module.
+let mountedTab = () => false;
 const notices = new Map();
 const noticePolicies = new Map();
 const modified = new Set();
@@ -76,6 +81,20 @@ export function reportError(tabId, text) {
 
 // default: a tab whose surface reported no error has none.
 export const tabError = (tabId) => errors.get(tabId) ?? null;
+
+/** Sets the function with which the page decides whether the surface of a tab is mounted and not disposed. */
+export function setMountedTab(probe) {
+  mountedTab = probe;
+}
+
+/** Ends the origins of the tabs that left their stored layout while mounted, for each surface that is no longer mounted. Called on each mount change. */
+export function settleLeftTabs() {
+  for (const [tabId, operation] of leftWhileMounted) {
+    if (mountedTab(tabId)) continue;
+    leftWhileMounted.delete(tabId);
+    dropOrigin(tabId, operation);
+  }
+}
 
 /** Sets the function with which the plane decides whether a tab is visible. */
 export function setVisibleTab(probe) {
@@ -176,6 +195,8 @@ export function restoreOrigin(tab, viewTab) {
   // A tab read from a stored layout has no creation path of this session; the stored layout is its record.
   if (!createdBy.has(tab.id)) createdBy.set(tab.id, "stored layout");
   everHeld.add(tab.id);
+  // A tab that a stored layout holds again has not left it.
+  leftWhileMounted.delete(tab.id);
   // A tab whose origin this session recorded keeps it: a layout that is applied before it is stored has no origin member for it.
   if (origins.has(tab.id)) return null;
   const present = "origin" in tab;
@@ -268,17 +289,30 @@ export function forgetTabsLeft(previousCards, nextCards, operation) {
   if (typeof operation !== "string" || operation === "") throw new TypeError("forgetTabsLeft requires the operation that stores the layout");
   // default: a card without tabs keeps no tab.
   const kept = new Set(nextCards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => tab.id)));
+  // A tab that the next stored layout holds has not left, so an earlier departure of it is cancelled.
+  for (const tabId of kept) leftWhileMounted.delete(tabId);
   for (const card of previousCards) {
     // default: a card without tabs holds no tab that could leave.
     for (const tab of card.data?.tabs ?? []) {
       if (kept.has(tab.id)) continue;
-      origins.delete(tab.id);
-      loaded.delete(tab.id);
-      refusals.delete(tab.id);
       // The record names the tabs that the stored layout held, so a drop by a layout of another state is visible in it.
-      forgottenBy.set(tab.id, `${operation}, whose stored layout held ${kept.size === 0 ? "no tab" : `the tabs ${[...kept].join(", ")}`}`);
+      const held = `${operation}, whose stored layout held ${kept.size === 0 ? "no tab" : `the tabs ${[...kept].join(", ")}`}`;
+      // A surface that is still mounted keeps the origin it started with until it is disposed (docs/spec/projects.md#tab-origin).
+      if (mountedTab(tab.id)) {
+        leftWhileMounted.set(tab.id, held);
+        continue;
+      }
+      dropOrigin(tab.id, held);
     }
   }
+}
+
+/** Removes the origin of a tab that left its stored layout, and records the operation that dropped it for the refusal of a missing origin. */
+function dropOrigin(tabId, operation) {
+  origins.delete(tabId);
+  loaded.delete(tabId);
+  refusals.delete(tabId);
+  forgottenBy.set(tabId, operation);
 }
 
 /** Records whether the surface of tabId reports work in progress (docs/spec/plugins.md#memory-saver). */

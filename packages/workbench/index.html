@@ -48,13 +48,13 @@ import {
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
    are done here. */
 import { latest, onCommit, onRun, placeCompositorRecord, publish, publishAhead } from "./compositor.js";
-import { authorizeSurface, disposeSurfacesExcept, mountedSurface, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { authorizeSurface, disposeSurfacesExcept, mountedSurface, onMountedChange, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { prepareRetainedSurface, releaseRetainedSurfaceSlots } from "./retained-surface-mounts.js";
 import { memoryPlacement } from "./memory-placement.js";
 import { afterDeclaredSnapshotIngress, prepareDeclaredSnapshotIngress } from "./declared-source.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
-import { onTabReports, reportTabState, reportTitle, tabKeeps, viewRefusal } from "./tab-reports.js";
+import { onTabReports, reportTabState, reportTitle, setMountedTab, settleLeftTabs, tabKeeps, viewRefusal } from "./tab-reports.js";
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
@@ -242,6 +242,12 @@ const memoryPlacementReady = new Promise((resolve, reject) => {
   resolveMemoryPlacementReady = resolve;
   rejectMemoryPlacementReady = reject;
 });
+// A tab that left its stored layout keeps its origin while its surface is mounted; a mount change ends the origin once that surface is disposed.
+setMountedTab((tabId) => {
+  const mount = mountedSurface(tabId);
+  return mount !== null && !mount.disposed;
+});
+onMountedChange(settleLeftTabs);
 onTabReports(() => memorySaver.protectionsChanged());
 onMemoryPressure((report) => memorySaver.pressure(report));
 // The end of the mount of a restoring tab ends its restore; a region that refuses its session history fails it.

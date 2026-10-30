@@ -125,3 +125,42 @@ test("a tab of a space that is not displayed keeps its origin across the display
   assert.deepEqual(tabOrigin("origin-away"), { directory: null }, "the origin of a tab in another space was dropped by the display of this space");
 });
 
+test("a tab that leaves its stored layout while its surface is mounted keeps its origin until the surface is disposed", () => {
+  recordOrigin("origin-mounted", null, "test fixture");
+  const previous = [{ id: "c", data: { tabs: [{ id: "origin-mounted", plugin: "p" }] } }];
+  storedLayoutState({ cards: previous });
+  const mounted = new Set(["origin-mounted"]);
+  assert.equal(typeof tabReports.setMountedTab, "function", "tab-reports takes the mounted check of the page");
+  assert.equal(typeof tabReports.settleLeftTabs, "function", "tab-reports settles the left tabs when a mount changes");
+  try {
+    tabReports.setMountedTab((id) => mounted.has(id));
+    forgetTabsLeft(previous, [], "saved layout of space spc-mounted, project prj-mounted");
+    assert.deepEqual(tabOrigin("origin-mounted"), { directory: null }, "the origin ended while its surface is still mounted");
+    // The surface is disposed: the mount change settles the left tab, and its origin ends with the operation that stored the layout.
+    mounted.delete("origin-mounted");
+    tabReports.settleLeftTabs();
+    assert.throws(() => tabOrigin("origin-mounted"), /tab origin-mounted has no origin/);
+    assert.match(tabReports.originHistory("origin-mounted"),
+      /origin dropped by saved layout of space spc-mounted, project prj-mounted, whose stored layout held no tab/);
+  } finally {
+    tabReports.setMountedTab(() => false);
+  }
+});
+
+test("a tab that returns to a stored layout before its surface is disposed keeps its origin", () => {
+  recordOrigin("origin-returned", null, "test fixture");
+  const previous = [{ id: "c", data: { tabs: [{ id: "origin-returned", plugin: "p" }] } }];
+  storedLayoutState({ cards: previous });
+  const mounted = new Set(["origin-returned"]);
+  try {
+    tabReports.setMountedTab((id) => mounted.has(id));
+    forgetTabsLeft(previous, [], "saved layout of space spc-returned, project prj-returned");
+    forgetTabsLeft([], [{ id: "c", data: { tabs: [{ id: "origin-returned", plugin: "p" }] } }], "saved layout of space spc-returned, project prj-returned");
+    mounted.delete("origin-returned");
+    tabReports.settleLeftTabs();
+    assert.deepEqual(tabOrigin("origin-returned"), { directory: null }, "the returned tab lost its origin");
+  } finally {
+    tabReports.setMountedTab(() => false);
+  }
+});
+
