@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-266-2: CI job 분리를 완료했다. `core-node`, `macos-wailsv3`, `macos-tauriv2`, `native-darwin`은 독립 job으로 실행하고, `equivalence`는 그 job들에 의존하지 않고 자기 toolchain을 설치해 두 host를 build하며, `required` gate는 모든 결과를 읽는다. Linux는 검증 대상 platform이 아니므로 Linux CLI job은 F239-285에 따라 제거된 상태로 둔다. 검증: workflow, Node selector, native target owner file이 35/35 통과하고, `ci` graph의 GitHub 실행 하나가 모든 job과 gate를 통과했다.
 - F239-266-1: Setup과 native offline 항목을 완료한다. 소유 검사 `scripts/test/workflow-setup.test.mjs`와 `scripts/test/native-offline.test.mjs`는 setup action과 native `fetch` target이 없으면 10/10 실패하고 현재 source에서 10/10 통과한다. 현재 setup action, `ci.yml`, Makefile을 가진 `main`의 release run에서 호출된 `ci` workflow의 모든 job이 각자의 setup, 잠긴 의존성 fetch, offline 검사로 통과했다.
 - F238-c-11: View literal checker 항목이 core에서 완료됐다. `@soksak/plugin-api`는 `soksak-view-check` bin을 선언하고 `contract/clipboard.json`을 pack한다. 소유 view-check, package-files, clipboard-contract test가 12/12 통과한다. 이를 게시하는 release는 미배포이며 release 절차(F272)에 속한다.
 - F292-39: 창 검사는 더 이상 맨 앞 애플리케이션을 저장하거나 복원하거나 판정하지 않는다. 명세된 애플리케이션 동작은 자기 창을 활성화할 수 있고, 사람이 앞으로 가져온 다른 애플리케이션은 검사가 일으킨 것이 아니며, 이전 애플리케이션을 활성화하면 그 사람에게서 활성화를 빼앗기 때문이다. 하네스는 session baseline, `SOKSAK_WINDOW_CHECK_BASELINE`, 그 process identity 확인, 맨 앞 애플리케이션이 검사 대상 호스트인 실행의 거부, 각 검사 뒤의 복원을 없앤다. CI workflow는 검사 전에 애플리케이션을 맨 앞으로 가져오지 않는다. Red: `a frontmost change to another application during a check does not reject the check result`가 변경 전 코드에서 `frontmost baseline changed from pid 10 to pid 30; check result not accepted`로 실패했다. Green: 통과한다.

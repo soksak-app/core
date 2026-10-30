@@ -11,10 +11,10 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
-위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 13개와 waiting 30개인 43개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
+위 기능 cohort 다섯 개는 전체 체크리스트의 완료를 뜻하지 않는다. 현재 미완료 행은 active 12개와 waiting 30개인 42개이며 임시 bypass 네 행은 제외한다. Parent 행을 포함하므로 독립 기능의 개수가 아니다.
 
 - **현재 측정과 검사 수정: 3** — F239-223, F239-223-3, F239-233
-- **CI와 release 소유권: 3** — F239-266, F239-266-2 및 F239-266-3
+- **CI와 release 소유권: 2** — F239-266 및 F239-266-3
 - **보고된 실패와 과거 종료 감사: 13** — F212.1-2-2; F212.12-2-2-4-8; F266.1부터 F266.3, F266.5부터 F266.7 및 F266.9부터 F266.13
 - **성능 측정: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package 설치와 publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
@@ -216,7 +216,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 
 - [~] F239-266 — P1: 잠긴 의존성, offline 검사와 필수 coverage를 유지하며 CI와 release 소유권을 언어와 host별로 나눈다.
   - [o] F239-266-1 — P1: 언어별 setup action을 재사용한다. 각 호출 job은 자기에게 필요한 toolchain과 잠긴 의존성을 설치한 뒤 offline으로 검사한다. 다른 job의 setup 결과를 받지 않는다. Objective-C job은 고정된 ZXing 입력만 받는 download-only `fetch` target을 제공한다. Offline mode에서는 release file이 없으면 curl 실행 전에 거부하며 fetch는 compile 없이 cache와 download의 hash를 검증한다. Red: setup action을 제거하고 native Makefile에서 `fetch` target을 뺀 상태에서 `scripts/test/workflow-setup.test.mjs`와 `scripts/test/native-offline.test.mjs`가 10/10 실패한다. setup case는 `.github/actions/setup-node/action.yml`의 `ENOENT`로, fetch case는 `make`가 target `fetch`의 rule이 없다고 보고하며 실패한다. Green: 현재 source에서 두 owner가 10/10 통과한다(macOS 26.6.2 arm64). GitHub 실행: setup action, `ci.yml`, Makefile이 현재 source와 같은 `main`의 release run에서 호출된 `ci` workflow의 모든 job(`core-node`, `native-darwin`, `macos-wailsv3`, `macos-tauriv2`, `equivalence`, `required`)이 통과했다. 각 job은 offline 검사 전에 자기 setup action, frozen-lockfile install, 잠긴 Cargo fetch, native `fetch`를 실행했다.
-  - [~] F239-266-2 — P1: JavaScript, Wails/Go, Tauri/Rust, Objective-C, Linux CLI 검사를 독립 job으로 둔다. Cross-toolchain script 검사와 host equivalence는 언어 job에 의존하지 않는 자체 환경 job에서 실행한다. 최종 gate 전에 각 소유 test를 지정 scope 하나에 빠짐없이 배정한다.
+  - [o] F239-266-2 — P1: JavaScript, Wails/Go, Tauri/Rust, Objective-C, Linux CLI 검사를 독립 job으로 둔다. Cross-toolchain script 검사와 host equivalence는 언어 job에 의존하지 않는 자체 환경 job에서 실행한다. 최종 gate 전에 각 소유 test를 지정 scope 하나에 빠짐없이 배정한다. 완료: `ci.yml`은 `core-node`, `macos-wailsv3`, `macos-tauriv2`, `native-darwin`을 독립 job으로 실행하고, `equivalence`는 `needs:` 없이 자기 toolchain을 설치하고 두 host를 build해 구조 검사, `host-contract-check`, `scripts/` test를 실행한다. `required` gate는 다섯 결과를 모두 읽는다(refactor(ci): Separate host verification jobs). Linux는 검증 대상 platform이 아니므로 F239-285가 Linux CLI job을 제거했고, Go와 Rust Sok CLI test는 두 macOS host job에서 실행한다. Workflow owner `CI JavaScript scopes cover every discovered test file exactly once`는 발견된 Node test file마다 `core-node`, `equivalence`, `native-darwin` scope 중 하나에 배정하고, `ci keeps language host checks independent and gates release on every required job`는 job과 gate를 검사하며, native target owner `every native test source is run by a make target`는 native test source마다 make target에 배정한다. 이 checkout에서 workflow, Node selector, native target owner file이 35/35 통과하고, `ci` graph의 GitHub 실행 하나가 모든 job과 `required` gate를 통과했다.
   - [~] F239-266-3 — P1: Release host별 job에서 build, audit와 migration을 수행한다. 두 host job, 독립 equivalence와 registry acceptance가 성공해야 publish한다. Publish는 최종 release file을 받을 수 있으나 equivalence는 자체 checkout에서 build한다. Implementation ready: setup과 native offline 소유 검사는 각각 5/5, workflow 9/9, Make 7/7, host audit 25/25, Node selector 15/15, release CLI 26/26 통과한다. 독립 source review에서 다른 job의 build 결과에 대한 남은 의존성을 찾지 못했다. 이 로컬 결과는 GitHub 실행이나 publication을 입증하지 않는다.
 
 - [o] F239-278 — P1: Native Darwin test runner manifest와 test별 output, 그리고 존재하는 macOS DiagnosticReports를 failure-only CI artifact로 보존한다. 기존 `SOKSAK_NATIVE_TEST_RUN_FOLDER`와 고정된 artifact action을 재사용하고 Foundation을 통해 사용자 Library 경로를 찾는다. 관찰한 실패 native job은 artifact를 남기지 않았고 두 test는 crash 상세 없이 SIGSEGV로 끝났다. Green: 기존 workflow owner 9/9, `ci.yml` parsing, `make docs-check`가 통과한다. 이후 실패 evidence를 보존하지만 native test failure를 수정하지 않는다.
