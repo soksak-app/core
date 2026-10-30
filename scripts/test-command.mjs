@@ -60,9 +60,15 @@ export function groupMembers(pgid) {
   return members;
 }
 
-/** The members that can still run: a zombie has ended and waits to be reaped. */
+// ps(1) state: the first character is the run state, and the characters after it are flags. Z is a zombie, which has ended and waits to be
+// reaped. The flag E marks a process that is trying to exit, which has also ended its work.
+function hasEnded(state) {
+  return state.startsWith('Z') || state.slice(1).includes('E');
+}
+
+/** The members that can still run: a zombie or an exiting process has ended its work. */
 export function runningMembers(pgid, members = groupMembers(pgid)) {
-  return members.filter((member) => !member.state.startsWith('Z'));
+  return members.filter((member) => !hasEnded(member.state));
 }
 
 function signalGroup(pid, signal) {

@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } fr
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn, spawnSync } from "node:child_process";
+import childProcess, { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 
 import { EVENT_PREFIX } from "../test-event-reporter.mjs";
@@ -225,6 +225,19 @@ test("a refused group signal with a running member names it", async () => {
     assert.throws(() => stopGroup(live.pid, refusedWithEperm), (error) => error.code === "EPERM" && new RegExp(`pid ${live.pid} `).test(error.message), "the refused signal does not name the running member");
   } finally {
     process.kill(-live.pid, "SIGKILL");
+  }
+});
+
+test("a refused group signal whose only member is exiting ends without error", () => {
+  // The process table lists one member of the group in state ?NE, a process that is trying to exit (ps(1) flag E). The group signal is refused with EPERM.
+  const pgid = 424242;
+  const originalExecFileSync = childProcess.execFileSync;
+  childProcess.execFileSync = (file, args, options) => (file === "ps" ? `${pgid + 1} ${pgid} ?NE\n` : originalExecFileSync(file, args, options));
+  try {
+    assert.doesNotThrow(() => stopGroup(pgid, refusedWithEperm));
+    assert.doesNotThrow(() => killGroup(pgid, refusedWithEperm));
+  } finally {
+    childProcess.execFileSync = originalExecFileSync;
   }
 });
 
