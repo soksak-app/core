@@ -304,17 +304,27 @@ for (const app of Object.values(APPS)) {
     }), dragged, "?1002 button motion report");
     // In ?1000 and ?1006, the wheel reports a wheel button for every line. The page sends one line for every cell height of the received movement. WebKit decides how many times the injected pixel
     // movement arrives at the page, so the factor is measured by scrolling the history without mouse reporting.
-    await s.run("terminal.input", { bytes: "clear; i=0; while [ $i -lt 40 ]; do echo H$i; i=$((i+1)); done\r" }, surface);
-    await s.until("terminal.session", (value) => value.scrollback?.history >= 6, "the output did not exceed the screen", { surface });
+    // The loop prints LOOPEND after its last line, so the baseline is read after the output that could move the offset.
+    await s.run("terminal.input", { bytes: "clear; i=0; while [ $i -lt 40 ]; do echo H$i; i=$((i+1)); done; printf 'LOOPEND\\n'\r" }, surface);
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith("LOOPEND")), "the output loop did not finish");
+    const baseline = (await s.get("terminal.session", surface)).scrollback;
+    assert.ok(baseline.history >= 6, `the output loop left history ${baseline.history}, which does not exceed the screen`);
     const calibration = Math.round(3 * cellHeight);
-    const offset = (await s.get("terminal.session", surface)).scrollback.offset;
+    const offset = baseline.offset;
     await s.pointer(click.x, click.y, "scroll", { deltaY: -calibration });
     const moved = (await s.until("terminal.session", (value) => value.scrollback.offset !== offset,
       "the calibration wheel did not scroll the history", { surface })).scrollback.offset - offset;
     const factor = Math.round(moved * cellHeight / calibration);
     assert.ok(factor >= 1, `the calibration wheel moved ${moved} lines for ${calibration} points`);
     await s.pointer(click.x, click.y, "scroll", { deltaY: calibration });
-    await s.until("terminal.session", (value) => value.scrollback.offset === offset, "the calibration wheel did not scroll back", { surface });
+    let last = baseline;
+    await s.until("terminal.session", (value) => {
+      if (value.scrollback) last = value.scrollback;
+      return value.scrollback?.offset === offset;
+    }, `the calibration wheel did not scroll back to the baseline offset ${offset}`, { surface }).catch((error) => {
+      error.message = `${error.message}; last offset ${last.offset}, history ${last.history}`;
+      throw error;
+    });
     t.diagnostic(`a wheel of ${calibration} points moved ${moved} lines: the page receives ${factor} times the injected delta`);
     // A movement of 2.5 lines is two lines.
     const wheelDelta = Math.round(2.5 * cellHeight / factor);

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-16-2: `terminal-protocols.test.mjs`의 calibration wheel은 40줄 출력 loop가 끝난 뒤 기준 offset을 읽는다. loop는 화면에 `LOOPEND`로 끝을 표시하며, scroll back은 기준 offset을 status에서 기다리고, 실패 문구는 기준 offset, 마지막 offset과 history를 적는다.
 - F292-26-2: 두 호스트의 modal order 테스트는 native surface가 없는 창을 다룬다. 이 창에서는 web view index 0의 document region의 order가 0이다. `settingsAboveSurfaces` 검사는 실패 메시지에 modal과 region의 order를 적는다.
 - F292-26-4: `dom.rect` 응답은 rect 옆에 `offsetWidth`, `offsetHeight`, `zoom`(요소의 유효 CSS zoom인 `currentCSSZoom`, 엔진이 제공하지 않으면 `null`)을 더한다. 그래서 zoom이 적용된 요소의 측정이 실패하면 엔진이 보고한 크기가 보인다. `text size commands enlarge the pressed card or the frame and keep the plane in the window`의 실패 메시지는 배율 1과 1.5에서의 rect, offset 크기, zoom을 출력한다. 검증: `packages/plugin-api/test/exposure.test.mjs`의 `dom.rect reports the offset size and the effective CSS zoom of the element`는 변경 전 코드에서 실패했고 변경 후 통과한다. `contract/expose.json`의 계약 사례와 workbench exposure 시험도 새 필드를 가진다.
 - F292-36: 릴리스 CLI는 각 host의 frontend를 애플리케이션 폴더에서 읽는다. 폴더는 `--<host>-app DIR`로 주며 기본값은 `apps/<host>`다. host 모드는 선택하지 않은 애플리케이션 폴더를 거부한다. `release CLI inspects every executable in the bundle` test는 fixture 애플리케이션 폴더를 넘기므로 checkout에 staging된 frontend 때문에 더 이상 실패하지 않는다. 검증: test는 변경 전에 staging된 `index.html`에서 `ENOENT`를 읽었고, 변경 후 29/29 통과한다.
