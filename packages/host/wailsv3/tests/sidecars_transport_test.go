@@ -2323,17 +2323,50 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	receiveSidecarMessage(t, owner.seen)
+	// The service answers every send of a surface, and the reader of the host delivers each answer to the owner. The owner takes
+	// them all, as a window does, so the reader reaches the answer to shutdown that the replacement waits for.
+	taken := make(chan struct{})
+	defer close(taken)
+	go func() {
+		for {
+			select {
+			case <-owner.seen:
+			case <-taken:
+				return
+			}
+		}
+	}()
 	replaced := make(chan error, 1)
 	go func() { replaced <- sidecars.Replace(context.Background(), "fixture-service") }()
 	// The replacement has sent its close-owner when the service has read it, and the service holds the answer.
 	<-service.closeOwner
+	// The sends of a surface fill the write queue of the service, which holds its answer, until the host refuses one for the full
+	// queue; the service answers each of them after its answer to close-owner. A stop that begins later finds the queue full, as a stop
+	// that the scheduler delays behind the sends does.
+	for {
+		err := sidecars.Send(owner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
+		if err == nil {
+			continue
+		}
+		if !strings.Contains(err.Error(), "is not keeping up") {
+			t.Fatalf("a send to the held service failed: %v", err)
+		}
+		break
+	}
 	stopped := make(chan struct{})
 	go func() {
 		sidecars.Stop()
 		close(stopped)
 	}()
-	// The stop has begun when the host refuses a send; give its close time to reach the service.
-	for sidecars.Send(owner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`)) == nil {
+	// The stop has begun when the host refuses a send because the sidecars are stopped; give its close time to reach the service.
+	for {
+		err := sidecars.Send(owner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
+		if err != nil && strings.Contains(err.Error(), "sidecars are stopped") {
+			break
+		}
+		if err != nil && !strings.Contains(err.Error(), "is not keeping up") {
+			t.Fatalf("a send while the stop begins failed: %v", err)
+		}
 		runtime.Gosched()
 	}
 	time.Sleep(200 * time.Millisecond)
