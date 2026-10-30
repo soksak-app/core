@@ -74,6 +74,7 @@ func onMain(system platform.Platform, work func() error) error {
 // The main thread runs no code on a stack other than its own while the host runs its main-thread steps
 // (docs/spec/hosts.md, main thread of the Wails host): the collector of a JavaScriptCore VM copies the stack of the main thread from
 // its stack pointer to the origin of its stack, and a stack pointer outside that stack ends the process.
+// contract: host.main-thread.runs-no-code-outside-own-stack
 func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 	system, err := platform.Current()
 	if err != nil {

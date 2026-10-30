@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -185,6 +185,23 @@ test('the checked-in English and Korean host contract tables contain unique case
   const englishCases = parseContractCases(english);
   const koreanCases = parseContractCases(korean);
   assert.deepEqual([...koreanCases.keys()].sort(), [...englishCases.keys()].sort());
+});
+
+test('every Go test function of the Wails host tests declares a contract case that the specification defines for wailsv3', () => {
+  const cases = parseContractCases(readFileSync(new URL('../../docs/spec/host-contract.md', import.meta.url), 'utf8'));
+  const testRoot = 'packages/host/wailsv3/tests';
+  const tests = [];
+  const errors = [];
+  for (const file of readdirSync(fileURLToPath(new URL(`../../${testRoot}/`, import.meta.url)), { recursive: true })) {
+    if (!file.endsWith('_test.go')) continue;
+    const path = `${testRoot}/${file}`;
+    const parsed = parseDeclarations(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'), 'go', path);
+    tests.push(...parsed.tests);
+    errors.push(...parsed.errors);
+  }
+  const audit = auditDeclarations(cases, [{ name: 'wailsv3', language: 'go', tests, errors }]);
+  assert.ok(tests.length > 0, `no Go test function found under ${testRoot}`);
+  assert.deepEqual(audit.errors, []);
 });
 
 test('results are grouped by run and owner, and a name that one owner shares keeps a failure, then a pass, then a skip', () => {
