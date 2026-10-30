@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F284: 창 검사 fixture plugin의 view page는 native view handler가 거부하는 import map을 갖지 않는다.
 - F281-1: 두 host에서 닫힌 window의 first responder 변경은 아무것도 보내지 않고 오류를 저장하지 않는다.
 - F281: Tauri와 Wails host는 닫히는 window의 first responder observation을 AppKit이 해제했을 수 있는 window를 쓰지 않고 끝낸다. Tauri host는 window가 닫힐 때 더 이상 SIGSEGV로 crash하지 않는다.
 - F283-1: 창 검사 job은 메모리 압박 report와 끝난 process의 kernel 기록을 남긴다.

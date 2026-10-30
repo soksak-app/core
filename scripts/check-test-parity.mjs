@@ -7996,6 +7996,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F284",
+    implementation: [{ file: "e2e/fixtures/extension-probe/provider/ui/page.html", symbol: "<title>Probe provider</title>" }],
+    tests: [{ file: "e2e/test/view-fixture-pages.test.mjs", id: "each view page of the fixture plugins starts with a doctype and holds no import map" }],
+    expected: "Every view page of the window-check fixture plugins starts with a doctype and holds no import map of its own.",
+    levels: ["unit"],
+  },
+  {
     id: "F281-1",
     implementation: [
       { file: "packages/host/wailsv3/src/responder.go", symbol: "closed func(error) bool" },
