@@ -3,7 +3,6 @@
 // A plugin host reads and writes its declared keys through pluginHostData. When the window shows another project or the library,
 // the values of the previous project are no longer served.
 import { checkProjectData } from "@soksak/plugin-api";
-import { log } from "./host.js";
 
 /** The declared project data of each plugin, from its plugin.json data field. */
 const declaredData = new Map();
@@ -34,37 +33,20 @@ const isEntry = (stored) => stored !== null && typeof stored === "object" && !Ar
   && Object.keys(stored).sort().join() === "format,value" && Number.isInteger(stored.format) && stored.format > 0;
 
 /**
- * Checks the stored keys of a plugin for the visible project. A value stored without an entry is the form that has no format, which
- * is format 1: it is rewritten once in the entry form when its declared format is 1. Any other earlier form or format, and a
- * newer format, fails the read with the named error and stays unchanged (docs/spec/plugins.md#project-data).
+ * Checks the stored keys of a plugin for the visible project. A stored entry of another format, and a value stored without an
+ * entry, fail the read with the named error and stay unchanged; the workbench converts no stored value
+ * (docs/spec/plugins.md#project-data).
  */
-async function checkStored(project, plugin, declared) {
+function checkStored(project, plugin, declared) {
   const failures = new Map();
   const stored = options.data.get(project.id, plugin);
   const where = (key) => `project ${project.id} plugin ${plugin} data ${key}`;
   for (const [key, entry] of Object.entries(declared)) {
     if (!Object.hasOwn(stored, key)) continue;
     const want = formatOf(entry);
-    const current = isEntry(stored[key]);
-    const format = current ? stored[key].format : 1;
-    if (current && format === want) continue;
-    if (format > want) {
-      failures.set(key, `${where(key)}: stored format ${format} is newer than declared format ${want}`);
-      continue;
-    }
-    if (format < want) {
-      failures.set(key, `${where(key)}: stored format ${format} needs a migration to reach format ${want}`);
-      continue;
-    }
-    // The value has no entry and its declared format is 1: it is stored in the entry form once.
-    try {
-      checkProjectData(plugin, declared, key, stored[key]);
-    } catch (error) {
-      failures.set(key, error.message);
-      continue;
-    }
-    await options.data.set(project.id, plugin, key, { format: want, value: stored[key] });
-    log(`plugin data: ${where(key)} stored without a format is stored in format ${want}`);
+    if (isEntry(stored[key]) && stored[key].format === want) continue;
+    const found = isEntry(stored[key]) ? `stored format ${stored[key].format}` : "stored without a format";
+    failures.set(key, `${where(key)}: ${found} is not declared format ${want}`);
   }
   return failures;
 }
@@ -93,7 +75,7 @@ async function prepare(project) {
   const context = { project: project ?? null, access: new Map() }; // default: a library window has no visible project.
   if (!project) return context;
   for (const [plugin, declared] of declaredData) {
-    const failures = await checkStored(project, plugin, declared);
+    const failures = checkStored(project, plugin, declared);
     context.access.set(plugin, dataOf(project, plugin, declared, failures));
   }
   return context;

@@ -121,7 +121,7 @@ func TestSettingsFilesAndInheritance(t *testing.T) {
 	if err := readJSON(t, filepath.Join(root, ".soksak", "settings.json"), &project); err != nil {
 		t.Fatal(err)
 	}
-	// The file holds its overrides and the format member of the current form (docs/spec/installation.md#stored-data-migration).
+	// The file holds its overrides and the format member of the current form (docs/spec/installation.md#stored-data-formats).
 	if len(project) != 2 || project["gap"] != float64(12) || project["format"] != float64(1) {
 		t.Fatalf("project file includes inherited settings: %v", project)
 	}
@@ -139,7 +139,7 @@ func TestSettingsFilesAndInheritance(t *testing.T) {
 	if err := readJSON(t, filepath.Join(root, ".soksak", "settings.json"), &project); err != nil {
 		t.Fatal(err)
 	}
-	// The snapshot migrated the file, so the format carrier remains after the override is removed.
+	// The format carrier remains after the override is removed.
 	if len(project) != 1 || project["format"] != float64(1) {
 		t.Fatalf("reset did not remove the override: %v", project)
 	}
@@ -339,7 +339,7 @@ func TestProjectTextSizeOverrideIsRejected(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(`{"textSize":1.5}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"format":1,"textSize":1.5}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err = store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
@@ -455,8 +455,8 @@ func TestTabSessionRejectsOtherFormatAndInvalidRequests(t *testing.T) {
 	}
 	path := filepath.Join(folder, "tab-a.json")
 	for _, c := range []struct{ text, found string }{
-		{`{"format":2,"regions":{}}`, "tab session format 2 is not 1"},
-		{`{"regions":{}}`, "tab session format missing is not 1"},
+		{`{"format":2,"regions":{}}`, "tab-sessions/tab-a.json: format must be 1"},
+		{`{"regions":{}}`, "tab-sessions/tab-a.json: format must be 1"},
 		{`{"format":1,"regions":[]}`, "tab session regions is not an object"},
 	} {
 		if err := os.WriteFile(path, []byte(c.text), 0o600); err != nil {
@@ -493,7 +493,7 @@ func TestTabStateRejectsOtherFormatAndInvalidEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := store.Apply(host.WorkspaceRequest{Kind: "tabStatePut", Tab: "tab-a", Entry: host.Record{"kept": true}})
-	if want := path + ": tab state format 2 is not 1"; err == nil || err.Error() != want {
+	if want := path + ": tab-state.json: format must be 1"; err == nil || err.Error() != want {
 		t.Fatalf("a put into format 2 returned %v, want %q", err, want)
 	}
 	if data, _ := os.ReadFile(path); string(data) != `{"format":2,"tabs":{}}` {
@@ -522,8 +522,8 @@ func TestTabStateRejectsOtherFormatAndInvalidEntries(t *testing.T) {
 	}
 }
 
-// contract: workspace.settings.write-stores-current-form
-func TestProjectSettingsWriteStoresTheCurrentNumberedForm(t *testing.T) {
+// contract: workspace.settings.write-refuses-another-form
+func TestProjectSettingsWriteRefusesAnotherFormAndStoresTheCurrentForm(t *testing.T) {
 	config := t.TempDir()
 	w := host.NewWorkspace(config)
 	earlier := t.TempDir()
@@ -538,17 +538,52 @@ func TestProjectSettingsWriteStoresTheCurrentNumberedForm(t *testing.T) {
 		t.Fatal(err)
 	}
 	file := filepath.Join(earlier, ".soksak", "settings.json")
-	if err := os.WriteFile(file, []byte(`{"gap":6}`), 0o644); err != nil {
+	const former = `{"gap":6}`
+	if err := os.WriteFile(file, []byte(former), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-earlier", Patch: map[string]any{"gap": 12}})
-	assertProjectFileForm(t, file, map[string]any{"format": float64(1), "gap": float64(12)})
-	apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-earlier", Remove: []string{"gap"}})
-	assertProjectFileForm(t, file, map[string]any{"format": float64(1)})
+	_, err := w.Apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-earlier", Patch: map[string]any{"gap": 12}})
+	if want := file + ": settings.json: format must be 1"; err == nil || err.Error() != want {
+		t.Fatalf("a write into a file without the format member returned %v, want %q", err, want)
+	}
+	if data, _ := os.ReadFile(file); string(data) != former {
+		t.Fatalf("a refused write changed the file: %s", data)
+	}
 	fresh := t.TempDir()
 	apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-fresh", "root": fresh, "identity": "1:5"}})
 	apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-fresh", Patch: map[string]any{"gap": 3}})
 	assertProjectFileForm(t, filepath.Join(fresh, ".soksak", "settings.json"), map[string]any{"format": float64(1), "gap": float64(3)})
+}
+
+// contract: install.stored.rejects-an-earlier-form
+func TestEarlierStoredFormsAreRejectedBySnapshot(t *testing.T) {
+	config := t.TempDir()
+	store := host.NewWorkspace(config)
+	projects := filepath.Join(config, "projects.json")
+	const bare = `[{"id":"prj-a","root":"/x","identity":"1:1"}]`
+	if err := os.WriteFile(projects, []byte(bare), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"}); err == nil || err.Error() != projects+": projects.json: format must be 1" {
+		t.Fatalf("a bare array of projects returned %v", err)
+	}
+	if data, _ := os.ReadFile(projects); string(data) != bare {
+		t.Fatalf("a refused read changed projects.json: %s", data)
+	}
+	if err := os.Remove(projects); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(config, "settings.json")
+	const former = `{"gap":6}`
+	if err := os.WriteFile(settings, []byte(former), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"}); err == nil || err.Error() != settings+": settings.json: format must be 1" {
+		t.Fatalf("settings.json without the format member returned %v", err)
+	}
+	if data, _ := os.ReadFile(settings); string(data) != former {
+		t.Fatalf("a refused read changed settings.json: %s", data)
+	}
 }
 
 func assertProjectFileForm(t *testing.T, path string, want map[string]any) {

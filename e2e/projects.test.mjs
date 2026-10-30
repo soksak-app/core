@@ -14,8 +14,7 @@ import { readEvents, currentEventOffsets, traceRows } from "@soksak/window-check
 import { openStages, systemState } from "./open-report.mjs";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
-// The current form of settings.json, which the stored data table of docs/spec/installation.md numbers by its format member, and which
-// packages/sok/migrations/settings.json ends at (from 0 to 1).
+// The current form of settings.json, which the stored data table of docs/spec/installation.md numbers by its format member.
 const SETTINGS_FORMAT = 1;
 
 // The running application reads the same file, so the check writes to a temporary file like the host and then renames it. The application never reads a partial file.

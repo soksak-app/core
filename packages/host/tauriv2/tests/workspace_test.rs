@@ -42,7 +42,7 @@ fn settings_use_common_and_project_files_and_reset_removes_override() {
         &store,
         json!({"kind":"settings", "id":"prj-test", "patch":{"gap":12}}),
     );
-    // The written file is in the current numbered form (docs/spec/installation.md#stored-data-migration).
+    // The written file is in the current numbered form (docs/spec/installation.md#stored-data-formats).
     assert_eq!(
         read(&root.path().join(".soksak/settings.json")),
         json!({"format": 1, "gap": 12})
@@ -286,7 +286,7 @@ fn a_project_text_size_override_is_rejected() {
     assert_eq!(refused.err(), Some("textSize is common-only".to_string()));
     let path = root.path().join(".soksak/settings.json");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(&path, r#"{"textSize":1.5}"#).unwrap();
+    fs::write(&path, r#"{"format":1,"textSize":1.5}"#).unwrap();
     let refused = store.apply(serde_json::from_value(json!({"kind":"snapshot"})).unwrap());
     assert_eq!(
         refused.err(),
@@ -469,9 +469,12 @@ fn tab_session_rejects_other_format_and_invalid_requests() {
     for (text, found) in [
         (
             r#"{"format":2,"regions":{}}"#,
-            "tab session format 2 is not 1",
+            "tab-sessions/tab-a.json: format must be 1",
         ),
-        (r#"{"regions":{}}"#, "tab session format missing is not 1"),
+        (
+            r#"{"regions":{}}"#,
+            "tab-sessions/tab-a.json: format must be 1",
+        ),
         (
             r#"{"format":1,"regions":[]}"#,
             "tab session regions is not an object",
@@ -527,7 +530,7 @@ fn tab_state_rejects_other_format_and_invalid_entries() {
     };
     assert_eq!(
         put("tab-a", json!({"kept":true})),
-        format!("{}: tab state format 2 is not 1", path.display())
+        format!("{}: tab-state.json: format must be 1", path.display())
     );
     assert_eq!(
         fs::read_to_string(&path).unwrap(),
@@ -571,9 +574,9 @@ fn tab_state_rejects_other_format_and_invalid_entries() {
     }
 }
 
-// contract: workspace.settings.write-stores-current-form
+// contract: workspace.settings.write-refuses-another-form
 #[test]
-fn a_project_settings_write_stores_the_current_numbered_form() {
+fn a_project_settings_write_refuses_another_form_and_stores_the_current_form() {
     let config = folder::Folder::new();
     let store = Workspace::new(config.path().into());
     // A project whose settings file is in the earlier form (no format member).
@@ -583,23 +586,21 @@ fn a_project_settings_write_stores_the_current_numbered_form() {
         json!({"kind":"add", "project":{"id":"prj-earlier", "root":earlier.path(), "identity":"1:4"}}),
     );
     fs::create_dir_all(earlier.path().join(".soksak")).unwrap();
-    fs::write(earlier.path().join(".soksak/settings.json"), r#"{"gap":6}"#).unwrap();
-    apply(
-        &store,
-        json!({"kind":"settings", "id":"prj-earlier", "patch":{"gap":12}}),
-    );
+    let file = earlier.path().join(".soksak/settings.json");
+    fs::write(&file, r#"{"gap":6}"#).unwrap();
+    let refused = store
+        .apply(
+            serde_json::from_value(
+                json!({"kind":"settings", "id":"prj-earlier", "patch":{"gap":12}}),
+            )
+            .unwrap(),
+        )
+        .unwrap_err();
     assert_eq!(
-        read(&earlier.path().join(".soksak/settings.json")),
-        json!({"format": 1, "gap": 12})
+        refused,
+        format!("{}: settings.json: format must be 1", file.display())
     );
-    apply(
-        &store,
-        json!({"kind":"settings", "id":"prj-earlier", "remove":["gap"]}),
-    );
-    assert_eq!(
-        read(&earlier.path().join(".soksak/settings.json")),
-        json!({"format": 1})
-    );
+    assert_eq!(fs::read_to_string(&file).unwrap(), r#"{"gap":6}"#);
     // A project whose settings file does not exist yet.
     let fresh = folder::Folder::new();
     apply(
@@ -614,4 +615,33 @@ fn a_project_settings_write_stores_the_current_numbered_form() {
         read(&fresh.path().join(".soksak/settings.json")),
         json!({"format": 1, "gap": 3})
     );
+}
+
+// contract: install.stored.rejects-an-earlier-form
+#[test]
+fn earlier_stored_forms_are_rejected_by_snapshot() {
+    let config = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    let projects = config.path().join("projects.json");
+    let bare = r#"[{"id":"prj-a","root":"/x","identity":"1:1"}]"#;
+    fs::write(&projects, bare).unwrap();
+    let refused = store
+        .apply(serde_json::from_value(json!({"kind":"snapshot"})).unwrap())
+        .unwrap_err();
+    assert_eq!(
+        refused,
+        format!("{}: projects.json: format must be 1", projects.display())
+    );
+    assert_eq!(fs::read_to_string(&projects).unwrap(), bare);
+    fs::remove_file(&projects).unwrap();
+    let settings = config.path().join("settings.json");
+    fs::write(&settings, r#"{"gap":6}"#).unwrap();
+    let refused = store
+        .apply(serde_json::from_value(json!({"kind":"snapshot"})).unwrap())
+        .unwrap_err();
+    assert_eq!(
+        refused,
+        format!("{}: settings.json: format must be 1", settings.display())
+    );
+    assert_eq!(fs::read_to_string(&settings).unwrap(), r#"{"gap":6}"#);
 }

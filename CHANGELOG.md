@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F296-3: The host readers of projects.json, settings.json, tab-state.json and tab-sessions refuse a file of another format with `<file>: <name>: format must be <n>` instead of reading it, and the workbench refuses a stored plugin data entry of another format or without a format instead of converting it.
 - F296-2: The `sok` command lines of both hosts no longer apply migration definitions. A `plugins/installed.json` of any format other than 3 is refused with `<file>: plugins/installed.json: format must be 3`, and the manifest case of the `migrations` member is replayed by the Go, Rust and plugin-api runners.
 - F296-1: The specifications state the rejection of a stored file of an earlier form with `<file>: <name>: format must be <n>` in place of the stored data migration. The migration cases, the `migrations` manifest member, the `log.migrated` event and the migration terms are removed. While the release version is 0.0.x, no migration ships.
 - F292-61: The host contract table has the case `log.plugin-catalog.records-the-held-catalogs`, which the Go and Rust tests of the plugin catalogs declare, so the declaration audit binds those tests to a case of the specification. Validation: `scripts/test/check-host-contract.test.mjs` reported the undefined case on the unchanged table and passes after the row is added.

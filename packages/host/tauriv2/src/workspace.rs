@@ -9,7 +9,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
 use serde::Deserialize;
-use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
 use tauri::{AppHandle, Manager};
 
@@ -61,12 +60,14 @@ pub struct Request {
 /// Reads the projects of projects.json, which holds them under the `projects` member beside the format member of the
 /// stored form (docs/spec/installation.md#stored-data-formats).
 fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
-    #[derive(Default, Deserialize)]
-    struct Document {
-        #[serde(default)]
-        projects: Vec<Value>,
-    }
-    Ok(read::<Document>(path)?.projects)
+    let Some(document) = read_stored(path, "projects.json", PROJECTS_FORMAT)? else {
+        return Ok(vec![]);
+    };
+    let projects = document
+        .get("projects")
+        .cloned()
+        .unwrap_or_else(|| json!([]));
+    serde_json::from_value(projects).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// The current format numbers of the stored files that the host writes (docs/spec/installation.md#stored-data-formats).
@@ -83,12 +84,23 @@ fn write_projects(path: &Path, projects: &[Value]) -> Result<(), String> {
     write(path, &document)
 }
 
-fn read<T: DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
-    match fs::read(path) {
-        Ok(data) => serde_json::from_slice(&data).map_err(|e| format!("{}: {e}", path.display())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(T::default()),
-        Err(e) => Err(format!("{}: {e}", path.display())),
+/// Reads a stored file that carries its format in the member format. A missing file reads as None. A file that is not an
+/// object, or whose format member is absent or another number, is refused with the file and the number it requires
+/// (docs/spec/installation.md#stored-data-formats).
+fn read_stored(path: &Path, name: &str, format: u64) -> Result<Option<Map<String, Value>>, String> {
+    let data = match fs::read(path) {
+        Ok(data) => data,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    let value: Value =
+        serde_json::from_slice(&data).map_err(|e| format!("{}: {e}", path.display()))?;
+    let refusal = || format!("{}: {name}: format must be {format}", path.display());
+    let document = value.as_object().ok_or_else(refusal)?;
+    if document.get("format").and_then(Value::as_f64) != Some(format as f64) {
+        return Err(refusal());
     }
+    Ok(Some(document.clone()))
 }
 
 fn write(path: &Path, value: &impl serde::Serialize) -> Result<(), String> {
@@ -105,13 +117,10 @@ fn write(path: &Path, value: &impl serde::Serialize) -> Result<(), String> {
 /// The format of tab-state.json, the tab state store of the memory saver (docs/spec/projects.md#persistence).
 const TAB_STATE_FORMAT: u64 = 1;
 
-/// Returns the document of tab-state.json as stored, or null when the file does not exist; the page reader checks its
-/// format.
+/// Returns the document of tab-state.json as stored, or null when the file does not exist; a document of another format
+/// is refused with the path of the file.
 fn read_tab_state(path: &Path) -> Result<Value, String> {
-    if !path.exists() {
-        return Ok(Value::Null);
-    }
-    Ok(Value::Object(read::<Map<String, Value>>(path)?))
+    Ok(read_stored(path, "tab-state.json", TAB_STATE_FORMAT)?.map_or(Value::Null, Value::Object))
 }
 
 /// Sets the entry of tab, or removes it when entry is None, in tab-state.json and returns the size of the written
@@ -127,24 +136,8 @@ fn put_tab_state(
     if let Some(entry) = &entry {
         check_tab_state_entry(tab, entry)?;
     }
-    let document: Map<String, Value> = read(path)?;
     let mut tabs = Map::new();
-    if !document.is_empty() {
-        match document.get("format") {
-            None => {
-                return Err(format!(
-                    "{}: tab state format missing is not {TAB_STATE_FORMAT}",
-                    path.display()
-                ));
-            }
-            Some(format) if format.as_f64() != Some(TAB_STATE_FORMAT as f64) => {
-                return Err(format!(
-                    "{}: tab state format {format} is not {TAB_STATE_FORMAT}",
-                    path.display()
-                ));
-            }
-            Some(_) => {}
-        }
+    if let Some(document) = read_stored(path, "tab-state.json", TAB_STATE_FORMAT)? {
         tabs = document
             .get("tabs")
             .and_then(Value::as_object)
@@ -228,22 +221,14 @@ fn read_tab_session(directory: &Path, tab: &str) -> Result<Value, String> {
     if !path.exists() {
         return Ok(Value::Null);
     }
-    let document: Map<String, Value> = read(&path)?;
-    match document.get("format") {
-        None => {
-            return Err(format!(
-                "{}: tab session format missing is not {TAB_SESSION_FORMAT}",
-                path.display()
-            ));
-        }
-        Some(format) if format.as_f64() != Some(TAB_SESSION_FORMAT as f64) => {
-            return Err(format!(
-                "{}: tab session format {format} is not {TAB_SESSION_FORMAT}",
-                path.display()
-            ));
-        }
-        Some(_) => {}
-    }
+    let Some(document) = read_stored(
+        &path,
+        &format!("tab-sessions/{tab}.json"),
+        TAB_SESSION_FORMAT,
+    )?
+    else {
+        return Ok(Value::Null);
+    };
     if !document.get("regions").is_some_and(Value::is_object) {
         return Err(format!(
             "{}: tab session regions is not an object",
@@ -391,11 +376,17 @@ impl Workspace {
             .position(|p| p["id"].as_str() == req.id.as_deref());
         match req.kind.as_str() {
             "snapshot" => {
-                let mut common: Map<String, Value> = read(&self.directory.join("settings.json"))?;
+                let mut common = read_stored(
+                    &self.directory.join("settings.json"),
+                    "settings.json",
+                    SETTINGS_FORMAT,
+                )?
+                .unwrap_or_default();
                 for project in &mut projects {
                     let path = Path::new(project["root"].as_str().ok_or("invalid project root")?)
                         .join(".soksak/settings.json");
-                    let mut settings: Map<String, Value> = read(&path)?;
+                    let mut settings =
+                        read_stored(&path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default();
                     if let Some(key) = COMMON_ONLY.iter().find(|key| settings.contains_key(**key)) {
                         return Err(format!("{}: {key} is common-only", path.display()));
                     }
@@ -480,7 +471,8 @@ impl Workspace {
                 } else {
                     self.directory.join("settings.json")
                 };
-                let mut settings: Map<String, Value> = read(&path)?;
+                let mut settings =
+                    read_stored(&path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default();
                 let mut set: Vec<String> = patch.keys().cloned().collect();
                 settings.extend(patch);
                 let mut removed = vec![];

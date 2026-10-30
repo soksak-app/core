@@ -199,7 +199,7 @@ fn installed_plugins_document_reports_an_invalid_state() {
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
         format!(
-            r#"{{"error":"{}: the file holds format 9; the definitions migrate formats 2 to 3"}}"#,
+            r#"{{"error":"{}: plugins/installed.json: format must be 3"}}"#,
             file.display()
         )
     );

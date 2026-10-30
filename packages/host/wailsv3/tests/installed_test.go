@@ -99,8 +99,7 @@ func TestInstalledPluginsDocumentReadsTheNameFromThePackageJSON(t *testing.T) {
 // contract: installed.document.refuses-package
 func TestInstalledPluginsDocumentRefusesAPackageField(t *testing.T) {
 	config := installedFixture(t)
-	// A format-2 file with `package` migrates to format 3 at the reader entry; the refusal belongs to a file of the
-	// current format that holds the removed member (docs/spec/installation.md#stored-data-migration).
+	// A file of the current format that holds the removed member is refused (docs/spec/installation.md#stored-data-formats).
 	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 3, "plugins": {"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}}}, "sidecars": {}}`})
 	want := `{"error":"` + filepath.Join(config, "plugins/installed.json") + `: plugins/installed.json alpha: unknown field package"}`
 	if got := string(host.InstalledPluginsDocument(config, false)); got != want {
@@ -158,7 +157,7 @@ func TestInstalledPluginsDocumentReportsAnInvalidState(t *testing.T) {
 		t.Fatalf("missing manifest %s", got)
 	}
 	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 9, "plugins": {}, "sidecars": {}}`})
-	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/installed.json")+`: the file holds format 9; the definitions migrate formats 2 to 3"}` {
+	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/installed.json")+`: plugins/installed.json: format must be 3"}` {
 		t.Fatalf("state error %s", got)
 	}
 }

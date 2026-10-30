@@ -71,9 +71,9 @@ type WorkspaceRequest struct {
 // readProjects reads the projects of projects.json, which holds them under the `projects` member beside the format
 // member of the stored form (docs/spec/installation.md#stored-data-formats).
 func readProjects(path string) ([]Record, error) {
-	document := Record{}
-	if err := readJSON(path, &document); err != nil {
-		return nil, err
+	document, err := readStored(path, "projects.json", projectsFormat)
+	if err != nil || document == nil {
+		return []Record{}, err
 	}
 	projects := []Record{}
 	if list, held := document["projects"].([]any); held {
@@ -117,6 +117,32 @@ func readJSON(path string, into any) error {
 	return nil
 }
 
+// readStored reads a stored file that carries its format in the member format. A missing file reads as nil. A file that is
+// not an object, or whose format member is absent or another number, is refused with the file and the number it requires
+// (docs/spec/installation.md#stored-data-formats).
+func readStored(path, name string, format int) (Record, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, nil
+	}
+	var value any
+	if err := readJSON(path, &value); err != nil {
+		return nil, err
+	}
+	document, ok := value.(map[string]any)
+	if !ok {
+		return nil, formatMustBe(path, name, format)
+	}
+	if number, held := document["format"].(float64); !held || number != float64(format) {
+		return nil, formatMustBe(path, name, format)
+	}
+	return Record(document), nil
+}
+
+// formatMustBe is the refusal of a stored file whose format is not the number that its contract requires.
+func formatMustBe(path, name string, format int) error {
+	return fmt.Errorf("%s: %s: format must be %d", path, name, format)
+}
+
 func writeJSON(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
@@ -153,11 +179,8 @@ const tabStateFormat = 1
 // readTabState returns the document of tab-state.json as stored, or nil when the file does not exist; the page reader
 // checks its format.
 func readTabState(path string) (any, error) {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, nil
-	}
-	document := Record{}
-	if err := readJSON(path, &document); err != nil {
+	document, err := readStored(path, "tab-state.json", tabStateFormat)
+	if err != nil || document == nil {
 		return nil, err
 	}
 	return document, nil
@@ -174,23 +197,12 @@ func putTabState(path, tab string, entry Record) (any, error) {
 			return nil, err
 		}
 	}
-	document := Record{}
-	if err := readJSON(path, &document); err != nil {
+	document, err := readStored(path, "tab-state.json", tabStateFormat)
+	if err != nil {
 		return nil, err
 	}
 	tabs := map[string]any{}
-	if len(document) > 0 {
-		format, held := document["format"]
-		if !held {
-			return nil, fmt.Errorf("%s: tab state format missing is not %d", path, tabStateFormat)
-		}
-		if number, ok := format.(float64); !ok || number != tabStateFormat {
-			found, err := json.Marshal(format)
-			if err != nil {
-				return nil, err
-			}
-			return nil, fmt.Errorf("%s: tab state format %s is not %d", path, found, tabStateFormat)
-		}
+	if document != nil {
 		stored, ok := document["tabs"].(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("%s: tab state tabs is not an object", path)
@@ -267,23 +279,9 @@ func readTabSession(directory, tab string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, nil
-	}
-	document := Record{}
-	if err := readJSON(path, &document); err != nil {
+	document, err := readStored(path, "tab-sessions/"+tab+".json", tabSessionFormat)
+	if err != nil || document == nil {
 		return nil, err
-	}
-	format, held := document["format"]
-	if !held {
-		return nil, fmt.Errorf("%s: tab session format missing is not %d", path, tabSessionFormat)
-	}
-	if number, ok := format.(float64); !ok || number != tabSessionFormat {
-		found, err := json.Marshal(format)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("%s: tab session format %s is not %d", path, found, tabSessionFormat)
 	}
 	if _, ok := document["regions"].(map[string]any); !ok {
 		return nil, fmt.Errorf("%s: tab session regions is not an object", path)
@@ -402,19 +400,25 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 	}
 	switch req.Kind {
 	case "snapshot":
-		common := Record{}
-		if err := readJSON(filepath.Join(w.directory, "settings.json"), &common); err != nil {
+		common, err := readStored(filepath.Join(w.directory, "settings.json"), "settings.json", settingsFormat)
+		if err != nil {
 			return nil, err
 		}
+		if common == nil {
+			common = Record{}
+		}
 		for _, p := range projects {
-			settings := Record{}
 			root, ok := p["root"].(string)
 			if !ok {
 				return nil, fmt.Errorf("invalid project root")
 			}
 			path := filepath.Join(root, ".soksak", "settings.json")
-			if err := readJSON(path, &settings); err != nil {
+			settings, err := readStored(path, "settings.json", settingsFormat)
+			if err != nil {
 				return nil, err
+			}
+			if settings == nil {
+				settings = Record{}
 			}
 			for _, key := range commonOnly {
 				if _, has := settings[key]; has {
@@ -486,9 +490,12 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 			}
 			path = filepath.Join(projects[at]["root"].(string), ".soksak", "settings.json")
 		}
-		settings := Record{}
-		if err := readJSON(path, &settings); err != nil {
+		settings, err := readStored(path, "settings.json", settingsFormat)
+		if err != nil {
 			return nil, err
+		}
+		if settings == nil {
+			settings = Record{}
 		}
 		set := make([]string, 0, len(req.Patch))
 		for key, value := range req.Patch {

@@ -39,58 +39,42 @@ test("a plugin host reads and writes the project data of the shown project, and 
   await assert.rejects(pluginHostData.set("probe", "other", "x"), /probe data other is not declared/);
   await assert.rejects(pluginHostData.set("probe", "note", 5), /probe data note does not match its schema/);
   assert.deepEqual(stored.get("p1/probe").note, { format: 1, value: "kept" });
-  // A stored value of an earlier format is refused by the read, and it stays unchanged until a migration converts it.
+  // A stored value of an earlier format is refused by the read and stays unchanged; no conversion runs.
   await assert.rejects(pluginHostData.get("probe", "names"),
-    /project p1 plugin probe data names: stored format 1 needs a migration to reach format 2/);
+    /project p1 plugin probe data names: stored format 1 is not declared format 2/);
   assert.deepEqual(stored.get("p1/probe").names, { format: 1, value: ["a"] });
   await showData(null);
   await assert.rejects(pluginHostData.get("probe", "note"), /plugin host probe: no project is shown/);
 });
 
-test("a stored value in a newer format fails the read and is not changed", async () => {
+test("a stored value in another format fails the read and is not changed", async () => {
   declareProjectData("later", { note: { schema: { type: "string" }, default: "", format: 1 } });
   stored.set("p2/later", { note: { format: 3, value: "x" } });
   await showData({ id: "p2", root: "/work/p2" });
   await assert.rejects(pluginHostData.get("later", "note"),
-    /project p2 plugin later data note: stored format 3 is newer than declared format 1/);
+    /project p2 plugin later data note: stored format 3 is not declared format 1/);
   assert.deepEqual(stored.get("p2/later").note, { format: 3, value: "x" });
   await showData(null);
 });
 
-test("a value stored without a format entry is read as format 1 of the declared key", async () => {
+test("a value stored without a format entry is refused by the read and is not changed", async () => {
   declareProjectData("bare", { legacy: { schema: { type: "array", items: { type: "string" } }, default: [] } });
   stored.set("p3/bare", { legacy: ["d"] });
   await showData({ id: "p3", root: "/work/p3" });
-  assert.deepEqual(await pluginHostData.get("bare", "legacy"), ["d"]);
+  await assert.rejects(pluginHostData.get("bare", "legacy"),
+    /project p3 plugin bare data legacy: stored without a format is not declared format 1/);
+  assert.deepEqual(stored.get("p3/bare").legacy, ["d"]);
   await showData(null);
 });
 
 test("a data call invoked during preparation stays bound to the previous project", async () => {
   stored.set("p1/probe", { ...stored.get("p1/probe"), note: { format: 1, value: "old value" } });
-  stored.set("p-new/probe", { note: "new value" });
+  stored.set("p-new/probe", { note: { format: 1, value: "new value" } });
   await showData({ id: "p1", root: "/work/p1" });
 
-  let started;
-  const preparing = new Promise((resolve) => { started = resolve; });
-  let release;
-  const wait = new Promise((resolve) => { release = resolve; });
-  configureData({
-    data: {
-      get: (id, plugin) => stored.get(`${id}/${plugin}`) ?? {},
-      set: async (id, plugin, key, value) => {
-        if (id === "p-new" && plugin === "probe") {
-          started();
-          await wait;
-        }
-        stored.set(`${id}/${plugin}`, { ...stored.get(`${id}/${plugin}`), [key]: value });
-      },
-    },
-  });
-
   const change = showData({ id: "p-new", root: "/work/new" });
-  await preparing;
+  // The call is made before the new context commits, so the previous project serves it.
   const inFlight = pluginHostData.get("probe", "note");
-  release();
   await change;
   assert.equal(await inFlight, "old value");
 });
