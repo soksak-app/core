@@ -70,6 +70,10 @@
   "scripts": {
     "test": "node --test test/"
   },
+  "specFiles": [
+    "docs/spec/cases/log-contract/replay/screen-message.json",
+    "docs/spec/cases/manifest-validation.json"
+  ],
   "devDependencies": {
     "jsdom": "^30.0.1"
   },

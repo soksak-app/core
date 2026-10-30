@@ -14,6 +14,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, posix, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parse } from "acorn";
+import { declaresFile, specFilesOf, workspacePackages } from "./node-tests.mjs";
 import { checkDeclaration, gitCommonDir, repositoryFolder } from "./workspace-registry.mjs";
 
 const ROOT = resolve(process.argv[2] ?? new URL("../", import.meta.url).pathname);
@@ -272,10 +273,75 @@ export function checkTestPathReads(components, files, readSource = (file) => rea
   return errors;
 }
 
+// The JavaScript sources whose reads of docs/spec select the Node tests of their package (scripts/node-tests.mjs --changed).
+const JAVASCRIPT = /\.(js|mjs|cjs|ts)$/;
+
+/**
+ * The paths of docs/spec that the line reads: each string literal with `../`, resolved from the folder of the file as
+ * `new URL(path, import.meta.url)` and a join with the folder of the file resolve it. A template literal reads the folder
+ * before its first `${`.
+ */
+function specReadsOf(line, file) {
+  const reads = [];
+  for (const match of line.matchAll(LITERAL)) {
+    const text = match[1] ?? match[2] ?? match[3] ?? match[4] ?? "";
+    if (!text.includes("../")) continue;
+    const variable = text.indexOf("${");
+    const path = variable < 0 ? text : text.slice(0, text.lastIndexOf("/", variable) + 1);
+    const resolved = posix.normalize(posix.join(posix.dirname(file), path));
+    if (resolved.startsWith("docs/spec/")) reads.push(resolved);
+  }
+  return reads;
+}
+
+/**
+ * Checks that each workspace package declares in `specFiles` of its package.json every file of docs/spec that its JavaScript
+ * sources read, and declares no path that does not exist or that no source reads, so that a change of a specification file
+ * selects the tests of the packages that read it (scripts/node-tests.mjs --changed). `packages` are the workspace package folders
+ * other than the root, which owns docs/spec; `files` are the tracked sources; `exists` tells whether a path of the checkout exists.
+ */
+export function checkSpecReads(packages, files, {
+  readManifest = (folder) => readJson(join(ROOT, folder, "package.json")),
+  readSource = (file) => readFileSync(join(ROOT, file), "utf8"),
+  exists = (path) => existsSync(join(ROOT, path)),
+} = {}) {
+  const owners = packages.map((dir) => ({ dir, name: dir }));
+  const errors = [];
+  const reads = new Map(packages.map((dir) => [dir, []]));
+  for (const file of files.filter((item) => JAVASCRIPT.test(item))) {
+    const owner = owningComponent(owners, file);
+    if (!owner) continue;
+    readSource(file).split("\n").forEach((line, index) => {
+      for (const path of specReadsOf(line, file)) reads.get(owner.dir).push({ path, where: `${file}:${index + 1}` });
+    });
+  }
+  for (const dir of packages) {
+    const manifest = `${dir}/package.json`;
+    let declared;
+    try { declared = specFilesOf(readManifest(dir), manifest); }
+    catch (error) {
+      errors.push(error.message);
+      continue;
+    }
+    const found = reads.get(dir);
+    for (const { path, where } of found) {
+      if (!declared.some((entry) => declaresFile(entry, path))) {
+        errors.push(`${where}: ${dir} reads ${path}, which specFiles of ${manifest} does not declare`);
+      }
+    }
+    for (const entry of declared) {
+      if (!exists(entry)) errors.push(`${manifest}: specFiles names ${entry}, which does not exist`);
+      else if (!found.some(({ path }) => declaresFile(entry, path))) errors.push(`${manifest}: specFiles names ${entry}, which no source of ${dir} reads`);
+    }
+  }
+  return errors;
+}
+
 function main() {
   const all = components(ROOT);
   const errors = checkNames(new Set(corePackageNames(ROOT)), trackedSources(ROOT), (file) => readFileSync(join(ROOT, file), "utf8"));
   errors.push(...checkTestPathReads(corePackageFolders(ROOT), trackedSources(ROOT).filter((file) => TEST_FILE.test(file))));
+  errors.push(...checkSpecReads(workspacePackages(ROOT).filter((folder) => folder !== "."), trackedSources(ROOT)));
   for (const component of all.filter((item) => item.kind === "core")) {
     // Finds the plugin ids written in quotes, attribute values and section prefixes in core sources.
     const rules = [];

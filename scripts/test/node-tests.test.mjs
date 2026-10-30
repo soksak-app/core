@@ -163,6 +163,25 @@ test("another script of the packages that have it is discovered, and quotes arou
   assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1)]), [["e2e/a.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-force-exit", "--test-concurrency=1", "--test-global-setup=./setup.mjs"]]]);
 });
 
+test("a changed specification file selects the tests of the packages that declare it in specFiles", () => {
+  const root = workspace();
+  put(root, "package.json", JSON.stringify({ name: "root", scripts: { "test:scripts": "node --test scripts/test/" } }));
+  put(root, "scripts/test/x.test.mjs", "");
+  put(root, "reader/package.json", JSON.stringify({ name: "reader", specFiles: ["docs/spec/events.json"], scripts: { test: "node --test test/" } }));
+  put(root, "reader/test/audit.test.mjs", "");
+  put(root, "cases/package.json", JSON.stringify({ name: "cases", specFiles: ["docs/spec/cases/log-contract/"], scripts: { test: "node --test test/" } }));
+  put(root, "cases/test/replay.test.mjs", "");
+  put(root, "other/package.json", JSON.stringify({ name: "other", scripts: { test: "node --test test/" } }));
+  put(root, "other/test/y.test.mjs", "");
+  const names = (changed) => discoverNodeTests({ root, packages: [".", "cases", "other", "reader"], changed }).tests.map((item) => item.name);
+  assert.deepEqual(names(["docs/spec/events.json"]), ["scripts/test/x.test.mjs", "reader/test/audit.test.mjs"]);
+  assert.deepEqual(names(["docs/spec/cases/log-contract/replay/inputs.json"]), ["scripts/test/x.test.mjs", "cases/test/replay.test.mjs"]);
+  assert.deepEqual(names(["docs/spec/events.ko.md"]), ["scripts/test/x.test.mjs"]);
+  put(root, "other/package.json", JSON.stringify({ name: "other", specFiles: ["docs/features.md"], scripts: { test: "node --test test/" } }));
+  assert.throws(() => names(["docs/spec/events.json"]),
+    /other\/package\.json: specFiles must be a list of paths under docs\/spec\/, found \["docs\/features\.md"\]/);
+});
+
 test("the idle gate waits until the person gave no input for the given seconds", async () => {
   const { whenIdle } = await import("../node-tests.mjs");
   const readings = [2, 4, 31];

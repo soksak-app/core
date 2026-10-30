@@ -17,6 +17,14 @@
   "scripts": {
     "test": "node --test test/"
   },
+  "specFiles": [
+    "docs/spec/cases/log-contract/",
+    "docs/spec/events.json",
+    "docs/spec/persistent-services.ko.md",
+    "docs/spec/persistent-services.md",
+    "docs/spec/replay.ko.md",
+    "docs/spec/replay.md"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -2,7 +2,7 @@
 // starts and ends with its elapsed time, has its own limit, and runs in parallel (docs/operations/examples.md#test-runner).
 // The test script of each package names the flags and the paths: `node --test [flags] <paths>`, optionally after commands such as
 // `pnpm build`. `--script <name>` reads another script of the packages that have it (`verify` runs the window checks, with
-// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). A file has no limit of its own. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists; `make push-check` runs the tests of the changed packages with it.
+// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). A file has no limit of its own. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists or declare it in `specFiles` of their package.json; `make push-check` runs the tests of the changed packages with it.
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -106,10 +106,29 @@ const REPORTERS = ['--test-reporter=spec', '--test-reporter-destination=stdout',
   `--test-reporter=${EVENT_REPORTER}`, '--test-reporter-destination=stderr'];
 
 /**
- * The packages that hold the changed files (paths relative to the root). A file belongs to the deepest package folder that contains
- * it; a file that no package folder contains belongs to the root `.`. The result keeps the order of `packages`.
+ * The specification files that the sources of a package read, which its manifest declares in `specFiles` (paths under
+ * `docs/spec/`; a path that ends in `/` names a folder). `make boundaries` fails when a source reads a file of docs/spec that its
+ * package does not declare, so the declaration is complete.
  */
-export function changedPackages(files, packages) {
+export function specFilesOf(manifest, where) {
+  const declared = manifest.specFiles ?? [];
+  if (!Array.isArray(declared) || declared.some((path) => typeof path !== 'string' || !path.startsWith('docs/spec/') || path.includes('..'))) {
+    throw new Error(`${where}: specFiles must be a list of paths under docs/spec/, found ${JSON.stringify(declared)}`);
+  }
+  return declared;
+}
+
+/** Whether a declared path of `specFiles` names the file: the same file, or a folder that holds it. */
+export function declaresFile(declared, file) {
+  return declared.endsWith('/') ? file.startsWith(declared) : file === declared;
+}
+
+/**
+ * The packages that hold the changed files (paths relative to the root), and the packages whose `specFiles` (`specFiles(folder)`)
+ * names a changed file. A file belongs to the deepest package folder that contains it; a file that no package folder contains
+ * belongs to the root `.`. The result keeps the order of `packages`.
+ */
+export function changedPackages(files, packages, specFiles = () => []) {
   const owned = new Set();
   for (const file of files) {
     let owner = null;
@@ -118,7 +137,8 @@ export function changedPackages(files, packages) {
     }
     owned.add(owner ?? '.');
   }
-  return packages.filter((folder) => owned.has(folder));
+  return packages.filter((folder) => owned.has(folder)
+    || specFiles(folder).some((declared) => files.some((file) => declaresFile(declared, file))));
 }
 
 /** Selects test files by the existing substring selector and explicit root-relative path exclusions. */
@@ -140,15 +160,17 @@ export function selectNodeTests(tests, { only = '', exclude = [] } = {}) {
 /**
  * The tests of the packages (folders relative to `root`, or `.` for the root): one test per file, with the folder of its package
  * and the flags of its script, and the commands to run before them. With `changed` (the changed files), only the packages that hold
- * a changed file are discovered. `testTimeoutMs` is the limit of each test that declares none (`--test-timeout`).
+ * a changed file or declare it in `specFiles` are discovered. `testTimeoutMs` is the limit of each test that declares none (`--test-timeout`).
  */
 export function discoverNodeTests({ root, packages, script: scriptName = 'test', changed, testTimeoutMs = TEST_TIMEOUT_MS }) {
   const tests = [];
   const before = [];
-  const selected = changed === undefined ? packages : changedPackages(changed, packages);
+  const manifests = new Map(packages.map((folder) => [folder, JSON.parse(readFileSync(join(root, folder, 'package.json'), 'utf8'))]));
+  const selected = changed === undefined ? packages
+    : changedPackages(changed, packages, (folder) => specFilesOf(manifests.get(folder), `${folder === '.' ? '' : `${folder}/`}package.json`));
   for (const folder of selected) {
     const directory = join(root, folder);
-    const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'));
+    const manifest = manifests.get(folder);
     // The test script of the root runs this runner, so the root names the files of its own scripts in `test:scripts`.
     const key = folder === '.' && scriptName === 'test' ? 'test:scripts' : scriptName;
     if (manifest.scripts?.[key] === undefined) continue;
@@ -174,7 +196,7 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test',
 }
 
 /** The folders of the workspace packages relative to the root, the root first. */
-function workspacePackages(root) {
+export function workspacePackages(root) {
   const listed = JSON.parse(execFileSync('pnpm', ['-r', 'list', '--json', '--depth', '-1'], { cwd: root, encoding: 'utf8' }));
   return listed.map((item) => relative(root, item.path) || '.').sort((a, b) => (a === '.' ? -1 : b === '.' ? 1 : a.localeCompare(b)));
 }
@@ -221,7 +243,7 @@ async function main(argv) {
   const limitMs = count('timeout') * 1000;
   if (limitMs > MAX_TEST_TIMEOUT_MS) throw new Error(`--timeout must be at most ${MAX_TEST_TIMEOUT_MS / 1000} seconds, found ${values.timeout}`);
   const write = (line) => process.stdout.write(`${line}\n`);
-  // With --changed, the files that the revision range changes select the packages; the push gate runs them.
+  // With --changed, the files that the revision range changes select the packages that hold them or declare them in specFiles.
   const changed = values.changed === undefined ? undefined
     : execFileSync('git', ['diff', '--name-only', values.changed], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
   const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT), script: scriptName, changed, testTimeoutMs: limitMs });

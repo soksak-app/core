@@ -17,6 +17,10 @@
     "benchmark:view-drag": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/view-drag.test.mjs",
     "benchmark:plugin-host-throttle": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/plugin-host-throttle.test.mjs"
   },
+  "specFiles": [
+    "docs/spec/events.json",
+    "docs/spec/host-contract.md"
+  ],
   "dependencies": {
     "@soksak/client": "workspace:*",
     "@soksak/plugin-api": "workspace:*",

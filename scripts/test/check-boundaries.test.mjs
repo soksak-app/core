@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { checkNames, checkTestPathReads, components, corePackageFolders, corePackageNames } from "../check-boundaries.mjs";
+import { checkNames, checkSpecReads, checkTestPathReads, components, corePackageFolders, corePackageNames } from "../check-boundaries.mjs";
 
 // The names are joined from parts: the boundary audit scans this file for @soksak/ names.
 const scoped = (name) => ["@soksak", name].join("/");
@@ -170,6 +170,38 @@ test("checkTestPathReads does not refuse a path that a test names as the key of 
   };
   const errors = checkTestPathReads(components, testFiles(Object.keys(sources)), (file) => sources[file]);
   assert.deepEqual(errors.map((error) => error.split(":")[0]), ["packages/plugin-api/test/read.test.mjs"]);
+});
+
+test("checkSpecReads refuses a read of docs/spec that specFiles of the package does not declare", () => {
+  // A change of a specification file selects the tests of the packages that declare it (scripts/node-tests.mjs --changed).
+  const manifests = {
+    "packages/reader": { specFiles: ["docs/spec/cases/log-contract/", "docs/spec/replay.md", "docs/spec/gone.md", "docs/spec/unread.md"] },
+    "packages/silent": {},
+    "packages/wrong": { specFiles: ["docs/features.md"] },
+  };
+  const sources = {
+    "packages/reader/test/a.test.mjs": [
+      'const catalog = readFileSync(new URL("../../../docs/spec/events.json", import.meta.url));',
+      "const read = (name) => readFileSync(new URL(`../../../docs/spec/cases/log-contract/replay/${name}`, import.meta.url));",
+      'const replay = read("../../../docs/spec/replay.md");',
+      "const CATALOG = 'docs/spec/events.json';",
+    ].join("\n"),
+    "packages/reader/test/b.go": 'var p = "../../../docs/spec/hosts.md"\n',
+    "packages/silent/index.js": 'const spec = new URL("../../docs/spec/hosts.md", import.meta.url);\n',
+  };
+  const existing = new Set(["docs/spec/cases/log-contract/", "docs/spec/replay.md", "docs/spec/unread.md"]);
+  const errors = checkSpecReads(Object.keys(manifests), Object.keys(sources), {
+    readManifest: (folder) => manifests[folder],
+    readSource: (file) => sources[file],
+    exists: (path) => existing.has(path),
+  });
+  assert.deepEqual(errors, [
+    "packages/reader/test/a.test.mjs:1: packages/reader reads docs/spec/events.json, which specFiles of packages/reader/package.json does not declare",
+    "packages/reader/package.json: specFiles names docs/spec/gone.md, which does not exist",
+    "packages/reader/package.json: specFiles names docs/spec/unread.md, which no source of packages/reader reads",
+    "packages/silent/index.js:1: packages/silent reads docs/spec/hosts.md, which specFiles of packages/silent/package.json does not declare",
+    'packages/wrong/package.json: specFiles must be a list of paths under docs/spec/, found ["docs/features.md"]',
+  ]);
 });
 
 test("checkTestPathReads discovers the declared e2e owner from the production package list", () => {
