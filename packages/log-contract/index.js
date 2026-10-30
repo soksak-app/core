@@ -211,7 +211,8 @@ function chainFindings(entries, catalog) {
   // The policies that each process applied, by time (`log.policy`); before the first one the default policy is in force.
   // A chain crosses processes, so the time and not the seq places a policy against it.
   // The page puts the policy of the setting `diagnostics.log` in its gate when the setting changes, and the host records
-  // `log.policy` after it, so the policy that follows such a change is in force from the change.
+  // `log.policy` after it with the cids of that change, so a policy is in force from the stored change that carries one of
+  // its cids. A change that brings no policy and a policy whose change the gate did not store move no other policy.
   const byProcess = new Map();
   for (const entry of entries) {
     const process = processOf(entry.file);
@@ -220,21 +221,22 @@ function chainFindings(entries, catalog) {
   }
   const policies = new Map();
   for (const [process, processEntries] of byProcess) {
-    // `seq` orders a process across its main, debug and rotated files. Page timestamps are estimates and can fall after the
-    // host timestamp of the policy event that follows the settings change, so pair those events in process order.
-    const changes = [];
-    for (const { event } of processEntries.sort((a, b) => a.event.seq - b.event.seq)) {
-      // The catalog declares `keys` a required string, and the line check refuses a line without it.
-      if (event.event === "page.settings.change" && event.fields.keys.split(",").includes("diagnostics.log")) {
-        changes.push(event.ts_us);
-        continue;
-      }
-      if (event.event !== "log.policy") continue;
-      // default: a policy without a preceding change of the setting is in force from its own timestamp.
-      const ts = changes.length > 0 ? changes.shift() : event.ts_us;
-      // default: the first policy for a process appends to an empty policy history.
-      policies.set(process, [...(policies.get(process) ?? []), { ts, classes: event.fields.classes }]);
+    // Page timestamps are estimates and can fall after the host timestamp of the policy event that the change brings, so the
+    // change and not the policy places the policy that carries its cids.
+    const changes = new Map();
+    for (const { event } of processEntries) {
+      if (event.event !== "page.settings.change") continue;
+      // default: a change without cids is reported by the structure check of the required cids.
+      for (const cid of event.cids ?? []) changes.set(cid, event.ts_us);
     }
+    const applied = [];
+    for (const { event } of processEntries) {
+      if (event.event !== "log.policy") continue;
+      // default: a policy without cids, or one whose change is not stored, is in force from its own timestamp.
+      const placed = (event.cids ?? []).filter((cid) => changes.has(cid)).map((cid) => changes.get(cid));
+      applied.push({ ts: placed.length > 0 ? Math.min(...placed) : event.ts_us, classes: event.fields.classes });
+    }
+    policies.set(process, applied);
   }
   // Whether every policy in force in the process of the first event, from the first to the last event of the chain,
   // stores the hop.

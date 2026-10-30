@@ -709,16 +709,19 @@ impl EventLog {
         }
     }
 
-    /// Queues an event that the writer reports about itself (`log.policy`) from another thread. These events pass every gate: a
-    /// policy that turns a class off must still be able to say that it did.
+    /// Queues an event that the writer reports about itself (`log.policy`) from another thread, with the correlation identifiers
+    /// of the input that caused it, or none. These events pass every gate: a policy that turns a class off must still be able to say
+    /// that it did.
     pub(crate) fn enqueue_writer_event(
         &self,
         level: Level,
         name: &str,
         fields: Box<RawValue>,
+        cids: Vec<String>,
     ) -> bool {
         // events: forwarded
         let mut pending = Pending::writer_event(self.layer, self.clock, level, name, fields);
+        pending.cids = cids;
         pending.bytes = pending.fields.get().len() + name.len();
         if self.queued_bytes.load(Ordering::Relaxed) + pending.bytes > self.queue_bytes {
             self.count_loss(Channel::of(level), 1, pending.bytes as u64);
@@ -736,7 +739,7 @@ impl EventLog {
             None => json!({"cause": cause}),
         };
         let fields = to_raw_value(&fields).expect("a json value serializes");
-        self.enqueue_writer_event(Level::Info, "log.closed", fields)
+        self.enqueue_writer_event(Level::Info, "log.closed", fields, Vec::new())
     }
 
     /// The gate of this writer, shared with the producers of the process.

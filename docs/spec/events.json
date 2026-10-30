@@ -146,7 +146,7 @@
           "classes"
         ]
       },
-      "description": "The policy of the event log that is now in force: source is default when no policy file exists and file when the policy file holds it; classes holds the least severe level that is stored for each class. The first policy of a writer and every change of it are stored; the same policy again is not."
+      "description": "The policy of the event log that is now in force: source is default when no policy file exists and file when the policy file holds it; classes holds the least severe level that is stored for each class. The first policy of a writer and every change of it are stored; the same policy again is not. A policy that the action policy of the call log wrote carries the cids of the settings change that sent it."
     },
     "log.pruned": {
       "layer": "host",

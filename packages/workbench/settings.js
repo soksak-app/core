@@ -575,7 +575,7 @@ export function set(patch, scope = projectId ? "project" : "common", actor) {
   apply();
   const propagation = Promise.all([
     Object.hasOwn(patch, "diagnostics.performance") ? setTraceEnabled(settings["diagnostics.performance"]) : undefined,
-    Object.hasOwn(patch, "diagnostics.log") ? setLogPolicy(settings["diagnostics.log"]) : undefined,
+    Object.hasOwn(patch, "diagnostics.log") ? setLogPolicy(settings["diagnostics.log"], cids) : undefined,
   ]);
   const saved = Promise.all([writing, propagation]).then(() => store.settings(id, patch, cids));
   writing = saved.finally(async () => {

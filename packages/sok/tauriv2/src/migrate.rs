@@ -285,7 +285,7 @@ fn migrate(config_dir: &Path, file: &str) -> Result<u64, String> {
             &serde_json::json!({"file": file, "from": step.from, "to": step.to}),
         )
         .expect("a json value serializes");
-        log.enqueue_writer_event(Level::Info, "log.migrated", fields);
+        log.enqueue_writer_event(Level::Info, "log.migrated", fields, Vec::new());
     }
     Ok(step.to)
 }

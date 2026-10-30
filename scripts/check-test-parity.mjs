@@ -1169,11 +1169,12 @@ const FEATURE_LINKS = [
     id: "F239-225",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "const byProcess = new Map();" }],
     tests: [
-      { file: "packages/log-contract/test/audit.test.mjs", id: "a diagnostics.log transition follows same-process seq across rotated files when page time is later" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a policy is in force from the change of a rotated file whose cids it carries when page time is later" },
       { file: "packages/log-contract/test/audit.test.mjs", id: "same seq in another process cannot hide a missing page.call" },
-      { file: "packages/log-contract/test/audit.test.mjs", id: "a missing call remains a finding when the next same-process policy stores it" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a missing call remains a finding when the policy that the change brings stores it" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a policy is placed at the change whose cids it carries, so changes without a policy and policies of gated changes move no pair" },
     ],
-    expected: "The audit pairs each diagnostics.log change with the next policy in the same process by seq, retains the setting timestamp as the effective time, and still reports a missing call when that policy stores it.",
+    expected: "The audit places each policy at the stored settings change of the same process whose cids it carries, retains the setting timestamp as the effective time, places a policy without such a change at its own time, and still reports a missing call when that policy stores it.",
     levels: ["unit"],
   },
 

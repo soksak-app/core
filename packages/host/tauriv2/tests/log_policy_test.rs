@@ -462,3 +462,110 @@ fn each_applied_policy_is_the_event_log_policy_and_a_refused_file_is_not() {
     );
     drop(watch);
 }
+
+// contract: log.policy.carries-the-cids-of-the-change
+#[test]
+fn the_policy_that_a_page_change_writes_carries_the_cids_of_the_change() {
+    let config = folder::Folder::new();
+    let policy_path = config.path().join("log-policy.json");
+    let log = Arc::new(
+        event_log::start(options(
+            &config.path().join("logs"),
+            Some(policy_path.clone()),
+        ))
+        .unwrap(),
+    );
+    let (sender, applied) = channel::<(String, String)>();
+    let sender = std::sync::Mutex::new(sender);
+    let watch = start_log_policy(
+        &log,
+        Some(Box::new(move |source: &str, detail: &str| {
+            sender
+                .lock()
+                .unwrap()
+                .send((source.to_string(), detail.to_string()))
+                .unwrap();
+        })),
+    )
+    .unwrap();
+    let wait = |step: &str, want: &str| {
+        let (got, detail) = applied
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap_or_else(|_| {
+                panic!("{step}: the policy {want:?} was not applied within 10 seconds")
+            });
+        assert_eq!(got, want, "{step}: applied {got:?} ({detail})");
+    };
+    wait("start without a file", "default");
+    let narrow = json!({"lifecycle": "trace", "input": "trace", "call": "info", "io": "trace", "frame": "trace"});
+    let everything = json!({"lifecycle": "trace", "input": "trace", "call": "trace", "io": "trace", "frame": "trace"});
+    // The policy of a change carries the cids of that change.
+    log_command(
+        &log,
+        json!({"action": "policy", "classes": narrow, "cids": ["p1.2"]}),
+    )
+    .unwrap();
+    wait("the change p1.2", "file");
+    // The same policy again stores nothing, and its cids do not reach a later policy that another writer of the file brings.
+    log_command(
+        &log,
+        json!({"action": "policy", "classes": narrow, "cids": ["p2.2"]}),
+    )
+    .unwrap();
+    fs::write(&policy_path, EVERYTHING).unwrap();
+    wait("a write of another writer", "file");
+    // A policy that a request without cids writes carries none.
+    log_command(&log, json!({"action": "policy", "classes": narrow})).unwrap();
+    wait("a request without cids", "file");
+    log_command(
+        &log,
+        json!({"action": "policy", "classes": everything, "cids": ["p3.2"]}),
+    )
+    .unwrap();
+    wait("the change p3.2", "file");
+    // A list that a line cannot hold is refused and writes nothing.
+    for (name, bad) in [
+        ("an identifier with a quote", json!(["p\"4.2"])),
+        ("an empty identifier", json!([""])),
+        ("a list of numbers", json!([4])),
+        ("a text", json!("p4.2")),
+    ] {
+        let error = log_command(
+            &log,
+            json!({"action": "policy", "classes": narrow, "cids": bad}),
+        )
+        .expect_err(name);
+        assert!(error.contains("cids"), "{name}: {error}");
+    }
+    log.flush(Duration::from_secs(5)).unwrap();
+    let policies: Vec<(Value, Value)> = read(log.path())
+        .into_iter()
+        .filter(|event| event["event"] == "log.policy")
+        .map(|event| {
+            (
+                event["fields"]["classes"]["call"].clone(),
+                event["cids"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        policies,
+        vec![
+            (json!("error"), Value::Null),
+            (json!("info"), json!(["p1.2"])),
+            (json!("trace"), Value::Null),
+            (json!("info"), Value::Null),
+            (json!("trace"), json!(["p3.2"])),
+        ]
+    );
+    let written = LogPolicy::parse(
+        &policy_path.display().to_string(),
+        &fs::read(&policy_path).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        written.allows(Class::Call, Level::Trace),
+        "a refused request wrote the file"
+    );
+    drop(watch);
+}

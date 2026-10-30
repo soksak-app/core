@@ -440,11 +440,13 @@ func (l *EventLog) queue(pending *pendingEvent) error {
 	}
 }
 
-// enqueueWriterEvent queues an event that the writer reports about itself (log.policy) from another goroutine. These events pass
-// every gate: a policy that turns a class off must still be able to say that it did.
-func (l *EventLog) enqueueWriterEvent(level Level, name string, fields json.RawMessage) bool {
+// enqueueWriterEvent queues an event that the writer reports about itself (log.policy) from another goroutine, with the correlation
+// identifiers of the input that caused it, or none. These events pass every gate: a policy that turns a class off must still be able
+// to say that it did.
+func (l *EventLog) enqueueWriterEvent(level Level, name string, fields json.RawMessage, cids []string) bool {
 	// events: forwarded
 	pending := l.writerEvent(level, name, fields)
+	pending.cids = cids
 	pending.bytes = len(fields) + len(name)
 	if l.queuedBytes.Load()+int64(pending.bytes) > l.queueBytes {
 		l.countLoss(ChannelOf(level), pending.bytes)
@@ -466,7 +468,7 @@ func (l *EventLog) RecordClosed(cause string, signal *int) bool {
 		fmt.Fprintf(os.Stderr, "event writer: the fields of log.closed cannot be serialized: %v\n", err)
 		return false
 	}
-	return l.enqueueWriterEvent(LevelInfo, "log.closed", text)
+	return l.enqueueWriterEvent(LevelInfo, "log.closed", text, nil)
 }
 
 // capFields returns the fields text of an event as the writer stores it. Fields over EventFieldsLimitBytes are replaced by

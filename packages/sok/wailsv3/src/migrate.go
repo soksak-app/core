@@ -360,5 +360,5 @@ func recordMigration(file string, from, to int) {
 	if err != nil {
 		panic(fmt.Sprintf("the fields of log.migrated do not encode: %v", err))
 	}
-	log.enqueueWriterEvent(LevelInfo, "log.migrated", fields)
+	log.enqueueWriterEvent(LevelInfo, "log.migrated", fields, nil)
 }

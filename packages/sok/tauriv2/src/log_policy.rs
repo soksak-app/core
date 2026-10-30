@@ -166,6 +166,8 @@ pub struct Gate {
     max: [AtomicI32; 5],
     gated: [[AtomicU64; 5]; 5],
     current: Mutex<Option<(LogPolicy, String)>>,
+    /// The policy that a writer of the policy file writes for a settings change, with the cids of that change.
+    cause: Mutex<Option<(LogPolicy, Vec<String>)>>,
 }
 
 impl Gate {
@@ -174,6 +176,7 @@ impl Gate {
             max: Default::default(),
             gated: Default::default(),
             current: Mutex::new(None),
+            cause: Mutex::new(None),
         };
         gate.store(LogPolicy::default());
         gate
@@ -256,17 +259,37 @@ impl EventLog {
         self.gate_handle().policy()
     }
 
+    /// Names the cids of the settings change that writes `policy` to the policy file, before the file is written; empty cids name
+    /// none. The next `set_policy` of that policy stores them in its `log.policy`, and a `set_policy` of another policy discards
+    /// them, so a policy that another writer of the file brings carries none (docs/spec/logging.md#policy).
+    pub fn set_policy_cause(&self, policy: LogPolicy, cids: Vec<String>) {
+        let gate = self.gate_handle();
+        // default: a lock that a panicking thread poisoned still holds a consistent cause, which is replaced whole.
+        let mut cause = gate.cause.lock().unwrap_or_else(PoisonError::into_inner);
+        *cause = (!cids.is_empty()).then_some((policy, cids));
+    }
+
     /// Puts the policy in force. A policy that differs from the one in force, and the first policy of a writer, is the event
-    /// `log.policy` with the place it came from (`default` or `file`); the same policy again stores nothing.
+    /// `log.policy` with the place it came from (`default` or `file`) and the cids that `set_policy_cause` named for it; the same
+    /// policy again stores nothing.
     pub fn set_policy(&self, policy: LogPolicy, source: &str) {
-        if !self.gate_handle().set(policy, source) {
+        let gate = self.gate_handle();
+        // default: a lock that a panicking thread poisoned still holds a consistent cause, which is taken whole.
+        let mut held = gate.cause.lock().unwrap_or_else(PoisonError::into_inner);
+        let cause = held.take();
+        drop(held);
+        let cids = match cause {
+            Some((caused, cids)) if caused == policy => cids,
+            _ => Vec::new(),
+        };
+        if !gate.set(policy, source) {
             return;
         }
         match serde_json::value::to_raw_value(
             &json!({"source": source, "classes": policy.classes()}),
         ) {
             Ok(fields) => {
-                self.enqueue_writer_event(Level::Info, "log.policy", fields);
+                self.enqueue_writer_event(Level::Info, "log.policy", fields, cids);
             }
             Err(error) => {
                 eprintln!("event writer: the policy cannot be serialized: {error}");

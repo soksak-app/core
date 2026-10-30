@@ -243,12 +243,12 @@ test("the policy that a change of diagnostics.log brings is in force from the ch
   const text = [
     open,
     line(2, "page.settings.change", { actor: "core.settings.set", keys: "mode,diagnostics.log" }, { cids: ["p1.1"], layer: "page", class: "input" }),
-    line(3, "log.policy", { source: "file", classes: info }, { class: "lifecycle" }),
+    line(3, "log.policy", { source: "file", classes: info }, { class: "lifecycle", cids: ["p1.1"] }),
   ].join("\n");
   assert.deepEqual(auditLogs([{ file: "host-b1.jsonl", text }], gated), []);
 });
 
-test("a diagnostics.log transition follows same-process seq across rotated files when page time is later", () => {
+test("a policy is in force from the change of a rotated file whose cids it carries when page time is later", () => {
   const callChain = {
     ...catalog,
     events: {
@@ -269,7 +269,7 @@ test("a diagnostics.log transition follows same-process seq across rotated files
   );
   const currentGeneration = lines(
     line(4, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }, { ts_us: 3000 }),
-    line(5, "log.policy", { source: "file", classes: error }, { ts_us: 4000 }),
+    line(5, "log.policy", { source: "file", classes: error }, { ts_us: 4000, cids: ["p1.1"] }),
     line(6, "log.policy", { source: "file", classes: debug }, { ts_us: 6000 }),
   );
   assert.deepEqual(auditLogs([
@@ -308,7 +308,7 @@ test("same seq in another process cannot hide a missing page.call", () => {
   ], callChain).map(({ line, message }) => [line, message]), [[3, "chain settings of p1.1 lacks page.call"]]);
 });
 
-test("a missing call remains a finding when the next same-process policy stores it", () => {
+test("a missing call remains a finding when the policy that the change brings stores it", () => {
   const callChain = {
     ...catalog,
     events: {
@@ -326,12 +326,67 @@ test("a missing call remains a finding when the next same-process policy stores 
     line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }, { ts_us: 1001 }),
     line(2, "log.policy", { source: "file", classes: error }, { ts_us: 2000 }),
     line(3, "page.settings.change", { actor: "core.settings.set", keys: "diagnostics.log" }, { layer: "page", class: "call", cids: ["p1.1"], ts_us: 5000 }),
-    line(4, "log.policy", { source: "file", classes: debug }, { ts_us: 4000 }),
+    line(4, "log.policy", { source: "file", classes: debug }, { ts_us: 4000, cids: ["p1.1"] }),
     line(5, "log.policy", { source: "file", classes: error }, { ts_us: 6000 }),
   );
   assert.deepEqual(auditLogs([{ file: "host-7-b1.jsonl", text }], callChain).map(({ line, message }) => [line, message]), [
     [3, "chain settings of p1.1 lacks page.call"],
   ]);
+});
+
+test("a policy is placed at the change whose cids it carries, so changes without a policy and policies of gated changes move no pair", () => {
+  const callChain = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      "page.settings.change": { layer: "page", class: "call", level: "info", fields: objectFields({ actor: { type: "string" }, keys: { type: "string" } }) },
+      "page.call": { layer: "page", class: "call", level: ["debug", "warn"], fields: objectFields() },
+      "host.binding.call": { layer: "host", class: "call", level: ["debug", "warn"], fields: objectFields() },
+      "log.policy": catalog.events["log.policy"],
+    },
+    chains: { settings: ["page.settings.change", "page.call", "host.binding.call"] },
+  };
+  const debug = { lifecycle: "debug", input: "error", call: "debug", io: "error", frame: "error" };
+  const error = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" };
+  const change = (seq, actor, cid, ts_us) =>
+    line(seq, "page.settings.change", { actor, keys: "diagnostics.log,terminal.shell" }, { layer: "page", class: "call", cids: [cid], ts_us });
+  const call = (seq, cid, ts_us) => [
+    line(seq, "page.call", {}, { layer: "page", class: "call", level: "warn", cids: [cid], ts_us }),
+    line(seq + 1, "host.binding.call", {}, { class: "call", level: "warn", cids: [cid], ts_us: ts_us + 1 }),
+  ];
+  const text = lines(
+    line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }, { ts_us: 1001 }),
+    line(2, "log.policy", { source: "file", classes: debug }, { ts_us: 2000 }),
+    // Two reloads of the fixture list diagnostics.log with its stored value, so no policy follows them.
+    change(3, "diagnostics.fixture", "p1.3", 3000),
+    ...call(4, "p1.3", 3010),
+    change(6, "diagnostics.fixture", "p2.3", 4000),
+    ...call(7, "p2.3", 4010),
+    // A change to error stores its record under debug and brings the policy error.
+    change(9, "core.settings.set", "p3.2", 5000),
+    line(10, "log.policy", { source: "file", classes: error }, { ts_us: 5016, cids: ["p3.2"] }),
+    // The change to debug runs under error, which does not store its record; its policy is stored.
+    line(11, "log.policy", { source: "file", classes: debug }, { ts_us: 6000, cids: ["p4.2"] }),
+    // The change to error stores its record under debug; the policy error that it brings stores no page.call of it.
+    change(12, "core.settings.set", "p5.2", 7000),
+    line(13, "log.policy", { source: "file", classes: error }, { ts_us: 7016, cids: ["p5.2"] }),
+    // A later change to debug runs under error, which does not store its record.
+    line(14, "log.policy", { source: "file", classes: debug }, { ts_us: 9000, cids: ["p6.2"] }),
+    // A reload of the fixture that leaves diagnostics.log as stored brings no policy.
+    change(15, "diagnostics.fixture", "p7.3", 9500),
+    ...call(16, "p7.3", 9510),
+    // A reload of the fixture that returns diagnostics.log to error stores its record under debug and brings the policy
+    // error, which stores no page.call of it.
+    change(18, "diagnostics.fixture", "p8.4", 10000),
+    line(19, "log.policy", { source: "file", classes: error }, { ts_us: 10006, cids: ["p8.4"] }),
+    // The change to debug of the next check runs under error, which does not store its record.
+    line(20, "log.policy", { source: "file", classes: debug }, { ts_us: 12000, cids: ["p9.2"] }),
+    // The batch of the page reaches the writer after the watch applied the policy, so the policy of a change to error
+    // takes the seq before the change that brought it.
+    line(21, "log.policy", { source: "file", classes: error }, { ts_us: 13010, cids: ["p10.2"] }),
+    change(22, "core.settings.set", "p10.2", 13000),
+  );
+  assert.deepEqual(auditLogs([{ file: "host-7-b1.jsonl", text }], callChain), []);
 });
 
 test("an event of the layer page or plugin names the page that wrote it, and an event of another layer names none", () => {

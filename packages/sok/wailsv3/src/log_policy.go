@@ -154,12 +154,19 @@ type policyState struct {
 	source string
 }
 
+// policyCause is the policy that a writer of the policy file writes for a settings change, with the cids of that change.
+type policyCause struct {
+	policy LogPolicy
+	cids   []string
+}
+
 // eventGate is the gate of a writer: the policy in force and, for each class and level, the number of events that were not built or
 // stored since the writer last reported them.
 type eventGate struct {
 	max     [5]atomic.Int32
 	gated   [5][5]atomic.Uint64
 	current atomic.Pointer[policyState]
+	cause   atomic.Pointer[policyCause]
 }
 
 func newEventGate() *eventGate {
@@ -198,9 +205,25 @@ func (l *EventLog) Gate(class Class, level Level) bool {
 	return false
 }
 
+// SetPolicyCause names the cids of the settings change that writes policy to the policy file, before the file is written; empty
+// cids name none. The next SetPolicy of that policy stores them in its `log.policy`, and a SetPolicy of another policy discards them,
+// so a policy that another writer of the file brings carries none (docs/spec/logging.md#policy).
+func (l *EventLog) SetPolicyCause(policy LogPolicy, cids []string) {
+	if len(cids) == 0 {
+		l.gate.cause.Store(nil)
+		return
+	}
+	l.gate.cause.Store(&policyCause{policy: policy, cids: cids})
+}
+
 // SetPolicy puts the policy in force. A policy that differs from the one in force, and the first policy of a writer, is the event
-// `log.policy` with the place it came from (`default` or `file`); the same policy again stores nothing.
+// `log.policy` with the place it came from (`default` or `file`) and the cids that SetPolicyCause named for it; the same policy again
+// stores nothing.
 func (l *EventLog) SetPolicy(policy LogPolicy, source string) {
+	var cids []string
+	if cause := l.gate.cause.Swap(nil); cause != nil && cause.policy == policy {
+		cids = cause.cids
+	}
 	next := &policyState{policy: policy, source: source}
 	for {
 		current := l.gate.current.Load()
@@ -218,7 +241,7 @@ func (l *EventLog) SetPolicy(policy LogPolicy, source string) {
 		fmt.Fprintf(os.Stderr, "event writer: the policy cannot be serialized: %v\n", err)
 		return
 	}
-	l.enqueueWriterEvent(LevelInfo, "log.policy", fields)
+	l.enqueueWriterEvent(LevelInfo, "log.policy", fields, cids)
 }
 
 // Policy is the policy in force: the policy that SetPolicy put in force last, or the default policy before the first.

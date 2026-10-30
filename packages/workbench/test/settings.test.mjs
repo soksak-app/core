@@ -37,23 +37,29 @@ test('the performance trace flag is a declared boolean defaulting to false', asy
 
 test('the log policy is a declared object of levels for the classes, applied when the settings load and when it changes', async (t) => {
   const applied = [];
-  t.mock.module('../log-policy.js', { exports: { setLogPolicy: async (policy) => { applied.push(policy); } } });
+  t.mock.module('../log-policy.js', { exports: { setLogPolicy: async (policy, cids) => { applied.push([policy, cids]); } } });
   const realDocument = globalThis.document;
   globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
   const memory = { common: {}, projects: [] };
+  const written = [];
   const { connectSettings, set: change, value } = await import('../settings.js?test=log-policy');
   try {
     await connectSettings({
       snapshot: async () => structuredClone(memory),
-      settings: async (id, values) => { memory.common = { ...memory.common, ...values }; },
+      settings: async (id, values, cids) => { written.push(cids); memory.common = { ...memory.common, ...values }; },
       onChange: () => () => {},
     });
-    // The policy stores only errors by default: a class that the setting does not name stores the level error.
+    // The policy stores only errors by default: a class that the setting does not name stores the level error. A policy
+    // that the stored settings give has no change, so it carries no cids.
     assert.deepEqual(value('diagnostics.log'), {});
-    assert.deepEqual(applied, [{}]);
+    assert.deepEqual(applied, [[{}, undefined]]);
     await change({ 'diagnostics.log': { call: 'info' } }, 'common', 'test');
     assert.deepEqual(memory.common['diagnostics.log'], { call: 'info' });
-    assert.deepEqual(applied.at(-1), { call: 'info' });
+    // The policy of a change carries the cids of the change, the same cids that the write of the settings carries
+    // (docs/spec/logging.md#policy).
+    assert.equal(written.length, 1);
+    assert.ok(Array.isArray(written[0]) && written[0].length > 0, `the write carries the cids ${JSON.stringify(written[0])}`);
+    assert.deepEqual(applied.find(([, cids]) => cids !== undefined), [{ call: 'info' }, written[0]]);
     for (const bad of [{ audio: 'off' }, { call: 'loud' }, 'off', null, []]) {
       assert.throws(() => change({ 'diagnostics.log': bad }, 'common', 'test'), /Invalid setting diagnostics.log/);
     }

@@ -75,8 +75,12 @@ pub fn write_log_policy(path: &Path, policy: &LogPolicy) -> Result<(), String> {
     })
 }
 
-/// The action `policy` of the call `log`: the page sends the policy of its setting `diagnostics.log` as `classes`, and the host checks it
-/// with the rules of the file and writes the file, which every watcher applies (docs/spec/logging.md#classes-and-policy).
+/// The refusal of the member `cids` of the action `policy`, the same text in both hosts.
+const POLICY_CIDS_REFUSAL: &str = "cids must be a non-empty list of identifiers that are not empty and hold no quote, backslash or control character";
+
+/// The action `policy` of the call `log`: the page sends the policy of its setting `diagnostics.log` as `classes`, with the `cids` of
+/// the settings change that brings it, and the host checks it with the rules of the file and writes the file, which every watcher
+/// applies (docs/spec/logging.md#classes-and-policy). The writer stores the `cids` in the `log.policy` of that policy.
 pub fn set_log_policy(log: &EventLog, request: &Value) -> Result<(), String> {
     let path = log
         .policy_path()
@@ -85,7 +89,20 @@ pub fn set_log_policy(log: &EventLog, request: &Value) -> Result<(), String> {
     let text = json!({"schema": SCHEMA, "classes": request.get("classes").cloned().unwrap_or(Value::Null)})
         .to_string();
     let policy = LogPolicy::parse("the call log", text.as_bytes())?;
-    write_log_policy(path, &policy)
+    let cids = match request.get("cids") {
+        None => Vec::new(),
+        Some(Value::Array(items)) if !items.is_empty() => items
+            .iter()
+            .map(|item| match item.as_str() {
+                Some(cid) if crate::event_log::valid_cid(cid) => Ok(cid.to_string()),
+                _ => Err(POLICY_CIDS_REFUSAL.to_string()),
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(_) => return Err(POLICY_CIDS_REFUSAL.into()),
+    };
+    // The cause is named before the file is written, so the load that the write notifies finds it.
+    log.set_policy_cause(policy, cids);
+    write_log_policy(path, &policy).inspect_err(|_| log.set_policy_cause(policy, Vec::new()))
 }
 
 /// The watch of the policy file; dropping it stops the watch.

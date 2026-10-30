@@ -56,8 +56,12 @@ func GateEvent(class Class, level Level) bool {
 	return true
 }
 
-// setLogPolicy is the action `policy` of the call `log`: the page sends the policy of its setting `diagnostics.log` as `classes`, and
-// the host checks it with the rules of the file and writes the file, which every watcher applies (docs/spec/logging.md#classes-and-policy).
+// policyCidsRefusal is the refusal of the member `cids` of the action `policy`, the same text in both hosts.
+const policyCidsRefusal = "cids must be a non-empty list of identifiers that are not empty and hold no quote, backslash or control character"
+
+// setLogPolicy is the action `policy` of the call `log`: the page sends the policy of its setting `diagnostics.log` as `classes`, with
+// the `cids` of the settings change that brings it, and the host checks it with the rules of the file and writes the file, which every
+// watcher applies (docs/spec/logging.md#classes-and-policy). The writer stores the `cids` in the `log.policy` of that policy.
 func setLogPolicy(log *EventLog, request map[string]any) error {
 	if log.PolicyPath() == "" {
 		return errors.New("this event writer has no policy file")
@@ -70,7 +74,27 @@ func setLogPolicy(log *EventLog, request map[string]any) error {
 	if err != nil {
 		return err
 	}
-	return WriteLogPolicy(log.PolicyPath(), policy)
+	var cids []string
+	if value, ok := request["cids"]; ok {
+		items, ok := value.([]any)
+		if !ok || len(items) == 0 {
+			return errors.New(policyCidsRefusal)
+		}
+		for _, item := range items {
+			cid, ok := item.(string)
+			if !ok || sok.CheckCids([]string{cid}) != nil {
+				return errors.New(policyCidsRefusal)
+			}
+			cids = append(cids, cid)
+		}
+	}
+	// The cause is named before the file is written, so the load that the write notifies finds it.
+	log.SetPolicyCause(policy, cids)
+	if err := WriteLogPolicy(log.PolicyPath(), policy); err != nil {
+		log.SetPolicyCause(policy, nil)
+		return err
+	}
+	return nil
 }
 
 // WriteLogPolicy writes the policy file as a new file renamed over the path, so a watcher never reads half a policy.

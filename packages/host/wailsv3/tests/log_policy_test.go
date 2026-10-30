@@ -406,3 +406,90 @@ func TestEachAppliedPolicyIsTheEventLogPolicyAndARefusedFileIsNot(t *testing.T) 
 	// A refused file emits nothing, so the next event is the policy of the file.
 	wait("write in place", policy.Classes())
 }
+
+// contract: log.policy.carries-the-cids-of-the-change
+func TestThePolicyThatAPageChangeWritesCarriesTheCidsOfTheChange(t *testing.T) {
+	config := t.TempDir()
+	options := eventLogOptions(filepath.Join(config, "logs"))
+	options.PolicyPath = filepath.Join(config, "log-policy.json")
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied := make(chan [2]string, 16)
+	stop, err := host.StartLogPolicy(log, func(source, detail string) { applied <- [2]string{source, detail} })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(stop)
+	wait := func(step, want string) {
+		t.Helper()
+		select {
+		case got := <-applied:
+			if got[0] != want {
+				t.Fatalf("%s: applied %q (%s), want %q", step, got[0], got[1], want)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s: the policy %q was not applied within 10 seconds", step, want)
+		}
+	}
+	command := func(step string, request map[string]any) {
+		t.Helper()
+		if _, err := host.LogCommand(log, request); err != nil {
+			t.Fatalf("%s: %v", step, err)
+		}
+	}
+	wait("start without a file", "default")
+	narrow := map[string]any{"lifecycle": "trace", "input": "trace", "call": "info", "io": "trace", "frame": "trace"}
+	every := map[string]any{"lifecycle": "trace", "input": "trace", "call": "trace", "io": "trace", "frame": "trace"}
+	// The policy of a change carries the cids of that change.
+	command("the change p1.2", map[string]any{"action": "policy", "classes": narrow, "cids": []any{"p1.2"}})
+	wait("the change p1.2", "file")
+	// The same policy again stores nothing, and its cids do not reach a later policy that another writer of the file brings.
+	command("the same policy", map[string]any{"action": "policy", "classes": narrow, "cids": []any{"p2.2"}})
+	if err := os.WriteFile(options.PolicyPath, []byte(everything), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wait("a write of another writer", "file")
+	// A policy that a request without cids writes carries none.
+	command("a request without cids", map[string]any{"action": "policy", "classes": narrow})
+	wait("a request without cids", "file")
+	command("the change p3.2", map[string]any{"action": "policy", "classes": every, "cids": []any{"p3.2"}})
+	wait("the change p3.2", "file")
+	// A list that a line cannot hold is refused and writes nothing.
+	for _, bad := range []struct {
+		name string
+		cids any
+	}{
+		{"an identifier with a quote", []any{"p\"4.2"}},
+		{"an empty identifier", []any{""}},
+		{"a list of numbers", []any{float64(4)}},
+		{"a text", "p4.2"},
+	} {
+		_, err := host.LogCommand(log, map[string]any{"action": "policy", "classes": narrow, "cids": bad.cids})
+		if err == nil || !strings.Contains(err.Error(), "cids") {
+			t.Errorf("%s: %v", bad.name, err)
+		}
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var policies [][2]any
+	for _, event := range readEventLog(t, log.Path()) {
+		if event["event"] == "log.policy" {
+			policies = append(policies, [2]any{event["fields"].(map[string]any)["classes"].(map[string]any)["call"], event["cids"]})
+		}
+	}
+	want := [][2]any{{"error", nil}, {"info", []any{"p1.2"}}, {"trace", nil}, {"info", nil}, {"trace", []any{"p3.2"}}}
+	if !reflect.DeepEqual(policies, want) {
+		t.Fatalf("the policies and their cids: %v, want %v", policies, want)
+	}
+	data, err := os.ReadFile(options.PolicyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	written, err := host.ParseLogPolicy(options.PolicyPath, data)
+	if err != nil || !written.Allows(host.ClassCall, host.LevelTrace) {
+		t.Fatalf("a refused request wrote the file: %s, %v", data, err)
+	}
+}

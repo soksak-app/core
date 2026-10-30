@@ -31,6 +31,20 @@ test("the setting completes the classes it does not name with error, puts the po
   }
 });
 
+test("the policy of a settings change carries the cids of the change to the host, and a policy without a change carries none", async () => {
+  calls.length = 0;
+  try {
+    await setLogPolicy({ call: "debug" }, ["p1.2"]);
+    await setLogPolicy({ call: "trace" });
+    assert.deepEqual(calls, [
+      { name: "log", payload: { action: "policy", classes: { lifecycle: "error", input: "error", call: "debug", io: "error", frame: "error" }, cids: ["p1.2"] } },
+      { name: "log", payload: { action: "policy", classes: { lifecycle: "error", input: "error", call: "trace", io: "error", frame: "error" } } },
+    ]);
+  } finally {
+    logGate.set(everything);
+  }
+});
+
 test("a setting that names a class or a level outside the contract is refused before the gate or the host sees it", async () => {
   calls.length = 0;
   await assert.rejects(setLogPolicy({ audio: "off" }), /the class audio is not one of lifecycle, input, call, io, frame/);
