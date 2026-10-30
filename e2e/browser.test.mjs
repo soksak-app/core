@@ -15,8 +15,8 @@ const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language
 
 
 import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
-import { fresh, terminalCardSidebar } from "./fixture.mjs";
-import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
+import { fresh, reading, terminalCardSidebar } from "./fixture.mjs";
+import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 /** A red block of CSS size 120x60 placed at the upper left of the block document. Its pixels grow with the page zoom. */
@@ -688,5 +688,66 @@ for (const app of Object.values(APPS)) {
       `the document block must grow by the factor: ${JSON.stringify(before)} → ${JSON.stringify(after)}`);
     // blockSize measures after the region is placed at the rectangle of its own element. When the card text grows, the address bar
     // grows too, so the height of the element can shrink.
+  });
+}
+
+/** Waits for the event `name` at the level info, written after offsets, whose fields the accept function accepts, and returns its fields. */
+async function recordFields(app, offsets, name, accept, reads) {
+  const line = await untilEventLine(app.configDir, offsets,
+    (text) => text.startsWith(`info plugin ${name}: `) && accept(JSON.parse(text.slice(text.indexOf("{")))),
+    30000, reading(app, reads));
+  return JSON.parse(line.slice(line.indexOf("{")));
+}
+
+// The browser surface writes its records to the event log of the application: the address of the document changes
+// (plugin.browser.navigation), the document finishes loading (plugin.browser.load) and the person commits an address in the
+// address bar (plugin.browser.address.commit).
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the browser records its navigation, load and address commit in the event log`, async (t) => {
+    const s = await open(t, app);
+    const reads = ["plugin.browser.navigation", "plugin.browser.load", "plugin.browser.address.commit"];
+    await fresh(s, { log: { call: "info", input: "info" }, reads });
+    const base = await serve(s);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    const at = (path) => `${base}/${path}`;
+    const offsets = currentEventOffsets(app.configDir);
+
+    await s.run("browser.navigate", { url: at("record-one") }, surface);
+    await loaded(s, surface, at("record-one"));
+    // Types an address in the address bar with native input and sends it with Enter.
+    const field = await s.rect("browser.address", undefined, surface);
+    await s.click(field.document.x + field.x + field.width / 2, field.document.y + field.y + field.height / 2);
+    await s.press("a", { text: at("record-two") });
+    await s.press("Enter");
+    await loaded(s, surface, at("record-two"));
+    await s.flushLog();
+
+    // The command of the check navigates to record-one from the address that the surface had before.
+    const firstNavigation = await recordFields(app, offsets, "plugin.browser.navigation",
+      (fields) => fields.to === at("record-one"), reads);
+    assert.equal(typeof firstNavigation.from, "string");
+    assert.equal(firstNavigation.to, at("record-one"));
+
+    const firstLoad = await recordFields(app, offsets, "plugin.browser.load",
+      (fields) => fields.url === at("record-one"), reads);
+    assert.equal(firstLoad.ok, true);
+    assert.equal(typeof firstLoad.micros, "number");
+    assert.ok(firstLoad.micros >= 0, `load micros must not be negative: ${firstLoad.micros}`);
+
+    // The address bar sends the text that the person typed, and the document then moves from record-one to record-two.
+    const commit = await recordFields(app, offsets, "plugin.browser.address.commit",
+      (fields) => fields.value === at("record-two"), reads);
+    assert.equal(commit.url, at("record-two"));
+
+    const secondNavigation = await recordFields(app, offsets, "plugin.browser.navigation",
+      (fields) => fields.to === at("record-two"), reads);
+    assert.equal(secondNavigation.from, at("record-one"));
+
+    const secondLoad = await recordFields(app, offsets, "plugin.browser.load",
+      (fields) => fields.url === at("record-two"), reads);
+    assert.equal(secondLoad.ok, true);
+    assert.equal(typeof secondLoad.micros, "number");
+    assert.ok(secondLoad.micros >= 0, `load micros must not be negative: ${secondLoad.micros}`);
   });
 }
