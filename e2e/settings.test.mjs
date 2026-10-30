@@ -291,7 +291,7 @@ for (const app of Object.values(APPS)) {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-sets-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     mkdirSync(join(root, ".soksak"), { recursive: true });
-    writeFileSync(join(root, ".soksak/settings.json"), JSON.stringify({ sets: broken }));
+    writeFileSync(join(root, ".soksak/settings.json"), JSON.stringify({ format: 1, sets: broken }));
     // The invalid set that this check saved is also reported as a page error every time the settings of that project are reloaded.
     s.expectError(/settings: set .* names unknown section files\.gone/);
     await s.run("core.settings.set", { patch: { projectOpening: "tabs" }, scope: "common" });

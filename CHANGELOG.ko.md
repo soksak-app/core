@@ -6,6 +6,7 @@
 
 - F292-66: `native/darwin`의 ZXing source 추출은 release file마다 한 번만 실행된다. 풀린 파일에는 추출 시각이 기록되고(`tar -m`), source는 임시 folder에 풀린 뒤 제자리로 옮겨지므로 동시에 실행되는 make가 archive를 다시 풀지 않고 부분적으로 풀린 tree를 보지 않는다. 검증: 변경 전 Makefile에서 `scripts/test/native-offline.test.mjs`의 test `the ZXing extraction target is not run again after a completed extraction`이 실패했고, 변경 후 통과한다.
 - F292-64: test runner는 시험이 한도를 넘으면 그 시험이 `stackSignal`로 선언한 신호를 보내고, 프로세스가 exit할 때 또는 10 s 뒤에 그 프로세스 그룹을 끝낸다. `make go-repeat`과 `make host-contract-check`의 Go 시험은 SIGQUIT을 선언하므로, 한도를 넘은 Go 시험은 `=== RUN`만이 아니라 goroutine의 stack을 출력한다. Wails host의 `TestAStopLeavesTheCloseOfAReplacementToTheReplacement`는 stop이 시작하기 전에 붙잡힌 service의 write queue를 채우고 owner에 오는 모든 메시지를 받는다. 읽히지 않는 8개 메시지의 owner channel이 host의 reader를 막아 replacement가 shutdown 응답을 받지 못했고, stop은 한도 120 s까지 그 owner mutex를 기다렸기 때문이다. 검증: 새 runner, discovery, go-repeat 시험은 바꾸지 않은 runner에서 실패했고 변경 뒤 통과한다. 결정적 Go 시험은 읽히지 않는 owner로 한도까지 실행되었고, tag `diagnostics`로 30회 중 30회, 함께 시작한 두 copy에서도 통과한다.
+- F296-5: 잘못 저장된 set의 window check는 project `settings.json`을 `format: 1`과 함께 쓴다. 그래서 열기는 format이 아니라 check가 시험하는 unknown section으로 거부된다.
 - F292-69: bundle preparation과 window check는 전체 process table을 상한 없이 읽는다. 그래서 명령이 긴 다른 프로세스가 더 이상 `ENOBUFS`로 그것들을 실패시키지 않는다.
 - F292-68: test runner는 process group의 leftover를 구성원만 읽어 밝히고, 목록이 실패해도 group을 끝낸다. 그래서 큰 process table이 정지된 group과 끝나지 않는 run을 남기지 않는다.
 - F292-67: `node scripts/node-tests.mjs --changed`는 `--only`와 `--exclude`가 바뀐 범위의 test file을 하나도 남기지 않으면 `no test file contains ""`로 실패하지 않고 `SKIP` 줄과 함께 통과한다.
