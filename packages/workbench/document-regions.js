@@ -115,7 +115,12 @@ export function createDocumentRegions() {
      * Resolves to whether the stored session that the last restore of the tab read holds a session history. A view attaches
      * its regions after its mount ends, so the end of the restore reads the stored session and not the attaches.
      */
-    restoredHistory: (tab) => stored.get(tab) ?? Promise.resolve(false),
+    restoredHistory: (tab) => {
+      const history = stored.get(tab);
+      // A restore reads the stored session of its tab first (restore), so a tab without a read has no restore to end.
+      if (history === undefined) return Promise.reject(new Error(`tab ${tab} has no read of its stored session`));
+      return history;
+    },
     /**
      * Attaches the region name of the tab of plugin through attach(request) with the interactionState that it restores
      * once. A refused interactionState is reported to the refusal listeners and the region attaches again without it, because a

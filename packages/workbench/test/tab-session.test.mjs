@@ -96,6 +96,7 @@ test("a restore states whether its stored session holds a session history before
   assert.equal(await regions.restoredHistory("tab-a"), true, "the restore of a stored session history");
   regions.restore("tab-b");
   assert.equal(await regions.restoredHistory("tab-b"), false, "the restore of a tab without a stored session");
+  await assert.rejects(regions.restoredHistory("tab-c"), { message: "tab tab-c has no read of its stored session" });
 });
 
 test("a session that the store refuses to read is logged and the region attaches without it", async () => {
