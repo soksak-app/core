@@ -77,15 +77,25 @@ test("a session stored before a restart is passed to the first attach after it a
   assert.deepEqual(await second.regions.attachRequest("tab-a", "side"), { document: "side" });
   assert.deepEqual(await second.regions.attachRequest("tab-b", "page"), { document: "page" }, "a tab without a file");
   assert.deepEqual(await second.regions.attach("tab-a", "fixture", "page", async () => null), { history: false });
-  assert.equal(second.regions.restoredHistory("tab-a"), false);
   // An unload stores the session; the restore reads it for the attach of the restored surface.
   answers.documentInteractionState = async () => "BBBB";
   await second.sessions.capture("tab-a");
   second.regions.released("tab-a");
   second.regions.restore("tab-a");
   assert.deepEqual(await second.regions.attach("tab-a", "fixture", "page", async () => null), { history: true });
-  assert.equal(second.regions.restoredHistory("tab-a"), true);
+  assert.equal(await second.regions.restoredHistory("tab-a"), true);
   assert.equal(files.tabStatePuts, 0, "a session write leaves tab-state.json unchanged");
+});
+
+test("a restore states whether its stored session holds a session history before a region of the tab attaches", async () => {
+  const files = fakeFiles();
+  files.sessions.set("tab-a", { format: 1, regions: { page: { session: "AAAA" } } });
+  const { regions } = start(files);
+  // A view attaches its regions after its mount ends, so the end of the restore reads the stored session, not the attaches.
+  regions.restore("tab-a");
+  assert.equal(await regions.restoredHistory("tab-a"), true, "the restore of a stored session history");
+  regions.restore("tab-b");
+  assert.equal(await regions.restoredHistory("tab-b"), false, "the restore of a tab without a stored session");
 });
 
 test("a session that the store refuses to read is logged and the region attaches without it", async () => {

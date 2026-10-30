@@ -13,8 +13,8 @@ export function createDocumentRegions() {
   const pending = new Map();
   // The tabs whose stored session is read: a tab outside the set reads it at its next attach.
   const seeded = new Set();
-  // The tabs of which a region restored a session history since the last restore.
-  const restoredHistory = new Set();
+  // tab id -> the promise of whether the stored session that the last read of the tab gave holds a session history.
+  const stored = new Map();
   // The reader of the stored sessions, given once the tab sessions are open (useSessions).
   let resolveSessions;
   const sessions = new Promise((resolve) => { resolveSessions = resolve; });
@@ -30,14 +30,15 @@ export function createDocumentRegions() {
   // Reads the stored session of tab for its next attaches; a failed read is logged and the regions attach without it.
   function seed(tab) {
     seeded.add(tab);
-    restoredHistory.delete(tab);
-    pending.set(tab, sessions
+    const states = sessions
       .then((read) => (read ? read(tab) : undefined))
       .then((states) => ({ ...states }))
       .catch((error) => {
         report(`memory saver: tab ${tab}: session read failed: ${error.message}`);
         return {};
-      }));
+      });
+    stored.set(tab, states.then((value) => Object.keys(value).length > 0));
+    pending.set(tab, states);
   }
 
   return {
@@ -110,8 +111,11 @@ export function createDocumentRegions() {
     },
     /** The tabs that have attached regions. */
     tabs: () => [...attachedNames].filter(([, names]) => names.size).map(([tab]) => tab),
-    /** Whether a region of the tab restored a session history since its last restore. */
-    restoredHistory: (tab) => restoredHistory.has(tab),
+    /**
+     * Resolves to whether the stored session that the last restore of the tab read holds a session history. A view attaches
+     * its regions after its mount ends, so the end of the restore reads the stored session and not the attaches.
+     */
+    restoredHistory: (tab) => stored.get(tab) ?? Promise.resolve(false),
     /**
      * Attaches the region name of the tab of plugin through attach(request) with the interactionState that it restores
      * once. A refused interactionState is reported to the refusal listeners and the region attaches again without it, because a
@@ -130,7 +134,6 @@ export function createDocumentRegions() {
         await attach({ document: name });
       }
       this.attached(tab, name);
-      if (history) restoredHistory.add(tab);
       return { history };
     },
     /** Adds a listener (tab, plugin, name, error) of a refused interactionState; returns its removal. */

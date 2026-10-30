@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-31: `page.tab.restored` states in `history` whether the stored session that the restore read holds a session history; the page took it from the regions that restored a history by the end of the mount, which a view attaches only after its mount ends, so a view tab reported `false`. Validation: the unit test in `packages/workbench/test/tab-session.test.mjs` read `false` before the change and passes after it.
 - F292-30: The browser DOM and network window check reads `browser.elements` as a tree of element labels nested by depth and `browser.requests` as a list of `<type> <address>` labels, the declared UI form of both statuses; it read the earlier `nodes` and `entries` fields.
 - F292-29: A view mount that declares its composition notifies the mount listeners with no error, so the memory saver ends the restore of a shown unloaded view tab; the tab stayed `restoring`. Validation: the unit test in `packages/workbench/test/surface-view.test.mjs` read no end of the mount before the change and passes after it.
 - F292-28: The memory saver window check counts the rows of `diagnostics.objects` with a document name as document regions, apart from the view of the surface, which both hosts list as the document `""`, and the endpoint specification states that `host.documents` and `documents` include that view. Validation: the check counted two regions of a tab before the change and passes its unload step on both hosts after it.

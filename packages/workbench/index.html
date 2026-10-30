@@ -240,7 +240,10 @@ onMemoryPressure((report) => memorySaver.pressure(report));
 onSurfaceMounted((tab, error) => {
   if (!memoryObserved || memorySaver.state(tab) !== "restoring") return;
   if (error) memorySaver.restoreFailed(tab, error.message);
-  else memorySaver.restored(tab, documentRegions.restoredHistory(tab));
+  else documentRegions.restoredHistory(tab).then((history) => {
+    // A failed region or another unload may end the restore while the stored session is read.
+    if (memorySaver.state(tab) === "restoring") memorySaver.restored(tab, history);
+  });
 });
 documentRegions.onRefused((tab, plugin, name, error) => memorySaver.historyRefused(tab, plugin, `document region ${name}: ${error.message}`));
 // A changed history of a document region is a navigation commit, after which the tab session is written.
