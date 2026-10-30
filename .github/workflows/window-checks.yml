@@ -2,7 +2,8 @@ name: window-checks
 # build-machine: skip smoke reason=the job runs the window checks on a hosted runner with a virtual display (docs/operations/examples.md#continuous-integration)
 # Runs the window checks of both applications and the audit of their logs on a hosted runner. Its virtual machine has no
 # display, so the job adds a virtual display; that display presents no frames, so SOKSAK_CHECK_DISPLAY=absent skips the
-# checks that record the screen, and the native presentation tests do not run here. The local window checks run both.
+# checks that record the screen, and the native presentation tests do not run here. No person answers the system
+# prompts here, so SOKSAK_CHECK_PERSON=absent skips the checks that need a system authorization. The local window checks run all.
 
 # release.yml calls this workflow when a push releases a version.
 on:
@@ -21,6 +22,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
       SOKSAK_CHECK_DISPLAY: absent
+      SOKSAK_CHECK_PERSON: absent
     steps:
       # The harness reads the configuration folders and the certificate authority of the registry from this folder.
       - name: Place the check configurations

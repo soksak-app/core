@@ -15,7 +15,7 @@ const MENU_TITLES = {
 const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language] ?? MENU_TITLES.en;
 
 
-import { APPS, drag, failure, open, RECORDING, within } from "@soksak/window-check/app.mjs";
+import { APPS, drag, failure, open, PERSON, RECORDING, within } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { fresh, reading } from "./fixture.mjs";
@@ -619,7 +619,7 @@ for (const app of Object.values(APPS)) {
       "the notice stayed after the tab came into view");
   });
 
-  test(`${app.name}: an OSC 9 notification from a terminal out of view follows the system policy and then the tab policy`, async (t) => {
+  test(`${app.name}: an OSC 9 notification from a terminal out of view follows the system policy and then the tab policy`, { ...PERSON }, async (t) => {
       const s = await open(t, app);
       await fresh(s);
       s.cleanup(() => closeTerminalTabs(s));

@@ -54,6 +54,7 @@ test('the window-check workflow runs on a hosted runner with a virtual display a
   const text = read('.github/workflows/window-checks.yml');
   assert.deepEqual(runnerLabels(text), [['macos-15']]);
   assert.match(text, /^\s+SOKSAK_CHECK_DISPLAY: absent$/m, 'the job does not declare that its display presents no frames');
+  assert.match(text, /^\s+SOKSAK_CHECK_PERSON: absent$/m, 'the job does not declare that no person answers its system prompts');
   const list = steps(text);
   const at = (name) => list.findIndex((step) => step.name === name);
   assert.ok(at('Start the virtual display') >= 0 && at('Start the virtual display') < at('Start both applications'),

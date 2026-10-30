@@ -361,6 +361,31 @@ export function recordingOptions(env) {
 /** The recording options of this run. */
 export const RECORDING = Object.freeze(recordingOptions(process.env));
 
+/** The reason of a check that needs a system authorization, which a run without a person skips. */
+const NO_PERSON = "the check needs a system authorization that a person answers; the local window checks run it";
+
+/**
+ * Whether a person answers the system prompts of this run: SOKSAK_CHECK_PERSON is unset on a computer where a person is
+ * present, and `absent` on a runner where no person answers (docs/operations/examples.md#continuous-integration). Another
+ * value is an error.
+ */
+export function personAnswers(env) {
+  if (env.SOKSAK_CHECK_PERSON === undefined) return true;
+  if (env.SOKSAK_CHECK_PERSON === "absent") return false;
+  throw new Error(`SOKSAK_CHECK_PERSON is ${JSON.stringify(env.SOKSAK_CHECK_PERSON)}; it is unset or absent`);
+}
+
+/**
+ * The node:test options of a check that needs a system authorization a person answers: a run without a person skips it
+ * with its reason before it starts. A check spreads them into its options, `test(name, { ...PERSON, timeout }, fn)`.
+ */
+export function personOptions(env) {
+  return personAnswers(env) ? {} : { skip: NO_PERSON };
+}
+
+/** The person options of this run. */
+export const PERSON = Object.freeze(personOptions(process.env));
+
 /** The connection to one application. A request targets one window. */
 export class Session {
   constructor(app, client) {

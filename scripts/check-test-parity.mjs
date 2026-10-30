@@ -8157,6 +8157,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F292-26-3",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export const PERSON" },
+      { file: ".github/workflows/window-checks.yml", symbol: "SOKSAK_CHECK_PERSON: absent" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/display.test.mjs", id: "a check that needs a system authorization answered by a person is skipped when no person answers" },
+      { file: "packages/window-check/test/display.test.mjs", id: "the person options of this run are frozen and spread into a check's options" },
+      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow runs on a hosted runner with a virtual display and skips the checks that record the screen" },
+    ],
+    expected: "A window check that needs a system authorization answered by a person declares PERSON and is skipped before it starts in a run where no person answers; the window-check workflow declares that no person answers.",
+    levels: ["unit"],
+  },
+  {
     id: "F290",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export const RECORDING" },

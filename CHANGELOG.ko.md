@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-26-3: 사람이 답해야 하는 system 권한을 필요로 하는 창 검사는 `@soksak/window-check`의 `PERSON`을 선언하며, `SOKSAK_CHECK_PERSON=absent`이면 시작 전에 건너뛴다. window-checks workflow가 이를 설정한다. `e2e/terminal.test.mjs`의 OSC 9 system 정책 검사가 이를 선언한다.
 - F292-26-1-1: `diagnostics.fixture`는 기다리는 각 단계를 event `page.fixture.step`(lifecycle, info)으로 기록한다. `start` 기록과 `end` 기록을 쓰며, 끝 기록에는 경과 밀리초와 error 문구 또는 `null`이 있다. page gate, Go writer, Rust writer는 진단 test mark와 같이 모든 정책에서 이 event를 통과시키며, docs/spec/logging.md와 docs/spec/events.json이 이를 선언한다. 검증: `packages/plugin-api/test/log-batch.test.mjs`, `packages/workbench/test/diagnostic-fixture.test.mjs`, `packages/sok/wailsv3/tests/log_policy_test.go`, `packages/sok/tauriv2/tests/log_policy_test.rs`의 소유 Red/Green 시험.
 - F292-9-1: Wails host의 darwin view join은 presentation callback과 abandon이 모두 UI thread에서 실행되므로 end flag에 lock이 필요 없다고 적는다.
 - F292-9-2: Tauri host의 presentation 요청은 view join을 `PresentationWait::joinable`로 고르며, 이는 보이지 않는 배치를 제외한다. 보이지 않는 배치의 presentation wait를 present 시점에 끝내지 않는다. 그 view의 wait는 Wails host와 같이 보이지 않음을 적용하는 sync에서 끝난다. 검증: `packages/host/tauriv2/src/presentation_wait_test.rs`의 `presentation_wait::tests::an_invisible_placement_is_not_joinable_and_leaves_its_wait_open`와 `packages/host/wailsv3/src/presentation_wait_test.go`의 `TestAnInvisiblePlacementAtPresentEndsNoWaitUntilItsSync`.

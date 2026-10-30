@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { recordingOptions, Session } from "../app.mjs";
+import { PERSON, personAnswers, personOptions, recordingOptions, Session } from "../app.mjs";
 
 // A session whose client records the requests it receives.
 function session(t) {
@@ -42,4 +42,20 @@ test("a run with a display sends a recording", { timeout: 1000 }, async (t) => {
   delete process.env.SOKSAK_CHECK_DISPLAY;
   await checked.request("diagnostics.capture.start", {});
   assert.deepEqual(sent, ["diagnostics.capture.start"]);
+});
+
+test("a check that needs a system authorization answered by a person is skipped when no person answers", { timeout: 1000 }, () => {
+  assert.equal(personAnswers({ SOKSAK_CHECK_PERSON: "absent" }), false);
+  assert.equal(personAnswers({}), true);
+  assert.deepEqual(personOptions({ SOKSAK_CHECK_PERSON: "absent" }), {
+    skip: "the check needs a system authorization that a person answers; the local window checks run it",
+  });
+  assert.deepEqual(personOptions({}), {});
+  assert.throws(() => personOptions({ SOKSAK_CHECK_PERSON: "yes" }), /SOKSAK_CHECK_PERSON is "yes"; it is unset or absent/);
+  assert.throws(() => personAnswers({ SOKSAK_CHECK_PERSON: "" }), /SOKSAK_CHECK_PERSON is ""; it is unset or absent/);
+});
+
+test("the person options of this run are frozen and spread into a check's options", { timeout: 1000 }, () => {
+  assert.equal(Object.isFrozen(PERSON), true);
+  assert.deepEqual({ ...PERSON, timeout: 5 }, { timeout: 5, ...personOptions(process.env) });
 });
