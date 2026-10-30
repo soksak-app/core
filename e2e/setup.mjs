@@ -2,7 +2,7 @@
 //
 // The application executable to check is a build output of this repository. cargo decides that folder (it follows CARGO_TARGET_DIR), so
 // it is found in target_directory of `cargo metadata` and declared as SOKSAK_BINARY_WAILSV3 and SOKSAK_BINARY_TAURIV2. A path that the run has already
-// declared is kept. After the declaration, it runs the start of the harness (@soksak/window-check/session.mjs).
+// declared is kept.
 import { spawnSync } from "node:child_process";
 import { captureTextCommand, debugBinaries } from "./platform/platform.js";
 
@@ -18,17 +18,16 @@ export function targetDirectory(run = (command, args) => spawnSync(command, args
   return directory;
 }
 
-/** The limit of the core window-check setup: the declaration of the binaries and the start of the harness, each of which has its own limit. */
+/** The limit of the core window-check setup: the declaration of the binaries. */
 export const E2E_SETUP_LIMIT_MS = 300_000;
 
 export async function globalSetup() {
-  const { globalSetup: harness, withSetupLimit } = await import("@soksak/window-check/session.mjs");
+  const { withSetupLimit } = await import("@soksak/window-check/session.mjs");
   await withSetupLimit("e2e setup", E2E_SETUP_LIMIT_MS, async () => {
     const declared = debugBinaries(targetDirectory());
     if (!process.env.SOKSAK_CAPTURE_TEXT) {
       process.env.SOKSAK_CAPTURE_TEXT = captureTextCommand();
     }
     for (const [variable, path] of Object.entries(declared)) process.env[variable] ??= path;
-    await harness();
   });
 }

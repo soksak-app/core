@@ -11,7 +11,6 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditRunWithCatalog } from './audit-run.mjs';
 import { MAX_TEST_TIMEOUT_MS, runTests } from './test-runner.mjs';
-import { sessionBaselineEnvironment } from '../packages/window-check/frontmost.mjs';
 
 /** The seconds since the last keyboard or pointer input of the person, or null when the system does not report it. */
 export function idleSeconds() {
@@ -235,14 +234,7 @@ async function main(argv) {
   const run = newRun(ROOT);
   write(`RUN  ${tests.length} test files with ${concurrency} at once, each test limited to ${limitMs / 1000}s and no limit for a file; run ${run.id} keeps its output and manifest in ${run.folder}`);
   const beforeEach = values['when-idle'] === undefined ? undefined : whenIdle(count('when-idle'), { write });
-  const windowCheckSession = scriptName.startsWith('verify') && tests.some((item) => item.name.startsWith('e2e/'))
-    ? sessionBaselineEnvironment()
-    : null;
-  const { results } = await runTests({
-    tests: tests.map((item) => ({ ...item,
-      ...(windowCheckSession === null ? {} : { env: { ...item.env, ...windowCheckSession } }) })),
-    concurrency, write, beforeEach, run,
-  });
+  const { results } = await runTests({ tests, concurrency, write, beforeEach, run });
   const passed = [...results.values()].every((result) => result.status === 'pass');
   // The logs are audited also when a test failed, because a failed run is classified by its logs.
   const audited = auditAfterRun(scriptName, run, write);

@@ -1592,30 +1592,6 @@ const FEATURE_LINKS = [
     ]
   },
   {
-    id: "F239-47-24",
-    implementation: [
-      {
-        file: "packages/window-check/frontmost.mjs",
-        symbol: "export function parseSessionBaseline("
-      }
-    ],
-    tests: [
-      {
-        file: "packages/window-check/test/frontmost.test.mjs",
-        id: "a propagated baseline requires the same live process identity and excludes tested hosts"
-      },
-      {
-        file: "e2e/activation/ime.test.mjs",
-        id: "eight Korean vowels and one Backspace retain an exact input trace"
-      }
-    ],
-    expected: "Both hosts share the same validated baseline identity and restore it after their checks.",
-    levels: [
-      "unit",
-      "application"
-    ]
-  },
-  {
     id: "F239-47-6",
     implementation: [
       {
@@ -1930,18 +1906,6 @@ const FEATURE_LINKS = [
     ],
     expected: "Detach request identity does not restart with the application and reload reaches recorded divider-drag geometry acceptance.",
     levels: ["unit", "application"],
-  },
-  {
-    id: "F239-182",
-    implementation: [
-      { file: "packages/window-check/frontmost.mjs", symbol: "frontmost after refusal" },
-    ],
-    tests: [
-      { file: "packages/window-check/test/frontmost.test.mjs", id: "a refused baseline activation records both frontmost observations (${after})" },
-      { file: "packages/window-check/test/frontmost.test.mjs", id: "a failed observation after activation refusal preserves both errors" },
-    ],
-    expected: "Baseline activation refusal preserves both process observations and the original errors without becoming a passing check.",
-    levels: ["unit"],
   },
   {
     id: "F239-266-1",
@@ -6857,18 +6821,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F55",
-    implementation: [
-      { file: "packages/window-check/frontmost.mjs", symbol: "export function sessionBaseline" },
-      { file: "packages/window-check/session.mjs", symbol: "export async function globalSetup" },
-    ],
-    tests: [
-      { file: "packages/window-check/test/frontmost.test.mjs", id: "a session whose frontmost application before the checks is a tested host is refused" },
-    ],
-    expected: "A window-check run whose frontmost application before the checks is a tested host fails once before its first check.",
-    levels: ["unit"],
-  },
-  {
     id: "F62",
     implementation: [
       { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", symbol: "func serveHarnessConnections" },
@@ -7824,10 +7776,19 @@ const FEATURE_LINKS = [
     implementation: [{ file: "e2e/run.mjs", symbol: "export function runE2E(" }],
     tests: [
       { file: "e2e/test/run.test.mjs", id: "runE2E rejects missing or partial metadata before injected operations" },
-      { file: "e2e/test/run.test.mjs", id: "run requires both run metadata values before baseline probe or child start" },
+      { file: "e2e/test/run.test.mjs", id: "run requires both run metadata values before child start" },
       { file: "e2e/test/run.test.mjs", id: "run forwards valid run metadata unchanged" },
     ],
-    expected: "The E2E runner requires both nonempty run metadata values before probing the baseline or starting a child, and forwards a valid pair unchanged.",
+    expected: "The E2E runner requires both nonempty run metadata values before starting a child, and forwards a valid pair unchanged.",
+    levels: ["unit"],
+  },
+  {
+    id: "F292-39",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "export async function open(t, app)" }],
+    tests: [
+      { file: "packages/window-check/test/session-frontmost.test.mjs", id: "a frontmost change to another application during a check does not reject the check result" },
+    ],
+    expected: "A window check neither reads nor changes the frontmost application, so a frontmost change during a check does not reject its result.",
     levels: ["unit"],
   },
   {
@@ -10093,7 +10054,10 @@ const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F
 // tests and symbols are removed with it.
 // F125 and F239-269 wrote the registry manifest check of the core release, which F276 removes: the registry checks the
 // plugin versions of each core version that it lists.
-const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116", "F125", "F239-269"]);
+// F55, F239-47-24 and F239-182 wrote the frontmost baseline of a window-check session (the refusal of a tested host as the
+// baseline, the shared baseline identity and the report of a refused baseline activation), which F292-39 removes:
+// frontmost state is not a criterion of a check result.
+const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

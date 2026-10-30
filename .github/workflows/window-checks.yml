@@ -130,10 +130,6 @@ jobs:
               waited=$((waited + 1))
             done
           done
-      # The checks measure applications that are not frontmost, and the harness restores the application that was frontmost
-      # before the run, so Finder is the baseline.
-      - name: Make Finder frontmost
-        run: osascript -e 'tell application "Finder" to activate'
       - name: Window checks
         id: checks
         working-directory: core

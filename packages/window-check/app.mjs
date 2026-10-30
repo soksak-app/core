@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
-import { activateApp, coveringWindows, frontmostApp, restoreFrontmost, sessionBaselineFromEnvironment } from "./frontmost.mjs";
+import { activateApp, coveringWindows } from "./frontmost.mjs";
 import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
@@ -97,12 +97,6 @@ function running(pid) {
 
 let locked = false;
 const sessionTails = new Map();
-/**
- * The process numbers of the hosts that the checks of this process opened. A check fails when one of them stays active
- * after the check.
- */
-const testedHosts = new Set();
-
 /** Rejects at once a duplicate session of a Node test that operates the windows of the same application. */
 export async function acquireWindowCheckSlot(appName) {
   if (sessionTails.has(appName)) {
@@ -185,36 +179,10 @@ export async function open(t, app) {
         "after make e2e-registry-tls, and run them again.",
     );
   }
-  let baseline;
-  try {
-    baseline = sessionBaselineFromEnvironment(process.env, {
-      hosts: [{ name: app.name, pid: client.endpoint.pid }],
-    });
-  } catch (error) {
-    client.close();
-    releaseSlot();
-    throw error;
-  }
   const session = new Session(app, client);
-  // Check-specific cleanups and released presses run before pasteboard and frontmost-baseline restoration. Input-source
-  // restoration is inserted at the start of this list and runs after the baseline restoration.
+  // Check-specific cleanups and released presses run before the pasteboard restoration. Input-source restoration is
+  // inserted at the start of this list and runs after the pasteboard restoration.
   const pasteboard = readPasteboard();
-  // A full-screen transition or a new project window activates the application. Cleanup restores the single session
-  // baseline before another check runs; the synthetic drag requires an inactive application.
-  testedHosts.add(client.endpoint.pid);
-  const previous = frontmostApp();
-  if (baseline.pid !== client.endpoint.pid) {
-    session.cleanup(async () => {
-      const { before, after } = await restoreFrontmost({
-        name: app.name,
-        baseline: baseline.pid,
-        host: session.client.endpoint.pid,
-        hosts: [...testedHosts],
-        inactive: () => session.until("host.window", (w) => w.active === false, "the application stayed active after the check"),
-      });
-      t.diagnostic(`frontmost before the check ${previous}, after the check ${before}, after restoring ${after}`);
-    });
-  }
   session.cleanup(() => {
     const written = writePasteboard(pasteboard.items);
     const failure = restoreFailure(pasteboard.items, written, readPasteboard());
@@ -433,7 +401,6 @@ export class Session {
     if (this.client.endpoint.pid !== endpoint.pid) {
       throw new Error(`${this.app.name}: the relaunch connected to process ${this.client.endpoint.pid}, not ${endpoint.pid}`);
     }
-    testedHosts.add(endpoint.pid);
     this.step(`relaunched as process ${endpoint.pid}`);
     // The new process writes endpoint.json before its page loads, and the page answers the status and command requests of
     // the check and of its cleanups, so the relaunch ends when every window reports a ready page.

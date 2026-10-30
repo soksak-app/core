@@ -52,7 +52,7 @@ After core release files exist, the registry owner publishes one index containin
 
 ## Bounded execution
 
-The E2E runner requires nonempty `SOKSAK_RUN_ID` and `SOKSAK_RUN_FOLDER` values together before it probes the frontmost application or starts a test child. Missing or partial metadata fails at the runner boundary. The runner passes the supplied values to the child unchanged; it does not synthesize an identifier or folder. This keeps every window-check child attributable to its run and audit output.
+The E2E runner requires nonempty `SOKSAK_RUN_ID` and `SOKSAK_RUN_FOLDER` values together before it starts a test child. Missing or partial metadata fails at the runner boundary. The runner passes the supplied values to the child unchanged; it does not synthesize an identifier or folder. This keeps every window-check child attributable to its run and audit output.
 
 Each independently executed case has its own timeout: 10 seconds for pure unit behavior, 30 seconds for native-process behavior, and 60 seconds for application behavior by default. A longer case must declare its limit and concrete reason. Build time is reported separately and is not a test result. A whole-suite timeout does not replace per-case limits.
 
@@ -62,7 +62,7 @@ The command supervisor takes an explicit identifier, executable/arguments, worki
 
 ## Application acceptance
 
-A multi-host window-check session captures one frontmost application identity before starting its test workers. The session runner passes the same validated `{pid, name, bundle}` context to global setup and every test worker through `SOKSAK_WINDOW_CHECK_BASELINE`; a worker or host invocation does not capture a replacement baseline. Global setup rejects a missing or malformed context, a context whose process is no longer the same application, and a baseline PID that belongs to a tested host. Separate host invocations in one session receive and validate the same context. After every check, the harness restores this baseline when the checked host is frontmost. It reports another tested host that remains frontmost. If an unrelated application is frontmost, the harness leaves it undisturbed and rejects the check result because the shared baseline was not restored.
+A window check does not capture, restore or judge the frontmost application. An application action may activate its window as specified, and another application that a person brings forward during a check is not caused by the check; activating an earlier application would take the activation away from that person. A check that needs activation state asserts it through the declared status of the action it tests.
 
 An acceptance condition without observation at its required verification level remains unresolved. Unit passes, successful command replies, and inferred behavior do not establish application acceptance.
 
@@ -75,5 +75,3 @@ Native geometry and pixel checks include complete gestures at the requested capt
 IME functional acceptance requires the complete approved input gesture, matching same-window AppKit reference documents, coherent terminal states, and recorded glyph and underline proof for every input stage. Capture cadence is recorded as a separate performance measurement. A fixed ScreenCaptureKit sample-gap target is not a functional acceptance criterion because the API does not guarantee its requested update interval. Truncated recordings, missing frames, undecoded identities, missing required stage proof, and incorrect input remain failures.
 
 The older terminal-focus activation consumer verifies the click, exact native input and AppKit documents, and complete callback-to-frame correspondence. It retains raw callback timing and cadence exceedances as observations. This consumer does not measure glyph or underline pixels and does not replace the full IME visual-proof consumer.
-
-A refused baseline activation remains a failed check even if a later observation finds the baseline frontmost. The failure records the frontmost process before the request, the observed process after refusal, and the original activation error. If the post-refusal observation also fails, the failure preserves both errors.

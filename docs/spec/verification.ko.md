@@ -52,7 +52,7 @@ Core release file이 준비된 뒤 registry owner는 이미 검증한 component�
 
 ## 제한된 실행
 
-E2E 실행기는 frontmost application을 조회하거나 시험 child를 시작하기 전에 비어 있지 않은 `SOKSAK_RUN_ID`와 `SOKSAK_RUN_FOLDER`를 함께 요구한다. 누락되거나 일부만 있는 metadata는 실행기 경계에서 실패한다. 실행기는 전달받은 두 값을 child에 그대로 전달하며 id나 폴더를 만들어내지 않는다. 따라서 모든 window-check child를 해당 run과 감사 출력에 연결할 수 있다.
+E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSAK_RUN_ID`와 `SOKSAK_RUN_FOLDER`를 함께 요구한다. 누락되거나 일부만 있는 metadata는 실행기 경계에서 실패한다. 실행기는 전달받은 두 값을 child에 그대로 전달하며 id나 폴더를 만들어내지 않는다. 따라서 모든 window-check child를 해당 run과 감사 출력에 연결할 수 있다.
 
 독립 실행하는 각 케이스에 자체 타임아웃을 둔다. 기본값은 순수 단위 동작 10초, 네이티브 프로세스 동작 30초, 앱 동작 60초다. 더 오래 필요한 케이스는 제한과 구체적 사유를 선언한다. 빌드 시간은 별도로 보고하며 테스트 결과로 세지 않는다. 전체 스위트 타임아웃이 케이스별 제한을 대체하지 않는다.
 
@@ -62,7 +62,7 @@ E2E 실행기는 frontmost application을 조회하거나 시험 child를 시작
 
 ## 앱 인수 검증
 
-Multi-host window-check session은 test worker를 시작하기 전에 frontmost application identity 하나를 캡처한다. Session runner는 같은 검증된 `{pid, name, bundle}` context를 `SOKSAK_WINDOW_CHECK_BASELINE`으로 global setup과 모든 test worker에 전달한다. Worker와 host invocation은 baseline을 다시 캡처하지 않는다. Global setup은 context가 없거나 잘못됐거나, 해당 process가 더는 같은 application이 아니거나, baseline PID가 검사 대상 host인 경우 거부한다. 같은 session의 별도 host invocation은 같은 context를 받아 검증한다. 각 check 뒤 검사한 host가 frontmost이면 하네스는 이 baseline으로 복원한다. 다른 검사 대상 host가 계속 frontmost이면 보고한다. 무관한 application이 frontmost이면 하네스는 그대로 두지만, 공유 baseline이 복원되지 않았으므로 검사 결과를 거부한다.
+창 검사는 frontmost application을 저장하거나 복원하거나 판정하지 않는다. 명세된 애플리케이션 동작은 자기 창을 활성화할 수 있고, 검사 중 사람이 앞으로 가져온 다른 애플리케이션은 검사가 일으킨 것이 아니며, 이전 애플리케이션을 활성화하면 그 사람에게서 활성화를 빼앗기 때문이다. 활성화 상태가 필요한 검사는 시험하는 동작의 선언된 status로 이를 확인한다.
 
 요구된 검증 등급에서 관측하지 못한 완료 조건은 미해결로 남는다. 단위 검사 통과, 성공한 명령 응답, 동작 추정은 앱의 완료 검증을 입증하지 않는다.
 
@@ -75,5 +75,3 @@ OS 입력기는 활성 애플리케이션의 키 창만 처리하므로 입력�
 IME 기능 acceptance는 승인된 전체 입력 gesture, 동일 window의 일치하는 AppKit reference document, 일관된 terminal 상태 및 각 입력 단계의 녹화된 glyph와 underline 증거를 요구한다. Capture cadence는 별도 성능 측정으로 기록한다. ScreenCaptureKit API가 요청한 update 간격을 보장하지 않으므로 고정 sample-gap 목표는 기능 acceptance 기준이 아니다. 잘린 recording, frame 누락, decode하지 못한 identity, 필요한 단계 증거 누락 및 잘못된 입력은 계속 실패한다.
 
 기존 terminal-focus activation consumer는 click, 정확한 native input 및 AppKit document와 완전한 callback-to-frame 대응을 검증한다. Raw callback timing과 cadence 초과를 관측값으로 유지한다. 이 consumer는 glyph나 underline pixel을 측정하지 않으며 전체 IME visual-proof consumer를 대체하지 않는다.
-
-Baseline 활성화 거부는 후속 관측에서 baseline이 전면이어도 검사 실패로 유지한다. 실패 기록은 요청 전 frontmost process, 거부 후 관측한 process 및 원래 활성화 오류를 포함한다. 거부 후 관측도 실패하면 두 오류를 모두 보존한다.

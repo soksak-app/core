@@ -2,13 +2,11 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { sessionBaselineEnvironment } from "@soksak/window-check/frontmost.mjs";
 
 export function runE2E({
   args = process.argv.slice(2),
   env = process.env,
   stderr = process.stderr,
-  baselineEnvironment = sessionBaselineEnvironment,
   spawn = spawnSync,
   executable = process.execPath,
 } = {}) {
@@ -24,13 +22,7 @@ export function runE2E({
       }
     }
 
-    const childEnv = {
-      ...env,
-      ...baselineEnvironment({ env }),
-      SOKSAK_RUN_ID: env.SOKSAK_RUN_ID,
-      SOKSAK_RUN_FOLDER: env.SOKSAK_RUN_FOLDER,
-    };
-    const result = spawn(executable, args, { env: childEnv, stdio: "inherit" });
+    const result = spawn(executable, args, { env, stdio: "inherit" });
     if (result.error) throw result.error;
     return result.status ?? 1;
   } catch (error) {
