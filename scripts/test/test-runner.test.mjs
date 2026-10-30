@@ -176,6 +176,25 @@ test("a test file that leaves a timer open after its tests pass is ended at its 
   }
 });
 
+test("a group at its limit is ended and its leftovers named while other processes make the process table larger than a read buffer", { timeout: 20000 }, async (t) => {
+  // Three processes outside the group of the test carry arguments of 450 KB each, so the commands of all processes exceed the 1 MiB
+  // output buffer of execFileSync; the names of the leftovers come only from the members of the group. The cleanup ends them and the
+  // group of the test process, which a runner that stops the group and fails to read the table leaves stopped.
+  const folder = mkdtempSync(join(tmpdir(), "runner-large-"));
+  const pidFile = join(folder, "pid");
+  const large = Array.from({ length: 3 }, () => spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "x".repeat(450 * 1024)], { stdio: "ignore" }));
+  t.after(() => {
+    for (const child of large) child.kill("SIGKILL");
+    try { process.kill(-Number(readFileSync(pidFile, "utf8")), "SIGKILL"); } catch (error) { if (error.code !== "ESRCH" && error.code !== "ENOENT") throw error; }
+    rmSync(folder, { recursive: true, force: true });
+  });
+  const source = `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" }); setInterval(() => {}, 1000);`;
+  const { results } = await run([{ ...node("large", source), timeoutMs: 2000 }], { concurrency: 1 });
+  const result = results.get("large");
+  assert.equal(result.status, "timeout", result.detail);
+  assert.match(result.detail, /^exceeded 2\.000s and was killed; left running: pid \d+ .*setInterval/, result.detail);
+});
+
 test("a process that outlives its test process is ended at that exit, and the failure names it", async () => {
   // The child inherits the output pipes, so the output closes only when the child ends. The child is unreferenced, so the test process
   // exits with 0 while the child runs.

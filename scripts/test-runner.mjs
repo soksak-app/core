@@ -3,7 +3,7 @@
 // (node:test `timeout`, or the per-test default that the harness passes to node --test). An item may declare `timeoutMs` for a
 // command that has no per-test limit, such as a build; no such limit is above 10 minutes. The exit limit (`exitLimitMs`) bounds only the
 // exit of a test file process after its tests ended, when no test runs.
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
@@ -67,8 +67,15 @@ function validate(options) {
 function leftoverNames(pgid, leader) {
   const members = runningMembers(pgid).filter((member) => member.pid !== leader);
   if (members.length === 0) return [];
+  // Only the members are read: the commands of every process of the system can exceed the output buffer of execFileSync. ps exits
+  // with 1 when no listed process remains, which leaves the members unnamed.
+  const listed = spawnSync('ps', ['-o', 'pid=,command=', '-p', members.map((member) => member.pid).join(',')], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  if (listed.error) throw new Error(`ps of the members of process group ${pgid}: ${listed.error.message}`);
+  if (listed.status !== 0 && !(listed.status === 1 && listed.stdout === '')) {
+    throw new Error(`ps of the members of process group ${pgid} exited with ${listed.status}: ${listed.stderr.trim()}`);
+  }
   const commands = new Map();
-  for (const line of execFileSync('ps', ['-A', '-o', 'pid=,command='], { encoding: 'utf8' }).split('\n')) {
+  for (const line of listed.stdout.split('\n')) {
     const match = /^\s*(\d+)\s+(.*)$/.exec(line);
     if (match) commands.set(Number(match[1]), match[2]);
   }
@@ -78,10 +85,6 @@ function leftoverNames(pgid, leader) {
 /** Sends a signal to the process group pgid. The default is the group signal of the system; a test passes its own sender. */
 const sendToGroup = (pgid, signal) => process.kill(-pgid, signal);
 
-/**
- * Stops every process of the group of a test with SIGSTOP, so none of them runs while the leftovers are read. The stop comes before the
- * read, because the read takes seconds under load. A group that no longer exists has nothing to stop.
- */
 /**
  * Sends a signal to the group pgid. macOS refuses a group signal with EPERM when no member of the group can receive it, which is the case
  * when only zombies remain; such a group has nothing to end, so the refusal is not an error. A refusal while a member runs is an error,
@@ -98,6 +101,10 @@ function signalGroup(pgid, signal, send) {
   }
 }
 
+/**
+ * Stops every process of the group of a test with SIGSTOP, so none of them runs while the leftovers are read. The stop comes before the
+ * read, because the read takes seconds under load. A group that no longer exists has nothing to stop.
+ */
 export function stopGroup(pgid, send = sendToGroup) {
   signalGroup(pgid, 'SIGSTOP', send);
 }
@@ -109,12 +116,19 @@ export function killGroup(pgid, send = sendToGroup) {
 
 /**
  * Ends the group of a test in the order stop, list, kill: the stop comes first, so no process of the group runs while the process table is
- * read, which takes seconds under load. It returns the leftovers except `leader`.
+ * read, which takes seconds under load. It returns the leftovers except `leader`. The kill follows the list even when the list fails, so
+ * a failed list never leaves the group stopped; the error of the list is thrown after the kill, and a failed kill names it too.
  */
 function endGroup(pgid, leader) {
   stopGroup(pgid);
-  const leftovers = leftoverNames(pgid, leader);
-  killGroup(pgid);
+  let leftovers;
+  let listError = null;
+  try { leftovers = leftoverNames(pgid, leader); } catch (error) { listError = error; }
+  try { killGroup(pgid); } catch (error) {
+    if (listError) error.message = `${error.message}; the list before the kill failed: ${listError.message}`;
+    throw error;
+  }
+  if (listError) throw listError;
   return leftovers;
 }
 
