@@ -308,7 +308,7 @@ test("an error written between two checks is not judged by the check that starts
   const dir = configDir(t);
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
   const session = (eventStart) => ({
-    app: { name: "probe", configDir: dir }, cleanups: [], expectedErrors: [], recordings: new Set(), recordingsBefore: [],
+    app: { name: "probe", configDir: dir }, cleanups: [], expectedErrors: [], recordings: new Set(), recordingsBefore: [], stallSamples: new Set(),
     failedRecordings: new Map(), eventStart, eventBoot: 1, markTest: async () => null,
   });
   const first = sessionEventStart(dir);

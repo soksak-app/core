@@ -110,7 +110,7 @@ test("a request pending past 3 s starts the host and page samples in the same tu
   const sample = async () => (await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
     sample: (pid, file) => { started.push(pid); return file; } })).join(", ");
   const reports = [];
-  void within(new Promise(() => {}), 10_000, "wailsv3 status.get host.windows", sample, (text) => reports.push(text));
+  void within(new Promise(() => {}), 10_000, "wailsv3 status.get host.windows", sample, (text) => reports.push(text), () => {});
   t.mock.timers.tick(2999);
   assert.deepEqual(started, []);
   t.mock.timers.tick(1);
@@ -123,7 +123,7 @@ test("a request that answers before 3 s does not start a sample", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let sampled = 0;
   const answer = within(new Promise((resolve) => setTimeout(() => resolve(5), 1000)), 10_000, "probe",
-    async () => { sampled++; return ""; }, () => {});
+    async () => { sampled++; return ""; }, () => {}, () => {});
   t.mock.timers.tick(1000);
   assert.equal(await answer, 5);
   t.mock.timers.tick(10_000);

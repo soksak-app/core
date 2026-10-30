@@ -240,6 +240,8 @@ export async function finishSession(t, session, close) {
         t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
       }
     }
+    // The cleanups may start stall samples too, so the samples are awaited after them and before the error audit.
+    await settleStallSamples(t, session, failures);
     // Every error line written to the application log during the check is kept as a diagnostic, and an error that the
     // check did not declare fails the check. A reload clears the error display of a document, so the log decides. The
     // log is read after the cleanups so that it includes the errors they cause.
@@ -298,10 +300,32 @@ export async function finishSession(t, session, close) {
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
     }
   } finally {
+    // The end mark is a request that may start a stall sample, and a sample stores its dump through the connection, so
+    // every sample ends before the connection is closed.
+    await settleStallSamples(t, session, failures);
     close();
   }
   if (failures.length === 1) throw failures[0];
   if (failures.length) throw new AggregateError(failures, `${failures.length} cleanup steps failed`);
+}
+
+/**
+ * Waits for every stall sample that the session holds, including a sample that starts while it waits. A sample that
+ * recorded the host is reported as a diagnostic, and a failed sample is a failure with its reason.
+ */
+async function settleStallSamples(t, session, failures) {
+  while (session.stallSamples.size) {
+    const held = [...session.stallSamples];
+    session.stallSamples.clear();
+    for (const { line, error } of await Promise.all(held)) {
+      if (error) {
+        failures.push(error);
+        t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+      } else {
+        t.diagnostic(`stall sample: ${line}`);
+      }
+    }
+  }
 }
 
 /** The reason of a check that records the screen, which a run without a display skips. */
@@ -373,6 +397,9 @@ export class Session {
     // The synthetic presses that stay open from the delivered down until the up of the same button is delivered. They
     // are found by window and button (docs/spec/exposure.md).
     this.presses = new Map();
+    // The stall samples that requests of the session started after STALL_AFTER, each as a promise of {line} or {error}.
+    // finishSession waits for each one and reports it, so no sample process outlives the check.
+    this.stallSamples = new Set();
     // The moment the session opened. step writes the time of each step from it.
     this.started = performance.now();
   }
@@ -458,6 +485,7 @@ export class Session {
     other.expectedErrors = this.expectedErrors;
     other.testName = this.testName;
     other.presses = this.presses;
+    other.stallSamples = this.stallSamples;
     other.started = this.started;
     other.window = window;
     return other;
@@ -499,7 +527,8 @@ export class Session {
       }
       throw error;
     });
-    return within(answer, timeout, what, sample, (text) => this.step(text));
+    return within(answer, timeout, what, sample, (text) => this.step(text),
+      (started) => this.stallSamples.add(started.then((line) => ({ line }), (error) => ({ error }))));
   }
 
   get(name, surface) {
@@ -847,9 +876,10 @@ function compact(object) {
 /**
  * Fails when the promise does not answer within ms. When sample is given, it records the host threads at that moment
  * before failing and writes the path of that record into the error (F69). When recording fails, the error states the
- * reason.
+ * reason. A sample that starts at STALL_AFTER goes on after the request answers, so hold receives its promise, which
+ * resolves to the reported line or rejects with the reason of the failed sample; the session waits for it.
  */
-export function within(promise, ms, what, sample, report) {
+export function within(promise, ms, what, sample, report, hold) {
   let timer;
   const limit = new Promise((_, reject) => {
     timer = setTimeout(async () => {
@@ -867,12 +897,21 @@ export function within(promise, ms, what, sample, report) {
   let stall;
   if (sample && ms > STALL_AFTER) {
     if (typeof report !== "function") throw new Error(`within needs a report function for a sample after ${STALL_AFTER} ms`);
+    if (typeof hold !== "function") throw new Error(`within needs a hold function for a sample after ${STALL_AFTER} ms`);
     stall = setTimeout(() => {
       const pending = `${what} still pending after ${STALL_AFTER} ms`;
-      sample().then(
-        (text) => report(`${pending}; the host's threads at that moment: ${text}`),
-        (error) => report(`${pending}; sampling the host failed: ${error.message}`),
-      );
+      hold(sample().then(
+        (text) => {
+          const line = `${pending}; the host's threads at that moment: ${text}`;
+          report(line);
+          return line;
+        },
+        (error) => {
+          const line = `${pending}; sampling the host failed: ${error.message}`;
+          report(line);
+          throw new Error(line);
+        },
+      ));
     }, STALL_AFTER);
   }
   return Promise.race([promise, limit]).finally(() => {
