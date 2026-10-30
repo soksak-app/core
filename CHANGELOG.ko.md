@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-1: browser cohort 검사는 기대하는 판을 후보 registry에서 읽고, 표면을 기다리기 전에 시험 project의 layout을 준비한다.
 - F292-3: 입력 기록 검사는 모든 층에서 입력한 키를 입력 transaction의 action으로 읽는다.
 - F292-4: sidebar 선택 검사는 `projects.json`을 현재 형식 `{format, projects}`로 읽는다.
 - F292-2: geometry 검사는 표면의 마지막 device pixel 줄을 메인 페이지가 아니라 표면의 view가 가진다고 기대한다.
