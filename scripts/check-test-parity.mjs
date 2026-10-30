@@ -318,7 +318,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/tab-reports.js", symbol: "export function forgetTabsLeft(previousCards, nextCards, operation)" },
     ],
     tests: [
-      { file: "packages/workbench/test/surface-view.test.mjs", id: "a view whose origin is missing names the tab, its plugin, space, project, creation path, session history and the drop" },
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "a view whose origin is missing names the tab, its plugin, space, project, creation path, session history, the drop and the tabs of the stored layout" },
     ],
     expected: "The refusal of a missing origin names the operation that dropped it.",
     levels: ["unit"],

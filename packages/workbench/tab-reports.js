@@ -275,7 +275,8 @@ export function forgetTabsLeft(previousCards, nextCards, operation) {
       origins.delete(tab.id);
       loaded.delete(tab.id);
       refusals.delete(tab.id);
-      forgottenBy.set(tab.id, operation);
+      // The record names the tabs that the stored layout held, so a drop by a layout of another state is visible in it.
+      forgottenBy.set(tab.id, `${operation}, whose stored layout held ${kept.size === 0 ? "no tab" : `the tabs ${[...kept].join(", ")}`}`);
     }
   }
 }

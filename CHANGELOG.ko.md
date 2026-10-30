@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-22-1-1: 없는 view origin의 거부가 origin을 버린 동작이 저장한 layout의 tab을 적는다.
 - F292-14-1: 선언 UI snapshot ingress가 plugin이 선언하지 않은 status의 snapshot을 보고한다. 전에는 확인한 뒤 기록 없이 버렸다.
 - F292-11: main page가 plugin command의 view exposure 등록을 거부한다. 그 등록은 view가 `runtime.command.register`로 등록한 command의 forwarding handler를 바꿔 요청에 답이 없게 했다. unload probe는 command를 `commands.register`로만 등록한다.
 - F292-24: `@soksak/plugin-api/view`가 `createViewReporter`를 내보낸다. 이것은 오류, call timeout, lost peer를 페이지의 전역 오류 hook으로 보내고 call 수와 닫힌 표면의 보고는 console에 남기는 view bridge의 report 함수다. 모든 보고를 버리던 확장점 provider와 unload probe, RAF probe가 이것을 쓰며, reporter 사본 두 개는 지웠다.
