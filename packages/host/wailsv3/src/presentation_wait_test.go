@@ -1,6 +1,9 @@
 package host
 
-import "testing"
+import (
+	"testing"
+	"unsafe"
+)
 
 // contract: view.presentation-wait.ends
 // A view joins the presentation wait once per change: a second join of a waiting view does not join again.
@@ -77,5 +80,65 @@ func TestPresentationEndsTheWaitWithoutAnAbandonedEvent(t *testing.T) {
 	}
 	if _, err := w.end("probe-surface", "timeout"); err == nil {
 		t.Fatalf("an end with the reason timeout was accepted")
+	}
+}
+
+// deferredUIPlatform queues EnqueueUI work until the test runs the queue, as the UI queue does when the current framework event
+// callback has not ended.
+type deferredUIPlatform struct {
+	*lifecyclePlatform
+	queued []func()
+}
+
+func (p *deferredUIPlatform) EnqueueUI(run func()) error {
+	p.queued = append(p.queued, run)
+	return nil
+}
+
+func (p *deferredUIPlatform) runQueued() {
+	for len(p.queued) > 0 {
+		run := p.queued[0]
+		p.queued = p.queued[1:]
+		run()
+	}
+}
+
+// contract: view.presentation-wait.presented-before-end
+// A presentation that completes on its native callback ends the wait as presented before a later hide: the hide ends no wait, writes
+// no abandoned record and calls no native abandon, and the queued end of the presentation finds no wait.
+func TestAHideAfterAPresentedCallbackEndsNoWait(t *testing.T) {
+	isolateTraceRecords(t)
+	s, fake, native := newLifecycleSurfaces(t, &fakeClock{})
+	queue := &deferredUIPlatform{lifecyclePlatform: fake}
+	saved := system
+	system = queue
+	t.Cleanup(func() { system = saved })
+	events := recordWindowEvents(s)
+	window := unsafe.Pointer(new(int))
+	shown := []Placement{{ID: "probe-surface", Visible: true}}
+	if err := s.joinShownViews(window, 7, shown); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	if len(fake.joins) != 1 {
+		t.Fatalf("the shown view joined %d transactions, want 1", len(fake.joins))
+	}
+	fake.joins[0].presented()
+	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", false, nullOriginStart()); err != nil {
+		t.Fatalf("hide the view: %v", err)
+	}
+	queue.runQueued()
+	if got := bufferedTraces(t, "host.trace.view.presentation-abandoned"); len(got) != 0 {
+		t.Fatalf("abandoned records after a completed presentation: %v, want none", got)
+	}
+	if fake.joins[0].abandons != 0 {
+		t.Fatalf("the hide abandoned the native join of a completed presentation %d times", fake.joins[0].abandons)
+	}
+	if s.presentation.waits("probe-surface") {
+		t.Fatalf("the completed presentation left its wait open")
+	}
+	for _, event := range *events {
+		if event.name == "view-presentation-abandoned" {
+			t.Fatalf("the window received view-presentation-abandoned after a completed presentation: %+v", event)
+		}
 	}
 }

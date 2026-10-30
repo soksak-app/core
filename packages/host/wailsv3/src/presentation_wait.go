@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	"sync"
 	"unsafe"
 )
 
@@ -12,10 +13,32 @@ type presentationPlacement struct {
 	generation uint64
 }
 
+// presentationSignal records that the native presentation of one join completed. The presentation callback sets it when the view
+// presents, which can run before the UI thread processes the end, so it holds a lock.
+type presentationSignal struct {
+	mu        sync.Mutex
+	presented bool
+}
+
+// complete records the presentation of the join.
+func (s *presentationSignal) complete() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.presented = true
+}
+
+// completed reports whether the presentation of the join completed.
+func (s *presentationSignal) completed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.presented
+}
+
 // presentationJoin identifies the exact layout and view incarnation that a callback may end.
 type presentationJoin struct {
 	ticket     uint64
 	generation uint64
+	presented  *presentationSignal
 	abandon    func() error
 }
 
@@ -71,17 +94,19 @@ func (w *presentationWait) accept(ticket uint64) {
 
 // begin joins the view of surface to a ticket and generation. It reports false when the view already waits.
 func (w *presentationWait) begin(surface string, abandon func() error) bool {
-	return w.beginFor(surface, 0, 0, abandon)
+	return w.beginFor(surface, 0, 0, &presentationSignal{}, abandon)
 }
 
-func (w *presentationWait) beginFor(surface string, ticket, generation uint64, abandon func() error) bool {
+// beginFor joins the view of surface to a ticket and generation. The presented signal is the one that the presentation callback of the
+// join completes.
+func (w *presentationWait) beginFor(surface string, ticket, generation uint64, presented *presentationSignal, abandon func() error) bool {
 	if w.waiting == nil {
 		w.waiting = map[string]presentationJoin{}
 	}
 	if w.waits(surface) {
 		return false
 	}
-	w.waiting[surface] = presentationJoin{ticket: ticket, generation: generation, abandon: abandon}
+	w.waiting[surface] = presentationJoin{ticket: ticket, generation: generation, presented: presented, abandon: abandon}
 	return true
 }
 
@@ -130,10 +155,12 @@ func (w *presentationWait) endFor(surface string, ticket, generation uint64, rea
 	if waiting {
 		w.finishIfReady(join.ticket)
 	}
-	if reason == "presented" {
+	if reason == "presented" || !waiting {
 		return false, nil
 	}
-	if !waiting {
+	// The presentation callback completes the join before its end is queued to the UI thread, so an end that runs first ends the
+	// wait as presented: it writes no abandoned record and abandons no native join.
+	if join.presented.completed() {
 		return false, nil
 	}
 	tracePresentationJoin("abandoned", surface, join.generation, join.ticket, false, reason)
@@ -267,8 +294,10 @@ func (s *Surfaces) joinViewForPresentation(window unsafe.Pointer, ticket uint64,
 	}
 	surface, generation := placement.ID, channel.generation
 	tracePresentationJoin("requested", surface, generation, ticket, false, "")
+	presented := &presentationSignal{}
 	abandon, joined, err := system.JoinView(window, ticket, view, func() {
 		tracePresentationJoin("presented", surface, generation, ticket, false, "")
+		presented.complete()
 		if err := system.EnqueueUI(func() { s.endPresentationWaitFor(surface, ticket, generation, "presented") }); err != nil {
 			LogError("view channel", err)
 		}
@@ -280,7 +309,7 @@ func (s *Surfaces) joinViewForPresentation(window unsafe.Pointer, ticket uint64,
 	if !joined {
 		return generation, false, nil
 	}
-	if !s.presentation.beginFor(surface, ticket, generation, abandon) {
+	if !s.presentation.beginFor(surface, ticket, generation, presented, abandon) {
 		if err := abandon(); err != nil {
 			return generation, false, fmt.Errorf("view %s already waits and its extra native join could not be abandoned: %w", surface, err)
 		}

@@ -64,14 +64,20 @@ struct WaitKey {
     ticket: u64,
 }
 
+/// One join that waits for presentation. `abandon` ends the native join without presentation and is None while the native join
+/// call is in progress. `presented` is set when the native presentation completed, before the UI thread ends the wait.
+struct Wait {
+    abandon: Option<ViewAbandon>,
+    presented: bool,
+}
+
 #[derive(Default)]
 struct State {
-    waits: BTreeMap<WaitKey, Option<ViewAbandon>>,
+    waits: BTreeMap<WaitKey, Wait>,
     committed: BTreeMap<String, CommittedPlacement>,
 }
 
-/// The views that wait for presentation, by surface, view generation and layout ticket. Each wait holds the function that
-/// ends its native join without presentation. It is None while the native join call is in progress.
+/// The views that wait for presentation, by surface, view generation and layout ticket.
 #[derive(Default)]
 pub struct PresentationWait(Mutex<State>);
 
@@ -126,13 +132,32 @@ impl PresentationWait {
         if state.waits.contains_key(&key) {
             return false;
         }
-        state.waits.insert(key, None);
+        state.waits.insert(
+            key,
+            Wait {
+                abandon: None,
+                presented: false,
+            },
+        );
         drop(state);
         trace_presentation_join("requested", surface, generation, ticket, None, None);
         true
     }
 
-    /// Stores the native join's abandon operation unless its presentation already completed.
+    /// Records that the native presentation of the join completed. The presentation callback calls it on the thread that
+    /// presents the view, so a hide that runs before the queued end of the wait ends it as presented. A join that is no longer
+    /// waiting has nothing to record.
+    pub fn mark_presented(&self, surface: &str, generation: u64, ticket: u64) {
+        if let Some(wait) = self.lock().waits.get_mut(&WaitKey {
+            surface: surface.to_string(),
+            generation,
+            ticket,
+        }) {
+            wait.presented = true;
+        }
+    }
+
+    /// Stores the native join's abandon operation of a wait that is still open.
     pub fn attach_abandon(
         &self,
         surface: &str,
@@ -146,14 +171,14 @@ impl PresentationWait {
             generation,
             ticket,
         };
-        let Some(entry) = state.waits.get_mut(&key) else {
+        let Some(wait) = state.waits.get_mut(&key) else {
             return false;
         };
         assert!(
-            entry.is_none(),
+            wait.abandon.is_none(),
             "native join abandon operation was attached twice"
         );
-        *entry = Some(abandon);
+        wait.abandon = Some(abandon);
         true
     }
 
@@ -188,15 +213,17 @@ impl PresentationWait {
                 "presentation wait ends with {reason:?}, which is not an end"
             ));
         }
-        let abandon = match self.lock().waits.remove(&WaitKey {
+        let wait = match self.lock().waits.remove(&WaitKey {
             surface: surface.to_string(),
             generation,
             ticket,
         }) {
             None => return Ok(false),
-            Some(abandon) => abandon,
+            Some(wait) => wait,
         };
-        if reason == "presented" {
+        // A presentation that completed before this end ended the wait as presented: it writes no abandoned record and abandons
+        // no native join.
+        if reason == "presented" || wait.presented {
             return Ok(false);
         }
         trace_presentation_join("abandoned", surface, generation, ticket, None, Some(reason));
@@ -205,7 +232,7 @@ impl PresentationWait {
             "host.trace.view.presentation-abandoned",
             serde_json::json!({"surface": surface, "reason": reason}),
         );
-        if let Some(abandon) = abandon {
+        if let Some(abandon) = wait.abandon {
             abandon()
                 .map_err(|error| format!("ending the native join of view {surface}: {error}"))?;
         }
@@ -259,7 +286,7 @@ impl PresentationWait {
             state.committed.clear();
             std::mem::take(&mut state.waits)
                 .into_iter()
-                .map(|(key, abandon)| (key.ticket, key.surface, abandon))
+                .map(|(key, wait)| (key.ticket, key.surface, wait.abandon))
                 .collect::<Vec<_>>()
         };
         let mut failures = Vec::new();
@@ -296,7 +323,7 @@ impl PresentationWait {
                 state
                     .waits
                     .remove(&key)
-                    .map(|abandon| (key.ticket, key.surface, abandon))
+                    .map(|wait| (key.ticket, key.surface, wait.abandon))
             })
             .collect()
     }

@@ -222,3 +222,44 @@ fn the_abandoned_notice_names_the_surface_and_the_reason() {
         json!({"surface": SURFACE, "reason": "hidden"})
     );
 }
+
+// contract: view.presentation-wait.presented-before-end
+// A presentation that completes on its native callback ends the wait as presented before a later hide: the hide ends no wait, writes
+// no abandoned record and calls no native abandon, and the queued end of the presentation finds no wait.
+#[test]
+fn a_hide_after_a_presented_callback_ends_no_wait() {
+    let _trace = crate::performance::test_trace();
+    let wait = PresentationWait::default();
+    let abandons = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&abandons);
+    assert!(wait.begin(ABANDON_SURFACE, GENERATION, TICKET));
+    assert!(wait.attach_abandon(
+        ABANDON_SURFACE,
+        GENERATION,
+        TICKET,
+        Box::new(move || {
+            counted.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }),
+    ));
+    wait.mark_presented(ABANDON_SURFACE, GENERATION, TICKET);
+    let abandoned_before = buffered_fields("host.trace.view.presentation-abandoned")
+        .into_iter()
+        .filter(|fields| fields["surface"] == ABANDON_SURFACE)
+        .count();
+    assert_eq!(
+        wait.end(ABANDON_SURFACE, GENERATION, TICKET, "hidden"),
+        Ok(false)
+    );
+    assert!(!wait.waits(ABANDON_SURFACE, GENERATION, TICKET));
+    assert_eq!(abandons.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        wait.end(ABANDON_SURFACE, GENERATION, TICKET, "presented"),
+        Ok(false)
+    );
+    let abandoned_after = buffered_fields("host.trace.view.presentation-abandoned")
+        .into_iter()
+        .filter(|fields| fields["surface"] == ABANDON_SURFACE)
+        .count();
+    assert_eq!(abandoned_after, abandoned_before);
+}

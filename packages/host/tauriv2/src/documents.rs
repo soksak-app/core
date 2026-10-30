@@ -3331,6 +3331,14 @@ pub(crate) fn join_shown_views(
                 None,
                 None,
             );
+            // The completion is recorded here, before the queued end runs, so a hide that runs first ends no wait.
+            if let Some(data) = window_data_if_registered(&presented_window) {
+                data.documents.presentation().mark_presented(
+                    &presented_surface,
+                    generation,
+                    ticket,
+                );
+            }
             let ended = platform::current().and_then(|platform| {
                 platform.enqueue_ui(Box::new(move || {
                     end_ticket_presentation_wait(
