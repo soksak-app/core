@@ -315,6 +315,18 @@ test('a window-check job without a run folder uploads no part of the checkout', 
   }
 });
 
+test('the window-check jobs record how each application ended and keep every crash report of the applications', { timeout: 1000 }, () => {
+  for (const workflow of ['.github/workflows/window-checks.yml']) {
+    const text = read(workflow);
+    // A host that ends without a record of its own (no log.closed, no fatal record) is named by its exit status, which only the
+    // parent shell of the application receives.
+    assert.match(text, /wait "\$!"; echo "\$\? \$\(date -u [^\n]*\)" > "\$RUNNER_TEMP\/\$app\.status"/, `${workflow} does not record the exit status of each application`);
+    assert.match(text, /^\s+\$\{\{ runner\.temp \}\}\/\*\.status$/m, `${workflow} uploads no exit status`);
+    // The system writes a crash report also for a crash that the fatal record of the host did not reach.
+    assert.match(text, /find "\$reports" -maxdepth 1 -name "soksak-\$app-\*\.ips" -exec cp \{\} "\$RUNNER_TEMP\/crash-reports\/" \\;/, `${workflow} keeps the crash reports only of a host that wrote a fatal record`);
+  }
+});
+
 test('the window-check jobs wait for the applications to end and keep the crash report of an application that crashed', () => {
   for (const workflow of ['.github/workflows/window-checks.yml']) {
     const text = read(workflow);

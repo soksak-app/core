@@ -105,15 +105,20 @@ jobs:
           echo "SOKSAK_CANDIDATE_REGISTRY=file://$GITHUB_WORKSPACE/core/target/registry/index.json" >> "$GITHUB_ENV"
       # The harness does not start applications (docs/operations/examples.md#window-checks), so this step starts them. The
       # applications write endpoint.json when they serve; no event reports it to the shell, so the step waits for the file
-      # for at most 60 seconds and fails with the name of the application that did not serve.
+      # for at most 60 seconds and fails with the name of the application that did not serve. A subshell is the parent of each
+      # application and writes its exit status and the time it ended to `<app>.status`; a status above 128 is the signal number
+      # plus 128. A host that ends without a record of its own (no `log.closed`, no fatal record) is named only by this status.
       - name: Start both applications
         working-directory: core
         run: |
           for app in wailsv3 tauriv2; do
             config="$SOKSAK_CONFIG_ROOT/soksak-check-$app"
-            nohup "target/debug/soksak-$app.app/Contents/MacOS/soksak-$app" --config-dir "$config" \
-              --registry-ca "$SOKSAK_CONFIG_ROOT/soksak-check-registry-tls/ca.pem" > "$RUNNER_TEMP/$app.out" 2>&1 &
-            echo "$!" > "$RUNNER_TEMP/$app.pid"
+            (
+              nohup "target/debug/soksak-$app.app/Contents/MacOS/soksak-$app" --config-dir "$config" \
+                --registry-ca "$SOKSAK_CONFIG_ROOT/soksak-check-registry-tls/ca.pem" > "$RUNNER_TEMP/$app.out" 2>&1 &
+              echo "$!" > "$RUNNER_TEMP/$app.pid"
+              wait "$!"; echo "$? $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$RUNNER_TEMP/$app.status"
+            ) &
           done
           for app in wailsv3 tauriv2; do
             waited=0
@@ -179,6 +184,10 @@ jobs:
             done
             cp "$reports"/soksak-$app-*.ips "$RUNNER_TEMP/crash-reports/"
           done
+          # The system writes a crash report also for a crash that the fatal record of the host did not reach.
+          for app in wailsv3 tauriv2; do
+            find "$reports" -maxdepth 1 -name "soksak-$app-*.ips" -exec cp {} "$RUNNER_TEMP/crash-reports/" \;
+          done
           # A host that the system ended with SIGKILL writes no record; the memory pressure reports and the kernel records
           # of ended processes name it.
           find "$reports" -maxdepth 1 -name 'JetsamEvent-*.ips' -exec cp {} "$RUNNER_TEMP/crash-reports/" \;
@@ -201,4 +210,5 @@ jobs:
             ${{ runner.temp }}/wailsv3.out
             ${{ runner.temp }}/tauriv2.out
             ${{ runner.temp }}/crash-reports
+            ${{ runner.temp }}/*.status
           if-no-files-found: error

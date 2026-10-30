@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F283-2: The window-check jobs record the exit status of each application and keep every crash report of the applications.
 - F291: The run audit reads a log of any length; a run whose last test had no end mark and whose logs held hundreds of thousands of events ended with `Maximum call stack size exceeded`.
 - F290: Each window check that records the screen declares `RECORDING`, which skips it before it starts without a display that presents frames; an undeclared recording fails with an error that names the declaration.
 - F285-3: The structure checks read a Tauri command that is generic over the runtime.

@@ -8109,6 +8109,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F283-2",
+    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "> \"$RUNNER_TEMP/$app.status\"" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check jobs record how each application ended and keep every crash report of the applications" }],
+    expected: "The window-check jobs record the exit status of each application and keep every crash report of the applications.",
+    levels: ["unit"],
+  },
+  {
     id: "F283-1",
     implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "JetsamEvent-*.ips" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check jobs wait for the applications to end and keep the crash report of an application that crashed" }],
