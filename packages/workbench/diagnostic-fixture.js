@@ -10,7 +10,7 @@ async function step(name, emitEvent, work) {
     emitEvent("info", "page.fixture.step", { step: name, phase: "end", ms: Math.round(performance.now() - started), error: null });
     return result;
   } catch (error) {
-    emitEvent("info", "page.fixture.step", { step: name, phase: "end", ms: Math.round(performance.now() - started), error: String(error?.message ?? error) });
+    emitEvent("info", "page.fixture.step", { step: name, phase: "end", ms: Math.round(performance.now() - started), error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 }
