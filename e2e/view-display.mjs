@@ -40,9 +40,11 @@ function placementOf(row) {
 /**
  * The surfaces of `surfaces` whose committed placement changed during a drag window. `baselineRows` are the trace rows before the
  * window and `windowRows` the rows of the window, in trace order. The placement of a surface is the frame and visibility of its last
- * `placed` row; its first row in the window is compared with the placement of its last row in the baseline. A surface with no earlier
- * placed row is a change, and so is a surface with a `created` row, which starts a new root-view generation
- * (docs/spec/plugin-processes.md, rule 6). A surface without a row in the window is not a change.
+ * `placed` row; its first row in the window is compared with the placement of its last row in the baseline. A surface with a `created`
+ * row starts a new root-view generation and is a change (docs/spec/plugin-processes.md, rule 6), and so is a surface created in the
+ * baseline before its first placed row. The baseline covers the lifetime of each surface: a surface of `surfaces` with a placed row in
+ * the window and neither a created nor a placed row in the baseline is rejected, because its placement at the window start is unknown.
+ * A surface without a row in the window is not a change.
  */
 export function expectedPresentations(baselineRows, windowRows, surfaces) {
   if (!Array.isArray(baselineRows)) throw new TypeError("baseline rows must be an array");
@@ -50,18 +52,25 @@ export function expectedPresentations(baselineRows, windowRows, surfaces) {
   if (!Array.isArray(surfaces)) throw new TypeError("surfaces must be an array");
   const isSurfaceRow = (row) => row?.layer === "host" && row.event === "surface" && (row.phase === "placed" || row.phase === "created");
   const last = new Map();
+  const covered = new Set();
   for (const row of baselineRows) {
     if (!isSurfaceRow(row)) continue;
+    covered.add(row.surface);
     if (row.phase === "created") last.delete(row.surface);
     else last.set(row.surface, placementOf(row));
   }
+  const wanted = new Set(surfaces);
   const changed = new Set();
   for (const row of windowRows) {
     if (!isSurfaceRow(row)) continue;
     if (row.phase === "created") {
       changed.add(row.surface);
+      covered.add(row.surface);
       last.delete(row.surface);
       continue;
+    }
+    if (wanted.has(row.surface) && !covered.has(row.surface)) {
+      throw new Error(`baseline rows hold no created or placed row of ${row.surface}; its placement at the window start is unknown`);
     }
     const placement = placementOf(row);
     if (last.get(row.surface) !== placement) changed.add(row.surface);

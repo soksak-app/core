@@ -891,6 +891,9 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: three terminals survive repeated divider drags and project returns`, RECORDING, async (t) => {
     const s = await open(t, app);
+    // The placed rows from this point are the baseline of each drag set: the last placed row of a surface before a window is its
+    // placement at the window start. The baseline starts before the fixture, so it holds the created and placed rows of every terminal.
+    const placementRowsFrom = currentEventOffsets(s.app.configDir);
     // The trace stays on: the check judges the presentation of every surface, and its records name the frame that a
     // surface did not present (docs/spec/performance-trace.md, F161.18).
     await fresh(s, { performanceTrace: true });
@@ -916,8 +919,6 @@ for (const app of Object.values(APPS)) {
     const returnSets = 3;
     const roundTripsPerSet = 5;
     const roundTimeout = 60000;
-    // The placed rows from this point are the baseline of each drag set: the last placed row of a surface before a window is its placement at the window start.
-    const placementRowsFrom = currentEventOffsets(s.app.configDir);
     for (let set = 0; set < returnSets; set++) {
       const roundLabel = `set ${set + 1}/${returnSets}, ${roundTripsPerSet} uninterrupted round trips`;
       const started = Date.now();

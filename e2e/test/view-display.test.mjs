@@ -223,8 +223,22 @@ test("a terminal that moves once from its placement before the drag is awaited",
   assert.deepEqual(expectedPresentations(baseline, window, ["terminal-a", "terminal-b"]), ["terminal-b"]);
 });
 
-test("a terminal without a placed row before the drag is awaited", { timeout: 5000 }, () => {
-  const baseline = [placedAt("terminal-a", 0)];
+test("a terminal created before the drag without a placed row is awaited", { timeout: 5000 }, () => {
+  const baseline = [placedAt("terminal-a", 0), traceRow("surface", { phase: "created", surface: "terminal-b" })];
   const window = [placedAt("terminal-a", 0), placedAt("terminal-b", 200)];
   assert.deepEqual(expectedPresentations(baseline, window, ["terminal-a", "terminal-b"]), ["terminal-b"]);
+});
+
+test("a terminal that the baseline rows do not cover is rejected instead of awaited", { timeout: 5000 }, () => {
+  // The rows of set 0 of a Wails run: the baseline started after the last placement before the drag, and tab-pmhp35 kept its
+  // placement while the two other terminals moved.
+  const placed = (surface, x, w) => traceRow("surface", { phase: "placed", surface, x, y: 116, w, h: 286, visible: true });
+  const window = [placed("tab-l3zyob", 210, 263), placed("tab-pmhp35", 597, 373), placed("tab-pre4dr", 487, 96)];
+  assert.throws(() => expectedPresentations([], window, ["tab-l3zyob", "tab-pmhp35", "tab-pre4dr"]),
+    /baseline rows hold no created or placed row of tab-l3zyob/);
+  const baseline = [traceRow("surface", { phase: "created", surface: "tab-l3zyob" }), placed("tab-l3zyob", 210, 179),
+    traceRow("surface", { phase: "created", surface: "tab-pmhp35" }), placed("tab-pmhp35", 597, 373),
+    traceRow("surface", { phase: "created", surface: "tab-pre4dr" }), placed("tab-pre4dr", 403, 180)];
+  assert.deepEqual(expectedPresentations(baseline, window, ["tab-l3zyob", "tab-pmhp35", "tab-pre4dr"]),
+    ["tab-l3zyob", "tab-pre4dr"]);
 });

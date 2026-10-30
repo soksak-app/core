@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-19-3: `terminal.test.mjs`의 divider-drag 검사는 placement baseline을 fixture 전에 잡으므로 baseline이 모든 terminal의 created와 placed row를 담고, `e2e/view-display.mjs`의 `expectedPresentations`는 window 시작의 placement를 baseline row가 담지 않은 surface를 그 surface를 밝히는 오류로 거부한다. Drag 전 마지막 layout 뒤에 잡은 baseline에는 surface row가 없었으므로 검사는 placement가 바뀌지 않아 host가 join을 더하지 않은 terminal을 기다렸다. 검증: `e2e/test/view-display.test.mjs`의 `a terminal that the baseline rows do not cover is rejected instead of awaited`가 바뀌지 않은 helper에서 실패했고 그 파일의 다른 18개 test와 함께 통과한다. Drag case의 window check는 이 변경에서 실행하지 않았다.
 - F292-42: 영속 사이드카의 연결 알림은 docs/spec/persistent-services.ko.md#서비스-전송이 정한 대로 그 사이드카로 전송한 표면에만 닿는다. 두 호스트는 알림을 소유한 모든 표면에 보냈기 때문에, 표면이 다른 사이드카로만 전송한 페이지가 자기 표면의 연결 알림을 받았다. 이제 각 호스트의 영속 표면 기록은 표면마다 그 표면이 전송한 영속 사이드카를 담고, contract case `sidecars-transport.persistent.connection-notice-reaches-only-senders`가 두 호스트의 전달을 다룬다.
 - F292-37-8: 비공개 native API 목록이 responsiveness selector의 소스 줄을 `WebKit-7625.1.29.18.27` 대신 SDK의 WebKit build 21624.5.1.11.3의 공개 tag인 `WebKit-7624.5.1.11.3`에서 인용하고, 더 이상 SDK build에 공개 tag가 없다고 적지 않는다. 검증: `git ls-remote`가 tag를 보여 주고, 인용한 각 줄을 두 tag에서 대조했으며 인용한 동작은 같다.
 
