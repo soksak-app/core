@@ -22,6 +22,7 @@ import { fresh, reading, recordCatalog } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertHeldStatesShown } from "./drag-measurement.mjs";
+import { presentsFrame } from "./region-raster.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
 import {
   acceptedCurrentViewReplies, currentPageNativeViewCalls, currentPageViewCallCoverage,
@@ -178,9 +179,6 @@ for (const app of Object.values(APPS)) {
         `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface, timeout: 10000 });
     }
     const regionsOf = (host) => terminals.map((terminal) => host.regions.find((item) => item.surface === terminal.surface && item.name === "view"));
-    // The presented raster of a region has the size of its frame once the region shows the screen of its new size.
-    const current = (region) => region?.visible && region.presented
-      && Math.abs(region.presented.width - region.frame.width) <= 1 && Math.abs(region.presented.height - region.frame.height) <= 1;
     for (let round = 1; round <= 5; round++) {
       const layout = await s.get("core.layout");
       const grid = await s.get("core.grid");
@@ -190,7 +188,7 @@ for (const app of Object.values(APPS)) {
       await s.run("core.boundary.move", { axis: "x", line: own.c1, position: grid.lines.x[own.c1] - Math.round(width / 3) });
       await s.presented();
       await s.run("core.layout.balance", {});
-      await s.until("host.window", (host) => regionsOf(host).every(current),
+      await s.until("host.window", (host) => regionsOf(host).every((region) => presentsFrame(region, host.scale)),
         `round ${round}: a terminal did not present a raster of its new size after the balance`, { timeout: 5000 });
     }
   });
