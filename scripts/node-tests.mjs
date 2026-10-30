@@ -183,12 +183,13 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test',
     if (files.length === 0) throw new Error(`${folder}: the test script names no test file in ${script.paths.join(' ')}`);
     for (const file of files) {
       // The spec reporter writes the errors of the failed tests at the end of the file, so a file that is killed keeps none;
-      // the TAP reporter on the standard error writes the error of each test when the test ends. --test-force-exit ends the file
-      // process when its tests end, so a test that timed out with an open handle does not keep the file running. The event watchdog
+      // the TAP reporter on the standard error writes the error of each test when the test ends. The file process ends by itself when
+      // its tests end and is not ended with process.exit: on macOS the pipes of the standard output and error are asynchronous, and
+      // process.exit drops the reports still queued on them (the last reports of a file were lost that way). The event watchdog
       // of the file is the largest limit of a test: a file whose events stop for that long holds a test that its own limit did not end.
-      // The exit limit ends a file process that does not exit after the summary of its tests, when no test runs.
+      // The exit limit ends a file process that does not exit after the summary of its tests, when no test runs, and names its samples.
       tests.push({ name: relative(root, file).split('\\').join('/'), command: process.execPath,
-        args: ['--test', ...REPORTERS, `--test-timeout=${testTimeoutMs}`, '--test-force-exit', ...script.flags, file], cwd: directory,
+        args: ['--test', ...REPORTERS, `--test-timeout=${testTimeoutMs}`, ...script.flags, file], cwd: directory,
         eventLimitMs: MAX_TEST_TIMEOUT_MS, exitLimitMs: EXIT_LIMIT_MS });
     }
   }
