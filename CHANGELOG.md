@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-14-2: The unload probe fixture pushes its snapshots under the plugin-local status name `location`, which the snapshot ingress reported as undeclared under the qualified name.
 - F292-12-1: The native window facts report `blurred` as a JSON boolean; a number made `host.window` fail on both hosts.
 - F292-22-1-1: The refusal of a missing view origin names the tabs that the stored layout of the operation that dropped the origin held.
 - F292-14-1: The declared UI snapshot ingress reports a snapshot whose status is not a status that its plugin declares, which it acknowledged and discarded with no record.

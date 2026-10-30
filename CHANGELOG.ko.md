@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-14-2: unload probe fixture가 snapshot을 plugin-local status 이름 `location`으로 push한다. qualified 이름은 snapshot ingress가 선언되지 않은 것으로 보고했다.
 - F292-12-1: native window facts가 `blurred`를 JSON boolean으로 보고한다. 숫자 값은 두 호스트의 `host.window`을 실패시켰다.
 - F292-22-1-1: 없는 view origin의 거부가 origin을 버린 동작이 저장한 layout의 tab을 적는다.
 - F292-14-1: 선언 UI snapshot ingress가 plugin이 선언하지 않은 status의 snapshot을 보고한다. 전에는 확인한 뒤 기록 없이 버렸다.
