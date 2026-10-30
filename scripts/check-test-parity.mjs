@@ -6656,7 +6656,7 @@ const FEATURE_LINKS = [
   {
     id: "F94",
     implementation: [
-      { file: "e2e/real/terminal.test.mjs", symbol: "async function prepare(t, app, line, { fullscreen = false } = {})" },
+      { file: "e2e/real/terminal.test.mjs", symbol: "async function prepare(t, app, line, { fullscreen = false, log = {}, reads = [] } = {})" },
     ],
     tests: [
       { file: "e2e/real/terminal.test.mjs", id: "a real wheel over a long history is shown without lag, stalls, or reversal" },
