@@ -50,6 +50,9 @@ static void failStep(NSString *step, NSString *reason) {
 
 static int framePort;
 static NSData *silence;
+// The number of requests of the form page. The frame of the second form page, which the reload requests, is answered
+// one second late, so a press that a wait sends before the frame of the reload has loaded misses the field of the frame.
+static int formRequests;
 
 static void respond(nw_connection_t connection, NSString *request) {
     NSArray<NSString *> *parts = [request componentsSeparatedByString:@" "];
@@ -64,14 +67,15 @@ static void respond(nw_connection_t connection, NSString *request) {
         type = @"audio/wav";
         bytes = silence;
     } else if ([path isEqualToString:@"/form"]) {
+        formRequests++;
         body = [NSString stringWithFormat:@"<!doctype html><title>Form</title><style>body{margin:0}</style><body>"
             "<input id=field style='position:absolute;left:0;top:0;width:200px;height:40px'>"
             "<div id=editable contenteditable style='position:absolute;left:250px;top:0;width:200px;height:40px'></div>"
             "<iframe id=frame style='position:absolute;left:0;top:100px;width:300px;height:100px;border:0'"
-            " src=\"http://127.0.0.1:%d/frame\"></iframe>"
+            " src=\"http://127.0.0.1:%d/frame%@\"></iframe>"
             "<script>let loads = 0; frame.addEventListener('load', () => { loads++; document.title = `Form ${loads}`; });"
             "let frameFocus = false; addEventListener('message', (event) => { frameFocus = event.data === 'focus'; });"
-            "</script></body>", framePort];
+            "</script></body>", framePort, formRequests == 2 ? @"?late" : @""];
     } else if ([path hasPrefix:@"/frame"]) {
         body = @"<!doctype html><title>Frame</title><style>body{margin:0}</style><body>"
             "<form id=form onsubmit='event.preventDefault()'>"
@@ -90,8 +94,11 @@ static void respond(nw_connection_t connection, NSString *request) {
     NSMutableData *response = [NSMutableData dataWithData:[head dataUsingEncoding:NSUTF8StringEncoding]];
     [response appendData:bytes];
     dispatch_data_t out = dispatch_data_create(response.bytes, response.length, dispatch_get_main_queue(), DISPATCH_DATA_DESTRUCTOR_DEFAULT);
-    nw_connection_send(connection, out, NW_CONNECTION_FINAL_MESSAGE_CONTEXT, true, ^(nw_error_t sent) {
-        nw_connection_cancel(connection);
+    dispatch_time_t when = dispatch_time(DISPATCH_TIME_NOW, [path isEqualToString:@"/frame?late"] ? NSEC_PER_SEC : 0);
+    dispatch_after(when, dispatch_get_main_queue(), ^{
+        nw_connection_send(connection, out, NW_CONNECTION_FINAL_MESSAGE_CONTEXT, true, ^(nw_error_t sent) {
+            nw_connection_cancel(connection);
+        });
     });
 }
 
@@ -177,18 +184,35 @@ static void waitForTitle(NSUInteger index, NSString *step, NSString *title) {
     }
 }
 
+// The state of a press that did not focus its target: the load state of the main frame and of its frame, the state that
+// the region reported last, the first responder of the window and the view at the point.
+static NSString *pressState(NSWindow *window, WKWebView *view, double x, double y) {
+    NSString *page = evaluate(view, @"return JSON.stringify({ readyState: document.readyState,"
+        " frameLoads: typeof loads === 'number' ? loads : null, active: document.activeElement?.id ?? null });");
+    NSView *content = window.contentView;
+    NSView *hit = [content hitTest:NSMakePoint(x, content.isFlipped ? y : content.bounds.size.height - y)];
+    return [NSString stringWithFormat:@"page %@, loading %@, navigations %@, first responder %@, hit view %@", page,
+        latest[1][@"loading"], latest[1][@"navigations"], NSStringFromClass([window.firstResponder class]),
+        hit ? NSStringFromClass([hit class]) : @"none"];
+}
+
 // Presses the window point, waits until the expression of the main frame focused is true, and types one key with native events.
 static void type(NSWindow *window, WKWebView *view, double x, double y, NSString *focused, NSString *step) {
-    BOOL pressed = sp_input_pointer(window, x, y, 1, 0, 0, 0) == SP_INPUT_DELIVERED
-        && sp_input_pointer(window, x, y, 3, 0, 0, 0) == SP_INPUT_DELIVERED;
-    if (!pressed) failStep(step, @"the native press is not delivered");
+    sp_input_result press = sp_input_pointer(window, x, y, 1, 0, 0, 0);
+    sp_input_result release = press == SP_INPUT_DELIVERED ? sp_input_pointer(window, x, y, 3, 0, 0, 0) : SP_INPUT_REJECTED;
+    if (press != SP_INPUT_DELIVERED || release != SP_INPUT_DELIVERED) {
+        failStep(step, [NSString stringWithFormat:@"the native press is not delivered (press result %d, release result %d)",
+            press, release]);
+    }
     NSString *script = [NSString stringWithFormat:@"return %@;", focused];
     if (!pumpUntil(stepLimit, ^BOOL { return [evaluate(view, script) isEqual:@YES]; })) {
-        failStep(step, [NSString stringWithFormat:@"the press did not focus %@", focused]);
+        failStep(step, [NSString stringWithFormat:@"the press did not focus %@ (%@)", focused, pressState(window, view, x, y)]);
     }
-    BOOL typed = sp_input_key(window, "a", "a", 0, true) == SP_INPUT_DELIVERED
-        && sp_input_key(window, "a", "a", 0, false) == SP_INPUT_DELIVERED;
-    if (!typed) failStep(step, @"the native key is not delivered");
+    sp_input_result down = sp_input_key(window, "a", "a", 0, true);
+    sp_input_result up = down == SP_INPUT_DELIVERED ? sp_input_key(window, "a", "a", 0, false) : SP_INPUT_REJECTED;
+    if (down != SP_INPUT_DELIVERED || up != SP_INPUT_DELIVERED) {
+        failStep(step, [NSString stringWithFormat:@"the native key is not delivered (down result %d, up result %d)", down, up]);
+    }
 }
 
 int main(void) { @autoreleasepool {
@@ -245,8 +269,11 @@ int main(void) { @autoreleasepool {
     check([scripted[@"form"] isEqual:@NO], [NSString stringWithFormat:@"an input event of a script sets no form flag (%@)", scripted]);
     type(window, view, 50, 20, @"document.activeElement === field", @"main field");
     check([queryUntil(document, @"main field", @"form", @YES)[@"form"] isEqual:@YES], @"a key typed into a field of the main frame sets the form flag");
-    // The title changes before the reload, so the title of the reloaded page shows that the reload ended.
+    // The title changes before the reload, so the title of the reloaded page shows that the reload ended. The region
+    // reports the changed title before the reload starts, because the reply of the script and the report of the title
+    // arrive in no declared order, and a report of the earlier title would end the wait of the reload at once.
     evaluate(view, @"document.title = 'Reloading'; return true;");
+    waitForTitle(1, @"reload title", @"Reloading");
     sp_document_go(document, 2, 0);
     waitForTitle(1, @"reload", @"Form 1");
     check([queryUntil(document, @"reload", @"form", @NO)[@"form"] isEqual:@NO], @"a reload clears the form flag");
