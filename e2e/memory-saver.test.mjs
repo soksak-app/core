@@ -80,7 +80,9 @@ async function step(t, s, name, fn) {
 }
 
 const entryOf = (memory, tab) => memory.tabs.find((entry) => entry.tab === tab);
-const regionsOf = (objects, tab) => objects.documents.filter((entry) => entry.surface === tab).length;
+// diagnostics.objects lists the view of a view surface as the document "" of its surface next to its document regions.
+const documentsOf = (objects, tab) => objects.documents.filter((entry) => entry.surface === tab);
+const regionsOf = (objects, tab) => documentsOf(objects, tab).filter((entry) => entry.document !== "").length;
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the memory saver unloads hidden tabs on the command and under pressure and restores them`, { timeout: 300000 }, async (t) => {
@@ -150,7 +152,8 @@ for (const app of Object.values(APPS)) {
     });
     const unloadedObjects = await s.request("diagnostics.objects");
     assert.equal(regionsOf(unloadedObjects, a), 0, `the document region of ${a} remains after the unload: ${JSON.stringify(unloadedObjects.documents)}`);
-    assert.equal(unloadedObjects.host.documents, loadedObjects.host.documents - 1,
+    assert.equal(documentsOf(unloadedObjects, a).length, 0, `the view of ${a} remains after the unload: ${JSON.stringify(unloadedObjects.documents)}`);
+    assert.equal(unloadedObjects.host.documents, loadedObjects.host.documents - documentsOf(loadedObjects, a).length,
       `the host documents went from ${loadedObjects.host.documents} to ${unloadedObjects.host.documents} at the unload`);
 
     // 2. Showing it again restores the address and the session history.
