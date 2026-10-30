@@ -15,14 +15,14 @@ import (
 // contract: log.plugin-catalog.classifies-plugin-events
 func TestAPluginEventHasTheClassThatTheCatalogOfItsPluginDeclares(t *testing.T) {
 	lines := writeEvents(t, func(log *sok.EventLog) {
-		log.AddPluginClasses(map[string]sok.Class{"plugin.probe.frame": sok.ClassFrame})
+		log.AddPluginCatalogs([]sok.PluginCatalog{{Plugin: "probe", Version: "1.0.0", Classes: map[string]sok.Class{"plugin.probe.frame": sok.ClassFrame}}})
 		log.Emit(sok.LevelInfo, "plugin.probe.frame", map[string]any{"sequence": 1})
 		log.Emit(sok.LevelInfo, "plugin.probe.other", map[string]any{})
 	})
 	want := []struct {
 		event, class string
 		undeclared   bool
-	}{{"log.open", "lifecycle", false}, {"log.policy", "lifecycle", false}, {"plugin.probe.frame", "frame", false}, {"plugin.probe.other", "", true}}
+	}{{"log.open", "lifecycle", false}, {"log.policy", "lifecycle", false}, {"log.plugins", "lifecycle", false}, {"plugin.probe.frame", "frame", false}, {"plugin.probe.other", "", true}}
 	if len(lines) != len(want) {
 		t.Fatalf("%d lines: %v", len(lines), lines)
 	}
@@ -32,6 +32,17 @@ func TestAPluginEventHasTheClassThatTheCatalogOfItsPluginDeclares(t *testing.T) 
 			t.Fatalf("line %d is %+v, want %+v", index+1, event, want[index])
 		}
 	}
+}
+
+// classesOf joins the classes that the catalogs declare, so a test reads the classes of every event the reader used.
+func classesOf(catalogs []sok.PluginCatalog) map[string]sok.Class {
+	classes := map[string]sok.Class{}
+	for _, catalog := range catalogs {
+		for name, class := range catalog.Classes {
+			classes[name] = class
+		}
+	}
+	return classes
 }
 
 // writePlugin writes an installed plugin of the configuration folder with its plugin.json and, when catalog is not empty, the
@@ -66,10 +77,11 @@ func TestThePluginClassesAreTheCatalogsOfTheEnabledInstalledPlugins(t *testing.T
 	writePlugin(t, config, "probe", `{"schema":3,"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{"type":"object","properties":{},"required":[]}},"plugin.probe.error":{"layer":"plugin","class":"lifecycle","level":"error","fields":{"type":"object","properties":{},"required":[]}}}}`)
 	writePlugin(t, config, "fixture", `{"schema":3,"events":{"plugin.fixture.watch":{"layer":"plugin","class":"io","level":"debug","fields":{"type":"object","properties":{},"required":[]}}}}`)
 	writeInstalled(t, config, `"probe":{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{}},"fixture":{"version":"1.0.0","path":"plugins/fixture/1.0.0","enabled":false,"sidecars":{}}`)
-	classes, errs := sok.PluginEventClasses(config)
+	catalogs, errs := sok.PluginCatalogs(config)
 	if len(errs) != 0 {
 		t.Fatalf("errors %v", errs)
 	}
+	classes := classesOf(catalogs)
 	want := map[string]sok.Class{"plugin.probe.frame": sok.ClassFrame, "plugin.probe.error": sok.ClassLifecycle}
 	if !reflect.DeepEqual(classes, want) {
 		t.Fatalf("classes %v, want %v", classes, want)
@@ -89,7 +101,8 @@ func TestACatalogThatCannotBeUsedIsAnErrorThatNamesItsFileAndTheOtherPluginsKeep
 		return `"` + id + `":{"version":"1.0.0","path":"plugins/` + id + `/1.0.0","enabled":true,"sidecars":{}}`
 	}
 	writeInstalled(t, config, enabled("probe")+","+enabled("outside")+","+enabled("classless")+","+enabled("broken")+","+enabled("missing")+","+enabled("old"))
-	classes, errs := sok.PluginEventClasses(config)
+	catalogs, errs := sok.PluginCatalogs(config)
+	classes := classesOf(catalogs)
 	if !reflect.DeepEqual(classes, map[string]sok.Class{"plugin.probe.frame": sok.ClassFrame}) {
 		t.Fatalf("classes %v", classes)
 	}

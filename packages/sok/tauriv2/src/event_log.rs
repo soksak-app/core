@@ -8,7 +8,7 @@
 //! writer a `Pull`.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -25,6 +25,7 @@ use serde_json::value::{RawValue, to_raw_value};
 use crate::event_bounds::{EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES, Fields, cut_text};
 use crate::event_classes::{Class, class_of};
 use crate::log_policy::Gate;
+use crate::plugin_catalog::PluginCatalog;
 
 /// The schema number of the lines that this writer writes. Schema 2 adds `mono_ns` to every line.
 pub const SCHEMA: u64 = 2;
@@ -260,6 +261,8 @@ pub struct EventLog {
     writer: Mutex<Option<JoinHandle<()>>>,
     /// The classes that the catalogs of the installed plugins declare (docs/spec/logging.md#plugin-catalogs).
     plugin_classes: RwLock<HashMap<String, Class>>,
+    /// The version of each plugin whose catalog the writer holds, by plugin; `add_plugin_catalogs` updates it under its lock.
+    plugin_versions: Mutex<BTreeMap<String, String>>,
 }
 
 /// The layers of the event contract that another layer of a process relays (docs/spec/logging.md#event).
@@ -417,19 +420,45 @@ impl EventLog {
             clock: options.clock,
             writer: Mutex::new(Some(writer)),
             plugin_classes: RwLock::new(HashMap::new()),
+            plugin_versions: Mutex::new(BTreeMap::new()),
         })
     }
 
-    /// Adds the classes of the plugin events, which the host reads from the catalogs of the enabled installed plugins when it
-    /// starts and after each change of the installed plugins. A later class of a name replaces the earlier one, and no name is
-    /// removed: a page that loaded a plugin before a change runs its code until the page reloads, and a page that keeps its
-    /// plugins keeps it longer (docs/spec/logging.md#plugin-catalogs).
-    pub fn add_plugin_classes(&self, classes: HashMap<String, Class>) {
-        self.plugin_classes
-            .write()
+    /// Applies the catalogs that the host read from the enabled installed plugins: adds their classes, records the plugin and
+    /// version of each catalog, and stores the event `log.plugins` with every catalog the writer holds. A later class of a name
+    /// replaces the earlier one, and no catalog is removed: a page that loaded a plugin before a change runs its code until the
+    /// page reloads, and a page that keeps its plugins keeps it longer (docs/spec/logging.md#plugin-catalogs).
+    pub fn add_plugin_catalogs(&self, catalogs: Vec<PluginCatalog>) {
+        // default: the versions are updated under their lock, which stays held until the record is queued, so the records of two
+        // applications keep the order of their updates.
+        let mut versions = self
+            .plugin_versions
+            .lock()
             // default: the map holds only whole values, so a panic of another thread leaves no partial state.
-            .unwrap_or_else(PoisonError::into_inner)
-            .extend(classes);
+            .unwrap_or_else(PoisonError::into_inner);
+        {
+            let mut classes = self
+                .plugin_classes
+                .write()
+                // default: the map holds only whole values, so a panic of another thread leaves no partial state.
+                .unwrap_or_else(PoisonError::into_inner);
+            for catalog in catalogs {
+                classes.extend(catalog.classes);
+                versions.insert(catalog.plugin, catalog.version);
+            }
+        }
+        let plugins: Vec<_> = versions
+            .iter()
+            .map(|(plugin, version)| json!({"plugin": plugin, "version": version}))
+            .collect();
+        match to_raw_value(&json!({"plugins": plugins})) {
+            Ok(fields) => {
+                self.enqueue_writer_event(Level::Info, "log.plugins", fields, Vec::new());
+            }
+            Err(error) => {
+                eprintln!("event writer: log.plugins cannot be serialized: {error}");
+            }
+        }
     }
 
     /// The class that the catalog declares for `event`: the core catalog, or the catalog of the installed plugin of a plugin

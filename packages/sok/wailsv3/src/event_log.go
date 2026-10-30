@@ -183,16 +183,18 @@ type EventLog struct {
 	closeOnce   sync.Once
 	onWrite     atomic.Pointer[func(path string, size int64)]
 	// pluginClasses holds the classes that the catalogs of the installed plugins declare (docs/spec/logging.md#plugin-catalogs).
-	// AddPluginClasses replaces the map under pluginClassesAdding, so classify reads it without a lock.
+	// AddPluginCatalogs replaces the map under pluginClassesAdding, so classify reads it without a lock.
 	pluginClasses       atomic.Pointer[map[string]Class]
 	pluginClassesAdding sync.Mutex
+	// pluginVersions holds the version of each plugin whose catalog the writer holds; pluginClassesAdding guards it.
+	pluginVersions map[string]string
 }
 
-// AddPluginClasses adds the classes of the plugin events, which the host reads from the catalogs of the enabled installed
-// plugins when it starts and after each change of the installed plugins. A later class of a name replaces the earlier one,
-// and no name is removed: a page that loaded a plugin before a change runs its code until the page reloads, and a page that
-// keeps its plugins keeps it longer (docs/spec/logging.md#plugin-catalogs).
-func (l *EventLog) AddPluginClasses(classes map[string]Class) {
+// AddPluginCatalogs applies the catalogs that the host read from the enabled installed plugins: it adds their classes and
+// records the plugin and version of each catalog, then stores the event log.plugins with every catalog the writer holds. A
+// later class of a name replaces the earlier one, and no catalog is removed: a page that loaded a plugin before a change runs
+// its code until the page reloads, and a page that keeps its plugins keeps it longer (docs/spec/logging.md#plugin-catalogs).
+func (l *EventLog) AddPluginCatalogs(catalogs []PluginCatalog) {
 	l.pluginClassesAdding.Lock()
 	defer l.pluginClassesAdding.Unlock()
 	merged := map[string]Class{}
@@ -201,10 +203,32 @@ func (l *EventLog) AddPluginClasses(classes map[string]Class) {
 			merged[name] = class
 		}
 	}
-	for name, class := range classes {
-		merged[name] = class
+	if l.pluginVersions == nil {
+		l.pluginVersions = map[string]string{}
+	}
+	for _, catalog := range catalogs {
+		for name, class := range catalog.Classes {
+			merged[name] = class
+		}
+		l.pluginVersions[catalog.Plugin] = catalog.Version
 	}
 	l.pluginClasses.Store(&merged)
+	ids := make([]string, 0, len(l.pluginVersions))
+	for id := range l.pluginVersions {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	plugins := make([]map[string]string, 0, len(ids))
+	for _, id := range ids {
+		plugins = append(plugins, map[string]string{"plugin": id, "version": l.pluginVersions[id]})
+	}
+	fields, err := json.Marshal(map[string]any{"plugins": plugins})
+	if err != nil {
+		// A map of text serializes without failure, so this is a defect of the serializer.
+		fmt.Fprintf(os.Stderr, "event writer: log.plugins cannot be serialized: %v\n", err)
+		return
+	}
+	l.enqueueWriterEvent(LevelInfo, "log.plugins", fields, nil)
 }
 
 // SetOnWrite sets the observer that the writer calls after it wrote a batch, with the path of the file and its size. It is

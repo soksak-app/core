@@ -8,7 +8,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use soksak_sok::event_classes::Class;
 use soksak_sok::event_log::Level;
-use soksak_sok::plugin_catalog::plugin_event_classes;
+use soksak_sok::plugin_catalog::{PluginCatalog, plugin_catalogs};
 
 #[path = "support/folder.rs"]
 mod folder;
@@ -30,10 +30,11 @@ fn a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares() {
     let dir = temp("classify");
     support::store_every_level(dir.path());
     let log = soksak_sok::start_tool_event_log(dir.path()).unwrap();
-    log.add_plugin_classes(HashMap::from([(
-        "plugin.probe.frame".to_string(),
-        Class::Frame,
-    )]));
+    log.add_plugin_catalogs(vec![PluginCatalog {
+        plugin: "probe".to_string(),
+        version: "1.0.0".to_string(),
+        classes: HashMap::from([("plugin.probe.frame".to_string(), Class::Frame)]),
+    }]);
     log.emit(Level::Info, "plugin.probe.frame", &json!({"sequence": 1}));
     log.emit(Level::Info, "plugin.probe.other", &json!({}));
     log.flush(Duration::from_secs(5)).unwrap();
@@ -58,6 +59,7 @@ fn a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares() {
         vec![
             (json!("log.open"), json!("lifecycle"), Value::Null),
             (json!("log.policy"), json!("lifecycle"), Value::Null),
+            (json!("log.plugins"), json!("lifecycle"), Value::Null),
             (json!("plugin.probe.frame"), json!("frame"), Value::Null),
             (json!("plugin.probe.other"), Value::Null, json!(true)),
         ]
@@ -111,8 +113,12 @@ fn the_plugin_classes_are_the_catalogs_of_the_enabled_installed_plugins() {
         dir.path(),
         &format!("{},{}", enabled("probe", true), enabled("fixture", false)),
     );
-    let (classes, errors) = plugin_event_classes(dir.path());
+    let (catalogs, errors) = plugin_catalogs(dir.path());
     assert!(errors.is_empty(), "errors {errors:?}");
+    let classes: HashMap<String, Class> = catalogs
+        .into_iter()
+        .flat_map(|catalog| catalog.classes)
+        .collect();
     assert_eq!(
         classes,
         HashMap::from([
@@ -157,7 +163,11 @@ fn a_catalog_that_cannot_be_used_is_an_error_that_names_its_file_and_the_other_p
             .collect::<Vec<_>>()
             .join(","),
     );
-    let (classes, errors) = plugin_event_classes(dir.path());
+    let (catalogs, errors) = plugin_catalogs(dir.path());
+    let classes: HashMap<String, Class> = catalogs
+        .into_iter()
+        .flat_map(|catalog| catalog.classes)
+        .collect();
     assert_eq!(
         classes,
         HashMap::from([("plugin.probe.frame".to_string(), Class::Frame)])

@@ -522,13 +522,13 @@ impl<R: tauri::Runtime> tauri::Assets<R> for InstalledAssets<R> {
     }
 }
 
-/// Gives the writer the classes that the catalogs of the enabled installed plugins declare, and records each catalog that it
-/// cannot use as an error of the place plugin catalog (docs/spec/logging.md#plugin-catalogs). The host applies it when it starts
-/// and after each change of the installed plugins; the writer keeps the classes of a plugin that a change removed, because a
-/// page that loaded the plugin runs its code until it reloads.
+/// Gives the writer the catalogs of the enabled installed plugins, which declare the classes of their events, and records each
+/// catalog that it cannot use as an error of the place plugin catalog (docs/spec/logging.md#plugin-catalogs). The host applies it
+/// when it starts and after each change of the installed plugins; the writer keeps the catalog of a plugin that a change removed,
+/// because a page that loaded the plugin runs its code until it reloads, and it records the catalogs it holds.
 pub fn apply_plugin_event_classes(log: &crate::event_log::EventLog, config_dir: &Path) {
-    let (classes, errors) = soksak_sok::plugin_catalog::plugin_event_classes(config_dir);
-    log.add_plugin_classes(classes);
+    let (catalogs, errors) = soksak_sok::plugin_catalog::plugin_catalogs(config_dir);
+    log.add_plugin_catalogs(catalogs);
     for error in errors {
         log_error("plugin catalog", error);
     }

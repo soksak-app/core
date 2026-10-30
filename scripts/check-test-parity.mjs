@@ -5629,8 +5629,8 @@ const FEATURE_LINKS = [
   {
     id: "F160.36",
     implementation: [
-      { file: "packages/sok/wailsv3/src/plugin_catalog.go", symbol: "func PluginEventClasses" },
-      { file: "packages/sok/tauriv2/src/plugin_catalog.rs", symbol: "pub fn plugin_event_classes" },
+      { file: "packages/sok/wailsv3/src/plugin_catalog.go", symbol: "func PluginCatalogs" },
+      { file: "packages/sok/tauriv2/src/plugin_catalog.rs", symbol: "pub fn plugin_catalogs" },
     ],
     tests: [
       { file: "packages/sok/wailsv3/tests/plugin_catalog_test.go", id: "TestAPluginEventHasTheClassThatTheCatalogOfItsPluginDeclares" },
@@ -9215,7 +9215,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-112",
-    implementation: [{ file: "packages/sok/tauriv2/src/plugin_catalog.rs", symbol: "pub fn plugin_event_classes(" }],
+    implementation: [{ file: "packages/sok/tauriv2/src/plugin_catalog.rs", symbol: "pub fn plugin_catalogs(" }],
     tests: [{ file: "packages/sok/tauriv2/tests/plugin_catalog_test.rs", id: "a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares" }],
     expected: "The plugin catalog continues to return the class declared for each enabled plugin event after formatting-only changes.",
     levels: ["unit"],

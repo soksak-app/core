@@ -104,10 +104,11 @@ fn a_plugin_event_below_the_level_of_its_class_is_refused_by_the_writer_and_coun
     let dir = Folder::new("plugin-gate-class");
     support::store_every_level(dir.path());
     let log = soksak_sok::start_tool_event_log(dir.path()).unwrap();
-    log.add_plugin_classes(HashMap::from([(
-        "plugin.probe.frame".to_string(),
-        Class::Frame,
-    )]));
+    log.add_plugin_catalogs(vec![soksak_sok::plugin_catalog::PluginCatalog {
+        plugin: "probe".to_string(),
+        version: "1.0.0".to_string(),
+        classes: HashMap::from([("plugin.probe.frame".to_string(), Class::Frame)]),
+    }]);
     log.set_policy(
         soksak_sok::log_policy::LogPolicy::parse(
             "log-policy.json",

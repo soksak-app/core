@@ -15,13 +15,20 @@ import (
 	"strings"
 )
 
-// PluginEventClasses reads the catalogs of the enabled installed plugins and returns the class of each event they declare. A
-// catalog that cannot be used is an error that names its file, and the other plugins keep their classes; the errors are in the
-// order of the plugin ids.
-func PluginEventClasses(configDir string) (map[string]Class, []error) {
+// PluginCatalog is the catalog that the reader used for an enabled installed plugin: its version and the class of each event it
+// declares.
+type PluginCatalog struct {
+	Plugin  string
+	Version string
+	Classes map[string]Class
+}
+
+// PluginCatalogs reads the catalogs of the enabled installed plugins. A catalog that cannot be used is an error that names its
+// file, and the other plugins keep their catalogs; the catalogs and the errors are in the order of the plugin ids.
+func PluginCatalogs(configDir string) ([]PluginCatalog, []error) {
 	state, err := ReadInstalled(configDir)
 	if err != nil {
-		return map[string]Class{}, []error{err}
+		return nil, []error{err}
 	}
 	ids := make([]string, 0, len(state.Plugins))
 	for id, plugin := range state.Plugins {
@@ -30,7 +37,7 @@ func PluginEventClasses(configDir string) (map[string]Class, []error) {
 		}
 	}
 	slices.Sort(ids)
-	classes := map[string]Class{}
+	var catalogs []PluginCatalog
 	var errs []error
 	for _, id := range ids {
 		declared, err := pluginCatalogClasses(filepath.Join(configDir, state.Plugins[id].Path), id)
@@ -38,11 +45,9 @@ func PluginEventClasses(configDir string) (map[string]Class, []error) {
 			errs = append(errs, err)
 			continue
 		}
-		for name, class := range declared {
-			classes[name] = class
-		}
+		catalogs = append(catalogs, PluginCatalog{Plugin: id, Version: state.Plugins[id].Version, Classes: declared})
 	}
-	return classes, errs
+	return catalogs, errs
 }
 
 // pluginCatalogClasses reads the catalog that the plugin.json in folder names. A plugin without the member events declares no

@@ -69,6 +69,7 @@ const EXACT = new Map([
   ["log.gated", "lifecycle"],
   ["log.migrated", "lifecycle"],
   ["log.open", "lifecycle"],
+  ["log.plugins", "lifecycle"],
   ["log.policy", "lifecycle"],
   ["log.pruned", "lifecycle"],
   ["log.rotated", "lifecycle"],

@@ -82,6 +82,7 @@ var eventClasses = map[string]Class{
 	"log.gated":                               ClassLifecycle,
 	"log.migrated":                            ClassLifecycle,
 	"log.open":                                ClassLifecycle,
+	"log.plugins":                             ClassLifecycle,
 	"log.policy":                              ClassLifecycle,
 	"log.pruned":                              ClassLifecycle,
 	"log.rotated":                             ClassLifecycle,

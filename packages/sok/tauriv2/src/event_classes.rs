@@ -124,6 +124,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "log.gated" => Some(Class::Lifecycle),
         "log.migrated" => Some(Class::Lifecycle),
         "log.open" => Some(Class::Lifecycle),
+        "log.plugins" => Some(Class::Lifecycle),
         "log.policy" => Some(Class::Lifecycle),
         "log.pruned" => Some(Class::Lifecycle),
         "log.rotated" => Some(Class::Lifecycle),

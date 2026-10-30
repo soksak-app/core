@@ -10,24 +10,34 @@ use serde_json::Value;
 use crate::event_classes::Class;
 use crate::plugins::read_installed;
 
-/// Reads the catalogs of the enabled installed plugins and returns the class of each event they declare. A catalog that cannot
-/// be used is an error that names its file, and the other plugins keep their classes; the errors are in the order of the
-/// plugin ids.
-pub fn plugin_event_classes(config_dir: &Path) -> (HashMap<String, Class>, Vec<String>) {
+/// The catalog that the reader used for an enabled installed plugin: its version and the class of each event it declares.
+pub struct PluginCatalog {
+    pub plugin: String,
+    pub version: String,
+    pub classes: HashMap<String, Class>,
+}
+
+/// Reads the catalogs of the enabled installed plugins. A catalog that cannot be used is an error that names its file, and the
+/// other plugins keep their catalogs; the catalogs and the errors are in the order of the plugin ids.
+pub fn plugin_catalogs(config_dir: &Path) -> (Vec<PluginCatalog>, Vec<String>) {
     let state = match read_installed(config_dir) {
         Ok(state) => state,
-        Err(error) => return (HashMap::new(), vec![error]),
+        Err(error) => return (Vec::new(), vec![error]),
     };
-    let mut classes = HashMap::new();
+    let mut catalogs = Vec::new();
     let mut errors = Vec::new();
     // The plugins of the state are in the order of their ids.
     for (id, plugin) in state.plugins.iter().filter(|(_, plugin)| plugin.enabled) {
         match catalog_classes(&config_dir.join(&plugin.path), id) {
-            Ok(declared) => classes.extend(declared),
+            Ok(classes) => catalogs.push(PluginCatalog {
+                plugin: id.clone(),
+                version: plugin.version.clone(),
+                classes,
+            }),
             Err(error) => errors.push(error),
         }
     }
-    (classes, errors)
+    (catalogs, errors)
 }
 
 /// Reads the catalog that the plugin.json in `folder` names. A plugin without the member `events` declares no event.

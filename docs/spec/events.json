@@ -126,6 +126,39 @@
       },
       "description": "A range of seq that the writer refused; it explains the gap. channel is other for the events of the levels error, warn and info and debug for the events of the levels debug and trace; it is stored in the main file. queued is the largest number of events that waited in the writer queue at a refusal that the record counts; it is absent for a loss that a source reports through the pull."
     },
+    "log.plugins": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "plugin": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "plugin",
+                "version"
+              ]
+            }
+          }
+        },
+        "required": [
+          "plugins"
+        ]
+      },
+      "description": "The plugin catalogs that the writer holds after one application of the catalogs of the installed plugins: plugins lists the plugin and version of each catalog it holds, sorted by plugin. The host applies the catalogs at its start and at each change of the installed plugins, so each application stores one record. A catalog that the writer applied stays held until the process ends, so a plugin that a change removed or disabled is still listed."
+    },
     "log.policy": {
       "layer": "host",
       "class": "lifecycle",
