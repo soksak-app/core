@@ -239,6 +239,10 @@ func EmitHost(level Level, event string, fields map[string]any) {
 		fmt.Fprintf(os.Stderr, "event writer: the event %q does not start with host.\n", event)
 		return
 	}
+	// The switch of the performance trace controls every event host.trace.<event> (docs/spec/performance-trace.md#the-switch).
+	if strings.HasPrefix(event, "host.trace.") && !performanceOn.Load() {
+		return
+	}
 	// A closed gate serializes nothing; an event the catalog does not declare has no class and no gate.
 	if class, declared := sok.EventClassOf(event); declared && !sok.PassesEveryGate(event) && !GateEvent(class, level) {
 		return
@@ -258,6 +262,10 @@ func EmitHost(level Level, event string, fields map[string]any) {
 func EmitHostCids(level Level, event string, cids []string, fields map[string]any) {
 	if !strings.HasPrefix(event, "host.") {
 		fmt.Fprintf(os.Stderr, "event writer: the event %q does not start with host.\n", event)
+		return
+	}
+	// The switch of the performance trace controls every event host.trace.<event> (docs/spec/performance-trace.md#the-switch).
+	if strings.HasPrefix(event, "host.trace.") && !performanceOn.Load() {
 		return
 	}
 	if class, declared := sok.EventClassOf(event); declared && !sok.PassesEveryGate(event) && !GateEvent(class, level) {

@@ -9,6 +9,8 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use serde_json::json;
+use soksak_host_tauriv2::event_log::Level;
+use soksak_host_tauriv2::event_record;
 use soksak_host_tauriv2::performance;
 
 #[path = "support/records.rs"]
@@ -98,6 +100,45 @@ fn the_process_holds_the_switch_and_no_file_does() {
             "{path} exists after the switch"
         );
     }
+}
+
+// contract: performance.trace.switch-gates-every-host-trace-event
+#[test]
+fn the_switch_gates_every_host_trace_event() {
+    if let Some(config) = std::env::var_os(CHILD) {
+        let writer = records::start_writer(std::path::Path::new(&config));
+        let emit = |n: u64| {
+            event_record::emit_host(
+                Level::Debug,
+                "host.trace.exposure.reply",
+                json!({"id": n, "from": "main"}),
+            );
+            event_record::emit_host_cids(
+                Level::Debug,
+                "host.trace.exposure.request",
+                &["1-2.3".to_string()],
+                json!({"id": n, "surface": "s", "method": "status.get"}),
+            );
+        };
+        emit(1);
+        performance::command(json!({"action": "on"})).unwrap();
+        emit(2);
+        performance::command(json!({"action": "off"})).unwrap();
+        emit(3);
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = in_child("the_switch_gates_every_host_trace_event");
+    // Only the events written while the switch was on are stored, between the markers.
+    assert_eq!(
+        trace_events(config.path()),
+        [
+            "host.trace.on",
+            "host.trace.exposure.reply",
+            "host.trace.exposure.request",
+            "host.trace.off"
+        ]
+    );
 }
 
 // contract: performance.trace.already-off-writes-nothing

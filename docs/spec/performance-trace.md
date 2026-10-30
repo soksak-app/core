@@ -36,6 +36,8 @@ A built plugin host can be measured with a test fixture that runs a `requestAnim
 
 The process of the host holds the switch; no file holds it and no flag reaches a sidecar. The page reads `diagnostics.performance` from the settings it already loads and tells the host through the host call `performance` — `on` when the setting turns true, `off` when it turns false, and once at startup with the stored value, so a switch of the host that a page which ended left on returns to the stored state. The call accepts the actions `on` and `off` only and refuses any other action with an error; a request that does not change the switch stores nothing. Turning the trace on stores `host.trace.on` and starts the sampler, which stores `host.sampler.memory` every five seconds while the trace is on; turning it off stores `host.trace.off` and ends the sampler, and turning it on again starts a new one. A start of the process always starts with the trace off. Passive instrumentation reports failures without replacing the measured operation result.
 
+The switch controls every event `host.trace.<event>` of the host: while it is off, the host stores none of them, whatever the log policy stores.
+
 ## Reading
 
 The event files are JSON lines, so field tools answer questions directly: the frame reasons of an idle terminal (`select(.event=="frame") | group_by(.reason)`), the raster values a drag through collapse produced (`select(.event=="configure")`), whether tab switching recreated webviews (`select(.event=="surface")`), and what memory did around a user action (`select(.event=="action")`).

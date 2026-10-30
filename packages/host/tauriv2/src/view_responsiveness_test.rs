@@ -21,6 +21,7 @@ fn traces(name: &str, surface: &str) -> Vec<Value> {
 // contract: view.responsiveness.relay
 #[test]
 fn an_unresponsive_and_a_responsive_notice_write_their_trace_and_return_their_window_event() {
+    let _trace = crate::performance::test_trace();
     let surface = "responsive-probe-surface";
     let unresponsive = view_responsiveness_notice(surface, "probe", 5, false);
     assert_eq!(
@@ -73,6 +74,7 @@ fn a_notice_from_a_retired_view_generation_is_not_current() {
 // contract: view.process.events
 #[test]
 fn creating_a_view_writes_the_request_and_its_first_ready_message_writes_the_ready_event_once() {
+    let _trace = crate::performance::test_trace();
     let surface = "process-probe-surface";
     record_view_process_request(surface, "probe");
     assert_eq!(

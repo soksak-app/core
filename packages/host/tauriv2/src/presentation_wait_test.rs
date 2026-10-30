@@ -69,6 +69,7 @@ fn waits_are_keyed_by_surface_generation_and_ticket() {
 // contract: view.presentation-wait.ends
 #[test]
 fn each_end_without_presentation_writes_the_abandoned_event() {
+    let _trace = crate::performance::test_trace();
     for reason in ["process-ended", "hidden", "unresponsive"] {
         let wait = PresentationWait::default();
         wait.begin(SURFACE, GENERATION, TICKET);

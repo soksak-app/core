@@ -10,6 +10,7 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 // contract: view.origin.retired-callback-is-cancelled
 #[test]
 fn a_retired_view_callback_is_cancelled_before_dispatch() {
+    let _trace = crate::performance::test_trace();
     let channels = ViewChannels::default();
     let retired = channels.register_origin("surface", "probe", 1);
     let _current = channels.register_origin("surface", "probe", 2);

@@ -8049,6 +8049,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F295",
+    implementation: [
+      { file: "packages/host/wailsv3/src/event_record.go", symbol: "strings.HasPrefix(event, \"host.trace.\") && !performanceOn.Load()" },
+      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "event.starts_with(\"host.trace.\") && !crate::performance::enabled()" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/performance_test.go", id: "TestTheSwitchGatesEveryHostTraceEvent" },
+      { file: "packages/host/tauriv2/tests/performance_test.rs", id: "the_switch_gates_every_host_trace_event" },
+    ],
+    expected: "Both hosts store no event host.trace.<event> while the switch of the performance trace is off.",
+    levels: ["unit"],
+  },
+  {
     id: "F294",
     implementation: [{ file: "packages/workbench/host.js", symbol: "if (name === \"exposureReply\" && replyGate !== null)" }],
     tests: [{ file: "packages/workbench/test/surface-runtime.test.mjs", id: "an installed reply gate decides when the exposure reply of a view is sent" }],

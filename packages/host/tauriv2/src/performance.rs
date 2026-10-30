@@ -16,6 +16,27 @@ static SWITCHING: Mutex<()> = Mutex::new(());
 #[cfg(test)]
 pub(crate) static TEST_SWITCH: Mutex<()> = Mutex::new(());
 
+/// The performance trace of a lib test, turned on while the value lives; the value holds `TEST_SWITCH`. The switch controls
+/// the `host.trace` events (docs/spec/performance-trace.md#the-switch), so a test that reads them turns it on.
+#[cfg(test)]
+pub(crate) struct TestTrace(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
+
+#[cfg(test)]
+pub(crate) fn test_trace() -> TestTrace {
+    let switch = TEST_SWITCH.lock().unwrap_or_else(PoisonError::into_inner);
+    command(json!({"action": "on"})).unwrap();
+    TestTrace(switch)
+}
+
+#[cfg(test)]
+impl Drop for TestTrace {
+    fn drop(&mut self) {
+        if let Err(error) = command(json!({"action": "off"})) {
+            eprintln!("turning off the performance trace after the test failed: {error}");
+        }
+    }
+}
+
 /// Whether the trace of this process is on.
 pub fn enabled() -> bool {
     ON.load(Ordering::Acquire)

@@ -1848,6 +1848,7 @@ func TestSidecarCountsOnlyFailuresWithinTheWindow(t *testing.T) {
 func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 	sidecars, directory, clock := restartSidecars(t)
 	log := useEventLog(t)
+	support.TraceOn(t)
 	owner := newFakeOwner("/projects/a")
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {

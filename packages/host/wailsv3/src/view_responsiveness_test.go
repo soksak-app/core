@@ -5,14 +5,17 @@ import (
 	"testing"
 )
 
-// isolateTraceRecords empties the start buffer of the records for the test, and restores it when the test ends.
+// isolateTraceRecords empties the start buffer of the records for the test and turns the performance trace on, whose switch
+// controls the host.trace events; it restores both when the test ends.
 func isolateTraceRecords(t *testing.T) {
 	t.Helper()
 	records.Lock()
 	saved := records.buffer
 	records.buffer = nil
 	records.Unlock()
+	wasOn := performanceOn.Swap(true)
 	t.Cleanup(func() {
+		performanceOn.Store(wasOn)
 		records.Lock()
 		records.buffer = saved
 		records.Unlock()

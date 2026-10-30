@@ -8,16 +8,7 @@ import (
 
 // contract: modal.ready-visible
 func TestAStaleModalReadyChangesNothingAndWritesTheTrace(t *testing.T) {
-	records.Lock()
-	saved := records.buffer
-	records.buffer = nil
-	records.Unlock()
-	defer func() {
-		records.Lock()
-		records.buffer = saved
-		records.Unlock()
-	}()
-
+	isolateTraceRecords(t)
 	s := &Surfaces{}
 	if err := s.ModalReady("debug", 7); err != nil {
 		t.Fatalf("a ready request of a modal that is not open answered %v, want nil", err)

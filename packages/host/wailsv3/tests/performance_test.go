@@ -85,6 +85,31 @@ func TestTheProcessHoldsTheSwitchAndNoFileDoes(t *testing.T) {
 	}
 }
 
+// contract: performance.trace.switch-gates-every-host-trace-event
+func TestTheSwitchGatesEveryHostTraceEvent(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
+	emit := func(n int) {
+		host.EmitHost(host.LevelDebug, "host.trace.exposure.reply", map[string]any{"id": n, "from": "main"})
+		host.EmitHostCids(host.LevelDebug, "host.trace.exposure.request", []string{"1-2.3"}, map[string]any{"id": n, "surface": "s", "method": "status.get"})
+	}
+	emit(1)
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
+	emit(2)
+	if _, err := host.PerformanceCommand(map[string]any{"action": "off"}); err != nil {
+		t.Fatal(err)
+	}
+	emit(3)
+	// Only the events written while the switch was on are stored, between the markers.
+	want := "host.trace.on host.trace.exposure.reply host.trace.exposure.request host.trace.off"
+	if got := strings.Join(traceEvents(t, config, log), " "); got != want {
+		t.Fatalf("trace events %q, want %q", got, want)
+	}
+}
+
 // contract: performance.trace.already-off-writes-nothing
 func TestAlreadyOffWritesNothing(t *testing.T) {
 	config := t.TempDir()

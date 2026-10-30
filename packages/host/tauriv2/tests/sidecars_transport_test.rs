@@ -3016,6 +3016,7 @@ fn a_persistent_service_end_stops_the_restarts_before_the_spawn() {
     // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
     if let Some(config) = std::env::var_os("SOKSAK_PERSISTENT_RESTART_CHILD") {
         let writer = records::start_writer(Path::new(&config));
+        let _trace = records::trace_on();
         let executable_directory = folder::Folder::new();
         let runs = executable_directory.path().join("runs");
         let program = executable_directory.path().join("echo");

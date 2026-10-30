@@ -12,6 +12,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 // contract: exposure.list.appends-host-entries-registered
@@ -345,6 +346,7 @@ func TestRelayTimeoutOfACommandWritesCallTimeout(t *testing.T) {
 // contract: exposure.relay.late-reply-writes-call-event
 func TestRelayLateReplyOfACommandWritesCallLateReply(t *testing.T) {
 	log := useRoomyEventLog(t)
+	support.TraceOn(t)
 	relay := host.NewRelay[string]()
 	var requested uint64
 	relay.RequestCall("surface-main-a", host.RelayCall{Plugin: "probe", Command: "probe.run"}, 50*time.Millisecond, func(id uint64) error {

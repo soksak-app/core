@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F295: 두 호스트는 performance trace가 꺼져 있으면 `host.trace.*` event를 저장하지 않는다. 각 호스트에서 이 event를 쓰는 곳 약 스무 곳이 스위치를 읽지 않았다.
 - F294: 표면 exposure 답의 진단 hold는 view 표면의 `exposureReply` 호출도 붙잡는다.
 - F293: 두 호스트는 endpoint 요청의 window를 name보다 먼저 검사하고, 없거나 비었거나 문자열이 아닌 window에 `window must be a non-empty string`으로 답한다.
 - F283-2: 창 검사 job은 각 애플리케이션의 종료 상태를 기록하고 애플리케이션의 crash report를 모두 남긴다.

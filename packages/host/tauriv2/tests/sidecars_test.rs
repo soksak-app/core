@@ -2299,6 +2299,7 @@ fn counts_only_failures_within_the_window() {
 #[test]
 fn surface_open_clears_the_restart_limit() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _trace = records::trace_on();
     let clock = RestartClock::new();
     let (sidecars, directory) = restart_sidecars(&clock);
     let writer_folder = folder::Folder::new();
@@ -2348,6 +2349,7 @@ fn surface_open_clears_the_restart_limit() {
 #[test]
 fn enable_clears_the_restart_limit_of_its_sidecars() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _trace = records::trace_on();
     let clock = RestartClock::new();
     let (sidecars, directory) = restart_sidecars(&clock);
     let writer_folder = folder::Folder::new();

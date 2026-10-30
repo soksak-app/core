@@ -154,3 +154,23 @@ pub fn start_every_level(options: Options) -> Result<EventLog, String> {
     store_every_level(&log);
     Ok(log)
 }
+
+/// The performance trace of the test process, turned on while the value lives. The switch controls the `host.trace` events
+/// (docs/spec/performance-trace.md#the-switch), so a test that reads them turns it on; the test holds its serial lock while
+/// the value lives, because the switch belongs to the process.
+pub struct TraceOn;
+
+pub fn trace_on() -> TraceOn {
+    soksak_host_tauriv2::performance::command(serde_json::json!({"action": "on"})).unwrap();
+    TraceOn
+}
+
+impl Drop for TraceOn {
+    fn drop(&mut self) {
+        if let Err(error) =
+            soksak_host_tauriv2::performance::command(serde_json::json!({"action": "off"}))
+        {
+            eprintln!("turning off the performance trace after the test failed: {error}");
+        }
+    }
+}

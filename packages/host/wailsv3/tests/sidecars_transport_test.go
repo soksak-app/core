@@ -2485,6 +2485,7 @@ func deadProcessID(t *testing.T) int {
 // contract: sidecars.restart.persistent-service-end-stops-before-the-spawn, sidecars.restart.persistent-refused-send-gets-the-connection-notice
 func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
 	log := useEventLog(t)
+	support.TraceOn(t)
 	root := t.TempDir()
 	folder := t.TempDir()
 	runs := filepath.Join(folder, "runs")

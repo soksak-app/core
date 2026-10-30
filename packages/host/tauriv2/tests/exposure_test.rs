@@ -765,6 +765,7 @@ fn timeout_of_a_command_writes_the_call_timeout_event() {
 #[test]
 fn late_reply_to_a_command_writes_the_call_late_reply_event() {
     let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _trace = records::trace_on();
     let config = folder::Folder::new();
     let log = records::start_writer(config.path());
     let relay = Relay::default();

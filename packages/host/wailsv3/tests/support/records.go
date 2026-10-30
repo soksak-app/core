@@ -120,3 +120,17 @@ func StoreEveryLevel(t *testing.T, log *host.EventLog) {
 	}
 	log.SetPolicy(policy, "file")
 }
+
+// TraceOn turns the performance trace on for the test, whose switch controls the host.trace events
+// (docs/spec/performance-trace.md#the-switch), and turns it off when the test ends.
+func TraceOn(t *testing.T) {
+	t.Helper()
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := host.PerformanceCommand(map[string]any{"action": "off"}); err != nil {
+			t.Error(err)
+		}
+	})
+}
