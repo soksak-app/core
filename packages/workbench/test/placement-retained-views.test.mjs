@@ -129,7 +129,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     saver.observe(new Set(["retained-view"]), [{ id: "retained-view", plugin: "placement-probe" }]);
     const undrawn = { surfaces: [], drawn: false, settled: false, titlebar: 40 };
     const classified = await memoryPlacement(undrawn, [retained], {
-      ready: Promise.resolve(), saver, observe: () => {},
+      ready: Promise.resolve(), saver, observe: () => {}, start: (entries) => entries,
     });
     const beforeDraw = await placeCompositorRecord(undrawn, classified.surfaces,
       (request) => host.surfaces.place({ ...undrawn, surfaces: request.surfaces }),
@@ -148,7 +148,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
 
     const drawn = { surfaces: [retained], drawn: true, settled: true, titlebar: 40 };
     const afterDraw = await memoryPlacement(drawn, [retained], {
-      ready: Promise.resolve(), saver, observe: () => {},
+      ready: Promise.resolve(), saver, observe: () => {}, start: (entries) => entries,
     });
     await placeCompositorRecord(drawn, afterDraw.surfaces,
       (request) => host.surfaces.place({ ...drawn, surfaces: request.surfaces }),
@@ -459,7 +459,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
       if (initialized) memory.observe(new Set(), tabs.map(({ id, plugin }) => ({ id, plugin })));
     };
     const undrawn = { surfaces: [], settled: true, drawn: false, titlebar: 40 };
-    const beforeDraw = await memoryPlacement(undrawn, candidates, { ready, saver: memory, observe });
+    const beforeDraw = await memoryPlacement(undrawn, candidates, { ready, saver: memory, observe, start: (entries) => entries });
     const prepared = await placeCompositorRecord(undrawn, beforeDraw.surfaces,
       (request) => host.surfaces.place(request), ["placement-probe"], {
         mountedSurface: (id) => mounted.has(id) ? { surfaceId: id, disposed: false } : null,
@@ -477,7 +477,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
 
     let classificationFinished = false;
     const drawn = { surfaces: [], settled: true, drawn: true, titlebar: 40 };
-    const classifiedPlacement = memoryPlacement(drawn, candidates, { ready, saver: memory, observe }).then((value) => {
+    const classifiedPlacement = memoryPlacement(drawn, candidates, { ready, saver: memory, observe, start: (entries) => entries }).then((value) => {
       classificationFinished = true;
       return value;
     });
@@ -507,7 +507,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
     const failedReady = new Promise((_resolve, reject) => { rejectReady = reject; });
     let observedAfterFailure = false;
     const waiting = [1, 2].map(() => memoryPlacement(drawn, candidates, {
-      ready: failedReady, saver: memory,
+      ready: failedReady, saver: memory, start: (entries) => entries,
       observe: () => { observedAfterFailure = true; },
     }));
     rejectReady(startupFailure);
@@ -568,7 +568,7 @@ test("a disabled memory saver mounts a cold hidden view at startup", async (t) =
     memory.observe(new Set(), [{ id: cold.id, plugin: cold.plugin }]);
     memory.start();
     const classified = await memoryPlacement({ surfaces: [], drawn: true }, candidates, {
-      ready: Promise.resolve(), saver: memory,
+      ready: Promise.resolve(), saver: memory, start: (entries) => entries,
       observe: (_record, tabs) => memory.observe(new Set(), tabs.map(({ id, plugin }) => ({ id, plugin }))),
     });
     const answer = await placeCompositorRecord({ surfaces: [], drawn: true, settled: true, titlebar: 40 },

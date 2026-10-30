@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-22: placement는 view의 start value를 후보와 함께, commit의 상태로, declared UI snapshot ingress와 memory placement readiness를 기다리기 전에 읽는다. 그래서 그 기다림 동안 어떤 작업이 닫은 tab이 origin 없음으로 placement를 거부하지 않는다.
 - F283-3: 창 검사 job이 `scripts/crash-fault.mjs`로 애플리케이션의 각 crash report의 fault thread, image, 주소를 밝히고 runner에서 `atos`로 그 주소를 푼다.
 - F292-21: 실행 감사는 호스트 writer가 field에 저장하는 식별자 `surface`와 `session`이 든 document field truncation envelope를 받아들인다.
 - F292-1: browser cohort 검사는 기대하는 판을 후보 registry에서 읽고, 표면을 기다리기 전에 시험 project의 layout을 준비한다.

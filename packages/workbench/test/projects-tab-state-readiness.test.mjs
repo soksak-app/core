@@ -53,7 +53,7 @@ test("a failed tab-state open rejects drawn placement waiters while the existing
   const record = { drawn: true };
   const candidates = [{ id: "hidden-view", plugin: "probe" }];
   const waiters = [1, 2].map(() => memoryPlacement(record, candidates, {
-    ready, saver, observe: () => { observed = true; },
+    ready, saver, observe: () => { observed = true; }, start: (entries) => entries,
   }));
 
   await assert.rejects(initialising, failure);

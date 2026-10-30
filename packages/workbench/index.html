@@ -253,14 +253,29 @@ function observeMemory(record, all) {
     all.map((surface) => ({ id: surface.id, plugin: surface.plugin })));
 }
 
+/**
+ * The candidates of a commit with the start values of their views (docs/spec/native-surfaces.md#view-surfaces): the host injects
+ * them as window.sokSurface before the page of the view runs. origin is the origin of the tab, and project is the project that
+ * the window shows. A view whose origin the layout read refused starts no view and is marked refused.
+ */
+function commitStarts(candidates) {
+  const refused = new Set(candidates.filter((entry) => entry.surface.composition?.kind === "view"
+    && viewRefusal(entry.surface.surfaceId) !== null).map((entry) => entry.surface.surfaceId));
+  const started = surfacePlacementsForHost(candidates.filter((entry) => !refused.has(entry.surface.surfaceId)), projects.active());
+  return [...started, ...candidates.filter((entry) => refused.has(entry.surface.surfaceId)).map((entry) => ({ ...entry, refused: true }))];
+}
+
 onCommit((record) => {
   const candidates = [...record.surfaces, ...dormant(record.surfaces)];
-  return afterDeclaredSnapshotIngress(async () => {
-    const { surfaces: all, retain: ids, unload } = await memoryPlacement(record, candidates, {
-      ready: memoryPlacementReady,
-      saver: memorySaver,
-      observe: observeMemory,
-    });
+  // The start values are read now, in the state of this commit; a tab that an operation closes during the waits below leaves
+  // its stored layout, which ends its origin (docs/spec/projects.md#tab-origin).
+  const placing = memoryPlacement(record, candidates, {
+    ready: memoryPlacementReady,
+    saver: memorySaver,
+    observe: observeMemory,
+    start: commitStarts,
+  });
+  return Promise.all([afterDeclaredSnapshotIngress(() => {}), placing]).then(async ([, { surfaces: all, retain: ids, unload }]) => {
     // An unloaded tab stays in the layout: it is not declared to the host, its surface is released in the unload mode, and
     // it is retained so that it is not released as a closed tab.
     // A tab of a plugin that is not loaded is not a surface, but its placeholder must stay alive (docs/spec/plugins.md).
@@ -268,15 +283,11 @@ onCommit((record) => {
       for (const tab of tabsOf(card)) if (!registry.hasPlugin(tab.plugin)) ids.add(tab.id);
     }
     // The surfaces that the place leaves out are released only after it succeeds; a failed place keeps them mounted.
-    // The start values of the views (docs/spec/native-surfaces.md#view-surfaces): the host injects them as window.sokSurface
-    // before the page of the view runs. origin is the origin of the tab, and project is the project that the window shows.
-    // A view whose origin the layout read refused starts no view. Its tab keeps its place in the layout and shows its text
-    // (docs/spec/projects.md#tab-origin), as a placeholder does.
-    const refusedViews = new Set(all.filter((entry) => entry.surface.composition?.kind === "view"
-      && viewRefusal(entry.surface.surfaceId) !== null).map((entry) => entry.surface.surfaceId));
+    // A refused view keeps its tab in the layout, which shows its text (docs/spec/projects.md#tab-origin), as a placeholder does.
+    const refusedViews = new Set(all.filter((entry) => entry.refused).map((entry) => entry.surface.surfaceId));
     for (const id of refusedViews) ids.add(id);
     record.surfaces = record.surfaces.filter(({ id }) => !refusedViews.has(id));
-    const placed = surfacePlacementsForHost(all.filter((entry) => !refusedViews.has(entry.surface.surfaceId)), projects.active());
+    const placed = all.filter((entry) => !entry.refused);
     const activeIds = new Set((currentGrid()?.cards ?? []).map((card) => activeTab(card)?.id).filter(Boolean));
     const answer = await placeSurfaces(() => placeCompositorRecord(record, placed,
       (request) => host.place(request), host.kinds, {

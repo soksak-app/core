@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-22: A placement reads the start values of its views with its candidates, in the state of its commit, before the declared UI snapshot ingress and the memory placement readiness, so a tab that an operation closes during those waits no longer refuses the placement with a missing origin.
 - F283-3: The window-check job names the fault thread, image and address of each crash report of an application with `scripts/crash-fault.mjs` and resolves the address with `atos` on the runner.
 - F292-21: The run audit accepts a document field truncation envelope that holds the `surface` and `session` identifiers that the host writer stores in the fields.
 - F292-1: The browser cohort check reads the expected versions from the candidate registry and prepares the layout of the test project before it waits for the surfaces.

@@ -8078,6 +8078,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F292-22",
+    implementation: [{ file: "packages/workbench/memory-placement.js", symbol: "const started = start(candidates);" }],
+    tests: [{ file: "packages/workbench/test/memory-placement-start.test.mjs", id: "a placement keeps the start values of its commit when a tab leaves its layout during the readiness wait" }],
+    expected: "A placement reads the start values of its views with its candidates, before its readiness wait.",
+    levels: ["unit"],
+  },
+  {
     id: "F292-21",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "const HOST_FIELD_IDENTIFIERS = new Set([\"surface\", \"session\"]);" }],
     tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "document field truncation keeps the surface and session that the host writer stores in the fields" }],
