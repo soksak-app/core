@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 
+import { EVENT_PREFIX } from "../test-event-reporter.mjs";
 import { killGroup, runTests, stopGroup } from "../test-runner.mjs";
 
 const node = (name, source, extra = {}) => ({ name, command: process.execPath, args: ["-e", source], timeoutMs: 5000, ...extra });
@@ -247,44 +248,72 @@ const EVENT_REPORTER = fileURLToPath(new URL("../test-event-reporter.mjs", impor
 // The file runs without NODE_TEST_CONTEXT, which would make node --test skip it (the same variable as nodeTestFile).
 const eventsOf = (file, extra = {}) => ({ name: "events", command: "/usr/bin/env",
   args: ["-u", "NODE_TEST_CONTEXT", process.execPath, "--test", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", file], ...extra });
+// The flags of a process whose start takes 500 ms before its first event, as the start of a process takes on a loaded machine. The
+// module blocks the main thread of the process before its script runs, so a test that judges the watchdog by the wall clock counts the
+// start against the event limit.
+function slowStart(folder) {
+  const module = join(folder, "slow-start.mjs");
+  writeFileSync(module, "const end = Date.now() + 500;\nwhile (Date.now() < end) {}\n");
+  return ["--import", module];
+}
+// The statement that writes a test event line as the reporter does. The line is written with writeSync, because a write to a pipe on
+// macOS is asynchronous and a process that blocks after it would keep the line.
+const eventLine = (type, name) => `require("node:fs").writeSync(2, ${JSON.stringify(`${EVENT_PREFIX}${JSON.stringify({ type, name })}\n`)});`;
+// Resolves when the output file of a test in the folder of the run holds `text`. The runner handles the event of a line before it
+// appends the line to the output file, so a change of the folder is the event source of a handled event.
+function untilOutput(path, text) {
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      try {
+        if (readFileSync(path, "utf8").includes(text)) { watcher.close(); resolve(); }
+      } catch (error) {
+        if (error.code !== "ENOENT") { watcher.close(); reject(error); }
+      }
+    };
+    const watcher = watch(dirname(path), check);
+    check();
+  });
+}
 
-test("a test file whose test events stop for the event limit is ended near that limit, and the failure names the last event", async () => {
-  // The first test ends after 50 ms, so the events of the file stop after it; the second test blocks the event loop for 3 s.
-  const { file, folder } = await nodeTestFile([
-    'import test from "node:test";',
-    'test("quick first", () => new Promise((resolve) => setTimeout(resolve, 50)));',
-    'test("blocks second", () => { const end = Date.now() + 3000; while (Date.now() < end) {} });',
-  ].join("\n") + "\n");
+// The event watchdog tests drive the timers of the runner with the mock clock and move it only after the runner handled an event of the
+// process, so the time that the process takes to start or to write an event under load is not part of the result.
+test("a test file whose test events stop for the event limit is ended at that limit, and the failure names the last event", async (t) => {
+  // The process writes one event and then blocks its main thread for 30 s, as a test that blocks the event loop does.
+  const folder = mkdtempSync(join(tmpdir(), "runner-events-"));
+  const source = `${eventLine("test:pass", "quick first")} Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000);`;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    const { results } = await run([eventsOf(file, { eventLimitMs: 300 })], { concurrency: 1 });
-    const result = results.get("events");
+    const outcome = run([{ name: "events", command: process.execPath, args: [...slowStart(folder), "-e", source], eventLimitMs: 300 }],
+      { concurrency: 1, run: { id: "stop", folder: join(folder, "run") } });
+    await untilOutput(join(folder, "run", "001-events.log"), '"name":"quick first"');
+    t.mock.timers.tick(300);
+    const result = (await outcome).results.get("events");
     assert.equal(result.status, "timeout", result.output);
-    assert.match(result.detail, /^no test event for 300 ms, the largest limit of a test; last event: test:[a-z]+/, result.detail);
-    assert.ok(result.elapsedMs < 2000, `the file ran ${result.elapsedMs} ms, through the blocking test that ends after 3000 ms`);
+    assert.equal(result.detail, "no test event for 300 ms, the largest limit of a test; last event: test:pass quick first");
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
 });
 
-test("a test file that does not exit after its tests ended fails at the exit limit with a sample of its processes", { timeout: 60000 }, async () => {
-  // The test passes, and the exit listener then blocks the main thread for 30 s, as a process that waits in its shutdown does. The event
-  // limit of 20 s is above the exit limit of 1 s, so a runner without the exit limit reports a timeout at the event limit.
+test("a test file that does not exit after its tests ended fails at the exit limit with a sample of its processes", { timeout: 60000 }, async (t) => {
+  // The test passes, and the exit listener then blocks the main thread for 30 s, as a process that waits in its shutdown does. The clock
+  // moves by the exit limit after the summary, which stays below the event limit, so a runner without the exit limit does not end it.
   const { file, folder } = await nodeTestFile([
     'import test from "node:test";',
     'test("passes", () => {});',
     'process.on("exit", () => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000); });',
   ].join("\n") + "\n");
   const runFolder = join(folder, "run");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    const { results } = await run([eventsOf(file, { eventLimitMs: 20000, exitLimitMs: 1000 })], { concurrency: 1, run: { id: "exit", folder: runFolder } });
-    const result = results.get("events");
+    const outcome = run([eventsOf(file, { eventLimitMs: 20000, exitLimitMs: 1000 })], { concurrency: 1, run: { id: "exit", folder: runFolder } });
+    await untilOutput(join(runFolder, "001-events.log"), '"type":"test:summary"');
+    t.mock.timers.tick(1000);
+    const result = (await outcome).results.get("events");
     assert.equal(result.status, "fail", `${result.status}: ${result.detail}`);
     const match = /^the file process did not exit within 1\.000s after its tests ended; last event: test:summary; samples: ([^;]+)(?:; left running: .+)?$/.exec(result.detail);
     assert.ok(match, result.detail);
-    assert.ok(result.elapsedMs < 15000, `the file ran ${result.elapsedMs} ms, to its event limit instead of its exit limit`);
-    const samples = match[1].split(", ");
-    assert.ok(samples.length >= 1, result.detail);
-    for (const path of samples) {
+    for (const path of match[1].split(", ")) {
       assert.ok(path.startsWith(`${runFolder}/`), `${path} is not in the folder of the run`);
       assert.match(readFileSync(path, "utf8"), /Call graph:/, `${path} holds no thread stacks`);
     }
@@ -293,14 +322,33 @@ test("a test file that does not exit after its tests ended fails at the exit lim
   }
 });
 
-test("a test file whose test events keep arriving is not ended at the event limit, though it runs longer than the limit", async () => {
-  // Five tests of 200 ms each run 1000 ms in all, and the events of the file do not stop for 300 ms.
-  const body = "() => new Promise((resolve) => setTimeout(resolve, 200))";
-  const source = ['import test from "node:test";', ...[1, 2, 3, 4, 5].map((n) => `test("step ${n}", ${body});`)].join("\n") + "\n";
-  const { file, folder } = await nodeTestFile(source);
+test("a test file whose test events keep arriving is not ended at the event limit, though it runs longer than the limit", async (t) => {
+  // The process writes the event of step n after the file go-<n - 1> appears, and exits after step 5. The clock moves by 299 ms after
+  // each event, 1495 ms in all, so the events of the process do not stop for the limit of 300 ms.
+  const folder = mkdtempSync(join(tmpdir(), "runner-events-"));
+  const source = [
+    'const { existsSync, watch, writeSync } = require("node:fs");',
+    `const folder = ${JSON.stringify(folder)};`,
+    'let step = 0;',
+    'const next = () => {',
+    '  step += 1;',
+    '  if (step > 5) { watcher.close(); return; }',
+    `  writeSync(2, ${JSON.stringify(EVENT_PREFIX)} + JSON.stringify({ type: "test:pass", name: "step " + step }) + "\\n");`,
+    '};',
+    'const watcher = watch(folder, () => { if (existsSync(`${folder}/go-${step}`)) next(); });',
+    'next();',
+  ].join("\n");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    const { results } = await run([eventsOf(file, { eventLimitMs: 300 })], { concurrency: 1 });
-    assert.equal(results.get("events").status, "pass", results.get("events").detail);
+    const outcome = run([{ name: "events", command: process.execPath, args: [...slowStart(folder), "-e", source], eventLimitMs: 300 }],
+      { concurrency: 1, run: { id: "arrive", folder: join(folder, "run") } });
+    for (let step = 1; step <= 5; step++) {
+      await untilOutput(join(folder, "run", "001-events.log"), `"name":"step ${step}"`);
+      t.mock.timers.tick(299);
+      writeFileSync(join(folder, `go-${step}`), "");
+    }
+    const result = (await outcome).results.get("events");
+    assert.equal(result.status, "pass", result.detail);
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
