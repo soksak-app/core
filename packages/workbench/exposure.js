@@ -497,10 +497,13 @@ export function createRegistry({ call = null, report = null } = {}) {
       };
     },
 
-    /** Follows one core status inside this document. fn is called as fn(value, "core"), and the function returns an unsubscribe function. */
-    observeCore: (name, fn) => core.follow(name, (value) => fn(value, "core")),
-
+    /**
+     * Follows a status: fn(value, from) receives its value and each change, and the function returns an unsubscribe function. A
+     * status that the core table of this document registers is followed there when no surface is wanted, because no surface
+     * registers it; from is then "core".
+     */
     observe(name, surface, fn, { exact = false } = {}) {
+      if (surface == null && core.registered("status", name)) return core.follow(name, (value) => fn(value, "core"));
       // default: an observation that names no surface has null as the wanted surface.
       const observer = { name, wanted: surface ?? null, exact, fn, surface: undefined, watch: null, listener: null,
         pageEntry: null, stopPage: null };

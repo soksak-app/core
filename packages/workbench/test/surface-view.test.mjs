@@ -605,6 +605,62 @@ test("a view subscription to the text size resolves with a result", { timeout: 5
   }
 });
 
+test("a view watch of a core status delivers the value and the changes of the core status", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = sourceListenerMap();
+  const events = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async (name, payload) => {
+        if (name === "viewEvent" && payload.event === "status") events.push(payload.data);
+        return null;
+      } } };
+    },
+  } });
+  const { registry } = await import("../exposure.js");
+  const name = "core.fixture-grid";
+  registry.declare("core", { status: [{ name, description: "Fixture grid.", schema: { type: "object" } }], commands: [], dom: [] });
+  let grid = { cards: ["a"] };
+  const gridListeners = new Set();
+  registry.status(name, () => grid, (fn) => { gridListeners.add(fn); return () => gridListeners.delete(fn); });
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-core-status");
+  const pluginId = "fixture-core-status-view";
+  const surfaceId = "fixture-core-status-view-surface";
+  recordOrigin(surfaceId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    composition: { kind: "view", page: "ui/page.html" } };
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  try {
+    authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
+    listeners.get("view-call")({ id: 9, command: "runtime.status.watch", params: { name } });
+    await settle();
+    await settle();
+    grid = { cards: ["a", "b"] };
+    for (const fn of gridListeners) fn(grid);
+    await settle();
+    assert.deepEqual(events, [{ name, value: { cards: ["a"] } }, { name, value: { cards: ["a", "b"] } }],
+      `the view received ${JSON.stringify(events)}`);
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
 // contract: view.restart.limit-shows-error
 // The view-stopped event of the surface is shown as the error state of the surface, and mounting the surface again replaces that state.
 test("a view that stopped its restarts shows its reason as the error state of its surface until it is mounted again", { timeout: 5000 }, async (t) => {
