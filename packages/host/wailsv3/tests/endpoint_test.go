@@ -394,6 +394,38 @@ func TestEndpointMissingWindow(t *testing.T) {
 	}
 }
 
+// contract: endpoint.rpc.target-params-are-checked-in-order
+func TestEndpointTargetParamsOrder(t *testing.T) {
+	backend := newFakeBackend()
+	_, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	const window = "window must be a non-empty string"
+	const name = "name is required and must have the form <owner>.<name>"
+	cases := []struct {
+		params  map[string]any
+		code    int
+		message string
+	}{
+		{map[string]any{"name": "core.layout"}, -32602, window},
+		{map[string]any{"window": 3, "name": "core.layout"}, -32602, window},
+		{map[string]any{"window": "", "name": "core.layout"}, -32602, window},
+		{map[string]any{"window": nil, "name": "core.layout"}, -32602, window},
+		// The window is checked before the name, and the name before the existence of the window.
+		{map[string]any{"window": 3, "name": 3}, -32602, window},
+		{map[string]any{"window": "gone", "name": 3}, -32602, name},
+		{map[string]any{"window": "gone", "name": "layout"}, -32602, name},
+	}
+	for id, c := range cases {
+		got := call(t, conn, 30+id, "status.get", c.params)
+		if got.Error == nil || got.Error.Code != c.code || got.Error.Message != c.message {
+			t.Fatalf("status.get %v: %+v, want %d %q", c.params, got.Error, c.code, c.message)
+		}
+	}
+	if requests, _ := backend.seen(); len(requests) != 0 {
+		t.Fatalf("a request with invalid target params reached the page: %v", requests)
+	}
+}
+
 // contract: endpoint.names.unknown-host-name-1001, endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples, endpoint.input.pointer-invalid-phase
 func TestEndpointNameErrors(t *testing.T) {
 	_, address, _ := serve(t, newFakeBackend())

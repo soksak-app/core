@@ -326,6 +326,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.rpc.page-params-omit-window` | 페이지는 window 필드를 뺀 전달 매개변수를 받는다. | both |
 | `endpoint.rpc.unknown-window-1003` | 존재하지 않는 창에 대한 선언된 메서드는 페이지에 닿지 않고 오류 1003을 반환한다. | both |
 | `endpoint.rpc.missing-window-param-invalid` | window 매개변수가 없는 status.get은 -32602를 반환한다. | both |
+| `endpoint.rpc.target-params-are-checked-in-order` | window를 지정하는 요청은 params를 한 순서로 검사한다. window가 없거나, null이거나, 문자열이 아니거나, 비어 있으면 -32602 `window must be a non-empty string`으로 실패한다. 그다음 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act`에서 name이 없거나, 문자열이 아니거나, `<owner>.<name>` 형식이 아니면 -32602 `name is required and must have the form <owner>.<name>`으로 실패한다. 그다음 없는 window는 1003으로 실패한다. 이런 요청은 page에 닿지 않는다. | both |
 | `endpoint.names.unknown-host-name-1001` | 알 수 없는 host 이름의 command.run은 오류 1001을 반환한다. | both |
 | `endpoint.names.missing-name-invalid` | name이 없는 status.get은 -32602를 반환한다. | both |
 | `endpoint.names.owner-form-required` | owner.name 형식이 아닌 이름과 문자열이 아닌 이름은 -32602를 반환한다. | both |

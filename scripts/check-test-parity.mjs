@@ -8049,6 +8049,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F293",
+    implementation: [
+      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "func windowParam(params json.RawMessage) (string, error)" },
+      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "window must be a non-empty string" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointTargetParamsOrder" },
+      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "target_params_are_checked_in_order" },
+    ],
+    expected: "Both hosts check the window, then the name, then the existence of the window of an endpoint request with one error text.",
+    levels: ["unit"],
+  },
+  {
     id: "F291",
     implementation: [{ file: "scripts/audit-run.mjs", symbol: "inside.reduce((most, { event }) => Math.max(most, event.ts_us), -Infinity)" }],
     tests: [{ file: "scripts/test/audit-run.test.mjs", id: "a run whose last test has no end mark audits a log of more events than the call stack holds arguments" }],

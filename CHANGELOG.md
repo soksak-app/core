@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F293: Both hosts check the window of an endpoint request before its name and answer a missing, empty or non-string window with `window must be a non-empty string`.
 - F283-2: The window-check jobs record the exit status of each application and keep every crash report of the applications.
 - F291: The run audit reads a log of any length; a run whose last test had no end mark and whose logs held hundreds of thousands of events ended with `Maximum call stack size exceeded`.
 - F290: Each window check that records the screen declares `RECORDING`, which skips it before it starts without a display that presents frames; an undeclared recording fails with an error that names the declaration.

@@ -1210,9 +1210,11 @@ fn target(
         Some(Value::Object(params)) => params,
         Some(_) => return Err(Failure::params("params must be an object")),
     };
+    // The window is checked first, then the name, then the existence of the window
+    // (endpoint.rpc.target-params-are-checked-in-order).
     let window = match params.remove("window") {
-        Some(Value::String(window)) => window,
-        _ => return Err(Failure::params("window must be a string")),
+        Some(Value::String(window)) if !window.is_empty() => window,
+        _ => return Err(Failure::params("window must be a non-empty string")),
     };
     if matches!(
         method,

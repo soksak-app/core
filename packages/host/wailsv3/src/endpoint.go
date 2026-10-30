@@ -987,13 +987,6 @@ var namePattern = regexp.MustCompile(`^[a-z0-9-]+(\.[a-z0-9-]+)+$`)
 
 func isHostName(name string) bool { return strings.HasPrefix(name, "host.") }
 
-// target is the common parameter of a request that specifies a window.
-type target struct {
-	Window  *string `json:"window"`
-	Name    *string `json:"name"`
-	Surface *string `json:"surface"`
-}
-
 // decode reads params into into. It is a parameter error when params is not an object.
 func decode(params json.RawMessage, into any) error {
 	if len(params) == 0 || params[0] != '{' {
@@ -1007,30 +1000,49 @@ func decode(params json.RawMessage, into any) error {
 
 // window reads the window of params and checks that the window exists.
 func (e *Endpoint) window(params json.RawMessage) (string, error) {
-	var t target
-	if err := decode(params, &t); err != nil {
+	window, err := windowParam(params)
+	if err != nil {
 		return "", err
 	}
-	if t.Window == nil || *t.Window == "" {
-		return "", rpcError(codeInvalidParams, "window is required")
+	if !e.backend.HasWindow(window) {
+		return "", errMissingWindow(window)
 	}
-	if !e.backend.HasWindow(*t.Window) {
-		return "", errMissingWindow(*t.Window)
-	}
-	return *t.Window, nil
+	return window, nil
 }
 
-// named reads the window and the name of params.
+// windowParam reads the window of params without checking that the window exists.
+func windowParam(params json.RawMessage) (string, error) {
+	var fields struct {
+		Window json.RawMessage `json:"window"`
+	}
+	if err := decode(params, &fields); err != nil {
+		return "", err
+	}
+	var window string
+	if json.Unmarshal(fields.Window, &window) != nil || window == "" {
+		return "", rpcError(codeInvalidParams, "window must be a non-empty string")
+	}
+	return window, nil
+}
+
+// named reads the window and the name of params. The window is checked first, then the name, then the existence of the window
+// (endpoint.rpc.target-params-are-checked-in-order).
 func (e *Endpoint) named(params json.RawMessage) (string, string, error) {
-	var t target
-	if err := decode(params, &t); err != nil {
+	if _, err := windowParam(params); err != nil {
 		return "", "", err
 	}
-	if t.Name == nil || !namePattern.MatchString(*t.Name) {
+	var fields struct {
+		Name json.RawMessage `json:"name"`
+	}
+	if err := decode(params, &fields); err != nil {
+		return "", "", err
+	}
+	var name string
+	if json.Unmarshal(fields.Name, &name) != nil || !namePattern.MatchString(name) {
 		return "", "", rpcError(codeInvalidParams, "name is required and must have the form <owner>.<name>")
 	}
 	window, err := e.window(params)
-	return window, *t.Name, err
+	return window, name, err
 }
 
 // withoutWindow removes window from the params to send to the page.
@@ -1099,7 +1111,9 @@ func watchTopic(e *Endpoint, params json.RawMessage, on bool) (topic, bool, erro
 		}
 		return t, on, nil
 	}
-	var fields target
+	var fields struct {
+		Surface *string `json:"surface"`
+	}
 	if err := decode(params, &fields); err != nil {
 		return topic{}, on, err
 	}

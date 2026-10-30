@@ -513,6 +513,45 @@ fn declared_method_on_unknown_window_returns_1003() {
     endpoint.stop();
 }
 
+// contract: endpoint.rpc.target-params-are-checked-in-order
+#[test]
+fn target_params_are_checked_in_order() {
+    let config = folder::Folder::new();
+    let (fake, _) = Fake::new();
+    let endpoint = start(config.path(), "test-window", fake.clone());
+    let mut connection = open(&endpoint);
+    let window = "window must be a non-empty string";
+    let name = "name is required and must have the form <owner>.<name>";
+    let cases = [
+        (json!({"name": "core.layout"}), window),
+        (json!({"window": 3, "name": "core.layout"}), window),
+        (json!({"window": "", "name": "core.layout"}), window),
+        (json!({"window": null, "name": "core.layout"}), window),
+        // The window is checked before the name, and the name before the existence of the window.
+        (json!({"window": 3, "name": 3}), window),
+        (json!({"window": "gone", "name": 3}), name),
+        (json!({"window": "gone", "name": "layout"}), name),
+    ];
+    for (id, (params, message)) in cases.into_iter().enumerate() {
+        let reply = request(
+            &mut connection,
+            30 + id as u64,
+            "status.get",
+            params.clone(),
+        );
+        assert_eq!(
+            (
+                reply["error"]["code"].clone(),
+                reply["error"]["message"].clone()
+            ),
+            (json!(-32602), json!(message)),
+            "status.get {params}"
+        );
+    }
+    assert!(fake.calls().is_empty());
+    endpoint.stop();
+}
+
 // contract: endpoint.rpc.round-trip-by-id, endpoint.rpc.page-params-omit-window
 #[test]
 fn framing_round_trip_answers_requests_by_id() {

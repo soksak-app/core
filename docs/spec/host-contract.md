@@ -323,6 +323,7 @@ Items:
 | `endpoint.rpc.page-params-omit-window` | The page receives forwarded params without the window field. | both |
 | `endpoint.rpc.unknown-window-1003` | A declared method on a window that does not exist returns error 1003 without reaching the page. | both |
 | `endpoint.rpc.missing-window-param-invalid` | A status.get without a window param returns -32602. | both |
+| `endpoint.rpc.target-params-are-checked-in-order` | A request that names a window checks its params in one order: a window that is absent, null, not a string or empty fails with -32602 `window must be a non-empty string`; then for `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect` and `dom.act` a name that is absent, not a string or not of the form `<owner>.<name>` fails with -32602 `name is required and must have the form <owner>.<name>`; then a window that does not exist fails with 1003. No such request reaches the page. | both |
 | `endpoint.names.unknown-host-name-1001` | command.run with an unknown host name returns error 1001. | both |
 | `endpoint.names.missing-name-invalid` | status.get without a name returns -32602. | both |
 | `endpoint.names.owner-form-required` | Names without the owner.name form, and non-string names, return -32602. | both |
