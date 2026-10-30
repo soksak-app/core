@@ -8085,6 +8085,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F292-25",
+    implementation: [
+      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func modalOrder(nativeSurfaces, webviews int) int {" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn modal_order(native_surfaces: usize, webviews: usize) -> usize {" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/exposure_webviews_test.go", id: "TestModalOrderIsAboveEveryNativeSurfaceAndWebview" },
+      { file: "packages/host/tauriv2/src/exposure_webviews_test.rs", id: "modal_order_is_above_every_native_surface_and_webview" },
+    ],
+    expected: "host.window reports the order of an open modal above every native surface order and every web view order on both hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F292-21",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "const HOST_FIELD_IDENTIFIERS = new Set([\"surface\", \"session\"]);" }],
     tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "document field truncation keeps the surface and session that the host writer stores in the fields" }],

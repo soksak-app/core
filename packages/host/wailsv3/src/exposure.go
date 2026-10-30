@@ -1391,7 +1391,6 @@ func registeredSurface(named map[uint64]string, view uint64) (string, error) {
 	return id, nil
 }
 
-// windowState reads the current value of host.window.
 // windowWebviewCounts returns the web view counts of host.window from the native window facts.
 func windowWebviewCounts(facts windowFacts) (appDom, document, pluginHost int) {
 	return facts.AppDomWebviews, facts.DocumentWebviews, facts.PluginHostWebviews
@@ -1403,6 +1402,14 @@ func windowWebviewRow(order int, view windowWebviewFacts) WindowWebview {
 		Visible: !view.Hidden, Focused: view.Focused, Order: order}
 }
 
+// modalOrder returns the order of an open modal in host.window from the number of native surfaces and the number of
+// web views. The orders of native surfaces and of web views are indexes of two lists, and the modal is attached above
+// both, so its order is above every index of either list.
+func modalOrder(nativeSurfaces, webviews int) int {
+	return nativeSurfaces + webviews
+}
+
+// windowState reads the current value of host.window.
 func (s *Surfaces) windowState() (WindowStatus, error) {
 	var facts windowFacts
 	var named map[uint64]string
@@ -1494,8 +1501,8 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 				}
 				frame := view.frame
 				modal.Frame = &frame
-				modalOrder := len(facts.NativeSurfaces) + len(facts.Webviews)
-				modal.Order = &modalOrder
+				order := modalOrder(len(facts.NativeSurfaces), len(facts.Webviews))
+				modal.Order = &order
 				modal.Background = &ModalBackground{Draws: view.Draws, Alpha: view.Alpha}
 				found = true
 				break

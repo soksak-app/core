@@ -14,3 +14,11 @@ func TestWindowStatusCountsPluginHostWebviewsApart(t *testing.T) {
 		t.Fatalf("plugin host row %#v, want pluginHost true, main false, document false, visible false, order 3", row)
 	}
 }
+
+// contract: window.facts.modal-order-is-above-every-webview
+func TestModalOrderIsAboveEveryNativeSurfaceAndWebview(t *testing.T) {
+	// Two native surfaces have the orders 0 and 1, and five web views have the orders 0 to 4.
+	if order := modalOrder(2, 5); order != 7 {
+		t.Fatalf("modal order %d, want 7", order)
+	}
+}

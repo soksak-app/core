@@ -1724,6 +1724,13 @@ fn window_webview_counts(facts: &Value) -> Result<(u64, u64, u64), Failure> {
     ))
 }
 
+/// Returns the order of an open modal in host.window from the number of native surfaces and the number of web views.
+fn modal_order(native_surfaces: usize, webviews: usize) -> usize {
+    // The orders of native surfaces and of web views are indexes of two lists, and the modal is attached above both, so
+    // its order is above every index of either list.
+    native_surfaces + webviews
+}
+
 /// Returns the host.window row of the web view at drawing order `order` from its native facts.
 fn window_webview_row(order: usize, view: &Value) -> Result<Value, Failure> {
     let flag = |name: &str| {
@@ -1854,10 +1861,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
             );
         } else if modal.is_object() && modal_view == Some(address) {
             modal["frame"] = rect(view);
-            // The order of native surfaces is reported in a separate compositor plane, so its index cannot be compared
-            // with the index of the webview subtree. The modal is attached above that whole plane, so it has the next
-            // order.
-            modal["order"] = json!(native_surfaces.len());
+            modal["order"] = json!(modal_order(native_surfaces.len(), webviews.len()));
             modal["background"] = json!({"draws": view["draws"], "alpha": view["alpha"]});
         }
     }

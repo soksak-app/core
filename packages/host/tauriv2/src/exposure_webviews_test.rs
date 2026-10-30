@@ -26,3 +26,10 @@ fn window_status_counts_plugin_host_webviews_apart() {
         "plugin host row {row}"
     );
 }
+
+// contract: window.facts.modal-order-is-above-every-webview
+#[test]
+fn modal_order_is_above_every_native_surface_and_webview() {
+    // Two native surfaces have the orders 0 and 1, and five web views have the orders 0 to 4.
+    assert_eq!(modal_order(2, 5), 7);
+}
