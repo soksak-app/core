@@ -1,9 +1,13 @@
 // Checks that the first responder observation of a window calls back at each change of the first responder, in a window
 // of a class that the application declares and in a class that is declared at run time, that a later observation
-// replaces an earlier one, that an ended observation calls back no more, and that an observed window is released, and that each
+// replaces an earlier one, that an ended observation calls back no more, that an observed window is released, that an
+// observation ends after its window was released, and that each
 // change of the first responder is a record of native.window.first_responder. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
+#import <stdlib.h>
+#import <unistd.h>
+#import <mach-o/dyld.h>
 #import "window_facts.h"
 #import "event_ring.h"
 #import "support/records.h"
@@ -47,18 +51,23 @@ static void checkWindow(Class windowClass, NSString *label) {
         [window.contentView addSubview:second];
         [window orderFront:nil];
         __block int earlier = 0;
-        check(sp_window_observe_responder(window, ^{ earlier++; }), [label stringByAppendingString:@" observation starts"]);
+        void *replaced = sp_window_observe_responder(window, ^{ earlier++; });
+        check(replaced != NULL, [label stringByAppendingString:@" observation starts"]);
         __block int changes = 0;
-        check(sp_window_observe_responder(window, ^{ changes++; }), [label stringByAppendingString:@" observation is replaced"]);
+        void *observation = sp_window_observe_responder(window, ^{ changes++; });
+        check(observation != NULL, [label stringByAppendingString:@" observation is replaced"]);
         [window makeFirstResponder:first];
         int afterFirst = changes;
         check(afterFirst == 1, [NSString stringWithFormat:@"%@ a move to the first view calls back once (%d calls)", label, afterFirst]);
         [window makeFirstResponder:second];
         check(changes == 2, [NSString stringWithFormat:@"%@ a move to the second view calls back once (%d calls)", label, changes]);
         check(earlier == 0, [NSString stringWithFormat:@"%@ the replaced observation stays silent (%d calls)", label, earlier]);
-        sp_window_end_responder_observation(window);
+        sp_window_end_responder_observation(replaced);
         [window makeFirstResponder:first];
-        check(changes == 2, [NSString stringWithFormat:@"%@ an ended observation calls back no more (%d calls)", label, changes]);
+        check(changes == 3, [NSString stringWithFormat:@"%@ the end of a replaced observation leaves the current one (%d calls)", label, changes]);
+        sp_window_end_responder_observation(observation);
+        [window makeFirstResponder:second];
+        check(changes == 3, [NSString stringWithFormat:@"%@ an ended observation calls back no more (%d calls)", label, changes]);
         [window close];
         [window release];
     }
@@ -68,8 +77,10 @@ static void checkWindow(Class windowClass, NSString *label) {
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
         [window setReleasedWhenClosed:NO];
         __block int calls = 0;
-        check(sp_window_observe_responder(window, ^{ calls++; }), [label stringByAppendingString:@" an unshown window is observed"]);
+        void *observation = sp_window_observe_responder(window, ^{ calls++; });
+        check(observation != NULL, [label stringByAppendingString:@" an unshown window is observed"]);
         [window release];
+        sp_window_end_responder_observation(observation);
         check(calls == 0, [NSString stringWithFormat:@"%@ an observed window is released (%d calls)", label, calls]);
     }
 }
@@ -89,7 +100,8 @@ static void checkFirstResponderRecords(void) {
         [window.contentView addSubview:second];
         [window orderFront:nil];
         [window makeFirstResponder:first];
-        check(sp_window_observe_responder(window, ^{}), @"first responder records: the observation starts");
+        void *observation = sp_window_observe_responder(window, ^{});
+        check(observation != NULL, @"first responder records: the observation starts");
         NSArray<NSDictionary *> *moves = capturedEvents(^{
             [window makeFirstResponder:second];
             [window makeFirstResponder:first];
@@ -112,20 +124,54 @@ static void checkFirstResponderRecords(void) {
             if ([event[@"name"] isEqual:@"native.window.first_responder"]) sameChanges++;
         }
         check(sameChanges == 0, [NSString stringWithFormat:@"a move to the first responder records no change (%lu records)", (unsigned long)sameChanges]);
-        sp_window_end_responder_observation(window);
+        sp_window_end_responder_observation(observation);
         [window close];
         [window release];
     }
 }
 
-int main(void) { @autoreleasepool {
+// A host ends the observation in a main-thread step after the window closed, when AppKit may have released the window. The
+// end must not touch the released window. The test runs with MallocScribble, so the memory of a released window holds no
+// valid object, and a use of it fails instead of reading the stale memory.
+static void checkEndAfterRelease(void) {
+    NSWindow *window = nil;
+    __block int calls = 0;
+    void *observation = NULL;
+    // A weak slot of the runtime; the test is built without automatic reference counting.
+    id weakWindow = nil;
+    @autoreleasepool {
+        window = [[SPDeclaredWindow alloc] initWithContentRect:NSMakeRect(60, 60, 400, 300)
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        [window setReleasedWhenClosed:NO];
+        observation = sp_window_observe_responder(window, ^{ calls++; });
+        check(observation != NULL, @"end after release: the observation starts");
+        objc_storeWeak(&weakWindow, window);
+        [window close];
+        [window release];
+    }
+    // The pool held the references that AppKit autoreleased, so the window is released when it drains.
+    check(objc_loadWeak(&weakWindow) == nil, @"end after release: the window is released before the end");
+    objc_storeWeak(&weakWindow, nil);
+    sp_window_end_responder_observation(observation);
+    check(calls == 0, [NSString stringWithFormat:@"an observation ends after its window was released (%d calls)", calls]);
+}
+
+int main(int argc, char **argv) { @autoreleasepool {
+    // MallocScribble applies to a process from its start, so the test starts itself again with it.
+    if (!getenv("MallocScribble")) {
+        setenv("MallocScribble", "1", 1);
+        execv(argv[0], argv);
+        fprintf(stderr, "FAIL: the test cannot start itself again with MallocScribble\n");
+        return 1;
+    }
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-    check(!sp_window_observe_responder(NULL, ^{}), @"an observation without a window is refused");
+    check(sp_window_observe_responder(NULL, ^{}) == NULL, @"an observation without a window is refused");
     checkWindow(SPDeclaredWindow.class, @"declared class:");
     checkWindow(runtimeWindowClass(), @"runtime class:");
     checkFirstResponderRecords();
+    checkEndAfterRelease();
     return failures == 0 ? 0 : 1;
 } }

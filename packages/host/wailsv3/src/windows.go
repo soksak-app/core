@@ -399,7 +399,9 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			}
 			// The page combines the first responder with the focus of its documents in core.focus.
 			var observed error
-			application.InvokeSync(func() { observed = system.ObserveResponder(win.NativeWindow(), s.responderChanged) })
+			application.InvokeSync(func() {
+				s.responderObservation, observed = system.ObserveResponder(win.NativeWindow(), s.responderChanged)
+			})
 			if observed != nil {
 				fatalError("window responder", observed)
 			}
@@ -630,7 +632,9 @@ func (s *Surfaces) close() {
 	s.host.removals.Abandon(s.name)
 	application.InvokeSync(func() {
 		cancelLayout(s, s.window)
-		system.EndResponderObservation(s.window.NativeWindow())
+		// The close ends the observation and not the window, which Wails may have released.
+		system.EndResponderObservation(s.responderObservation)
+		s.responderObservation = nil
 		if s.monitor != 0 {
 			system.UnwatchInput(s.monitor)
 		}

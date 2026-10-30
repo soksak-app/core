@@ -222,6 +222,6 @@ bool nativeWindowFullscreen(void *handle, bool on, uintptr_t callback) {
 }
 
 extern void nativeResponderChanged(uintptr_t callback);
-bool nativeWindowObserveResponder(void *handle, uintptr_t callback) {
+void *nativeWindowObserveResponder(void *handle, uintptr_t callback) {
     return sp_window_observe_responder(handle, ^{ nativeResponderChanged(callback); });
 }

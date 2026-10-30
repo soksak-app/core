@@ -75,12 +75,14 @@ bool sp_window_observe_occlusion(void *window, void (^changed)(void));
 #endif
 
 // Calls changed on the main thread each time the first responder of the window changes, observed with key-value
-// observing of firstResponder, which AppKit declares key-value observing compliant. The observation ends when the window
-// is released. An existing observation of the window is replaced. Returns false when there is no window or no callback.
+// observing of firstResponder, which AppKit declares key-value observing compliant. Returns the observation, which the caller
+// ends once with sp_window_end_responder_observation, or NULL when there is no window or no callback. The observation refers
+// to the window weakly and ends without a callback when the window is released. A later observation of the window ends an
+// existing one, which the caller still passes to the end.
 #ifdef __BLOCKS__
-bool sp_window_observe_responder(void *window, void (^changed)(void));
+void *sp_window_observe_responder(void *window, void (^changed)(void));
 #endif
 
-// Ends the first responder observation of the window, so its callback is not called again. A window without an observation
-// is left unchanged.
-void sp_window_end_responder_observation(void *window);
+// Ends the observation that sp_window_observe_responder returned and releases it, so its callback is not called again. It
+// does not use the window, so it may run after AppKit released the window.
+void sp_window_end_responder_observation(void *observation);

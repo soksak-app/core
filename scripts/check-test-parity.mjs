@@ -358,7 +358,7 @@ const FEATURE_LINKS = [
     expected: "Every document has a UUID page identity, and both hosts require a document and a positive finite time origin in view.ready.",
     id: "F239-297",
     implementation: [
-      { file: "native/darwin/src/window_facts.m", symbol: "bool sp_window_observe_responder(" },
+      { file: "native/darwin/src/window_facts.m", symbol: "void *sp_window_observe_responder(" },
       { file: "packages/host/wailsv3/src/responder.go", symbol: "func (r *responderState) send(" },
       { file: "packages/host/tauriv2/src/responder.rs", symbol: "pub fn send_changed_responder(" },
       { file: "packages/plugin-api/view.js", symbol: "calls.request(\"tab.focus\", value)" },
@@ -7993,6 +7993,13 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "function checklist(" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a platform-excluded item only with a named unavailable platform and unverified result" }],
     expected: "A platform-excluded checklist item names the unavailable platform and states that runtime behavior remains unverified.",
+    levels: ["unit"],
+  },
+  {
+    id: "F281",
+    implementation: [{ file: "native/darwin/src/window_facts.m", symbol: "void sp_window_end_responder_observation(void *observation)" }],
+    tests: [{ file: "native/darwin/tests/window_responder_test.m", id: "an observation ends after its window was released" }],
+    expected: "The first responder observation ends through its own observation, without using the window that AppKit may have released.",
     levels: ["unit"],
   },
   {

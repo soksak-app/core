@@ -14,7 +14,7 @@ package darwin
 #include "window_reveal.h"
 
 bool nativeWindowFullscreen(void *window, bool on, uintptr_t callback);
-bool nativeWindowObserveResponder(void *window, uintptr_t callback);
+void *nativeWindowObserveResponder(void *window, uintptr_t callback);
 #import <Cocoa/Cocoa.h>
 
 void nativeWindowPrepare(void *window);
@@ -49,27 +49,25 @@ func (implementation) Fullscreen(window unsafe.Pointer, on bool, done func()) er
 	return nil
 }
 
-// The observation callbacks by window. They are read and changed only on the UI thread.
+// The observation callbacks by observation. They are read and changed only on the UI thread.
 var responderObservers = map[unsafe.Pointer]cgo.Handle{}
 
-func (implementation) ObserveResponder(window unsafe.Pointer, changed func()) error {
+func (implementation) ObserveResponder(window unsafe.Pointer, changed func()) (unsafe.Pointer, error) {
 	handle := cgo.NewHandle(changed)
-	if !bool(C.nativeWindowObserveResponder(window, C.uintptr_t(handle))) {
+	observation := C.nativeWindowObserveResponder(window, C.uintptr_t(handle))
+	if observation == nil {
 		handle.Delete()
-		return errors.New("the first responder of the window cannot be observed")
+		return nil, errors.New("the first responder of the window cannot be observed")
 	}
-	if previous, ok := responderObservers[window]; ok {
-		previous.Delete()
-	}
-	responderObservers[window] = handle
-	return nil
+	responderObservers[observation] = handle
+	return observation, nil
 }
 
-func (implementation) EndResponderObservation(window unsafe.Pointer) {
-	C.sp_window_end_responder_observation(window)
-	if handle, ok := responderObservers[window]; ok {
+func (implementation) EndResponderObservation(observation unsafe.Pointer) {
+	C.sp_window_end_responder_observation(observation)
+	if handle, ok := responderObservers[observation]; ok {
 		handle.Delete()
-		delete(responderObservers, window)
+		delete(responderObservers, observation)
 	}
 }
 

@@ -41,8 +41,8 @@ func (implementation) Fullscreen(unsafe.Pointer, bool, func()) error {
 	return unsupported("full screen")
 }
 
-func (implementation) ObserveResponder(unsafe.Pointer, func()) error {
-	return unsupported("first responder observation")
+func (implementation) ObserveResponder(unsafe.Pointer, func()) (unsafe.Pointer, error) {
+	return nil, unsupported("first responder observation")
 }
 
 func (implementation) EndResponderObservation(unsafe.Pointer) {}

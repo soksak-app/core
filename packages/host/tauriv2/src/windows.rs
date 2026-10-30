@@ -745,7 +745,10 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     )?;
     // The page combines the first responder with the focus of its documents in core.focus.
     let responding = window.clone();
-    platform.observe_responder(owner, Box::new(move || responder_changed(&responding)))?;
+    // The close of the window ends the observation in a later main-thread step, when AppKit may have released the window, so
+    // the step ends the observation and not the window.
+    let responder_observation =
+        platform.observe_responder(owner, Box::new(move || responder_changed(&responding)))?;
     // Notifies the connections that watch host.window of the change of the occlusion state. Tauri does not send this
     // change as a window event.
     let occluded = window.clone();
@@ -821,7 +824,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                         );
                     }
                     log_failure("surface layout cancel", platform.cancel_layout(owner));
-                    platform.end_responder_observation(owner);
+                    platform.end_responder_observation(responder_observation);
                     match closing {
                         Ok(data) => dispose_plugin_hosts_of(&closing_host, &data, false),
                         Err(error) => log_error("plugin host", error),

@@ -413,16 +413,20 @@ bool sp_window_observe_occlusion(void *handle, void (^changed)(void)) {
     return true;
 }
 
-// Observation of the first responder of one window. It is an associated object of the window, so it is released with
-// the window; key-value observing unregisters an observer of an object that is released. A later observation of the
-// window removes it.
-@interface SPResponderObserver : NSObject
-@property(nonatomic, assign) NSWindow *window;
+// Observation of the first responder of one window. The window holds it as an associated object, and the caller holds it
+// as the observation that sp_window_end_responder_observation ends. It refers to the window weakly, so an end after AppKit
+// released the window touches no window; key-value observing unregisters an observer of an object that is released. A later
+// observation of the window ends it.
+@interface SPResponderObserver : NSObject {
+    id _window;
+}
 @property(nonatomic, copy) void (^changed)(void);
+- (instancetype)initWithWindow:(NSWindow *)window;
 - (void)end;
 @end
 
 static char responderContext;
+static const char responderObserverKey;
 
 // The class name of a responder, or an empty name when the change has no responder (KVO reports nil as NSNull).
 static NSString *responderClassName(id responder) {
@@ -453,40 +457,50 @@ static void emitResponderChange(NSInteger windowNumber, id from, id to) {
     if (from != to) emitResponderChange(((NSWindow *)object).windowNumber, from, to);
     _changed();
 }
+- (instancetype)initWithWindow:(NSWindow *)window {
+    if ((self = [super init])) objc_storeWeak(&_window, window);
+    return self;
+}
+// Ends the observation once; a second end and an end after the window was released do nothing to the window.
 - (void)end {
-    [_window removeObserver:self forKeyPath:@"firstResponder" context:&responderContext];
-    _window = nil;
+    NSWindow *window = [objc_loadWeak(&_window) retain];
+    objc_storeWeak(&_window, nil);
+    if (!window) return;
+    [window removeObserver:self forKeyPath:@"firstResponder" context:&responderContext];
+    if (objc_getAssociatedObject(window, &responderObserverKey) == self) {
+        objc_setAssociatedObject(window, &responderObserverKey, nil, OBJC_ASSOCIATION_RETAIN);
+    }
+    [window release];
 }
 - (void)dealloc {
+    objc_storeWeak(&_window, nil);
     [_changed release];
     [super dealloc];
 }
 @end
 
-static const char responderObserverKey;
-
-bool sp_window_observe_responder(void *handle, void (^changed)(void)) {
+void *sp_window_observe_responder(void *handle, void (^changed)(void)) {
     NSCAssert(NSThread.isMainThread, @"first responder observation requires the UI thread");
     NSWindow *window = (NSWindow *)handle;
     if (!window || !changed) {
         sp_log_error("window facts", "the window or the callback of the first responder observation is missing");
-        return false;
+        return NULL;
     }
     [(SPResponderObserver *)objc_getAssociatedObject(window, &responderObserverKey) end];
-    SPResponderObserver *observer = [[SPResponderObserver new] autorelease];
-    observer.window = window;
+    SPResponderObserver *observer = [[SPResponderObserver alloc] initWithWindow:window];
     observer.changed = changed;
     if (!sp_observe_key_path("window_facts.responder", SP_OBSERVE_RECORD, window, observer, @"firstResponder", NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew, &responderContext)) {
-        return false;
+        [observer release];
+        return NULL;
     }
     objc_setAssociatedObject(window, &responderObserverKey, observer, OBJC_ASSOCIATION_RETAIN);
-    return true;
+    return observer;
 }
 
-void sp_window_end_responder_observation(void *handle) {
+void sp_window_end_responder_observation(void *observation) {
     NSCAssert(NSThread.isMainThread, @"first responder observation requires the UI thread");
-    NSWindow *window = (NSWindow *)handle;
-    if (!window) return;
-    [(SPResponderObserver *)objc_getAssociatedObject(window, &responderObserverKey) end];
-    objc_setAssociatedObject(window, &responderObserverKey, nil, OBJC_ASSOCIATION_RETAIN);
+    SPResponderObserver *observer = (SPResponderObserver *)observation;
+    if (!observer) return;
+    [observer end];
+    [observer release];
 }

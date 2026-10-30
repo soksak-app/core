@@ -380,6 +380,9 @@ type Surfaces struct {
 	ready bool
 	// responder is the first responder that the page last received (window-responder).
 	responder responderState
+	// responderObservation is the first responder observation of the window, which close ends. It is read and changed only on
+	// the UI thread.
+	responderObservation unsafe.Pointer
 	// readied is the channel that waits for the next WindowReady. Host.mu protects it.
 	readied []chan struct{}
 	monitor uintptr

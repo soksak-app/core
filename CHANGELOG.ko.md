@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F281: Tauri와 Wails host는 닫히는 window의 first responder observation을 AppKit이 해제했을 수 있는 window를 쓰지 않고 끝낸다. Tauri host는 window가 닫힐 때 더 이상 SIGSEGV로 crash하지 않는다.
 - F283-1: 창 검사 job은 메모리 압박 report와 끝난 process의 kernel 기록을 남긴다.
 - F282: 두 host는 view surface의 view에 있는 first responder를 page가 받아들이는 owner `surface`로 보고한다.
 - F280: 창 검사 job은 멈춘 application이 끝나기를 기다리고 crash한 host의 crash report를 남긴다.

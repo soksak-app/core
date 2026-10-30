@@ -288,11 +288,12 @@ type Platform interface {
 	// Fullscreen switches the window to full screen or back and calls done on the UI thread when the transition
 	// ends. A request that arrives during a transition is handled after that transition ends.
 	Fullscreen(window unsafe.Pointer, on bool, done func()) error
-	// ObserveResponder calls changed on the UI thread each time the first responder of the window changes. An existing
-	// observation of the window is replaced. Call it on the UI thread.
-	ObserveResponder(window unsafe.Pointer, changed func()) error
-	// EndResponderObservation ends the observation of ObserveResponder, so changed is not called again. Call it on the UI thread.
-	EndResponderObservation(window unsafe.Pointer)
+	// ObserveResponder calls changed on the UI thread each time the first responder of the window changes, and returns the
+	// observation. An existing observation of the window stops calling back, and its owner still ends it. Call it on the UI thread.
+	ObserveResponder(window unsafe.Pointer, changed func()) (unsafe.Pointer, error)
+	// EndResponderObservation ends an observation of ObserveResponder once, so its changed is not called again. It does not use
+	// the window, so it may run after the window was released. Call it on the UI thread.
+	EndResponderObservation(observation unsafe.Pointer)
 
 	// TitlebarHeight returns the title bar height (pt) of the window. It is 0 while the title bar is not shown, as in full screen, and
 	// it returns an error when the window has no buttons. Call it on the UI thread.

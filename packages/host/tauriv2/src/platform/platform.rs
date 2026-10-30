@@ -347,11 +347,12 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Calls changed on the UI thread whenever the occlusion state of the window changes. The observation ends with the
     /// window.
     fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String>;
-    /// Calls changed on the UI thread each time the first responder of the window changes. An existing observation of
-    /// the window is replaced. Call it on the UI thread.
-    fn observe_responder(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String>;
-    /// Ends the observation of observe_responder, so changed is not called again. Call it on the UI thread.
-    fn end_responder_observation(&self, window: Handle);
+    /// Calls changed on the UI thread each time the first responder of the window changes, and returns the observation. An
+    /// existing observation of the window stops calling back, and its owner still ends it. Call it on the UI thread.
+    fn observe_responder(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<Handle, String>;
+    /// Ends an observation of observe_responder once, so its changed is not called again. It does not use the window, so it
+    /// may run after the window was released. Call it on the UI thread.
+    fn end_responder_observation(&self, observation: Handle);
 
     /// Returns the title bar height (pt) of the window. It is 0 while the title bar is not shown, as in full screen,
     /// and it returns an error when the window has no buttons. Call it on the UI thread.

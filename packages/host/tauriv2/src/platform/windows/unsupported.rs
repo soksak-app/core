@@ -47,11 +47,11 @@ pub fn observe_occlusion(_window: Handle, _changed: Box<dyn Fn()>) -> Result<(),
     missing("window occlusion")
 }
 
-pub fn observe_responder(_window: Handle, _changed: Box<dyn Fn()>) -> Result<(), String> {
+pub fn observe_responder(_window: Handle, _changed: Box<dyn Fn()>) -> Result<Handle, String> {
     missing("first responder observation")
 }
 
-pub fn end_responder_observation(_window: Handle) {}
+pub fn end_responder_observation(_observation: Handle) {}
 
 pub fn titlebar_height(_window: Handle) -> Result<f64, String> {
     missing("window title bar")

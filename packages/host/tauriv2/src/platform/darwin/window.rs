@@ -95,25 +95,31 @@ pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn()>) -> Result<(), S
     }
 }
 
-/// Calls changed whenever the first responder of the window changes (key-value observing of firstResponder).
-pub fn observe_responder(window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
+/// Calls changed whenever the first responder of the window changes (key-value observing of firstResponder), and returns the
+/// observation that end_responder_observation ends.
+pub fn observe_responder(window: Handle, changed: Box<dyn Fn()>) -> Result<Handle, String> {
     unsafe extern "C" {
-        fn sp_window_observe_responder(window: *mut c_void, changed: &Block<dyn Fn()>) -> bool;
+        fn sp_window_observe_responder(
+            window: *mut c_void,
+            changed: &Block<dyn Fn()>,
+        ) -> *mut c_void;
     }
     let changed = RcBlock::new(changed);
-    if unsafe { sp_window_observe_responder(window as *mut c_void, &changed) } {
-        Ok(())
-    } else {
+    let observation = unsafe { sp_window_observe_responder(window as *mut c_void, &changed) };
+    if observation.is_null() {
         Err("the first responder of the window cannot be observed".into())
+    } else {
+        Ok(observation as Handle)
     }
 }
 
-/// Ends the first responder observation of the window.
-pub fn end_responder_observation(window: Handle) {
+/// Ends the first responder observation that observe_responder returned. It does not use the window, so it may run after
+/// AppKit released the window.
+pub fn end_responder_observation(observation: Handle) {
     unsafe extern "C" {
-        fn sp_window_end_responder_observation(window: *mut c_void);
+        fn sp_window_end_responder_observation(observation: *mut c_void);
     }
-    unsafe { sp_window_end_responder_observation(window as *mut c_void) }
+    unsafe { sp_window_end_responder_observation(observation as *mut c_void) }
 }
 
 /// Returns the title bar height of the window. It returns an error for a window that cannot have a title bar.
