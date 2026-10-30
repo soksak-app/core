@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-26-5: retained surface listing test가 fixture plugin 이름을 쓴다. core test는 workspace registry의 plugin 이름을 쓰지 않기 때문이다(`make boundaries`).
 - F292-26-7-2: 프로젝트 폴더가 없는 window check는 제거가 의도적으로 일으키는 plugin host page의 unhandled rejection 전달 기록, `error host plugin host channel: plugin files: unhandled rejection: ...`을 두 형태의 제거 오류와 함께 선언한다. 두 host source가 이 reason에 같은 text를 이미 반환하므로 host 코드는 바뀌지 않았다. 검증: `make docs-check parity-check host-parity-check hosts-check`와 형식 검사. window check와 Go·Rust host 테스트는 이 항목에서 실행하지 않았다.
 - F292-9-3: host window check가 call class를 `debug`로 선언하고 `page.call`을 읽는다. 그래서 settle되지 않는 commit의 event log에 각 `presentSurfaces` 요청과 그 답이 남는다. 전에는 기본 policy가 이 check의 call 기록을 하나도 저장하지 않았다.
 - F292-26-7-1: window check `a folded sidebar strip next to a card divider keeps each input to its own control`는 `core.divider` 대신 card 가장자리 안쪽 0.5 px에서 `core.card`를 기대한다. 그 위치는 gap과 접힌 띠 사이의 card 테두리다. divider는 gap이 잡기 크기 11 포인트보다 좁을 때만 card 가장자리로 넓어진다(`docs/spec/example-model.md`). 실패한 실행의 gap은 12 포인트였고 `dividers()`는 정확히 gap만 덮었으므로, hit test는 맞고 check의 기대가 틀렸다. 검증: check의 기대만 고쳤고 hit test와 workbench는 바꾸지 않았다. 고친 check를 두 host에서 확인하는 window 실행은 아직 하지 않았다.

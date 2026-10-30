@@ -4,14 +4,14 @@ import { retainedSurfaceEntries } from "../surface-listing.js";
 
 test("a mounted view outside the seated record is listed with its exposes and no placement", () => {
   const mounts = [
-    { surface: "tab-a", plugin: "browser", exposes: ["status core.surface.document", "status browser.location"], composition: "view",
+    { surface: "tab-a", plugin: "probeview", exposes: ["status core.surface.document", "status probeview.location"], composition: "view",
       status: { phase: "ready", error: null }, state: "loaded" },
-    { surface: "tab-b", plugin: "browser", exposes: ["status browser.location"], composition: "view",
+    { surface: "tab-b", plugin: "probeview", exposes: ["status probeview.location"], composition: "view",
       status: { phase: "ready", error: null }, state: "loaded" },
   ];
   assert.deepEqual(retainedSurfaceEntries(mounts, new Set(["tab-b"])), [{
-    surface: "tab-a", plugin: "browser", visible: false, dim: null, declared: null, applied: null,
-    exposes: ["status core.surface.document", "status browser.location"], status: { phase: "ready", error: null },
+    surface: "tab-a", plugin: "probeview", visible: false, dim: null, declared: null, applied: null,
+    exposes: ["status core.surface.document", "status probeview.location"], status: { phase: "ready", error: null },
     placeholder: null, composition: "view", state: "loaded",
   }]);
 });
