@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F277-2: process identity package에 native/darwin과 같은 형식의 `repeat` target `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=<n>`이 있다. 이 target은 native test runner로 시험을 실행하며 시험별 RUNNING과 PASS 줄 및 시간 제한을 적용한다. `make -C native/darwin repeat`는 이 시험에 대해 `No rule to make target`으로 더 이상 실패하지 않는다. 검증: `scripts/test/native-repeat.test.mjs`의 `make repeat in the process-identity package names its test of each run, reports its result and elapsed time, and stops at a failed run`은 변경 전 Makefile에서 `No rule to make target 'repeat'`로 실패했고 변경 후 통과한다. 변수 이름을 바꾼 뒤 `test-process-identity`가 통과한다.
+- F277: process identity 시험의 display name readback을 실패 없이 75회 반복했으며, 그중 60회는 겹쳐 실행한 두 복사본의 run이다. F277은 not reproduced로 닫는다. 원인은 재발할 때 F277-1의 오류 문장으로 기록한다. 검증: `make -C native/darwin/process-identity repeat TEST=process_identity_test COUNT=<n>`의 로그 `build/logs/F277/`(단독, 순차, 겹친 run).
 - F296-4: 각 host의 release workflow는 저장 데이터 migration 단계를 실행하지 않는다. `scripts/release-step.sh`와 그 시험을 제거했다. 생성된 event class 표와 window-check gate 목록은 더 이상 `log.migrated`를 이름으로 들지 않는다.
 - F296-3: host reader는 projects.json, settings.json, tab-state.json, tab-sessions의 다른 형식 file을 읽지 않고 `<file>: <name>: format must be <n>`으로 거부한다. workbench는 다른 형식이거나 format 없이 저장된 plugin data 항목을 변환하지 않고 거부한다.
 - F296-2: 두 호스트의 `sok` command line은 migration 정의를 적용하지 않는다. format이 3이 아닌 `plugins/installed.json`은 `<file>: plugins/installed.json: format must be 3`으로 거부되며, `migrations` member의 manifest case는 Go, Rust, plugin-api runner가 재생한다.
