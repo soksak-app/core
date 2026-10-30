@@ -395,16 +395,17 @@ test("the golden lines and the golden catalog pass the audit", async () => {
 
 test("sampler memory records match one strict role-shaped event schema", async () => {
   const { readFileSync } = await import("node:fs");
+  // A reading row holds the footprint and its parts (docs/spec/performance-trace.md); a failed reading holds the error alone.
   const eventCatalog = JSON.parse(readFileSync(new URL("../../../docs/spec/events.json", import.meta.url), "utf8"));
   const records = [
-    { rss_host_kb: 100, footprint_kb: 110 },
+    { rss_host_kb: 100, footprint_kb: 110, internal_kb: 50, compressed_kb: 5, purgeable_kb: 1, graphics_kb: 2, media_kb: 0, network_kb: 0, neural_kb: 0 },
     { error: "host memory unavailable" },
-    { role: "sidecar", name: "vt", pid: 20, rss_kb: 30, footprint_kb: 40 },
+    { role: "sidecar", name: "vt", pid: 20, rss_kb: 30, footprint_kb: 40, internal_kb: 50, compressed_kb: 5, purgeable_kb: 1, graphics_kb: 2, media_kb: 0, network_kb: 0, neural_kb: 0 },
     { role: "sidecar", name: "vt", pid: 20, error: "process ended" },
-    { role: "page", window: "window-a", pid: 21, rss_kb: 31, footprint_kb: 41 },
+    { role: "page", window: "window-a", pid: 21, rss_kb: 31, footprint_kb: 41, internal_kb: 50, compressed_kb: 5, purgeable_kb: 1, graphics_kb: 2, media_kb: 0, network_kb: 0, neural_kb: 0 },
     { role: "page", window: "window-a", error: "window facts unavailable" },
     { role: "page", window: "window-a", pid: 0, error: "web process has not started" },
-    { role: "document", window: "window-a", surface: "surface-a", document: "page", pid: 22, rss_kb: 32, footprint_kb: 42 },
+    { role: "document", window: "window-a", surface: "surface-a", document: "page", pid: 22, rss_kb: 32, footprint_kb: 42, internal_kb: 50, compressed_kb: 5, purgeable_kb: 1, graphics_kb: 2, media_kb: 0, network_kb: 0, neural_kb: 0 },
     { role: "document", window: "window-a", surface: "surface-a", document: "page", pid: 0, error: "web process has not started" },
   ];
   const rows = records.map((fields, index) => JSON.stringify({
@@ -430,11 +431,11 @@ test("sampler memory records match one strict role-shaped event schema", async (
   assert.deepEqual(auditLog("host-b1.debug.jsonl", [header, ...rows].join("\n"), eventCatalog), []);
 
   const malformed = [
-    { role: "page", pid: 21, rss_kb: 31, footprint_kb: 41 },
+    { role: "page", pid: 21, rss_kb: 31, footprint_kb: 41, internal_kb: 50, compressed_kb: 5, purgeable_kb: 1, graphics_kb: 2, media_kb: 0, network_kb: 0, neural_kb: 0 },
     { role: "document", window: "window-a", document: "page", pid: 22, error: "missing surface" },
-    { role: "document", window: "window-a", surface: "surface-a", pid: 22, rss_kb: 32, footprint_kb: 42 },
-    { error: "failed", rss_host_kb: 100, footprint_kb: 110 },
-    { role: "document", window: "window-a", surface: "surface-a", document: "page", pid: 22, rss_kb: 32, footprint_kb: 42, error: "conflicting state" },
+    { role: "document", window: "window-a", surface: "surface-a", pid: 22, rss_kb: 32, footprint_kb: 42, internal_kb: 50, compressed_kb: 5, purgeable_kb: 1, graphics_kb: 2, media_kb: 0, network_kb: 0, neural_kb: 0 },
+    { error: "failed", rss_host_kb: 100, footprint_kb: 110, internal_kb: 50, compressed_kb: 5, purgeable_kb: 1, graphics_kb: 2, media_kb: 0, network_kb: 0, neural_kb: 0 },
+    { role: "document", window: "window-a", surface: "surface-a", document: "page", pid: 22, rss_kb: 32, footprint_kb: 42, internal_kb: 50, compressed_kb: 5, purgeable_kb: 1, graphics_kb: 2, media_kb: 0, network_kb: 0, neural_kb: 0, error: "conflicting state" },
   ];
   const malformedRows = malformed.map((fields, index) => JSON.stringify({
     ts_us: 2000 + index,
