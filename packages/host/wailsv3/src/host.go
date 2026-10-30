@@ -308,7 +308,7 @@ func Run(assets fs.FS, options Options) error {
 	// main loop runs, because before it the main thread runs the start and takes no heartbeat.
 	var stopStall atomic.Pointer[func()]
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-		stop := StartStallWatch(StallWatchOptions{OnMain: application.InvokeAsync, Sample: system.SampleThreads,
+		stop := StartStallWatch(StallWatchOptions{Heartbeat: StallHeartbeat(system), Sample: system.SampleThreads,
 			Folder: filepath.Dir(eventLog.Path()), EmitHost: EmitHost})
 		stopStall.Store(&stop)
 	})

@@ -296,7 +296,8 @@ type CoreRootHost interface {
 // A function that does not return an error receives only a handle that a creation function returning an error made.
 type Platform interface {
 	CoreRootHost
-	// EnqueueUI runs work once on the main queue after the current framework event callback ends.
+	// EnqueueUI runs work once as a main-thread step after the current framework event callback ends. On macOS the step runs work
+	// on the worker of the framework while the main thread waits in C (docs/spec/hosts.md, main thread of the Wails host).
 	EnqueueUI(work func()) error
 	// PrepareWindow fits the sizes of the content view of the window and the main web view.
 	PrepareWindow(window unsafe.Pointer) error
@@ -343,6 +344,11 @@ type Platform interface {
 	// SampleThreads writes the stacks of the threads of this process, sampled for one second, into the file path. The watch of
 	// the main thread calls it for a stall (docs/spec/logging.md, stalls).
 	SampleThreads(path string) error
+	// StallHeartbeat sends a heartbeat that a C function answers on the main thread, so no Go code runs on the main thread for it
+	// (docs/spec/hosts.md, main thread of the Wails host). It returns the time of the call and the time of the last answer on the
+	// clock of MonotonicNanos; while no heartbeat was answered, the time of the answer is the time of the first heartbeat. The
+	// watch of the main thread calls it (docs/spec/logging.md, stalls).
+	StallHeartbeat() (now, answered uint64)
 	// CollectGarbage makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
 	// uses it. Call it on the UI thread.
 	CollectGarbage(view unsafe.Pointer) error

@@ -8,10 +8,15 @@ package darwin
 #cgo pkg-config: soksak-darwin
 #include <stdbool.h>
 #include "mouse_buttons.h"
+#include "main_thread.h"
 
-extern void mouseButtonsChanged(void *context, unsigned long long mask);
+// The callback runs its Go function on the worker, and the native call runs on the main thread (main_thread.h).
+extern void goMouseButtonsChanged(void *context, unsigned long long mask);
+static void mouseButtonsChangedBridge(void *context, unsigned long long mask) {
+    wailsRunOnWorker(^{ goMouseButtonsChanged(context, mask); });
+}
 static bool watchButtons(void) {
-    return sp_mouse_buttons_watch((sp_mouse_buttons_changed)mouseButtonsChanged, NULL);
+    return ON_MAIN(bool, sp_mouse_buttons_watch(mouseButtonsChangedBridge, NULL));
 }
 */
 import "C"
@@ -24,8 +29,8 @@ import (
 // buttonsReceiver is the function that receives the mouse button mask. There is one watch per process, so only one is kept.
 var buttonsReceiver func(uint64)
 
-//export mouseButtonsChanged
-func mouseButtonsChanged(_ unsafe.Pointer, mask C.ulonglong) {
+//export goMouseButtonsChanged
+func goMouseButtonsChanged(_ unsafe.Pointer, mask C.ulonglong) {
 	buttonsReceiver(uint64(mask))
 }
 

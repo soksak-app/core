@@ -3,6 +3,7 @@ package host_test
 import (
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,8 +26,15 @@ func TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd(t *testing.T) {
 	var levels []host.Level
 	var names []string
 	var sampled []string
+	start := time.Now()
+	clock := func() time.Duration { return time.Since(start) }
+	var answered atomic.Int64
 	stop := host.StartStallWatch(host.StallWatchOptions{
-		OnMain: func(f func()) { work <- f },
+		Heartbeat: func() (time.Duration, time.Duration) {
+			work <- func() { answered.Store(int64(clock())) }
+			return clock(), time.Duration(answered.Load())
+		},
+		Clock:  clock,
 		Sample: func(path string) error { mu.Lock(); sampled = append(sampled, path); mu.Unlock(); return nil },
 		Folder: t.TempDir(),
 		EmitHost: func(level host.Level, event string, f map[string]any) {
@@ -106,9 +114,10 @@ func firstStall(t *testing.T, extra time.Duration) map[string]any {
 		fields map[string]any
 	}, 64)
 	stop := host.StartStallWatch(host.StallWatchOptions{
-		OnMain: func(func()) {},
-		Sample: func(string) error { return nil },
-		Folder: t.TempDir(),
+		// The main thread never answers, so the time of the answer stays the time of the first heartbeat, the start of the clock.
+		Heartbeat: func() (time.Duration, time.Duration) { return ct.clock(), 0 },
+		Sample:    func(string) error { return nil },
+		Folder:    t.TempDir(),
 		EmitHost: func(_ host.Level, event string, fields map[string]any) {
 			records <- struct {
 				name   string

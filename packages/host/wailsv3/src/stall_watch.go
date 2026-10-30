@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
@@ -24,16 +25,27 @@ const (
 	stallLate = time.Second
 )
 
-// StallWatchOptions are the parts of the watch: OnMain runs a function on the watched thread, Sample writes the stacks of the
-// threads of the process into a file, Folder is the logs folder and EmitHost stores an event of the host. Clock is the time
-// since the watch started and Wait waits one beat; nil takes the monotonic clock and time.Sleep.
+// StallWatchOptions are the parts of the watch: Heartbeat sends a heartbeat that the watched thread answers and returns the time
+// of the call and the time of the last answer on one clock, where the time of the answer is the time of the first heartbeat
+// while none was answered; the watched thread answers without Go code (docs/spec/hosts.md, main thread of the Wails host).
+// Sample writes the stacks of the threads of the process into a file, Folder is the logs folder and EmitHost stores an event of
+// the host. Clock is the time since the watch started, which measures the lateness of the watch's own wake, and Wait waits one
+// beat; nil takes the monotonic clock and time.Sleep.
 type StallWatchOptions struct {
-	OnMain   func(func())
-	Sample   func(path string) error
-	Folder   string
-	EmitHost func(Level, string, map[string]any)
-	Clock    func() time.Duration
-	Wait     func(time.Duration)
+	Heartbeat func() (now, answered time.Duration)
+	Sample    func(path string) error
+	Folder    string
+	EmitHost  func(Level, string, map[string]any)
+	Clock     func() time.Duration
+	Wait      func(time.Duration)
+}
+
+// StallHeartbeat is the heartbeat of the watch that the platform answers on the main thread in C.
+func StallHeartbeat(system platform.Platform) func() (now, answered time.Duration) {
+	return func() (time.Duration, time.Duration) {
+		now, answered := system.StallHeartbeat()
+		return time.Duration(now), time.Duration(answered)
+	}
 }
 
 // StartStallWatch starts the watch and returns the function that stops it. The watch ends after the beat that is running.
@@ -47,9 +59,10 @@ func StartStallWatch(options StallWatchOptions) func() {
 	if wait == nil {
 		wait = time.Sleep
 	}
-	var beat atomic.Int64
 	var stopped atomic.Bool
 	routine.Go("stall-watch", func() {
+		// The first heartbeat is the reference of the answers until the watched thread answers one.
+		options.Heartbeat()
 		var stalledFrom int64 = -1
 		for !stopped.Load() {
 			before := clock()
@@ -60,8 +73,8 @@ func StartStallWatch(options StallWatchOptions) func() {
 			if watchLate < 0 {
 				watchLate = 0
 			}
-			options.OnMain(func() { beat.Store(clock().Milliseconds()) })
-			now, last := clock().Milliseconds(), beat.Load()
+			sent, answered := options.Heartbeat()
+			now, last := sent.Milliseconds(), answered.Milliseconds()
 			switch {
 			case stalledFrom < 0 && now-last >= stallLate.Milliseconds():
 				stalledFrom = last

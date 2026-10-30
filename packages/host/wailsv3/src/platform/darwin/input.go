@@ -7,37 +7,38 @@ package darwin
 #include <stdint.h>
 #include <stdlib.h>
 #include "input_inject.h"
+#include "main_thread.h"
 #import <Cocoa/Cocoa.h>
 
-extern void inputActivated(void *context, int result, char *frontmost);
+extern void goInputActivated(void *context, int result, char *frontmost);
 static void activated(void *context, sp_activate_result result, const char *frontmost) {
-    inputActivated(context, (int)result, (char *)frontmost);
+    wailsRunOnWorker(^{ goInputActivated(context, (int)result, (char *)frontmost); });
 }
 static void activateWindowAt(void *window, double x, double y, double timeout, uintptr_t handle) {
-    sp_input_activate_at(window, x, y, timeout, activated, (void *)handle);
+    wailsRunOnMain(^{ sp_input_activate_at(window, x, y, timeout, activated, (void *)handle); });
 }
 
-extern void inputDelivered(void *context, int result, sp_input_held *held);
+extern void goInputDelivered(void *context, int result, sp_input_held *held);
 static void delivered(void *context, sp_input_result result, const sp_input_held *held) {
-    inputDelivered(context, (int)result, (sp_input_held *)held);
+    wailsRunOnWorker(^{ goInputDelivered(context, (int)result, (sp_input_held *)held); });
 }
 static void injectPointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY,
     double receive, uintptr_t handle) {
-    sp_input_pointer_then(window, x, y, phase, button, deltaX, deltaY, receive, delivered, (void *)handle);
+    wailsRunOnMain(^{ sp_input_pointer_then(window, x, y, phase, button, deltaX, deltaY, receive, delivered, (void *)handle); });
 }
 
 // Announces whether a view that a press passes through is a surface. For a surface it returns a non-zero value, and the upward
 // search from the hit view stops there.
-extern int surfaceHit(uintptr_t owner, void* view);
+extern int goSurfaceHit(uintptr_t owner, void* view);
 
 // Announces one step of a left button drag in page coordinates. phase is 0 for press, 1 for move and 2 for release.
-extern void surfacePoint(uintptr_t owner, int phase, double x, double y);
+extern void goSurfacePoint(uintptr_t owner, int phase, double x, double y);
 
 // Announces the first surface found while going up from a view to the content view. It returns whether a surface was found. This value
 // shows whether the input started in a view of this app and not in the page.
 static int surfaceWalk(uintptr_t owner, NSView* view, NSView* content) {
     while (view != nil && view != content) {
-        if (surfaceHit(owner, (void*)view)) {
+        if (ON_WORKER(int, goSurfaceHit(owner, (void*)view))) {
             return 1;
         }
         view = [view superview];
@@ -62,7 +63,7 @@ static int surfaceWalk(uintptr_t owner, NSView* view, NSView* content) {
 // that redraws the plane.
 //
 // The monitor returns the event without changing it, so the view also receives the event.
-static uintptr_t surfaceWatchMouse(void* nsWindow, uintptr_t owner) {
+static uintptr_t surfaceWatchMouseOnMain(void* nsWindow, uintptr_t owner) {
     __block int surfaceDragging = 0;
     NSWindow* window = (NSWindow*)nsWindow;
     NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged
@@ -83,9 +84,10 @@ static uintptr_t surfaceWatchMouse(void* nsWindow, uintptr_t owner) {
                 double y = [content bounds].size.height - at.y;
                 if (type == NSEventTypeLeftMouseDown) {
                     surfaceDragging = surfaceWalk(owner, [content hitTest:at], content);
-                    if (surfaceDragging) surfacePoint(owner, 0, x, y);
+                    if (surfaceDragging) wailsRunOnWorker(^{ goSurfacePoint(owner, 0, x, y); });
                 } else if (surfaceDragging) {
-                    surfacePoint(owner, type == NSEventTypeLeftMouseDragged ? 1 : 2, x, y);
+                    int phase = type == NSEventTypeLeftMouseDragged ? 1 : 2;
+                    wailsRunOnWorker(^{ goSurfacePoint(owner, phase, x, y); });
                     if (type == NSEventTypeLeftMouseUp) surfaceDragging = 0;
                 }
             }
@@ -94,7 +96,17 @@ static uintptr_t surfaceWatchMouse(void* nsWindow, uintptr_t owner) {
     }];
 }
 
-static void surfaceUnwatchMouse(uintptr_t monitor) { if (monitor) [NSEvent removeMonitor:(id)monitor]; }
+static uintptr_t surfaceWatchMouse(void* nsWindow, uintptr_t owner) {
+    return ON_MAIN(uintptr_t, surfaceWatchMouseOnMain(nsWindow, owner));
+}
+
+static void surfaceUnwatchMouse(uintptr_t monitor) {
+    wailsRunOnMain(^{ if (monitor) [NSEvent removeMonitor:(id)monitor]; });
+}
+
+static sp_input_result main_sp_input_key(void *window, const char *key, const char *text, unsigned int modifiers, bool down) {
+    return ON_MAIN(sp_input_result, sp_input_key(window, key, text, modifiers, down));
+}
 */
 import "C"
 
@@ -108,20 +120,20 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// watchers are the input receiver handles of each monitor number. They are read and changed only on the main thread.
+// watchers are the input receiver handles of each monitor number. They are read and changed only in main-thread steps.
 var watchers = map[uintptr]cgo.Handle{}
 var pointerSequence sync.Mutex
 
-//export surfaceHit
-func surfaceHit(owner C.uintptr_t, view unsafe.Pointer) C.int {
+//export goSurfaceHit
+func goSurfaceHit(owner C.uintptr_t, view unsafe.Pointer) C.int {
 	if cgo.Handle(owner).Value().(platform.Input).Press(uintptr(view)) {
 		return 1
 	}
 	return 0
 }
 
-//export surfacePoint
-func surfacePoint(owner C.uintptr_t, phase C.int, x C.double, y C.double) {
+//export goSurfacePoint
+func goSurfacePoint(owner C.uintptr_t, phase C.int, x C.double, y C.double) {
 	cgo.Handle(owner).Value().(platform.Input).Point(int(phase), float64(x), float64(y))
 }
 
@@ -147,11 +159,11 @@ func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, 
 	return nil
 }
 
-// inputDelivered announces the result of sp_input_pointer_then. The library passes held only when the result is SP_INPUT_BUTTON_HELD
+// goInputDelivered announces the result of sp_input_pointer_then. The library passes held only when the result is SP_INPUT_BUTTON_HELD
 // and keeps it valid until done returns.
 //
-//export inputDelivered
-func inputDelivered(context unsafe.Pointer, result C.int, held *C.sp_input_held) {
+//export goInputDelivered
+func goInputDelivered(context unsafe.Pointer, result C.int, held *C.sp_input_held) {
 	handle := cgo.Handle(uintptr(context))
 	done := handle.Value().(func(platform.PointerResult, platform.ButtonHeld))
 	handle.Delete()
@@ -192,8 +204,8 @@ type activation struct {
 	done    func(error)
 }
 
-//export inputActivated
-func inputActivated(context unsafe.Pointer, result C.int, frontmost *C.char) {
+//export goInputActivated
+func goInputActivated(context unsafe.Pointer, result C.int, frontmost *C.char) {
 	handle := cgo.Handle(uintptr(context))
 	a := handle.Value().(activation)
 	handle.Delete()
@@ -237,7 +249,7 @@ func (implementation) InjectKey(window unsafe.Pointer, key, text string, modifie
 		typed = C.CString(text)
 		defer C.free(unsafe.Pointer(typed))
 	}
-	switch C.sp_input_key(window, name, typed, C.uint(modifiers), C.bool(down)) {
+	switch C.main_sp_input_key(window, name, typed, C.uint(modifiers), C.bool(down)) {
 	case C.SP_INPUT_DELIVERED:
 		return platform.PointerDelivered, nil
 	case C.SP_INPUT_INACTIVE:

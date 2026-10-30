@@ -6,12 +6,15 @@ package darwin
 #include <stdint.h>
 #include <stdlib.h>
 #include "input_reference.h"
-extern void inputReferenceReply(uintptr_t context, char *reply, char *failure);
+#include "main_thread.h"
+
+// The callback runs its Go function on the worker, and the native call runs on the main thread (main_thread.h).
+extern void goInputReferenceReply(uintptr_t context, char *reply, char *failure);
 static void referenceReply(void *context, const char *reply, const char *failure) {
-    inputReferenceReply((uintptr_t)context, (char *)reply, (char *)failure);
+    wailsRunOnWorker(^{ goInputReferenceReply((uintptr_t)context, (char *)reply, (char *)failure); });
 }
 static void inputReference(void *window, const char *action, const char *document, uintptr_t context) {
-    sp_input_reference(window, action, document, referenceReply, (void *)context);
+    wailsRunOnMain(^{ sp_input_reference(window, action, document, referenceReply, (void *)context); });
 }
 */
 import "C"
@@ -39,8 +42,8 @@ func (implementation) InputReference(window unsafe.Pointer, action string, docum
 	C.inputReference(window, operation, expected, C.uintptr_t(cgo.NewHandle(done)))
 }
 
-//export inputReferenceReply
-func inputReferenceReply(context C.uintptr_t, value, failure *C.char) {
+//export goInputReferenceReply
+func goInputReferenceReply(context C.uintptr_t, value, failure *C.char) {
 	handle := cgo.Handle(context)
 	done := handle.Value().(func(json.RawMessage, error))
 	handle.Delete()

@@ -90,6 +90,11 @@ func (implementation) SampleThreads(string) error {
 	return unsupported("thread sampling")
 }
 
+func (implementation) StallHeartbeat() (uint64, uint64) {
+	unreachable("stall heartbeat")
+	return 0, 0
+}
+
 func (implementation) CollectGarbage(unsafe.Pointer) error {
 	return unsupported("JavaScript garbage collection")
 }

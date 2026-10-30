@@ -8,6 +8,20 @@ package darwin
 #cgo pkg-config: soksak-darwin
 #include <stdlib.h>
 #include "clipboard.h"
+#include "main_thread.h"
+
+// The native calls run on the main thread (main_thread.h).
+static void *main_sp_clipboard_open(const char *name) { return ON_MAIN(void *, sp_clipboard_open(name)); }
+static void main_sp_clipboard_close(void *clipboard) { wailsRunOnMain(^{ sp_clipboard_close(clipboard); }); }
+static char *main_sp_clipboard_read_text(void *clipboard) { return ON_MAIN(char *, sp_clipboard_read_text(clipboard)); }
+static char *main_sp_clipboard_write_text(void *clipboard, const char *text) {
+    return ON_MAIN(char *, sp_clipboard_write_text(clipboard, text));
+}
+static char *main_sp_clipboard_read_png(void *clipboard) { return ON_MAIN(char *, sp_clipboard_read_png(clipboard)); }
+static char *main_sp_clipboard_write_png(void *clipboard, const unsigned char *bytes, size_t length) {
+    return ON_MAIN(char *, sp_clipboard_write_png(clipboard, bytes, length));
+}
+static char *main_sp_clipboard_read_file_urls(void *clipboard) { return ON_MAIN(char *, sp_clipboard_read_file_urls(clipboard)); }
 */
 import "C"
 
@@ -43,19 +57,19 @@ func clipboardStatus(result map[string]any) error {
 }
 
 func (implementation) ClipboardRead(kind string) (platform.ClipboardValue, error) {
-	board := C.sp_clipboard_open(nil)
+	board := C.main_sp_clipboard_open(nil)
 	if board == nil {
 		return platform.ClipboardValue{}, fmt.Errorf("cannot open system clipboard")
 	}
-	defer C.sp_clipboard_close(board)
+	defer C.main_sp_clipboard_close(board)
 	var pointer *C.char
 	switch kind {
 	case "text":
-		pointer = C.sp_clipboard_read_text(board)
+		pointer = C.main_sp_clipboard_read_text(board)
 	case "png":
-		pointer = C.sp_clipboard_read_png(board)
+		pointer = C.main_sp_clipboard_read_png(board)
 	case "fileURLs":
-		pointer = C.sp_clipboard_read_file_urls(board)
+		pointer = C.main_sp_clipboard_read_file_urls(board)
 	default:
 		return platform.ClipboardValue{}, fmt.Errorf("unsupported clipboard type %s", kind)
 	}
@@ -105,14 +119,14 @@ func (implementation) ClipboardRead(kind string) (platform.ClipboardValue, error
 }
 
 func (implementation) ClipboardWriteText(text string) error {
-	board := C.sp_clipboard_open(nil)
+	board := C.main_sp_clipboard_open(nil)
 	if board == nil {
 		return fmt.Errorf("cannot open system clipboard")
 	}
-	defer C.sp_clipboard_close(board)
+	defer C.main_sp_clipboard_close(board)
 	value := C.CString(text)
 	defer C.free(unsafe.Pointer(value))
-	result, err := clipboardJSON(C.sp_clipboard_write_text(board, value))
+	result, err := clipboardJSON(C.main_sp_clipboard_write_text(board, value))
 	if err != nil {
 		return err
 	}
@@ -123,16 +137,16 @@ func (implementation) ClipboardWritePNG(bytes []byte) error {
 	if len(bytes) > 16*1024*1024 {
 		return fmt.Errorf("clipboard PNG exceeds 16 MiB")
 	}
-	board := C.sp_clipboard_open(nil)
+	board := C.main_sp_clipboard_open(nil)
 	if board == nil {
 		return fmt.Errorf("cannot open system clipboard")
 	}
-	defer C.sp_clipboard_close(board)
+	defer C.main_sp_clipboard_close(board)
 	var pointer *C.uchar
 	if len(bytes) > 0 {
 		pointer = (*C.uchar)(unsafe.Pointer(&bytes[0]))
 	}
-	result, err := clipboardJSON(C.sp_clipboard_write_png(board, pointer, C.size_t(len(bytes))))
+	result, err := clipboardJSON(C.main_sp_clipboard_write_png(board, pointer, C.size_t(len(bytes))))
 	if err != nil {
 		return err
 	}

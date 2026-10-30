@@ -20,4 +20,4 @@ require (
 
 // The replacement avoids duplicate transport-error records and rejects
 // callbacks from retired windows while preserving window event routing.
-replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3 v3.0.0-20261027083005-8dd1dcfcc3aa
+replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3 v3.0.0-20261030134858-0b7b1e3f80bb

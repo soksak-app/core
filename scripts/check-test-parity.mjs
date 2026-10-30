@@ -192,6 +192,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Wails environment declaration", "declaration", ["apps/wailsv3/environment.json"], ["apps/wailsv3/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Wails bridge", "js-ts", ["packages/host/wailsv3/src/bridge.js"], ["apps/wailsv3/test/runtime-contract.test.mjs"], { sharedTests: true }),
   lane("Wails native webview bridge", "objective-c", ["packages/host/wailsv3/src/platform/darwin/webview.m"], ["packages/host/wailsv3/tests/documents_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Wails main-thread worker interface", "native-interface", ["packages/host/wailsv3/src/platform/darwin/main_thread.h"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("Workbench styles", "stylesheet", ["packages/workbench/app.css", "packages/workbench/library.css"], ["packages/workbench/test/background.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench declarations", "declaration", ["packages/workbench/exposure.json"], ["packages/workbench/test/exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench shortcuts", "declaration", ["packages/workbench/shortcuts.json"], ["scripts/test/shortcut-table.test.mjs"], { testLanguage: "js-ts" }),

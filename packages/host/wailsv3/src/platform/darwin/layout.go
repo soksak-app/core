@@ -8,14 +8,24 @@ package darwin
 #include <stdlib.h>
 #include <string.h>
 #include "surface_layout.h"
+#include "main_thread.h"
 
 void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback);
 void nativeWindowStartPage(void *window, uint64_t ticket, double height, uintptr_t callback);
 bool nativeWindowAfterPresentation(void *window, uintptr_t callback);
 bool nativeWindowJoinView(void *window, uint64_t ticket, void *view, uintptr_t callback);
-bool surfaceLayoutAbandonView(void *owner, void *viewWebview);
 bool nativeWindowAfterSettled(void *window, uintptr_t callback);
-void surfaceLayoutInjectSettledFailure(void);
+
+// The native calls of this file run on the main thread (main_thread.h).
+static bool main_surfaceLayoutCommit(void *window, uint64_t ticket) { return ON_MAIN(bool, surfaceLayoutCommit(window, ticket)); }
+static void main_surfaceLayoutCancel(void *window) { wailsRunOnMain(^{ surfaceLayoutCancel(window); }); }
+static void main_surfaceLayoutCancelTicket(void *window, uint64_t ticket) {
+    wailsRunOnMain(^{ surfaceLayoutCancelTicket(window, ticket); });
+}
+static bool main_surfaceLayoutAbandonView(void *window, void *view) {
+    return ON_MAIN(bool, surfaceLayoutAbandonView(window, view));
+}
+static void main_surfaceLayoutInjectSettledFailure(void) { wailsRunOnMain(^{ surfaceLayoutInjectSettledFailure(); }); }
 */
 import "C"
 
@@ -32,24 +42,24 @@ func (implementation) BeginLayout(window unsafe.Pointer, ticket uint64, ready fu
 }
 
 func (implementation) CommitLayout(window unsafe.Pointer, ticket uint64) bool {
-	return bool(C.surfaceLayoutCommit(window, C.uint64_t(ticket)))
+	return bool(C.main_surfaceLayoutCommit(window, C.uint64_t(ticket)))
 }
 
 func (implementation) CancelLayout(window unsafe.Pointer) error {
-	C.surfaceLayoutCancel(window)
+	C.main_surfaceLayoutCancel(window)
 	return nil
 }
 
 func (implementation) CancelLayoutTicket(window unsafe.Pointer, ticket uint64) error {
-	C.surfaceLayoutCancelTicket(window, C.uint64_t(ticket))
+	C.main_surfaceLayoutCancelTicket(window, C.uint64_t(ticket))
 	return nil
 }
 
 // JoinView joins the view webview to the layout transaction of window with ticket. The native join ends by the presentation of the
 // view or by abandon, whichever comes first. The native side calls the presentation callback only for a join that did not end by
 // abandon, and abandon does nothing after the presentation, so the callback handle is released exactly once. The presentation callback
-// (_doAfterNextPresentationUpdate) and abandon both run on the UI thread, which surfaceLayoutJoinView and surfaceLayoutAbandonView
-// assert, so ended needs no lock.
+// (_doAfterNextPresentationUpdate) and abandon both run in main-thread steps, whose native calls surfaceLayoutJoinView and
+// surfaceLayoutAbandonView assert the main thread, and main-thread steps do not overlap, so ended needs no lock.
 func (implementation) JoinView(window unsafe.Pointer, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
 	ended := false
 	handle := cgo.NewHandle(func() {
@@ -66,7 +76,7 @@ func (implementation) JoinView(window unsafe.Pointer, ticket uint64, view unsafe
 		}
 		ended = true
 		handle.Delete()
-		if !bool(C.surfaceLayoutAbandonView(window, view)) {
+		if !bool(C.main_surfaceLayoutAbandonView(window, view)) {
 			return errors.New("the native layout transaction has no open join of the view")
 		}
 		return nil
@@ -80,8 +90,8 @@ func (implementation) StartPageTitlebar(window unsafe.Pointer, ticket uint64, he
 	return nil
 }
 
-//export nativeStartPageReady
-func nativeStartPageReady(value C.uintptr_t, failure *C.char) {
+//export goNativeStartPageReady
+func goNativeStartPageReady(value C.uintptr_t, failure *C.char) {
 	handle := cgo.Handle(value)
 	ready := handle.Value().(func(error))
 	handle.Delete()
@@ -92,8 +102,8 @@ func nativeStartPageReady(value C.uintptr_t, failure *C.char) {
 	ready(errors.New(C.GoString(failure)))
 }
 
-//export nativeLayoutReady
-func nativeLayoutReady(value C.uintptr_t, allowed C.bool) {
+//export goNativeLayoutReady
+func goNativeLayoutReady(value C.uintptr_t, allowed C.bool) {
 	handle := cgo.Handle(value)
 	ready := handle.Value().(func(bool))
 	handle.Delete()
@@ -109,8 +119,8 @@ func (implementation) AfterPresentation(window unsafe.Pointer, done func()) erro
 	return nil
 }
 
-//export nativePresentationDone
-func nativePresentationDone(value C.uintptr_t) {
+//export goNativePresentationDone
+func goNativePresentationDone(value C.uintptr_t) {
 	handle := cgo.Handle(value)
 	done := handle.Value().(func())
 	handle.Delete()
@@ -127,12 +137,12 @@ func (implementation) AfterSettled(window unsafe.Pointer, done func(displayed fl
 }
 
 func (implementation) InjectSettledFailure(_ unsafe.Pointer) error {
-	C.surfaceLayoutInjectSettledFailure()
+	C.main_surfaceLayoutInjectSettledFailure()
 	return nil
 }
 
-//export nativeSettledDone
-func nativeSettledDone(value C.uintptr_t, displayed C.double, message *C.char) {
+//export goNativeSettledDone
+func goNativeSettledDone(value C.uintptr_t, displayed C.double, message *C.char) {
 	handle := cgo.Handle(value)
 	done := handle.Value().(func(float64, error))
 	handle.Delete()

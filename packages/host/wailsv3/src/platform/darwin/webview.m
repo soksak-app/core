@@ -8,10 +8,11 @@
 #import "webview_geometry.h"
 #import "window_fullscreen.h"
 #import "window_facts.h"
+#import "main_thread.h"
 
-extern void nativeMessage(unsigned long long identifier, char *message);
-extern void nativeCommitted(unsigned long long identifier);
-extern void nativeTerminated(unsigned long long identifier);
+extern void goNativeMessage(unsigned long long identifier, char *message);
+extern void goNativeCommitted(unsigned long long identifier);
+extern void goNativeTerminated(unsigned long long identifier);
 
 @interface SPNativeBridge : NSObject <WKScriptMessageHandler>
 @property unsigned long long identifier;
@@ -25,7 +26,9 @@ extern void nativeTerminated(unsigned long long identifier);
     WKSecurityOrigin *origin = message.frameInfo.securityOrigin;
     if (!message.frameInfo.isMainFrame || ![origin.protocol isEqualToString:self.scheme]
         || ![origin.host isEqualToString:self.host] || ![message.body isKindOfClass:NSString.class]) return;
-    nativeMessage(self.identifier, (char *)[message.body UTF8String]);
+    unsigned long long identifier = self.identifier;
+    char *body = (char *)[message.body UTF8String];
+    wailsRunOnWorker(^{ goNativeMessage(identifier, body); });
 }
 - (void)dealloc {
     [_scheme release]; [_host release];
@@ -42,7 +45,8 @@ extern void nativeTerminated(unsigned long long identifier);
 
 @implementation SPNativeWebview
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
-    nativeCommitted(self.messageIdentifier);
+    unsigned long long identifier = self.messageIdentifier;
+    wailsRunOnWorker(^{ goNativeCommitted(identifier); });
     [self evaluateJavaScript:self.backgroundEnabled ? @"window.__soksakBackground = true" : @"window.__soksakBackground = false" completionHandler:^(id result, NSError *error) {
         if (error) sp_log_error("surface background", error.localizedDescription.UTF8String);
     }];
@@ -50,7 +54,8 @@ extern void nativeTerminated(unsigned long long identifier);
 // The WebContent process of a surface or a modal ended; the host records it as it records the page process of a window.
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
     sp_webview_log_process_end((__bridge void *)view, "surface webview");
-    nativeTerminated(self.messageIdentifier);
+    unsigned long long identifier = self.messageIdentifier;
+    wailsRunOnWorker(^{ goNativeTerminated(identifier); });
 }
 - (void)dealloc {
     [_baseURL release];
@@ -69,30 +74,31 @@ static WKWebView *mainWebview(NSView *parent) {
     return nil;
 }
 
-extern void nativePresentationDone(uintptr_t callback);
-bool nativeWindowAfterPresentation(void *handle, uintptr_t callback) {
+extern void goNativePresentationDone(uintptr_t callback);
+static bool nativeWindowAfterPresentationOnMain(void *handle, uintptr_t callback) {
     WKWebView *view = sp_window_main_webview(handle);
     if (!view) return false;
-    surfaceLayoutAfterPresentation(view, ^{ nativePresentationDone(callback); });
+    surfaceLayoutAfterPresentation(view, ^{ wailsRunOnWorker(^{ goNativePresentationDone(callback); }); });
     return true;
 }
 
 // nativeWindowJoinView joins the view webview to the layout transaction of window. callback runs when the view presents.
-bool nativeWindowJoinView(void *window, uint64_t ticket, void *view, uintptr_t callback) {
-    return surfaceLayoutJoinView(window, ticket, view, ^{ nativePresentationDone(callback); });
+static bool nativeWindowJoinViewOnMain(void *window, uint64_t ticket, void *view, uintptr_t callback) {
+    return surfaceLayoutJoinView(window, ticket, view, ^{ wailsRunOnWorker(^{ goNativePresentationDone(callback); }); });
 }
 
-extern void nativeSettledDone(uintptr_t callback, double displayed, char *error);
-bool nativeWindowAfterSettled(void *handle, uintptr_t callback) {
+extern void goNativeSettledDone(uintptr_t callback, double displayed, char *error);
+static bool nativeWindowAfterSettledOnMain(void *handle, uintptr_t callback) {
     WKWebView *view = sp_window_main_webview(handle);
     if (!view) return false;
     surfaceLayoutAfterSettled(view, ^(double displayed, const char *error) {
-        nativeSettledDone(callback, displayed, error ? strdup(error) : NULL);
+        char *copy = error ? strdup(error) : NULL;
+        wailsRunOnWorker(^{ goNativeSettledDone(callback, displayed, copy); });
     });
     return true;
 }
 
-void nativeWindowPrepare(void *handle) {
+static void nativeWindowPrepareOnMain(void *handle) {
     NSWindow *window = (NSWindow *)handle;
     WKWebView *root = sp_window_main_webview(handle);
     if (!root) return;
@@ -104,7 +110,7 @@ void nativeWindowPrepare(void *handle) {
     }
 }
 
-bool nativeWindowConfigureMain(void *handle, bool dark) {
+static bool nativeWindowConfigureMainOnMain(void *handle, bool dark) {
     NSWindow *window = (NSWindow *)handle;
     WKWebView *root = sp_window_main_webview(handle);
     if (!root) return false;
@@ -116,18 +122,18 @@ bool nativeWindowConfigureMain(void *handle, bool dark) {
     return true;
 }
 
-bool nativeWindowSetMainWebview(void *handle) {
+static bool nativeWindowSetMainWebviewOnMain(void *handle) {
     NSWindow *window = (NSWindow *)handle;
     if (sp_window_main_webview(handle)) return true;
     WKWebView *root = mainWebview(window.contentView);
     return root && sp_window_set_main_webview(window, root);
 }
 
-void nativeWebviewBounds(void *handle, double x, double y, double width, double height) {
+static void nativeWebviewBoundsOnMain(void *handle, double x, double y, double width, double height) {
     webviewSetFrame(handle, x, y, width, height);
 }
 
-void *nativeWebviewCreate(void *handle, unsigned long long identifier, const char *name, const char *script,
+static void *nativeWebviewCreateOnMain(void *handle, unsigned long long identifier, const char *name, const char *script,
     double x, double y, double width, double height, bool hidden, bool transparent, bool fillParent) {
     NSWindow *window = (NSWindow *)handle;
     WKWebView *root = sp_window_main_webview(handle);
@@ -175,11 +181,11 @@ void *nativeWebviewCreate(void *handle, unsigned long long identifier, const cha
     // A modal with fillParent is placed directly in the window, and every surface is attached to
     // SurfaceHost regardless of transparency. The native plane must be below the DOM web view of a mixed surface.
     if (!fillParent) webviewAttachSurface(view, root);
-    nativeWebviewBounds(view, x, y, width, height);
+    nativeWebviewBoundsOnMain(view, x, y, width, height);
     return view; // Go owns this reference until nativeWebviewClose.
 }
 
-bool nativeWebviewNavigate(void *handle, const char *url) {
+static bool nativeWebviewNavigateOnMain(void *handle, const char *url) {
     SPNativeWebview *view = (SPNativeWebview *)handle;
     NSURL *target = [NSURL URLWithString:[NSString stringWithUTF8String:url] relativeToURL:view.baseURL];
     if (!target) return false;
@@ -187,16 +193,16 @@ bool nativeWebviewNavigate(void *handle, const char *url) {
     return true;
 }
 
-void nativeWebviewHidden(void *handle, bool hidden) { webviewSetSurfaceHidden(handle, hidden); }
-void nativeWebviewBackground(void *handle, bool enabled) {
+static void nativeWebviewHiddenOnMain(void *handle, bool hidden) { webviewSetSurfaceHidden(handle, hidden); }
+static void nativeWebviewBackgroundOnMain(void *handle, bool enabled) {
     SPNativeWebview *view = handle;
     view.backgroundEnabled = enabled;
     [view evaluateJavaScript:enabled ? @"window.__soksakBackground = true" : @"window.__soksakBackground = false" completionHandler:nil];
 }
-void nativeWebviewEval(void *handle, const char *script) {
+static void nativeWebviewEvalOnMain(void *handle, const char *script) {
     [(WKWebView *)handle evaluateJavaScript:[NSString stringWithUTF8String:script] completionHandler:nil];
 }
-void nativeWebviewClose(void *handle) {
+static void nativeWebviewCloseOnMain(void *handle) {
     WKWebView *view = (WKWebView *)handle;
     webviewInputUnregister(view);
     [view stopLoading];
@@ -206,22 +212,78 @@ void nativeWebviewClose(void *handle) {
     [view release];
 }
 
-extern void nativeLayoutReady(uintptr_t callback, bool allowed);
+extern void goNativeLayoutReady(uintptr_t callback, bool allowed);
+static void nativeWindowLayoutBeginOnMain(void *window, uint64_t ticket, uintptr_t callback) {
+    surfaceLayoutBegin(window, ticket, ^(int allowed) { wailsRunOnWorker(^{ goNativeLayoutReady(callback, allowed); }); });
+}
+
+extern void goNativeStartPageReady(uintptr_t callback, const char *failure);
+static void nativeWindowStartPageOnMain(void *window, uint64_t ticket, double height, uintptr_t callback) {
+    surfaceLayoutStartPage(window, ticket, height, ^(const char *failure) { wailsRunOnWorker(^{ goNativeStartPageReady(callback, failure); }); });
+}
+
+extern void goNativeFullscreenDone(uintptr_t callback);
+static bool nativeWindowFullscreenOnMain(void *handle, bool on, uintptr_t callback) {
+    return sp_window_fullscreen(handle, on, ^{ wailsRunOnWorker(^{ goNativeFullscreenDone(callback); }); });
+}
+
+extern void goNativeResponderChanged(uintptr_t callback);
+static void *nativeWindowObserveResponderOnMain(void *handle, uintptr_t callback) {
+    return sp_window_observe_responder(handle, ^{ wailsRunOnWorker(^{ goNativeResponderChanged(callback); }); });
+}
+
+// The functions that Go code calls. Go code runs on the worker of the framework, and each function runs its body on the main
+// thread through wailsRunOnMain (docs/spec/hosts.md, main thread of the Wails host).
+bool nativeWindowAfterPresentation(void *handle, uintptr_t callback) {
+    return ON_MAIN(bool, nativeWindowAfterPresentationOnMain(handle, callback));
+}
+bool nativeWindowJoinView(void *window, uint64_t ticket, void *view, uintptr_t callback) {
+    return ON_MAIN(bool, nativeWindowJoinViewOnMain(window, ticket, view, callback));
+}
+bool nativeWindowAfterSettled(void *handle, uintptr_t callback) {
+    return ON_MAIN(bool, nativeWindowAfterSettledOnMain(handle, callback));
+}
+void nativeWindowPrepare(void *handle) {
+    wailsRunOnMain(^{ nativeWindowPrepareOnMain(handle); });
+}
+bool nativeWindowConfigureMain(void *handle, bool dark) {
+    return ON_MAIN(bool, nativeWindowConfigureMainOnMain(handle, dark));
+}
+bool nativeWindowSetMainWebview(void *handle) {
+    return ON_MAIN(bool, nativeWindowSetMainWebviewOnMain(handle));
+}
+void nativeWebviewBounds(void *handle, double x, double y, double width, double height) {
+    wailsRunOnMain(^{ nativeWebviewBoundsOnMain(handle, x, y, width, height); });
+}
+void *nativeWebviewCreate(void *handle, unsigned long long identifier, const char *name, const char *script,
+    double x, double y, double width, double height, bool hidden, bool transparent, bool fillParent) {
+    return ON_MAIN(void *, nativeWebviewCreateOnMain(handle, identifier, name, script, x, y, width, height, hidden,
+        transparent, fillParent));
+}
+bool nativeWebviewNavigate(void *handle, const char *url) {
+    return ON_MAIN(bool, nativeWebviewNavigateOnMain(handle, url));
+}
+void nativeWebviewHidden(void *handle, bool hidden) {
+    wailsRunOnMain(^{ nativeWebviewHiddenOnMain(handle, hidden); });
+}
+void nativeWebviewBackground(void *handle, bool enabled) {
+    wailsRunOnMain(^{ nativeWebviewBackgroundOnMain(handle, enabled); });
+}
+void nativeWebviewEval(void *handle, const char *script) {
+    wailsRunOnMain(^{ nativeWebviewEvalOnMain(handle, script); });
+}
+void nativeWebviewClose(void *handle) {
+    wailsRunOnMain(^{ nativeWebviewCloseOnMain(handle); });
+}
 void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback) {
-    surfaceLayoutBegin(window, ticket, ^(int allowed) { nativeLayoutReady(callback, allowed); });
+    wailsRunOnMain(^{ nativeWindowLayoutBeginOnMain(window, ticket, callback); });
 }
-
-extern void nativeStartPageReady(uintptr_t callback, const char *failure);
 void nativeWindowStartPage(void *window, uint64_t ticket, double height, uintptr_t callback) {
-    surfaceLayoutStartPage(window, ticket, height, ^(const char *failure) { nativeStartPageReady(callback, failure); });
+    wailsRunOnMain(^{ nativeWindowStartPageOnMain(window, ticket, height, callback); });
 }
-
-extern void nativeFullscreenDone(uintptr_t callback);
 bool nativeWindowFullscreen(void *handle, bool on, uintptr_t callback) {
-    return sp_window_fullscreen(handle, on, ^{ nativeFullscreenDone(callback); });
+    return ON_MAIN(bool, nativeWindowFullscreenOnMain(handle, on, callback));
 }
-
-extern void nativeResponderChanged(uintptr_t callback);
 void *nativeWindowObserveResponder(void *handle, uintptr_t callback) {
-    return sp_window_observe_responder(handle, ^{ nativeResponderChanged(callback); });
+    return ON_MAIN(void *, nativeWindowObserveResponderOnMain(handle, callback));
 }

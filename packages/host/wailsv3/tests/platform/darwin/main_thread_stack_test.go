@@ -51,6 +51,16 @@ func spin(duration time.Duration) {
 	}
 }
 
+// onMain runs work as one main-thread step through EnqueueUI and returns its error, as the host runs the calls that need the
+// main thread.
+func onMain(system platform.Platform, work func() error) error {
+	result := make(chan error, 1)
+	if err := system.EnqueueUI(func() { result <- work() }); err != nil {
+		return err
+	}
+	return <-result
+}
+
 // The main thread runs no code on a stack other than its own while the host runs its main-thread steps
 // (docs/spec/hosts.md, main thread of the Wails host): the collector of a JavaScriptCore VM copies the stack of the main thread from
 // its stack pointer to the origin of its stack, and a stack pointer outside that stack ends the process.
@@ -81,13 +91,52 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 			}
 			return nil
 		}},
+		// The Dock menu item runs the exported callback of the Dock menu from the action of the menu.
+		{"Dock menu callback", func() error {
+			opened := make(chan struct{})
+			if err := onMain(system, func() error {
+				return system.InstallDock(func() { spin(work); opened <- struct{}{} })
+			}); err != nil {
+				return err
+			}
+			for range rounds {
+				if err := onMain(system, func() error { return system.DockSelect("새 창") }); err != nil {
+					return err
+				}
+				<-opened
+			}
+			return nil
+		}},
+		// An injected level runs the exported callback of the memory pressure source inside the call that the step makes.
+		{"memory pressure callback", func() error {
+			reported := make(chan string, 1)
+			if err := onMain(system, func() error {
+				return system.OnMemoryPressure(func(level string, _ uint64) { spin(work); reported <- level })
+			}); err != nil {
+				return err
+			}
+			levels := [2]string{"warn", "normal"}
+			for round := range rounds {
+				level := levels[round%2]
+				if err := onMain(system, func() error { return system.InjectMemoryPressure(level) }); err != nil {
+					return err
+				}
+				if got := <-reported; got != level {
+					return fmt.Errorf("the source reported %s for the injected level %s", got, level)
+				}
+			}
+			return nil
+		}},
 		{"stall heartbeat", func() error {
 			var emittedLock sync.Mutex
 			var emitted []string
 			beats := make(chan struct{}, 64)
+			heartbeat := host.StallHeartbeat(system)
 			stop := host.StartStallWatch(host.StallWatchOptions{
-				OnMain: func(beat func()) {
-					application.InvokeAsync(func() { beat(); beats <- struct{}{} })
+				Heartbeat: func() (time.Duration, time.Duration) {
+					now, answered := heartbeat()
+					beats <- struct{}{}
+					return now, answered
 				},
 				Sample: func(string) error { return nil },
 				Folder: t.TempDir(),

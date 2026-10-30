@@ -10,19 +10,23 @@ package darwin
 #include <stdbool.h>
 #include <stdint.h>
 #include "process_exit.h"
+#include "main_thread.h"
 
-extern void processExitAnswered(uintptr_t handle, bool exited);
-static void answered(void *context, bool exited) { processExitAnswered((uintptr_t)context, exited); }
+// The callback runs its Go function on the worker, and the native call runs on the main thread (main_thread.h).
+extern void goProcessExitAnswered(uintptr_t handle, bool exited);
+static void answered(void *context, bool exited) {
+    wailsRunOnWorker(^{ goProcessExitAnswered((uintptr_t)context, exited); });
+}
 static void whenExited(pid_t pid, double seconds, uintptr_t handle) {
-    sp_process_when_exited(pid, seconds, answered, (void *)handle);
+    wailsRunOnMain(^{ sp_process_when_exited(pid, seconds, answered, (void *)handle); });
 }
 */
 import "C"
 
 import "runtime/cgo"
 
-//export processExitAnswered
-func processExitAnswered(handle C.uintptr_t, exited C.bool) {
+//export goProcessExitAnswered
+func goProcessExitAnswered(handle C.uintptr_t, exited C.bool) {
 	// handle is the value that WhenProcessExited created, and the library calls done once.
 	h := cgo.Handle(handle)
 	done := h.Value().(func(bool))
@@ -30,7 +34,7 @@ func processExitAnswered(handle C.uintptr_t, exited C.bool) {
 	done(bool(exited))
 }
 
-// WhenProcessExited replies to done when the process pid ends or seconds pass. Call it on the main thread.
+// WhenProcessExited replies to done when the process pid ends or seconds pass. Call it in a main-thread step.
 func (implementation) WhenProcessExited(pid int32, seconds float64, done func(bool)) {
 	C.whenExited(C.pid_t(pid), C.double(seconds), C.uintptr_t(cgo.NewHandle(done)))
 }

@@ -4,6 +4,7 @@ package darwin
 
 /*
 #import <Cocoa/Cocoa.h>
+#include "main_thread.h"
 
 // Fits a region in AppKit coordinates inward to the pixel grid of the backing store. A view does not cover more than the region
 // that the page declared.
@@ -20,7 +21,7 @@ static NSRect surfaceAligned(NSWindow* window, double x, double y, double w, dou
 
 // Moves the shape view to the display pixels to keep the edges sharp. The region is in page coordinates measured from the top left of the content view,
 // as the page declared.
-static void shapeSetFrame(void* handle, double x, double y, double w, double h) {
+static void shapeSetFrameOnMain(void* handle, double x, double y, double w, double h) {
     NSView* view = (NSView*)handle;
     NSWindow* window = [view window];
     if (window == nil || [window contentView] == nil) return;
@@ -29,7 +30,7 @@ static void shapeSetFrame(void* handle, double x, double y, double w, double h) 
 }
 
 // Raises the shape above its sibling views.
-static void surfaceRaise(void* handle) {
+static void surfaceRaiseOnMain(void* handle) {
     NSView* view = (NSView*)handle;
     NSView* parent = [view superview];
     if (parent == nil) return;
@@ -39,7 +40,7 @@ static void surfaceRaise(void* handle) {
 // Creates the layer-backed NSView used for the shapes that the page draws over a surface. An NSView with a layer
 // accepts a color with alpha and composites it over the content behind. WKWebView cannot do this composition because WebKit draws an opaque
 // background and the key to turn that background off is private.
-static void* shapeCreate(void* nsWindow, double x, double y, double w, double h) {
+static void* shapeCreateOnMain(void* nsWindow, double x, double y, double w, double h) {
     NSWindow* window = (NSWindow*)nsWindow;
     if (window == nil || [window contentView] == nil) return NULL;
     double up = [window contentView].bounds.size.height - y - h;
@@ -49,7 +50,7 @@ static void* shapeCreate(void* nsWindow, double x, double y, double w, double h)
     return (void*)view;
 }
 
-static void shapeSetStyle(void* handle, double radius, double lineWidth,
+static void shapeSetStyleOnMain(void* handle, double radius, double lineWidth,
                           double fr, double fg, double fb, double fa,
                           double lr, double lg, double lb, double la) {
     NSView* view = (NSView*)handle;
@@ -63,11 +64,26 @@ static void shapeSetStyle(void* handle, double radius, double lineWidth,
 
 // Removes the shape view and releases the reference that alloc returned. The superview keeps its own reference until
 // removeFromSuperview.
-static void shapeDestroy(void* handle) {
+static void shapeDestroyOnMain(void* handle) {
     NSView* view = (NSView*)handle;
     [view removeFromSuperview];
     [view release];
 }
+
+// The functions that Go code calls run their bodies on the main thread (main_thread.h).
+static void shapeSetFrame(void* handle, double x, double y, double w, double h) {
+    wailsRunOnMain(^{ shapeSetFrameOnMain(handle, x, y, w, h); });
+}
+static void surfaceRaise(void* handle) { wailsRunOnMain(^{ surfaceRaiseOnMain(handle); }); }
+static void* shapeCreate(void* nsWindow, double x, double y, double w, double h) {
+    return ON_MAIN(void*, shapeCreateOnMain(nsWindow, x, y, w, h));
+}
+static void shapeSetStyle(void* handle, double radius, double lineWidth,
+                          double fr, double fg, double fb, double fa,
+                          double lr, double lg, double lb, double la) {
+    wailsRunOnMain(^{ shapeSetStyleOnMain(handle, radius, lineWidth, fr, fg, fb, fa, lr, lg, lb, la); });
+}
+static void shapeDestroy(void* handle) { wailsRunOnMain(^{ shapeDestroyOnMain(handle); }); }
 */
 import "C"
 

@@ -9,11 +9,16 @@ package darwin
 #include <stdbool.h>
 #include <stdlib.h>
 #include "memory_pressure.h"
+#include "main_thread.h"
 
+// The report runs its Go function on the worker, and the native calls run on the main thread (main_thread.h).
 extern void goMemoryPressure(char *level, unsigned long long seq);
 static bool startMemoryPressure(void) {
-    return sp_memory_pressure_start(^(const char *level, unsigned long long seq) { goMemoryPressure((char *)level, seq); });
+    return ON_MAIN(bool, sp_memory_pressure_start(^(const char *level, unsigned long long seq) {
+        wailsRunOnWorker(^{ goMemoryPressure((char *)level, seq); });
+    }));
 }
+static bool main_sp_memory_pressure_inject(const char *level) { return ON_MAIN(bool, sp_memory_pressure_inject(level)); }
 */
 import "C"
 
@@ -41,7 +46,7 @@ func (implementation) OnMemoryPressure(report func(level string, seq uint64)) er
 func (implementation) InjectMemoryPressure(level string) error {
 	text := C.CString(level)
 	defer C.free(unsafe.Pointer(text))
-	if !C.sp_memory_pressure_inject(text) {
+	if !C.main_sp_memory_pressure_inject(text) {
 		return errors.New("the memory pressure source did not accept the level " + level)
 	}
 	return nil

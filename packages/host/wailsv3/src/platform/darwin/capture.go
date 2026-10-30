@@ -14,31 +14,37 @@ package darwin
 #include "surface_layout.h"
 #include "notifications.h"
 #include "document_view.h"
+#include "main_thread.h"
 
-extern void documentFrameIdentityDone(uintptr_t context, char *json, char *error);
+// The callbacks run their Go functions on the worker, and the native calls of this file that use AppKit, WebKit or the capture
+// state run on the main thread (main_thread.h). The capture clock and the capture error need no thread.
+extern void goDocumentFrameIdentityDone(uintptr_t context, char *json, char *error);
 static void documentFrameIdentityDoneBridge(void *context, const char *json, const char *error) {
-	documentFrameIdentityDone((uintptr_t)context, (char *)json, (char *)error);
+	wailsRunOnWorker(^{ goDocumentFrameIdentityDone((uintptr_t)context, (char *)json, (char *)error); });
 }
 static bool scheduleDocumentFrameIdentityStart(void *document, uint64_t generation, uintptr_t context) {
-	return sp_document_frame_identity_start(document, generation, documentFrameIdentityDoneBridge, (void *)context);
+	return ON_MAIN(bool, sp_document_frame_identity_start(document, generation, documentFrameIdentityDoneBridge, (void *)context));
 }
 static bool scheduleDocumentFrameIdentityFreeze(uint64_t generation, uintptr_t context) {
-	return sp_document_frame_identity_freeze(generation, documentFrameIdentityDoneBridge, (void *)context);
+	return ON_MAIN(bool, sp_document_frame_identity_freeze(generation, documentFrameIdentityDoneBridge, (void *)context));
 }
 static bool scheduleDocumentFrameIdentityRemove(uint64_t generation, uintptr_t context) {
-	return sp_document_frame_identity_remove(generation, documentFrameIdentityDoneBridge, (void *)context);
+	return ON_MAIN(bool, sp_document_frame_identity_remove(generation, documentFrameIdentityDoneBridge, (void *)context));
 }
 
-extern void deliveredNotifications(void *context, char *json);
+extern void goDeliveredNotifications(void *context, char *json);
+static void deliveredNotificationsBridge(void *context, const char *json) {
+    wailsRunOnWorker(^{ goDeliveredNotifications(context, (char *)json); });
+}
 static void listDeliveredNotifications(void) {
-    sp_notifications_delivered((void (*)(void *, const char *))deliveredNotifications, NULL);
+    wailsRunOnMain(^{ sp_notifications_delivered(deliveredNotificationsBridge, NULL); });
 }
 #import <Cocoa/Cocoa.h>
 
 // Records at most max window server numbers of this window and the windows attached to it, and returns the number recorded.
 // The capture tool names a window by this number, so it reads the page, surfaces and modals composited by the window server without
 // moving the window to the front. The window number of this app comes first.
-static int windowNumbers(void* nsWindow, long* out, int max) {
+static int windowNumbersOnMain(void* nsWindow, long* out, int max) {
     NSWindow* window = (NSWindow*)nsWindow;
     if (window == nil || max <= 0) return 0;
     int n = 0;
@@ -48,6 +54,25 @@ static int windowNumbers(void* nsWindow, long* out, int max) {
         out[n++] = (long)[child windowNumber];
     }
     return n;
+}
+static int windowNumbers(void* nsWindow, long* out, int max) { return ON_MAIN(int, windowNumbersOnMain(nsWindow, out, max)); }
+static bool main_sp_capture_open(long windowNumber, bool display, char **error) {
+    return ON_MAIN(bool, sp_capture_open(windowNumber, display, error));
+}
+static bool main_sp_capture_start(const char *directory, bool frameIdentity, char **error) {
+    return ON_MAIN(bool, sp_capture_start(directory, frameIdentity, error));
+}
+static int main_sp_capture_stop(double after) { return ON_MAIN(int, sp_capture_stop(after)); }
+static bool main_sp_capture_has_stream(void) { return ON_MAIN(bool, sp_capture_has_stream()); }
+static int main_sp_capture_wait(void) { return ON_MAIN(int, sp_capture_wait()); }
+static bool main_sp_capture_limited(void) { return ON_MAIN(bool, sp_capture_limited()); }
+static double main_sp_capture_longest_gap(void) { return ON_MAIN(double, sp_capture_longest_gap()); }
+static bool main_sp_capture_still(long windowNumber, const char *path, char **error) {
+    return ON_MAIN(bool, sp_capture_still(windowNumber, path, error));
+}
+static void main_surfaceLayoutTraceStart(void) { wailsRunOnMain(^{ surfaceLayoutTraceStart(); }); }
+static size_t main_surfaceLayoutTraceStop(double *out, size_t capacity) {
+    return ON_MAIN(size_t, surfaceLayoutTraceStop(out, capacity));
 }
 */
 import "C"
@@ -93,7 +118,7 @@ func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
 
 func (implementation) CaptureOpen(windowNumber int, display bool) error {
 	var nativeError *C.char
-	prepared := bool(C.sp_capture_open(C.long(windowNumber), C.bool(display), &nativeError))
+	prepared := bool(C.main_sp_capture_open(C.long(windowNumber), C.bool(display), &nativeError))
 	return captureCallError("open", prepared, nativeError)
 }
 
@@ -104,12 +129,12 @@ func (implementation) CaptureStart(directory string, frameIdentity bool) error {
 	where := C.CString(directory)
 	defer C.free(unsafe.Pointer(where))
 	var nativeError *C.char
-	started := bool(C.sp_capture_start(where, C.bool(frameIdentity), &nativeError))
+	started := bool(C.main_sp_capture_start(where, C.bool(frameIdentity), &nativeError))
 	return captureCallError("start", started, nativeError)
 }
 
 func (implementation) CaptureStop(after float64) (int, error) {
-	frames := int(C.sp_capture_stop(C.double(after)))
+	frames := int(C.main_sp_capture_stop(C.double(after)))
 	if err := captureErrorIfPresent("stop"); err != nil {
 		return frames, err
 	}
@@ -118,7 +143,7 @@ func (implementation) CaptureStop(after float64) (int, error) {
 
 // CaptureHasStream reports whether the capture module still owns its current stream and writer transaction.
 func (implementation) CaptureHasStream() (bool, error) {
-	return bool(C.sp_capture_has_stream()), nil
+	return bool(C.main_sp_capture_has_stream()), nil
 }
 
 func captureErrorIfPresent(operation string) error {
@@ -130,23 +155,23 @@ func captureErrorIfPresent(operation string) error {
 }
 
 func (implementation) CaptureWait() (bool, error) {
-	if C.sp_capture_wait() != 0 {
+	if C.main_sp_capture_wait() != 0 {
 		return true, nil
 	}
 	return false, captureError("wait")
 }
 
-func (implementation) CaptureLimited() bool { return bool(C.sp_capture_limited()) }
+func (implementation) CaptureLimited() bool { return bool(C.main_sp_capture_limited()) }
 
-func (implementation) CaptureLongestGap() float64 { return float64(C.sp_capture_longest_gap()) }
+func (implementation) CaptureLongestGap() float64 { return float64(C.main_sp_capture_longest_gap()) }
 
 func (implementation) CaptureClock() float64 { return float64(C.sp_capture_clock()) }
 
 // deliveredDone receives the result of the notification query in progress.
 var deliveredDone func(string)
 
-//export deliveredNotifications
-func deliveredNotifications(_ unsafe.Pointer, json *C.char) {
+//export goDeliveredNotifications
+func goDeliveredNotifications(_ unsafe.Pointer, json *C.char) {
 	deliveredDone(C.GoString(json))
 }
 
@@ -155,12 +180,12 @@ func (implementation) DeliveredNotifications(done func(json string)) {
 	C.listDeliveredNotifications()
 }
 
-func (implementation) LayoutTraceStart() { C.surfaceLayoutTraceStart() }
+func (implementation) LayoutTraceStart() { C.main_surfaceLayoutTraceStart() }
 
 func (implementation) LayoutTraceStop() ([][5]float64, error) {
 	const capacity = 4096
 	values := make([]C.double, capacity*C.SURFACE_LAYOUT_TRACE_STAGES)
-	count := int(C.surfaceLayoutTraceStop(&values[0], capacity))
+	count := int(C.main_surfaceLayoutTraceStop(&values[0], capacity))
 	if count > capacity {
 		return nil, fmt.Errorf("layout trace capacity exceeded: %d records, capacity %d", count, capacity)
 	}
@@ -180,7 +205,7 @@ func (implementation) CaptureStill(windowNumber int, path string) error {
 	target := C.CString(path)
 	defer C.free(unsafe.Pointer(target))
 	var nativeError *C.char
-	written := bool(C.sp_capture_still(C.long(windowNumber), target, &nativeError))
+	written := bool(C.main_sp_capture_still(C.long(windowNumber), target, &nativeError))
 	return captureCallError("still", written, nativeError)
 }
 func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error {
@@ -219,8 +244,8 @@ func scheduleDocumentFrameIdentity(operation string, generation uint64, done fun
 	return nil
 }
 
-//export documentFrameIdentityDone
-func documentFrameIdentityDone(context C.uintptr_t, reply *C.char, nativeError *C.char) {
+//export goDocumentFrameIdentityDone
+func goDocumentFrameIdentityDone(context C.uintptr_t, reply *C.char, nativeError *C.char) {
 	handle := cgo.Handle(context)
 	done := handle.Value().(func(json.RawMessage, error))
 	handle.Delete()

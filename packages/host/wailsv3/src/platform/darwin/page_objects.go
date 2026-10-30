@@ -11,13 +11,15 @@ package darwin
 #include <stdbool.h>
 #include <stdint.h>
 #include "webview_geometry.h"
+#include "main_thread.h"
 
-extern void pageObjectsCounted(uintptr_t handle, long elements, long documents, char *failure);
+// The callback runs its Go function on the worker, and the native call runs on the main thread (main_thread.h).
+extern void goPageObjectsCounted(uintptr_t handle, long elements, long documents, char *failure);
 static void pageCounted(void *context, long elements, long documents, const char *failure) {
-    pageObjectsCounted((uintptr_t)context, elements, documents, (char *)failure);
+    wailsRunOnWorker(^{ goPageObjectsCounted((uintptr_t)context, elements, documents, (char *)failure); });
 }
 static void countPageObjects(void *view, bool document, uintptr_t handle) {
-    sp_webview_count_objects(view, document, pageCounted, (void *)handle);
+    wailsRunOnMain(^{ sp_webview_count_objects(view, document, pageCounted, (void *)handle); });
 }
 */
 import "C"
@@ -28,8 +30,8 @@ import (
 	"unsafe"
 )
 
-//export pageObjectsCounted
-func pageObjectsCounted(handle C.uintptr_t, elements, documents C.long, failure *C.char) {
+//export goPageObjectsCounted
+func goPageObjectsCounted(handle C.uintptr_t, elements, documents C.long, failure *C.char) {
 	// handle is the value that CountPageObjects created, and the library calls done once.
 	h := cgo.Handle(handle)
 	done := h.Value().(func(int64, int64, error))
@@ -41,7 +43,7 @@ func pageObjectsCounted(handle C.uintptr_t, elements, documents C.long, failure 
 	done(int64(elements), int64(documents), nil)
 }
 
-// CountPageObjects evaluates the counts of view and gives done the result. Call it on the main thread.
+// CountPageObjects evaluates the counts of view and gives done the result. Call it in a main-thread step.
 func (implementation) CountPageObjects(view unsafe.Pointer, document bool, done func(elements, documents int64, err error)) {
 	C.countPageObjects(view, C.bool(document), C.uintptr_t(cgo.NewHandle(done)))
 }

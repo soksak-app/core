@@ -10,6 +10,11 @@ package darwin
 #include "event_ring.h"
 #include "activity_observers.h"
 #include "observe.h"
+#include "main_thread.h"
+
+// The event ring, its clock and the observation counters need no thread; the registration of the activity observers uses
+// AppKit and runs on the main thread (main_thread.h).
+static void main_sp_observe_activity(void) { wailsRunOnMain(^{ sp_observe_activity(); }); }
 */
 import "C"
 
@@ -56,6 +61,6 @@ func (implementation) FlushNativeObservers() error {
 }
 
 func (implementation) ObserveActivity() error {
-	C.sp_observe_activity()
+	C.main_sp_observe_activity()
 	return nil
 }

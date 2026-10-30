@@ -5,9 +5,15 @@ package darwin
 /*
 #include <stdbool.h>
 #include "quit_request.h"
+#include "main_thread.h"
 
+// The request runs its Go function on the worker, and the native calls run on the main thread (main_thread.h).
 extern void goQuitRequest(void);
-static bool installQuitRequest(void) { return sp_quit_request_install(^{ goQuitRequest(); }); }
+static bool installQuitRequest(void) {
+    return ON_MAIN(bool, sp_quit_request_install(^{ wailsRunOnWorker(^{ goQuitRequest(); }); }));
+}
+static void main_sp_quit_request_answer(void) { wailsRunOnMain(^{ sp_quit_request_answer(); }); }
+static void main_sp_quit_request_cancel(void) { wailsRunOnMain(^{ sp_quit_request_cancel(); }); }
 */
 import "C"
 
@@ -50,6 +56,6 @@ func (implementation) OnQuitRequest(quit func()) error {
 	return nil
 }
 
-func (implementation) AnswerQuitRequests() { C.sp_quit_request_answer() }
+func (implementation) AnswerQuitRequests() { C.main_sp_quit_request_answer() }
 
-func (implementation) CancelQuitRequests() { C.sp_quit_request_cancel() }
+func (implementation) CancelQuitRequests() { C.main_sp_quit_request_cancel() }
