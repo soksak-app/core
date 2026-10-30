@@ -15,6 +15,8 @@
 //
 //   node scripts/check-release.mjs --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH
 //   node scripts/check-release.mjs --host wailsv3|tauriv2 --macos-minimum VERSION --<host>-bundle PATH
+// The frontend of a host is read from its application directory, apps/<host> of the checkout unless --<host>-app DIR
+// gives another one; the application directory holds src/frontend (the staged frontend) and the workbench dependency.
 import { parseArgs } from "node:util";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -142,8 +144,8 @@ export function frontendSources(workbench, frontend, diagnostic) {
   return { published, pageModule, pageModuleName: `page diagnostics module ${source}` };
 }
 
-function applicationSources(app, diagnostic) {
-  const appDir = join(ROOT, "apps", app);
+/** The frontend that the application directory staged, and the workbench that the application depends on. */
+function applicationSources(appDir, diagnostic) {
   return frontendSources(packageDir(appDir, "@soksak/workbench"), join(appDir, "src/frontend"), diagnostic);
 }
 
@@ -152,7 +154,7 @@ if (import.meta.main) {
   // parseArgs keeps the last value of a repeated option, so a repeated option is found from the tokens and refused.
   const { values, tokens } = parseArgs({
     strict: true, tokens: true,
-    options: Object.fromEntries([["host", { type: "string" }], ["macos-minimum", { type: "string" }], ...APPS.map((app) => [`${app}-bundle`, { type: "string" }])]),
+    options: Object.fromEntries([["host", { type: "string" }], ["macos-minimum", { type: "string" }], ...APPS.map((app) => [`${app}-bundle`, { type: "string" }]), ...APPS.map((app) => [`${app}-app`, { type: "string" }])]),
   });
   const seen = new Set();
   for (const token of tokens.filter((entry) => entry.kind === "option")) {
@@ -173,6 +175,16 @@ if (import.meta.main) {
       throw new Error(`--${app}-bundle is not accepted with --host ${selectedHost}`);
     }
     bundles.set(app, resolve(path));
+  }
+  const appDirs = new Map();
+  for (const app of APPS) {
+    const path = values[`${app}-app`];
+    if (path === undefined) continue;
+    if (path === "") throw new Error(`--${app}-app requires a directory path`);
+    if (selectedHost !== undefined && app !== selectedHost) {
+      throw new Error(`--${app}-app is not accepted with --host ${selectedHost}`);
+    }
+    appDirs.set(app, resolve(path));
   }
   if (selectedHost !== undefined) {
     if (minimum === undefined) throw new Error("required release option: --macos-minimum VERSION");
@@ -205,7 +217,7 @@ if (import.meta.main) {
       // are sidecar helpers that carry none.
       if (path === executable || name === "sok") auditDiagnostics(errors, path, text, diagnostic);
       else find(errors, path, text);
-      if (path === executable) auditFrontend(errors, path, text, applicationSources(app, diagnostic));
+      if (path === executable) auditFrontend(errors, path, text, applicationSources(appDirs.get(app) ?? join(ROOT, "apps", app), diagnostic));
       try {
         built.push({ path, application: path === executable, minimum: machoMinimum(bytes) });
       } catch (error) {

@@ -157,6 +157,16 @@ for (const [host, other] of [["wailsv3", "tauriv2"], ["tauriv2", "wailsv3"]]) {
     ]);
     assert.match(stderr, new RegExp(`--${other}-bundle is not accepted with --host ${host}`), stderr);
   });
+
+  test(`release CLI rejects an unselected ${other} application directory in ${host} mode`, { timeout: 5000 }, () => {
+    const stderr = check([
+      "--host", host,
+      "--macos-minimum", "14.4",
+      `--${host}-bundle`, "selected.app",
+      `--${other}-app`, "unselected",
+    ]);
+    assert.match(stderr, new RegExp(`--${other}-app is not accepted with --host ${host}`), stderr);
+  });
 }
 
 test("release CLI identifies a missing minimum in selected-host mode", { timeout: 5000 }, () => {
@@ -173,9 +183,33 @@ test("release CLI preserves the default audit of both host bundles", { timeout: 
   assert.ok(stderr.includes(join(tauri, "Contents/MacOS/soksak-tauriv2") + ": missing"), stderr);
 });
 
+/**
+ * Makes the application directory of each host with a staged frontend and the workbench package that it depends on. The
+ * directories are fixtures, so the check reads no frontend that the checkout staged.
+ */
+function applications(t) {
+  const dir = mkdtempSync(join(tmpdir(), "soksak-release-apps-"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  const args = [];
+  for (const app of ["wailsv3", "tauriv2"]) {
+    const appDir = join(dir, app);
+    const workbench = join(appDir, "node_modules/@soksak/workbench");
+    const frontend = join(appDir, "src/frontend");
+    mkdirSync(workbench, { recursive: true });
+    mkdirSync(frontend, { recursive: true });
+    writeFileSync(join(workbench, "package.json"), JSON.stringify({ name: "@soksak/workbench", exports: { "./package.json": "./package.json" }, files: ["index.html"] }));
+    writeFileSync(join(workbench, "index.html"), "<main>source</main>");
+    writeFileSync(join(workbench, "observe.js"), "diagnostic module");
+    writeFileSync(join(frontend, "index.html"), "<main>staged</main>");
+    writeFileSync(join(frontend, "diagnostics.js"), "diagnostic module");
+    args.push(`--${app}-app`, appDir);
+  }
+  return args;
+}
+
 test("release CLI inspects every executable in the bundle", { timeout: 5000 }, (t) => {
   const { paths, args } = bundles(t, { tauriv2: "\0sp_diag_probe\0" });
-  const stderr = check(args);
+  const stderr = check([...args, ...applications(t)]);
   assert.ok(stderr.includes(`${join(paths.tauriv2.executables, "soksak-fixture-sidecar")}: contains a sidecar diagnostic symbol`), stderr);
   assert.ok(stderr.includes(`${join(paths.wailsv3.executables, "soksak-wailsv3")}: does not embed a readable frontend`), stderr);
 });
