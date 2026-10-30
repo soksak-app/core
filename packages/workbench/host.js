@@ -207,12 +207,12 @@ export function retainSidecarSessions(surfaces) {
 export function surfaceContextRuntime(surface, declarations = {}) {
   const { surfaceId } = surface;
   if (typeof surfaceId !== "string" || !surfaceId) throw new TypeError("surface runtime requires surface.surfaceId");
+  // default: a call without parameters omits the payload.
   const call = (name, payload) => bridge.call(name, { ...(payload ?? {}), surface: surfaceId });
   const invoke = (name, payload) => {
     if (name === "report") return reportRecord("error", payload);
     // A view answers a forwarded exposure request through this call, so its reply passes the gate of the surface replies.
     if (name === "exposureReply" && replyGate !== null) return replyGate(surfaceId, () => call(name, payload));
-    // default: a call without parameters omits the payload.
     return call(name, payload);
   };
   const listeners = new Map();
