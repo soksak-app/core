@@ -197,8 +197,10 @@ test("core entries answer requests and undeclared or unregistered names fail wit
 
   const button = document.querySelector('[data-expose="core.fixture.button"]');
   button.getBoundingClientRect = () => ({ left: 4, top: 5, width: 6, height: 7 });
+  // jsdom has no layout, so the offset size is given to the element.
+  Object.defineProperties(button, { offsetWidth: { value: 6 }, offsetHeight: { value: 7 } });
   assert.deepEqual(await made.handle({ method: "dom.rect", params: { name: "core.fixture.button" } }),
-    { result: { x: 4, y: 5, width: 6, height: 7, document: { x: 0, y: 0 } } });
+    { result: { x: 4, y: 5, width: 6, height: 7, offsetWidth: 6, offsetHeight: 7, zoom: null, document: { x: 0, y: 0 } } });
   let clicked = 0;
   button.addEventListener("click", () => clicked++);
   assert.deepEqual(await made.handle({ method: "dom.act", params: { name: "core.fixture.button", action: "click" } }), { result: null });

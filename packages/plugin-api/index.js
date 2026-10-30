@@ -1459,7 +1459,12 @@ export class ExposureError extends Error {
 /** The rectangle of an element, in CSS pixels relative to the viewport of the document that the element belongs to. */
 export function elementRect(element) {
   const r = element.getBoundingClientRect();
-  return { x: r.left, y: r.top, width: r.width, height: r.height };
+  // zoom is the effective CSS zoom that the engine reports for the element. An engine without currentCSSZoom reports null.
+  return {
+    x: r.left, y: r.top, width: r.width, height: r.height,
+    offsetWidth: element.offsetWidth, offsetHeight: element.offsetHeight,
+    zoom: typeof element.currentCSSZoom === "number" ? element.currentCSSZoom : null,
+  };
 }
 
 const KEYBOARD = /^key/;

@@ -81,8 +81,12 @@ for (const app of Object.values(APPS)) {
     await s.until("core.text", (value) => value.frame === 1.5, "three frame steps did not reach factor 1.5");
     await s.presented();
     const spaceAfter = await s.rect("core.space-tab", 0);
+    // The measurement at each factor is printed with the offset size and the engine zoom, so a failure shows whether the rectangle
+    // includes the zoom of the frame.
+    const measured = (rect) => `rect ${rect.width} × ${rect.height}, offset ${rect.offsetWidth} × ${rect.offsetHeight}, zoom ${rect.zoom}`;
     assert.ok(grew(spaceTab.height, spaceAfter.height, 1.5),
-      `the space tab height must grow by the frame factor: ${spaceTab.height} → ${spaceAfter.height}`);
+      `the space tab height must grow by the frame factor: ${spaceTab.height} → ${spaceAfter.height} ` +
+      `(factor 1: ${measured(spaceTab)}; factor 1.5: ${measured(spaceAfter)})`);
     const cardRect = await s.rect("core.card", 0);
     assert.ok(cardRect.y + cardRect.height <= window.content.height + 0.5,
       `the plane must stay inside the window: card bottom ${cardRect.y + cardRect.height}, content ${window.content.height}`);

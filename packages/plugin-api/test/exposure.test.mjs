@@ -121,7 +121,7 @@ test("the package of a staged page is read from its path", () => {
 });
 
 /** Imitates one element without jsdom. The event constructors are read from the document of the element. */
-function element(rect = { left: 1, top: 2, width: 3, height: 4 }) {
+function element(rect = { left: 1, top: 2, width: 3, height: 4 }, engine = {}) {
   class Event { constructor(type, init) { this.type = type; this.init = init; } }
   class KeyboardEvent extends Event {}
   class MouseEvent extends Event {}
@@ -134,6 +134,10 @@ function element(rect = { left: 1, top: 2, width: 3, height: 4 }) {
     isConnected: true,
     ownerDocument: { defaultView: { Event, KeyboardEvent, MouseEvent } },
     getBoundingClientRect: () => rect,
+    // The offset size of an element without transform is its layout size; engine supplies the zoom when it provides currentCSSZoom.
+    offsetWidth: rect.width,
+    offsetHeight: rect.height,
+    ...engine,
     click() { this.clicks++; },
     dispatchEvent(event) { events.push(event); return true; },
   };
@@ -178,7 +182,8 @@ test("a dom entry resolves one element, or one of many by index, and acts on it"
   entries.dom("probe.row", () => [rows[0]]);
   entries.dom("probe.row", () => [rows[1]]);
   assert.equal(entries.registered("dom", "probe.row"), true);
-  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.input" }), { x: 1, y: 2, width: 3, height: 4 });
+  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.input" }),
+    { x: 1, y: 2, width: 3, height: 4, offsetWidth: 3, offsetHeight: 4, zoom: null });
   assert.equal((await entries.answer("dom.rect", { name: "probe.row", index: 1 })).y, 5);
   await assert.rejects(entries.answer("dom.rect", { name: "probe.row", index: 2 }), /no element at index 2/);
 
@@ -260,9 +265,18 @@ test("a surface page registers declared names once through its port and answers 
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(replies.sort((a, b) => a[0] - b[0]), [
     [7, { result: 3 }],
-    [8, { result: { x: 1, y: 2, width: 3, height: 4 } }],
+    [8, { result: { x: 1, y: 2, width: 3, height: 4, offsetWidth: 3, offsetHeight: 4, zoom: null } }],
     [9, { error: { code: EXPOSURE_ERRORS.unknownName, message: "unknown status probe.missing" } }],
   ]);
+});
+
+// dom.rect reports the size the engine gives the element beside its rectangle, so a zoomed element is measured as the engine reports it.
+test("dom.rect reports the offset size and the effective CSS zoom of the element", async () => {
+  const entries = exposureEntries(declarationMap(exposes()));
+  const zoomed = element({ left: 1, top: 2, width: 39, height: 39 }, { offsetWidth: 26, offsetHeight: 26, currentCSSZoom: 1.5 });
+  entries.dom("probe.input", () => [zoomed]);
+  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.input" }),
+    { x: 1, y: 2, width: 39, height: 39, offsetWidth: 26, offsetHeight: 26, zoom: 1.5 });
 });
 
 test("a rejected stale exposure reply is reported instead of becoming an unhandled promise", async () => {
@@ -393,7 +407,8 @@ test("a dom request gives an index or an address, never both, and an address res
     if (address.key === "none") throw new ExposureError(1009, "no control matches");
     return found;
   });
-  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.row", address: { key: "go" } }), { x: 9, y: 9, width: 1, height: 1 });
+  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.row", address: { key: "go" } }),
+    { x: 9, y: 9, width: 1, height: 1, offsetWidth: 1, offsetHeight: 1, zoom: null });
   assert.deepEqual(seen, [{ address: { key: "go" }, count: 1 }], "the resolver did not receive the address and the elements");
   assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.row", address: { key: "none" } })), 1009);
 });
