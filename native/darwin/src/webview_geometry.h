@@ -25,12 +25,6 @@ void *webviewSurfaceNativePlane(void *surface);
 bool sp_surface_place_view(void *surface, void *view);
 // Forgets the web view of a view placed in its surface, before the view is closed.
 void sp_surface_unplace_view(void *view);
-#ifdef __OBJC__
-@class NSEvent, NSView;
-// A view in the surface coordinate system uses one device pixel per coordinate unit. WebKit uses the wheel delta
-// (points) as view coordinate units, so for a wheel event going to view the function returns an event converted to that unit. Outside the surface coordinate system, it returns event.
-NSEvent *webviewScrollInViewUnits(NSEvent *event, NSView *view);
-#endif
 // Makes a web view placed inside the surface web view draw in the same unit as the surface.
 void webviewMatchSurface(void *webview, void *surface);
 void webviewSetFrame(void *webview, double x, double y, double width, double height);

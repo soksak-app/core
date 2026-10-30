@@ -183,8 +183,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         NSEvent *event = [NSEvent eventWithCGEvent:scroll];
         CFRelease(scroll);
         if (event.window != window) { held->why = "the scroll event has another window"; return SP_INPUT_REJECTED; }
-        // The event monitor of the application converts a real wheel event to surface coordinate units. sendEvent does not pass through the monitor.
-        [window sendEvent:webviewScrollInViewUnits(event, hitView(window, point))];
+        [window sendEvent:event];
         return SP_INPUT_DELIVERED;
     }
     NSView *hit = pointerTarget(window, point, phase, button);

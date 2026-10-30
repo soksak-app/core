@@ -384,37 +384,6 @@ static void notifyScale(NSView *view) {
 }
 @end
 
-NSEvent *webviewScrollInViewUnits(NSEvent *event, NSView *view) {
-    CGFloat scale = 1;
-    for (NSView *parent = view; parent; parent = parent.superview) {
-        if ([parent isKindOfClass:SPSurfaceCoordinates.class]) {
-            scale = ((SPSurfaceCoordinates *)parent).scale;
-            break;
-        }
-    }
-    // A surface page uses AppKit points and CSS pixels 1:1. A document region expresses the native frame in the device-pixel
-    // coordinate space of the surface, so pageZoom == scale is kept. The event distance conversion is needed only for that document region path.
-    if ([view isKindOfClass:WKWebView.class] && ((WKWebView *)view).pageZoom <= 1.0) return event;
-    if (scale <= 0 || scale == 1) return event;
-    CGEventRef copy = CGEventCreateCopy(event.CGEvent);
-    if (!copy) return event;
-    // Converts line, point, and fixed-point deltas. NSEvent uses the point value as the delta for continuous scrolling and the fixed-point value for line scrolling.
-    const CGEventField lines[2] = { kCGScrollWheelEventDeltaAxis1, kCGScrollWheelEventDeltaAxis2 };
-    const CGEventField points[2] = { kCGScrollWheelEventPointDeltaAxis1, kCGScrollWheelEventPointDeltaAxis2 };
-    const CGEventField fixed[2] = { kCGScrollWheelEventFixedPtDeltaAxis1, kCGScrollWheelEventFixedPtDeltaAxis2 };
-    for (int axis = 0; axis < 2; axis++) {
-        double line = CGEventGetDoubleValueField(copy, fixed[axis]);
-        int64_t whole = CGEventGetIntegerValueField(copy, lines[axis]);
-        int64_t point = CGEventGetIntegerValueField(copy, points[axis]);
-        CGEventSetIntegerValueField(copy, lines[axis], llround(whole * scale));
-        CGEventSetIntegerValueField(copy, points[axis], llround(point * scale));
-        CGEventSetDoubleValueField(copy, fixed[axis], line * scale);
-    }
-    NSEvent *scaled = [NSEvent eventWithCGEvent:copy];
-    CFRelease(copy);
-    return scaled ?: event;
-}
-
 void webviewAttachSurface(void *handle, void *mainHandle) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     WKWebView *view = (WKWebView *)handle;

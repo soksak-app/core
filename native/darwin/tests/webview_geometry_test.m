@@ -231,28 +231,47 @@ static void pumpUntil(BOOL (^done)(void), NSString *(^state)(void)) {
     }
 }
 
-// Waits until the surface finishes scrolling and returns the CSS pixels the document moved. Scrolling has finished
+// Waits until the web view finishes scrolling and returns the CSS pixels its document moved. Scrolling has finished
 // when two displays report the same value. The per-display values and elapsed time of the last scroll measurement.
 // The failure message reports these values.
 static NSMutableString *scrollSamples = nil;
 
-static double scrolledBy(WKWebView *surface) {
+static double scrolledByView(WKWebView *view) {
     currentStep = __func__;
     NSDate *start = [NSDate date];
     [scrollSamples release];
     scrollSamples = [[NSMutableString alloc] init];
-    until(^BOOL { return [evaluate(surface, @"document.scrollingElement.scrollTop") doubleValue] > 0; });
-    double last = -1, now = [evaluate(surface, @"document.scrollingElement.scrollTop") doubleValue];
+    until(^BOOL { return [evaluate(view, @"document.scrollingElement.scrollTop") doubleValue] > 0; });
+    double last = -1, now = [evaluate(view, @"document.scrollingElement.scrollTop") doubleValue];
     [scrollSamples appendFormat:@"%g@%.0fms", now, -start.timeIntervalSinceNow * 1000];
     while (now != last) {
         last = now;
         __block BOOL shown = NO;
-        [surface _doAfterNextPresentationUpdate:^{ shown = YES; }];
+        [view _doAfterNextPresentationUpdate:^{ shown = YES; }];
         until(^BOOL { return shown; });
-        now = [evaluate(surface, @"document.scrollingElement.scrollTop") doubleValue];
+        now = [evaluate(view, @"document.scrollingElement.scrollTop") doubleValue];
         [scrollSamples appendFormat:@" %g@%.0fms", now, -start.timeIntervalSinceNow * 1000];
     }
     return now;
+}
+
+// Sends a 120-point scroll through the injected input path to the center of a web view and returns the CSS pixels
+// the document of the view moved. The center must hit the view itself.
+static double scrollViewCenter(NSWindow *window, WKWebView *view) {
+    currentStep = __func__;
+    evaluate(view, @"document.scrollingElement.scrollTop = 0; null");
+    NSRect rect = [view convertRect:view.bounds toView:window.contentView];
+    double x = NSMidX(rect), y = window.contentView.bounds.size.height - NSMidY(rect);
+    WKWebView *target = webViewAtTopPoint(window, x, y);
+    check(target == view, [NSString stringWithFormat:@"the center of the view at %g,%g is its own hit (got %@)", x, y, target]);
+    __block BOOL shown = NO;
+    [view _doAfterNextPresentationUpdate:^{ shown = YES; }];
+    until(^BOOL { return shown; });
+    __block sp_input_result result = SP_INPUT_REJECTED;
+    sp_input_pointer_then(window, x, y, 4, 0, 0, 120, 5, scrollDone, &result);
+    until(^BOOL { return result != SP_INPUT_REJECTED; });
+    check(result == SP_INPUT_DELIVERED, @"a 120-point scroll into the view is delivered");
+    return scrolledByView(view);
 }
 
 // Sends a native wheel scroll to the surface and returns the CSS pixels the document moved. The wheel delta is in
@@ -286,7 +305,7 @@ static double scrollBy(NSWindow *window, WKWebView *surface, BOOL posted) {
         sp_input_pointer_then(window, x, y, 4, 0, 0, 120, 5, scrollDone, &result);
         until(^BOOL { return result != SP_INPUT_REJECTED; });
         check(result == SP_INPUT_DELIVERED, @"a scroll into the surface is delivered");
-        return scrolledBy(surface);
+        return scrolledByView(surface);
     }
     NSView *content = window.contentView;
     NSPoint local = NSMakePoint(x, content.bounds.size.height - y);
@@ -315,7 +334,7 @@ static double scrollBy(NSWindow *window, WKWebView *surface, BOOL posted) {
                 " visibility: document.visibilityState, scrollHeight: document.scrollingElement.scrollHeight,"
                 " clientHeight: document.scrollingElement.clientHeight, scrollTop: document.scrollingElement.scrollTop})"),
             window.backingScaleFactor, NSStringFromRect(surface.frame)]; });
-    return scrolledBy(surface);
+    return scrolledByView(surface);
 }
 
 static void verify(SPScaledWindow *window, WKWebView *surface, CGFloat scale, double height, NSString *when) {
@@ -558,6 +577,24 @@ int main(void) { @autoreleasepool {
     webviewSetFrame(surface, 40, 30, 300, 200.5);
     verify(window, surface, 2, 200.5, @"after changing back to 2x");
     verifyRegion(region, 2, 260, 140.5, @"after changing back to 2x");
+
+    // A document region at page zoom 1.5 on the 2x surface receives the same 120-point scroll as a web view at the same
+    // page zoom and device scale that has no surface. WebKit defines the distance of the plain view, so the region must
+    // move by that distance too.
+    check(sp_document_zoom(region, 1.5), @"a document region takes page zoom 1.5");
+    evaluate(region, @"document.body.style.margin = '0'; document.body.innerHTML = '<div style=\"height:5000px\"></div>'; null");
+    until(^BOOL { return [evaluate(region, @"document.scrollingElement.scrollHeight") doubleValue] >= 5000; });
+    double zoomedRegion = scrollViewCenter(window, region);
+    WKWebView *plain = [[[WKWebView alloc] initWithFrame:NSMakeRect(380, 220, 200, 120)] autorelease];
+    [window.contentView addSubview:plain positioned:NSWindowAbove relativeTo:main];
+    plain.pageZoom = 1.5;
+    [plain _setOverrideDeviceScaleFactor:2];
+    load(plain, @"<!doctype html><body style='margin:0'><div style='height:5000px'></div></body>");
+    double plainZoomed = scrollViewCenter(window, plain);
+    check(plainZoomed > 0 && zoomedRegion == plainZoomed,
+        [NSString stringWithFormat:@"a document region at page zoom 1.5 on a 2x surface scrolls by the CSS distance of a web view at the same zoom and scale without a surface (region %g, plain view %g)",
+            zoomedRegion, plainZoomed]);
+    [plain removeFromSuperview];
     sp_document_close(region);
 
     checkScrollBarSide(window, surface, @"rtl");
