@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
-import { readFile, realpath, rename, writeFile } from 'node:fs/promises';
+import { open, readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
@@ -30,11 +30,23 @@ function digest(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
+// SHA-256 of a file read into one reused buffer: a file of a dirty worktree, such as an untracked log, can be larger than the
+// memory of the process, and a new buffer for each chunk would leave the released chunks to the garbage collector.
 async function hashFile(root, file) {
   requiredText(file, 'file');
-  const path = resolve(root, file);
-  const content = await readFile(path);
-  return { path: file, sha256: digest(content) };
+  const hash = createHash('sha256');
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  const handle = await open(resolve(root, file), 'r');
+  try {
+    for (;;) {
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
+      if (bytesRead === 0) break;
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+  } finally {
+    await handle.close();
+  }
+  return { path: file, sha256: hash.digest('hex') };
 }
 
 async function hashFiles(root, files, name) {
