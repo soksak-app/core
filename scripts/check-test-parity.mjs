@@ -90,7 +90,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "packages/soksak/scripts/check-breaks.mjs",
     "packages/soksak/scripts/mutate.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
-  lane("host structure audit", "js-ts", ["scripts/check-hosts.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("host structure audit", "js-ts", ["scripts/check-hosts.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/main-thread-calls.test.mjs"], { sharedTests: true }),
   lane("release diagnostic audit", "js-ts", ["scripts/check-release.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-release-paths.test.mjs"], { sharedTests: true }),
   lane("release migration step", "shell", ["scripts/release-step.sh"], ["scripts/test/release-step.test.mjs"]),
   lane("installed format mentions", "js-ts", ["scripts/test/format-mentions.test.mjs"], ["scripts/test/format-mentions.test.mjs"]),
