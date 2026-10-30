@@ -551,15 +551,6 @@ void *webviewSurfaceNativePlane(void *handle) {
     return surfaceHost((NSView *)handle).nativePlane;
 }
 
-void webviewMatchSurface(void *handle, void *surfaceHandle) {
-    NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
-    WKWebView *view = (WKWebView *)handle;
-    NSView *surface = (NSView *)surfaceHandle;
-    view.pageZoom = sp_surface_scale(surface);
-    // Inside a surface in the device-pixel coordinate system, one local coordinate unit is rendered as one device pixel, like the surface.
-    if (surfaceHost(surface)) [view _setOverrideDeviceScaleFactor:1];
-}
-
 void webviewSetFrame(void *handle, double x, double y, double width, double height) {
     NSView *view = (NSView *)handle;
     NSWindow *window = view.window;

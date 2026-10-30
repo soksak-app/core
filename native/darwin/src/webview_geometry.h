@@ -25,8 +25,6 @@ void *webviewSurfaceNativePlane(void *surface);
 bool sp_surface_place_view(void *surface, void *view);
 // Forgets the web view of a view placed in its surface, before the view is closed.
 void sp_surface_unplace_view(void *view);
-// Makes a web view placed inside the surface web view draw in the same unit as the surface.
-void webviewMatchSurface(void *webview, void *surface);
 void webviewSetFrame(void *webview, double x, double y, double width, double height);
 void webviewGetFrame(void *webview, double *rect);
 void webviewSetSurfaceHidden(void *webview, bool hidden);
