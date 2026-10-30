@@ -151,7 +151,7 @@ char *sp_window_facts(void *handle) {
         // before it has one, so the memory of a document web view is attributed to its surface.
         row[@"process"] = @(view._webProcessIdentifier);
         // A document web view that the host blurs while a dialog is open carries the blur filter (sp_document_background).
-        row[@"blurred"] = @(view.contentFilters.count > 0);
+        row[@"blurred"] = @((BOOL)(view.contentFilters.count > 0));
         int near60 = surfaceLayoutPrefersNear60FPS(view);
         row[@"near60fps"] = near60 < 0 ? (id)NSNull.null : @(near60 == 1);
         NSView *nativePlane = (NSView *)sp_surface_native_plane(view);

@@ -322,6 +322,7 @@ NATIVE_TESTS = observe_test \
   view_channel_test \
   view_focus_test \
   plugin_host_view_test \
+  window_facts_blur_test \
   document_binary_test \
   document_typing_test \
   document_press_test \

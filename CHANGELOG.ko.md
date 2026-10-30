@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-12-1: native window facts가 `blurred`를 JSON boolean으로 보고한다. 숫자 값은 두 호스트의 `host.window`을 실패시켰다.
 - F292-22-1-1: 없는 view origin의 거부가 origin을 버린 동작이 저장한 layout의 tab을 적는다.
 - F292-14-1: 선언 UI snapshot ingress가 plugin이 선언하지 않은 status의 snapshot을 보고한다. 전에는 확인한 뒤 기록 없이 버렸다.
 - F292-11: main page가 plugin command의 view exposure 등록을 거부한다. 그 등록은 view가 `runtime.command.register`로 등록한 command의 forwarding handler를 바꿔 요청에 답이 없게 했다. unload probe는 command를 `commands.register`로만 등록한다.
