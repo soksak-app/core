@@ -31,6 +31,21 @@ static OSStatus setApplicationInformationItem(SPLSSessionID session, SPLSASNRef 
 static CFTypeRef copyApplicationInformationItem(SPLSSessionID session, SPLSASNRef asn, CFTypeRef key) {
     (void)session; (void)asn; (void)key; copyCalls++; return copiedName ? CFRetain(copiedName) : NULL;
 }
+// The live services observe the LaunchServices display name at the moment registration returns, which is the first moment
+// another process such as lsappinfo can list the process; the observation runs before the display-name set call.
+static CFTypeRef registeredName;
+static OSStatus registerApplicationAndObserve(CFDictionaryRef info, ProcessSerialNumber *serial) {
+    OSStatus status = _RegisterApplication(info, serial);
+    if (status == noErr) registeredName = _LSCopyApplicationInformationItem(SPLSDefaultSessionID,
+        _LSGetCurrentApplicationASN(), _kLSDisplayNameKey);
+    return status;
+}
+static const SPProcessIdentityServices observedLaunchServices = {
+    .register_application = registerApplicationAndObserve,
+    .current_application_asn = _LSGetCurrentApplicationASN,
+    .set_application_information_item = _LSSetApplicationInformationItem,
+    .copy_application_information_item = _LSCopyApplicationInformationItem,
+};
 static const SPProcessIdentityServices fakeServices = {
     .register_application = registerApplication,
     .current_application_asn = currentApplicationASN,
@@ -95,6 +110,15 @@ int main(void) { @autoreleasepool {
     check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) == 0 &&
         setValue != NULL && CFEqual(setValue, copiedName) && registerCalls == 1 && asnCalls == 1 && setCalls == 1 && copyCalls == 1,
         @"the service sequence sets and verifies the exact display name");
+
+    // This case runs before any other live registration of the process, so the observation shows the first listed name.
+    memset(error, 0, sizeof(error));
+    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &observedLaunchServices) == 0 &&
+        registeredName != NULL && CFGetTypeID(registeredName) == CFStringGetTypeID() &&
+        CFEqual(registeredName, CFSTR("soksak://sidecar/probe")),
+        [NSString stringWithFormat:@"LaunchServices lists the process with its display name from its registration: found %@, error %s",
+            registeredName, error]);
+    if (registeredName) CFRelease(registeredName);
 
     memset(error, 0, sizeof(error));
     int status = setDisplayName("soksak://sidecar/probe", error, sizeof(error));

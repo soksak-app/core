@@ -39,7 +39,21 @@ static int processSetDisplayNameWithServices(const char *display_name, char *err
         setError(error, error_capacity, "creating process display name", EINVAL);
         return EINVAL;
     }
-    OSStatus status = services->register_application(NULL, NULL);
+    // The check-in dictionary carries the display name, so LaunchServices lists the process with that name from the moment
+    // it registers it. A registration without the name lists the executable name until the set call below, and a process
+    // that reads the list in that interval receives the executable name. LaunchServices applies the dictionary only at the
+    // first registration of a process; the set call makes the name exact for a process that is already registered.
+    const void *infoKeys[] = {_kLSDisplayNameKey};
+    const void *infoValues[] = {requested};
+    CFDictionaryRef info = CFDictionaryCreate(kCFAllocatorDefault, infoKeys, infoValues, 1,
+        &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    if (info == NULL) {
+        setError(error, error_capacity, "creating LaunchServices check-in information", ENOMEM);
+        CFRelease(requested);
+        return ENOMEM;
+    }
+    OSStatus status = services->register_application(info, NULL);
+    CFRelease(info);
     if (status != noErr) {
         setError(error, error_capacity, "LaunchServices registration", (int)status);
         CFRelease(requested);
