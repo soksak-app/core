@@ -2,10 +2,10 @@ package tests
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 
@@ -85,10 +85,25 @@ func TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration(t *testing
 	}
 }
 
+// writeInstalledRaw writes plugins/installed.json of the configuration directory with the text given.
+func writeInstalledRaw(t *testing.T, config, text string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(config, "plugins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(config, "plugins", "installed.json"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// installedOfTwoPlugins is the current form of plugins/installed.json with the two plugins of the tests; installation
+// extracts each of them into the folder that the file records.
+const installedOfTwoPlugins = `{"format": 3, "plugins": {"probe": {"version": "0.0.4", "path": "plugins/probe/0.0.4", "enabled": true, "sidecars": {}}, "probe2": {"version": "0.0.2", "path": "plugins/probe2/0.0.2", "enabled": true, "sidecars": {}}}, "sidecars": {}}`
+
 // contract: cli.plugin.writing-commands-own-the-configuration
 func TestAWritingCommandReleasesTheConfigurationWhenItEnds(t *testing.T) {
 	config := t.TempDir()
-	writeInstalledRaw(t, config, releasedFormat2)
+	writeInstalledRaw(t, config, installedOfTwoPlugins)
 	for id, version := range map[string]string{"probe": "0.0.4", "probe2": "0.0.2"} {
 		plugin := filepath.Join(config, "plugins", id, version)
 		if err := os.MkdirAll(plugin, 0o755); err != nil {
@@ -113,8 +128,16 @@ func TestAWritingCommandReleasesTheConfigurationWhenItEnds(t *testing.T) {
 	if code, _, stderr := run("plugin", "disable", "probe2", "--config-dir", config); code != 0 {
 		t.Fatalf("second code %d stderr %q", code, stderr)
 	}
-	if strings.Contains(readText(t, filepath.Join(config, "plugins", "installed.json")), "package") {
-		t.Fatal("the second command did not see the migrated file")
+	var installed struct {
+		Plugins map[string]struct {
+			Enabled bool `json:"enabled"`
+		} `json:"plugins"`
+	}
+	if err := json.Unmarshal([]byte(readText(t, filepath.Join(config, "plugins", "installed.json"))), &installed); err != nil {
+		t.Fatal(err)
+	}
+	if installed.Plugins["probe"].Enabled {
+		t.Fatal("the second command did not see the first command's write: probe is enabled")
 	}
 }
 
@@ -123,7 +146,7 @@ func TestAWritingCommandReleasesTheConfigurationWhenItEnds(t *testing.T) {
 // process.lock for its lifetime still runs its plugin operations.
 func TestRunPluginActionTakesNoLockBesideALiveOwner(t *testing.T) {
 	config := t.TempDir()
-	writeInstalledRaw(t, config, releasedFormat2)
+	writeInstalledRaw(t, config, installedOfTwoPlugins)
 	for id, version := range map[string]string{"probe": "0.0.4", "probe2": "0.0.2"} {
 		plugin := filepath.Join(config, "plugins", id, version)
 		if err := os.MkdirAll(plugin, 0o755); err != nil {

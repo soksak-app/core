@@ -14,7 +14,6 @@ import (
 	"sync"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
-	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // Workspace reads and writes projects.json and settings.json of the configuration directory and the
@@ -70,7 +69,7 @@ type WorkspaceRequest struct {
 }
 
 // readProjects reads the projects of projects.json, which holds them under the `projects` member beside the format
-// member of the stored form (docs/spec/installation.md#stored-data-migration).
+// member of the stored form (docs/spec/installation.md#stored-data-formats).
 func readProjects(path string) ([]Record, error) {
 	document := Record{}
 	if err := readJSON(path, &document); err != nil {
@@ -89,13 +88,16 @@ func readProjects(path string) ([]Record, error) {
 	return projects, nil
 }
 
+// projectsFormat and settingsFormat are the current format numbers of the stored files that the host writes
+// (docs/spec/installation.md#stored-data-formats).
+const (
+	projectsFormat = 1
+	settingsFormat = 1
+)
+
 // writeProjects writes the projects under the `projects` member with the format member of the current form.
 func writeProjects(path string, projects []Record) error {
-	format, err := sok.ProjectsFormat()
-	if err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
-	return writeJSON(path, Record{"format": format, "projects": projects})
+	return writeJSON(path, Record{"format": projectsFormat, "projects": projects})
 }
 
 func readJSON(path string, into any) error {
@@ -378,11 +380,7 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		return listTabSessions(w.directory)
 	}
 	registry := filepath.Join(w.directory, "projects.json")
-	// The entry of the shared reader of projects.json migrates it to the current format first; the file holds the
-	// projects under the `projects` member beside the format member (docs/spec/installation.md#stored-data-migration).
-	if _, err := sok.MigrateProjects(w.directory); err != nil {
-		return nil, err
-	}
+	// The file holds the projects under the `projects` member beside the format member (docs/spec/installation.md#stored-data-formats).
 	projects, err := readProjects(registry)
 	if err != nil {
 		return nil, err
@@ -405,11 +403,6 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 	switch req.Kind {
 	case "snapshot":
 		common := Record{}
-		// The entry of the shared reader of settings.json migrates it to the current format first
-		// (docs/spec/installation.md#stored-data-migration).
-		if _, err := sok.MigrateSettings(w.directory); err != nil {
-			return nil, err
-		}
 		if err := readJSON(filepath.Join(w.directory, "settings.json"), &common); err != nil {
 			return nil, err
 		}
@@ -420,10 +413,6 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 				return nil, fmt.Errorf("invalid project root")
 			}
 			path := filepath.Join(root, ".soksak", "settings.json")
-			// The project settings file migrates at its first read like the common one.
-			if _, err := sok.MigrateSettings(filepath.Dir(path)); err != nil {
-				return nil, err
-			}
 			if err := readJSON(path, &settings); err != nil {
 				return nil, err
 			}
@@ -436,7 +425,7 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 			p["settings"] = settings
 		}
 		// The format member is the carrier of the stored form, not a setting, so the snapshot does not show it
-		// (docs/spec/installation.md#stored-data-migration).
+		// (docs/spec/installation.md#stored-data-formats).
 		delete(common, "format")
 		return Record{"projects": projects, "common": common}, nil
 	case "add":
@@ -497,11 +486,6 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 			}
 			path = filepath.Join(projects[at]["root"].(string), ".soksak", "settings.json")
 		}
-		// The write reads the file through the entry of the shared reader, which migrates it first, and stores the current form of
-		// the file (docs/spec/installation.md#stored-data-migration).
-		if _, err := sok.MigrateSettings(filepath.Dir(path)); err != nil {
-			return nil, err
-		}
 		settings := Record{}
 		if err := readJSON(path, &settings); err != nil {
 			return nil, err
@@ -518,11 +502,7 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 				removed = append(removed, key)
 			}
 		}
-		format, err := sok.SettingsFormat()
-		if err != nil {
-			return nil, err
-		}
-		settings["format"] = format
+		settings["format"] = settingsFormat
 		if err := writeJSON(path, settings); err != nil {
 			return nil, err
 		}

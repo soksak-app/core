@@ -59,7 +59,7 @@ pub struct Request {
 }
 
 /// Reads the projects of projects.json, which holds them under the `projects` member beside the format member of the
-/// stored form (docs/spec/installation.md#stored-data-migration).
+/// stored form (docs/spec/installation.md#stored-data-formats).
 fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
     #[derive(Default, Deserialize)]
     struct Document {
@@ -69,10 +69,13 @@ fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
     Ok(read::<Document>(path)?.projects)
 }
 
+/// The current format numbers of the stored files that the host writes (docs/spec/installation.md#stored-data-formats).
+pub(crate) const PROJECTS_FORMAT: u64 = 1;
+pub(crate) const SETTINGS_FORMAT: u64 = 1;
+
 /// Writes the projects under the `projects` member with the format member of the current form.
 fn write_projects(path: &Path, projects: &[Value]) -> Result<(), String> {
-    let format =
-        soksak_sok::migrate::projects_format().map_err(|e| format!("{}: {e}", path.display()))?;
+    let format = PROJECTS_FORMAT;
     let document = serde_json::json!({
         "format": format,
         "projects": projects,
@@ -370,8 +373,6 @@ impl Workspace {
             _ => {}
         }
         let registry = self.directory.join("projects.json");
-        // The entry of the shared reader of projects.json migrates it to the current format first.
-        soksak_sok::migrate::migrate_projects(&self.directory)?;
         let mut projects: Vec<Value> = read_projects(&registry)?;
         for project in &projects {
             let id = project["id"].as_str().ok_or("invalid project id")?;
@@ -390,23 +391,16 @@ impl Workspace {
             .position(|p| p["id"].as_str() == req.id.as_deref());
         match req.kind.as_str() {
             "snapshot" => {
-                // The entry of the shared reader of settings.json migrates it to the current format first
-                // (docs/spec/installation.md#stored-data-migration).
-                soksak_sok::migrate::migrate_settings(&self.directory)?;
                 let mut common: Map<String, Value> = read(&self.directory.join("settings.json"))?;
                 for project in &mut projects {
                     let path = Path::new(project["root"].as_str().ok_or("invalid project root")?)
                         .join(".soksak/settings.json");
-                    // The project settings file migrates at its first read like the common one.
-                    soksak_sok::migrate::migrate_settings(
-                        path.parent().ok_or("invalid project root")?,
-                    )?;
                     let mut settings: Map<String, Value> = read(&path)?;
                     if let Some(key) = COMMON_ONLY.iter().find(|key| settings.contains_key(**key)) {
                         return Err(format!("{}: {key} is common-only", path.display()));
                     }
                     // The format member is the carrier of the stored form, not a setting, so the snapshot does not show
-                    // it (docs/spec/installation.md#stored-data-migration).
+                    // it (docs/spec/installation.md#stored-data-formats).
                     settings.remove("format");
                     project["settings"] = settings.into();
                 }
@@ -486,11 +480,6 @@ impl Workspace {
                 } else {
                     self.directory.join("settings.json")
                 };
-                // The write reads the file through the entry of the shared reader, which migrates it first, and stores the current form
-                // of the file (docs/spec/installation.md#stored-data-migration).
-                soksak_sok::migrate::migrate_settings(
-                    path.parent().ok_or("invalid settings path")?,
-                )?;
                 let mut settings: Map<String, Value> = read(&path)?;
                 let mut set: Vec<String> = patch.keys().cloned().collect();
                 settings.extend(patch);
@@ -501,10 +490,7 @@ impl Workspace {
                         removed.push(key);
                     }
                 }
-                settings.insert(
-                    "format".into(),
-                    json!(soksak_sok::migrate::settings_format()?),
-                );
+                settings.insert("format".into(), json!(SETTINGS_FORMAT));
                 write(&path, &settings)?;
                 set.sort();
                 removed.sort();

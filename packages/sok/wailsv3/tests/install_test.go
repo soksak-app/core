@@ -417,10 +417,27 @@ func TestInstalledFileOfAnotherFormatIsRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, _, stderr := run("plugin", "list", "--config-dir", config)
-	// The form below the floor is refused by the migration engine and the file stays unchanged
-	// (docs/spec/installation.md#stored-data-migration).
-	want := "sok: " + file + ": the file holds format 1; the definitions migrate formats 2 to 3\n"
+	// A file of another format is refused and stays unchanged (docs/spec/installation.md#stored-data-formats).
+	want := "sok: " + file + ": plugins/installed.json: format must be 3\n"
 	if code != 1 || stderr != want || readText(t, file) != former {
+		t.Fatalf("code %d stderr %q want %q", code, stderr, want)
+	}
+}
+
+// contract: install.installed.rejects-another-format
+func TestInstalledFileOfTheReleasedFormat2IsRejected(t *testing.T) {
+	config := t.TempDir()
+	file := filepath.Join(config, "plugins/installed.json")
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	released := `{"format": 2, "plugins": {}, "sidecars": {}}`
+	if err := os.WriteFile(file, []byte(released), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run("plugin", "list", "--config-dir", config)
+	want := "sok: " + file + ": plugins/installed.json: format must be 3\n"
+	if code != 1 || stderr != want || readText(t, file) != released {
 		t.Fatalf("code %d stderr %q want %q", code, stderr, want)
 	}
 }

@@ -402,9 +402,6 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
 pub fn read_installed_manifests(
     config_dir: &Path,
 ) -> Result<(InstalledState, BTreeMap<String, InstalledManifest>), String> {
-    // The entry of the shared reader migrates the file to the current format first, so every reader in every process
-    // finds the current form (docs/spec/installation.md#stored-data-migration).
-    crate::migrate::migrate_installed(config_dir)?;
     let path = config_dir.join(INSTALLED);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,

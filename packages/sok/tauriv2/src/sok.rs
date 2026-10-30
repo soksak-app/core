@@ -26,7 +26,6 @@ pub mod log_policy;
 pub mod log_query;
 mod logged;
 mod manifest;
-pub mod migrate;
 mod ownership;
 mod path;
 #[path = "platform/platform.rs"]

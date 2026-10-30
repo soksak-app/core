@@ -646,12 +646,34 @@ fn an_installed_file_of_another_format_is_rejected() {
         (
             1,
             format!(
-                "sok: {}: the file holds format 1; the definitions migrate formats 2 to 3\n",
+                "sok: {}: plugins/installed.json: format must be 3\n",
                 file.display()
             )
         )
     );
     assert_eq!(read_text(&file), former);
+}
+
+// contract: install.installed.rejects-another-format
+#[test]
+fn an_installed_file_of_the_released_format_2_is_rejected() {
+    let config = Folder::new("plugins");
+    let file = config.path().join("plugins/installed.json");
+    std::fs::create_dir_all(file.parent().expect("plugins")).expect("plugins folder");
+    let released = r#"{"format": 2, "plugins": {}, "sidecars": {}}"#;
+    std::fs::write(&file, released).expect("format 2");
+    let (code, _, stderr) = run(&["plugin", "list", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr),
+        (
+            1,
+            format!(
+                "sok: {}: plugins/installed.json: format must be 3\n",
+                file.display()
+            )
+        )
+    );
+    assert_eq!(read_text(&file), released);
 }
 
 // contract: cli.plugin.install-modes-ignore-the-umask

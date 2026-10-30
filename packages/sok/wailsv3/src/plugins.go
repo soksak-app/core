@@ -379,9 +379,8 @@ type InstalledManifest struct {
 	Value map[string]any
 }
 
-// ReadInstalled reads plugins/installed.json. The entry of the shared reader migrates the file to the current format
-// first, so every reader in every process finds the current form (docs/spec/installation.md#stored-data-migration). When
-// the file does not exist, nothing is installed. A file that is not in the current format is an error.
+// ReadInstalled reads plugins/installed.json. When the file does not exist, nothing is installed. A file that is not in
+// the current format is an error (docs/spec/installation.md#stored-data-formats).
 func ReadInstalled(configDir string) (*InstalledState, error) {
 	state, _, err := ReadInstalledManifests(configDir)
 	return state, err
@@ -390,9 +389,6 @@ func ReadInstalled(configDir string) (*InstalledState, error) {
 // ReadInstalledManifests reads plugins/installed.json and the plugin.json of each installed plugin, each once. It
 // returns the state and the manifest of each installed plugin by id.
 func ReadInstalledManifests(configDir string) (*InstalledState, map[string]InstalledManifest, error) {
-	if _, err := MigrateInstalled(configDir); err != nil {
-		return nil, nil, err
-	}
 	path := filepath.Join(configDir, Installed)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {

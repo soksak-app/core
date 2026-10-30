@@ -16,11 +16,11 @@ fn write_raw(path: &Path, text: &str) {
     fs::write(path, text).unwrap();
 }
 
-/// The released form of plugins/installed.json of format 2 with two plugins and their folders.
-fn released_config(config: &Path) {
+/// The current form of plugins/installed.json with two plugins and their folders.
+fn installed_of_two_plugins(config: &Path) {
     write_raw(
         &config.join("plugins/installed.json"),
-        r#"{"format": 2, "plugins": {"probe": {"package": "@scope/plugin-probe", "version": "0.0.4", "path": "plugins/probe/0.0.4", "enabled": true, "sidecars": {}}, "probe2": {"package": "@scope/plugin-probe2", "version": "0.0.2", "path": "plugins/probe2/0.0.2", "enabled": true, "sidecars": {}}}, "sidecars": {}}"#,
+        r#"{"format": 3, "plugins": {"probe": {"version": "0.0.4", "path": "plugins/probe/0.0.4", "enabled": true, "sidecars": {}}, "probe2": {"version": "0.0.2", "path": "plugins/probe2/0.0.2", "enabled": true, "sidecars": {}}}, "sidecars": {}}"#,
     );
     for (id, version, name) in [
         ("probe", "0.0.4", "@scope/plugin-probe"),
@@ -69,7 +69,7 @@ fn owner_text() -> String {
 fn a_plugin_command_refuses_while_another_process_owns_the_configuration() {
     let config = Folder::new("own-refuse");
     fs::create_dir_all(config.join("plugins")).unwrap();
-    released_config(&config);
+    installed_of_two_plugins(&config);
     // A live process (this test) owns the configuration directory through its advisory lock, as a running host does.
     fs::write(config.join("process.lock"), owner_text()).unwrap();
     let owner = std::fs::File::open(config.join("process.lock")).unwrap();
@@ -89,17 +89,20 @@ fn a_plugin_command_refuses_while_another_process_owns_the_configuration() {
 #[test]
 fn a_writing_command_releases_the_configuration_when_it_ends() {
     let config = Folder::new("own-release");
-    released_config(&config);
+    installed_of_two_plugins(&config);
     let (code, _, stderr) = run_cli(&config, &["plugin", "disable", "probe"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(!config.join("process.lock").exists(), "the lock stayed");
     // A second command runs at once: the first released the configuration when it ended.
     let (code, _, stderr) = run_cli(&config, &["plugin", "disable", "probe2"]);
     assert_eq!(code, 0, "{stderr}");
-    let text = fs::read_to_string(config.join("plugins/installed.json")).unwrap();
-    assert!(
-        !text.contains("\"package\""),
-        "the second command did not see the migrated file"
+    let installed: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(config.join("plugins/installed.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        installed["plugins"]["probe"]["enabled"],
+        serde_json::Value::Bool(false),
+        "the second command did not see the first command's write"
     );
 }
 
@@ -109,7 +112,7 @@ fn a_writing_command_releases_the_configuration_when_it_ends() {
 #[test]
 fn run_plugin_action_takes_no_lock_beside_a_live_owner() {
     let config = Folder::new("own-host");
-    released_config(&config);
+    installed_of_two_plugins(&config);
     // The host's own lock is present and held by this live process.
     fs::write(config.join("process.lock"), owner_text()).unwrap();
     let owner = std::fs::File::open(config.join("process.lock")).unwrap();

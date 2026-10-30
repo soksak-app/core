@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F296-2: 두 호스트의 `sok` command line은 migration 정의를 적용하지 않는다. format이 3이 아닌 `plugins/installed.json`은 `<file>: plugins/installed.json: format must be 3`으로 거부되며, `migrations` member의 manifest case는 Go, Rust, plugin-api runner가 재생한다.
 - F296-1: 명세는 마이그레이션 대신 이전 형태의 저장 file을 `<file>: <name>: format must be <n>`으로 거부한다고 적는다. 마이그레이션 case, `migrations` manifest member, `log.migrated` event, 마이그레이션 용어를 제거했다. release version이 0.0.x인 동안 마이그레이션은 싣지 않는다.
 - F292-61: host 계약 표에 시험들이 선언하는 case `log.plugin-catalog.records-the-held-catalogs`가 추가되어, 선언 감사가 plugin catalog 시험을 명세의 case에 묶는다. 검증: `scripts/test/check-host-contract.test.mjs`는 행이 없는 표에서 정의되지 않은 case를 보고했고, 행을 추가한 뒤 통과한다.
 - F292-60: runner는 시험 파일 process에 `--test-force-exit`를 넘기지 않는다. `process.exit`가 macOS의 비동기 pipe에 쌓인 보고를 버려서, 통과해야 할 파일이 마지막 보고 없이 끝나 `ended by exit 0 while a test ran`으로 실패했기 때문이다. 시험이 끝난 뒤 handle을 열어 둔 파일은 exit limit에서 실패한다. 검증: `scripts/test/node-tests.test.mjs`의 `each test file runs with a limit for each of its tests and ends when its tests end`가 변경 전 runner에서 실패했고 변경 뒤 통과하며, `packages/plugin-api`는 runner로 71 of 71 시험을 통과한다.

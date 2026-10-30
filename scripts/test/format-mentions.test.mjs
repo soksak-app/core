@@ -1,6 +1,5 @@
 // The mechanical tie of the installed format number: every spec, test and fixture mention of the format of
-// plugins/installed.json matches the number the reader requires, and the migration fixture names the previous released
-// form (docs/spec/installation.md#stored-data-migration, F189).
+// plugins/installed.json matches the number the reader requires (docs/spec/installation.md#stored-data-formats).
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -23,7 +22,7 @@ test("every spec mention of the installed format number matches the reader", () 
       const text = readFileSync(join(ROOT, dir, name), "utf8");
       for (const match of text.matchAll(/format must be (\d)|`format` (?:is not|이 아닌) (\d)|has `format` (\d)|`format` (\d+)과|format` (\d+)은/g)) {
         const found = Number(match.slice(1).find((group) => group !== undefined));
-        // The legitimate mentions are the closed format-1 lineage, the floor 2, the previous and the current form.
+        // The legitimate mentions are the refused format 1 and format 2 forms, and the current form.
         const allowed = new Set([1, 2, installedFormat - 1, installedFormat]);
         if (!allowed.has(found)) findings.push(`${dir}/${name}: format ${found}`);
       }
@@ -47,18 +46,12 @@ test("the stored fixtures of the tests name the current form or the released for
   for (const file of files) {
     const text = readFileSync(join(ROOT, file), "utf8");
     for (const [, line, number] of text.matchAll(/^(.*"format":\s*(\d+).*)$/gm)) {
-      // The registry index file legitimately holds format 1; the closed lineage, the floor, the released form one below
-      // the current one and the above-chain form 9 are the forms the tests may store.
+      // The registry index file legitimately holds format 1; the refused forms 1 and 2, the current form and the above-chain
+      // form 9 are the forms the tests may store.
       if (line.includes("index.json") || line.includes("registry")) continue;
       const allowed = new Set([1, 2, installedFormat - 1, installedFormat, 9]);
       if (!allowed.has(Number(number))) findings.push(`${file}: format ${number}`);
     }
   }
-  // The migration tests hold the released form and forms outside the chain.
   assert.deepEqual(findings, []);
-});
-
-test("the migration fixture names the previous released form", () => {
-  const text = readFileSync(join(ROOT, "packages/sok/wailsv3/tests/migrate_test.go"), "utf8");
-  assert.match(text, new RegExp(`"format": ${installedFormat - 1}`), "the migration fixture no longer names the previous released form; it must track it so the release step keeps its meaning");
 });

@@ -249,9 +249,6 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 if let Some(end) = exposure::unrecorded_end(app) {
                     endpoint::report_unrecorded_end(&end);
                 }
-                // The records of the migration engine go through the event writer of this process
-                // (docs/spec/installation.md#stored-data-migration).
-                soksak_sok::migrate::use_migration_log(Some(std::sync::Arc::clone(&events)));
                 // The policy of the event log is the file log-policy.json, which the host and every process watch
                 // (docs/spec/logging.md#classes-and-policy).
                 let policy_app = app.clone();

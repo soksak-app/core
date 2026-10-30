@@ -131,8 +131,8 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
   lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/projects_test.go", "packages/host/wailsv3/src/images_relay_test.go", "packages/host/wailsv3/src/image_detach_test.go", "packages/host/wailsv3/src/responder_test.go", "packages/host/wailsv3/src/start_test.go", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/diagnostics_input_reference_test.go", "packages/host/wailsv3/src/diagnostics_clock_test.go", "packages/host/wailsv3/src/composition_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/webview_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/document_test.go", "packages/host/wailsv3/src/platform/darwin/input_reference_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/exposure_performance_test.go", "packages/host/wailsv3/src/exposure_webviews_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_start_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/view_call_record_test.go", "packages/host/wailsv3/src/view_error_test.go", "packages/host/wailsv3/src/document_binary_take_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go", "packages/host/wailsv3/src/view_origin_test.go", "packages/host/wailsv3/src/plugin_host_test.go", "packages/host/wailsv3/src/plugin_host_channel_test.go", "packages/host/wailsv3/src/source_origins_test.go", "packages/host/wailsv3/src/plugin_host_sidecar_test.go", "packages/host/wailsv3/src/sidecars_session_retention_test.go", "packages/host/wailsv3/src/plugins_starter_test.go", "packages/host/wailsv3/src/images_test.go", "packages/host/wailsv3/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
-  lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go", "packages/sok/wailsv3/src/diagnostics_test.go", "packages/sok/wailsv3/src/dev_test.go", "packages/sok/wailsv3/src/debug_test.go", "packages/sok/wailsv3/src/migrate_format_test.go", "packages/sok/wailsv3/src/event_log_loss_test.go"]),
-  lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs", "packages/sok/tauriv2/src/event_log_lock_test.rs", "packages/sok/tauriv2/src/debug_test.rs", "packages/sok/tauriv2/src/migrate_format_test.rs", "packages/sok/tauriv2/src/event_log_loss_test.rs", "packages/sok/tauriv2/src/process_wait_test.rs"]),
+  lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go", "packages/sok/wailsv3/src/diagnostics_test.go", "packages/sok/wailsv3/src/dev_test.go", "packages/sok/wailsv3/src/debug_test.go", "packages/sok/wailsv3/src/event_log_loss_test.go"]),
+  lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs", "packages/sok/tauriv2/src/event_log_lock_test.rs", "packages/sok/tauriv2/src/debug_test.rs", "packages/sok/tauriv2/src/event_log_loss_test.rs", "packages/sok/tauriv2/src/process_wait_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
   lane("Darwin clipboard", "objective-c", ["native/darwin/src/clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { sharedTests: true }),
@@ -5265,13 +5265,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F188",
-    implementation: [{ file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateInstalled" }],
-    tests: [{ file: "packages/sok/wailsv3/tests/migrate_test.go", id: "TestMigrateInstalledMigratesTheReleasedFormat2ToTheCurrentFormat" }],
-    expected: "Stored data migrates mechanically from definitions that the package ships, performed by core.",
-    levels: ["unit"],
-  },
-  {
     id: "F190",
     implementation: [
       { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func ownConfiguration" },
@@ -5285,32 +5278,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F188.5",
-    implementation: [
-      { file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateProjects" },
-      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func readProjects" },
-    ],
-    tests: [
-      { file: "packages/sok/wailsv3/tests/migrate_test.go", id: "TestMigrateProjectsWrapsTheBareListOfTheEarlierForm" },
-      { file: "packages/sok/tauriv2/tests/migrate_test.rs", id: "migrate_projects_wraps_the_bare_list_of_the_earlier_form" },
-    ],
-    expected: "projects.json carries its form in a format member beside the projects member, migrated from the bare array at the first read.",
-    levels: ["unit"],
-  },
-  {
-    id: "F188.4",
-    implementation: [
-      { file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateSettings" },
-      { file: "packages/host/wailsv3/src/workspace.go", symbol: "sok.MigrateSettings(w.directory)" },
-    ],
-    tests: [
-      { file: "packages/sok/wailsv3/tests/migrate_test.go", id: "TestMigrateSettingsAddsTheFormatNumberOfTheFormWithoutOne" },
-      { file: "packages/sok/tauriv2/tests/migrate_test.rs", id: "migrate_settings_adds_the_format_number_of_the_form_without_one" },
-    ],
-    expected: "settings.json carries its form in a format member migrated at the first read of the workspace layer.",
-    levels: ["unit"],
-  },
-  {
     id: "F189",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "Migrate stored data with the Wails release host" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds, migrates, and packages each host after the reusable CI checks succeed" }],
@@ -5318,29 +5285,31 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F188.2",
+    id: "F188",
     implementation: [
-      { file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateInstalled" },
-      { file: "packages/sok/tauriv2/src/migrate.rs", symbol: "pub fn migrate_installed" },
+      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "func ReadInstalledManifests" },
+      { file: "packages/sok/tauriv2/src/plugins.rs", symbol: "pub fn read_installed_manifests" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/migrate_test.go", id: "TestMigrateInstalledMigratesTheReleasedFormat2ToTheCurrentFormat" },
-      { file: "packages/sok/tauriv2/tests/migrate_test.rs", id: "migrate_installed_migrates_the_released_format_2_to_the_current_format" },
+      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestInstalledFileOfTheReleasedFormat2IsRejected" },
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "an_installed_file_of_the_released_format_2_is_rejected" },
     ],
-    expected: "The engine of both command lines migrates the released format-2 form to the current format, idempotently, refusing forms outside the chain.",
+    expected: "The command lines of both hosts read installed.json only in its current format; the migration of F188 is removed by F296.",
     levels: ["unit"],
   },
   {
     id: "F188.3",
     implementation: [
-      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "if _, err := MigrateInstalled(configDir); err != nil {" },
-      { file: "packages/sok/tauriv2/src/plugins.rs", symbol: "crate::migrate::migrate_installed(config_dir)?;" },
+      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "func ReadInstalledManifests" },
+      { file: "packages/sok/tauriv2/src/plugins.rs", symbol: "pub fn read_installed_manifests" },
     ],
     tests: [
       { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestInstalledFileOfAnotherFormatIsRejected" },
+      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestInstalledFileOfTheReleasedFormat2IsRejected" },
       { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "an_installed_file_of_another_format_is_rejected" },
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "an_installed_file_of_the_released_format_2_is_rejected" },
     ],
-    expected: "The shared reader entry of installed.json migrates before it reads, in every process.",
+    expected: "The shared reader of installed.json refuses every format other than the current one before it reads, in every process.",
     levels: ["unit"],
   },
   {

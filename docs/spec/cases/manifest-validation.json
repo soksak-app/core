@@ -71,6 +71,31 @@
       ]
     },
     {
+      "id": "top.migrations-member-is-unknown",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "migrations": {
+          "probe.json": "migrations/probe.json"
+        }
+      },
+      "accepted": false,
+      "error": "plugin.json: unknown field migrations",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "top.unknown-fields-sorted",
       "manifest": {
         "id": "probe",
