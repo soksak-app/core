@@ -33,7 +33,7 @@ Host-equivalence job은 비교에 필요한 모든 언어와 toolchain을 설치
 
 의존성을 받은 뒤 build와 check stage는 offline으로 실행한다. Node와 pnpm은 정확한 선언 버전, Go는 module/workspace 선언, Rust는 정확하게 선언된 toolchain을 따른다. Frozen pnpm lock, Cargo.lock과 Go module sum을 계속 검사한다. Offline 검사는 누락된 의존성을 받거나 lock을 갱신하지 않으며 빠진 input을 밝히고 실패한다.
 
-Release host별 job은 자체 bundle을 build하고 audit하며 해당 host로 stored-data migration을 검증하고 release file를 만든다. Registry compatibility는 별도 필수 검사로 유지한다. 최종 판정은 독립 equivalence를 포함한 모든 필수 job의 성공을 요구한다. Publish는 그 판정 후 audit한 host release file만 받는다. 필수 job의 실패, 취소나 skip은 publication을 막는다.
+Release host별 job은 자체 bundle을 build하고 audit하며 release file를 만든다. Registry compatibility는 별도 필수 검사로 유지한다. 최종 판정은 독립 equivalence를 포함한 모든 필수 job의 성공을 요구한다. Publish는 그 판정 후 audit한 host release file만 받는다. 필수 job의 실패, 취소나 skip은 publication을 막는다.
 
 명시적으로 선택한 registry index에는 고정한 SHA-256을 지정할 수 있다. Digest를 지정하면 정확히 소문자 hexadecimal 64자리여야 하고 비어 있지 않은 명시적 index URL이 필요하며 JSON parsing 전에 받은 bytes와 비교한다. 불일치는 acceptance 실패다. 기본 public-index 검사와 digest 없는 명시적 index는 기존 동작을 유지한다.
 

@@ -216,7 +216,7 @@ hosted runner의 가상 머신에는 display가 없으므로, job은 검사 전�
 
 Core는 스스로 release하며, 저장소는 설치 기록(`plugin.json`, `installed.json`)으로만 연결되므로 core의 release는 plugin이나 sidecar 저장소의 release를 기다리지 않는다. `main`에 push하면 `.github/workflows/release.yml`이 시작된다. 이 workflow는 `ci.yml`의 job을 실행하고, 그것이 성공하면 `gate` job이 `soksak-release-gate packages/plugin-api/package.json docs/features.md`(`packages/plugin-api/release-gate.js`)를 실행한다. Gate는 원격에 tag `v<version>`이 없을 때 모든 workspace package의 release version(`scripts/check-versions.mjs`)인 `packages/plugin-api/package.json`의 version을 release한다. 코드가 release할 수 있는지는 workflow의 검사가 정한다. checklist에서 `[ ]`, `[~]`, `[!]` 상태인 항목은 release를 막지 않으며, gate는 그 항목을 다음 version으로 넘어가는 항목으로 출력한다. Tag는 `git ls-remote`로 읽고 git이 실패하면 실패하므로 알 수 없는 tag 집합을 빈 것으로 읽지 않는다. Checklist 오류나 식별자 없는 열린 항목이 있어도 실패한다. Workflow는 version을 정하지 않는다. 새 version은 커밋된 workspace version 선언 변경이다.
 
-Gate가 release하면 같은 run이 `window-checks.yml`을 호출하고, 두 host를 build, migrate, package하며, registry manifest를 검사한다. `publish` job은 이 job이 모두 성공하고, run의 commit이 여전히 `main`의 head이며, tag가 여전히 없을 때만 실행된다. 이 job은 그 commit에 tag `v<version>`을 release와 함께 만든다. Workflow는 한 번에 하나의 run만 실행하므로(`concurrency: release`) 두 push가 한 version을 두 번 publish하지 않는다. Workflow token으로 push한 tag는 다른 workflow를 시작하지 않으므로 release job은 tag push가 아니라 같은 run에서 실행된다.
+Gate가 release하면 같은 run이 `window-checks.yml`을 호출하고, 두 host를 build하고 package하며, registry manifest를 검사한다. `publish` job은 이 job이 모두 성공하고, run의 commit이 여전히 `main`의 head이며, tag가 여전히 없을 때만 실행된다. 이 job은 그 commit에 tag `v<version>`을 release와 함께 만든다. Workflow는 한 번에 하나의 run만 실행하므로(`concurrency: release`) 두 push가 한 version을 두 번 publish하지 않는다. Workflow token으로 push한 tag는 다른 workflow를 시작하지 않으므로 release job은 tag push가 아니라 같은 run에서 실행된다.
 
 ## page 메모리
 

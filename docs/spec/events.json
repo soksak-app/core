@@ -8,32 +8,6 @@
     "sok"
   ],
   "events": {
-    "log.migrated": {
-      "layer": "host",
-      "class": "lifecycle",
-      "level": "info",
-      "fields": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "file": {
-            "type": "string"
-          },
-          "from": {
-            "type": "number"
-          },
-          "to": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "file",
-          "from",
-          "to"
-        ]
-      },
-      "description": "The engine of the process applied a migration definition to the file, from its format number to this one (docs/spec/installation.md#stored-data-migration)."
-    },
     "log.open": {
       "layer": "host",
       "class": "lifecycle",

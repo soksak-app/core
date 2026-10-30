@@ -73,12 +73,13 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 표면 페이지나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`, `state`나 `host`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. registry index나 `installed.json`의 plugin이 그 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
 | `hostOperations` | 아니오; `host`와 `dependencies`의 sidecar가 필요 | `{ "<sidecar name>": ["<operation>", ...] }`: plugin host가 각 sidecar 의존에 대해 부를 수 있는 작업. 각 작업은 sidecar의 `sidecar.json`의 `hostReadOperations`에 있어야 하고, 메인 페이지는 그 밖의 작업을 거절한다([plugin host](plugin-host.ko.md#channel), [sidecars](sidecars.ko.md#메시지)) |
 | `events` | 아니오 | plugin의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
-| `migrations` | 아니요 | `{ "<저장 file>": "<경로>" }`: plugin이 소유하는 저장 file의 마이그레이션 정의. 각각은 package 안의 정의 file 경로이고 형식은 [저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)과 같다. 오늘 그런 file을 소유한 plugin은 없으므로 아무도 선언하지 않는다. 그것을 선언하는 release는 그 field를 아는 core release를 요구한다 |
 | `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface`가 필요하다 |
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
 | `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: plugin host가 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `host`가 필요하다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
 | `host` | 아니오 | `{ "page": "<경로>", "state"?: { "format": <양의 정수>, "maxBytes": <양의 정수> } }`: [plugin host](plugin-host.ko.md). plugin의 view가 하나도 열려 있지 않은 동안 sidebar section의 선언 status를 제공하는 숨은 web view다. `page`는 `view` composition의 페이지 규칙을 따르고, `state`는 host 페이지가 저장하여 프로세스의 재시작에서 복구되는 상태를 선언한다 |
+
+이 표에 없는 manifest member는 알 수 없는 member이며 그 manifest는 거부된다. 0.0.x release version인 동안은 저장 데이터 마이그레이션을 싣지 않으므로 어떤 manifest도 migration member를 선언하지 않는다.
 
 플러그인은 `surface`, `sections`, `contributes` 중 하나 이상이 필요하다. 표면이 있는 플러그인만 추가 메뉴에 표시되고 레일을 갖는다. 워크벤치는 표면에 대해 아무것도 import하지 않으며, 페이지는 view가 불러온다([view 표면](#view-표면)). 표면 식별자는 URL 쿼리가 아닌 명시적인 context 멤버다. 기존 `page` 선언은 거부하며 별도 구현 경로를 선택하지 않는다. 정의되지 않은 필드는 거부한다.
 
@@ -105,7 +106,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 창 연결은 등록된 플러그인을 요구하지만 표면은 요구하지 않고, 카드 연결은 표면을 요구한다. `left`나 `right` 연결은 일반 선택이며 `plugin: null`을 요구한다. 플러그인별 창 연결은 `window-left`나 `window-right`를 쓴다.
 
 ## 섹션
-section id와 plugin id는 한 번 공개되면 불변이다. tab·저장된 settings·저장된 project data가 그것들을 참조하고, 이름을 바꾸면 어떤 마이그레이션도 닿지 않는 저장 file이 깨진다([저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)).
+section id와 plugin id는 한 번 공개되면 불변이다. tab·저장된 settings·저장된 project data가 그것들을 참조하고, 이름을 바꾸면 저장된 참조가 해석되지 않는다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)).
 
 섹션은 `status`를 선언하며, `status`는 같은 plugin이 `exposes.status`에 선언한 status 이름이다. `module`을 가진 섹션은 manifest를 읽을 때 `plugin <id>: section <section id> module is removed; a section takes status`로 거부하고, `status`가 없는 섹션은 `plugin <id>: section <section id> requires a status`로 거부한다. status 하나는 섹션 하나만 뒷받침한다. 형태와 값 규칙은 [선언된 UI](declared-ui.ko.md#사이드바-section-형태)에 있다.
 
@@ -124,11 +125,11 @@ section id와 plugin id는 한 번 공개되면 불변이다. tab·저장된 set
 세로 목록의 펼친 fill 섹션은 머리와 본문의 고유 최소 높이를 유지한다. 사이드바가 더 작으면 세트 전체를 스크롤하며 섹션을 높이 0으로 줄이지 않는다. 플러그인이 가상 목록을 사용하면 플러그인이 최소 가시 행 높이를 선언한다. 파일 트리는 28포인트 도구 줄과 최소 한 행 20포인트를 확보한다. 이 동작은 카드 콘텐츠의 잔여 높이를 늘리거나 저장한 사이드바 크기를 바꾸지 않는다.
 
 ## 프로젝트 데이터
-per-key 형식은 코어가 소유한 file 안의 값을 변환한다. 저장 file 자체의 형태는 정의로 갱신된다([저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)).
+per-key 형식은 코어가 소유한 file 안의 값마다 형태를 정하며, 다른 형태의 값은 변환되지 않고 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)).
 
 `data`는 plugin host가 프로젝트마다 저장하는 키를 선언한다. plugin host는 [프로젝트 데이터 호출](plugin-host.ko.md#프로젝트-데이터-호출)로 이 키를 읽고 쓰며, 메인 페이지가 표시된 프로젝트에 대해 답한다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
 
-저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 창이 프로젝트를 표시할 때 그 프로젝트에 저장된 선언 키를 확인한다. format 없이 저장된 값, 즉 format이 생기기 전의 형태는 format 1이다. 그 값은 스키마로 검사한 뒤 선언한 format의 현재 형태로 한 번 저장하고, 프로젝트, 플러그인, 키, format을 적은 줄을 애플리케이션 log에 쓴다. 선언보다 낮은 format으로 저장된 값, 선언보다 높은 format으로 저장된 값, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다. 낮은 format의 값은 [저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)이 변환한 뒤에야 다시 읽는다. 워크벤치는 변환을 위해 plugin 코드를 실행하지 않기 때문이다.
+저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 창이 프로젝트를 표시할 때 그 프로젝트에 저장된 선언 키를 확인한다. 선언한 format과 다른 format으로 저장된 항목, format 없이 저장된 값, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다. 워크벤치는 저장된 값을 변환하지 않는다.
 
 ## 확장 지점
 
