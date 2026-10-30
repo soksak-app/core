@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { discoverNodeTests, parseTestScript, selectNodeTests } from "../node-tests.mjs";
+import { discoverNodeTests, parseTestScript, planNodeRun, selectNodeTests } from "../node-tests.mjs";
 import { MAX_TEST_TIMEOUT_MS, runTests } from "../test-runner.mjs";
 
 // The reporter that a test file writes its events with (scripts/test-event-reporter.mjs).
@@ -246,4 +246,13 @@ test("a change selects the deepest package that holds it, and a change outside e
   assert.deepEqual(names(["a/inner/src/x.js"]), ["a/inner/test/two.test.mjs"]);
   assert.deepEqual(names(["README.md"]), ["scripts/test/s.test.mjs"]);
   assert.deepEqual(names([]), []);
+});
+
+test("a changed range whose tests the exclusions remove runs no test and says why, and an empty selection without a range is an error", () => {
+  const all = [{ name: "scripts/test/a.test.mjs" }, { name: "scripts/test/b.test.mjs" }];
+  assert.deepEqual(planNodeRun(all, { range: "origin/main..HEAD", exclude: ["scripts"] }),
+    { skip: "SKIP no test file of a package changed in origin/main..HEAD remains after --exclude scripts" });
+  assert.deepEqual(planNodeRun([], { range: "origin/main..HEAD" }), { skip: "SKIP no test file of a package changed in origin/main..HEAD" });
+  assert.deepEqual(planNodeRun(all, { only: "a.test" }), { tests: [all[0]] });
+  assert.throws(() => planNodeRun(all, { only: "missing" }), /no test file contains "missing"/);
 });

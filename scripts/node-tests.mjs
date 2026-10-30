@@ -158,6 +158,18 @@ export function selectNodeTests(tests, { only = '', exclude = [] } = {}) {
 }
 
 /**
+ * The tests to run, or the reason to run none: with `range` (a --changed revision range) a selection that is empty after
+ * `only` and `exclude` runs no test, because the range changed no test file that the run owns; without a range it is an error.
+ */
+export function planNodeRun(all, { range, only = '', exclude = [] } = {}) {
+  const tests = selectNodeTests(all, { only, exclude });
+  if (tests.length > 0) return { tests };
+  if (range === undefined) throw new Error(`no test file contains ${JSON.stringify(only)}`);
+  const after = all.length === 0 ? '' : ` remains after ${exclude.map((path) => `--exclude ${path}`).join(' ')}${only === '' ? '' : ` --only ${only}`}`;
+  return { skip: `SKIP no test file of a package changed in ${range}${after}` };
+}
+
+/**
  * The tests of the packages (folders relative to `root`, or `.` for the root): one test per file, with the folder of its package
  * and the flags of its script, and the commands to run before them. With `changed` (the changed files), only the packages that hold
  * a changed file or declare it in `specFiles` are discovered. `testTimeoutMs` is the limit of each test that declares none (`--test-timeout`).
@@ -248,12 +260,12 @@ async function main(argv) {
   const changed = values.changed === undefined ? undefined
     : execFileSync('git', ['diff', '--name-only', values.changed], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
   const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT), script: scriptName, changed, testTimeoutMs: limitMs });
-  if (changed !== undefined && all.length === 0) {
-    write(`SKIP no test file of a package changed in ${values.changed}`);
+  const plan = planNodeRun(all, { range: values.changed, only, exclude: values.exclude });
+  if (plan.skip !== undefined) {
+    write(plan.skip);
     return 0;
   }
-  const tests = selectNodeTests(all, { only, exclude: values.exclude });
-  if (tests.length === 0) throw new Error(`no test file contains ${JSON.stringify(only)}`);
+  const { tests } = plan;
   // The commands before the tests run one at a time, each with its elapsed time, and a failure ends the run.
   const prepare = before.filter((step) => tests.some((item) => item.cwd === step.cwd));
   if (prepare.length > 0) {
