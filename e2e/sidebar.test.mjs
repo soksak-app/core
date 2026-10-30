@@ -338,12 +338,18 @@ for (const app of Object.values(APPS)) {
     "the right sidebar did not mount the DOM and network sections");
     const surface = of(sidebars).surface;
     await s.run("browser.navigate", { url: `${base}/inspect` }, surface);
-    const elements = await s.until("browser.elements", (value) => value.nodes.some((node) => node.id === "box"),
+    // Both statuses are declared UI values: a tree of element labels nested by depth, and a list of `<type> <address>` items.
+    const treeOf = (value) => {
+      const flat = (nodes, depth) => nodes.flatMap((node) => [`${depth}:${node.label}`, ...flat(node.children ?? [], depth + 1)]);
+      return flat(value.elements.find((element) => element.kind === "tree")?.nodes ?? [], 0);
+    };
+    const listOf = (value) => (value.elements.find((element) => element.kind === "list")?.items ?? []).map((item) => item.label);
+    const elements = await s.until("browser.elements", (value) => treeOf(value).some((label) => label.includes("#box")),
       "browser.elements did not report the document's elements", { surface });
-    assert.deepEqual(elements.nodes.map((node) => `${node.depth}:${node.tag}`), ["0:html", "1:head", "2:title", "1:body", "2:div", "3:img"]);
-    const requests = await s.until("browser.requests", (value) => value.entries.some((entry) => entry.url === `${base}/pixel`),
+    assert.deepEqual(treeOf(elements), ["0:html", "1:head", "2:title", "1:body", "2:div#box.a.b", "3:img"]);
+    const requests = await s.until("browser.requests", (value) => listOf(value).includes(`img ${base}/pixel`),
       "browser.requests did not report the image request", { surface });
-    assert.deepEqual(requests.entries.map((entry) => [entry.type, entry.url]), [["navigation", `${base}/inspect`], ["img", `${base}/pixel`]]);
+    assert.deepEqual(listOf(requests), [`navigation ${base}/inspect`, `img ${base}/pixel`]);
     await s.until("core.sidebars", (value) => text(value, "browser.dom") === "htmlheadtitlebodydiv#box.a.bimg"
       && text(value, "browser.network").startsWith(`navigation ${base}/inspect `) && text(value, "browser.network").includes(`img ${base}/pixel `),
     "the DOM and network sections did not show the elements and requests");
