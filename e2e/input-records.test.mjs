@@ -77,19 +77,21 @@ for (const app of Object.values(APPS)) {
       return event && { ts: new Date(event.ts_us / 1000).toISOString(), event };
     };
     const forEnter = (record) => record.surface === terminal.surface;
+    // The input path carries the typed key as an action of the input report (docs/spec/native-surfaces.md).
+    const enter = (actions) => Array.isArray(actions) && actions.some((action) => action.type === "key" && action.key === "Enter");
     const found = {
       injected: nativeLine(/^info native input inject: \{"kind":"key","key":"Enter".*"down":true.*"result":"delivered".*"responder":"SPImageRegion"/),
       nativeKeyDown: typed((e) => e.event === "native.input.key_down" && e.fields.keyCode === 36),
-      nativeReport: typed((e) => e.event === "native.input.report" && e.fields.report.startsWith('{"type":"key","key":"Enter"')),
-      hostRegion: traced((r) => r.layer === "host" && r.event === "region" && forEnter(r) && r.body?.key === "Enter"),
-      pageRegion: traced((r) => r.layer === "plugin" && r.event === "region" && forEnter(r) && r.key === "Enter"),
-      pageIme: traced((r) => r.layer === "plugin" && r.event === "ime" && forEnter(r) && r.key === "Enter"),
-      pageInput: traced((r) => r.layer === "plugin" && r.event === "input" && forEnter(r) && r.key === "Enter"),
-      pageSend: traced((r) => r.layer === "plugin" && r.event === "send" && forEnter(r) && r.body?.keys?.[0]?.key === "Enter"),
+      nativeReport: typed((e) => e.event === "native.input.report" && enter(JSON.parse(e.fields.report).actions)),
+      hostRegion: traced((r) => r.layer === "host" && r.event === "region" && forEnter(r) && enter(r.body?.actions)),
+      pageRegion: traced((r) => r.layer === "plugin" && r.event === "region" && forEnter(r) && enter(r.actions)),
+      pageIme: traced((r) => r.layer === "plugin" && r.event === "ime" && forEnter(r) && enter(r.input?.actions)),
+      pageInput: traced((r) => r.layer === "plugin" && r.event === "input" && forEnter(r) && enter(r.actions)),
+      pageSend: traced((r) => r.layer === "plugin" && r.event === "send" && forEnter(r) && enter(r.body?.actions)),
       pageSendResult: traced((r) => r.layer === "plugin" && r.event === "send.result" && r.operation === "input" && r.ok === true),
-      hostSidecarSend: traced((r) => r.layer === "host" && r.event === "sidecar.send" && forEnter(r) && r.body?.keys?.[0]?.key === "Enter"),
+      hostSidecarSend: traced((r) => r.layer === "host" && r.event === "sidecar.send" && forEnter(r) && enter(r.body?.actions)),
       vtRequest: traced((r) => r.layer === "vt-core" && r.event === "request" && r.operation === "input" && forEnter(r)
-        && r.body?.body?.keys?.[0]?.key === "Enter"),
+        && enter(r.body?.body?.actions)),
       ptyWrite: traced((r) => r.layer === "vt-core" && r.event === "pty_write" && r.hex === "0d"),
       ptyRead: traced((r) => r.layer === "vt-core" && r.event === "pty_read" && Buffer.from(r.hex, "hex").toString("latin1").includes("sh-")),
     };

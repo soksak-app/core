@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-3: The input record check reads the typed key as an action of the input transaction in every layer.
 - F292-4: The sidebar choice check reads `projects.json` in its current form `{format, projects}`.
 - F292-2: The geometry check expects the view of a surface, not the main page, to own the last device pixel row of the surface.
 - F292-7: `host.window` of both hosts reports the plugin host web views as `pluginHostWebviews` and marks their rows with `pluginHost`; `appDomWebviews` no longer counts them.

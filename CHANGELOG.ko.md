@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-3: 입력 기록 검사는 모든 층에서 입력한 키를 입력 transaction의 action으로 읽는다.
 - F292-4: sidebar 선택 검사는 `projects.json`을 현재 형식 `{format, projects}`로 읽는다.
 - F292-2: geometry 검사는 표면의 마지막 device pixel 줄을 메인 페이지가 아니라 표면의 view가 가진다고 기대한다.
 - F292-7: 두 호스트의 `host.window`는 plugin host 웹뷰를 `pluginHostWebviews`로 보고하고 그 행에 `pluginHost`를 표시한다. `appDomWebviews`는 그것을 더 세지 않는다.
