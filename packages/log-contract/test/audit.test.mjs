@@ -404,8 +404,8 @@ test("sampler memory records match one strict role-shaped event schema", async (
     { role: "page", window: "window-a", pid: 21, rss_kb: 31, footprint_kb: 41 },
     { role: "page", window: "window-a", error: "window facts unavailable" },
     { role: "page", window: "window-a", pid: 0, error: "web process has not started" },
-    { role: "document", window: "window-a", surface: "surface-a", pid: 22, rss_kb: 32, footprint_kb: 42 },
-    { role: "document", window: "window-a", surface: "surface-a", pid: 0, error: "web process has not started" },
+    { role: "document", window: "window-a", surface: "surface-a", document: "page", pid: 22, rss_kb: 32, footprint_kb: 42 },
+    { role: "document", window: "window-a", surface: "surface-a", document: "page", pid: 0, error: "web process has not started" },
   ];
   const rows = records.map((fields, index) => JSON.stringify({
     ts_us: 1000 + index,
@@ -431,9 +431,10 @@ test("sampler memory records match one strict role-shaped event schema", async (
 
   const malformed = [
     { role: "page", pid: 21, rss_kb: 31, footprint_kb: 41 },
-    { role: "document", window: "window-a", pid: 22, error: "missing surface" },
+    { role: "document", window: "window-a", document: "page", pid: 22, error: "missing surface" },
+    { role: "document", window: "window-a", surface: "surface-a", pid: 22, rss_kb: 32, footprint_kb: 42 },
     { error: "failed", rss_host_kb: 100, footprint_kb: 110 },
-    { role: "document", window: "window-a", surface: "surface-a", pid: 22, rss_kb: 32, footprint_kb: 42, error: "conflicting state" },
+    { role: "document", window: "window-a", surface: "surface-a", document: "page", pid: 22, rss_kb: 32, footprint_kb: 42, error: "conflicting state" },
   ];
   const malformedRows = malformed.map((fields, index) => JSON.stringify({
     ts_us: 2000 + index,
