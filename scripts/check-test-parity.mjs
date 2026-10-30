@@ -9541,6 +9541,20 @@ const FEATURE_LINKS = [
     expected: "Continuous requests complete from a positive presented snapshot of the current raster while settled requests remain latest-sequence strict; generation and raster changes invalidate the snapshot, hidden regions do not block, and presentation errors still fail closed.",
     levels: ["unit"],
   },
+  {
+    id: "F297",
+    implementation: [
+      { file: "e2e/benchmark/cases/resize.mjs", symbol: "export const CATCH_UP_LIMIT_MS = 150;" },
+      { file: "e2e/benchmark/cases/idle-tab.mjs", symbol: "export const IDLE_TAB_BOUND_KB = 50 * 1024;" },
+    ],
+    tests: [
+      { file: "e2e/test/resize-case.test.mjs", id: "the catch-up limit of a maximise or restore is 150 ms, and a measured time above it fails the benchmark" },
+      { file: "e2e/test/idle-tab-case.test.mjs", id: "the idle tab limit is 50 MB, and a measured cost above it fails the benchmark" },
+      { file: "e2e/test/idle-tab-case.test.mjs", id: "the documents of a tab are counted once each footprint is settled" },
+    ],
+    expected: "The catch-up limit of 150 ms and the idle tab limit of 51200 KB are judged by the benchmark cases, and the settled documents of a tab are counted; the window checks keep the behavior and the measured values, and their window run is pending the release candidate.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

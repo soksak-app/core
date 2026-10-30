@@ -8,9 +8,6 @@ import { join } from "node:path";
  */
 export const LAG = 12;
 
-/** Time (ms) from the recording start to the last behind frame that the layout may take (docs/spec/native-surfaces.md#acceptance-criteria). */
-export const CATCH_UP = 150;
-
 /** Brightness darker than the card border and the glyphs. The window background and the empty area are darker than this. */
 const BRIGHT = 70;
 
@@ -107,13 +104,14 @@ export function lagStages({ measured, layouts, events }) {
 /**
  * The evidence of one resize gesture: each measured frame with its time, window size, gaps and behind flag, the display time
  * of the layout, the layout transactions that diagnostics.capture.stop returned and the stages of lagStages (ms on the frame clock).
+ * `behindMs` is the time (ms) from the first frame to the last behind frame, 0 when no frame is behind.
  */
 export function frameEvidence({ gesture, displayed, measured, layouts, stages = null }) {
-  const { behind } = judgeFrames(measured);
+  const { behind, took } = judgeFrames(measured);
   return {
     gesture,
     lag: LAG,
-    catchUp: CATCH_UP,
+    behindMs: took,
     displayed,
     frames: measured.map((m, i) => ({ time: m.time, window: m.window, gap: m.gap, behind: behind[i] })),
     layouts,
