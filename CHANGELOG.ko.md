@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F285-3: 구조 검사는 runtime에 generic한 Tauri command를 읽는다.
 - F289: version, host contract, event class script는 script 경로가 없는 process에서도 import할 수 있다.
 - F288: release 검사는 release 실행 파일을 staging이 쓴 frontend 파일과 비교한다.
 - F285-1: Tauri 호스트의 모든 async command는 본문을 async runtime의 blocking thread에서 실행하므로, page의 답을 기다리는 command가 processor가 적은 컴퓨터에서 다른 command와 답을 멈추지 않는다.

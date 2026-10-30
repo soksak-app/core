@@ -8007,6 +8007,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F285-3",
+    implementation: [{ file: "scripts/check-hosts.mjs", symbol: "const FRAMEWORK_ARGUMENT" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "command argument audit accepts the application handle of a command that is generic over the runtime" }],
+    expected: "The command argument check accepts AppHandle<R> as the framework application handle.",
+    levels: ["unit"],
+  },
+  {
     id: "F285-2",
     implementation: [{ file: "packages/host/tauriv2/src/performance.rs", symbol: "pub(crate) static TEST_SWITCH: Mutex<()>" }],
     tests: [{ file: "packages/host/tauriv2/src/view_join_test.rs", id: "presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end" }],

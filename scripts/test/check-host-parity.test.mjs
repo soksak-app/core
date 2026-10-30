@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditHostParity, auditMenuTables, goMenuTables, rustMenuTables, snake, specMenuTables } from "../check-host-parity.mjs";
+import { auditHostParity, auditMenuTables, goMenuTables, rustHandlers, rustMenuTables, snake, specMenuTables } from "../check-host-parity.mjs";
 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({
@@ -110,4 +110,9 @@ test("hyphenated diagnostic endpoint methods are read from both hosts", () => {
     'diagnosticMethods["diagnostics.fixture"] = nil',
     'diagnosticMethods["diagnostics.fixture"] = nil\n  diagnosticMethods["diagnostics.native.window-color-space"] = nil');
   assert.deepEqual(auditHostParity(changed), []);
+});
+
+test("rustHandlers reads a command that is generic over the runtime", { timeout: 1000 }, () => {
+  const bindings = "\nbindings! {\n#[tauri::command]\nasync fn plugins_run<R: tauri::Runtime>(\n    app: AppHandle<R>,\n) -> Result<(), String> {}\n#[tauri::command]\nfn release(window: Window) -> Result<(), String> {}\n}\n";
+  assert.deepEqual([...rustHandlers(bindings)], ["plugins_run", "release"]);
 });

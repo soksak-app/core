@@ -19,10 +19,15 @@ test("an async command whose body runs on a worker of the async runtime is found
     "async fn wait(webview: Webview) -> Result<(), String> {",
     "    exposure::wait(&webview)",
     "}",
+    "#[tauri::command]",
+    "async fn run<R: tauri::Runtime>(app: AppHandle<R>) -> Result<(), String> {",
+    "    plugins::run(&app)",
+    "}",
     "",
   ].join("\n")), [
     "1 forward: a synchronous body runs on a worker of the async runtime",
     "5 wait: the body of an async command does not run through blocking(move || ...)",
+    "9 run: the body of an async command does not run through blocking(move || ...)",
   ]);
 });
 

@@ -326,6 +326,22 @@ fn reject(channel: other::ipc::Channel<Vec<DeclaredSourceEvent>>) -> Result<(), 
   ]);
 });
 
+test("command argument audit accepts the application handle of a command that is generic over the runtime", { timeout: 1000 }, () => {
+  const source = `
+#[tauri::command]
+async fn plugins_run<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    request: Argument<RunRequest>,
+) -> Result<(), String> {}
+
+#[tauri::command]
+async fn other(app: AppHandle<R, Extra>) -> Result<(), String> {}
+`;
+  assert.deepEqual(findUndecodedCommandArguments(source, "bindings.rs"), [
+    "bindings.rs: command other argument app is AppHandle<R, Extra>, not Argument<T>",
+  ]);
+});
+
 test("stub audit reads every product source file and reports a file it cannot read", { timeout: 1000 }, () => {
   const files = {
     "native/darwin/src/a.m": "// TODO: Implement the panel\n",

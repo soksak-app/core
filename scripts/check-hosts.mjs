@@ -112,8 +112,9 @@ export function findStubs(files, read) {
 }
 
 // An argument of a Tauri command is Argument<T> unless it is a framework object. Then the argument decoder of the host interprets it and rejects it with the same sentence as the Wails host
-// (docs/spec/native-host.md#host-calls).
-const FRAMEWORK_ARGUMENT = /^(Window|Webview|AppHandle|(tauri::)?State<.*>|tauri::ipc::Channel<.*>)$/s;
+// (docs/spec/native-host.md#host-calls). A command that is generic over the runtime names the application handle as
+// AppHandle<R>, which is the same framework object.
+const FRAMEWORK_ARGUMENT = /^(Window|Webview|AppHandle(<R>)?|(tauri::)?State<.*>|tauri::ipc::Channel<.*>)$/s;
 const COMMAND = /#\[tauri::command[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\(crate\))?\s+)?(?:async\s+)?fn\s+(\w+)(?:<[^>]*>)?\(([^)]*)\)/g;
 
 /** Returns the arguments of the Tauri commands in source that are neither a framework object nor Argument<T>. */

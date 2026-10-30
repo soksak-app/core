@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BINDINGS = "packages/host/tauriv2/src/bindings.rs";
-const COMMAND = /#\[tauri::command(\(async\))?\]\n(async )?fn (\w+)\([^{]*\{\n\s*([^\n]*)/g;
+const COMMAND = /#\[tauri::command(\(async\))?\]\n(async )?fn (\w+)(?:<[^>]*>)?\([^{]*\{\n\s*([^\n]*)/g;
 
 /** Each async command of the source whose body does not run on the blocking threads, as { line, name, reason }. */
 export function findWorkerBodies(source) {
