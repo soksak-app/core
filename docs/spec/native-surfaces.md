@@ -346,6 +346,7 @@ The review rejected fixed cell-percentage bands because glyph strokes can extend
 - A run must fail if it records too few frames or cannot identify the surface and card in most frames. Drag latency requires finite capture times and positions and at least one measured frame at or after the first input; absent measurements are an error, not zero latency.
 - Continuous input must continue to update the displayed layout; postponing all rendering until release does not satisfy this specification.
 - Surface creation, replacement, hiding, window resizing, and document reload must preserve these requirements.
+- A window maximise or restore keeps the layout at the window size within 150 ms. The time runs from the first recorded frame to the last frame whose right or bottom layout gap differs by more than 12 pt from the gap of the first frame. The bound is the duration of the shortened zoom animation of both hosts, which measured at most 116 ms. The window check `maximising and restoring settle with the layout at the window size` (`e2e/resize.test.mjs`) states this bound and keeps its measured frames as run evidence.
 - A document region stays on its element when its surface moves or resizes, receives native scroll input without application activation, and closes with its surface.
 - Fractional-size checks measure actual CSS rectangles and recorded pixels. Integer-valued viewport queries alone do not establish the rendered document extent.
 - The final device pixel inside a native surface must participate in document hit testing.

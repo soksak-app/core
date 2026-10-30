@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-13: window check `maximising and restoring settle with the layout at the window size`는 제스처별 측정 프레임(시간, 창 크기, 간격, 뒤처짐 표시), `diagnostics.capture.stop`이 반환한 레이아웃 트랜잭션, 표시 시각을 통과 또는 실패와 관계없이 실행 폴더에 `resize-frames-<host>-<gesture>.json`으로 보존한다. 기록 파일은 여전히 삭제된다. 제스처는 호스트 window event와 view presentation 기록을 debug 수준으로 남겨, event log에서 프레임 옆에 놓이게 한다. 프레임 추출은 `e2e/resize-frames.mjs`이며 `e2e/test/resize-frames.test.mjs`가 검사한다. docs/spec/native-surfaces.md는 창 최대화 또는 복원의 150 ms 한계를 12 pt 간격 기준과 단축된 zoom 애니메이션(최대 116 ms) 근거와 함께 밝힌다. 검증: 도우미 테스트는 `e2e/resize-frames.mjs`가 없을 때 `ERR_MODULE_NOT_FOUND`로 실패했고, 이후 6개 중 6개가 통과한다. window check 자체는 실행하지 않았으므로 Tauri 지연의 원인은 F292-13에서 열려 있다.
 - F292-26-3: 사람이 답해야 하는 system 권한을 필요로 하는 창 검사는 `@soksak/window-check`의 `PERSON`을 선언하며, `SOKSAK_CHECK_PERSON=absent`이면 시작 전에 건너뛴다. window-checks workflow가 이를 설정한다. `e2e/terminal.test.mjs`의 OSC 9 system 정책 검사가 이를 선언한다.
 - F292-26-1-1: `diagnostics.fixture`는 기다리는 각 단계를 event `page.fixture.step`(lifecycle, info)으로 기록한다. `start` 기록과 `end` 기록을 쓰며, 끝 기록에는 경과 밀리초와 error 문구 또는 `null`이 있다. page gate, Go writer, Rust writer는 진단 test mark와 같이 모든 정책에서 이 event를 통과시키며, docs/spec/logging.md와 docs/spec/events.json이 이를 선언한다. 검증: `packages/plugin-api/test/log-batch.test.mjs`, `packages/workbench/test/diagnostic-fixture.test.mjs`, `packages/sok/wailsv3/tests/log_policy_test.go`, `packages/sok/tauriv2/tests/log_policy_test.rs`의 소유 Red/Green 시험.
 - F292-9-1: Wails host의 darwin view join은 presentation callback과 abandon이 모두 UI thread에서 실행되므로 end flag에 lock이 필요 없다고 적는다.
