@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-11-2: The unload probe fixture serves `probeunload.location` through the exposure of its view and pushes no declared UI snapshot; its status requests had no reply.
 - F292-11-1: A forwarded run of a command that a view registered with `runtime.command.register` runs on the forwarding handler of the surface, which sends it to the view as a command request; the main page consumed it as a request that the view answers, and the command never replied.
 - F292-14-2: The unload probe fixture pushes its snapshots under the plugin-local status name `location`, which the snapshot ingress reported as undeclared under the qualified name.
 - F292-12-1: The native window facts report `blurred` as a JSON boolean; a number made `host.window` fail on both hosts.

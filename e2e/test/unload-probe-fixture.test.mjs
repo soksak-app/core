@@ -8,28 +8,32 @@ import { startUnloadProbe } from "../fixtures/memory-saver/unload-probe/ui/unloa
 const manifestPath = fileURLToPath(new URL("../fixtures/memory-saver/unload-probe/plugin.json", import.meta.url));
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
-// The declared UI snapshot ingress joins the plugin id and the status of a snapshot and reports a status that the plugin does
-// not declare (docs/spec/declared-ui.md), so each snapshot of the probe names a declared status by its plugin-local name.
-test("the unload probe registers its qualified status and pushes snapshots under the plugin-local name", { timeout: 1000 }, async () => {
+// The main page forwards a status request of the probe surface to the view (docs/spec/native-surfaces.md#view-surfaces, view
+// exposure), so the view serves the declared status probeunload.location through its exposure and pushes no declared UI snapshot,
+// because the probe declares no section.
+test("the unload probe serves its declared status through its exposure and follows the region state", { timeout: 1000 }, async () => {
   const declared = manifest.exposes.status.map((status) => status.name);
-  const registered = [];
-  const pushed = [];
+  const served = new Map();
   let onState;
   const bridge = {
     calls: { request: async (name) => (name === "tab.state.read" ? { url: "https://example.test/" } : null) },
     composition: { create: async () => ({ region: () => ({ onState: (listener) => { onState = listener; }, load: async () => {} }) }) },
     commands: { register: async () => {} },
-    exposure: { register: async (kind, name) => registered.push([kind, name]) },
-    snapshots: { push: (status) => pushed.push(status) },
+    snapshots: { push: () => { throw new Error("the probe pushed a declared UI snapshot"); } },
   };
+  const expose = { status: async (name, read, subscribe) => { served.set(name, { read, subscribe }); } };
 
-  await startUnloadProbe({ bridge, document: { getElementById: () => ({}) } });
-  onState({ url: "https://example.test/next", loading: false, history: { entries: [], index: -1 } });
+  await startUnloadProbe({ bridge, expose, document: { getElementById: () => ({}) } });
 
-  assert.deepEqual(registered, [["status", "probeunload.location"]]);
-  assert.ok(pushed.length === 2, `the probe pushed ${pushed.length} snapshots`);
-  for (const status of pushed) {
-    assert.ok(declared.includes(`${manifest.id}.${status}`),
-      `the snapshot status ${status} is not a local name of a declared status (${declared.join(", ")})`);
-  }
+  assert.deepEqual([...served.keys()], declared);
+  const location = served.get("probeunload.location");
+  assert.deepEqual(location.read(), { url: "", loading: false, history: { entries: [], index: -1 }, restored: { url: "https://example.test/" } });
+  const values = [];
+  const stop = location.subscribe((value) => values.push(value));
+  const history = { entries: [{ url: "https://example.test/next", title: "" }], index: 0 };
+  onState({ url: "https://example.test/next", loading: false, history });
+  stop();
+  onState({ url: "https://example.test/later", loading: true, history });
+  assert.deepEqual(values.at(-1), { url: "https://example.test/next", loading: false, history, restored: { url: "https://example.test/" } });
+  assert.equal(location.read().url, "https://example.test/later");
 });
