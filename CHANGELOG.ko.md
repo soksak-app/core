@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-20-2: window check runner와 Node 시험 harness는 시험 파일에 한도를 두지 않는다. 파일의 시험마다 자기 한도가 있다. node:test `timeout`이 있으면 그 값이고, 없으면 harness가 `--test-timeout`으로 `node --test`에 넘기는 기본값이다(window check 600초, 단위 시험 120초). `--test-force-exit`로 시험이 끝나면 파일 프로세스가 끝나므로, 열린 handle을 가진 채 시간 초과된 시험이 파일을 계속 실행시키지 않는다. runner는 build 단계처럼 `timeoutMs`를 선언한 명령의 한도를 유지한다. 검증: 시험 `a test file whose tests each pass within their own limits is not ended by the runner, though the tests together take longer`는 변경 전 runner에서 `test pair has no timeoutMs`로 실패했고 변경 후 통과한다. 시험 `each test file runs with a limit for each of its tests and ends when its tests end`는 변경 전 harness에서 실패했고 변경 후 통과한다.
 - F292-26-5: retained surface listing test가 fixture plugin 이름을 쓴다. core test는 workspace registry의 plugin 이름을 쓰지 않기 때문이다(`make boundaries`).
 - F292-26-7-2: 프로젝트 폴더가 없는 window check는 제거가 의도적으로 일으키는 plugin host page의 unhandled rejection 전달 기록, `error host plugin host channel: plugin files: unhandled rejection: ...`을 두 형태의 제거 오류와 함께 선언한다. 두 host source가 이 reason에 같은 text를 이미 반환하므로 host 코드는 바뀌지 않았다. 검증: `make docs-check parity-check host-parity-check hosts-check`와 형식 검사. window check와 Go·Rust host 테스트는 이 항목에서 실행하지 않았다.
 - F292-9-3: host window check가 call class를 `debug`로 선언하고 `page.call`을 읽는다. 그래서 settle되지 않는 commit의 event log에 각 `presentSurfaces` 요청과 그 답이 남는다. 전에는 기본 policy가 이 check의 call 기록을 하나도 저장하지 않았다.

@@ -40,12 +40,23 @@ test("each test file of a package is a test with the folder and the flags of its
   put(root, "c/package.json", JSON.stringify({ name: "c" }));
   const { tests, before } = discoverNodeTests({ root, packages: ["a", "b", "c"] });
   assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1), item.cwd]), [
-    ["a/test/nested/two.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--experimental-test-module-mocks"], join(root, "a")],
-    ["a/test/one.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--experimental-test-module-mocks"], join(root, "a")],
-    ["a/test/support/helper.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--experimental-test-module-mocks"], join(root, "a")],
-    ["b/test/three.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr"], join(root, "b")],
+    ["a/test/nested/two.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-force-exit", "--experimental-test-module-mocks"], join(root, "a")],
+    ["a/test/one.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-force-exit", "--experimental-test-module-mocks"], join(root, "a")],
+    ["a/test/support/helper.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-force-exit", "--experimental-test-module-mocks"], join(root, "a")],
+    ["b/test/three.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-force-exit"], join(root, "b")],
   ]);
   assert.deepEqual(before, [{ name: "b: pnpm build", command: "pnpm", args: ["build"], cwd: join(root, "b") }]);
+});
+
+test("each test file runs with a limit for each of its tests and ends when its tests end, and the file has no limit of its own", () => {
+  const root = workspace();
+  put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
+  put(root, "a/test/one.test.mjs", "");
+  const { tests } = discoverNodeTests({ root, packages: ["a"], testTimeoutMs: 1500 });
+  assert.equal(tests.length, 1);
+  assert.ok(tests[0].args.includes("--test-timeout=1500"), `the default limit of each test is missing: ${JSON.stringify(tests[0].args)}`);
+  assert.ok(tests[0].args.includes("--test-force-exit"), `the file process does not end with its tests: ${JSON.stringify(tests[0].args)}`);
+  assert.equal(tests[0].timeoutMs, undefined, "a test file has a limit of its own");
 });
 
 test("only and excluded path scopes partition scripts tests from workspace package tests", () => {
@@ -142,7 +153,7 @@ test("another script of the packages that have it is discovered, and quotes arou
   put(root, "other/package.json", JSON.stringify({ name: "other", scripts: { test: "node --test test/" } }));
   put(root, "other/test/x.test.mjs", "");
   const { tests } = discoverNodeTests({ root, packages: ["e2e", "other"], script: "verify" });
-  assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1)]), [["e2e/a.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--test-concurrency=1", "--test-global-setup=./setup.mjs"]]]);
+  assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1)]), [["e2e/a.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-force-exit", "--test-concurrency=1", "--test-global-setup=./setup.mjs"]]]);
 });
 
 test("the idle gate waits until the person gave no input for the given seconds", async () => {

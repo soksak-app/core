@@ -1,6 +1,7 @@
 // Runs a list of tests as separate processes in a bounded pool and reports what runs, for how long and how it ended
-// (docs/operations/examples.md#test-runner). Every test has its own limit; no limit is above 10 minutes, and a test that
-// needs more is reported before it is allowed.
+// (docs/operations/examples.md#test-runner). The runner has no limit for a test file: each test of a file carries its own limit
+// (node:test `timeout`, or the per-test default that the harness passes to node --test). An item may declare `timeoutMs` for a
+// command that has no per-test limit, such as a build; no such limit is above 10 minutes.
 import { execFileSync, spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -27,9 +28,9 @@ function validate(options) {
     if (names.has(item.name)) throw new TypeError(`the test ${item.name} is listed twice`);
     names.add(item.name);
     if (typeof item.command !== 'string' || !Array.isArray(item.args)) throw new TypeError(`${item.name}: command and args are required`);
-    // Each test carries its own limit; the runner applies no run-wide default (AGENTS.md Verification).
-    if (item.timeoutMs === undefined) throw new TypeError(`test ${item.name} has no timeoutMs`);
-    if (!Number.isInteger(item.timeoutMs) || item.timeoutMs < 1 || item.timeoutMs > MAX_TEST_TIMEOUT_MS) {
+    // The runner applies no run-wide or file-wide limit (AGENTS.md Verification). A declared limit is checked; an absent one means
+    // that the process has no limit of the runner.
+    if (item.timeoutMs !== undefined && (!Number.isInteger(item.timeoutMs) || item.timeoutMs < 1 || item.timeoutMs > MAX_TEST_TIMEOUT_MS)) {
       throw new TypeError(`${item.name}: timeoutMs must be an integer from 1 through ${MAX_TEST_TIMEOUT_MS}`);
     }
   }
@@ -96,8 +97,8 @@ function endGroup(pgid, leader) {
 /**
  * Runs one test process and resolves with its status, elapsed time and output. The test process runs in a group of its own, so the
  * processes it starts belong to the group. When the test process exits, a process that remains in the group is a leftover: the group is
- * ended and the test fails with the names of the leftovers. At its limit the group is ended, and the timeout names the leftovers
- * other than the test process, which node --test keeps running until its files end.
+ * ended and the test fails with the names of the leftovers. When the item declares a limit, the group is ended at that limit, and the
+ * timeout names the leftovers other than the test process.
  */
 function runOne(item, limitMs, env, outputPath) {
   return new Promise((resolve) => {
@@ -115,7 +116,8 @@ function runOne(item, limitMs, env, outputPath) {
     let groupError = null;
     // At the limit the group is stopped first, and the elapsed time is taken at that stop, so a slow listing of the leftovers does not
     // move the time of the timeout.
-    const timer = setTimeout(() => {
+    // A process without a declared limit has no timer; its tests end by their own limits.
+    const timer = limitMs === undefined ? null : setTimeout(() => {
       timedOut = true;
       timedOutElapsedMs = performance.now() - started;
       try { timeoutLeftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
@@ -191,7 +193,7 @@ export async function runTests(options) {
       }
       running.set(item.name, performance.now());
       const limit = item.timeoutMs;
-      write(`RUN  ${item.name} (${running.size} running, limit ${seconds(limit)}s)`);
+      write(`RUN  ${item.name} (${running.size} running, ${limit === undefined ? 'no runner limit' : `limit ${seconds(limit)}s`})`);
       let entry = null;
       if (run) {
         const output = `${String(manifest.tests.length + 1).padStart(3, '0')}-${item.name.replace(/[^A-Za-z0-9._-]/g, '_')}.log`;

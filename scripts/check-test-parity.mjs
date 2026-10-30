@@ -4728,7 +4728,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/page-log.test.mjs", id: "a console argument that JSON cannot serialize is recorded as a marker with its reason, not as [object Object]" },
       { file: "scripts/test/test-command.test.mjs", id: "keeps a process error and a cleanup error together when both occur" },
       { file: "scripts/test/test-discovery.test.mjs", id: "a cargo line that starts with a brace but is not JSON fails with the line" },
-      { file: "scripts/test/test-runner.test.mjs", id: "a limit above ten minutes, a missing limit and an empty list are refused" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a limit above ten minutes, a limit that is not an integer and an empty list are refused" },
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "refuses a case without its own limit and names the case" },
       { file: "scripts/test/check-app-update.test.mjs", id: "the endpoint file is absent until written, and a file that is not JSON is an error that names the path" },
     ],
@@ -5833,7 +5833,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/node-tests.test.mjs", id: "another script of the packages that have it is discovered, and quotes around a glob are not part of the path" },
     ],
-    expected: "The window-check files run one at a time through the test runner with the start, the end, the elapsed time and a limit of 600 s for each file.",
+    expected: "The window-check files run one at a time through the test runner with the start, the end, the elapsed time and a limit of 600 s for each test that declares no timeout; a file has no limit of its own.",
     levels: ["unit"],
   },
   {

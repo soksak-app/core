@@ -2,7 +2,7 @@
 // starts and ends with its elapsed time, has its own limit, and runs in parallel (docs/operations/examples.md#test-runner).
 // The test script of each package names the flags and the paths: `node --test [flags] <paths>`, optionally after commands such as
 // `pnpm build`. `--script <name>` reads another script of the packages that have it (`verify` runs the window checks, with
-// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists; `make push-check` runs the tests of the changed packages with it.
+// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). A file has no limit of its own. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists; `make push-check` runs the tests of the changed packages with it.
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -10,7 +10,7 @@ import { cpus } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditRunWithCatalog } from './audit-run.mjs';
-import { runTests } from './test-runner.mjs';
+import { MAX_TEST_TIMEOUT_MS, runTests } from './test-runner.mjs';
 import { sessionBaselineEnvironment } from '../packages/window-check/frontmost.mjs';
 
 /** The seconds since the last keyboard or pointer input of the person, or null when the system does not report it. */
@@ -43,7 +43,7 @@ export function newRun(root, now = new Date()) {
   const id = `${now.toISOString().replace(/[-:]/g, '').slice(0, 15)}-${process.pid}`;
   return { id, folder: join(root, 'target', 'test-runs', id) };
 }
-/** The limit of one test file. */
+/** The default limit of each test of a test file, which node --test applies to the tests that declare no timeout. */
 const TEST_TIMEOUT_MS = 120_000;
 const SOURCE = /\.(?:[cm]?js)$/;
 
@@ -132,9 +132,9 @@ export function selectNodeTests(tests, { only = '', exclude = [] } = {}) {
 /**
  * The tests of the packages (folders relative to `root`, or `.` for the root): one test per file, with the folder of its package
  * and the flags of its script, and the commands to run before them. With `changed` (the changed files), only the packages that hold
- * a changed file are discovered.
+ * a changed file are discovered. `testTimeoutMs` is the limit of each test that declares none (`--test-timeout`).
  */
-export function discoverNodeTests({ root, packages, script: scriptName = 'test', changed }) {
+export function discoverNodeTests({ root, packages, script: scriptName = 'test', changed, testTimeoutMs = TEST_TIMEOUT_MS }) {
   const tests = [];
   const before = [];
   const selected = changed === undefined ? packages : changedPackages(changed, packages);
@@ -152,10 +152,11 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test',
     const files = [...new Set(script.paths.flatMap((path) => filesOf(directory, path)))].sort();
     if (files.length === 0) throw new Error(`${folder}: the test script names no test file in ${script.paths.join(' ')}`);
     for (const file of files) {
-      // The spec reporter writes the errors of the failed tests at the end of the file, so a file that its limit kills
-      // keeps none; the TAP reporter on the standard error writes the error of each test when the test ends.
+      // The spec reporter writes the errors of the failed tests at the end of the file, so a file that is killed keeps none;
+      // the TAP reporter on the standard error writes the error of each test when the test ends. --test-force-exit ends the file
+      // process when its tests end, so a test that timed out with an open handle does not keep the file running.
       tests.push({ name: relative(root, file).split('\\').join('/'), command: process.execPath,
-        args: ['--test', ...REPORTERS, ...script.flags, file], cwd: directory });
+        args: ['--test', ...REPORTERS, `--test-timeout=${testTimeoutMs}`, '--test-force-exit', ...script.flags, file], cwd: directory });
     }
   }
   return { tests, before };
@@ -207,11 +208,12 @@ async function main(argv) {
   const only = values.only;
   const scriptName = values.script;
   const limitMs = count('timeout') * 1000;
+  if (limitMs > MAX_TEST_TIMEOUT_MS) throw new Error(`--timeout must be at most ${MAX_TEST_TIMEOUT_MS / 1000} seconds, found ${values.timeout}`);
   const write = (line) => process.stdout.write(`${line}\n`);
   // With --changed, the files that the revision range changes select the packages; the push gate runs them.
   const changed = values.changed === undefined ? undefined
     : execFileSync('git', ['diff', '--name-only', values.changed], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
-  const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT), script: scriptName, changed });
+  const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT), script: scriptName, changed, testTimeoutMs: limitMs });
   if (changed !== undefined && all.length === 0) {
     write(`SKIP no test file of a package changed in ${values.changed}`);
     return 0;
@@ -226,13 +228,13 @@ async function main(argv) {
   }
   const concurrency = count('concurrency');
   const run = newRun(ROOT);
-  write(`RUN  ${tests.length} test files with ${concurrency} at once, each limited to ${limitMs / 1000}s; run ${run.id} keeps its output and manifest in ${run.folder}`);
+  write(`RUN  ${tests.length} test files with ${concurrency} at once, each test limited to ${limitMs / 1000}s and no limit for a file; run ${run.id} keeps its output and manifest in ${run.folder}`);
   const beforeEach = values['when-idle'] === undefined ? undefined : whenIdle(count('when-idle'), { write });
   const windowCheckSession = scriptName.startsWith('verify') && tests.some((item) => item.name.startsWith('e2e/'))
     ? sessionBaselineEnvironment()
     : null;
   const { results } = await runTests({
-    tests: tests.map((item) => ({ ...item, timeoutMs: limitMs,
+    tests: tests.map((item) => ({ ...item,
       ...(windowCheckSession === null ? {} : { env: { ...item.env, ...windowCheckSession } }) })),
     concurrency, write, beforeEach, run,
   });

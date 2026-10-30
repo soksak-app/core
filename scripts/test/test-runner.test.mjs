@@ -69,10 +69,9 @@ test("the summary counts the results and lists the slowest tests, slowest first"
   assert.ok(lines.some((line) => line.startsWith("SLOWEST ")));
 });
 
-test("a limit above ten minutes, a missing limit and an empty list are refused", async () => {
+test("a limit above ten minutes, a limit that is not an integer and an empty list are refused", async () => {
   await assert.rejects(runTests({ tests: [node("x", "0", { timeoutMs: 600001 })], concurrency: 1, write() {} }), /600000/);
-  // A test without its own limit is refused and named; the runner applies no run-wide limit.
-  await assert.rejects(runTests({ tests: [{ name: "x", command: process.execPath, args: ["-e", "0"] }], concurrency: 1, write() {} }), /test x has no timeoutMs/);
+  await assert.rejects(runTests({ tests: [node("x", "0", { timeoutMs: 1.5 })], concurrency: 1, write() {} }), /x: timeoutMs must be an integer/);
   await assert.rejects(runTests({ tests: [], concurrency: 1, write() {} }), /no tests/);
 });
 
@@ -224,5 +223,20 @@ test("a refused group signal with a running member names it", async () => {
     assert.throws(() => stopGroup(live.pid, refusedWithEperm), (error) => error.code === "EPERM" && new RegExp(`pid ${live.pid} `).test(error.message), "the refused signal does not name the running member");
   } finally {
     process.kill(-live.pid, "SIGKILL");
+  }
+});
+
+test("a test file whose tests each pass within their own limits is not ended by the runner, though the tests together take longer", async () => {
+  // Each test takes 600 ms under its own limit of 5000 ms, so the file takes about 1.2 s in total. The item declares no limit of its own.
+  const directory = mkdtempSync(join(tmpdir(), "runner-file-"));
+  try {
+    const file = join(directory, "pair.test.mjs");
+    const body = "() => new Promise((resolve) => setTimeout(resolve, 600))";
+    writeFileSync(file, `import test from "node:test";\ntest("first", { timeout: 5000 }, ${body});\ntest("second", { timeout: 5000 }, ${body});\n`);
+    const { results } = await run([{ name: "pair", command: process.execPath, args: ["--test", file] }], { concurrency: 1 });
+    const result = results.get("pair");
+    assert.equal(result.status, "pass", result.detail);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
