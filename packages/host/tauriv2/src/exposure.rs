@@ -1611,11 +1611,15 @@ pub(crate) fn window_processes(
     let mut document_processes = Vec::new();
     for view in webviews {
         let handle = view["view"].as_u64().ok_or("a webview fact has no view")? as platform::Handle;
-        if let Some((surface, _)) = documents.get(&handle) {
+        if let Some((surface, document)) = documents.get(&handle) {
             let process = view["process"]
                 .as_u64()
                 .ok_or("a document webview fact has no process")?;
-            document_processes.push((surface.clone(), process as u32));
+            document_processes.push(crate::performance::DocumentProcess {
+                surface: surface.clone(),
+                document: document.clone(),
+                process: process as u32,
+            });
         }
     }
     let plugin_host_processes = plugin_host_processes_for_facts(webviews, &plugin_hosts)?;

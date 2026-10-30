@@ -342,8 +342,16 @@ fn the_sampler_reads_the_processes_of_every_window() {
                 Ok(performance::WindowProcesses {
                     page: page_pid,
                     documents: vec![
-                        ("surface-a".to_string(), document_pid),
-                        ("surface-b".to_string(), 0),
+                        performance::DocumentProcess {
+                            surface: "surface-a".into(),
+                            document: "page".into(),
+                            process: document_pid,
+                        },
+                        performance::DocumentProcess {
+                            surface: "surface-b".into(),
+                            document: "page".into(),
+                            process: 0,
+                        },
                     ],
                     plugin_hosts: vec![
                         performance::PluginHostProcess {
@@ -387,6 +395,7 @@ fn the_sampler_reads_the_processes_of_every_window() {
             "{document_record}"
         );
         assert_eq!(document_record["window"], "window-a", "{document_record}");
+        assert_eq!(document_record["document"], "page", "{document_record}");
         let plugin_host_record = samples
             .iter()
             .find(|s| s["role"] == "plugin-host" && s["plugin"] == "probealpha")

@@ -210,11 +210,20 @@ pub fn process_remove(pid: u32) {
 }
 
 /// The processes of one window that the sampler reads: the WebContent process of its page, and the WebContent process of each
-/// document web view with the surface of that document. A process is 0 before it starts.
+/// document web view with the surface and the document of that web view. A process is 0 before it starts.
 pub struct WindowProcesses {
     pub page: u32,
-    pub documents: Vec<(String, u32)>,
+    pub documents: Vec<DocumentProcess>,
     pub plugin_hosts: Vec<PluginHostProcess>,
+}
+
+/// The WebContent process of one document web view of a window: a document region or the page of a view surface, named by
+/// its surface and its document.
+#[derive(Debug, Eq, PartialEq)]
+pub struct DocumentProcess {
+    pub surface: String,
+    pub document: String,
+    pub process: u32,
 }
 
 /// The WebContent process of one plugin host webview of a window.
@@ -281,11 +290,11 @@ pub fn sample() {
                 observe("sampler", || {
                     process_memory(json!({"role": "page", "window": window}), processes.page)
                 });
-                for (surface, pid) in processes.documents {
+                for document in processes.documents {
                     observe("sampler", || {
                         process_memory(
-                            json!({"role": "document", "window": window, "surface": surface}),
-                            pid,
+                            json!({"role": "document", "window": window, "surface": document.surface, "document": document.document}),
+                            document.process,
                         )
                     });
                 }

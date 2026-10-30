@@ -183,7 +183,7 @@ func PerformanceSample() {
 		})
 		for _, document := range processes.Documents {
 			PerformanceObserve("sampler", func() map[string]any {
-				return processMemory(map[string]any{"role": "document", "window": window, "surface": document.Surface}, document.Process)
+				return processMemory(map[string]any{"role": "document", "window": window, "surface": document.Surface, "document": document.Document}, document.Process)
 			})
 		}
 		for _, pluginHost := range processes.PluginHosts {
@@ -236,10 +236,12 @@ type PerformanceWindowProcesses struct {
 	PluginHosts []PerformancePluginHostProcess
 }
 
-// PerformanceDocumentProcess is the WebContent process of one document web view of a window.
+// PerformanceDocumentProcess is the WebContent process of one document web view of a window: a document region or the page of
+// a view surface, named by its surface and its document.
 type PerformanceDocumentProcess struct {
-	Surface string
-	Process int
+	Surface  string
+	Document string
+	Process  int
 }
 
 // PerformancePluginHostProcess is the WebContent process of one plugin host web view of a window.

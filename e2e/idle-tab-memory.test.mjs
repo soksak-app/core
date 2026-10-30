@@ -1,5 +1,5 @@
-// An idle browser tab costs at most 50 MB: the footprint of the web content process of its document plus the increase of the
-// main web view, read from the sampler of the trace (`host.sampler.memory`, docs/spec/performance-trace.md) through `log.query`.
+// An idle browser tab costs at most 50 MB: the footprints of the web content processes of its documents, the page of its view
+// and its document region, plus the increase of the main web view, read from the sampler of the trace (`host.sampler.memory`, docs/spec/performance-trace.md) through `log.query`.
 // The page is a blank local page, so the bound covers the tab and not the content of a site.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -50,13 +50,30 @@ async function readings(s, since, pick, label) {
   }
 }
 
-/** The footprint of the readings that `match` selects once two consecutive readings differ by less than SETTLED_KB. */
+/** The last of the footprints once its two last readings differ by less than SETTLED_KB, or undefined before. */
+const settledFootprint = (footprints) => {
+  const [previous, current] = footprints.slice(-2);
+  return footprints.length >= 2 && Math.abs(current - previous) < SETTLED_KB ? current : undefined;
+};
+
+/** The footprint of the readings that `match` selects once it is settled. */
 const settledOf = (name, match) => (rows) => {
   const footprints = rows.filter((fields) => match(fields) && Number.isInteger(fields.footprint_kb)).map((fields) => fields.footprint_kb);
-  const [previous, current] = footprints.slice(-2);
+  return { value: settledFootprint(footprints), state: `readings of ${name}: ${footprints.join(" ")} KB` };
+};
+
+/** The sum of the footprints of the documents that `match` selects once the footprint of each document is settled. */
+const settledDocumentsOf = (name, match) => (rows) => {
+  const documents = new Map();
+  for (const fields of rows) {
+    if (!match(fields) || !Number.isInteger(fields.footprint_kb)) continue;
+    if (!documents.has(fields.document)) documents.set(fields.document, []);
+    documents.get(fields.document).push(fields.footprint_kb);
+  }
+  const settled = [...documents.values()].map(settledFootprint);
   return {
-    value: footprints.length >= 2 && Math.abs(current - previous) < SETTLED_KB ? current : undefined,
-    state: `readings of ${name}: ${footprints.join(" ")} KB`,
+    value: settled.length > 0 && settled.every((value) => value !== undefined) ? settled.reduce((sum, value) => sum + value, 0) : undefined,
+    state: `readings of ${name}: ${[...documents].map(([document, footprints]) => `${document} ${footprints.join(" ")}`).join("; ")} KB`,
   };
 };
 
@@ -83,13 +100,14 @@ for (const app of Object.values(APPS)) {
     await s.until("browser.location", (at) => at.url === url && !at.loading && at.error === null && at.title === "blank",
       `surface ${tab} did not load ${url}`, { surface: tab });
     const loaded = await tailOf(s);
-    const settled = await readings(s, loaded, settledOf(`the document of ${tab}`, (fields) => fields.role === "document" && fields.surface === tab),
-      "the settled document of the tab");
+    const settled = await readings(s, loaded,
+      settledDocumentsOf(`the documents of ${tab}`, (fields) => fields.role === "document" && fields.surface === tab),
+      "the settled documents of the tab");
     const mainAfter = await readings(s, loaded, main, "the settled main web view after the tab");
     const growth = mainAfter - mainBefore;
     const cost = settled + growth;
-    t.diagnostic(`document ${settled} KB; main web view ${mainBefore} -> ${mainAfter} KB (${growth} KB); cost ${cost} KB`);
+    t.diagnostic(`documents ${settled} KB; main web view ${mainBefore} -> ${mainAfter} KB (${growth} KB); cost ${cost} KB`);
     assert.ok(cost <= BOUND_KB,
-      `the idle tab costs ${cost} KB: document ${settled} KB plus main web view growth ${growth} KB is over ${BOUND_KB} KB`);
+      `the idle tab costs ${cost} KB: documents ${settled} KB plus main web view growth ${growth} KB is over ${BOUND_KB} KB`);
   });
 }

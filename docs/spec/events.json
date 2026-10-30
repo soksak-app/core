@@ -1567,6 +1567,9 @@
               "surface": {
                 "type": "string"
               },
+              "document": {
+                "type": "string"
+              },
               "pid": {
                 "type": "number"
               },
@@ -1581,6 +1584,7 @@
               "role",
               "window",
               "surface",
+              "document",
               "pid",
               "rss_kb",
               "footprint_kb"
@@ -1617,6 +1621,9 @@
               "surface": {
                 "type": "string"
               },
+              "document": {
+                "type": "string"
+              },
               "pid": {
                 "type": "number"
               },
@@ -1628,6 +1635,7 @@
               "role",
               "window",
               "surface",
+              "document",
               "pid",
               "error"
             ],

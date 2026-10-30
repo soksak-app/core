@@ -307,8 +307,8 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 	}
 	host.PerformanceWindowAdd("window-a", func() (host.PerformanceWindowProcesses, error) {
 		return host.PerformanceWindowProcesses{Page: page.Process.Pid, Documents: []host.PerformanceDocumentProcess{
-			{Surface: "surface-a", Process: document.Process.Pid},
-			{Surface: "surface-b", Process: 0},
+			{Surface: "surface-a", Document: "page", Process: document.Process.Pid},
+			{Surface: "surface-b", Document: "page", Process: 0},
 		}, PluginHosts: []host.PerformancePluginHostProcess{
 			{Plugin: "probealpha", Process: page.Process.Pid},
 			{Plugin: "probebeta", Process: 0},
@@ -351,8 +351,9 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 	if documentFields == nil {
 		t.Fatal("no document sample names surface-a")
 	}
-	if pid, _ := documentFields["pid"].(float64); int(pid) != document.Process.Pid || documentFields["window"] != "window-a" {
-		t.Fatalf("the document sample does not name window-a and pid %d: %v", document.Process.Pid, documentFields)
+	if pid, _ := documentFields["pid"].(float64); int(pid) != document.Process.Pid || documentFields["window"] != "window-a" ||
+		documentFields["document"] != "page" {
+		t.Fatalf("the document sample does not name window-a, the document page and pid %d: %v", document.Process.Pid, documentFields)
 	}
 	if size, _ := documentFields["footprint_kb"].(float64); size <= 0 {
 		t.Fatalf("the document sample holds no footprint: %v", documentFields)

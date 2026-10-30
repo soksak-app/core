@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-18: 성능 trace의 sampler가 document 웹 뷰마다 `host.sampler.memory` 행에 `document`를 써서 view surface의 page와 document region을 구별하고, idle tab 검사는 tab의 document마다 안정된 footprint를 더한다.
 - F292-25: Tauri 호스트의 `host.window`는 Wails 호스트처럼 열린 modal의 order를 native surface 수와 web view 수의 합으로 보고하므로 modal이 모든 document region 위에 있다.
 - F292-22: placement는 view의 start value를 후보와 함께, commit의 상태로, declared UI snapshot ingress와 memory placement readiness를 기다리기 전에 읽는다. 그래서 그 기다림 동안 어떤 작업이 닫은 tab이 origin 없음으로 placement를 거부하지 않는다.
 - F283-3: 창 검사 job이 `scripts/crash-fault.mjs`로 애플리케이션의 각 crash report의 fault thread, image, 주소를 밝히고 runner에서 `atos`로 그 주소를 푼다.

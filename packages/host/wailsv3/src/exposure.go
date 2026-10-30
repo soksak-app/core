@@ -1375,7 +1375,7 @@ func (s *Surfaces) performanceProcesses() (PerformanceWindowProcesses, error) {
 		PluginHosts: append([]PerformancePluginHostProcess(nil), state.pluginHostProcesses...),
 	}
 	for _, document := range state.Documents {
-		processes.Documents = append(processes.Documents, PerformanceDocumentProcess{Surface: document.Surface, Process: document.Process})
+		processes.Documents = append(processes.Documents, PerformanceDocumentProcess{Surface: document.Surface, Document: document.Document, Process: document.Process})
 	}
 	return processes, nil
 }
