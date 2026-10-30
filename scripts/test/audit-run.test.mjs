@@ -116,6 +116,16 @@ test('an error between the tests of the run, and a start mark without an end mar
   assert.equal(judgment(folder).tests[1].result, 'fail');
 });
 
+test('a run whose last test has no end mark audits a log of more events than the call stack holds arguments', { timeout: 60000 }, (t) => {
+  const events = Array.from({ length: 300_000 }, (_, i) => focus(i + 3));
+  const { folder } = fixture(t, {
+    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), ...events] },
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 })],
+  });
+  assert.deepEqual(auditRun(catalog, folder), [`${join(folder, 'marks.jsonl')}:1: test t1 of fixture has a start mark and no end mark`]);
+  assert.equal(judgment(folder).volume[0].classes.lifecycle.events, 300_001);
+});
+
 test('an error before the first start mark or after the last end mark of the run belongs to no test of the run and is not judged', (t) => {
   // A configuration folder holds the logs of earlier runs and of a person's use of the application.
   const { folder } = fixture(t, {

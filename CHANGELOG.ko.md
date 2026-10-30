@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F291: 실행 감사는 길이와 관계없이 log를 읽는다. 마지막 test에 end mark가 없고 log에 event가 수십만 개 있는 실행은 `Maximum call stack size exceeded`로 끝났다.
 - F290: 화면을 녹화하는 창 검사는 모두 `RECORDING`을 선언하고, frame을 표시하는 display가 없으면 시작 전에 건너뛴다. 선언하지 않은 녹화는 그 선언을 밝힌 오류로 실패한다.
 - F285-3: 구조 검사는 runtime에 generic한 Tauri command를 읽는다.
 - F289: version, host contract, event class script는 script 경로가 없는 process에서도 import할 수 있다.

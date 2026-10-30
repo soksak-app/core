@@ -134,8 +134,8 @@ export function auditRun(catalog, folder) {
     // runs and of a person's use of the application, and a finding on a line outside the span (an error, a seq gap or a
     // chain that stops) belongs to no test of this run, so this run does not judge it; `check-events.mjs --logs` reports
     // every finding of a folder.
-    const spanStart = Math.min(...mine.map((made) => made.from.ts_us));
-    const spanEnd = mine.some((made) => made.to === null) ? Infinity : Math.max(...mine.map((made) => made.to.ts_us));
+    const spanStart = mine.reduce((least, made) => Math.min(least, made.from.ts_us), Infinity);
+    const spanEnd = mine.some((made) => made.to === null) ? Infinity : mine.reduce((most, made) => Math.max(most, made.to.ts_us), -Infinity);
     const times = new Map(parsed.flatMap(({ file, entries }) => entries.map((entry) => [`${file}\0${entry.line}`, entry.event.ts_us])));
     const judged = (file, line) => {
       const ts = times.get(`${file}\0${line}`);
@@ -148,7 +148,7 @@ export function auditRun(catalog, folder) {
     // The volume of each class over the span: the events and bytes of every file of the folder, per minute, against the
     // budget of the catalog (docs/spec/logging.md#volume-budget).
     const inside = parsed.flatMap(({ entries }) => entries).filter(({ event }) => event.ts_us >= spanStart && event.ts_us <= spanEnd);
-    const last = spanEnd === Infinity ? Math.max(...inside.map(({ event }) => event.ts_us)) : spanEnd;
+    const last = spanEnd === Infinity ? inside.reduce((most, { event }) => Math.max(most, event.ts_us), -Infinity) : spanEnd;
     const minutes = (last - spanStart) / 60_000_000;
     const classes = {};
     for (const { event, bytes } of inside) {
