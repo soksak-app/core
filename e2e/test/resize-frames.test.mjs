@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { frameEvidence, judgeFrames, LAG, measureFrame, writeEvidence } from "../resize-frames.mjs";
+import { frameEvidence, judgeFrames, LAG, lagStages, measureFrame, writeEvidence } from "../resize-frames.mjs";
 
 /** A frame of `width`×`height` device pixels whose top-left `bright` device columns and rows are bright. */
 function recordedFrame({ width = 200, height = 160, bright = { x: 150, y: 120 }, time = 1000, scale = 2 } = {}) {
@@ -66,6 +66,43 @@ test("frameEvidence keeps each frame with its time, window size, gaps and behind
     { time: 1000, window: { width: 400, height: 300 }, gap: { x: 25, y: 20 }, behind: false },
     { time: 1120, window: { width: 800, height: 600 }, gap: { x: 40, y: 20 }, behind: true },
   ]);
+});
+
+/** An event-log line at `ms` on the frame clock. */
+const logged = (ms, event, fields = {}) => ({ mono_ns: Math.round(ms * 1e6), layer: event.split(".")[0], event, fields });
+
+test("lagStages names the layout that caught up and the view join that held its commit", () => {
+  // The restore of a Tauri run: the window shrank at 229 ms, ticket 921 placed the maximised width, and ticket 922 presented
+  // its DOM at 461 ms and committed at 782 ms; the frame at 789 ms is the first frame at the window size.
+  const measured = [measuredAt(198, { x: 17, y: 13 }), measuredAt(275, { x: 0, y: 4 }), measuredAt(773, { x: 0, y: 4 }),
+    measuredAt(789, { x: 17, y: 13 })];
+  const layouts = [
+    { ticket: 921, begun: 243, requested: 273, presented: 279, committed: 367 },
+    { ticket: 922, begun: 426, requested: 458, presented: 461, committed: 782 },
+  ];
+  const events = [
+    logged(229, "host.window.event", { kind: "resize", window: "main" }),
+    logged(452, "host.trace.view.presentation-join", { phase: "requested", surface: "tab-a", generation: 616, ticket: 922 }),
+    logged(453, "host.trace.view.presentation-join", { phase: "result", surface: "tab-a", generation: 616, ticket: 922, joined: true }),
+    logged(455, "host.trace.view.presentation-join", { phase: "requested", surface: "tab-b", generation: 532, ticket: 922 }),
+    logged(456, "host.trace.view.presentation-join", { phase: "result", surface: "tab-b", generation: 532, ticket: 922, joined: true }),
+    logged(470, "host.trace.view.presentation-join", { phase: "presented", surface: "tab-b", generation: 532, ticket: 922 }),
+    logged(781, "host.trace.view.presentation-join", { phase: "presented", surface: "tab-a", generation: 616, ticket: 922 }),
+    logged(500, "host.stall", { late_ms: 120 }),
+  ];
+  assert.deepEqual(lagStages({ measured, layouts, events }), {
+    caught: 789, resized: 229, ticket: 921 + 1, begun: 426, requested: 458, presented: 461, committed: 782,
+    joins: [{ surface: "tab-a", generation: 616, requested: 452, presented: 781 },
+      { surface: "tab-b", generation: 532, requested: 455, presented: 470 }],
+    heldBy: "tab-a", stalls: [{ time: 500, event: "host.stall" }],
+  });
+});
+
+test("lagStages reports no stage when no frame is behind and rejects a line without a monotonic time", () => {
+  assert.equal(lagStages({ measured: [measuredAt(1000, { x: 25, y: 20 })], layouts: [], events: [] }), null);
+  const measured = [measuredAt(0, { x: 17, y: 13 }), measuredAt(10, { x: 0, y: 4 }), measuredAt(20, { x: 17, y: 13 })];
+  assert.throws(() => lagStages({ measured, layouts: [], events: [{ event: "host.window.event", fields: { kind: "resize" } }] }),
+    /host.window.event has no finite mono_ns/);
 });
 
 test("writeEvidence stores the evidence in the run folder under the host and the gesture", (t) => {

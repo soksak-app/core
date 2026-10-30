@@ -54,11 +54,61 @@ export function judgeFrames(measured) {
   return { behind, took: last < 0 ? 0 : measured[last].time - first.time };
 }
 
+/** The time (ms on the frame clock) of an event-log line; the frame clock and `mono_ns` read the same monotonic clock. */
+function lineTime(line) {
+  if (!Number.isFinite(line?.mono_ns)) throw new Error(`${line?.event} has no finite mono_ns: ${JSON.stringify(line)}`);
+  return line.mono_ns / 1e6;
+}
+
+/**
+ * The stages of the layout that caught up with the window after a resize. `measured` are the measured frames, `layouts` the
+ * layout transactions of diagnostics.capture.stop and `events` the event-log lines of the gesture. The layout that caught up is
+ * the last transaction committed at or before the first frame after the last behind frame (`caught`). The result names the last
+ * window resize event before that transaction began (`resized`), its stages, the root-view joins of its ticket from the
+ * `host.trace.view.presentation-join` rows, the view whose join presented last before the commit (`heldBy`), and the host stall
+ * records between the first frame and `caught`. It is null when no frame is behind the window.
+ */
+export function lagStages({ measured, layouts, events }) {
+  const { behind } = judgeFrames(measured);
+  const last = behind.lastIndexOf(true);
+  if (last < 0) return null;
+  const times = events.map((line) => ({ line, time: lineTime(line) }));
+  const caught = measured[last + 1]?.time ?? null;
+  const settled = layouts.filter((layout) => layout.committed !== null && (caught === null || layout.committed <= caught))
+    .sort((a, b) => a.committed - b.committed).at(-1) ?? null;
+  const resizes = times.filter(({ line, time }) => line.event === "host.window.event" && line.fields?.kind === "resize"
+    && (settled === null || time <= settled.begun));
+  const joins = new Map();
+  for (const { line, time } of times) {
+    if (settled === null || line.event !== "host.trace.view.presentation-join" || line.fields.ticket !== settled.ticket) continue;
+    const { surface, generation, phase } = line.fields;
+    const join = joins.get(surface) ?? { surface, generation, requested: null, presented: null };
+    if (phase === "requested") join.requested = time;
+    if (phase === "presented") join.presented = time;
+    joins.set(surface, join);
+  }
+  const presented = [...joins.values()].filter((join) => join.presented !== null).sort((a, b) => a.presented - b.presented);
+  const end = caught ?? measured.at(-1).time;
+  return {
+    caught,
+    resized: resizes.at(-1)?.time ?? null,
+    ticket: settled?.ticket ?? null,
+    begun: settled?.begun ?? null,
+    requested: settled?.requested ?? null,
+    presented: settled?.presented ?? null,
+    committed: settled?.committed ?? null,
+    joins: [...joins.values()],
+    heldBy: presented.at(-1)?.surface ?? null,
+    stalls: times.filter(({ line, time }) => line.event.startsWith("host.stall") && time >= measured[0].time && time <= end)
+      .map(({ line, time }) => ({ time, event: line.event })),
+  };
+}
+
 /**
  * The evidence of one resize gesture: each measured frame with its time, window size, gaps and behind flag, the display time
- * of the layout, and the layout transactions that diagnostics.capture.stop returned (ms on the frame clock).
+ * of the layout, the layout transactions that diagnostics.capture.stop returned and the stages of lagStages (ms on the frame clock).
  */
-export function frameEvidence({ gesture, displayed, measured, layouts }) {
+export function frameEvidence({ gesture, displayed, measured, layouts, stages = null }) {
   const { behind } = judgeFrames(measured);
   return {
     gesture,
@@ -67,6 +117,7 @@ export function frameEvidence({ gesture, displayed, measured, layouts }) {
     displayed,
     frames: measured.map((m, i) => ({ time: m.time, window: m.window, gap: m.gap, behind: behind[i] })),
     layouts,
+    stages,
   };
 }
 

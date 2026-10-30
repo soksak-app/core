@@ -5,9 +5,10 @@ import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { CATCH_UP, frameEvidence, judgeFrames, measureFrame, writeEvidence } from "./resize-frames.mjs";
+import { CATCH_UP, frameEvidence, judgeFrames, lagStages, measureFrame, writeEvidence } from "./resize-frames.mjs";
 
 /** Time (ms) added after the display time so that the recording also covers the interval in which the layout follows. */
 const SETTLE = 100;
@@ -20,6 +21,7 @@ const margin = (w) => w.content.width - right(w);
 
 async function record(s, gesture, change, sized) {
   const kept = margin(await s.get("host.window"));
+  const offsets = currentEventOffsets(s.app.configDir);
   const { frames: directory } = await s.request("diagnostics.capture.start");
   // The recording stores frames of the window size at up to 60 per second, so it is deleted right after the measurement.
   try {
@@ -38,10 +40,14 @@ async function record(s, gesture, change, sized) {
     // Covers the interval in which the layout follows after the window reaches the new size. The recording is stopped even when the change failed.
     const { layouts } = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + SETTLE : 0 });
     const measured = frames(directory).map((path) => measureFrame(readFrame(path)));
+    // The stages name where the time of a late layout went: the resize event, the layout transaction that caught up, the view
+    // join that held its commit, and the host stall records of the gesture.
+    await s.flushLog();
+    const stages = lagStages({ measured, layouts, events: readEvents(s.app.configDir, offsets).events });
     // The measured frames of the gesture are kept in the run folder whether the change passes or fails.
-    writeEvidence(process.env.SOKSAK_RUN_FOLDER, s.app.name, gesture, frameEvidence({ gesture, displayed, measured, layouts }));
+    writeEvidence(process.env.SOKSAK_RUN_FOLDER, s.app.name, gesture, frameEvidence({ gesture, displayed, measured, layouts, stages }));
     if (failure) throw failure;
-    return { displayed, measured };
+    return { displayed, measured, stages };
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -52,7 +58,7 @@ async function record(s, gesture, change, sized) {
  * was later than the window during the change. The window frame and the WebKit content are displayed separately (WebKit/WebKit#72971,
  * tauri-apps/tao#1207), so late frames during the change remain only as a measured value.
  */
-function assertSettled(t, { displayed, measured }, label) {
+function assertSettled(t, { displayed, measured, stages }, label) {
   assert.ok(measured.length > 1, `${label}: only ${measured.length} frames were recorded`);
   const [first] = measured;
   const last = measured.at(-1);
@@ -65,7 +71,7 @@ function assertSettled(t, { displayed, measured }, label) {
   const { behind, took } = judgeFrames(measured);
   t.diagnostic(`${label}: ${behind.filter(Boolean).length} of ${measured.length} frames show the layout behind the window, the last at ${took.toFixed(0)}ms`);
   assert.ok(took <= CATCH_UP, `${label}: the layout stayed behind the window for ${took.toFixed(0)}ms, more than ${CATCH_UP}ms ` +
-    `(${shown}; last frames ${tail.join(", ")})`);
+    `(${shown}; last frames ${tail.join(", ")}; stages ${JSON.stringify(stages)})`);
   assert.ok(!behind.at(-1), `${label}: the settled frame shows the layout behind the window ` +
     `(window ${last.window.width.toFixed(0)}×${last.window.height.toFixed(0)}, gap ${last.gap.x.toFixed(0)},${last.gap.y.toFixed(0)}, ` +
     `base gap ${first.gap.x.toFixed(0)},${first.gap.y.toFixed(0)}; ${shown}; last frames ${tail.join(", ")})`);
@@ -74,9 +80,13 @@ function assertSettled(t, { displayed, measured }, label) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: maximising and restoring settle with the layout at the window size`, RECORDING, async (t) => {
     const s = await open(t, app);
+    // The performance trace records the view joins of each layout transaction and the frame gate the page layout phases, so
+    // the stages of a late layout are named from the records (F292-41).
     await fresh(s, {
-      log: { lifecycle: "debug", call: "debug" },
-      reads: ["host.window.event", "host.trace.view.presentation-join", "host.trace.view.presentation-abandoned"],
+      performanceTrace: true,
+      log: { lifecycle: "debug", call: "debug", frame: "debug" },
+      reads: ["host.window.event", "host.trace.view.presentation-join", "host.trace.view.presentation-abandoned", "host.stall",
+        "page.trace.layout"],
     });
     const before = (await s.get("host.window")).frame;
     // The usable area of the screen that holds the window is the frame of the maximized window.
