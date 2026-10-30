@@ -13,15 +13,20 @@ bool sp_window_set_main_webview(void *window, void *main);
 // Returns only the registered app DOM web view. A window that is not registered gives NULL.
 void *sp_window_main_webview(void *window);
 
-// {frame, content, scale, key, active, children, controls, webviews, nativeSurfaces, appDomWebviews, documentWebviews}
+// {frame, content, scale, key, active, children, controls, webviews, nativeSurfaces, appDomWebviews, documentWebviews,
+//  pluginHostWebviews}
 //   frame     window frame {x, y, width, height}, screen coordinates
 //   content   content area {width, height}
 //   controls  window buttons [{x, y, width, height, hidden}], window coordinates
 //   webviews  lists the WKWebViews in the window in drawing order (the main position is not assumed)
-//             [{view, x, y, width, height, hidden, focused, draws, alpha}], window coordinates.
-//             view is the view address, draws tells whether it paints its own background, and alpha is the
-//             alpha of the background color under the page
+//             [{view, x, y, width, height, hidden, focused, draws, alpha, document, pluginHost}], window coordinates.
+//             view is the view address, draws tells whether it paints its own background, alpha is the
+//             alpha of the background color under the page, document tells whether it is the web view of a document
+//             region, and pluginHost whether it is a plugin host web view
 //   nativeSurfaces logical surface containers [{view, x, y, width, height, hidden}], window coordinates.
+//   documentWebviews   the web views of document regions
+//   pluginHostWebviews the plugin host web views
+//   appDomWebviews     every other web view: the app DOM and one web view for each view surface
 // Returns NULL when there is no window or registered main web view.
 char *sp_window_facts(void *window);
 

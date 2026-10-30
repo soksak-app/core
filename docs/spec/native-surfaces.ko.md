@@ -2,7 +2,7 @@
 
 [English](native-surfaces.md)
 
-승인된 단일 DOM 모델은 [표면 합성](surface-composition.ko.md)과 [플러그인 모듈](plugins.ko.md#표면-소유권)이 정의한다. 논리 표면은 WebView가 아니다. 네이티브 창 상태는 그리기 순서가 아닌 등록한 네이티브 뷰로 앱 DOM을 식별하며 문서 WebView는 앱 DOM 아래에 있다. `appDomWebviews`와 `documentWebviews`는 네이티브 계층에서 측정한다. `documentWebviews`는 문서 영역의 웹뷰를 세고, `appDomWebviews`는 창의 나머지 웹뷰, 곧 앱 DOM과 view 표면마다 하나인 웹뷰를 센다. 상수를 개수로 보고하거나 첫 자식을 메인 뷰로 추정해서는 안 된다. [기능 상태](../features.ko.md)는 통합과 검증을 분리하여 기록한다.
+승인된 단일 DOM 모델은 [표면 합성](surface-composition.ko.md)과 [플러그인 모듈](plugins.ko.md#표면-소유권)이 정의한다. 논리 표면은 WebView가 아니다. 네이티브 창 상태는 그리기 순서가 아닌 등록한 네이티브 뷰로 앱 DOM을 식별하며 문서 WebView는 앱 DOM 아래에 있다. `appDomWebviews`와 `documentWebviews`는 네이티브 계층에서 측정한다. `documentWebviews`는 문서 영역의 웹뷰를, `pluginHostWebviews`는 [plugin host](plugin-host.ko.md) 웹뷰를 세고, `appDomWebviews`는 창의 나머지 웹뷰, 곧 앱 DOM과 view 표면마다 하나인 웹뷰를 센다. `webviews`의 각 행은 문서 영역 웹뷰인지(`document`), plugin host 웹뷰인지(`pluginHost`)를 밝힌다. 상수를 개수로 보고하거나 첫 자식을 메인 뷰로 추정해서는 안 된다. [기능 상태](../features.ko.md)는 통합과 검증을 분리하여 기록한다.
 
 이 명세는 예제 애플리케이션의 표면 배치를 정의한다. 구현 및 검증 상태는 [기능 상태](../features.ko.md)에 기록한다.
 

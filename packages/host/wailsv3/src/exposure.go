@@ -66,7 +66,7 @@ var hostStatus = map[string]hostEntry{
 			"controls":    map[string]any{"type": "array", "items": rectSchema},
 			"webviews": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"frame": rectSchema, "main": map[string]any{"type": "boolean"}, "document": map[string]any{"type": "boolean"},
-				"visible": map[string]any{"type": "boolean"}, "focused": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
+				"pluginHost": map[string]any{"type": "boolean"}, "visible": map[string]any{"type": "boolean"}, "focused": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
 			}}},
 			"surfaces": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"id": map[string]any{"type": "string"}, "frame": rectSchema,
@@ -1163,20 +1163,22 @@ type windowFacts struct {
 		View   uint64 `json:"view"`
 		Hidden bool   `json:"hidden"`
 	} `json:"nativeSurfaces"`
-	AppDomWebviews   int `json:"appDomWebviews"`
-	DocumentWebviews int `json:"documentWebviews"`
+	AppDomWebviews     int `json:"appDomWebviews"`
+	DocumentWebviews   int `json:"documentWebviews"`
+	PluginHostWebviews int `json:"pluginHostWebviews"`
 }
 
 type windowWebviewFacts struct {
 	frame
-	View     uint64  `json:"view"`
-	Hidden   bool    `json:"hidden"`
-	Focused  bool    `json:"focused"`
-	Main     bool    `json:"main"`
-	Document bool    `json:"document"`
-	Draws    bool    `json:"draws"`
-	Alpha    float64 `json:"alpha"`
-	Process  int     `json:"process"`
+	View       uint64  `json:"view"`
+	Hidden     bool    `json:"hidden"`
+	Focused    bool    `json:"focused"`
+	Main       bool    `json:"main"`
+	Document   bool    `json:"document"`
+	PluginHost bool    `json:"pluginHost"`
+	Draws      bool    `json:"draws"`
+	Alpha      float64 `json:"alpha"`
+	Process    int     `json:"process"`
 }
 
 // pluginHostProcessesForFacts matches only registered plugin-host handles to native WebContent process facts.
@@ -1228,12 +1230,13 @@ type WindowDocument struct {
 
 // WindowWebview is the frame of one web view in the window coordinate system.
 type WindowWebview struct {
-	Frame    frame `json:"frame"`
-	Main     bool  `json:"main"`
-	Document bool  `json:"document"`
-	Visible  bool  `json:"visible"`
-	Focused  bool  `json:"focused"`
-	Order    int   `json:"order"`
+	Frame      frame `json:"frame"`
+	Main       bool  `json:"main"`
+	Document   bool  `json:"document"`
+	PluginHost bool  `json:"pluginHost"`
+	Visible    bool  `json:"visible"`
+	Focused    bool  `json:"focused"`
+	Order      int   `json:"order"`
 }
 
 // ModalBackground is the background drawing state of a modal web view.
@@ -1337,6 +1340,7 @@ type WindowStatus struct {
 	Quitting            bool             `json:"quitting"`
 	AppDomWebviews      int              `json:"appDomWebviews"`
 	DocumentWebviews    int              `json:"documentWebviews"`
+	PluginHostWebviews  int              `json:"pluginHostWebviews"`
 	Controls            []WindowControl  `json:"controls"`
 	Webviews            []WindowWebview  `json:"webviews"`
 	Surfaces            []WindowSurface  `json:"surfaces"`
@@ -1388,6 +1392,17 @@ func registeredSurface(named map[uint64]string, view uint64) (string, error) {
 }
 
 // windowState reads the current value of host.window.
+// windowWebviewCounts returns the web view counts of host.window from the native window facts.
+func windowWebviewCounts(facts windowFacts) (appDom, document, pluginHost int) {
+	return facts.AppDomWebviews, facts.DocumentWebviews, facts.PluginHostWebviews
+}
+
+// windowWebviewRow returns the host.window row of the web view at drawing order order from its native facts.
+func windowWebviewRow(order int, view windowWebviewFacts) WindowWebview {
+	return WindowWebview{Frame: view.frame, Main: view.Main, Document: view.Document, PluginHost: view.PluginHost,
+		Visible: !view.Hidden, Focused: view.Focused, Order: order}
+}
+
 func (s *Surfaces) windowState() (WindowStatus, error) {
 	var facts windowFacts
 	var named map[uint64]string
@@ -1456,8 +1471,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 		Webviews: []WindowWebview{},
 	}
-	out.DocumentWebviews = facts.DocumentWebviews
-	out.AppDomWebviews = facts.AppDomWebviews
+	out.AppDomWebviews, out.DocumentWebviews, out.PluginHostWebviews = windowWebviewCounts(facts)
 	out.pluginHostProcesses = pluginHostProcesses
 	out.pluginHostError = pluginHostSnapshotError
 	if out.Controls == nil {
@@ -1504,8 +1518,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		out.Surfaces = append(out.Surfaces, WindowSurface{ID: id, Frame: view.frame, Visible: !view.Hidden, Order: order})
 	}
 	for order, view := range facts.Webviews {
-		out.Webviews = append(out.Webviews, WindowWebview{Frame: view.frame, Main: view.Main,
-			Document: view.Document, Visible: !view.Hidden, Focused: view.Focused, Order: order})
+		out.Webviews = append(out.Webviews, windowWebviewRow(order, view))
 		if key, ok := documents[view.View]; ok {
 			out.Documents = append(out.Documents, WindowDocument{Surface: key.Surface, Document: key.Name,
 				Frame: view.frame, Visible: !view.Hidden, Focused: view.Focused, Order: order, Process: view.Process})

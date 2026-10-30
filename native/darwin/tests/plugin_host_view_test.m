@@ -1,8 +1,10 @@
 // Checks the plugin host web view: the operation creates it hidden at a zero frame in the window itself, refuses an
-// incomplete configuration, and disposes it (docs/spec/plugin-host.md).
+// incomplete configuration, is counted in the window facts as a plugin host web view, and disposes it
+// (docs/spec/plugin-host.md, docs/spec/native-surfaces.md).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "document_view.h"
+#import "window_facts.h"
 #import "support/temporary_folder.h"
 #import "support/view_import_map.h"
 
@@ -29,6 +31,9 @@ int main(int argc, char **argv) {
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
         [window setReleasedWhenClosed:NO];
         window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
+        WKWebView *main = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
+        [window.contentView addSubview:main];
+        check(sp_window_set_main_webview(window, main), @"the main page web view is registered");
         [window orderBack:nil];
 
         sp_view_import_map_set(viewImportMapFixture().UTF8String);
@@ -47,6 +52,18 @@ int main(int argc, char **argv) {
             NSView *hit = [window.contentView hitTest:center];
             check(hit != view && ![hit isDescendantOf:view], @"no hit test reaches the host web view");
             check(window.firstResponder != view, @"the host web view never became the first responder");
+            char *json = sp_window_facts(window);
+            NSDictionary *facts = json ? [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:json length:strlen(json)]
+                options:0 error:nil] : nil;
+            free(json);
+            NSDictionary *row = nil;
+            for (NSDictionary *item in facts[@"webviews"])
+                if ([item[@"view"] unsignedLongLongValue] == (uintptr_t)host) row = item;
+            check([facts[@"pluginHostWebviews"] isEqual:@1] && [facts[@"appDomWebviews"] isEqual:@1]
+                    && [facts[@"documentWebviews"] isEqual:@0] && [row[@"pluginHost"] isEqual:@YES],
+                [NSString stringWithFormat:@"the window facts count the host web view as a plugin host web view: pluginHostWebviews %@, "
+                    "appDomWebviews %@, documentWebviews %@, row pluginHost %@", facts[@"pluginHostWebviews"], facts[@"appDomWebviews"],
+                    facts[@"documentWebviews"], row[@"pluginHost"]]);
             sp_document_close(host);
             check(view.superview == nil, @"the disposal of the host web view removes it from the window");
         }

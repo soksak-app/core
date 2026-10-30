@@ -115,6 +115,7 @@ fn host_declarations() -> Value {
                 "controls": {"type": "array", "items": rect},
                 "webviews": {"type": "array", "items": {"type": "object", "properties": {
                     "frame": rect, "main": {"type": "boolean"}, "document": {"type": "boolean"},
+                    "pluginHost": {"type": "boolean"},
                     "visible": {"type": "boolean"}, "focused": {"type": "boolean"}, "order": {"type": "integer"}}}},
                 "surfaces": {"type": "array", "items": {"type": "object", "properties": {
                     "id": {"type": "string"}, "frame": rect,
@@ -1709,6 +1710,38 @@ fn responder_of(
     }
 }
 
+/// Returns the web view counts of host.window from the native window facts.
+fn window_webview_counts(facts: &Value) -> Result<(u64, u64, u64), Failure> {
+    let count = |name: &str| {
+        facts[name]
+            .as_u64()
+            .ok_or_else(|| internal(format!("window facts missing {name}")))
+    };
+    Ok((
+        count("appDomWebviews")?,
+        count("documentWebviews")?,
+        count("pluginHostWebviews")?,
+    ))
+}
+
+/// Returns the host.window row of the web view at drawing order `order` from its native facts.
+fn window_webview_row(order: usize, view: &Value) -> Result<Value, Failure> {
+    let flag = |name: &str| {
+        view[name].as_bool().ok_or_else(|| {
+            internal(format!(
+                "webview facts missing {name} at index {order}: {view}"
+            ))
+        })
+    };
+    let rect =
+        json!({"x": view["x"], "y": view["y"], "width": view["width"], "height": view["height"]});
+    Ok(
+        json!({"frame": rect, "main": flag("main")?, "document": flag("document")?,
+        "pluginHost": flag("pluginHost")?,
+        "visible": !flag("hidden")?, "focused": flag("focused")?, "order": order}),
+    )
+}
+
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let target = window.clone();
@@ -1754,12 +1787,8 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let webviews = facts["webviews"]
         .as_array()
         .ok_or_else(|| internal("window facts missing webviews"))?;
-    let document_webviews = facts["documentWebviews"]
-        .as_u64()
-        .ok_or_else(|| internal("window facts missing documentWebviews"))?;
-    let app_dom_webviews = facts["appDomWebviews"]
-        .as_u64()
-        .ok_or_else(|| internal("window facts missing appDomWebviews"))?;
+    let (app_dom_webviews, document_webviews, plugin_host_webviews) =
+        window_webview_counts(&facts)?;
     let overlay = &context.overlay;
     let mut surfaces = Vec::new();
     let mut attached = Vec::new();
@@ -1808,14 +1837,6 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
             .as_u64()
             .ok_or_else(|| internal("webview facts missing view"))?;
         let address = address as platform::Handle;
-        let main_webview = view["main"].as_bool().ok_or_else(|| {
-            internal(format!(
-                "webview facts missing main at index {order}: {view}"
-            ))
-        })?;
-        let document_webview = view["document"]
-            .as_bool()
-            .ok_or_else(|| internal("webview facts missing document"))?;
         let hidden = view["hidden"]
             .as_bool()
             .ok_or_else(|| internal("webview facts missing hidden"))?;
@@ -1825,8 +1846,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         let process = view["process"]
             .as_i64()
             .ok_or_else(|| internal("webview facts missing process"))?;
-        webview_frames.push(json!({"frame": rect(view), "main": main_webview,
-            "document": document_webview, "visible": !hidden, "focused": focused, "order": order}));
+        webview_frames.push(window_webview_row(order, view)?);
         if let Some((surface, document)) = documents.get(&address) {
             attached.push(
                 json!({"surface": surface, "document": document, "frame": rect(view),
@@ -1878,6 +1898,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "quitting": window.state::<crate::windows::Windows>().quit.active(),
         "appDomWebviews": app_dom_webviews,
         "documentWebviews": document_webviews,
+        "pluginHostWebviews": plugin_host_webviews,
         "controls": facts["controls"],
         "webviews": webview_frames,
         "surfaces": surfaces,
@@ -2514,3 +2535,6 @@ mod reply_tests {
 #[cfg(test)]
 #[path = "exposure_performance_test.rs"]
 mod exposure_performance_test;
+#[cfg(test)]
+#[path = "exposure_webviews_test.rs"]
+mod exposure_webviews_test;

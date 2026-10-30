@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-7: 두 호스트의 `host.window`는 plugin host 웹뷰를 `pluginHostWebviews`로 보고하고 그 행에 `pluginHost`를 표시한다. `appDomWebviews`는 그것을 더 세지 않는다.
 - F292-5: 창 검사 session이 표면의 status를 기다리는 일은 표면이 그 status를 등록한 뒤에 시작한다. view는 phase `ready` 뒤에 exposure를 등록한다.
 - F295: 두 호스트는 performance trace가 꺼져 있으면 `host.trace.*` event를 저장하지 않는다. 각 호스트에서 이 event를 쓰는 곳 약 스무 곳이 스위치를 읽지 않았다.
 - F294: 표면 exposure 답의 진단 hold는 view 표면의 `exposureReply` 호출도 붙잡는다.

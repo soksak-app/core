@@ -362,6 +362,8 @@ static void frameIdentityClose(SPDocumentView *view);
 // the activation of the window and it reaches neither the page nor the first responder. A view takes it, so the press reaches the page and
 // the view takes the keyboard focus (docs/spec/native-surfaces.md#view-surfaces). A document region keeps the refusal.
 @property BOOL acceptsFirstMouseClick;
+// Whether sp_plugin_host_create created the view (docs/spec/plugin-host.md).
+@property BOOL pluginHost;
 - (void)reportMessage:(NSDictionary *)value;
 - (void)reportViewMessage:(WKScriptMessage *)message;
 @property void *context;
@@ -1513,6 +1515,7 @@ void *sp_plugin_host_create(void *windowHandle, const char *directory, const cha
     SPDocumentView *view = pluginView(directory, folder, plugin, channelSource, YES, changed, context);
     if (!view) return NULL;
     view.appearance = window.effectiveAppearance;
+    view.pluginHost = YES;
     // The host page receives no input and never becomes the first responder (docs/spec/plugin-host.md): no input
     // registration, no click monitor, and the page-focus suppression that a webview configuration sets.
     if (!webviewIgnorePageFocus(view)) {
@@ -1527,6 +1530,12 @@ void *sp_plugin_host_create(void *windowHandle, const char *directory, const cha
     [view _setOverrideDeviceScaleFactor:window.backingScaleFactor];
     [openDocuments() addObject:view];
     return view; // The caller owns this reference until sp_document_close.
+}
+
+bool sp_webview_is_plugin_host(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    NSView *view = (NSView *)handle;
+    return [view isKindOfClass:SPDocumentView.class] && ((SPDocumentView *)view).pluginHost;
 }
 
 void sp_document_query(void *handle, sp_document_query_reply reply, void *context) {

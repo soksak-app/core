@@ -68,6 +68,10 @@ void sp_document_fail_creation_for_test(const char *cause);
 void *sp_plugin_host_create(void *window, const char *directory, const char *folder, const char *plugin,
     const char *channel, sp_document_changed changed, void *context);
 
+// Whether view is a plugin host web view that sp_plugin_host_create created. The window facts count these web views apart
+// from the app DOM and the view web views (docs/spec/native-surfaces.md). Called on the main thread.
+bool sp_webview_is_plugin_host(void *view);
+
 // Called when the WebContent process of a view ends, before the host closes the view (docs/spec/plugin-processes.md, rule 5). It
 // is not called for a closed view. Called on the main thread.
 typedef void (*sp_view_ended)(void *context);
