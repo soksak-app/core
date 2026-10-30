@@ -919,8 +919,9 @@ struct State<O> {
     // after the project of the window changed, requests and closes of an already opened surface are sent with this
     // root.
     roots: HashMap<String, String>,
-    /// Layout surfaces opened by a persistent service, including while the native view is absent.
-    persistent_surfaces: HashSet<String>,
+    /// The persistent sidecars that each layout surface sent to, including while the native view is absent or a
+    /// service is disconnected; a connection notice reaches only those surfaces.
+    persistent_surfaces: HashMap<String, HashSet<String>>,
     stopped: bool,
     // pending_replies: buffers the immutable image responses of each sidecar in the order of sending.
     // pending_closes: buffers the close messages of the surfaces of each sidecar (surface → close message).
@@ -1148,7 +1149,7 @@ impl<O: Owner> Sidecars<O> {
                     status_changed: None,
                     owners: HashMap::new(),
                     roots: HashMap::new(),
-                    persistent_surfaces: HashSet::new(),
+                    persistent_surfaces: HashMap::new(),
                     stopped: false,
                     pending_replies: HashMap::new(),
                     pending_closes: HashMap::new(),
@@ -1611,7 +1612,11 @@ impl<O: Owner> Sidecars<O> {
         if delivered.is_ok() {
             process.closed_surfaces.remove(surface);
             if process.persistent.is_some() {
-                state.persistent_surfaces.insert(surface.to_string());
+                state
+                    .persistent_surfaces
+                    .entry(surface.to_string())
+                    .or_default()
+                    .insert(name.to_string());
             }
         }
         if delivered.is_ok() && !cids.is_empty() {
@@ -1713,7 +1718,11 @@ impl<O: Owner> Sidecars<O> {
 
         let mut closed_any = false;
         for surface in gone {
-            let keep_persistent = native_view && state.persistent_surfaces.contains(&surface);
+            let keep_persistent = native_view
+                && state
+                    .persistent_surfaces
+                    .get(&surface)
+                    .is_some_and(|sidecars| !sidecars.is_empty());
             let root = if keep_persistent {
                 state.roots.get(&surface).cloned()
             } else {
@@ -3544,18 +3553,26 @@ fn refused_connect(reason: &str, name: &str) -> bool {
     reason.starts_with(&format!("sidecar {name}: connect authenticated service:"))
 }
 
-/// Notifies the owning surfaces of a persistent connection that was established again (V5-106). The window sends the
-/// image configure of that sidecar again ([Owner::sidecar_reconnected]), and the surface receives the connection event
-/// and opens its session again. If the start failed, it announces the connection loss and its reason.
+/// Notifies the surfaces that sent to the persistent sidecar name of its connection that was established again
+/// (V5-106); a surface that sent only to other sidecars receives nothing
+/// (docs/spec/persistent-services.md#service-transport). The window sends the image configure of that sidecar again
+/// ([Owner::sidecar_reconnected]), and the surface receives the connection event and opens its session again. If the
+/// start failed, it announces the connection loss and its reason.
 fn notify_connection<O: Owner>(core: &Arc<Core<O>>, name: &str, outcome: Result<(), String>) {
     let surfaces: Vec<(String, O)> = {
         // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the panic
         // hook records the panic.
         let state = core.state.lock().unwrap_or_else(PoisonError::into_inner);
         state
-            .owners
+            .persistent_surfaces
             .iter()
-            .map(|(surface, owner)| (surface.clone(), owner.clone()))
+            .filter(|(_, sidecars)| sidecars.contains(name))
+            .filter_map(|(surface, _)| {
+                state
+                    .owners
+                    .get(surface)
+                    .map(|owner| (surface.clone(), owner.clone()))
+            })
             .collect()
     };
     let body = match connection_notice(&outcome) {

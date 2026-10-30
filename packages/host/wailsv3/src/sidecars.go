@@ -160,8 +160,9 @@ type Sidecars struct {
 	// versions holds the version that installed.json records for each declared sidecar.
 	versions   map[string]string
 	persistent map[string]bool
-	// persistentSurfaces records layout surface sessions owned by a persistent service, including while it is disconnected.
-	persistentSurfaces map[string]bool
+	// persistentSurfaces records, for each layout surface session owned by a persistent service, the persistent sidecars
+	// that the surface sent to, including while a service is disconnected; a connection notice reaches only those surfaces.
+	persistentSurfaces map[string]map[string]bool
 	running            map[string]*sidecar
 	// starting is a sidecar that is starting. The start happens outside the lock, and when it ends, the channel is closed.
 	starting map[string]chan struct{}
@@ -370,7 +371,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		displayNames:        map[string]string{},
 		versions:            map[string]string{},
 		persistent:          map[string]bool{},
-		persistentSurfaces:  map[string]bool{},
+		persistentSurfaces:  map[string]map[string]bool{},
 		running:             map[string]*sidecar{},
 		starting:            map[string]chan struct{}{},
 		closing:             map[string]map[string]int{},
@@ -660,9 +661,12 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body 
 		}
 		if process.persistent {
 			if c.persistentSurfaces == nil {
-				c.persistentSurfaces = map[string]bool{}
+				c.persistentSurfaces = map[string]map[string]bool{}
 			}
-			c.persistentSurfaces[surface] = true
+			if c.persistentSurfaces[surface] == nil {
+				c.persistentSurfaces[surface] = map[string]bool{}
+			}
+			c.persistentSurfaces[surface][name] = true
 		}
 		if len(cids) > 0 {
 			for range c.requests.add(name, surface, cids, monotonicNanos()) {
@@ -817,7 +821,7 @@ func (c *Sidecars) closeSurfaceMode(surface string, nativeView bool) bool {
 		return false
 	}
 	root := c.roots[surface]
-	keepPersistent := nativeView && c.persistentSurfaces[surface]
+	keepPersistent := nativeView && len(c.persistentSurfaces[surface]) > 0
 	if !keepPersistent {
 		delete(c.owners, surface)
 		delete(c.roots, surface)
@@ -2398,18 +2402,21 @@ func refusedConnect(failure error, name string) bool {
 	return failure != nil && strings.HasPrefix(failure.Error(), fmt.Sprintf("sidecar %s: connect authenticated service:", name))
 }
 
-// notifyConnection tells the owning surfaces about a persistent connection that was connected again (V5-106). The window sends the picture configure of that sidecar
-// again (SidecarReconnected), and the surface receives the connection event and reopens its session.
-// When the start failed, it announces the connection loss and its reason.
+// notifyConnection tells the surfaces that sent to the persistent sidecar name about its connection that was connected again
+// (V5-106); a surface that sent only to other sidecars receives nothing (docs/spec/persistent-services.md#service-transport).
+// The window sends the picture configure of that sidecar again (SidecarReconnected), and the surface receives the connection
+// event and reopens its session. When the start failed, it announces the connection loss and its reason.
 func (c *Sidecars) notifyConnection(name string, failure error) {
 	type ownerSurface struct {
 		surface string
 		owner   SidecarOwner
 	}
 	c.mu.Lock()
-	entries := make([]ownerSurface, 0, len(c.owners))
-	for surface, owner := range c.owners {
-		entries = append(entries, ownerSurface{surface, owner})
+	var entries []ownerSurface
+	for surface, sidecars := range c.persistentSurfaces {
+		if owner := c.owners[surface]; owner != nil && sidecars[name] {
+			entries = append(entries, ownerSurface{surface, owner})
+		}
 	}
 	c.mu.Unlock()
 	raw, err := connectionNotice(failure)

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-42: 영속 사이드카의 연결 알림은 docs/spec/persistent-services.ko.md#서비스-전송이 정한 대로 그 사이드카로 전송한 표면에만 닿는다. 두 호스트는 알림을 소유한 모든 표면에 보냈기 때문에, 표면이 다른 사이드카로만 전송한 페이지가 자기 표면의 연결 알림을 받았다. 이제 각 호스트의 영속 표면 기록은 표면마다 그 표면이 전송한 영속 사이드카를 담고, contract case `sidecars-transport.persistent.connection-notice-reaches-only-senders`가 두 호스트의 전달을 다룬다.
 - F292-37-8: 비공개 native API 목록이 responsiveness selector의 소스 줄을 `WebKit-7625.1.29.18.27` 대신 SDK의 WebKit build 21624.5.1.11.3의 공개 tag인 `WebKit-7624.5.1.11.3`에서 인용하고, 더 이상 SDK build에 공개 tag가 없다고 적지 않는다. 검증: `git ls-remote`가 tag를 보여 주고, 인용한 각 줄을 두 tag에서 대조했으며 인용한 동작은 같다.
 
 - F292-37-1: `docs/spec/hosts.md`가 Wails host의 main thread를 명시한다. main thread에서는 Go code가 실행되지 않는다. Go code는 다른 thread에 고정된 worker goroutine에서 실행되고, 각 native callback은 record를 쓴 뒤 C에서 기다리며, 그동안 main thread는 worker가 그 단계를 위해 전달한 C 호출만 실행한다. 한 webview의 record는 다른 webview를 기다리지 않고 순서를 지킨다. 그 절은 이유인 goroutine stack에서 wrap되는 JavaScriptCore collector scan과 기각한 선택을 기록한다. Contract case `plugin-host.channel.ui-thread`, `window-close.native-window.used-in-reading-step`, `surfaces.sync.name-outlives-native-surface`, `exposure.windows.listed-in-one-main-thread-step`, `documents.commit.precedes-messages`, `window-close.surfaces.closed-once`가 worker와 전달 호출을 명시한다. 구현은 F292-37-3부터 F292-37-6까지에 열려 있다. 검증: `make docs-check`, `make hosts-check`, `make parity-check`가 통과한다.

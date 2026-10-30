@@ -1214,6 +1214,145 @@ func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 	sidecars.Stop()
 }
 
+// isConnectionNotice tells whether a sidecar message carries the connection notice of a persistent service.
+func isConnectionNotice(message SidecarMessage) bool {
+	var body map[string]any
+	return json.Unmarshal(message.Body, &body) == nil && body["event"] == "connection"
+}
+
+// contract: sidecars-transport.persistent.connection-notice-reaches-only-senders
+func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory := socketParent(t)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeHarnessEndpoint(t, root, socket)
+
+	// The first connection returns one request and ends after the listener closed, so the revival is refused and the
+	// next send starts the connection that announces the reconnection.
+	closed := make(chan struct{})
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+			return
+		}
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			return
+		}
+		if _, err := connection.Write(line); err != nil {
+			return
+		}
+		<-closed
+	}()
+
+	folder := t.TempDir()
+	if err := os.WriteFile(filepath.Join(folder, "stdio"), []byte("#!/bin/sh\nexec cat\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	declarations := append(harnessDeclarations(folder), SidecarDeclaration{Name: "fixture-stdio", Folder: folder,
+		Data: []byte(`{"executable":"stdio","displayName":"soksak://sidecar/probe","protocol":1}`)})
+	sidecars, err := NewSidecars(declarations, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	sender := &harnessOwner{root: "/sender", seen: make(chan SidecarMessage, 8)}
+	other := &harnessOwner{root: "/other", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(sender, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if first := receiveSidecarMessage(t, sender.seen); first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
+		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
+	}
+	if err := sidecars.Send(other, "fixture-stdio", "surface-2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if first := receiveSidecarMessage(t, other.seen); first.Sidecar != "fixture-stdio" || first.Surface != "surface-2" {
+		t.Fatalf("the first message was not the standard input echo: %v %v %s", first.Sidecar, first.Surface, first.Body)
+	}
+
+	listener.Close()
+	close(closed)
+	<-serverDone
+	if failure := receiveSidecarMessage(t, sender.seen); failure.Surface != "surface-1" || !isConnectionNotice(failure) {
+		t.Fatalf("the failed revival was not announced to the surface that sent: %v %s", failure.Surface, failure.Body)
+	}
+
+	// The send that connects again announces the connection before it returns.
+	revived, err := net.Listen("unix", filepath.Join(socketDirectory, "r.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { revived.Close() })
+	writeHarnessEndpoint(t, root, filepath.Join(socketDirectory, "r.sock"))
+	go func() {
+		connection, err := revived.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+			return
+		}
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if json.Unmarshal(line, &request) == nil && request["operation"] == "close-owner" {
+				reply, _ := json.Marshal(map[string]any{"operation": "closed-owner", "request": request["request"], "ok": false, "error": "test close"})
+				_, _ = connection.Write(append(reply, '\n'))
+				return
+			}
+			if _, err := connection.Write(line); err != nil {
+				return
+			}
+		}
+	}()
+	if err := sidecars.Send(sender, "fixture-service", "surface-1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+		t.Fatal(err)
+	}
+	announced := false
+	for range 2 {
+		if message := receiveSidecarMessage(t, sender.seen); message.Surface == "surface-1" && isConnectionNotice(message) {
+			announced = true
+		}
+	}
+	if !announced {
+		t.Fatal("the surface that sent to the service received no connection notice")
+	}
+	for {
+		select {
+		case message := <-other.seen:
+			if isConnectionNotice(message) {
+				t.Fatalf("a surface that never sent to %s received its connection notice: %v %v %s", "fixture-service", message.Sidecar, message.Surface, message.Body)
+			}
+			continue
+		default:
+		}
+		break
+	}
+}
+
 func receiveSidecarMessage(t *testing.T, seen <-chan SidecarMessage) SidecarMessage {
 	t.Helper()
 	select {

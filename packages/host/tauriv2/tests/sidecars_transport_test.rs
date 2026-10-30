@@ -1509,6 +1509,166 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
     sidecars.stop();
 }
 
+/// Whether a sidecar message carries the connection notice of a persistent service.
+fn is_connection_notice(message: &Message) -> bool {
+    serde_json::from_str::<serde_json::Value>(message.body.get())
+        .is_ok_and(|body| body["event"] == "connection")
+}
+
+/// Writes the endpoint of the harness service at socket_path for this check process.
+fn write_service_endpoint(service_directory: &Path, socket_path: &Path, token: &str) {
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": token
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+}
+
+// contract: sidecars-transport.persistent.connection-notice-reaches-only-senders
+#[test]
+fn persistent_connection_notice_reaches_only_the_surfaces_that_sent() {
+    let executable_directory = folder::Folder::new();
+    let stdio = executable_directory.path().join("stdio");
+    std::fs::write(&stdio, "#!/bin/sh\nexec cat\n").unwrap();
+    std::fs::set_permissions(&stdio, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("first.sock");
+    // The first connection returns one request and ends with its listener, so the revival is refused and the next
+    // send starts the connection that announces the reconnection.
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    write_service_endpoint(&service_directory, &socket_path, "senders-token");
+    let (close, closed) = channel::<()>();
+    let service = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        stream
+            .write_all(
+                br#"{"operation":"hello","protocol":1,"ok":true}
+"#,
+            )
+            .unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        stream.write_all(line.as_bytes()).unwrap();
+        // The connection ends only after the listener closed, so the revival is refused.
+        closed.recv().unwrap();
+        drop(listener);
+        stream.shutdown(Shutdown::Both).unwrap();
+    });
+
+    let fixture: Files = vec![
+        (
+            ECHO,
+            r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#.to_string(),
+        ),
+        (
+            "@fixture/sidecar-stdio",
+            r#"{"executable":"stdio","displayName":"soksak://sidecar/probe","protocol":1}"#.to_string(),
+        ),
+    ];
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (sender, sender_events) = owner("sender", "/projects/sender");
+    let (other, other_events) = owner("other", "/projects/other");
+    sidecars
+        .send(&sender, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    assert_eq!(
+        sender_events.recv_timeout(STALL).unwrap().surface,
+        "surface-1"
+    );
+    sidecars
+        .send(
+            &other,
+            "@fixture/sidecar-stdio",
+            "surface-2",
+            &raw(r#"{"operation":"open"}"#),
+        )
+        .unwrap();
+    let echoed = other_events.recv_timeout(STALL).unwrap();
+    assert_eq!(
+        (echoed.sidecar.as_str(), echoed.surface.as_str()),
+        ("@fixture/sidecar-stdio", "surface-2")
+    );
+    close.send(()).unwrap();
+    service.join().unwrap();
+    let failure = sender_events.recv_timeout(STALL).unwrap();
+    assert!(
+        failure.surface == "surface-1" && is_connection_notice(&failure),
+        "the failed revival was not announced to the surface that sent: {} {}",
+        failure.surface,
+        failure.body.get()
+    );
+
+    // The send that connects again announces the connection before it returns.
+    let revived_path = service_directory.join("revived.sock");
+    let revived = UnixListener::bind(&revived_path).unwrap();
+    write_service_endpoint(&service_directory, &revived_path, "senders-token");
+    let revived_service = thread::spawn(move || {
+        let (mut stream, _) = revived.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        writeln!(
+            stream,
+            "{{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}}"
+        )
+        .unwrap();
+        loop {
+            line.clear();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                return;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            if request["operation"] == "close-owner" {
+                writeln!(
+                    stream,
+                    "{}",
+                    serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": false, "error": "test close"})
+                )
+                .unwrap();
+                return;
+            }
+            stream.write_all(line.as_bytes()).unwrap();
+        }
+    });
+    sidecars
+        .send(&sender, ECHO, "surface-1", &raw(r#"{"operation":"input"}"#))
+        .unwrap();
+    let announced = (0..2)
+        .map(|_| sender_events.recv_timeout(STALL).unwrap())
+        .filter(|message| message.surface == "surface-1" && is_connection_notice(message))
+        .count();
+    assert!(
+        announced == 1,
+        "the surface that sent to the service received no connection notice"
+    );
+    while let Ok(message) = other_events.try_recv() {
+        assert!(
+            !is_connection_notice(&message),
+            "a surface that never sent to {ECHO} received its connection notice: {} {} {}",
+            message.sidecar,
+            message.surface,
+            message.body.get()
+        );
+    }
+    sidecars.stop();
+    revived_service.join().unwrap();
+}
+
 /// A window that receives sidecar messages and failures separately.
 #[derive(Clone)]
 struct FailureOwner {

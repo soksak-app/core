@@ -257,7 +257,7 @@ func TestNativeViewRemovalRetainsPersistentSession(t *testing.T) {
 	c.running[persistentName] = &sidecar{name: persistentName, persistent: true,
 		outbox: make(chan queuedLine, 4), closeWaiters: map[string]chan error{}, retained: map[string]int{},
 		surfaces: map[string]bool{persistentSurface: true}}
-	c.persistentSurfaces = map[string]bool{persistentSurface: true}
+	c.persistentSurfaces = map[string]map[string]bool{persistentSurface: {persistentName: true}}
 	c.owners[persistentSurface] = s
 	c.roots[persistentSurface] = "/fixture/root"
 
