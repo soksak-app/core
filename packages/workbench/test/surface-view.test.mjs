@@ -452,6 +452,44 @@ test("a view surface reports phase ready after its view declares its composition
   }
 });
 
+test("a view mount that declares its composition notifies the end of the mount without an error", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async () => null } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface, onSurfaceMounted } = await import("../surface-modules.js?view-mounted");
+  const pluginId = "fixture-mounted-view";
+  const surfaceId = "fixture-mounted-view-surface";
+  recordOrigin(surfaceId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    composition: { kind: "view", page: "ui/page.html" } };
+  // The memory saver ends the restore of a tab at this notification (docs/spec/plugins.md#memory-saver).
+  const ends = [];
+  const removeListener = onSurfaceMounted((id, error) => ends.push({ id, error }));
+  try {
+    authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    assert.deepEqual(ends, [{ id: surfaceId, error: null }], `the ends of the mount are ${JSON.stringify(ends)}`);
+  } finally {
+    removeListener();
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
 // The receipt of a view call and its reply are written at the debug level, so a call that never replies shows as a receipt without a reply.
 test("a view call writes receipt and reply records with its source generation", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });

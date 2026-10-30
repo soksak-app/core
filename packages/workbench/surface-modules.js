@@ -921,6 +921,7 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
           entry.compositionDeclared = true;
           context.status.report("ready");
           releaseSurfaceReady(context);
+          for (const listener of mountListeners) listener(surface.surfaceId, null);
           return null;
         });
       entry.mounted = Promise.race([mountReadiness, listenerFailure]);

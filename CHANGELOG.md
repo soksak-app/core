@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-29: A view mount that declares its composition notifies the mount listeners with no error, so the memory saver ends the restore of a shown unloaded view tab; the tab stayed `restoring`. Validation: the unit test in `packages/workbench/test/surface-view.test.mjs` read no end of the mount before the change and passes after it.
 - F292-27: The debug timeline window checks filter `host.test.start`, which each window check stores and which passes every gate; `host.app.event` is written only when the application starts, activates or exits, so the filters showed no row. Validation: `e2e/modal.test.mjs` failed both checks on both hosts before the change and passes on both hosts after it.
 - F292-11-2: The unload probe fixture serves `probeunload.location` through the exposure of its view and pushes no declared UI snapshot; its status requests had no reply.
 - F292-11-1: A forwarded run of a command that a view registered with `runtime.command.register` runs on the forwarding handler of the surface, which sends it to the view as a command request; the main page consumed it as a request that the view answers, and the command never replied.
