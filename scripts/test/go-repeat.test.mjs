@@ -13,7 +13,8 @@ import { spawnSync } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '../..');
 
-// The test named TestBeta hangs for 8 seconds, so only a kill at its limit ends it sooner.
+// The test named TestBeta hangs for 8 seconds, so only a kill at its limit ends it sooner; on SIGQUIT it prints a stack line and exits,
+// as a Go test binary prints the stacks of its goroutines.
 function fakeGo(t) {
   const directory = mkdtempSync(join(tmpdir(), 'soksak-go-repeat-'));
   t.after(() => rmSync(directory, { recursive: true }));
@@ -33,7 +34,7 @@ case "$*" in
 #!/bin/sh
 case "$1" in -test.list*) printf 'TestAlpha\\nTestBeta\\nBenchmarkGamma\\n'; exit 0 ;; esac
 name=$(printf '%s' "$2" | tr -d '^$')
-case "$name" in TestBeta) sleep 8 ;; esac
+case "$name" in TestBeta) trap 'printf "goroutine 1 [sleep]:\\n"; exit 2' QUIT; sleep 8 & wait $! ;; esac
 printf '=== RUN   %s\\n--- PASS: %s (0.00s)\\nPASS\\n' "$name" "$name"
 BINARY
     chmod +x "$out"; exit 0 ;;
@@ -53,12 +54,13 @@ function makeGo(t, mode, target) {
   return { ...result, directory };
 }
 
-test('make go-repeat names each test when it starts, reports its result and elapsed time, and kills a test at its limit', (t) => {
+test('make go-repeat names each test when it starts, reports its result and elapsed time, and asks a test at its limit for its stacks', (t) => {
   const { stdout, stderr, status } = makeGo(t, 'run', ['go-repeat', 'PACKAGE=./fixture', 'COUNT=1', 'TEST_TIMEOUT=2']);
   assert.match(stdout, /^RUN  TestAlpha \(1 running, limit 2\.000s\)$/m, stdout + stderr);
   assert.match(stdout, /^PASS TestAlpha \d+\.\d{3}s$/m, stdout + stderr);
   assert.match(stdout, /^RUN  TestBeta \(1 running, limit 2\.000s\)$/m, stdout + stderr);
-  assert.match(stdout, /^TIME TestBeta \d+\.\d{3}s exceeded 2\.000s and was killed(?:; left running: .*)?$/m, stdout + stderr);
+  assert.match(stdout, /^TIME TestBeta \d+\.\d{3}s exceeded 2\.000s and was sent SIGQUIT for its stacks(?:; left running: .*)?$/m, stdout + stderr);
+  assert.match(stdout, /^  goroutine 1 \[sleep\]:$/m, `the stacks of the test over its limit are not in the output: ${stdout}`);
   const killed = /^TIME TestBeta (\d+)\.\d{3}s/m.exec(stdout);
   assert.ok(killed && Number(killed[1]) < 6, `TestBeta ran to its own sleep instead of its limit: ${stdout}`);
   assert.doesNotMatch(stdout, /BenchmarkGamma/, 'a benchmark ran as a test');

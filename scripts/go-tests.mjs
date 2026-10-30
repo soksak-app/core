@@ -1,7 +1,8 @@
 // Runs the tests of the Go packages of a pattern one at a time, each as a process of its own with its own limit, through the test
 // runner (docs/operations/examples.md#test-runner). Each package with test files is compiled once with `go test -c`; each test runs
 // as the test binary with `-test.run ^<name>$` in the package folder, as go test runs it. A test that does not end is killed at its
-// limit and reported with its name and elapsed time, and the next test still runs. A package of the pattern with no test files does
+// limit and reported with its name and elapsed time, after SIGQUIT has made it print the stacks of its goroutines, and the next test
+// still runs. A package of the pattern with no test files does
 // not decide the run; the run fails when no package has test files or no test matches. The build reads the environment of the
 // caller (CGO_CFLAGS).
 // Usage: node scripts/go-tests.mjs --package <pattern> [--tags <tags>] [--test <regexp>] [--count <n>] [--timeout <seconds>]
@@ -12,6 +13,7 @@ import { loadavg, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { GO_STACK_SIGNAL } from './test-discovery.mjs';
 import { runTests } from './test-runner.mjs';
 
 /** The limit of one test when `--timeout` is not given. */
@@ -63,7 +65,7 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
     const tests = listed.map((item) => ({
       name: occurrences.get(item.name) > 1 ? `${item.importPath} ${item.name}` : item.name,
       command: item.binary, args: ['-test.run', `^${item.name}$`, '-test.v', '-test.count=1'], cwd: item.cwd,
-      passedAs: item.name, timeoutMs,
+      passedAs: item.name, timeoutMs, stackSignal: GO_STACK_SIGNAL,
     }));
     for (let run = 1; run <= count; run += 1) {
       write(`START ${pattern}: run ${run} of ${count}, ${tests.length} tests, each limited to ${timeoutMs / 1000}s`);

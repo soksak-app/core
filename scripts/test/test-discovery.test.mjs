@@ -27,6 +27,23 @@ test("a Go package lists its tests and each test runs in the folder of its packa
   assert.deepEqual(tests.map((item) => [item.testName, auditStatus(results.get(item.name))]).sort(), [["TestFails", "fail"], ["TestPasses", "pass"], ["TestSkips", "skip"]]);
 });
 
+test("a Go test over its limit prints the stacks of its goroutines before its group is ended", async () => {
+  const root = folder();
+  writeFileSync(join(root, "go.mod"), "module hangs\n\ngo 1.21\n");
+  writeFileSync(join(root, "a_test.go"), [
+    "package hangs", "", 'import ("testing"; "time")', "",
+    "func waitInTheFixture() { time.Sleep(time.Hour) }", "",
+    "func TestHangs(t *testing.T) { waitInTheFixture() }", "",
+  ].join("\n"));
+  const { tests, failures } = await discoverGo({ patterns: ["./..."], cwd: root, buildDir: join(root, "bin"), id: "go", write() {}, concurrency: 1, timeoutMs: 2000 });
+  assert.deepEqual(failures, []);
+  const { results } = await runTests({ tests, concurrency: 1, write() {} });
+  const result = results.get(tests[0].name);
+  assert.equal(result.status, "timeout", result.detail);
+  assert.match(result.output, /^goroutine \d+ .*\[sleep\]:$/m, result.output);
+  assert.match(result.output, /hangs\.waitInTheFixture\(/, result.output);
+});
+
 test("a Go package that does not build is a failure that names the package", async () => {
   const root = folder();
   writeFileSync(join(root, "go.mod"), "module broken\n\ngo 1.21\n");

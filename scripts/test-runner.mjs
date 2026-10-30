@@ -17,6 +17,11 @@ import { EVENT_PREFIX } from './test-event-reporter.mjs';
 export const MAX_TEST_TIMEOUT_MS = 600_000;
 
 const seconds = (ms) => (ms / 1000).toFixed(3);
+/**
+ * The time that a test process over its limit has to print its stacks and exit after its stack signal. The Go runtime writes the
+ * stacks of every goroutine on SIGQUIT and exits with status 2; the write takes milliseconds.
+ */
+export const STACK_LIMIT_MS = 10_000;
 /** The wall clock in microseconds, the unit of `ts_us` in the event logs, so a test window compares with the records. */
 const nowUs = () => Math.round((performance.timeOrigin + performance.now()) * 1000);
 
@@ -36,6 +41,10 @@ function validate(options) {
     // that the process has no limit of the runner.
     if (item.timeoutMs !== undefined && (!Number.isInteger(item.timeoutMs) || item.timeoutMs < 1 || item.timeoutMs > MAX_TEST_TIMEOUT_MS)) {
       throw new TypeError(`${item.name}: timeoutMs must be an integer from 1 through ${MAX_TEST_TIMEOUT_MS}`);
+    }
+    // The signal that asks the test process for its stacks at the limit (runOne), such as SIGQUIT for a Go test binary.
+    if (item.stackSignal !== undefined && (typeof item.stackSignal !== 'string' || !/^SIG[A-Z0-9]+$/.test(item.stackSignal))) {
+      throw new TypeError(`${item.name}: stackSignal must be a signal name such as SIGQUIT`);
     }
     // The event watchdog of a process that reports its test events (runOne). A process without the field has no watchdog.
     if (item.eventLimitMs !== undefined && (!Number.isInteger(item.eventLimitMs) || item.eventLimitMs < 1 || item.eventLimitMs > MAX_TEST_TIMEOUT_MS)) {
@@ -136,11 +145,31 @@ function runOne(item, limitMs, env, outputPath) {
     let watchdog = null;
     // The sampling and the end of a process that did not exit after its tests ended; the result waits for it.
     let ending = null;
+    // A process with `stackSignal` receives that signal at the limit and has STACK_LIMIT_MS to print its stacks and exit; its group is
+    // ended at its exit or at the end of that time, so the output of a test that does not end holds where each of its threads waits.
+    let stackTimer = null;
+    const endLimitGroup = () => {
+      if (limit.ended) return;
+      limit.ended = true;
+      clearTimeout(stackTimer);
+      try { limit.leftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
+    };
     const endAtLimit = (reason) => {
       if (limit !== null) return;
-      limit = { elapsedMs: performance.now() - started, reason, leftovers: [] };
+      limit = { elapsedMs: performance.now() - started, reason, leftovers: [], ended: false };
       clearTimeout(watchdog);
-      try { limit.leftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
+      if (item.stackSignal === undefined) {
+        endLimitGroup();
+        return;
+      }
+      limit.reason = reason.replace(/ and was killed$/, ` and was sent ${item.stackSignal} for its stacks`);
+      try { process.kill(child.pid, item.stackSignal); } catch (error) {
+        if (error.code !== 'ESRCH') groupError = error;
+      }
+      stackTimer = setTimeout(() => {
+        limit.reason += `; it did not exit within ${seconds(STACK_LIMIT_MS)}s and was killed`;
+        endLimitGroup();
+      }, STACK_LIMIT_MS);
     };
     const arm = () => {
       if (item.eventLimitMs === undefined) return;
@@ -224,7 +253,11 @@ function runOne(item, limitMs, env, outputPath) {
     });
     child.once('exit', () => {
       clearTimeout(watchdog);
-      if (limit !== null) return;
+      if (limit !== null) {
+        // The process exited after its stack signal; the processes that remain in its group are ended now.
+        if (item.stackSignal !== undefined && ending === null) endLimitGroup();
+        return;
+      }
       try { exitLeftovers = endGroup(child.pid, null); } catch (error) { groupError = error; }
     });
     // A file of the run receives the output as it arrives, so a run that stops leaves the output of the test it stopped in.
@@ -267,7 +300,8 @@ function runOne(item, limitMs, env, outputPath) {
 }
 
 /**
- * Runs `tests` (`{name, command, args, cwd?, env?, timeoutMs?, eventLimitMs?, exitLimitMs?}`) with at most `concurrency` processes at once.
+ * Runs `tests` (`{name, command, args, cwd?, env?, timeoutMs?, stackSignal?, eventLimitMs?, exitLimitMs?}`) with at most `concurrency`
+ * processes at once. `stackSignal` is the signal that asks a process over its `timeoutMs` for its stacks before its group is ended.
  * `eventLimitMs` is the event watchdog of a process that reports its test events (scripts/test-event-reporter.mjs), and `exitLimitMs`
  * the limit of its exit after its `test:summary` event, which needs `run`. `write(line)`
  * receives one line per event: `RUN`, `PASS`, `FAIL`, `TIME`, a `RUNNING` line every `heartbeatMs` that names the tests in

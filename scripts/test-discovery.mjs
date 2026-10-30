@@ -17,6 +17,12 @@ const execFileAsync = promisify(execFile);
 export const BUILD_TIMEOUT_MS = 600_000;
 
 /**
+ * The signal that a Go test binary over its limit receives before its group is ended: the Go runtime writes the stacks of every
+ * goroutine on SIGQUIT and exits, so the output of a test that does not end names where each goroutine waits.
+ */
+export const GO_STACK_SIGNAL = 'SIGQUIT';
+
+/**
  * The tests of the Go packages that match `patterns` (relative to `cwd`). `tags` is a build tag list and `ldflags` the link
  * flags; `buildDir` receives the test binaries. Returns `{tests, failures}`: `tests` are runner items with `testName` (the
  * name `go test -json` gives) and `failures` name the packages whose build failed.
@@ -46,7 +52,7 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
     const names = await execFileAsync(binary, ['-test.list', '.'], { cwd: pkg.dir, maxBuffer: 1 << 24 });
     for (const testName of names.stdout.split('\n').filter((line) => /^(Test|Example)/.test(line))) {
       tests.push({ name: `${id} ${pkg.importPath}.${testName}`, run: id, testName, owner: relative(realpathSync(cwd), pkg.dir), command: binary,
-        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v'], cwd: pkg.dir, timeoutMs });
+        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v'], cwd: pkg.dir, timeoutMs, stackSignal: GO_STACK_SIGNAL });
     }
   }
   return { tests, failures };

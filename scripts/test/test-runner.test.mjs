@@ -189,6 +189,27 @@ test("a process that outlives its test process is ended at that exit, and the fa
   assert.ok(result.elapsedMs < 15000, `the process ran ${result.elapsedMs} ms, to its limit instead of its exit`);
 });
 
+test("a test over its limit with a stack signal receives that signal first, and its output keeps what it printed on the signal", async () => {
+  // The process prints its stacks on SIGQUIT and exits, as a Go test binary does; a runner that kills the group without the signal
+  // leaves the output without the stacks.
+  const source = `process.on("SIGQUIT", () => { console.log("goroutine 1 [the stacks]"); process.exit(2); }); console.log("waiting"); ${sleeping(60000)}`;
+  const { results, lines } = await run([node("hangs", source, { timeoutMs: 1000, stackSignal: "SIGQUIT" })], { concurrency: 1 });
+  const result = results.get("hangs");
+  assert.equal(result.status, "timeout", result.detail);
+  assert.match(result.output, /^goroutine 1 \[the stacks\]$/m, result.output);
+  assert.match(lines.find((line) => line.startsWith("TIME hangs")), /^TIME hangs \d+\.\d{3}s exceeded 1\.000s and was sent SIGQUIT for its stacks$/);
+  assert.ok(result.elapsedMs < 5000, `the test ran ${result.elapsedMs} ms against its limit of 1000 ms`);
+});
+
+test("a test over its limit that does not exit on its stack signal is ended at the stack limit", async () => {
+  const source = `process.on("SIGQUIT", () => console.log("ignored")); ${sleeping(60000)}`;
+  const { results } = await run([node("ignores", source, { timeoutMs: 500, stackSignal: "SIGQUIT" })], { concurrency: 1 });
+  const result = results.get("ignores");
+  assert.equal(result.status, "timeout", result.detail);
+  assert.match(result.detail, /^exceeded 0\.500s and was sent SIGQUIT for its stacks; it did not exit within 10\.000s and was killed$/, result.detail);
+  assert.match(result.output, /^ignored$/m, result.output);
+});
+
 test("a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop", async () => {
   // The runner reads the process table with `ps` at the limit. This `ps` takes 5 seconds, as a read under load can, so a runner that
   // reads the table before it stops the group runs the test for about 7 seconds in all.
