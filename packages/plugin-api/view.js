@@ -69,12 +69,47 @@ export function createViewChannel({ handler }) {
 }
 
 /**
+ * Creates the report function of createViewBridge for a view page. An error report, a call that ended by a timeout and a peer that
+ * was lost for another reason than a closed surface reach reportError, which the view page passes as its global error hook, so the
+ * start script of the view writes them to the application log. The open-call counts are console debug records, and a skipped
+ * snapshot and a call or snapshot that ended because its surface closed are console info records.
+ */
+export function createViewReporter({ reportError, console }) {
+  if (typeof reportError !== "function") throw new TypeError("createViewReporter requires reportError");
+  if (typeof console?.debug !== "function" || typeof console?.info !== "function") {
+    throw new TypeError("createViewReporter requires console debug and info methods");
+  }
+  return (event) => {
+    if (event?.kind === "open-calls") {
+      console.debug("view bridge open calls", event);
+      return;
+    }
+    if (event?.kind === "skipped" ||
+        (event?.kind === "peer-lost" && event.reason === "surface-closed") ||
+        (event?.kind === "stalled" && event.reason === "surface-closed")) {
+      console.info("view bridge closed or coalesced", event);
+      return;
+    }
+    const fields = [];
+    if (typeof event?.where === "string") fields.push(event.where);
+    if (typeof event?.text === "string") fields.push(event.text);
+    // default: a thrown value that is not an Error is named by its text.
+    if (event?.error !== undefined) fields.push(`report error: ${event.error?.message ?? String(event.error)}`);
+    const message = fields.length > 0
+      ? fields.join(": ")
+      : `view bridge ${typeof event?.kind === "string" ? event.kind : "report"}: ${JSON.stringify(event)}`;
+    reportError(new Error(message));
+  };
+}
+
+/**
  * Creates the calls and the declared UI snapshots of a view over one view channel. The calls are createCalls() and the snapshot
  * sender is createSnapshotSender(), both sending through the channel. The channel has one listener, which passes each
  * acknowledgement of a snapshot to the sender and every other message to the calls.
  *
  *     handler   the sok-view message handler of the view, as for createViewChannel
  *     report    report(event) receives the counts and losses of the calls and the snapshots, as createCalls and createSnapshotSender
+ *               report them; a view page passes createViewReporter()
  *
  * Returns {calls, snapshots}. runtime serves the context entries of the view page: native.on, sidecar(name).on, .onFailure and .send,
  * theme, and textSize and settings with read and on each. composition.create({regions, overlays}) creates the composition of the

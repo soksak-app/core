@@ -1202,21 +1202,21 @@ const FEATURE_LINKS = [
   "id": "F239-216",
   "implementation": [
     {
-      "file": "e2e/fixtures/memory-saver/unload-probe/ui/bridge-report.js",
-      "symbol": "export function createBridgeReporter("
+      "file": "packages/plugin-api/view.js",
+      "symbol": "export function createViewReporter("
     }
   ],
   "tests": [
     {
-      "file": "e2e/test/unload-probe-bridge-report.test.mjs",
+      "file": "packages/plugin-api/test/view-reporter.test.mjs",
       "id": "a failed view error report reaches the injected global error hook"
     },
     {
-      "file": "e2e/test/unload-probe-bridge-report.test.mjs",
+      "file": "packages/plugin-api/test/view-reporter.test.mjs",
       "id": "ordinary call counts and close or coalescing reports stay out of the application error path"
     },
     {
-      "file": "e2e/test/unload-probe-bridge-report.test.mjs",
+      "file": "packages/plugin-api/test/view-reporter.test.mjs",
       "id": "unexpected transport loss reaches the injected global error hook"
     }
   ],
@@ -1258,10 +1258,6 @@ const FEATURE_LINKS = [
     {
       "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
       "symbol": "export async function cleanupPluginHostFixture("
-    },
-    {
-      "file": "e2e/fixtures/plugin-host-throttle/raf-probe/ui/bridge-report.js",
-      "symbol": "export function createRafProbeBridgeOptions("
     }
   ],
   "tests": [
@@ -1280,10 +1276,6 @@ const FEATURE_LINKS = [
     {
       "file": "e2e/test/plugin-host-throttle-fixture.test.mjs",
       "id": "plugin-host RAF fixture manifest uses the public plugin exposure contract"
-    },
-    {
-      "file": "e2e/test/plugin-host-throttle-fixture.test.mjs",
-      "id": "plugin-host RAF reporter ignores open-call metrics and sends real errors to the browser hook"
     },
     {
       "file": "e2e/test/plugin-host-throttle.test.mjs",

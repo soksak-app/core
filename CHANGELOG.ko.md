@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-24: `@soksak/plugin-api/view`가 `createViewReporter`를 내보낸다. 이것은 오류, call timeout, lost peer를 페이지의 전역 오류 hook으로 보내고 call 수와 닫힌 표면의 보고는 console에 남기는 view bridge의 report 함수다. 모든 보고를 버리던 확장점 provider와 unload probe, RAF probe가 이것을 쓰며, reporter 사본 두 개는 지웠다.
 - F292-23: extension point fixture의 provider view가 status를 `createExpose`로 제공하므로 메인 페이지가 전달한 exposure 요청에 답한다.
 - F292-18: 성능 trace의 sampler가 document 웹 뷰마다 `host.sampler.memory` 행에 `document`를 써서 view surface의 page와 document region을 구별하고, idle tab 검사는 tab의 document마다 안정된 footprint를 더한다.
 - F292-25: Tauri 호스트의 `host.window`는 Wails 호스트처럼 열린 modal의 order를 native surface 수와 web view 수의 합으로 보고하므로 modal이 모든 document region 위에 있다.
