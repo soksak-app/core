@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh as prepare } from "./fixture.mjs";
+import { documentMatchesFrame, pointerAtPrecision } from "./surface-geometry.mjs";
 
 /**
  * Waits until the scale and size of the native surface, the DOM slot and the surface document match after the display completes,
@@ -26,14 +27,30 @@ async function geometry(s, surface, scale) {
   const slot = (await s.surfaces()).find((x) => x.surface === surface).declared;
   assert.deepEqual([frame.x, frame.y, frame.width, frame.height], [slot.x, slot.y, slot.w, slot.h],
     `the native surface must fill its DOM slot at scale ${main.scale}`);
-  await s.until("core.surface.document", (doc) => doc.scale === scale
-    && doc.body.width === frame.width && doc.body.height === frame.height
-    && doc.viewport.width === frame.width && doc.viewport.height === frame.height,
-  `the surface document did not match ${JSON.stringify(frame)} at scale ${scale}`, { surface });
+  await s.until("core.surface.document", (doc) => documentMatchesFrame(doc, frame, scale),
+    `the surface document did not match ${JSON.stringify(frame)} at scale ${scale}`, { surface });
   return { state, frame };
 }
 
-/** Presses the last device pixel row of the surface with native input and checks the coordinates that the document received. */
+/** Presses a point of the surface with native input and returns its trusted pointerdown and click events. */
+async function press(s, surface, point) {
+  const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
+  const fresh = (list) => list.filter((e) => e.sequence > seen);
+  await s.pointer(point.x, point.y, "down");
+  const down = await s.until("core.surface.input", (events) => fresh(events).some((e) => e.type === "pointerdown"),
+    `the point ${point.x},${point.y} did not receive pointerdown`, { surface });
+  await s.pointer(point.x, point.y, "up");
+  const up = await s.until("core.surface.input", (list) => fresh(list).some((e) => e.type === "click"),
+    `the point ${point.x},${point.y} did not receive click`, { surface });
+  const events = { pointerdown: fresh(down).find((e) => e.type === "pointerdown"), click: fresh(up).find((e) => e.type === "click") };
+  for (const [type, event] of Object.entries(events)) assert.equal(event.trusted, true, `${type} must come through native event handling`);
+  return events;
+}
+
+/**
+ * Presses the last device pixel row of the surface with native input and checks the coordinates that the document received. A press
+ * at 10.25 points inside the surface measures the pointer precision of the WebKit of the run first.
+ */
 async function clickLastPixel(s, surface, scale) {
   const { state, frame } = await geometry(s, surface, scale);
   const x = frame.width / 2, y = frame.height - 0.5 / scale;
@@ -41,19 +58,14 @@ async function clickLastPixel(s, surface, scale) {
   // The surface is a view, so the root document of the surface owns that point.
   assert.deepEqual(await s.run("host.hit", point), { kind: "document", surface, document: "" },
     "the last device pixel row does not belong to the view of the surface");
-  const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
-  const fresh = (list) => list.filter((e) => e.sequence > seen);
-  await s.pointer(point.x, point.y, "down");
-  const down = await s.until("core.surface.input", (events) => fresh(events).some((e) => e.type === "pointerdown"),
-    "the final device pixel did not receive pointerdown", { surface });
-  await s.pointer(point.x, point.y, "up");
-  const events = await s.until("core.surface.input", (list) => fresh(list).some((e) => e.type === "click"),
-    "the final device pixel did not receive click", { surface });
-  for (const [type, tolerance, list] of [["pointerdown", 0.001, down], ["click", 1, events]]) {
-    const event = fresh(list).find((e) => e.type === type);
-    assert.equal(event.trusted, true, `${type} must come through native event handling`);
-    assert.ok(Math.abs(event.x - x) < tolerance && Math.abs(event.y - y) < tolerance,
-      `native input coordinates changed: expected ${x},${y}, received ${event.x},${event.y} for ${type}`);
+  const inside = await press(s, surface, { x: point.x, y: frame.y + 10.25 });
+  const precision = { pressed: 10.25, reported: inside.pointerdown.y };
+  const expected = { x: pointerAtPrecision(precision, x), y: pointerAtPrecision(precision, y) };
+  const events = await press(s, surface, point);
+  for (const [type, tolerance] of [["pointerdown", 0.001], ["click", 1]]) {
+    const event = events[type];
+    assert.ok(Math.abs(event.x - expected.x) < tolerance && Math.abs(event.y - expected.y) < tolerance,
+      `native input coordinates changed: expected ${expected.x},${expected.y} for a press at ${x},${y}, received ${event.x},${event.y} for ${type}`);
   }
   assert.equal((await s.get("host.window")).active, state.active, "native input must not change application activation");
 }
