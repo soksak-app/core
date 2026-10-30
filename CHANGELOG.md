@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-5: A wait of the window-check session on a status of a surface starts when the surface has registered the status; a view registers its exposure after its phase `ready`.
 - F295: Both hosts store no `host.trace.*` event while the performance trace is off; about twenty writers of these events in each host did not read the switch.
 - F294: The diagnostic hold of surface exposure replies holds the `exposureReply` call of a view surface.
 - F293: Both hosts check the window of an endpoint request before its name and answer a missing, empty or non-string window with `window must be a non-empty string`.

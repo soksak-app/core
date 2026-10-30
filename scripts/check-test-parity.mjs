@@ -8049,6 +8049,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F292-5",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "if (surface !== undefined) await this.registered(surface, [`status ${name}`]);" }],
+    tests: [{ file: "packages/window-check/test/surface-registration.test.mjs", id: "a wait on a status of a surface watches the status after the surface has registered it" }],
+    expected: "A wait on a status of a surface watches the status after the surface has registered it.",
+    levels: ["unit"],
+  },
+  {
     id: "F295",
     implementation: [
       { file: "packages/host/wailsv3/src/event_record.go", symbol: "strings.HasPrefix(event, \"host.trace.\") && !performanceOn.Load()" },

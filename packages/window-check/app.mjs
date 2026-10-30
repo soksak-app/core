@@ -738,8 +738,12 @@ export class Session {
     await this.key(key, "up", options);
   }
 
-  /** Waits by notification until the status satisfies the predicate. */
-  until(name, predicate, message, { surface, timeout = REQUEST } = {}) {
+  /**
+   * Waits by notification until the status satisfies the predicate. A wait on a status of a surface starts when the
+   * surface has registered the status, because a view surface registers its exposure after its phase `ready`.
+   */
+  async until(name, predicate, message, { surface, timeout = REQUEST } = {}) {
+    if (surface !== undefined) await this.registered(surface, [`status ${name}`]);
     this.step(`until ${name}`);
     return this.client.watch(this.window, name, predicate, { surface, timeout }).catch((error) => {
       if (error.code === "ETIMEDOUT") error.message = `${this.app.name}: ${message} (${error.message})`;
@@ -747,6 +751,17 @@ export class Session {
       else if (error instanceof EndpointError) error.message = `${this.app.name} status ${name}: ${error.message}`;
       throw error;
     });
+  }
+
+  /**
+   * Waits until the surface has registered every entry of `entries` (`status <name>`, `command <name>` or `dom <name>`, as
+   * `core.surfaces` lists them). The phase `ready` of a view surface means that the view declared its composition; the view
+   * registers its exposure after that (docs/spec/native-surfaces.md), so a check that runs a command or reads a status of a
+   * new view waits here.
+   */
+  registered(surface, entries, message = `surface ${surface} did not register ${entries.join(", ")}`) {
+    return this.until("core.surfaces", (surfaces) => surfaces.some((item) =>
+      item.surface === surface && entries.every((entry) => item.exposes.includes(entry))), message);
   }
 
   /**

@@ -36,6 +36,7 @@ for (const app of Object.values(APPS)) {
     const { tab } = await child.run("core.file.open", { path: "note.txt" });
     await child.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
       "the editor tab did not open");
+    await child.registered(tab, ["command editor.edit"]);
     await child.until("editor.document", (value) => value.path === "note.txt" && value.version !== null,
       "the editor did not read the file", { surface: tab });
     await child.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
@@ -79,6 +80,7 @@ for (const app of Object.values(APPS)) {
     });
     await s.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
       "the editor tab did not open");
+    await s.registered(tab, ["command editor.edit"]);
     await s.until("editor.document", (value) => value.path === path && value.version !== null,
       "the editor did not read the file", { surface: tab });
     await s.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
@@ -125,6 +127,7 @@ for (const app of Object.values(APPS)) {
     const { tab } = await s.run("core.file.open", { path });
     await s.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
       "the editor tab did not open");
+    await s.registered(tab, ["command editor.edit"]);
     await s.until("editor.document", (value) => value.path === path && value.version !== null,
       "the editor did not read the file", { surface: tab });
     await s.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
@@ -169,6 +172,7 @@ for (const app of Object.values(APPS)) {
     const { tab } = await child.run("core.file.open", { path: "note.txt" });
     await child.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
       "the editor tab did not open");
+    await child.registered(tab, ["command editor.edit"]);
     await child.until("editor.document", (value) => value.path === "note.txt" && value.version !== null,
       "the editor did not read the file", { surface: tab });
     await child.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
@@ -215,6 +219,7 @@ for (const app of Object.values(APPS)) {
     const { tab } = await child.run("core.file.open", { path: "note.txt" });
     await child.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
       "the editor tab did not open");
+    await child.registered(tab, ["command editor.edit"]);
     await child.until("editor.document", (value) => value.path === "note.txt" && value.version !== null,
       "the editor did not read the file", { surface: tab });
     await child.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);

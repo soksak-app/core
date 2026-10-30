@@ -129,6 +129,7 @@ for (const app of Object.values(APPS)) {
       await s.run("core.picker.pick", { index: picker.items.findIndex((item) => item.name === "저장하지 않고 닫기") });
     });
     await s.until("core.surfaces", (all) => all.some((x) => x.surface === surface && x.status.phase === "ready"), "the editor tab did not open");
+    await s.registered(surface, ["command editor.edit"]);
     await s.until("editor.document", (value) => value.path === path && value.version !== null, "the editor did not read the file", { surface });
     await s.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, surface);
     await s.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface });
