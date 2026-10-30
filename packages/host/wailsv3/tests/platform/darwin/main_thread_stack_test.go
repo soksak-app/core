@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -22,11 +23,20 @@ import (
 // the main thread as the host does.
 func init() { runtime.LockOSThread() }
 
-// TestMain runs the application of the framework on the main thread, without a window and with the prohibited activation
-// policy, so it takes no activation and shows no Dock icon. The tests start when the application finished launching, and the
-// process ends with their status.
+// TestMain blocks the asynchronous signals on the main thread and runs the application of the framework there, as the host
+// does, without a window and with the prohibited activation policy, so it takes no activation and shows no Dock icon. The tests
+// start when the application finished launching, and the process ends with their status.
 func TestMain(m *testing.M) {
 	if err := CaptureMainThread(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	// The host blocks the asynchronous signals on the main thread before the application runs.
+	system, err := platform.Current()
+	if err == nil {
+		err = system.BlockAsyncSignals()
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -155,6 +165,21 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 			defer emittedLock.Unlock()
 			if len(emitted) > 0 {
 				return fmt.Errorf("the stall watch stored %v", emitted)
+			}
+			return nil
+		}},
+		// The kernel delivers a signal that is sent to the process to a thread that does not block it, the main thread among
+		// them, and the Go signal handler runs on the signal stack of its thread, which the Go heap holds. The main thread
+		// waits in its run loop while a goroutine sends SIGCHLD and SIGURG to the process.
+		{"asynchronous signals", func() error {
+			pid := os.Getpid()
+			for start := time.Now(); time.Since(start) < time.Second; {
+				for _, signal := range []syscall.Signal{syscall.SIGCHLD, syscall.SIGURG} {
+					if err := syscall.Kill(pid, signal); err != nil {
+						return fmt.Errorf("sending %v: %w", signal, err)
+					}
+				}
+				time.Sleep(50 * time.Microsecond)
 			}
 			return nil
 		}},

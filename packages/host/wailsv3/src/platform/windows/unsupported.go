@@ -128,6 +128,10 @@ func (implementation) Screens() (string, error) {
 	return "", unsupported("display list")
 }
 
+func (implementation) BlockAsyncSignals() error {
+	return unsupported("the asynchronous signal mask")
+}
+
 func (implementation) OnTermination(func(os.Signal)) error {
 	return unsupported("termination requests")
 }

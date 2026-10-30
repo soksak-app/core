@@ -312,6 +312,11 @@ func Run(assets fs.FS, options Options) error {
 			Folder: filepath.Dir(eventLog.Path()), EmitHost: EmitHost})
 		stopStall.Store(&stop)
 	})
+	// The main goroutine runs on the main thread (the framework locks it there in its init), so the mask is the mask of the main
+	// thread (docs/spec/hosts.md, main thread of the Wails host).
+	if err := system.BlockAsyncSignals(); err != nil {
+		return err
+	}
 	err = app.Run()
 	if stop := stopStall.Load(); stop != nil {
 		(*stop)()

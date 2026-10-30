@@ -582,6 +582,11 @@ type Platform interface {
 	// SecureServiceDirectory makes the persistent service directory path accessible only to the current user.
 	SecureServiceDirectory(path string) error
 
+	// BlockAsyncSignals blocks every signal other than the synchronous faults (SIGILL, SIGTRAP, SIGABRT, SIGEMT, SIGFPE, SIGBUS,
+	// SIGSEGV, SIGSYS) on the calling thread, so the kernel delivers a signal that is sent to the process to another thread and
+	// the Go signal handler and its signal stack do not run on the main thread (docs/spec/hosts.md, main thread of the Wails
+	// host). Call it on the main thread before the application runs; it fails on another thread.
+	BlockAsyncSignals() error
 	// OnTermination makes quit be called with the first termination signal (SIGTERM, SIGINT, SIGHUP) that is received. A termination
 	// signal after that ends the process with the default action.
 	OnTermination(quit func(signal os.Signal)) error
