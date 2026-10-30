@@ -6,15 +6,25 @@ import { auditMainThreadCalls } from "../check-hosts.mjs";
 const LAYER = "packages/host/wailsv3/src/platform/darwin";
 const HEADER = "native/darwin/src/window_facts.h";
 const header = [
+  "#import <Cocoa/Cocoa.h>",
   "#include <stdbool.h>",
   "void *sp_app_main_window(void);",
   "bool sp_window_close(void *window);",
   "unsigned long long sp_mono_ns(void);",
   "typedef void (*sp_ui_task)(unsigned long);",
+  "void sp_ui_enqueue(sp_ui_task task, unsigned long context);",
   "@interface SPWindowFacts : NSObject",
   "- (void)close:(id)sender;",
   "@end",
 ].join("\n");
+// The worker functions of the framework and their macros, as main_thread.h of the darwin layer declares them.
+const mainThread = [
+  "void wailsRunOnWorker(void (^task)(void));",
+  "void wailsRunOnMain(void (^call)(void));",
+  "#define ON_MAIN(T, expression) ({ __block T onMainResult; wailsRunOnMain(^{ onMainResult = (expression); }); onMainResult; })",
+  "#define ON_WORKER(T, expression) ({ __block T onWorkerResult; wailsRunOnWorker(^{ onWorkerResult = (expression); }); onWorkerResult; })",
+].join("\n");
+const base = { [HEADER]: header, [`${LAYER}/main_thread.h`]: mainThread };
 
 /** Returns a Go file of the darwin layer with the preamble and the Go body. */
 function goFile(preamble, body) {
@@ -23,9 +33,9 @@ function goFile(preamble, body) {
 
 const exported = "//export goWindowClosed\nfunc goWindowClosed() {}\n";
 
-test("main-thread audit accepts exported callbacks that run through the worker", { timeout: 1000 }, () => {
+test("main-thread audit accepts exported callbacks that run through the worker", { timeout: 30000 }, () => {
   const files = {
-    [HEADER]: header,
+    ...base,
     [`${LAYER}/window.go`]: goFile([
       "#include \"main_thread.h\"",
       "extern void goWindowClosed(void);",
@@ -37,9 +47,9 @@ test("main-thread audit accepts exported callbacks that run through the worker",
   assert.deepEqual(auditMainThreadCalls(files), []);
 });
 
-test("main-thread audit rejects an exported callback that C calls directly", { timeout: 1000 }, () => {
+test("main-thread audit rejects an exported callback that C calls directly", { timeout: 30000 }, () => {
   const files = {
-    [HEADER]: header,
+    ...base,
     [`${LAYER}/window.go`]: goFile([
       "extern void goWindowClosed(void);",
       "static void windowClosed(void) { goWindowClosed(); }",
@@ -50,12 +60,15 @@ test("main-thread audit rejects an exported callback that C calls directly", { t
   ]);
 });
 
-test("main-thread audit rejects an exported callback that an Objective-C file passes to native code", { timeout: 1000 }, () => {
+test("main-thread audit rejects an exported callback that an Objective-C file passes to native code", { timeout: 30000 }, () => {
   const files = {
-    [HEADER]: header,
+    ...base,
     [`${LAYER}/window.go`]: goFile("", exported),
     [`${LAYER}/webview.m`]: [
+      "#import \"window_facts.h\"",
       "extern void goWindowClosed(void);",
+      "@interface SPDelegate : NSObject",
+      "@end",
       "@implementation SPDelegate",
       "- (void)windowWillClose:(NSNotification *)notification {",
       "    sp_ui_enqueue((sp_ui_task)goWindowClosed, 0);",
@@ -64,13 +77,13 @@ test("main-thread audit rejects an exported callback that an Objective-C file pa
     ].join("\n"),
   };
   assert.deepEqual(auditMainThreadCalls(files), [
-    `${LAYER}/webview.m:4: goWindowClosed is exported to C and is referenced outside wailsRunOnWorker or ON_WORKER`,
+    `${LAYER}/webview.m:7: goWindowClosed is exported to C and is referenced outside wailsRunOnWorker or ON_WORKER`,
   ]);
 });
 
-test("main-thread audit rejects a native call that Go makes directly instead of through a main_ wrapper", { timeout: 1000 }, () => {
+test("main-thread audit rejects a native call that Go makes directly instead of through a main_ wrapper", { timeout: 30000 }, () => {
   const files = {
-    [HEADER]: header,
+    ...base,
     [`${LAYER}/window.go`]: goFile([
       "#include \"window_facts.h\"",
       "#include \"main_thread.h\"",
@@ -88,9 +101,9 @@ test("main-thread audit rejects a native call that Go makes directly instead of 
   ]);
 });
 
-test("main-thread audit rejects a preamble function that Go calls and that uses AppKit outside the main thread", { timeout: 1000 }, () => {
+test("main-thread audit rejects a preamble function that Go calls and that uses AppKit outside the main thread", { timeout: 30000 }, () => {
   const files = {
-    [HEADER]: header,
+    ...base,
     [`${LAYER}/window.go`]: goFile([
       "#include \"window_facts.h\"",
       "#include \"main_thread.h\"",
@@ -119,7 +132,7 @@ test("main-thread audit rejects a preamble function that Go calls and that uses 
   ]);
 });
 
-test("main-thread audit names the thread-safe native functions with a reason", { timeout: 1000 }, async () => {
+test("main-thread audit names the thread-safe native functions with a reason", { timeout: 30000 }, async () => {
   const { MAIN_THREAD_FREE } = await import("../check-hosts.mjs");
   for (const [name, reason] of Object.entries(MAIN_THREAD_FREE)) {
     assert.match(name, /^sp_[a-z_*]+$/, name);

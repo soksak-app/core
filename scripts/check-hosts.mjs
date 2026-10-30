@@ -5,7 +5,9 @@
 //
 //   node scripts/check-hosts.mjs
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const ROOT = new URL("../", import.meta.url).pathname;
@@ -173,175 +175,85 @@ export const MAIN_THREAD_FREE = {
 const mainThreadFree = (name) => Object.keys(MAIN_THREAD_FREE)
   .some((key) => key.endsWith("*") ? name.startsWith(key.slice(0, -1)) : name === key);
 
-// Keywords after which a [ starts an Objective-C message and not a subscript, and the keywords whose condition in parentheses
-// a statement follows.
-const C_KEYWORDS = new Set(["return", "else", "do", "case", "in"]);
-const C_CONDITIONS = new Set(["if", "while", "for", "switch"]);
+// The flags of the cgo preambles and Objective-C files of the darwin layer, which cgo passes with the #cgo CFLAGS lines; the
+// preamble file starts with the prolog of cgo, which includes stddef.h.
+const CLANG_FLAGS = ["-x", "objective-c", "-fmodules", "-fblocks", "-mmacosx-version-min=14.4", "-w", "-fsyntax-only", "-Xclang", "-ast-dump=json"];
+const PREAMBLE_PROLOG = "#include <stddef.h>\n";
 
 /**
- * Splits C or Objective-C text into tokens with their line numbers, starting at line first. Comments, preprocessor directives
- * (with their continued lines), string literals and character literals are removed; a string literal becomes the token
- * "string" so that a [ after it is a subscript.
+ * Returns the nodes of the clang JSON AST of one translation unit with their locations. clang writes the file and the line of
+ * a location only when they differ from the location that it wrote before, so the walk keeps the last file and line in the
+ * order of the dump. A declaration takes its location (loc) and an expression, which has none, the beginning of its range; a
+ * node in a macro takes the location where the macro is used (expansionLoc). Each node gets its enclosing nodes (parents).
  */
-function cTokens(text, first = 1) {
-  const tokens = [];
-  let line = first;
-  let lineStart = true;
-  for (let i = 0; i < text.length;) {
-    const ch = text[i];
-    if (ch === "\n") { line++; lineStart = true; i++; continue; }
-    if (ch === " " || ch === "\t" || ch === "\r") { i++; continue; }
-    if (lineStart && ch === "#") {
-      while (i < text.length && !(text[i] === "\n" && text[i - 1] !== "\\")) { if (text[i] === "\n") line++; i++; }
-      continue;
+function astNodes(root) {
+  const state = { file: undefined, line: undefined };
+  const bare = (location) => {
+    if (location.file !== undefined) state.file = location.file;
+    if (location.line !== undefined) state.line = location.line;
+    return location.offset === undefined ? undefined : { file: state.file, line: state.line };
+  };
+  const place = (location) => {
+    if (location.spellingLoc) {
+      bare(location.spellingLoc);
+      return bare(location.expansionLoc);
     }
-    lineStart = false;
-    if (text.startsWith("//", i)) { while (i < text.length && text[i] !== "\n") i++; continue; }
-    if (text.startsWith("/*", i)) {
-      const end = text.indexOf("*/", i + 2);
-      if (end < 0) throw new Error(`unterminated comment at line ${line}`);
-      line += text.slice(i, end).split("\n").length - 1;
-      i = end + 2;
-      continue;
+    return bare(location);
+  };
+  const nodes = [];
+  // clang also lists a block of an Objective-C method as a declaration of the method, outside the BlockExpr that holds it; that
+  // copy is walked for its locations and not returned, because it has lost its enclosing call.
+  const visit = (node, parents, listed = true) => {
+    const entry = { node, parents };
+    if (node.loc) entry.place = place(node.loc);
+    if (node.range) {
+      const begin = place(node.range.begin);
+      place(node.range.end);
+      entry.place ??= begin;
     }
-    if (ch === "\"" || ch === "'") {
-      let j = i + 1;
-      while (j < text.length && text[j] !== ch) { if (text[j] === "\\") j++; if (text[j] === "\n") throw new Error(`unterminated literal at line ${line}`); j++; }
-      tokens.push({ text: ch === "\"" ? "string" : "char", kind: "literal", line });
-      i = j + 1;
-      continue;
+    const returned = listed && !(node.kind === "BlockDecl" && parents.at(-1)?.kind !== "BlockExpr");
+    if (returned) nodes.push(entry);
+    const inner = [...parents, node];
+    for (const child of node.inner ?? []) visit(child, inner, returned);
+  };
+  visit(root, []);
+  return nodes;
+}
+
+/** Returns the name of the function that a CallExpr calls, from the first DeclRefExpr of its callee. */
+function calleeName(call) {
+  const find = (node) => {
+    if (node.kind === "DeclRefExpr") return node.referencedDecl?.name;
+    for (const child of node.inner ?? []) {
+      const name = find(child);
+      if (name !== undefined) return name;
     }
-    const word = /^[A-Za-z_][A-Za-z0-9_]*|^[0-9][A-Za-z0-9_.]*/.exec(text.slice(i, i + 200));
-    if (word) {
-      tokens.push({ text: word[0], kind: /^[0-9]/.test(word[0]) ? "literal" : "word", line });
-      i += word[0].length;
-      continue;
-    }
-    tokens.push({ text: ch, kind: "punct", line });
-    i++;
-  }
-  return tokens;
+    return undefined;
+  };
+  return call.inner?.[0] ? find(call.inner[0]) : undefined;
 }
 
 /**
- * Annotates each token with the brackets that enclose it. A token gets the depth of braces (depth), the wrapper of the
- * nearest enclosing call of wailsRunOnWorker, ON_WORKER, wailsRunOnMain or ON_MAIN (wrapper, or undefined), whether any
- * enclosing call is wailsRunOnMain or ON_MAIN (main), and whether it is a [ that starts an Objective-C message (message).
+ * Returns the nearest enclosing call of wailsRunOnWorker or wailsRunOnMain of a node (ON_WORKER and ON_MAIN expand to them),
+ * whether any enclosing call is wailsRunOnMain, and the function definition that holds the node.
  */
-function annotate(tokens) {
-  const stack = [];
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    const previous = tokens[i - 1];
-    token.depth = stack.filter((entry) => entry.text === "{").length;
-    token.wrapper = stack.findLast((entry) => entry.wrapper)?.wrapper;
-    token.main = stack.some((entry) => MAIN_WRAPPERS.has(entry.wrapper));
-    if (token.text === "(" || token.text === "{" || token.text === "[") {
-      const callee = token.text === "(" && previous?.kind === "word" ? previous.text : undefined;
-      const wrapper = WORKER_WRAPPERS.has(callee) || MAIN_WRAPPERS.has(callee) ? callee : undefined;
-      if (token.text === "[") token.message = isMessage(tokens, i);
-      stack.push({ text: token.text, wrapper, index: i });
-    } else if (token.text === ")" || token.text === "}" || token.text === "]") {
-      const open = stack.pop();
-      if (open === undefined || ({ ")": "(", "}": "{", "]": "[" })[token.text] !== open.text) {
-        throw new Error(`unbalanced ${token.text} at line ${token.line}`);
+function enclosing(entry) {
+  let wrapper;
+  let main = false;
+  let definition;
+  for (let i = entry.parents.length - 1; i >= 0; i--) {
+    const parent = entry.parents[i];
+    const child = entry.parents[i + 1] ?? entry.node;
+    if (parent.kind === "CallExpr" && parent.inner?.[0] !== child) {
+      const name = calleeName(parent);
+      if (name === "wailsRunOnWorker" || name === "wailsRunOnMain") {
+        wrapper ??= name;
+        if (name === "wailsRunOnMain") main = true;
       }
-      token.open = open.index;
     }
+    if (definition === undefined && parent.kind === "FunctionDecl") definition = parent.name;
   }
-  if (stack.length) throw new Error(`unclosed ${stack.at(-1).text} at line ${tokens[stack.at(-1).index].line}`);
-  return tokens;
-}
-
-/**
- * Returns whether the [ at index starts an Objective-C message. A [ after a name, a literal or a ] is a subscript; a [ after a
- * ) is a subscript only when the parenthesis closes a call or a subscripted expression, and a message after a cast otherwise.
- */
-function isMessage(tokens, index) {
-  const previous = tokens[index - 1];
-  if (previous === undefined) return true;
-  if (previous.text === "@") return false;
-  if (previous.kind === "word") return C_KEYWORDS.has(previous.text);
-  if (previous.kind === "literal" || previous.text === "]") return false;
-  if (previous.text === ")") {
-    const before = tokens[previous.open - 1];
-    if (before?.kind === "word") return C_KEYWORDS.has(before.text) || C_CONDITIONS.has(before.text);
-    return before?.text !== ")" && before?.text !== "]";
-  }
-  return true;
-}
-
-/** Returns the functions that the C tokens define at file scope: name -> { start, end, line } of the body. */
-function cFunctions(tokens) {
-  const functions = new Map();
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (token.text !== "{" || token.depth !== 0 || tokens[i - 1]?.text !== ")") continue;
-    const name = tokens[tokens[i - 1].open - 1];
-    let end = i + 1;
-    while (end < tokens.length && !(tokens[end].text === "}" && tokens[end].open === i)) end++;
-    if (name?.kind === "word") functions.set(name.text, { start: i + 1, end, line: name.line });
-    i = end;
-  }
-  return functions;
-}
-
-/** Returns the names of the functions that the C tokens of a header declare at file scope. */
-function cDeclarations(tokens) {
-  const names = new Set();
-  for (let i = 1; i < tokens.length; i++) {
-    const token = tokens[i];
-    const previous = tokens[i - 1];
-    // A ( followed by * or ^ starts the declarator of a function pointer or a block type, and not a parameter list.
-    if (token.kind !== "word" || token.depth !== 0 || tokens[i + 1]?.text !== "(" || ["*", "^"].includes(tokens[i + 2]?.text)) continue;
-    if (previous.kind === "word" && tokens[i - 2]?.text !== "@" || previous.text === "*") names.add(token.text);
-  }
-  return names;
-}
-
-/** Splits Go text into the cgo preamble (with the line of its first line) and the Go tokens without comments and literals. */
-function goSource(text) {
-  const tokens = [];
-  let preamble;
-  let comment;
-  let line = 1;
-  for (let i = 0; i < text.length;) {
-    const ch = text[i];
-    if (ch === "\n") { line++; i++; continue; }
-    if (ch === " " || ch === "\t" || ch === "\r") { i++; continue; }
-    if (text.startsWith("//", i)) {
-      const end = text.indexOf("\n", i);
-      const body = text.slice(i + 2, end < 0 ? undefined : end);
-      comment = comment?.end === line - 1 ? { ...comment, text: `${comment.text}\n${body}`, end: line } : { text: body, line, end: line };
-      i = end < 0 ? text.length : end;
-      continue;
-    }
-    if (text.startsWith("/*", i)) {
-      const end = text.indexOf("*/", i + 2);
-      if (end < 0) throw new Error(`unterminated comment at line ${line}`);
-      const body = text.slice(i + 2, end);
-      const lines = body.split("\n").length - 1;
-      comment = { text: body, line, end: line + lines };
-      line += lines;
-      i = end + 2;
-      continue;
-    }
-    if (ch === "\"" || ch === "'" || ch === "`") {
-      let j = i + 1;
-      while (j < text.length && text[j] !== ch) { if (ch !== "`" && text[j] === "\\") j++; if (text[j] === "\n") line++; j++; }
-      if (tokens.at(-1)?.text === "import" && text.slice(i, j + 1) === "\"C\"") {
-        if (comment === undefined || comment.end !== line - 1) throw new Error(`import "C" at line ${line} has no preamble`);
-        preamble = comment;
-      }
-      tokens.push({ text: "literal", kind: "literal", line });
-      i = j + 1;
-      continue;
-    }
-    const word = /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i, i + 200));
-    tokens.push({ text: word ? word[0] : ch, kind: word ? "word" : "punct", line });
-    i += word ? word[0].length : 1;
-  }
-  return { preamble, tokens };
+  return { wrapper, main, definition };
 }
 
 /**
@@ -352,54 +264,90 @@ function goSource(text) {
  *   on the worker while the main thread waits in C.
  * - Go code calls a native function only when MAIN_THREAD_FREE lists it; it calls each other native function through a
  *   function of the layer (a main_ wrapper) that runs it through wailsRunOnMain or ON_MAIN.
- * - A function of the layer that Go code calls sends no Objective-C message and calls no native function outside
+ * - A function of the layer that Go code calls sends no Objective-C message and calls no native or NS function outside
  *   wailsRunOnMain or ON_MAIN, directly or through another function of the layer.
  * - No native function and no Objective-C message runs inside wailsRunOnWorker or ON_WORKER.
+ *
+ * go/parser reads the Go files (scripts/cgo-sources.go): the preamble, the #cgo CFLAGS, the //export functions and the calls of
+ * C functions. clang reads each preamble and each Objective-C file and dumps its AST as JSON, with the macros expanded and each
+ * called function resolved to its declaration; a function that a header of native/darwin/src declares is a native function.
+ * Two other parsers do not meet the check: cmd/cgo translates a package only with the pkg-config package soksak-darwin, which
+ * native/darwin installs with the built library and the structure job of CI does not build; tree-sitter-objc does not expand
+ * ON_MAIN and ON_WORKER, whose first argument is a type, and does not resolve which header declares a called function. The
+ * files are written to a temporary folder of their own, which the audit removes.
  */
 export function auditMainThreadCalls(sources) {
-  const errors = [];
-  const native = new Set();
-  for (const [path, text] of Object.entries(sources)) {
-    if (NATIVE_HEADERS.test(path)) for (const name of cDeclarations(annotate(cTokens(text)))) native.add(name);
+  const folder = mkdtempSync(join(tmpdir(), "main-thread-audit-"));
+  try {
+    for (const [path, text] of Object.entries(sources)) {
+      if (!path.startsWith(MAIN_THREAD_LAYER) && !NATIVE_HEADERS.test(path)) continue;
+      mkdirSync(dirname(join(folder, path)), { recursive: true });
+      writeFileSync(join(folder, path), text);
+    }
+    return auditFolder(folder, Object.keys(sources));
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
   }
-  const isNative = (name) => native.has(name) && !mainThreadFree(name);
+}
+
+/** Audits the files of paths that auditMainThreadCalls wrote into folder. */
+function auditFolder(folder, paths) {
+  const layerFiles = paths.filter((path) => path.startsWith(MAIN_THREAD_LAYER) && !path.slice(MAIN_THREAD_LAYER.length).includes("/"));
+  const goFiles = layerFiles.filter((path) => path.endsWith(".go"));
+  const goSources = goFiles.length === 0 ? [] : JSON.parse(execFileSync("go", ["run", `${ROOT}scripts/cgo-sources.go`],
+    { cwd: folder, input: goFiles.join("\n"), encoding: "utf8", maxBuffer: 1 << 26 }));
+  const defines = [...new Set(goSources.flatMap((source) => source.cflags).filter((flag) => flag.startsWith("-D")))];
   const units = [];
-  const exports = new Set();
-  const goCalls = [];
-  for (const [path, text] of Object.entries(sources)) {
-    if (!path.startsWith(MAIN_THREAD_LAYER) || path.slice(MAIN_THREAD_LAYER.length).includes("/")) continue;
+  for (const source of goSources) {
+    if (source.preamble === null) continue;
+    const file = `${source.file}.preamble.m`;
+    writeFileSync(join(folder, file), PREAMBLE_PROLOG + source.preamble.text);
+    units.push({ path: source.file, file, line: (line) => line - 2 + source.preamble.line });
+  }
+  for (const path of layerFiles.filter((path) => path.endsWith(".m"))) units.push({ path, file: path, line: (line) => line });
+  const nativeFolder = join(folder, "native/darwin/src/");
+  const native = new Set();
+  const definitions = new Map();
+  const uses = [];
+  const exports = new Set(goSources.flatMap((source) => source.exports));
+  for (const unit of units) {
+    let dump;
     try {
-      if (path.endsWith(".m")) units.push({ path, tokens: annotate(cTokens(text)) });
-      if (!path.endsWith(".go")) continue;
-      const { preamble, tokens } = goSource(text);
-      if (preamble) units.push({ path, tokens: annotate(cTokens(preamble.text, preamble.line)) });
-      for (const [, name] of text.matchAll(/^\/\/export (\w+)$/gm)) exports.add(name);
-      tokens.forEach((token, i) => {
-        if (token.text === "C" && tokens[i + 1]?.text === "." && tokens[i + 2]?.kind === "word" && tokens[i + 3]?.text === "(") {
-          goCalls.push({ path, name: tokens[i + 2].text, line: tokens[i + 2].line });
-        }
-      });
+      dump = execFileSync("clang", [...CLANG_FLAGS, ...defines, "-I", nativeFolder, "-I", join(folder, MAIN_THREAD_LAYER), unit.file],
+        { cwd: folder, encoding: "utf8", maxBuffer: 1 << 30, stdio: ["ignore", "pipe", "pipe"] });
     } catch (error) {
-      throw new Error(`${path}: ${error.message}`, { cause: error });
+      throw new Error(`${unit.path}: clang failed: ${error.stderr || error.message}`, { cause: error });
+    }
+    const main = join(folder, unit.file);
+    for (const entry of astNodes(JSON.parse(dump))) {
+      const { node, place } = entry;
+      if (node.kind === "FunctionDecl" && place?.file?.startsWith(nativeFolder)) native.add(node.name);
+      if (place?.file !== main && place?.file !== unit.file) continue;
+      const line = unit.line(place.line);
+      if (node.kind === "FunctionDecl" && node.inner?.some((child) => child.kind === "CompoundStmt")) {
+        definitions.set(node.name, { path: unit.path, line });
+        continue;
+      }
+      let use;
+      if (node.kind === "DeclRefExpr" && node.referencedDecl?.kind === "FunctionDecl") use = { kind: "reference", name: node.referencedDecl.name };
+      else if (node.kind === "CallExpr" && calleeName(node) !== undefined) use = { kind: "call", name: calleeName(node) };
+      else if (node.kind === "ObjCMessageExpr") use = { kind: "message" };
+      if (use) uses.push({ ...use, ...enclosing(entry), path: unit.path, line });
     }
   }
-  const functions = new Map();
-  for (const unit of units) {
-    for (const [name, body] of cFunctions(unit.tokens)) functions.set(name, { ...body, unit });
-  }
-  for (const { path, tokens } of units) {
-    tokens.forEach((token, i) => {
-      if (token.depth > 0 && token.kind === "word" && exports.has(token.text) && !WORKER_WRAPPERS.has(token.wrapper)) {
-        errors.push({ path, line: token.line, text: `${token.text} is exported to C and is referenced outside wailsRunOnWorker or ON_WORKER` });
-      }
-      if (!WORKER_WRAPPERS.has(token.wrapper)) return;
-      if (token.kind === "word" && tokens[i + 1]?.text === "(" && isNative(token.text)) {
-        errors.push({ path, line: token.line, text: `${token.text} runs on the worker inside wailsRunOnWorker or ON_WORKER; run it through wailsRunOnMain or ON_MAIN` });
-      }
-      if (token.message) {
-        errors.push({ path, line: token.line, text: "an Objective-C message runs on the worker inside wailsRunOnWorker or ON_WORKER; run it through wailsRunOnMain or ON_MAIN" });
-      }
-    });
+  const isNative = (name) => native.has(name) && !mainThreadFree(name);
+  const errors = [];
+  for (const use of uses) {
+    if (use.kind === "reference" && exports.has(use.name) && use.wrapper !== "wailsRunOnWorker") {
+      errors.push({ path: use.path, line: use.line, text: `${use.name} is exported to C and is referenced outside wailsRunOnWorker or ON_WORKER` });
+    }
+    if (use.wrapper !== "wailsRunOnWorker") continue;
+    if (use.kind === "call" && isNative(use.name)) {
+      errors.push({ path: use.path, line: use.line, text: `${use.name} runs on the worker inside wailsRunOnWorker or ON_WORKER; run it through wailsRunOnMain or ON_MAIN` });
+    }
+    if (use.kind === "message") {
+      errors.push({ path: use.path, line: use.line, text: "an Objective-C message runs on the worker inside wailsRunOnWorker or ON_WORKER; run it through wailsRunOnMain or ON_MAIN" });
+    }
   }
   // Returns the chain of calls by which the function name reaches the main thread outside wailsRunOnMain or ON_MAIN, or undefined.
   const reaches = new Map();
@@ -407,34 +355,36 @@ export function auditMainThreadCalls(sources) {
     if (reaches.has(name)) return reaches.get(name);
     if (visiting.has(name)) return undefined;
     visiting.add(name);
-    const { start, end, unit: { tokens } } = functions.get(name);
     let found;
-    for (let i = start; i < end && found === undefined; i++) {
-      const token = tokens[i];
-      if (token.main) continue;
-      if (token.message) found = `sends an Objective-C message (line ${token.line})`;
-      else if (token.kind !== "word" || tokens[i + 1]?.text !== "(") continue;
-      else if (isNative(token.text)) found = `calls the native function ${token.text} (line ${token.line})`;
-      else if (/^NS[A-Z]/.test(token.text)) found = `calls the AppKit function ${token.text} (line ${token.line})`;
-      else if (functions.has(token.text) && token.text !== name) {
-        const inner = mainUse(token.text, visiting);
-        if (inner) found = `calls ${token.text} (line ${token.line}), which ${inner}`;
+    for (const use of uses) {
+      if (found !== undefined) break;
+      if (use.definition !== name || use.main) continue;
+      if (use.kind === "message") found = `sends an Objective-C message (line ${use.line})`;
+      else if (use.kind !== "call") continue;
+      else if (isNative(use.name)) found = `calls the native function ${use.name} (line ${use.line})`;
+      else if (/^NS[A-Z]/.test(use.name)) found = `calls the AppKit function ${use.name} (line ${use.line})`;
+      else if (definitions.has(use.name) && use.name !== name) {
+        const inner = mainUse(use.name, visiting);
+        if (inner) found = `calls ${use.name} (line ${use.line}), which ${inner}`;
       }
     }
     reaches.set(name, found);
     return found;
   };
-  for (const call of goCalls) {
-    if (isNative(call.name) && !functions.has(call.name)) {
-      errors.push({ path: call.path, line: call.line, text: `Go calls the native function ${call.name} directly; call a main_ wrapper that runs it through wailsRunOnMain or ON_MAIN` });
-    } else if (functions.has(call.name)) {
-      const use = mainUse(call.name);
-      if (use) errors.push({ path: call.path, line: call.line, text: `Go calls ${call.name}, which ${use} outside wailsRunOnMain or ON_MAIN` });
+  for (const source of goSources) {
+    for (const call of source.calls) {
+      if (isNative(call.name) && !definitions.has(call.name)) {
+        errors.push({ path: source.file, line: call.line, text: `Go calls the native function ${call.name} directly; call a main_ wrapper that runs it through wailsRunOnMain or ON_MAIN` });
+      } else if (definitions.has(call.name)) {
+        const use = mainUse(call.name);
+        if (use) errors.push({ path: source.file, line: call.line, text: `Go calls ${call.name}, which ${use} outside wailsRunOnMain or ON_MAIN` });
+      }
     }
   }
-  return errors
+  const lines = errors
     .sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line)
     .map((error) => `${error.path}:${error.line}: ${error.text}`);
+  return lines.filter((line, index) => lines.indexOf(line) === index);
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
