@@ -92,8 +92,11 @@ function fakes() {
         declaration: () => ({ kind: "view", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] }),
         place: record("place"),
         report: record("report"),
-        document: Object.fromEntries(["attach", "load", "zoom", "go", "post", "subscribe", "unsubscribe", "detach"]
-          .map((name) => [name, record("document." + name)])),
+        document: {
+          ...Object.fromEntries(["attach", "load", "zoom", "go", "post", "unsubscribe", "detach"].map((name) => [name, record("document." + name)])),
+          // The hosts reply a subscribe with {handle}.
+          subscribe: async (...args) => { ran.composition.push(["document.subscribe", ...args]); return { handle: 3 }; },
+        },
         image: Object.fromEntries(["attach", "focus", "caret", "text", "detach"].map((name) => [name, record("image." + name)])),
       };
     })(),
@@ -561,6 +564,17 @@ test("the composition and region calls of a view run the page operations of its 
     ["image.detach", "picture"],
   ]);
   assert.deepEqual(ran.native, []);
+});
+
+test("document.subscribe of a view replies the handle number of the host reply and refuses a reply without one", async () => {
+  // The hosts reply {handle} (docs/spec/native-surfaces.md#document-regions); the view call replies the handle number, the form of
+  // the published case view.composition.stream-subscribe-and-close that the region record of the view keys its stream by.
+  const { options } = fakes();
+  const withReply = (reply) => ({ ...options, composition: { ...options.composition,
+    document: { ...options.composition.document, subscribe: async () => reply } } });
+  assert.equal(await answerViewCall({ id: 1, command: "document.subscribe", params: { name: "doc", stream: "elements" } }, withReply({ handle: 7 })), 7);
+  await assert.rejects(answerViewCall({ id: 2, command: "document.subscribe", params: { name: "doc", stream: "elements" } }, withReply({})),
+    { message: "document.subscribe doc elements: the host reply has no handle: {}" });
 });
 
 test("a region call without a region name or with params that are not its fields is refused and runs nothing", async () => {

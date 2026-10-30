@@ -348,7 +348,13 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     }
     case "document.subscribe": {
       const fields = regionOf(command, params);
-      return composition.document.subscribe(fields.name, fields.stream);
+      // The hosts reply {handle}; the view call replies the handle number, by which the region record of the view keys the
+      // messages and the close of the subscription.
+      const reply = await composition.document.subscribe(fields.name, fields.stream);
+      if (!Number.isSafeInteger(reply?.handle) || reply.handle < 0) {
+        throw new Error(`document.subscribe ${fields.name} ${fields.stream}: the host reply has no handle: ${JSON.stringify(reply)}`);
+      }
+      return reply.handle;
     }
     case "document.unsubscribe": {
       const fields = regionOf(command, params);
