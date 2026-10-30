@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
@@ -21,7 +21,7 @@ const cellsIn = (frame, region, session, row, count) => Array.from({ length: cou
     Math.round((region.frame.y + (row + 0.12) * session.cellHeight) * frame.scale)));
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a fixture TUI drag survives third-point clicks in three cycles`, { timeout: 180000 }, async (t) => {
+  test(`${app.name}: a fixture TUI drag survives third-point clicks in three cycles`, { ...RECORDING, timeout: 180000 }, async (t) => {
     requireTrusted();
     assert.ok([realpathSync(tmpdir()), realpathSync("/tmp")].includes(realpathSync(dirname(app.configDir))) &&
       basename(app.configDir).startsWith("soksak-check-"), "the fixture TUI check requires a disposable config directory");

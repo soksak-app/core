@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
 /** The card with the card id. */
@@ -139,7 +139,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings-modal", (modal) => !modal.open, "settings did not close");
   });
 
-  test(`${app.name}: native clicks reach every chrome icon at wide window sizes`, { timeout: 180000 }, async (t) => {
+  test(`${app.name}: native clicks reach every chrome icon at wide window sizes`, { ...RECORDING, timeout: 180000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const initialWindow = await s.get("host.window");

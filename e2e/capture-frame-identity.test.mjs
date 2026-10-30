@@ -5,14 +5,14 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, drag, open } from "@soksak/window-check/app.mjs";
+import { APPS, drag, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { readScreenUntil } from "./terminal-screen.mjs";
 
 const tuple = (value) => ({ generation: String(value.generation), raster: String(value.raster), sequence: value.sequence });
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: opt-in capture identity matches the presented terminal image`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: opt-in capture identity matches the presented terminal image`, { ...RECORDING, timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { settings: { memorySaver: false, "terminal.cursor.blink": "Never" } });
     const grid = await s.get("core.grid");
@@ -163,7 +163,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: diagnostic drag retains opt-in frame identity artifacts`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: diagnostic drag retains opt-in frame identity artifacts`, { ...RECORDING, timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { settings: { memorySaver: false, "terminal.cursor.blink": "Never" } });
     const result = await drag(t, s,

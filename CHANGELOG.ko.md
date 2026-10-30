@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F290: 화면을 녹화하는 창 검사는 모두 `RECORDING`을 선언하고, frame을 표시하는 display가 없으면 시작 전에 건너뛴다. 선언하지 않은 녹화는 그 선언을 밝힌 오류로 실패한다.
 - F285-3: 구조 검사는 runtime에 generic한 Tauri command를 읽는다.
 - F289: version, host contract, event class script는 script 경로가 없는 process에서도 import할 수 있다.
 - F288: release 검사는 release 실행 파일을 staging이 쓴 frontend 파일과 비교한다.

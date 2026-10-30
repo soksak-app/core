@@ -4,13 +4,13 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 import { documentIdentityCardIds, verifyDocumentFrameIdentityCapture, viewGenerationForSurface } from "./document-frame-identity.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: document-frame identity matches captured WebKit root pixels`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: document-frame identity matches captured WebKit root pixels`, { ...RECORDING, timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { performanceTrace: true });
     const project = await s.get("core.project");

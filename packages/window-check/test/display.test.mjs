@@ -1,37 +1,45 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Session } from "../app.mjs";
+import { recordingOptions, Session } from "../app.mjs";
 
-// A session whose client records the requests it receives, and a test context that records a skip.
+// A session whose client records the requests it receives.
 function session(t) {
   const sent = [];
-  const skips = [];
-  const client = { endpoint: { pid: 1 }, request: async (method, params) => { sent.push(method); return {}; } };
+  const client = { endpoint: { pid: 1 }, request: async (method) => { sent.push(method); return {}; } };
   const checked = new Session({ name: "wailsv3", configDir: "/nonexistent" }, client);
-  checked.test = { skip: (reason) => skips.push(reason), diagnostic: () => {} };
   const previous = process.env.SOKSAK_CHECK_DISPLAY;
   t.after(() => { if (previous === undefined) delete process.env.SOKSAK_CHECK_DISPLAY; else process.env.SOKSAK_CHECK_DISPLAY = previous; });
-  return { checked, sent, skips };
+  return { checked, sent };
 }
 
-test("a recording of a run without a display skips its check with the reason and sends no request", { timeout: 1000 }, async (t) => {
-  const { checked, sent, skips } = session(t);
+test("a check that records the screen is skipped before it starts when no display presents frames", { timeout: 1000 }, () => {
+  assert.deepEqual(recordingOptions({ SOKSAK_CHECK_DISPLAY: "absent" }), {
+    skip: "the check records the screen, which needs a display that presents frames; the local window checks run it",
+  });
+  assert.deepEqual(recordingOptions({}), {});
+  assert.throws(() => recordingOptions({ SOKSAK_CHECK_DISPLAY: "none" }), /SOKSAK_CHECK_DISPLAY is "none"; it is unset or absent/);
+});
+
+test("a recording of a check that does not declare it fails without a display and sends no request", { timeout: 1000 }, async (t) => {
+  const { checked, sent } = session(t);
   process.env.SOKSAK_CHECK_DISPLAY = "absent";
-  await assert.rejects(checked.request("diagnostics.capture.start", {}), /needs a display that presents frames/);
-  assert.equal(skips.length, 1, "the check was not skipped");
-  assert.match(skips[0], /needs a display that presents frames/);
+  await assert.rejects(checked.request("diagnostics.capture.start", {}),
+    /wailsv3 diagnostics.capture.start: the check records the screen without a display that presents frames and does not declare it with RECORDING of @soksak\/window-check/);
+  // A drag that the host records is a recording too.
+  await assert.rejects(checked.request("diagnostics.drag", { capture: true }),
+    /wailsv3 diagnostics.drag: the check records the screen without a display that presents frames and does not declare it/);
   assert.deepEqual(sent, []);
+  await checked.request("diagnostics.drag", { capture: false });
+  assert.deepEqual(sent, ["diagnostics.drag"]);
+  sent.length = 0;
   // A still capture reads the window and needs no presented frames, so it runs.
   await checked.request("diagnostics.capture.still", {});
   assert.deepEqual(sent, ["diagnostics.capture.still"]);
 });
 
-test("a run with a display sends a recording, and another value of SOKSAK_CHECK_DISPLAY is an error", { timeout: 1000 }, async (t) => {
-  const { checked, sent, skips } = session(t);
+test("a run with a display sends a recording", { timeout: 1000 }, async (t) => {
+  const { checked, sent } = session(t);
   delete process.env.SOKSAK_CHECK_DISPLAY;
   await checked.request("diagnostics.capture.start", {});
   assert.deepEqual(sent, ["diagnostics.capture.start"]);
-  assert.deepEqual(skips, []);
-  process.env.SOKSAK_CHECK_DISPLAY = "none";
-  assert.throws(() => checked.request("diagnostics.capture.start", {}), /SOKSAK_CHECK_DISPLAY is "none"; it is unset or absent/);
 });

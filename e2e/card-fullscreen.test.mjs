@@ -5,7 +5,7 @@ import { rmSync } from "node:fs";
 import { dirname } from "node:path";
 import { readPng } from "@soksak/window-check/png.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
 async function clickFullscreen(t, s, card, expected) {
@@ -41,7 +41,7 @@ async function clickFullscreen(t, s, card, expected) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: card fullscreen fills the work area and restores live surfaces`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: card fullscreen fills the work area and restores live surfaces`, { ...RECORDING, timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
     await fresh(s);
@@ -189,7 +189,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a native click on another tab of a fullscreen card switches the tab and keeps fullscreen`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: a native click on another tab of a fullscreen card switches the tab and keeps fullscreen`, { ...RECORDING, timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });

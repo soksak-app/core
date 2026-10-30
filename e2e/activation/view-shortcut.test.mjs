@@ -1,12 +1,12 @@
 // Activation-tier check of a native menu key equivalent from a focused plugin view.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: Command-zero in a focused view runs the native text-size menu command`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: Command-zero in a focused view runs the native text-size menu command`, { ...RECORDING, timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, {
       log: { input: "info", lifecycle: "info", call: "debug" },

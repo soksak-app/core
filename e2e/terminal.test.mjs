@@ -15,7 +15,7 @@ const MENU_TITLES = {
 const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language] ?? MENU_TITLES.en;
 
 
-import { APPS, drag, failure, open, within } from "@soksak/window-check/app.mjs";
+import { APPS, drag, failure, open, RECORDING, within } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { fresh, reading } from "./fixture.mjs";
@@ -345,7 +345,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(after.shells, [], "completed layout retention must reap every PTY child");
   });
 
-  test(`${app.name}: padding settings inset the terminal grid and show the terminal background`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: padding settings inset the terminal grid and show the terminal background`, { ...RECORDING, timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -453,7 +453,7 @@ for (const app of Object.values(APPS)) {
   });
 
   for (const shell of ["/bin/zsh", "/bin/bash"]) {
-    test(`${app.name}: a resize redraws a wrapped ${basename(shell)} input line without rows of the previous width`, async (t) => {
+    test(`${app.name}: a resize redraws a wrapped ${basename(shell)} input line without rows of the previous width`, RECORDING, async (t) => {
       const s = await open(t, app);
       await fresh(s);
       s.cleanup(() => closeTerminalTabs(s));
@@ -658,7 +658,7 @@ for (const app of Object.values(APPS)) {
         "the tab notice stayed after the tab came into view");
     });
 
-  test(`${app.name}: OSC 8 linked cells are drawn with an underline and plain cells are not`, async (t) => {
+  test(`${app.name}: OSC 8 linked cells are drawn with an underline and plain cells are not`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
@@ -889,7 +889,7 @@ for (const app of Object.values(APPS)) {
     }
   });
 
-  test(`${app.name}: three terminals survive repeated divider drags and project returns`, async (t) => {
+  test(`${app.name}: three terminals survive repeated divider drags and project returns`, RECORDING, async (t) => {
     const s = await open(t, app);
     // The trace stays on: the check judges the presentation of every surface, and its records name the frame that a
     // surface did not present (docs/spec/performance-trace.md, F161.18).
@@ -1024,7 +1024,7 @@ for (const app of Object.values(APPS)) {
     }
   });
 
-  test(`${app.name}: terminal input returns terminal output through the terminal sidecar`, async (t) => {
+  test(`${app.name}: terminal input returns terminal output through the terminal sidecar`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     await assertGridFillsPlane(s, "initial terminal layout");
@@ -1141,7 +1141,7 @@ for (const app of Object.values(APPS)) {
     );
   });
 
-  test(`${app.name}: inline image pixels follow scroll, resize, replacement, deletion, and cleanup`, { timeout: 30000 }, async (t) => {
+  test(`${app.name}: inline image pixels follow scroll, resize, replacement, deletion, and cleanup`, { ...RECORDING, timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -1198,7 +1198,7 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS inline image lifecycle (scroll/resize/replace/delete)`);
   });
 
-  test(`${app.name}: the terminal background equals the card color of every theme and mode`, async (t) => {
+  test(`${app.name}: the terminal background equals the card color of every theme and mode`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -1226,7 +1226,7 @@ for (const app of Object.values(APPS)) {
     }
   });
 
-  test(`${app.name}: terminal raster follows application light and dark theme`, async (t) => {
+  test(`${app.name}: terminal raster follows application light and dark theme`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -1265,7 +1265,7 @@ for (const app of Object.values(APPS)) {
       `dark and light background pixels did not differ: ${lightSample} -> ${switchedSample}`);
   });
 
-  test(`${app.name}: terminal cursor policy uses declared settings, persistence, and pixels`, { timeout: 30000 }, async (t) => {
+  test(`${app.name}: terminal cursor policy uses declared settings, persistence, and pixels`, { ...RECORDING, timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -1353,7 +1353,7 @@ for (const app of Object.values(APPS)) {
       "invalid cursor setting must not replace the effective value");
   });
 
-  test(`${app.name}: each cursor shape and focus state renders its own cursor-cell pixels`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: each cursor shape and focus state renders its own cursor-cell pixels`, { ...RECORDING, timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -1460,7 +1460,7 @@ for (const app of Object.values(APPS)) {
     expect(await measure("hidden"), "hidden");
   });
 
-  test(`${app.name}: the terminal font follows the pressed card's text size`, async (t) => {
+  test(`${app.name}: the terminal font follows the pressed card's text size`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -1494,7 +1494,7 @@ for (const app of Object.values(APPS)) {
       `the rendered glyph height must grow with the factor: ${JSON.stringify(glyphBefore)} → ${JSON.stringify(glyphAfter)}`);
   });
 
-  test(`${app.name}: a native drag over blank terminal cells ends without a surface error`, async (t) => {
+  test(`${app.name}: a native drag over blank terminal cells ends without a surface error`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -1536,7 +1536,7 @@ for (const app of Object.values(APPS)) {
       `are drawn on the selection background ${selection}`);
   });
 
-  test(`${app.name}: a terminal draws its screen after the window is resized from outside`, async (t) => {
+  test(`${app.name}: a terminal draws its screen after the window is resized from outside`, RECORDING, async (t) => {
     // A resize that the system makes, such as the tiling of a window, configures the terminal again; the frame of the new
     // raster shows the screen with its cursor, without input.
     const s = await open(t, app);
@@ -1557,7 +1557,7 @@ for (const app of Object.values(APPS)) {
       `the cursor cell ${cursor.col},${cursor.row} shows only the background after the resize: ${JSON.stringify(shown)}`);
   });
 
-  test(`${app.name}: a native drag into the padding below the last row selects to the last row`, async (t) => {
+  test(`${app.name}: a native drag into the padding below the last row selects to the last row`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -1603,7 +1603,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(state.error, undefined, `a drag into the bottom padding reported ${state.error}`);
   });
 
-  test(`${app.name}: native terminal selection renders and copies through one explicit paste`, async (t) => {
+  test(`${app.name}: native terminal selection renders and copies through one explicit paste`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -1796,7 +1796,7 @@ for (const app of Object.values(APPS)) {
       "a new trace did not resolve the trace overflow", { surface });
   });
 
-  test(`${app.name}: terminal image follows a window resize`, async (t) => {
+  test(`${app.name}: terminal image follows a window resize`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     await assertGridFillsPlane(s, "initial terminal resize layout");
@@ -1974,7 +1974,7 @@ for (const app of Object.values(APPS)) {
     );
   });
 
-  test(`${app.name}: multiple terminals keep fixed cells during a divider drag`, async (t) => {
+  test(`${app.name}: multiple terminals keep fixed cells during a divider drag`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));

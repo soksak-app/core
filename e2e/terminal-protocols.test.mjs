@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "./terminal-screen.mjs";
@@ -153,7 +153,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(rejected.error, undefined, "a rejected program sequence became a terminal error");
   });
 
-  test(`${app.name}: implemented OSC sequences change the title, colors, cursor, and clipboard and reply`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: implemented OSC sequences change the title, colors, cursor, and clipboard and reply`, { ...RECORDING, timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);

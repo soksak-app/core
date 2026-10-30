@@ -8049,14 +8049,26 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F290",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export const RECORDING" },
+      { file: "packages/window-check/app.mjs", symbol: "does not declare it with RECORDING of @soksak/window-check" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/display.test.mjs", id: "a check that records the screen is skipped before it starts when no display presents frames" },
+      { file: "packages/window-check/test/display.test.mjs", id: "a recording of a check that does not declare it fails without a display and sends no request" },
+    ],
+    expected: "A window check that records the screen declares RECORDING and is skipped before it starts without a display that presents frames; an undeclared recording fails with an error that names the declaration.",
+    levels: ["unit"],
+  },
+  {
     id: "F286",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export function displayPresents(env)" },
       { file: ".github/workflows/window-checks.yml", symbol: "SOKSAK_CHECK_DISPLAY: absent" },
     ],
     tests: [
-      { file: "packages/window-check/test/display.test.mjs", id: "a recording of a run without a display skips its check with the reason and sends no request" },
-      { file: "packages/window-check/test/display.test.mjs", id: "a run with a display sends a recording, and another value of SOKSAK_CHECK_DISPLAY is an error" },
+      { file: "packages/window-check/test/display.test.mjs", id: "a run with a display sends a recording" },
       { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow runs on a hosted runner with a virtual display and skips the checks that record the screen" },
     ],
     expected: "The window checks of CI run on a hosted runner with a virtual display and skip the checks that record the screen, which run in the local window checks.",

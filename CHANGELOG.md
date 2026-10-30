@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F290: Each window check that records the screen declares `RECORDING`, which skips it before it starts without a display that presents frames; an undeclared recording fails with an error that names the declaration.
 - F285-3: The structure checks read a Tauri command that is generic over the runtime.
 - F289: The version, host contract and event class scripts can be imported by a process without a script path.
 - F288: The release check compares the release executable with the frontend files that staging wrote.

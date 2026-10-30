@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { runViewMeasurements } from "@soksak/window-check/view-metrics.mjs";
 import { fresh } from "../fixture.mjs";
 import { collectEditorMotionMeasurements, finishEditorMeasurements, prepareEditorMeasurements }
@@ -11,7 +11,7 @@ import { collectEditorMotionMeasurements, finishEditorMeasurements, prepareEdito
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: editor process, footprint, layout, and drag measurements meet the declared contract`,
-    { timeout: 240000 }, async (t) => {
+    { ...RECORDING, timeout: 240000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s, { performanceTrace: true, log: { frame: "trace" }, reads: [
         "host.trace.view.process-request",

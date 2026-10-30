@@ -196,7 +196,6 @@ export async function open(t, app) {
     throw error;
   }
   const session = new Session(app, client);
-  session.test = t;
   // Check-specific cleanups and released presses run before pasteboard and frontmost-baseline restoration. Input-source
   // restoration is inserted at the start of this list and runs after the baseline restoration.
   const pasteboard = readPasteboard();
@@ -336,7 +335,7 @@ export async function finishSession(t, session, close) {
   if (failures.length) throw new AggregateError(failures, `${failures.length} cleanup steps failed`);
 }
 
-/** The reason of a check that a run without a display skips. */
+/** The reason of a check that records the screen, which a run without a display skips. */
 const NO_DISPLAY = "the check records the screen, which needs a display that presents frames; the local window checks run it";
 
 /**
@@ -349,6 +348,17 @@ export function displayPresents(env) {
   if (env.SOKSAK_CHECK_DISPLAY === "absent") return false;
   throw new Error(`SOKSAK_CHECK_DISPLAY is ${JSON.stringify(env.SOKSAK_CHECK_DISPLAY)}; it is unset or absent`);
 }
+
+/**
+ * The node:test options of a check that records the screen: a run without a display that presents frames skips it with
+ * its reason before it starts. A check spreads them into its options, `test(name, { ...RECORDING, timeout }, fn)`.
+ */
+export function recordingOptions(env) {
+  return displayPresents(env) ? {} : { skip: NO_DISPLAY };
+}
+
+/** The recording options of this run. */
+export const RECORDING = Object.freeze(recordingOptions(process.env));
 
 /** The connection to one application. A request targets one window. */
 export class Session {
@@ -454,7 +464,6 @@ export class Session {
     other.failedRecordings = this.failedRecordings;
     other.expectedErrors = this.expectedErrors;
     other.testName = this.testName;
-    other.test = this.test;
     other.presses = this.presses;
     other.started = this.started;
     other.window = window;
@@ -463,11 +472,12 @@ export class Session {
 
   request(method, params = {}, { timeout = REQUEST } = {}) {
     const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
-    // A recording needs presented frames, so a run without a display skips the check that starts one, with its reason, and
-    // the error ends the check; node:test reports a check that called skip as skipped.
-    if (method === "diagnostics.capture.start" && !displayPresents(process.env)) {
-      this.test.skip(NO_DISPLAY);
-      return Promise.reject(new Error(`${what}: ${NO_DISPLAY}`));
+    // A check that records declares RECORDING, which skips it before it starts in a run without a display, so a recording
+    // that reaches a run without a display is of a check that lacks the declaration.
+    if ((method === "diagnostics.capture.start" || (method === "diagnostics.drag" && params.capture === true)) &&
+      !displayPresents(process.env)) {
+      return Promise.reject(new Error(
+        `${what}: the check records the screen without a display that presents frames and does not declare it with RECORDING of @soksak/window-check`));
     }
     this.step(`${method} ${params.name ?? ""}`.trimEnd());
     // When the host does not answer, the check records at that moment the threads of this host and of its page process

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { APPS, open, recordingFolders } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING, recordingFolders } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
@@ -98,7 +98,7 @@ function brightness(frame) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the settings modal is on screen at the time presented reports after it is shown`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the settings modal is on screen at the time presented reports after it is shown`, { ...RECORDING, timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const { frames: directory } = await s.request("diagnostics.capture.start", {});

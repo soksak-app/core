@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
@@ -66,7 +66,7 @@ function nativeBorders(frame, rect) {
 for (const app of Object.values(APPS))
   test(
     `${app.name}: independent window and card settings survive hiding and project reload`,
-    { timeout: 120000 },
+    { ...RECORDING, timeout: 120000 },
     async (t) => {
       console.info(`START ${app.name}: window sidebar persistence`);
       const s = await open(t, app);

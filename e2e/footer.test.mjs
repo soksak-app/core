@@ -2,13 +2,13 @@
 // native/darwin/tests/webview_geometry_test.m checks the 1x and 2x scales and half-point surface sizes.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, drag, open } from "@soksak/window-check/app.mjs";
+import { APPS, drag, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { rasterRow, terminalMarks } from "./outside.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: vertical dragging preserves the footer border`, async (t) => {
+  test(`${app.name}: vertical dragging preserves the footer border`, RECORDING, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const initial = await s.get("host.window");

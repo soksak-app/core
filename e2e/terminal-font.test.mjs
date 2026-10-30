@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
@@ -43,7 +43,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a wide glyph narrower than two cells is centred in them`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: a wide glyph narrower than two cells is centred in them`, { ...RECORDING, timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.change", { key: SETTING, value: DEFAULT, scope: "common" }));

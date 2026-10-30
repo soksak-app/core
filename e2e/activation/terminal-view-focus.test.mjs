@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import test from "node:test";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { captureCadence, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
@@ -556,7 +556,7 @@ async function recordGesture(s, t, name, action) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a terminal click accepts the same native keys as its AppKit reference`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: a terminal click accepts the same native keys as its AppKit reference`, { ...RECORDING, timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     const terminal = await step(t, `${app.name}: prepare terminal`, () => fresh(s, {
       performanceTrace: true, log: EVERY_LEVEL,
@@ -626,7 +626,7 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`terminal pointer trace: ${JSON.stringify(input)}`);
   });
 
-  test(`${app.name}: repeated Korean vowels stay visible before Space`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: repeated Korean vowels stay visible before Space`, { ...RECORDING, timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     const terminal = await step(t, `${app.name}: prepare repeated-vowel terminal`, () => fresh(s, {
       performanceTrace: true,

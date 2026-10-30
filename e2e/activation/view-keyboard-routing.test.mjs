@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import test from "node:test";
 
 import { currentEventOffsets, readEvents, untilEventLines } from "@soksak/window-check/event-log.mjs";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 import { fresh, reading } from "../fixture.mjs";
@@ -347,7 +347,7 @@ for (const app of Object.values(APPS)) {
     }
   });
 
-  test(`${app.name}: IME Escape ends view composition as it does in AppKit`, { timeout: 90000 }, async (t) => {
+  test(`${app.name}: IME Escape ends view composition as it does in AppKit`, { ...RECORDING, timeout: 90000 }, async (t) => {
     const s = await openProbe(t, app);
     const { surface } = await focusedTerminal(s);
     await s.selectInputSource(KOREAN_2SET);

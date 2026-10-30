@@ -2,7 +2,7 @@
 // Missing content cases fail explicitly; sampled colour variation alone does not establish plugin content.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
 import { fresh } from "./fixture.mjs";
@@ -27,7 +27,7 @@ async function untilViewReady(s, offsets, wait) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: each installed view plugin requires an explicit content case in a card`, { timeout: 240000 }, async (t) => {
+  test(`${app.name}: each installed view plugin requires an explicit content case in a card`, { ...RECORDING, timeout: 240000 }, async (t) => {
     const s = await open(t, app);
     // The view calls of the page are records at the debug level of the class call; the check declares that policy, and the
     // preparation restores the setting when the check ends (keepCommonSettings).

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { MEASURED_BACKGROUND, ensureTerminals, setMeasuredBackground } from "./terminal-screen.mjs";
@@ -11,7 +11,7 @@ import { MEASURED_BACKGROUND, ensureTerminals, setMeasuredBackground } from "./t
 const near = (a, b, tolerance) => a.every((value, index) => Math.abs(value - b[index]) <= tolerance);
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a main-page reload shows no native surface without the page`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: a main-page reload shows no native surface without the page`, { ...RECORDING, timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);

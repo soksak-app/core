@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { preserveDisplayLinkArtifact } from "./display-link-artifact.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: capture stop preserves its display-link metadata`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: capture stop preserves its display-link metadata`, { ...RECORDING, timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const window = await s.get("host.window");

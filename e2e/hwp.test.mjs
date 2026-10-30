@@ -8,7 +8,7 @@ import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { openRecordedView, viewCardWithDifferentPluginTab } from "./view-metrics-collection.mjs";
 import { openHwp, studio } from "./hwp-support.mjs";
@@ -27,7 +27,7 @@ for (const app of Object.values(APPS)) {
       "a press in the editor did not give it the keyboard focus");
   });
 
-  test(`${app.name}: HWP startup resource timing snapshot is preserved`, { timeout: 180000 }, async (t) => {
+  test(`${app.name}: HWP startup resource timing snapshot is preserved`, { ...RECORDING, timeout: 180000 }, async (t) => {
     const runFolder = process.env.SOKSAK_RUN_FOLDER;
     if (typeof runFolder !== "string" || runFolder.length === 0) {
       throw new Error("SOKSAK_RUN_FOLDER is required to preserve HWP resource timing evidence");

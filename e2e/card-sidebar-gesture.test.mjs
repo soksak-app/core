@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
@@ -31,7 +31,7 @@ async function measure(s, id) {
 for (const app of Object.values(APPS)) {
   test(
     `${app.name}: native pointer drags all four card sidebar borders by their displacement`,
-    { timeout: 120000 },
+    { ...RECORDING, timeout: 120000 },
     async (t) => {
       console.info(`START ${app.name}: sidebar gesture`);
       const s = await open(t, app);
