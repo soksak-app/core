@@ -21,10 +21,11 @@ function serviceEndpoint(configDir) {
   };
 }
 
-test("a killed terminal sidecar recovers without an application restart", async (t) => {
-  for (const app of Object.values(APPS)) {
+// Each application has its own test and time limit, so a recovery that stops in one application ends that test only.
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a killed terminal sidecar recovers without an application restart`, { timeout: 120000 }, async (t) => {
     const session = await open(t, app);
-    if (!session) continue;
+    if (!session) return;
     await fresh(session);
     const [terminal] = await ensureTerminals(session, 1);
     const surface = terminal.surface;
@@ -40,8 +41,9 @@ test("a killed terminal sidecar recovers without an application restart", async 
     // Kills the persistent service. The session and the picture state disappear together with the service.
     const { endpoint: killed } = serviceEndpoint(app.configDir);
     assert.ok(Number.isInteger(killed.pid) && killed.pid > 0, "the service endpoint has no pid");
-    // The host logs the lost connection once when it restarts the service.
-    session.expectError(/^error host sidecar @soksak\/sidecar-vt-alacritty: connection lost; restarted$/);
+    // The host logs the lost connection once when it restarts the service, with how the connection ended and the number of
+    // requests that waited for it (docs/spec/diagnostics.md).
+    session.expectError(/^error host sidecar @soksak\/sidecar-vt-alacritty: connection lost; restarted \(end: .+, waiting: \d+\)$/);
     // A frame that the service sent before it died names an IOSurface that ended with the service, so its presentation fails
     // with notFound in the host, the native region, the plugin and the status of the surface; a line that the host writes to
     // the closed connection fails with a broken pipe. Both happen only when the kill meets a frame or a write in flight.
@@ -68,5 +70,5 @@ test("a killed terminal sidecar recovers without an application restart", async 
     // The service is respawned and runs with a new pid.
     const { endpoint: respawned } = serviceEndpoint(app.configDir);
     assert.notEqual(respawned.pid, killed.pid, "the service was not respawned after the kill");
-  }
-});
+  });
+}
