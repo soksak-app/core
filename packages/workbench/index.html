@@ -65,7 +65,7 @@ import {
    know this module. */
 import { verify } from "./verify.js";
 /* Wiring of the error display and the layout queue. This document passes the document, the host, the plane and the compositor. */
-import { createErrorDisplay, createPageLayout, reportUncaught } from "./page-layout.js";
+import { createErrorDisplay, createPageLayout, reportUncaught, verificationRows } from "./page-layout.js";
 
 /* Application interface. When it is absent, an implementation that does nothing is used. */
 import { chrome, log, onDocumentState, onImageDetachEnded, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
@@ -137,12 +137,18 @@ onRun((going) => {
 });
 
 function check() {
-  if (!currentGrid() || projects.inLibrary()) return;
-  controlsAt = presentedControls();
-  const rows = verify(controlsAt);
-  const layoutFailure = pageLayout.failure();
-  if (layoutFailure) rows.push({ name: "Surface presentation", ok: false, note: layoutFailure.message });
+  // Without a plane nothing is verified. The rows still replace the earlier rows, so a failure that was ended is not kept.
+  const drawn = Boolean(currentGrid()) && !projects.inLibrary();
+  const rows = verificationRows({
+    drawn,
+    rows: () => {
+      controlsAt = presentedControls();
+      return verify(controlsAt);
+    },
+    failure: pageLayout.failure(),
+  });
   setVerify(rows);
+  if (!drawn) return;
   const failed = rows.filter((r) => !r.ok);
   const line = failed.length === 0
     ? `verify: ${rows.length} pass`

@@ -8,6 +8,17 @@ import { trace } from "./performance.js";
 import { showError as showShownError } from "./shown-errors.js";
 
 /**
+ * Returns the rows that core.verify holds for the current state. rows() runs the verification of the drawn plane and is
+ * called only when drawn is true; without a drawn plane nothing is verified and the rows are empty. failure is the error
+ * of the last layout that failed (pageLayout.failure()), and its row is added in both cases.
+ */
+export function verificationRows({ drawn, rows, failure }) {
+  const out = drawn ? rows() : [];
+  if (failure) out.push({ name: "Surface presentation", ok: false, note: failure.message });
+  return out;
+}
+
+/**
  * Creates the function that shows an error in the error banner of the main document. It logs the error at the moment it
  * appears (shown-errors.js). If the banner does not exist, it creates the banner after the header.
  *
