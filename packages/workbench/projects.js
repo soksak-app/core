@@ -606,6 +606,10 @@ export async function flush() {
 }
 
 async function closeWindow() {
+  // The close follows the registry reads that this window started before the request: a project that another window
+  // removed after this window answered for its tabs ends first, so its tabs are not asked about again (F292-50). A failed
+  // read was reported by its reread and does not keep the window.
+  await refreshing.catch(() => {});
   // A modified tab that the person keeps keeps the window open (docs/spec/plugins.md#tab-reports).
   if (!(await listener.settleTabs())) {
     await windows.closeKept(beginOperation("page.window.operation", { action: "close_kept" }));

@@ -73,7 +73,7 @@ installOperationSink((event, fields, cids) => started.push([event, fields, cids]
 let kept = false;
 projects.onSwitch({
   check: () => {}, save: () => PROJECT.spaces[0].layout, load: () => {}, update: () => {}, retain: async () => {},
-  presented: async () => {}, empty: async () => {},
+  presented: async () => {}, empty: async () => { events.push("empty"); },
   settleTabs: async () => { events.push("ask"); return !kept; },
 });
 const store = {
@@ -202,4 +202,40 @@ test("the page flushes its event queue after the operation of the close starts a
   // event of the operation (F161.26).
   assert.deepEqual(events, ["ask", "settings", "geometry", "operation close", "logflush", "close"],
     `the operation, the drain and the close ran in another order: ${events}`);
+});
+
+test("a close request that follows a registry change without the shown project asks after the window ends that project", async () => {
+  // Another window removed the project after this window answered its question; the registry change reaches this window
+  // before the close request, and the read of the registry is still running when the request arrives (F292-50).
+  let notify = null;
+  let removed = false;
+  let reading = null;
+  const read = new Promise((resolve) => { reading = resolve; });
+  let release = null;
+  const held = new Promise((resolve) => { release = resolve; });
+  const changing = {
+    ...store,
+    snapshot: async () => {
+      if (!removed) return { common: {}, projects: [structuredClone(PROJECT)], open: [] };
+      reading();
+      await held;
+      return { common: {}, projects: [], open: [] };
+    },
+    onChange: (fn) => { notify = fn; },
+  };
+  await projects.initialise(changing);
+  await projects.activate(PROJECT.id);
+  kept = false;
+  removed = true;
+  events.length = 0;
+  notify();
+  const closing = requestClose();
+  await read;
+  release();
+  await closing;
+  assert.ok(events.includes("empty"), `the window did not end the removed project: ${events}`);
+  assert.ok(events.indexOf("empty") < events.indexOf("ask"),
+    `the close asked about the tabs of the removed project before the window ended it: ${events}`);
+  assert.equal(events.at(-1), "close");
+  assert.deepEqual(reported, []);
 });
