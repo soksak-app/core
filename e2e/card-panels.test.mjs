@@ -434,19 +434,45 @@ for (const app of Object.values(APPS)) {
     // The divider receives the gap up to the outer edge of the card, and the sidebar handle receives the collapsed band inside the card border.
     // The divider widens into the card edge only when the gap is narrower than the grab size (docs/spec/example-model.md), so the border
     // between the gap and the band is the card's own input. Pressing the band expands the sidebar.
+    // The element rectangles near the edge, the boundary positions after each press and the display scale are reported with a failure, so
+    // the run shows whether a drawn box, a moved boundary or the input position differs from the declared geometry.
+    const rects = async (name) => {
+      const list = [];
+      for (let index = 0; ; index++) {
+        try {
+          list.push(await s.rect(name, index));
+        } catch (error) {
+          // 1002 is the reply for the first index past the last element of the name.
+          if (error.code === 1002) return list;
+          throw error;
+        }
+      }
+    };
+    const near = (list) => list.filter((r) => r.x <= edge + grid.gap && r.x + r.width >= edge - grid.gap)
+      .map(({ x, y, width, height }) => ({ x, y, width, height }));
+    const drawn = {
+      scale: (await s.get("host.window")).scale, lines: grid.lines.x,
+      divider: near(await rects("core.divider")), card: near(await rects("core.card")), grip: near(await rects("core.card.sidebar.grip")),
+    };
     const press = async (x) => {
       const before = (await s.get("core.pointer")).sequence;
       await s.click(x, y);
       const pointer = await s.until("core.pointer", (value) => value.sequence > before && value.up !== null, `the press at ${x} did not arrive`);
-      const open = (await s.get("core.grid")).cards.find((item) => item.id === "terminal").sidebars.right.collapsed === false;
+      const after = await s.get("core.grid");
+      const open = after.cards.find((item) => item.id === "terminal").sidebars.right.collapsed === false;
       if (open) await fold();
-      return [pointer.down, open];
+      return [pointer.down, open, after.lines.x];
     };
     const measured = {};
-    for (const offset of [grid.gap / 2, 1, -0.5, -1.5, -3, -5]) measured[offset] = await press(edge + offset);
+    const lines = {};
+    for (const offset of [grid.gap / 2, 1, -0.5, -1.5, -3, -5]) {
+      const [down, open, at] = await press(edge + offset);
+      measured[offset] = [down, open];
+      lines[offset] = at;
+    }
     assert.deepEqual(measured, {
       [grid.gap / 2]: ["core.divider", false], 1: ["core.divider", false], "-0.5": ["core.card", false],
       "-1.5": ["core.card.sidebar.grip", true], "-3": ["core.card.sidebar.grip", true], "-5": ["core.card.sidebar.grip", true],
-    }, `the gap and the folded strip do not keep their own input: ${JSON.stringify({ edge, gap: grid.gap, measured })}`);
+    }, `the gap and the folded strip do not keep their own input: ${JSON.stringify({ edge, gap: grid.gap, measured, drawn, lines })}`);
   });
 }

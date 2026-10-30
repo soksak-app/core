@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-26-7-1: 고친 check `a folded sidebar strip next to a card divider keeps each input to its own control`의 window 실행은 gap 12 포인트에서 두 host 모두 card 가장자리 안쪽 0.5 포인트에서 `core.divider`를 측정했다. 이것은 `dividers()`와 card box의 선언된 geometry가 내지 않는 결과다. 이제 check는 실패할 때 가장자리 근처의 divider, card, grip element 사각형, 각 press 뒤의 boundary 위치, display scale을 보고하므로 다음 실행이 그중 어느 것이 다른지 보여 준다. 검증: 원인은 확인되지 않았고, 보고를 읽는 window 실행은 아직 하지 않았다.
 - F239-266-2: CI job 분리를 완료했다. `core-node`, `macos-wailsv3`, `macos-tauriv2`, `native-darwin`은 독립 job으로 실행하고, `equivalence`는 그 job들에 의존하지 않고 자기 toolchain을 설치해 두 host를 build하며, `required` gate는 모든 결과를 읽는다. Linux는 검증 대상 platform이 아니므로 Linux CLI job은 F239-285에 따라 제거된 상태로 둔다. 검증: workflow, Node selector, native target owner file이 35/35 통과하고, `ci` graph의 GitHub 실행 하나가 모든 job과 gate를 통과했다.
 - F239-266-1: Setup과 native offline 항목을 완료한다. 소유 검사 `scripts/test/workflow-setup.test.mjs`와 `scripts/test/native-offline.test.mjs`는 setup action과 native `fetch` target이 없으면 10/10 실패하고 현재 source에서 10/10 통과한다. 현재 setup action, `ci.yml`, Makefile을 가진 `main`의 release run에서 호출된 `ci` workflow의 모든 job이 각자의 setup, 잠긴 의존성 fetch, offline 검사로 통과했다.
 - F238-c-11: View literal checker 항목이 core에서 완료됐다. `@soksak/plugin-api`는 `soksak-view-check` bin을 선언하고 `contract/clipboard.json`을 pack한다. 소유 view-check, package-files, clipboard-contract test가 12/12 통과한다. 이를 게시하는 release는 미배포이며 release 절차(F272)에 속한다.
