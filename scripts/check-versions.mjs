@@ -10,7 +10,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 export const RELEASE = "0.0.21";
 export const LATEST_PUBLISHED = "0.0.20";
@@ -102,7 +102,7 @@ export function workspaceManifests(root = ROOT) {
     .map((path) => ({ path, text: readFileSync(join(root, path), "utf8") }));
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
   const errors = auditVersions(workspaceManifests());
   if (errors.length) {
     console.error(`Version checks failed:\n${errors.map((error) => `- ${error}`).join("\n")}`);

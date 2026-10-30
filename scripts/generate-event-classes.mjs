@@ -5,7 +5,7 @@
 // The catalog `docs/spec/events.json` owns the class of each event. A name with a placeholder declares a family whose
 // placeholder is the end of the name, so a family is a prefix and one or more characters of `a-z`, `0-9`, `_` and `.`.
 import { readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const CATALOG = 'docs/spec/events.json';
@@ -200,7 +200,7 @@ export function generatedTables() {
   return { [GO]: goTable(tables), [RUST]: rustTable(tables), [JS]: jsTable(tables) };
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
   const tables = generatedTables();
   const check = process.argv.includes('--check');
   const stale = [];

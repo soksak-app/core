@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, posix, relative } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { cpus } from 'node:os';
 import { auditStatus, discoverGo, discoverRust } from './test-discovery.mjs';
 import { runTests } from './test-runner.mjs';
@@ -564,7 +564,7 @@ async function main(argv) {
   return 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
   main(process.argv.slice(2)).then((code) => { process.exitCode = code; }, (error) => {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;

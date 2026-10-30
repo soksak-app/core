@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F289: version, host contract, event class script는 script 경로가 없는 process에서도 import할 수 있다.
 - F285-1: Tauri 호스트의 모든 async command는 본문을 async runtime의 blocking thread에서 실행하므로, page의 답을 기다리는 command가 processor가 적은 컴퓨터에서 다른 command와 답을 멈추지 않는다.
 - F285-2: performance trace를 켜고 끄는 Tauri 호스트 시험은 하나씩 실행되므로 서로의 기록을 읽지 않는다.
 - F287: 열린 checklist 항목은 release를 막지 않는다. release gate는 그 항목을 다음 version으로 넘어가는 항목으로 출력한다.

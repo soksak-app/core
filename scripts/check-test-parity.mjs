@@ -66,7 +66,7 @@ lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/te
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs", "scripts/test/fixtures/node-color-count.mjs"]),
 lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
 lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/test-evidence.test.mjs"]),
-  lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs"]),
+  lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs", "scripts/test/entry-guards.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
   lane("native window ownership audit", "js-ts", ["scripts/check-native-windows.mjs"], ["scripts/test/native-windows.test.mjs"]),
   lane("Tauri command thread audit", "js-ts", ["scripts/check-tauri-commands.mjs"], ["scripts/test/tauri-commands.test.mjs"]),
@@ -8011,6 +8011,13 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/host/tauriv2/src/performance.rs", symbol: "pub(crate) static TEST_SWITCH: Mutex<()>" }],
     tests: [{ file: "packages/host/tauriv2/src/view_join_test.rs", id: "presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end" }],
     expected: "A Tauri host test that switches the performance trace or reads its records runs alone among those tests.",
+    levels: ["unit"],
+  },
+  {
+    id: "F289",
+    implementation: [{ file: "scripts/check-versions.mjs", symbol: "if (import.meta.main) {" }],
+    tests: [{ file: "scripts/test/entry-guards.test.mjs", id: "check-versions.mjs can be imported by a process that has no script path" }],
+    expected: "A command module of the scripts can be imported by a process without a script path.",
     levels: ["unit"],
   },
   {
