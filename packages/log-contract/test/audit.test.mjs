@@ -692,6 +692,23 @@ test("document field truncation is audited as the declared bounded envelope", { 
   assert.deepEqual(auditLog("host-b1.jsonl", [open, debugOn(2), event].join("\n"), declaration), []);
 });
 
+test("document field truncation keeps the surface and session that the host writer stores in the fields", { timeout: 5000 }, () => {
+  const declaration = { ...catalog, events: { ...catalog.events,
+    "plugin.probe.payload": { layer: "plugin", class: "io", level: "info", fields: objectFields({ body: { type: "object" } }) },
+  } };
+  for (const fields of [{ head: '{"body":', truncated: true, surface: "tab-1" },
+    { head: '{"body":', truncated: true, surface: "tab-1", session: "s-1" }]) {
+    const event = line(3, "plugin.probe.payload", fields, { layer: "plugin", class: "io" });
+    assert.deepEqual(auditLog("host-b1.jsonl", [open, debugOn(2), event].join("\n"), declaration), [],
+      `the envelope with host identifiers was refused: ${JSON.stringify(fields)}`);
+  }
+  for (const fields of [{ head: "x", truncated: true, surface: 1 }, { head: "x", truncated: true, surface: "" }]) {
+    const event = line(3, "plugin.probe.payload", fields, { layer: "plugin", class: "io" });
+    assert.ok(auditLog("host-b1.jsonl", [open, debugOn(2), event].join("\n"), declaration).length > 0,
+      `an envelope with an invalid identifier was accepted: ${JSON.stringify(fields)}`);
+  }
+});
+
 test("document field truncation cannot hide malformed metadata or ordinary fields", { timeout: 5000 }, () => {
   const declaration = { ...catalog, events: { ...catalog.events,
     "plugin.probe.payload": { layer: "plugin", class: "io", level: "info", fields: objectFields({ body: { type: "object" } }) },

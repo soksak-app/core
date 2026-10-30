@@ -136,7 +136,7 @@ Every buffer and every value that an event carries has a bound, and a producer c
 
 Every event `host.buffer.dropped` has `count` 1 and the size of the refused message, so a flood of refusals is a flood of events, which the queue of the writer bounds and counts in its turn.
 
-The auditor recognizes the page/plugin whole-field truncation envelope only on document layers, with exactly `head` and `truncated: true`, a nonempty string head and at most 4096 UTF-8 bytes. It validates the envelope instead of requiring unavailable original fields. This recognition does not make the omitted body available to a consumer or satisfy input or visual proof.
+The auditor recognizes the page/plugin whole-field truncation envelope only on document layers, with `head` and `truncated: true`, a nonempty string head and at most 4096 UTF-8 bytes, and no other member than the nonempty string identifiers `surface` and `session`, which the host writer stores in the fields of a document event. It validates the envelope instead of requiring unavailable original fields. This recognition does not make the omitted body available to a consumer or satisfy input or visual proof.
 
 ## Files
 

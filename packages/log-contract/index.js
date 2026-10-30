@@ -31,6 +31,8 @@ const encoder = new TextEncoder();
 
 /** The layers whose events are written by a document and name it in `page`. */
 const PAGE_LAYERS = new Set(["page", "plugin"]);
+// The identifiers that the host writer stores in the fields of a document event (docs/spec/logging.md#bounds).
+const HOST_FIELD_IDENTIFIERS = new Set(["surface", "session"]);
 
 export function parseLog(file, text) {
   const entries = [];
@@ -153,12 +155,14 @@ function lineFindings(entry, catalog, validators, channel = "other") {
     else if (typeof event.fields?.head !== "string") report("the fields of a truncated event must hold the string head");
     return findings;
   }
-  // Document writers use the bounded fields envelope before the host writer's larger event bound.
+  // Document writers use the bounded fields envelope before the host writer's larger event bound. The host writer stores the
+  // identifiers surface and session of a view event in its fields (docs/spec/logging.md#bounds), also beside an envelope.
   if (PAGE_LAYERS.has(event.layer) && event.fields?.truncated === true && Object.hasOwn(event.fields, "head")) {
-    const fields = event.fields;
-    if (typeof fields.head !== "string" || fields.head.length === 0 || Buffer.byteLength(fields.head, "utf8") > 4096
-      || Object.keys(fields).length !== 2) {
-      report("page field truncation must contain only a nonempty head within 4096 bytes and truncated true");
+    const { head, truncated, ...identifiers } = event.fields;
+    const identified = Object.entries(identifiers).every(([key, value]) =>
+      HOST_FIELD_IDENTIFIERS.has(key) && typeof value === "string" && value.length > 0);
+    if (typeof head !== "string" || head.length === 0 || Buffer.byteLength(head, "utf8") > 4096 || !identified) {
+      report("page field truncation must contain a nonempty head within 4096 bytes, truncated true and only the host identifiers surface and session");
     }
     return findings;
   }

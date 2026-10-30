@@ -8064,6 +8064,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F292-21",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "const HOST_FIELD_IDENTIFIERS = new Set([\"surface\", \"session\"]);" }],
+    tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "document field truncation keeps the surface and session that the host writer stores in the fields" }],
+    expected: "The audit accepts a document field truncation envelope that holds the surface and session that the host writer stores, and refuses any other member.",
+    levels: ["unit"],
+  },
+  {
     id: "F292-5",
     implementation: [{ file: "packages/window-check/app.mjs", symbol: "if (surface !== undefined) await this.registered(surface, [`status ${name}`]);" }],
     tests: [{ file: "packages/window-check/test/surface-registration.test.mjs", id: "a wait on a status of a surface watches the status after the surface has registered it" }],

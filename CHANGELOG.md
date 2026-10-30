@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-21: The run audit accepts a document field truncation envelope that holds the `surface` and `session` identifiers that the host writer stores in the fields.
 - F292-1: The browser cohort check reads the expected versions from the candidate registry and prepares the layout of the test project before it waits for the surfaces.
 - F292-3: The input record check reads the typed key as an action of the input transaction in every layer.
 - F292-4: The sidebar choice check reads `projects.json` in its current form `{format, projects}`.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-21: 실행 감사는 호스트 writer가 field에 저장하는 식별자 `surface`와 `session`이 든 document field truncation envelope를 받아들인다.
 - F292-1: browser cohort 검사는 기대하는 판을 후보 registry에서 읽고, 표면을 기다리기 전에 시험 project의 layout을 준비한다.
 - F292-3: 입력 기록 검사는 모든 층에서 입력한 키를 입력 transaction의 action으로 읽는다.
 - F292-4: sidebar 선택 검사는 `projects.json`을 현재 형식 `{format, projects}`로 읽는다.
