@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-72: `docs/spec/logging.md` states once which events pass every gate; the copy that still named the removed migration record `log.migrated` is gone, and the remaining sentence names `log.plugins`.
 - F292-10: The check that a window reads the registry again when it becomes the key window runs in the activation tier (`e2e/activation/registry-active.test.mjs`) and activates the application first, because only a window of the active application becomes the key window and the hosted runner does not activate the application.
 - F292-71: The page sends each line of the diagnostic transcript with the action `transcript` of the host call `log`; both hosts store it as a record cut to its bound and send the whole line to the connections of the transcript, so a long call no longer reaches a check split and without its reply.
 - F297-1: The window check `split, resize, reload, and WebView churn restore the window and end the page process` (`e2e/split-load-memory.test.mjs`) runs one round and no longer judges the host RSS growth. The 32-round stress moved to `e2e/benchmark/cases/split-load.mjs`, and the benchmark `e2e/benchmark/split-load.test.mjs` (`benchmark:split-load`) judges the 128 MiB growth bound through `assertSplitLoadWithinBound`. Validation: `e2e/test/split-load-case.test.mjs` failed with `ERR_MODULE_NOT_FOUND` before the case module existed and passes after; the window check and the benchmark were not run because they need running applications.

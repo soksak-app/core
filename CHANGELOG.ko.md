@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-72: `docs/spec/logging.md`는 모든 gate를 지나는 event를 한 번만 적는다. 제거된 migration 기록 `log.migrated`를 아직 들던 사본은 없어졌고, 남은 문장은 `log.plugins`를 든다.
 - F292-10: 창이 key window가 될 때 registry를 다시 읽는지 보는 check는 activation tier(`e2e/activation/registry-active.test.mjs`)에서 실행되고 먼저 application을 활성화한다. active application의 창만 key window가 되고 hosted runner는 application을 활성화하지 않기 때문이다.
 - F292-71: page는 진단 transcript의 각 줄을 host call `log`의 action `transcript`로 보낸다. 두 host는 그것을 상한에서 자른 record로 저장하고 전체 줄을 transcript의 연결에 보낸다. 그래서 긴 call이 더 이상 나뉘고 응답이 빠진 채 check에 닿지 않는다.
 - F297-1: window check `split, resize, reload, and WebView churn restore the window and end the page process`(`e2e/split-load-memory.test.mjs`)는 round 1개를 실행하고 host RSS 증가를 더 이상 판정하지 않는다. 32 round stress는 `e2e/benchmark/cases/split-load.mjs`로 옮겼고, benchmark `e2e/benchmark/split-load.test.mjs`(`benchmark:split-load`)가 `assertSplitLoadWithinBound`로 128 MiB 증가 한도를 판정한다. 검증: case 모듈이 없을 때 `e2e/test/split-load-case.test.mjs`가 `ERR_MODULE_NOT_FOUND`로 실패했고, 만든 뒤 통과한다. window check와 benchmark는 실행 중인 application이 필요해 실행하지 않았다.
