@@ -127,6 +127,8 @@ jobs:
       - uses: ./core/.github/actions/setup-native
         with:
           root: core
+      - name: Fetch locked Node dependencies
+        run: pnpm -C core install --frozen-lockfile
       - name: Fetch pinned native release file
         run: make -C core native-darwin-fetch
       - name: Build the native library offline

@@ -170,8 +170,8 @@ test('ci keeps language host checks independent and gates release on every requi
   assert.doesNotMatch(job('equivalence'), /needs:/, 'equivalence installs and builds its own inputs');
   assert.match(job('native-darwin'), /uses: \.\/core\/\.github\/actions\/setup-node[\s\S]*?root: core/,
     'native Darwin package tests need the Node and pnpm toolchains');
-  assert.doesNotMatch(job('native-darwin'), /setup-go|setup-rust|pnpm install/,
-    'native Darwin checks install unused language toolchains or workspace dependencies');
+  assert.doesNotMatch(job('native-darwin'), /setup-go|setup-rust/,
+    'native Darwin checks install unused language toolchains');
   const wailsSteps = steps(job('macos-wailsv3'));
   assert.match(wailsSteps.find((step) => step.name === 'Go format checks')?.text ?? '', /make -C core go-format-check/);
   const tauriSteps = steps(job('macos-tauriv2'));
@@ -261,6 +261,25 @@ test('the native-darwin job records the display session before the native tests'
   assert.ok(record < tests, 'the display session is recorded before the native tests');
   for (const command of ['system_profiler SPDisplaysDataType', 'pmset -g', 'ioreg -n Root -d1 -k IOConsoleUsers']) {
     assert.ok(list[record].text.includes(command), `the session record runs ${command}`);
+  }
+});
+
+// The root scripts import the packages that the root package.json declares (scripts/test-runner.mjs imports
+// @soksak/window-check), and every make target of core runs through them, so a job installs the locked workspace
+// dependencies before its first core command.
+test('every CI job installs the locked workspace dependencies before its first core command', { timeout: 1000 }, () => {
+  const jobs = read('.github/workflows/ci.yml').split(/^ {2}(?=[a-z-]+:$)/m).filter((part) => /^[a-z-]+:\n/.test(part));
+  assert.ok(jobs.length > 0, 'ci.yml has no job');
+  const install = /run: pnpm -C core install --frozen-lockfile$/m;
+  const core = /run: (?:make -C core|node core\/|pnpm -C core(?! install))/m;
+  for (const job of jobs) {
+    const name = job.split(':')[0];
+    const list = steps(job);
+    const first = list.findIndex((step) => core.test(step.text));
+    if (first < 0) continue;
+    const installed = list.findIndex((step) => install.test(step.text));
+    assert.ok(installed >= 0 && installed < first,
+      `${name}: the step ${list[first].name} runs a core command before the locked workspace dependencies are installed`);
   }
 });
 
