@@ -1,5 +1,6 @@
 import { LOG_LEVELS, createSurfaceContext, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
+import { surfaceErrorText } from "./surface-status.js";
 import { markViewSurface, registry } from "./exposure.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
@@ -38,6 +39,33 @@ const mountListeners = new Set();
 export function onSurfaceMounted(listener) {
   mountListeners.add(listener);
   return () => mountListeners.delete(listener);
+}
+
+// The listeners of each change of the mounted surfaces: a mount starts, its status changes, or a mounted surface is disposed.
+const mountedChangeListeners = new Set();
+
+/** Adds a listener of each change of the mounted surfaces, which the core state reads again; returns its removal. */
+export function onMountedChange(listener) {
+  mountedChangeListeners.add(listener);
+  return () => mountedChangeListeners.delete(listener);
+}
+
+function mountedChanged() {
+  for (const listener of mountedChangeListeners) listener();
+}
+
+/**
+ * The mounted surfaces that are not disposed, each with its plugin and its status `{phase, error}`. The compositor record of the
+ * workbench decides which of them are placed; the rest are retained views (docs/spec/native-surfaces.md).
+ */
+export function liveMounts() {
+  return [...mounted.values()].filter((entry) => !entry.disposed).map((entry) => {
+    const state = entry.context.status.read();
+    return {
+      surface: entry.surfaceId, plugin: entry.pluginId,
+      status: { phase: state.phase, error: state.phase === "error" ? surfaceErrorText(state) : null },
+    };
+  });
 }
 
 function createMountRegistration() {
@@ -821,6 +849,8 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
       },
     });
     const state = context.status.subscribe(onState);
+    // A status change of a mounted view changes its entry in core.surfaces.
+    context.status.subscribe(mountedChanged);
     let resolveCompositionDisposed;
     const compositionDisposed = new Promise((resolve) => { resolveCompositionDisposed = resolve; });
     entry = { slot, host, shadow, context, closing, lifetime, state, exposure: null, composition: compositionReady.promise,
@@ -834,6 +864,7 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
       registration.state = "pending";
     }
     mounted.set(surface.surfaceId, entry);
+    mountedChanged();
     try {
       onState(context.status.read());
       const registrations = [];
@@ -1021,6 +1052,7 @@ export function suspendSurface(surfaceId) {
 function releaseFailedMount(entry, failure, beforeRelease = Promise.resolve()) {
   if (entry.disposing) return entry.disposing;
   entry.disposed = true;
+  mountedChanged();
   traceComposition(entry, "dispose", "reason", "mount-failure");
   if (!entry.compositionDeclared) entry.resolveCompositionDisposed({ disposed: true, failure });
   const disposing = Promise.resolve().then(async () => {
@@ -1053,6 +1085,7 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
   if (released) entry.lifetime.released = true;
   if (entry.disposing) return entry.disposing;
   entry.disposed = true;
+  mountedChanged();
   traceComposition(entry, "dispose", "reason", mode === "unload" ? "unload" : released ? "released" : "close");
   if (!entry.compositionDeclared) entry.resolveCompositionDisposed({ disposed: true, failure: null });
   if (mounting.get(surfaceId) === entry.mountRegistration) mounting.delete(surfaceId);

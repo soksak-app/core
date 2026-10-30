@@ -40,6 +40,8 @@ import { latest, seated } from "./compositor.js";
 import { filePlace, modalState, onFilesDropped, onModalState, onWindowResponder } from "./host.js";
 import { plugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
+import { retainedSurfaceEntries } from "./surface-listing.js";
+import { liveMounts, onMountedChange } from "./surface-modules.js";
 import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
@@ -228,7 +230,13 @@ function surfacesState() {
     composition: null,
   }));
   const record = seated();
-  if (!record) return placeholders;
+  // A mounted view that the record does not hold is a retained view; it is listed without a placement (docs/spec/exposure.md).
+  const retained = (seatedIds) => retainedSurfaceEntries(liveMounts().map((mount) => ({
+    ...mount, exposes: registry.namesOf(mount.surface),
+    composition: compositionKindOf(plugin(mount.plugin).surface(mount.surface)),
+    state: memory.unloaded(mount.surface) ? "unloaded" : "loaded",
+  })), seatedIds);
+  if (!record) return [...placeholders, ...retained(new Set())];
   const at = planeOrigin();
   return [...record.surfaces.map((s) => ({
     surface: s.id, plugin: s.plugin, visible: s.visible, dim: s.dim,
@@ -236,7 +244,7 @@ function surfacesState() {
     exposes: registry.namesOf(s.id), status: surfaceState(s.id), placeholder: null,
     composition: compositionKindOf(plugin(s.plugin).surface(s.id)),
     state: memory.unloaded(s.id) ? "unloaded" : "loaded",
-  })), ...placeholders];
+  })), ...placeholders, ...retained(new Set(record.surfaces.map((s) => s.id)))];
 }
 
 const withOpen = (project) => ({ ...project, open: projects.isOpen(project.id) });
@@ -625,6 +633,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
 
   onPicker(coreChanged);
   onSurfaceState(coreChanged);
+  onMountedChange(coreChanged);
   onSettingsDrawn(coreChanged);
   onDebugDrawn(coreChanged);
   onModalState(coreChanged);

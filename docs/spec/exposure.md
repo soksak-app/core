@@ -186,7 +186,7 @@ The main page publishes four statuses of the [plugin process design](plugin-proc
 - Status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, the counts of each plugin's losses, kept until the application ends.
 - Status `core.plugin.views`: `[{plugin, surface, responsive}]`, the responsiveness of each plugin view surface.
 - Status `core.plugin.snapshots`: `[{plugin, status, surface, generation, seq}]`, the last natively acknowledged snapshot sequence of each current source and declared status. `status` is the name sent in the snapshot event. `surface` is null for a plugin host. It has no record before the first accepted snapshot, clears the previous generation on source registration, and removes the record on source end. It includes sources whose sidebar section is not mounted, contains no snapshot value, and means transport acceptance rather than sidebar drawing.
-- Status `core.surfaces`: each surface entry carries `composition`, the kind of its declared composition (`view`), or `null` when the plugin declares no surface for it.
+- Status `core.surfaces`: each surface entry carries `composition`, the kind of its declared composition (`view`), or `null` when the plugin declares no surface for it. A mounted view that the compositor record does not hold is a retained view (native-surfaces.md); it is listed with `visible: false`, `dim`, `declared` and `applied` null, its `exposes`, its `status` (`{phase, error}` of its own mount), `composition` and `state`. A retained view has no placement. The status is announced when a mount starts, changes its status or is disposed, and when a registration of the surface changes.
 
 ## Windows
 

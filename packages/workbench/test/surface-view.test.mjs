@@ -490,6 +490,51 @@ test("a view mount that declares its composition notifies the end of the mount w
   }
 });
 
+// core.surfaces lists a mounted view outside the compositor record from liveMounts, and each change of the mounted views notifies
+// the core state, which reads core.surfaces again (docs/spec/exposure.md#core-statuses).
+test("a mounted view is listed by liveMounts until it is disposed, and each change notifies the mounted-change listeners", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async () => null } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface, liveMounts, onMountedChange, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-live-mounts");
+  const pluginId = "fixture-live-view";
+  const surfaceId = "fixture-live-view-surface";
+  recordOrigin(surfaceId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    composition: { kind: "view", page: "ui/page.html" } };
+  let changes = 0;
+  const removeListener = onMountedChange(() => { changes += 1; });
+  try {
+    assert.deepEqual(liveMounts(), [], "a document with no mount lists a mounted view");
+    authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    await waitSurfaceCompositionDeclared(surfaceId);
+    assert.deepEqual(liveMounts(), [{ surface: surfaceId, plugin: pluginId, status: { phase: "ready", error: null } }],
+      "the mounted view is not listed with its plugin and phase");
+    const before = changes;
+    await disposeSurface(surfaceId);
+    assert.deepEqual(liveMounts(), [], "a disposed view is still listed");
+    assert.ok(changes > before, "disposing a mounted view did not notify the mounted-change listeners");
+  } finally {
+    removeListener();
+    dom.window.close();
+  }
+});
+
 // The receipt of a view call and its reply are written at the debug level, so a call that never replies shows as a receipt without a reply.
 test("a view call writes receipt and reply records with its source generation", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
