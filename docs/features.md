@@ -11,14 +11,14 @@
 The source audits use the matching current SDK's public commands. Older installed SDK readers reject schema 3; their default command is not reported as passing. These are local development results. Publication and historical failure-closure tasks retain their own checklist states.
 
 
-The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 38 rows: 12 active and 26 waiting, excluding seven temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
+The five functional cohorts above do not constitute completion of the full checklist. The current open-row accounting is 42 rows: 12 active and 30 waiting, excluding four temporarily bypassed rows. Parent rows are included, so this is not a count of independent functions.
 
 - **Current measurement and check corrections: 3** — F239-223, F239-223-3, F239-233
 - **CI and release ownership: 2** — F239-266 and F239-266-3
 - **Reported failures and historical closure audits: 13** — F212.1-2-2; F212.12-2-2-4-8; F266.1 through F266.3, F266.5 through F266.7 and F266.9 through F266.13
 - **Performance measurements: 5** — F212.1, F212.7a, F212.14/-5/-5-5
 - **Package installation and publication: 9** — F212.12-1-10-6g; F212.15/-1/-2; F212.16-14/-15; F238-c-11/-11-1; F239-29-1
-- **Aggregate requirements and open-work register: 5** — F160, F160.29, F161, F212, F212.10
+- **Aggregate requirements and open-work register: 6** — F160, F160.29, F161, F212, F212.10, F240
 
 These rows retain their individual requirements and states. A passing functional cohort does not establish a historical failure's cause, a performance target, or publication. Package installation rows can still contain development work; publication is not inferred from a local installation.
 
