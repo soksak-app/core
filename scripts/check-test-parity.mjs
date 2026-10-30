@@ -8125,7 +8125,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F291",
-    implementation: [{ file: "scripts/audit-run.mjs", symbol: "inside.reduce((most, { event }) => Math.max(most, event.ts_us), -Infinity)" }],
+    implementation: [{ file: "scripts/audit-run.mjs", symbol: "mine.reduce((most, made) => Math.max(most, made.to === null ? made.fileEnd.ts_us : made.to.ts_us), -Infinity)" }],
     tests: [{ file: "scripts/test/audit-run.test.mjs", id: "a run whose last test has no end mark audits a log of more events than the call stack holds arguments" }],
     expected: "The run audit reads a log of any length and reports its findings.",
     levels: ["unit"],

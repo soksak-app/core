@@ -56,6 +56,34 @@ function readMarks(folder) {
   return { file, marks };
 }
 
+/**
+ * The end of each test that has a start mark and no end mark: the end of the process of its test file, from `manifest.json` of the
+ * test runner in the run folder. The file is the one whose process ran when the start mark was written, by `ts_us`; a start mark
+ * that no file or more than one file holds, a file that has not ended, or a run without a manifest is an error that names the mark.
+ */
+function endsOfOpenCases(folder, marksFile, cases) {
+  const open = cases.filter((made) => made.end === null);
+  if (open.length === 0) return;
+  const file = join(folder, 'manifest.json');
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    throw new Error(`${file}: the manifest of the run, which ends the range of a test without an end mark (${marksFile}:${open[0].start.line}), cannot be read: ${error.message}`, { cause: error });
+  }
+  if (!Array.isArray(manifest?.tests)) throw new Error(`${file}: tests is not a list, found ${JSON.stringify(manifest?.tests)}`);
+  for (const made of open) {
+    const at = made.start.ts_us;
+    const holders = manifest.tests.filter((item) => item.started_us <= at && (item.ended_us === null || item.ended_us >= at));
+    if (holders.length !== 1) {
+      throw new Error(`${marksFile}:${made.start.line}: the start mark of ${made.name} at ts_us ${at} lies in ${holders.length} test files of ${file}${holders.length > 1 ? `: ${holders.map((item) => item.name).join(', ')}` : ''}; the range of a test without an end mark ends with the process of exactly one file`);
+    }
+    const [holder] = holders;
+    if (!Number.isInteger(holder.ended_us)) throw new Error(`${file}: the test file ${holder.name} of the start mark of ${made.name} (${marksFile}:${made.start.line}) has no end, found ended_us ${JSON.stringify(holder.ended_us)}`);
+    made.fileEnd = { name: holder.name, ts_us: holder.ended_us };
+  }
+}
+
 /** The tests of the marks: one case for each start mark with its end mark and its declarations. */
 function casesOf(file, marks) {
   const cases = [];
@@ -83,6 +111,7 @@ function casesOf(file, marks) {
 export function auditRun(catalog, folder) {
   const { file: marksFile, marks } = readMarks(folder);
   const cases = casesOf(marksFile, marks);
+  endsOfOpenCases(folder, marksFile, cases);
   const findings = [];
   if (catalog.budget === undefined) throw new Error('the catalog declares no budget of the volume of the logs (budget)');
   const volume = [];
@@ -103,12 +132,15 @@ export function auditRun(catalog, folder) {
       if (made.from === undefined) throw new Error(`${marksFile}:${made.start.line}: the start mark (${made.start.boot}, ${made.start.seq}) of ${made.name} is not in the logs of ${config}`);
       if (made.end !== null && made.to === undefined) throw new Error(`${marksFile}:${made.end.line}: the end mark (${made.end.boot}, ${made.end.seq}) of ${made.name} is not in the logs of ${config}`);
     }
+    // A test without an end mark ends with the process of its test file (endsOfOpenCases), so its range of the application log
+    // ends at the last line written before that end.
     const inRange = (made, process, entry) => {
       const { from, to } = made;
       if (process.startsWith('host-')) {
-        return process.slice('host-'.length) === made.boot && entry.event.seq > from.seq && (to === null || entry.event.seq < to.seq);
+        return process.slice('host-'.length) === made.boot && entry.event.seq > from.seq
+          && (to === null ? entry.event.ts_us <= made.fileEnd.ts_us : entry.event.seq < to.seq);
       }
-      return entry.event.ts_us >= from.ts_us && (to === null || entry.event.ts_us <= to.ts_us);
+      return entry.event.ts_us >= from.ts_us && entry.event.ts_us <= (to === null ? made.fileEnd.ts_us : to.ts_us);
     };
     const expectedNames = new Set(mine.flatMap((made) => made.expected));
     const declared = new Set();
@@ -135,7 +167,7 @@ export function auditRun(catalog, folder) {
     // chain that stops) belongs to no test of this run, so this run does not judge it; `check-events.mjs --logs` reports
     // every finding of a folder.
     const spanStart = mine.reduce((least, made) => Math.min(least, made.from.ts_us), Infinity);
-    const spanEnd = mine.some((made) => made.to === null) ? Infinity : mine.reduce((most, made) => Math.max(most, made.to.ts_us), -Infinity);
+    const spanEnd = mine.reduce((most, made) => Math.max(most, made.to === null ? made.fileEnd.ts_us : made.to.ts_us), -Infinity);
     const times = new Map(parsed.flatMap(({ file, entries }) => entries.map((entry) => [`${file}\0${entry.line}`, entry.event.ts_us])));
     const judged = (file, line) => {
       const ts = times.get(`${file}\0${line}`);
@@ -148,8 +180,7 @@ export function auditRun(catalog, folder) {
     // The volume of each class over the span: the events and bytes of every file of the folder, per minute, against the
     // budget of the catalog (docs/spec/logging.md#volume-budget).
     const inside = parsed.flatMap(({ entries }) => entries).filter(({ event }) => event.ts_us >= spanStart && event.ts_us <= spanEnd);
-    const last = spanEnd === Infinity ? inside.reduce((most, { event }) => Math.max(most, event.ts_us), -Infinity) : spanEnd;
-    const minutes = (last - spanStart) / 60_000_000;
+    const minutes = (spanEnd - spanStart) / 60_000_000;
     const classes = {};
     for (const { event, bytes } of inside) {
       // A line marked undeclared is counted under `undeclared` whatever its class: an undeclared event of the layer plugin has the
@@ -192,7 +223,7 @@ export function auditRun(catalog, folder) {
       missing,
     };
     if (made.end === null) {
-      findings.push(`${marksFile}:${made.start.line}: test ${made.name} of ${made.app} has a start mark and no end mark`);
+      findings.push(`${marksFile}:${made.start.line}: test ${made.name} of ${made.app} has a start mark and no end mark; its range ends with its file process ${made.fileEnd.name}`);
     } else if (missing.length > 0) {
       for (const name of missing) {
         findings.push(`${marksFile}:${made.end.line}: test ${made.name} of ${made.app} expected the event ${name} and ${made.from.file} lines ${made.from.line}-${made.to.line} hold none`);

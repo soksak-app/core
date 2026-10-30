@@ -41,7 +41,7 @@ const failure = (seq, text) => event(seq, 'host.record.error', { where: 'place',
 const focus = (seq) => event(seq, 'host.window.event', { window: 'w', kind: 'focus' });
 
 /** A run folder with a configuration folder holding `files` (name to lines) and `marks` (records of marks.jsonl). */
-function fixture(t, { files, marks }) {
+function fixture(t, { files, marks, manifest }) {
   const root = mkdtempSync(join(tmpdir(), 'audit-run-'));
   t.after(() => rmSync(root, { recursive: true }));
   const config = join(root, 'config');
@@ -51,6 +51,8 @@ function fixture(t, { files, marks }) {
   mkdirSync(folder);
   const mark = (record) => ({ run: 'run-1', app: 'fixture', config, name: 't1', ts_us: US, ...record });
   writeFileSync(join(folder, 'marks.jsonl'), marks(mark).map((record) => JSON.stringify(record)).join('\n') + '\n');
+  // The manifest of the test runner: `{name, started_us, ended_us}` of each test file of the run.
+  if (manifest !== undefined) writeFileSync(join(folder, 'manifest.json'), JSON.stringify({ schema: 1, run: 'run-1', tests: manifest }));
   return { root, config, folder, host: join(config, 'logs', `host-${BOOT}.jsonl`) };
 }
 
@@ -108,12 +110,31 @@ test('an error between the tests of the run, and a start mark without an end mar
     files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), end(3, 't1'), failure(4, 'between'), start(5, 't2'), focus(6)] },
     marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 }), mark({ kind: 'end', boot: BOOT, seq: 3 }),
       mark({ kind: 'start', name: 't2', boot: BOOT, seq: 5 })],
+    manifest: [{ name: 'e2e/x.test.mjs', started_us: US, ended_us: US + 7000 }],
   });
   assert.deepEqual(auditRun(catalog, folder), [
     `${host}:4: undeclared error place: between`,
-    `${join(folder, 'marks.jsonl')}:3: test t2 of fixture has a start mark and no end mark`,
+    `${join(folder, 'marks.jsonl')}:3: test t2 of fixture has a start mark and no end mark; its range ends with its file process e2e/x.test.mjs`,
   ]);
   assert.equal(judgment(folder).tests[1].result, 'fail');
+});
+
+test('a start mark without an end mark ends at the end of its file process, so a later error that a later test declares is not charged to it', (t) => {
+  // The process of the file a.test.mjs ends after seq 3 while t1 runs; t2 of b.test.mjs declares the error at seq 6.
+  const { folder, host } = fixture(t, {
+    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), focus(3), focus(4), start(5, 't2'), failure(6, 'later'), end(7, 't2')] },
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2, ts_us: US + 2100 }),
+      mark({ kind: 'start', name: 't2', boot: BOOT, seq: 5, ts_us: US + 5100 }),
+      mark({ kind: 'expect_error', name: 't2', pattern: 'later', flags: '', ts_us: US + 5200 }),
+      mark({ kind: 'end', name: 't2', boot: BOOT, seq: 7, ts_us: US + 7100 })],
+    manifest: [{ name: 'e2e/a.test.mjs', started_us: US, ended_us: US + 3500 }, { name: 'e2e/b.test.mjs', started_us: US + 4000, ended_us: US + 8000 }],
+  });
+  assert.deepEqual(auditRun(catalog, folder), [
+    `${join(folder, 'marks.jsonl')}:1: test t1 of fixture has a start mark and no end mark; its range ends with its file process e2e/a.test.mjs`,
+  ]);
+  const [first, second] = judgment(folder).tests;
+  assert.deepEqual(first.errors, []);
+  assert.deepEqual(second.errors, [{ file: host, line: 6, text: 'error host place: later', declared: true }]);
 });
 
 test('a run whose last test has no end mark audits a log of more events than the call stack holds arguments', { timeout: 60000 }, (t) => {
@@ -121,8 +142,9 @@ test('a run whose last test has no end mark audits a log of more events than the
   const { folder } = fixture(t, {
     files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), ...events] },
     marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 })],
+    manifest: [{ name: 'e2e/x.test.mjs', started_us: US, ended_us: US + 400_000_000 }],
   });
-  assert.deepEqual(auditRun(catalog, folder), [`${join(folder, 'marks.jsonl')}:1: test t1 of fixture has a start mark and no end mark`]);
+  assert.deepEqual(auditRun(catalog, folder), [`${join(folder, 'marks.jsonl')}:1: test t1 of fixture has a start mark and no end mark; its range ends with its file process e2e/x.test.mjs`]);
   assert.equal(judgment(folder).volume[0].classes.lifecycle.events, 300_001);
 });
 
@@ -219,6 +241,15 @@ test('a run without marks.jsonl, a malformed mark, or a declaration without a st
   assert.throws(() => auditRun(catalog, bad.folder), /marks\.jsonl:2: kind sideways is not start, end, expect_error or expect_event/);
   const orphan = fixture(t, { files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT)] }, marks: (mark) => [mark({ kind: 'expect_event', event: 'host.update.start' })] });
   assert.throws(() => auditRun(catalog, orphan.folder), /marks\.jsonl:1: expect_event of t1 has no open start mark/);
+});
+
+test('a start mark without an end mark in a run without a manifest, or in no test file of the manifest, is an error that names the mark', (t) => {
+  const files = { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1')] };
+  const marks = (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 })];
+  const bare = fixture(t, { files, marks });
+  assert.throws(() => auditRun(catalog, bare.folder), /manifest\.json: the manifest of the run, which ends the range of a test without an end mark \(.*marks\.jsonl:1\), cannot be read/);
+  const outside = fixture(t, { files, marks, manifest: [{ name: 'e2e/x.test.mjs', started_us: US + 10, ended_us: US + 20 }] });
+  assert.throws(() => auditRun(catalog, outside.folder), /marks\.jsonl:1: the start mark of t1 at ts_us \d+ lies in 0 test files of .*manifest\.json; the range of a test without an end mark ends with the process of exactly one file/);
 });
 
 test('the events of a sidecar installed in a configuration folder of the run are audited against its catalog', (t) => {
