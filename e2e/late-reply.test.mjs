@@ -23,8 +23,8 @@ for (const app of Object.values(APPS)) {
     s.cleanup(async () => {
       if (holder(await s.get("core.grid"), tab)) await s.run("core.tab.close", { tab });
     });
-    // A view registers its core document entries after it declares its composition, which makes its phase ready; a request
-    // before the registration is answered by the main page and reaches no surface, so the hold would hold nothing.
+    // The declaration of its composition makes a view ready, and the view registers its core document entries after its page
+    // starts; a request before that registration is answered by the main page, so the check waits for both.
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
       item.surface === tab && item.visible && item.status.phase === "ready" && item.exposes.includes("command core.surface.hit")),
     "the new browser tab did not become ready with its command core.surface.hit");
