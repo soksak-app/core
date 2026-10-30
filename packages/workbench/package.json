@@ -37,6 +37,7 @@
     "compositor.js",
     "retained-surface-mounts.js",
     "surface-modules.js",
+    "surface-listing.js",
     "surface-sync-request.js",
     "plugin-records.js",
     "system-notifications.js",
