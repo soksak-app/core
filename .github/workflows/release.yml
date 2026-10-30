@@ -2,7 +2,8 @@ name: release
 # build-machine: skip smoke reason=the window checks of a release run in window-checks.yml on a hosted runner with a virtual display (docs/operations/examples.md#release)
 
 # A push to main runs the checks, and the repository releases itself when they succeed and `soksak-release-gate` finds no tag
-# of the declared version and no open checklist item (docs/operations/examples.md#release). The tag is created with the release.
+# of the declared version; open checklist items are carried into the next version (docs/operations/examples.md#release). The
+# tag is created with the release.
 on:
   push:
     branches: [main]

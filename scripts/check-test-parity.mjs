@@ -7996,6 +7996,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F287",
+    implementation: [{ file: "packages/plugin-api/release-gate.js", symbol: "const carried = openItems(checklistName, checklistText);" }],
+    tests: [{ file: "packages/plugin-api/test/release-gate.test.mjs", id: "an item that is waiting, active or bypassed does not hold the release and is carried into the next version" }],
+    expected: "An open checklist item does not hold a release; the gate lists it as carried into the next version.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-303",
     implementation: [{ file: ".github/workflows/ci.yml", symbol: "test-without-presentation" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the native tests that need display presentation run in no workflow and the others in the hosted job" }],
@@ -8171,7 +8178,7 @@ const FEATURE_LINKS = [
     id: "F272",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "needs.gate.outputs.release == 'true'" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks, the gate and the window checks succeed" }],
-    expected: "A push to main runs the checks once and releases the declared version only when the gate finds no tag and no open item and every job succeeds.",
+    expected: "A push to main runs the checks once and releases the declared version only when the gate finds no tag and every job succeeds.",
     levels: ["unit"],
   },
   {
@@ -8188,10 +8195,9 @@ const FEATURE_LINKS = [
     id: "F272-2",
     implementation: [{ file: "packages/plugin-api/release-gate.js", symbol: "export function releaseDecision(" }],
     tests: [
-      { file: "packages/plugin-api/test/release-gate.test.mjs", id: "a repository releases its declared version when the remote has no tag of it and no checklist item is open" },
-      { file: "packages/plugin-api/test/release-gate.test.mjs", id: "an item that is waiting, active or bypassed holds the release" },
+      { file: "packages/plugin-api/test/release-gate.test.mjs", id: "a repository releases its declared version when the remote has no tag of it" },
     ],
-    expected: "A repository releases its declared version only when the remote has no tag of it and its checklist has no item in the state [ ], [~] or [!].",
+    expected: "A repository releases its declared version only when the remote has no tag of it.",
     levels: ["unit"],
   },
   {

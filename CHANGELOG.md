@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F287: Open checklist items do not hold a release; the release gate lists them as carried into the next version.
 - F286: The window checks run on a hosted runner with a virtual display; the checks that record the screen and the native presentation tests run only in the local window checks.
 - F284: The view pages of the window-check fixture plugins hold no import map, which the native view handler refuses.
 - F281-1: A first responder change of a window that closed sends nothing and stores no error in either host.

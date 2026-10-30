@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Decides whether a repository releases the version that its package.json declares. The repository releases when the
-// remote has no tag of that version and its checklist has no open item: every item in the state `[ ]`, `[~]` or `[!]`
-// holds the release, because none of them is complete. The decision reads only the files and the remote tags of the
-// repository, so no other repository takes part in it.
+// remote has no tag of that version. The checks of the release workflow decide whether the code is releasable; an item
+// of the checklist in the state `[ ]`, `[~]` or `[!]` does not hold the release and is carried into the next version, and
+// the decision lists those items. The decision reads only the files and the remote tags of the repository, so no other
+// repository takes part in it.
 //
 //   soksak-release-gate <package.json> <checklist>
 //
@@ -29,8 +30,8 @@ export function declaredVersion(name, text) {
   return version;
 }
 
-/** The items of the checklist text that hold a release, as `<id> [<state>]`. An open item without an identifier is an error. */
-export function holdingItems(name, text) {
+/** The open items of the checklist text, as `<id> [<state>]`. An open item without an identifier is an error. */
+export function openItems(name, text) {
   const errors = [];
   const open = checklist(text, name, errors).filter(({ state }) => OPEN.has(state));
   const unnamed = open.filter(({ id }) => !id).length;
@@ -39,14 +40,13 @@ export function holdingItems(name, text) {
   return open.map(({ id, state }) => `${id} [${state}]`);
 }
 
-/** The decision for the manifest and checklist texts and whether the remote has the tag: { release, version, reasons }. */
+/** The decision for the manifest and checklist texts and whether the remote has the tag: { release, version, reasons, carried }. */
 export function releaseDecision({ manifestName, manifestText, checklistName, checklistText, tagExists }) {
   const version = declaredVersion(manifestName, manifestText);
   const reasons = [];
   if (tagExists(`v${version}`)) reasons.push(`the tag v${version} exists`);
-  const holding = holdingItems(checklistName, checklistText);
-  if (holding.length) reasons.push(`${holding.length} open items: ${holding.join(", ")}`);
-  return { release: reasons.length === 0, version, reasons };
+  const carried = openItems(checklistName, checklistText);
+  return { release: reasons.length === 0, version, reasons, carried };
 }
 
 /** Whether the remote origin has the tag. A failure of git is an error, so an unknown tag set never reads as empty. */
@@ -71,7 +71,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
     process.stderr.write(`release gate: ${error.message}\n`);
     process.exit(1);
   }
-  const { release, version, reasons } = decision;
+  const { release, version, reasons, carried } = decision;
   process.stdout.write(release ? `release v${version}\n` : `no release of v${version}: ${reasons.join("; ")}\n`);
+  process.stdout.write(`${carried.length} open items carried into the next version${carried.length ? `: ${carried.join(", ")}` : ""}\n`);
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `release=${release}\nversion=${version}\n`);
 }

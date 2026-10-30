@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F287: 열린 checklist 항목은 release를 막지 않는다. release gate는 그 항목을 다음 version으로 넘어가는 항목으로 출력한다.
 - F286: 창 검사는 가상 display가 있는 hosted runner에서 실행한다. 화면을 녹화하는 검사와 native presentation 시험은 로컬 창 검사에서만 실행한다.
 - F284: 창 검사 fixture plugin의 view page는 native view handler가 거부하는 import map을 갖지 않는다.
 - F281-1: 두 host에서 닫힌 window의 first responder 변경은 아무것도 보내지 않고 오류를 저장하지 않는다.
