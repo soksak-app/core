@@ -190,6 +190,14 @@ jobs:
           done
           # A host that the system ended with SIGKILL writes no record; the memory pressure reports and the kernel records
           # of ended processes name it.
+          # A trap that the Go signal handler raised again leaves no frame of the trapping code on the stack, and the library
+          # that holds the fault address is the build of this runner, so the fault of each report is resolved here.
+          for report in "$RUNNER_TEMP"/crash-reports/soksak-*.ips; do
+            [ -e "$report" ] || continue
+            fault="$(node core/scripts/crash-fault.mjs "$report")"
+            echo "$fault" > "$report.fault.json"
+            atos -o "$(jq -r .path <<<"$fault")" -arch "$(jq -r .arch <<<"$fault")" -l "$(jq -r .load <<<"$fault")" "$(jq -r .address <<<"$fault")" > "$report.fault.txt"
+          done
           find "$reports" -maxdepth 1 -name 'JetsamEvent-*.ips' -exec cp {} "$RUNNER_TEMP/crash-reports/" \;
           log show --last 3h --style compact --predicate 'process == "kernel" AND eventMessage CONTAINS "memorystatus"' > "$RUNNER_TEMP/crash-reports/memorystatus.log"
       - name: Keep the run folder

@@ -327,6 +327,16 @@ test('the window-check jobs record how each application ended and keep every cra
   }
 });
 
+test('the window-check jobs resolve the fault of each crash report of an application on the runner', { timeout: 1000 }, () => {
+  for (const workflow of ['.github/workflows/window-checks.yml']) {
+    const text = read(workflow);
+    // The library that holds the fault address is the build of the runner, so only the runner resolves it.
+    assert.match(text, /fault="\$\(node core\/scripts\/crash-fault\.mjs "\$report"\)"/, `${workflow} does not name the fault of each crash report`);
+    assert.match(text, /atos -o "\$\(jq -r \.path <<<"\$fault"\)" -arch "\$\(jq -r \.arch <<<"\$fault"\)" -l "\$\(jq -r \.load <<<"\$fault"\)" "\$\(jq -r \.address <<<"\$fault"\)" > "\$report\.fault\.txt"/,
+      `${workflow} does not resolve the fault address with atos`);
+  }
+});
+
 test('the window-check jobs wait for the applications to end and keep the crash report of an application that crashed', () => {
   for (const workflow of ['.github/workflows/window-checks.yml']) {
     const text = read(workflow);

@@ -58,6 +58,7 @@ lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/nativ
 lane("event log audit", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
 lane("event class tables", "js-ts", ["scripts/generate-event-classes.mjs"], ["scripts/test/event-classes.test.mjs"]),
 lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-run.test.mjs"]),
+lane("crash report fault", "js-ts", ["scripts/crash-fault.mjs"], ["scripts/test/crash-fault.test.mjs"]),
 lane("log command audit", "js-ts", ["scripts/audit-log.mjs"], ["scripts/test/audit-log.test.mjs"]),
 lane("temporary folder audit", "js-ts", ["scripts/temp-audit.mjs"], ["scripts/test/temp-audit.test.mjs"]),
 lane("census", "declaration", ["scripts/census.json"], ["scripts/test/census.test.mjs"], { testLanguage: "js-ts" }),
@@ -8061,6 +8062,19 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/exposure_webviews_test.rs", id: "window_status_counts_plugin_host_webviews_apart" },
     ],
     expected: "host.window counts the plugin host web views apart from the app DOM and the view web views.",
+    levels: ["unit"],
+  },
+  {
+    id: "F283-3",
+    implementation: [
+      { file: "scripts/crash-fault.mjs", symbol: "export function crashFault(text, file)" },
+      { file: ".github/workflows/window-checks.yml", symbol: "fault=\"$(node core/scripts/crash-fault.mjs \"$report\")\"" },
+    ],
+    tests: [
+      { file: "scripts/test/crash-fault.test.mjs", id: "a breakpoint that a signal handler raised again is named by the instruction address of its exception" },
+      { file: "scripts/test/workflows.test.mjs", id: "the window-check jobs resolve the fault of each crash report of an application on the runner" },
+    ],
+    expected: "The window-check job names the fault of each crash report and resolves its address with atos on the runner.",
     levels: ["unit"],
   },
   {
