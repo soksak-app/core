@@ -898,8 +898,11 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::exposure::window_changed(&host);
         }
         tauri::WindowEvent::Focused(focused) => {
-            if *focused && let Err(error) = emit_window(&host, "window-active", ()) {
-                log_error("window-active", error);
+            if *focused {
+                crate::window_events::record_window_event(host.label(), "window-active");
+                if let Err(error) = emit_window(&host, "window-active", ()) {
+                    log_error("window-active", error);
+                }
             }
             crate::exposure::window_changed(&host);
             crate::exposure::windows_changed(host.app_handle());
@@ -991,6 +994,8 @@ struct ShownProject {
 pub trait WindowFront {
     fn show(&self) -> tauri::Result<()>;
     fn set_focus(&self) -> tauri::Result<()>;
+    /// Whether the window is the key window of the application.
+    fn is_focused(&self) -> tauri::Result<bool>;
 }
 
 impl WindowFront for Window {
@@ -1001,6 +1006,10 @@ impl WindowFront for Window {
     fn set_focus(&self) -> tauri::Result<()> {
         Window::set_focus(self)
     }
+
+    fn is_focused(&self) -> tauri::Result<bool> {
+        Window::is_focused(self)
+    }
 }
 
 /// Shows the window that owns a project opened from another window. The window comes in front of the other windows of
@@ -1008,6 +1017,28 @@ impl WindowFront for Window {
 /// (docs/spec/projects.md).
 pub fn show_project_owner(owner: &impl WindowFront) -> Result<(), String> {
     owner.show().map_err(|e| e.to_string())
+}
+
+/// Stores the front of the owner window after it is shown, with whether the window is the key window and whether the
+/// application is active (window_events::record_project_front). A read that fails is reported on the application log, and
+/// the record is not written when the key state cannot be read.
+fn record_project_front(owner: &Window, project: &str) {
+    let key = match owner.is_focused() {
+        Ok(key) => key,
+        Err(error) => {
+            log_error("project front", error);
+            return;
+        }
+    };
+    let app_active =
+        match crate::exposure::on_main(owner, || platform::current()?.application_active()) {
+            Ok(active) => Some(active),
+            Err(error) => {
+                log_error("project front", error);
+                None
+            }
+        };
+    crate::window_events::record_project_front(owner.label(), project, key, app_active);
 }
 
 /// Shows and focuses the window of a notification that the person activated.
@@ -1060,6 +1091,7 @@ fn project_open_on_main(
         if label != window.label() {
             emit_window(&owner, "project-activate", &request.id).map_err(|e| e.to_string())?;
             show_project_owner(&owner)?;
+            record_project_front(&owner, &request.id);
         }
         return Ok(serde_json::json!({
             "local": label == window.label(),

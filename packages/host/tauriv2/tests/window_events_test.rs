@@ -20,7 +20,7 @@ const NAME: &str = "a_window_event_is_recorded_as_an_event";
 fn a_window_event_is_recorded_as_an_event() {
     if let Some(config) = std::env::var_os(CHILD) {
         let writer = records::start_writer(std::path::Path::new(&config));
-        for kind in ["resize", "focus", "closed"] {
+        for kind in ["resize", "focus", "window-active", "closed"] {
             record_window_event("main-2", kind);
         }
         // A kind outside the contract is reported on the standard error and stores nothing.
@@ -53,10 +53,14 @@ fn a_window_event_is_recorded_as_an_event() {
                 )
             })
             .collect();
-    let want: Vec<(String, String, String)> =
-        [("debug", "resize"), ("info", "focus"), ("info", "closed")]
-            .iter()
-            .map(|(level, kind)| (level.to_string(), "main-2".to_string(), kind.to_string()))
-            .collect();
+    let want: Vec<(String, String, String)> = [
+        ("debug", "resize"),
+        ("info", "focus"),
+        ("info", "window-active"),
+        ("info", "closed"),
+    ]
+    .iter()
+    .map(|(level, kind)| (level.to_string(), "main-2".to_string(), kind.to_string()))
+    .collect();
     assert_eq!(seen, want);
 }

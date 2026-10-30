@@ -92,6 +92,37 @@ type ProjectOpen struct {
 	Separate bool            `json:"separate"`
 	Geometry *WindowGeometry `json:"geometry"`
 }
+
+// RecordProjectFront stores the event host.project.front of the project that a window shows in front, after the window is shown
+// (docs/spec/logging.md#entrances). key tells whether the window is the key window. appActive tells whether the
+// application is active, and is nil when that state could not be read.
+func RecordProjectFront(window, project string, key bool, appActive *bool) {
+	EmitHost(LevelInfo, "host.project.front", map[string]any{"window": window, "project": project, "key": key, "app_active": appActive})
+}
+
+// recordProjectFront reads the key state of the owner window and the active state of the application after the owner is
+// shown, and stores them with RecordProjectFront. A failed read of the application state is reported and stored as nil.
+func recordProjectFront(window, project string, front windowFront) {
+	key := front.IsFocused()
+	active, err := projectFrontActive()
+	if err != nil {
+		LogError("project front", err)
+		RecordProjectFront(window, project, key, nil)
+		return
+	}
+	RecordProjectFront(window, project, key, &active)
+}
+
+// projectFrontActive reads whether the application is the active application, on the UI thread. A test of ProjectOpen replaces
+// it, because a test has no running application.
+var projectFrontActive = func() (bool, error) {
+	system, err := platform.Current()
+	if err != nil {
+		return false, err
+	}
+	return application.InvokeSyncWithResultAndError(system.ApplicationActive)
+}
+
 type ProjectOpened struct {
 	Local  bool `json:"local"`
 	Staged bool `json:"staged"`
@@ -127,6 +158,7 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 			// The window comes in front of the other windows of the application as the key window; it does not activate the
 			// application, whose activation the system may refuse (docs/spec/projects.md).
 			owner.fronts.Show()
+			recordProjectFront(owner.name, req.ID, owner.fronts)
 		}
 		return ProjectOpened{Local: local, Staged: staged}, nil
 	}

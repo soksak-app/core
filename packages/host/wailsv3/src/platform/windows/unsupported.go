@@ -197,6 +197,10 @@ func (implementation) OSVersion() (string, error) {
 	return "", unsupported("operating system version")
 }
 
+func (implementation) ApplicationActive() (bool, error) {
+	return false, unsupported("application activation state")
+}
+
 func (implementation) MenuSelect(string, string) error {
 	return unsupported("application menu")
 }

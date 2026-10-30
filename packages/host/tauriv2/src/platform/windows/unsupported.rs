@@ -639,6 +639,10 @@ pub fn os_version() -> Result<String, String> {
     missing("operating system version")
 }
 
+pub fn application_active() -> Result<bool, String> {
+    missing("application activation state")
+}
+
 pub fn menu_select(_menu: &str, _title: &str) -> Result<(), String> {
     missing("application menu")
 }

@@ -19,8 +19,13 @@ func (r *frontRecord) Show() application.Window {
 
 func (r *frontRecord) Focus() { r.calls = append(r.calls, "focus") }
 
+func (r *frontRecord) IsFocused() bool { return false }
+
 // contract: project.open.other-owner-is-shown-without-activation
 func TestProjectOpenShowsTheOtherOwnerWithoutActivation(t *testing.T) {
+	previous := projectFrontActive
+	projectFrontActive = func() (bool, error) { return false, nil }
+	t.Cleanup(func() { projectFrontActive = previous })
 	host, _, _, ctx := projectOpenFixture(t)
 	fronts := &frontRecord{}
 	var events []string

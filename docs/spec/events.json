@@ -2118,6 +2118,36 @@
       },
       "description": "The page started an install, update, remove, enable or disable of a plugin; its host call carries the same cids."
     },
+    "page.window.active": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "description": "The page received the host event window-active, so it reads the plugin state and the application update again (docs/spec/installation.md)."
+    },
+    "page.plugins.reread": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "updates": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "updates"
+        ]
+      },
+      "description": "The page read the plugin state again after window-active; updates is the number of installed plugins that the registry lists in a newer version (docs/spec/installation.md)."
+    },
     "page.project.operation": {
       "layer": "page",
       "class": "call",
@@ -3120,6 +3150,36 @@
         ]
       },
       "description": "A window ended while it was asked whether a project may be removed, so the removal is allowed."
+    },
+    "host.project.front": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "key": {
+            "type": "boolean"
+          },
+          "app_active": {
+            "type": ["boolean", "null"]
+          }
+        },
+        "required": [
+          "window",
+          "project",
+          "key",
+          "app_active"
+        ]
+      },
+      "description": "The host showed the window of a project owner after another window opened the project: key tells whether the window is the key window after it was shown, and app_active whether the application is active (null when that state could not be read). The host does not activate the application (docs/spec/projects.md)."
     },
     "host.workspace.settings": {
       "layer": "host",

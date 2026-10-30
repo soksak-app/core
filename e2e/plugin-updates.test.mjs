@@ -73,7 +73,8 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a window that becomes active reads the registry again`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    // The records that decide whether the owner became key and whether the application was active when the project opened.
+    await fresh(s, { log: { lifecycle: "info" }, reads: ["host.window.event", "host.project.front", "page.window.active", "page.plugins.reread"] });
     await keepCommonSettings(s);
     const before = await s.get("core.plugins");
     const installed = before.plugins.find((row) => row.id === "browser").installed.version;

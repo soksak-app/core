@@ -662,6 +662,9 @@ impl Platform for Windows {
     fn os_version(&self) -> Result<String, String> {
         unsupported::os_version()
     }
+    fn application_active(&self) -> Result<bool, String> {
+        unsupported::application_active()
+    }
     fn menu_select(&self, menu: &str, title: &str) -> Result<(), String> {
         unsupported::menu_select(menu, title)
     }

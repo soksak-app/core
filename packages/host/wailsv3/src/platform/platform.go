@@ -631,6 +631,8 @@ type Platform interface {
 	PreferredLanguage() (string, error)
 	// OSVersion returns the product version of the operating system, such as "26.6.2" (docs/spec/debug.md).
 	OSVersion() (string, error)
+	// ApplicationActive reports whether the application is the active application (NSApplication isActive on macOS). Call it on the UI thread.
+	ApplicationActive() (bool, error)
 	// MenuSelect runs the item with the title title in the submenu with the title menu. Call it on the UI thread.
 	MenuSelect(menu, title string) error
 	// MainWindow is the handle of the main window of the application. It is nil when there is none. Call it on the UI thread.

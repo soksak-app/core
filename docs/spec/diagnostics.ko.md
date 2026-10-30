@@ -105,6 +105,7 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | document-frame identity callback이 wait 종료 뒤 error를 보고하거나 Go callback이 두 번 이상 호출된다 | Go는 `error host document frame identity callback: <reason>`을 쓴다. Tauri는 늦은 callback failure를 `error host diagnostics: document frame identity callback failed after its request ended: <reason>`으로 쓴다. 첫 callback 결과가 유지된다. |
 | writer가 쓴 뒤 event 파일의 색인을 최신으로 맞출 수 없다(event 구조를 어기는 줄, 손상된 색인, 열 수 없는 파일) | `error host log index: <reason>`, 파일마다 이유가 다를 때마다 한 번([logging](logging.ko.md#색인)) |
 | 파일 `log-policy.json`이 [정책](logging.ko.md#정책)의 형식을 어기거나(JSON이 아닌 글, 모르는 항목, 빠졌거나 계약 밖인 class, 여섯 밖의 level) 정책을 감시하거나 적용할 수 없다 | `error host log policy: <file>: <발견한 것>`, 파일이 바뀔 때마다 한 번. 적용 중인 정책은 그대로 남는다 |
+| 프로젝트를 연 뒤 소유자 창의 key 상태나 응용의 활성 상태를 읽지 못한다 ([logging](logging.ko.md#입구)) | `error host project front: <reason>`, 읽기가 실패할 때마다 한 번. Tauri host는 key 상태를 읽지 못하면 `host.project.front`를 쓰지 않고, 활성 상태를 읽지 못하면 두 host 모두 `app_active`를 null로 저장한다 |
 | document stream을 문서에서 켜거나 끄지 못하거나, 그 스냅샷이나 메시지가 실패한다 | `sp_log_error`의 `error native document stream: <stream> <on or off>: <text>`, `error native document stream: elements snapshot: <text>`, `error native document stream: <stream>: the message is not JSON` |
 | native 호출이 실패한다 | `sp_log_error`의 `error native <where>: <text>` |
 | Tauri host의 fatal signal이나 잡히지 않은 예외 | `error native fatal: <signal name>` 또는 `error native fatal: uncaught exception <name>: <reason>` 기록 하나, 그 뒤 process가 끝난다. Wails host의 fatal signal은 Go runtime이 보고를 표준 오류에 쓴다 |

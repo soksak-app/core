@@ -18,6 +18,10 @@ impl WindowFront for FrontRecord {
         self.calls.borrow_mut().push("focus");
         Ok(())
     }
+
+    fn is_focused(&self) -> tauri::Result<bool> {
+        Ok(false)
+    }
 }
 
 // contract: project.open.other-owner-is-shown-without-activation

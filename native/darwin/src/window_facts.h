@@ -57,6 +57,10 @@ char *sp_menu_items(void);
  * Free it with sp_facts_free. */
 char *sp_preferred_language(void);
 
+// Whether the application is the active application (NSApplication isActive). Showing or making a window key does not
+// activate the application.
+bool sp_application_active(void);
+
 // Runs the item titled title in the submenu titled menu. Returns false when there is no such item.
 bool sp_menu_select(const char *menu, const char *title);
 

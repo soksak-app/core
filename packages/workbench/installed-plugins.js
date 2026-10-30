@@ -3,6 +3,7 @@ import { host } from "@soksak/runtime";
 import { pluginUnits } from "./environment.js";
 import { createAppUpdate } from "./app-update.js";
 import { createPluginOperations } from "./plugin-operations.js";
+import { emitEvent } from "./page-log.js";
 
 const listeners = new Set();
 const notify = () => { for (const fn of listeners) fn(); };
@@ -64,7 +65,13 @@ export async function followPluginChanges(apply) {
  * the state.
  */
 export function followActivation() {
-  if (host) host.on("window-active", () => { pluginOperations.refresh(); appUpdate.refresh(); });
+  if (host) {
+    host.on("window-active", () => {
+      emitEvent("info", "page.window.active", {});
+      pluginOperations.refresh().then(() => emitEvent("info", "page.plugins.reread", { updates: pluginOperations.status().updates.length }));
+      appUpdate.refresh();
+    });
+  }
 }
 
 /** On sidecars-changed from the host, reads the outdated sidecars again (docs/spec/installation.md). */

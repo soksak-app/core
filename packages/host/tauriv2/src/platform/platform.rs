@@ -949,6 +949,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn preferred_language(&self) -> Result<String, String>;
     /// The product version of the operating system, such as "26.6.2" (docs/spec/debug.md).
     fn os_version(&self) -> Result<String, String>;
+    /// Whether the application is the active application (NSApplication isActive on macOS). Call it on the main thread.
+    fn application_active(&self) -> Result<bool, String>;
     /// Runs the item with the title title in the submenu with the title menu. Call it on the main thread.
     fn menu_select(&self, menu: &str, title: &str) -> Result<(), String>;
     /// The main window handle of the application. It is 0 when there is none. Call it on the main thread.

@@ -22,6 +22,8 @@ var windowEventKinds = map[string]Level{
 	"closed":               LevelInfo,
 	"web_process_ended":    LevelInfo,
 	"navigation_committed": LevelInfo,
+	// window-active is the host's event that tells the page that the window became active; the host records it when it sends the event.
+	"window-active": LevelInfo,
 }
 
 // RecordWindowEvent stores a window event of the kind for the window. A kind outside windowEventKinds is reported on the

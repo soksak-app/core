@@ -317,6 +317,10 @@ char *sp_preferred_language(void) {
     return copy;
 }
 
+bool sp_application_active(void) {
+    return NSApp.isActive;
+}
+
 char *sp_menu_items(void) {
     NSMutableArray *menus = [NSMutableArray array];
     for (NSMenuItem *top in NSApp.mainMenu.itemArray) {

@@ -12,7 +12,7 @@ import (
 func TestAWindowEventIsRecordedAsAnEvent(t *testing.T) {
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
-	for _, kind := range []string{"resize", "focus", "closed"} {
+	for _, kind := range []string{"resize", "focus", "window-active", "closed"} {
 		host.RecordWindowEvent("main-2", kind)
 	}
 	// A kind outside the contract is reported on the standard error and stores nothing.
@@ -28,7 +28,7 @@ func TestAWindowEventIsRecordedAsAnEvent(t *testing.T) {
 		fields := event["fields"].(map[string]any)
 		seen = append(seen, [3]string{event["level"].(string), fields["window"].(string), fields["kind"].(string)})
 	}
-	want := [][3]string{{"debug", "main-2", "resize"}, {"info", "main-2", "focus"}, {"info", "main-2", "closed"}}
+	want := [][3]string{{"debug", "main-2", "resize"}, {"info", "main-2", "focus"}, {"info", "main-2", "window-active"}, {"info", "main-2", "closed"}}
 	if len(seen) != len(want) {
 		t.Fatalf("window events = %v, want %v", seen, want)
 	}

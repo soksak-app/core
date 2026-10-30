@@ -34,6 +34,8 @@ type titleSetter interface {
 type windowFront interface {
 	Show() application.Window
 	Focus()
+	// IsFocused reports whether the window is the key window of the application.
+	IsFocused() bool
 }
 
 // setTitle changes the window title and records it as the value that windows.list returns.
@@ -433,7 +435,10 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	}
 	// The page reads state that no event announces, such as the registry index, when its window becomes active
 	// (docs/spec/installation.md).
-	win.OnWindowEvent(events.Common.WindowFocus, func(*application.WindowEvent) { s.Emit("window-active") })
+	win.OnWindowEvent(events.Common.WindowFocus, func(*application.WindowEvent) {
+		RecordWindowEvent(s.name, "window-active")
+		s.Emit("window-active")
+	})
 	// The framework loads the page again after the WebContent process ends; the host writes the end as an error line
 	// (docs/spec/diagnostics.md).
 	win.OnWindowEvent(events.Mac.WebViewWebContentProcessDidTerminate, func(*application.WindowEvent) {

@@ -817,6 +817,9 @@ impl Platform for Darwin {
     fn os_version(&self) -> Result<String, String> {
         system::os_version()
     }
+    fn application_active(&self) -> Result<bool, String> {
+        system::application_active()
+    }
 
     fn menu_items(&self) -> Result<Value, String> {
         dock::menu()
