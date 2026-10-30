@@ -44,6 +44,12 @@ export function newRun(root, now = new Date()) {
 }
 /** The default limit of each test of a test file, which node --test applies to the tests that declare no timeout. */
 const TEST_TIMEOUT_MS = 120_000;
+/**
+ * The exit limit of a test file process after its tests ended (`test:summary`). The files of scripts/test, run 8 at once, exited at most
+ * 155 ms after the summary of their tests (12 ms at the median), so 20 s is more than 100 times the longest measured exit, and a process
+ * that does not exit within it waits in its shutdown instead of ending under load.
+ */
+const EXIT_LIMIT_MS = 20_000;
 const SOURCE = /\.(?:[cm]?js)$/;
 
 /**
@@ -158,9 +164,10 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test',
       // the TAP reporter on the standard error writes the error of each test when the test ends. --test-force-exit ends the file
       // process when its tests end, so a test that timed out with an open handle does not keep the file running. The event watchdog
       // of the file is the largest limit of a test: a file whose events stop for that long holds a test that its own limit did not end.
+      // The exit limit ends a file process that does not exit after the summary of its tests, when no test runs.
       tests.push({ name: relative(root, file).split('\\').join('/'), command: process.execPath,
         args: ['--test', ...REPORTERS, `--test-timeout=${testTimeoutMs}`, '--test-force-exit', ...script.flags, file], cwd: directory,
-        eventLimitMs: MAX_TEST_TIMEOUT_MS });
+        eventLimitMs: MAX_TEST_TIMEOUT_MS, exitLimitMs: EXIT_LIMIT_MS });
     }
   }
   return { tests, before };

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -261,6 +261,33 @@ test("a test file whose test events stop for the event limit is ended near that 
     assert.equal(result.status, "timeout", result.output);
     assert.match(result.detail, /^no test event for 300 ms, the largest limit of a test; last event: test:[a-z]+/, result.detail);
     assert.ok(result.elapsedMs < 2000, `the file ran ${result.elapsedMs} ms, through the blocking test that ends after 3000 ms`);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("a test file that does not exit after its tests ended fails at the exit limit with a sample of its processes", { timeout: 60000 }, async () => {
+  // The test passes, and the exit listener then blocks the main thread for 30 s, as a process that waits in its shutdown does. The event
+  // limit of 20 s is above the exit limit of 1 s, so a runner without the exit limit reports a timeout at the event limit.
+  const { file, folder } = await nodeTestFile([
+    'import test from "node:test";',
+    'test("passes", () => {});',
+    'process.on("exit", () => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000); });',
+  ].join("\n") + "\n");
+  const runFolder = join(folder, "run");
+  try {
+    const { results } = await run([eventsOf(file, { eventLimitMs: 20000, exitLimitMs: 1000 })], { concurrency: 1, run: { id: "exit", folder: runFolder } });
+    const result = results.get("events");
+    assert.equal(result.status, "fail", `${result.status}: ${result.detail}`);
+    const match = /^the file process did not exit within 1\.000s after its tests ended; last event: test:summary; samples: ([^;]+)(?:; left running: .+)?$/.exec(result.detail);
+    assert.ok(match, result.detail);
+    assert.ok(result.elapsedMs < 15000, `the file ran ${result.elapsedMs} ms, to its event limit instead of its exit limit`);
+    const samples = match[1].split(", ");
+    assert.ok(samples.length >= 1, result.detail);
+    for (const path of samples) {
+      assert.ok(path.startsWith(`${runFolder}/`), `${path} is not in the folder of the run`);
+      assert.match(readFileSync(path, "utf8"), /Call graph:/, `${path} holds no thread stacks`);
+    }
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }

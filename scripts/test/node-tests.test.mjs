@@ -61,6 +61,7 @@ test("each test file runs with a limit for each of its tests and ends when its t
   assert.ok(tests[0].args.includes("--test-force-exit"), `the file process does not end with its tests: ${JSON.stringify(tests[0].args)}`);
   assert.equal(tests[0].timeoutMs, undefined, "a test file has a limit of its own");
   assert.equal(tests[0].eventLimitMs, MAX_TEST_TIMEOUT_MS, "the event watchdog of a test file is not the largest limit of a test");
+  assert.ok(Number.isInteger(tests[0].exitLimitMs) && tests[0].exitLimitMs < tests[0].eventLimitMs, `the exit limit of a test file after its tests ended is ${tests[0].exitLimitMs}`);
   assert.ok(tests[0].args.includes(`--test-reporter=${EVENT_REPORTER}`), `the test file does not report its events: ${JSON.stringify(tests[0].args)}`);
 });
 
@@ -110,7 +111,8 @@ test("the discovered files run through the runner, each in the folder of its pac
   delete process.env.NODE_TEST_CONTEXT;
   let results;
   try {
-    ({ results } = await runTests({ tests: tests.map((item) => ({ ...item, timeoutMs: 30000 })), concurrency: 2, write: (line) => lines.push(line) }));
+    // A discovered file has an exit limit, which keeps its samples in the folder of the run.
+    ({ results } = await runTests({ tests: tests.map((item) => ({ ...item, timeoutMs: 30000 })), concurrency: 2, write: (line) => lines.push(line), run: { id: "discovered", folder: join(root, "run") } }));
   } finally {
     if (context !== undefined) process.env.NODE_TEST_CONTEXT = context;
   }
@@ -129,7 +131,7 @@ test("the error of a failed test is kept when its file is killed at its limit be
   delete process.env.NODE_TEST_CONTEXT;
   let results;
   try {
-    ({ results } = await runTests({ tests: tests.map((item) => ({ ...item, timeoutMs: 3000 })), concurrency: 1, write: () => {} }));
+    ({ results } = await runTests({ tests: tests.map((item) => ({ ...item, timeoutMs: 3000 })), concurrency: 1, write: () => {}, run: { id: "killed", folder: join(root, "run") } }));
   } finally {
     if (context !== undefined) process.env.NODE_TEST_CONTEXT = context;
   }
