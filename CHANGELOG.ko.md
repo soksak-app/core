@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-61: host 계약 표에 시험들이 선언하는 case `log.plugin-catalog.records-the-held-catalogs`가 추가되어, 선언 감사가 plugin catalog 시험을 명세의 case에 묶는다. 검증: `scripts/test/check-host-contract.test.mjs`는 행이 없는 표에서 정의되지 않은 case를 보고했고, 행을 추가한 뒤 통과한다.
 - F240: 열린 작업 register를 완료로 닫는다. 하위 항목 F240-1부터 F240-12까지 완료되었고, F240-2가 참조하는 열린 항목은 각자의 체크리스트 상태를 유지한다. 상위 항목 F160, F160.29, F161은 원인과 함께 보류한다. 검증: `make docs-check`.
 - F297: window check `maximising and restoring settle with the layout at the window size`(`e2e/resize.test.mjs`)와 `an idle browser tab on a blank page settles and its documents are counted`(`e2e/idle-tab-memory.test.mjs`)는 경과 시간과 메모리 양으로 판정하지 않는다. 두 gesture는 `e2e/benchmark/cases/resize.mjs`와 `e2e/benchmark/cases/idle-tab.mjs`로 옮겼고, benchmark `e2e/benchmark/resize-catch-up.test.mjs`(150 ms)와 `e2e/benchmark/idle-tab.test.mjs`(51200 KB)가 같은 값으로 한계를 판정한다. resize 증거는 따라잡는 데 걸린 시간인 `behindMs`를 기록한다. 검증: `e2e/test/resize-case.test.mjs`와 `e2e/test/idle-tab-case.test.mjs`는 case module이 없을 때 실패했고 이후 통과한다. window 실행과 benchmark는 개발 뒤에 실행한다.
 - F292-58: `scripts/test-command.mjs`의 `runningMembers`는 ps(1) 상태가 종료 중(flag `E`)인 process group member를 실행 중으로 세지 않는다. 그래서 종료 중인 process만 있는 group을 가진 test가 `could not end the process group` 거짓 실패를 내지 않는다. 검증: `scripts/test/test-command.test.mjs`의 `does not count a member that is exiting as running`과 `scripts/test/test-runner.test.mjs`의 `a refused group signal whose only member is exiting ends without error`가 변경 전 코드에서 실패했고 변경 뒤 통과한다. 두 file은 `node-repeat COUNT=1`로 모두 통과한다.
