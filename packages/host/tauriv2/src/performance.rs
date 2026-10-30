@@ -23,6 +23,8 @@ pub(crate) struct TestTrace(#[allow(dead_code)] std::sync::MutexGuard<'static, (
 
 #[cfg(test)]
 pub(crate) fn test_trace() -> TestTrace {
+    // default: a test that panicked while it held the switch leaves the lock poisoned; the next test still takes the switch,
+    // which holds no data, and the panic fails the earlier test.
     let switch = TEST_SWITCH.lock().unwrap_or_else(PoisonError::into_inner);
     command(json!({"action": "on"})).unwrap();
     TestTrace(switch)
