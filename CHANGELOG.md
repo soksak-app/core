@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-23: The provider view of the extension point fixture serves its status through `createExpose`, so it answers the exposure requests that the main page forwards.
 - F292-18: The sampler of the performance trace writes `document` in the `host.sampler.memory` row of each document web view, which tells the page of a view surface from its document regions, and the idle tab check sums the settled footprint of each document of the tab.
 - F292-25: `host.window` of the Tauri host reports the order of an open modal as the number of native surfaces plus the number of web views, as the Wails host does, so the modal is above every document region.
 - F292-22: A placement reads the start values of its views with its candidates, in the state of its commit, before the declared UI snapshot ingress and the memory placement readiness, so a tab that an operation closes during those waits no longer refuses the placement with a missing origin.
