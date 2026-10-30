@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F296-4: 각 host의 release workflow는 저장 데이터 migration 단계를 실행하지 않는다. `scripts/release-step.sh`와 그 시험을 제거했다. 생성된 event class 표와 window-check gate 목록은 더 이상 `log.migrated`를 이름으로 들지 않는다.
 - F296-3: host reader는 projects.json, settings.json, tab-state.json, tab-sessions의 다른 형식 file을 읽지 않고 `<file>: <name>: format must be <n>`으로 거부한다. workbench는 다른 형식이거나 format 없이 저장된 plugin data 항목을 변환하지 않고 거부한다.
 - F296-2: 두 호스트의 `sok` command line은 migration 정의를 적용하지 않는다. format이 3이 아닌 `plugins/installed.json`은 `<file>: plugins/installed.json: format must be 3`으로 거부되며, `migrations` member의 manifest case는 Go, Rust, plugin-api runner가 재생한다.
 - F296-1: 명세는 마이그레이션 대신 이전 형태의 저장 file을 `<file>: <name>: format must be <n>`으로 거부한다고 적는다. 마이그레이션 case, `migrations` manifest member, `log.migrated` event, 마이그레이션 용어를 제거했다. release version이 0.0.x인 동안 마이그레이션은 싣지 않는다.

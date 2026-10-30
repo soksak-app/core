@@ -66,7 +66,7 @@ fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
     let projects = document
         .get("projects")
         .cloned()
-        .unwrap_or_else(|| json!([]));
+        .unwrap_or_else(|| json!([])); // default: a projects.json without the projects member holds no project.
     serde_json::from_value(projects).map_err(|e| format!("{}: {e}", path.display()))
 }
 
@@ -381,12 +381,12 @@ impl Workspace {
                     "settings.json",
                     SETTINGS_FORMAT,
                 )?
-                .unwrap_or_default();
+                .unwrap_or_default(); // default: a missing settings.json holds no common settings.
                 for project in &mut projects {
                     let path = Path::new(project["root"].as_str().ok_or("invalid project root")?)
                         .join(".soksak/settings.json");
                     let mut settings =
-                        read_stored(&path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default();
+                        read_stored(&path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default(); // default: a missing project settings file holds no overrides.
                     if let Some(key) = COMMON_ONLY.iter().find(|key| settings.contains_key(**key)) {
                         return Err(format!("{}: {key} is common-only", path.display()));
                     }
@@ -472,7 +472,7 @@ impl Workspace {
                     self.directory.join("settings.json")
                 };
                 let mut settings =
-                    read_stored(&path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default();
+                    read_stored(&path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default(); // default: a missing project settings file holds no overrides.
                 let mut set: Vec<String> = patch.keys().cloned().collect();
                 settings.extend(patch);
                 let mut removed = vec![];

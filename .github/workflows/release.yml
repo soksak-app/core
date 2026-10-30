@@ -82,8 +82,6 @@ jobs:
           GOPROXY: 'off'
           GOSUMDB: 'off'
         run: make release-check-wailsv3
-      - name: Migrate stored data with the Wails release host
-        run: bash scripts/release-step.sh "target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3"
       - name: Package Wails release bundle
         run: |
           version="${{ needs.gate.outputs.version }}"
@@ -134,8 +132,6 @@ jobs:
           npm_config_offline: 'true'
           CARGO_NET_OFFLINE: 'true'
         run: make release-check-tauriv2
-      - name: Migrate stored data with the Tauri release host
-        run: bash scripts/release-step.sh "target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2"
       - name: Package Tauri release bundle
         run: |
           version="${{ needs.gate.outputs.version }}"

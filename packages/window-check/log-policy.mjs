@@ -40,10 +40,10 @@ export function readPolicy(configDir) {
 }
 
 /**
- * The events that pass every gate (docs/spec/logging.md#policy): the events that a writer reports about itself, the record of a
- * stored-data migration, the counts of the gates and the start of a document of the page.
+ * The events that pass every gate (docs/spec/logging.md#policy): the events that a writer reports about itself, the counts of the
+ * gates and the start of a document of the page.
  */
-const UNGATED = new Set(["log.open", "log.rotated", "log.dropped", "log.policy", "log.gated", "log.pruned", "log.migrated",
+const UNGATED = new Set(["log.open", "log.rotated", "log.dropped", "log.policy", "log.gated", "log.pruned",
   "page.log.gated", "native.log.gated", "page.start"]);
 
 /**

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F296-4: The release workflow of each host runs no stored data migration step; `scripts/release-step.sh` and its test are removed. The generated event class tables and the window-check gate list no longer name `log.migrated`.
 - F296-3: The host readers of projects.json, settings.json, tab-state.json and tab-sessions refuse a file of another format with `<file>: <name>: format must be <n>` instead of reading it, and the workbench refuses a stored plugin data entry of another format or without a format instead of converting it.
 - F296-2: The `sok` command lines of both hosts no longer apply migration definitions. A `plugins/installed.json` of any format other than 3 is refused with `<file>: plugins/installed.json: format must be 3`, and the manifest case of the `migrations` member is replayed by the Go, Rust and plugin-api runners.
 - F296-1: The specifications state the rejection of a stored file of an earlier form with `<file>: <name>: format must be <n>` in place of the stored data migration. The migration cases, the `migrations` manifest member, the `log.migrated` event and the migration terms are removed. While the release version is 0.0.x, no migration ships.

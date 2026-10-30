@@ -3,7 +3,7 @@
 // the audit of the run folder, and keeps the run folder of a failed job.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -85,7 +85,7 @@ test('the window-check workflow names the window checks, the audit step and the 
   assert.ok(index('Keep the run folder') > index('Audit of the logs'), 'the artifact is taken after the audit');
 });
 
-test('release builds, migrates, and packages each host after the reusable CI checks succeed', () => {
+test('release builds and packages each host after the reusable CI checks succeed', () => {
   const text = read('.github/workflows/release.yml');
   assert.match(text, /checks:\n\s+uses: \.\/\.github\/workflows\/ci\.yml/, 'release checks reuse the independent CI jobs');
   const job = (name) => {
@@ -101,11 +101,8 @@ test('release builds, migrates, and packages each host after the reusable CI che
     const hostJob = job(`release-${host}`);
     assert.match(hostJob, new RegExp(`run: make ${target}`));
     const list = steps(hostJob);
-    const migration = list.findIndex((step) => step.name === `Migrate stored data with the ${host === 'wailsv3' ? 'Wails' : 'Tauri'} release host`);
     const packaging = list.findIndex((step) => step.name === `Package ${host === 'wailsv3' ? 'Wails' : 'Tauri'} release bundle`);
-    assert.ok(migration >= 0, `${host}: no release migration step`);
-    assert.ok(packaging > migration, `${host}: package step does not follow migration`);
-    assert.match(list[migration].text, new RegExp(`bash scripts/release-step\\.sh ".*${binary}"`));
+    assert.ok(packaging >= 0, `${host}: no package step`);
     assert.match(list[packaging].text, /ditto -c -k --keepParent/);
     const nativeFetch = list.findIndex((step) => step.name === 'Fetch the pinned native release file');
     const build = list.findIndex((step) => step.name === `Build and audit ${host === 'wailsv3' ? 'Wails' : 'Tauri'} release bundle offline`);
@@ -122,11 +119,12 @@ test('release builds, migrates, and packages each host after the reusable CI che
   }
   assert.match(publish, /name: release-wailsv3/);
   assert.match(publish, /name: release-tauriv2/);
-  const step = read('scripts/release-step.sh');
-  assert.match(step, /"format":2/, 'the script writes the released format-2 form');
-  assert.match(step, /--config-dir/, 'the script runs the host once');
-  assert.match(step, /log\.migrated/, 'the script requires the migration record');
-  assert.match(step, /"format": ?3/, 'the script requires the migrated file');
+});
+
+test('the release workflow runs no stored data migration step and no release step script', () => {
+  const text = read('.github/workflows/release.yml');
+  assert.doesNotMatch(text, /Migrate stored data|release-step/, 'the release workflow names no migration step');
+  assert.equal(existsSync(join(ROOT, 'scripts', 'release-step.sh')), false, 'the release step script is removed');
 });
 
 test('the push check runs only the commit message check, and ci runs the structure, format and clippy checks', () => {
