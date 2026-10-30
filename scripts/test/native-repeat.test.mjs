@@ -103,3 +103,19 @@ test('make repeat-suite shows the runner output of every run of the suite, and p
   }
   assert.match(result.stdout, /^PASS: test suite passed 1 consecutive runs$/m, result.stdout + result.stderr);
 });
+
+test('make repeat in the process-identity package names its test of each run, reports its result and elapsed time, and stops at a failed run', (t) => {
+  const build = mkdtempSync(join(tmpdir(), 'soksak-process-identity-repeat-'));
+  t.after(() => rmSync(build, { recursive: true }));
+  const executable = fake(build, 'process_identity_test', 'counter="$0.count"; n=$(cat "$counter" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$counter"; echo "probe $n"; [ "$n" -lt 2 ]');
+  const result = spawnSync('make', ['-C', join(native, 'process-identity'), 'repeat', 'TEST=process_identity_test', 'COUNT=3', `BUILD=${build}`, '-o', executable], {
+    encoding: 'utf8', timeout: 60000,
+  });
+  assert.match(result.stdout, /^RUN  process_identity_test \(1 running, limit 120\.000s\)$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^PASS process_identity_test \d+\.\d{3}s$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^FAIL process_identity_test \d+\.\d{3}s exit 1$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^  probe 2$/m, 'the output of the failed run is missing');
+  assert.equal(result.stdout.split('\n').filter((line) => line.startsWith('RUN  ')).length, 2, result.stdout);
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /FAIL: process_identity_test run 2 of 3; /, result.stdout + result.stderr);
+});
