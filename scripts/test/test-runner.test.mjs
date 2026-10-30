@@ -353,3 +353,60 @@ test("a test file whose test events keep arriving is not ended at the event limi
     rmSync(folder, { recursive: true, force: true });
   }
 });
+
+// A test process that ends while a test runs: node --test reports the results of the earlier tests and no result, error or
+// cancellation for the running test, so its summary counts fewer tests than started. The ending is the system signal of the
+// file process, as a crash of a native module of a check (SIGSEGV) ends it.
+const endsMidTest = (ending) => [
+  'import test from "node:test";',
+  'test("passes first", () => {});',
+  `test("ends the process", async () => { await new Promise((resolve) => setTimeout(resolve, 20)); ${ending}; await new Promise((resolve) => setTimeout(resolve, 2000)); });`,
+  'test("queued after", () => {});',
+].join("\n") + "\n";
+
+test("a test file whose process is killed while a test runs fails with the test that has no result and the signal", async () => {
+  const { file, folder } = await nodeTestFile(endsMidTest('process.kill(process.pid, "SIGKILL")'));
+  try {
+    const { results } = await run([eventsOf(file, { eventLimitMs: 60_000 })], { concurrency: 1 });
+    const result = results.get("events");
+    assert.equal(result.status, "fail", result.output);
+    assert.equal(result.detail, "the test process ended by signal SIGKILL while a test ran; started without a result: ends the process; queued without a start: queued after");
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("a test file whose process exits with status 0 while a test runs fails with the test that has no result", async () => {
+  const { file, folder } = await nodeTestFile(endsMidTest("process.exit(0)"));
+  try {
+    const { results } = await run([eventsOf(file, { eventLimitMs: 60_000 })], { concurrency: 1 });
+    const result = results.get("events");
+    assert.equal(result.status, "fail", result.output);
+    assert.equal(result.detail, "the test process ended by exit 0 while a test ran; started without a result: ends the process; queued without a start: queued after");
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("a test file of suites, subtests, skipped, todo and filtered tests that ends by itself has a result for every started test", async () => {
+  const { file, folder } = await nodeTestFile([
+    'import { describe, it, test } from "node:test";',
+    'describe("suite", () => { it("inner", () => {}); it.skip("skipped inner", () => {}); });',
+    'test("parent", async (t) => { await t.test("child", () => {}); await t.test("child", () => {}); });',
+    'test.todo("todo", () => {});',
+    'test("filtered out", () => { throw new Error("runs only without the name pattern"); });',
+    'test("times out", { timeout: 50 }, () => new Promise((resolve) => setTimeout(resolve, 1000)));',
+  ].join("\n") + "\n");
+  try {
+    const item = eventsOf(file, { eventLimitMs: 60_000 });
+    item.args.splice(item.args.indexOf("--test") + 1, 0, "--test-name-pattern=^(?!filtered)");
+    const { results } = await run([item], { concurrency: 1 });
+    const result = results.get("events");
+    // The test over its own limit fails the file through the status of node --test, and no started test lacks a result.
+    assert.equal(result.status, "fail", result.output);
+    assert.equal(result.detail, "exit 1", result.output);
+    assert.ok(!result.output.includes("runs only without the name pattern"), result.output);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});

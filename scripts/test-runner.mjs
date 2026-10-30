@@ -178,6 +178,29 @@ function runOne(item, limitMs, env, outputPath) {
     // A process without a declared limit has no timer; its tests end by their own limits.
     const timer = limitMs === undefined ? null : setTimeout(() => endAtLimit(`exceeded ${seconds(limitMs)}s and was killed`), limitMs);
     arm();
+    // The tests of a process that reports its test events, by `nesting` and name: `queued` holds the tests enqueued and not yet
+    // dequeued, `running` the tests dequeued and not yet complete, each with its count. node --test reports no result, error or
+    // cancellation for a test whose file process ended while it ran, so a test left in `running` when the process ends has no result.
+    // `fileExit` is the exit code and signal that node --test sets on the result of a file whose process failed.
+    const queued = new Map();
+    const running = new Map();
+    let fileExit = null;
+    const count = (tests, key, step) => {
+      const left = (tests.get(key) ?? 0) + step;
+      if (left === 0) tests.delete(key);
+      else tests.set(key, left);
+    };
+    const track = (event) => {
+      const key = `${event.nesting}\0${event.name}`;
+      if (event.type === 'test:enqueue') count(queued, key, 1);
+      else if (event.type === 'test:dequeue') {
+        if (queued.has(key)) count(queued, key, -1);
+        count(running, key, 1);
+      } else if (event.type === 'test:complete') {
+        if (running.has(key)) count(running, key, -1);
+        if (Object.hasOwn(event, 'exitCode')) fileExit = { exitCode: event.exitCode, signal: event.signal };
+      }
+    };
     // The standard error carries the event lines of the reporter and the TAP form of the tests. A line is read when it is complete.
     const decoder = new StringDecoder('utf8');
     let pending = '';
@@ -190,6 +213,7 @@ function runOne(item, limitMs, env, outputPath) {
         try {
           const event = JSON.parse(line.slice(EVENT_PREFIX.length));
           lastEvent = event.name === '' ? event.type : `${event.type} ${event.name}`;
+          track(event);
           if (event.type === 'test:summary' && item.exitLimitMs !== undefined) armExit();
           else arm();
         } catch (error) {
@@ -228,7 +252,14 @@ function runOne(item, limitMs, env, outputPath) {
         const left = limit.leftovers.length > 0 ? `; left running: ${limit.leftovers.join('; ')}` : '';
         resolve({ status: limit.status ?? 'timeout', elapsedMs: limit.elapsedMs, output, detail: `${limit.reason}${left}` });
       } else if (eventError !== null) resolve({ status: 'fail', elapsedMs, output, detail: eventError.message });
-      else if (exitLeftovers.length > 0) resolve({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
+      else if (running.size > 0) {
+        const names = (tests) => [...tests.keys()].map((key) => key.slice(key.indexOf('\0') + 1)).join(', ');
+        const end = fileExit === null ? (code === null ? `signal ${signal}` : `exit ${code}`)
+          : (fileExit.signal === null ? `exit ${fileExit.exitCode}` : `signal ${fileExit.signal}`);
+        const left = exitLeftovers.length > 0 ? `; left running after exit: ${exitLeftovers.join('; ')}` : '';
+        const waiting = queued.size > 0 ? `; queued without a start: ${names(queued)}` : '';
+        resolve({ status: 'fail', elapsedMs, output, detail: `the test process ended by ${end} while a test ran; started without a result: ${names(running)}${waiting}${left}` });
+      } else if (exitLeftovers.length > 0) resolve({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
       else if (code === 0) resolve({ status: 'pass', elapsedMs, output, detail: '' });
       else resolve({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });
     });
