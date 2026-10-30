@@ -1260,3 +1260,31 @@ fn plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset() {
     );
     assert!(!config.path().join("plugins/installed.json").exists());
 }
+
+// contract: install.stored.no-migration
+#[test]
+fn manifest_declaring_migrations_is_refused_as_an_unknown_member() {
+    let registry = schema_outside_subset_index();
+    let config = Folder::new("plugins");
+    use_registry(&config, &registry);
+    write_tree(
+        config.path(),
+        &[
+            (
+                "plugins/probe/0.2.0/package.json",
+                r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}"#,
+            ),
+            (
+                "plugins/probe/0.2.0/plugin.json",
+                r#"{"id": "probe", "name": "Probe", "description": "Sample.", "migrations": [{"from": "0.1.0", "module": "ui/migrate.js"}]}"#,
+            ),
+        ],
+    );
+    let (code, _, stderr) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
+    assert_ne!(code, 0, "install succeeded");
+    assert!(
+        stderr.contains("plugin.json: unknown field migrations"),
+        "{stderr}"
+    );
+    assert!(!config.path().join("plugins/installed.json").exists());
+}

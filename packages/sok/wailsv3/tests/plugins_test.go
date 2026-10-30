@@ -911,3 +911,19 @@ func TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset(t *testing.T) 
 		t.Fatal("a refused install wrote installed.json")
 	}
 }
+
+// contract: install.stored.no-migration
+func TestManifestDeclaringMigrationsIsRefusedAsAnUnknownMember(t *testing.T) {
+	index := schemaOutsideSubsetIndex(t)
+	config := t.TempDir()
+	runJSON(t, "registry", "use", index, "--config-dir", config)
+	writeTree(t, filepath.Join(config, "plugins/probe/0.2.0"), map[string]string{
+		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
+		"plugin.json":  `{"id": "probe", "name": "Probe", "description": "Sample.", "migrations": [{"from": "0.1.0", "module": "ui/migrate.js"}]}`,
+	})
+	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t))
+	rejects(t, err, "plugin.json: unknown field migrations")
+	if exists(filepath.Join(config, "plugins", "installed.json")) {
+		t.Fatal("a refused install wrote installed.json")
+	}
+}

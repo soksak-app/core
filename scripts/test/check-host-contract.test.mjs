@@ -204,6 +204,31 @@ test('every Go test function of the Wails host tests declares a contract case th
   assert.deepEqual(audit.errors, []);
 });
 
+test('every contract case of each host scope has a declaring test in the current sources', () => {
+  const cases = parseContractCases(readFileSync(new URL('../../docs/spec/host-contract.md', import.meta.url), 'utf8'));
+  const sourcesOf = (roots, suffix) => {
+    const tests = [];
+    const errors = [];
+    for (const root of roots) {
+      for (const file of readdirSync(fileURLToPath(new URL(`../../${root}/`, import.meta.url)), { recursive: true })) {
+        if (!file.endsWith(suffix)) continue;
+        const path = `${root}/${file}`;
+        const parsed = parseDeclarations(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'), suffix === '.rs' ? 'rust' : 'go', path);
+        tests.push(...parsed.tests);
+        errors.push(...parsed.errors);
+      }
+    }
+    return { tests, errors };
+  };
+  const wails = sourcesOf(['packages/host/wailsv3', 'packages/sok/wailsv3'], '_test.go');
+  const tauri = sourcesOf(['packages/host/tauriv2/tests', 'packages/host/tauriv2/src', 'packages/sok/tauriv2/tests', 'packages/sok/tauriv2/src'], '.rs');
+  const { declared } = auditDeclarations(cases, [
+    { name: 'wailsv3', language: 'go', ...wails },
+    { name: 'tauriv2', language: 'rust', ...tauri },
+  ]);
+  assert.deepEqual(uncoveredCases(cases, declared), []);
+});
+
 test('results are grouped by run and owner, and a name that one owner shares keeps a failure, then a pass, then a skip', () => {
   const item = (name, run, owner, testName) => ({ name, run, owner, testName });
   const items = [item('r1 p1.A', 'r1', 'p1', 'A'), item('r1 p2.A', 'r1', 'p2', 'A'), item('r1 p1.B', 'r1', 'p1', 'B'),
