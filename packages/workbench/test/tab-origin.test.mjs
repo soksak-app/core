@@ -147,6 +147,29 @@ test("a tab that leaves its stored layout while its surface is mounted keeps its
   }
 });
 
+test("a view tab of a stored layout keeps its origin through the drawn layout of its space while its surface is mounted", () => {
+  // The stored layout of the space holds a terminal view tab with its origin, as a reopened project reads it.
+  const stored = { state: { cards: [{ id: "c", data: { tabs: [{ id: "origin-stored-view", plugin: "view-plugin", origin: { directory: "/work/project" } }] } }] } };
+  assert.deepEqual(recordStoredOrigins(stored, isView), [], "the stored origin is valid");
+  const mounted = new Set(["origin-stored-view"]);
+  try {
+    tabReports.setMountedTab((id) => mounted.has(id));
+    // The drawn layout of the space is stored without the tab while the plane still shows its mounted surface.
+    forgetTabsLeft(stored.state.cards, [], "drawn layout of space spc-stored, project prj-stored");
+    assert.deepEqual(tabOrigin("origin-stored-view"), { directory: "/work/project" },
+      "the stored origin ended while the surface of the tab is still mounted");
+    assert.deepEqual(storedLayoutState(stored.state).cards[0].data.tabs[0].origin, { directory: "/work/project" },
+      "the drawn plane cannot store the mounted tab with its origin");
+    mounted.delete("origin-stored-view");
+    tabReports.settleLeftTabs();
+    assert.throws(() => tabOrigin("origin-stored-view"), /tab origin-stored-view has no origin/);
+    assert.match(tabReports.originHistory("origin-stored-view"),
+      /^created by stored layout, held by this session: yes, origin dropped by drawn layout of space spc-stored, project prj-stored, whose stored layout held no tab$/);
+  } finally {
+    tabReports.setMountedTab(() => false);
+  }
+});
+
 test("a tab that returns to a stored layout before its surface is disposed keeps its origin", () => {
   recordOrigin("origin-returned", null, "test fixture");
   const previous = [{ id: "c", data: { tabs: [{ id: "origin-returned", plugin: "p" }] } }];
