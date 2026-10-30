@@ -38,8 +38,9 @@ async function clickLastPixel(s, surface, scale) {
   const { state, frame } = await geometry(s, surface, scale);
   const x = frame.width / 2, y = frame.height - 0.5 / scale;
   const point = { x: frame.x + x, y: frame.y + y };
-  // A DOM surface is mounted in the main page, so the page owns that point.
-  assert.deepEqual(await s.run("host.hit", point), { kind: "page" });
+  // The surface is a view, so the root document of the surface owns that point.
+  assert.deepEqual(await s.run("host.hit", point), { kind: "document", surface, document: "" },
+    "the last device pixel row does not belong to the view of the surface");
   const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
   const fresh = (list) => list.filter((e) => e.sequence > seen);
   await s.pointer(point.x, point.y, "down");
