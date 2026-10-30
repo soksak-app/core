@@ -22,3 +22,14 @@ func TestModalOrderIsAboveEveryNativeSurfaceAndWebview(t *testing.T) {
 		t.Fatalf("modal order %d, want 7", order)
 	}
 }
+
+// contract: window.facts.document-reports-its-blur
+func TestWindowDocumentReportsItsNativeBlur(t *testing.T) {
+	key := DocumentKey{Surface: "tab-a", Name: "page"}
+	if entry := windowDocument(key, 2, windowWebviewFacts{View: 7, Blurred: true}); !entry.Blurred {
+		t.Fatalf("document entry %#v of a blurred web view, want blurred true", entry)
+	}
+	if entry := windowDocument(key, 2, windowWebviewFacts{View: 7}); entry.Blurred {
+		t.Fatalf("document entry %#v of a web view without a filter, want blurred false", entry)
+	}
+}

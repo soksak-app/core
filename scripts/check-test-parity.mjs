@@ -8077,6 +8077,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F292-12",
+    implementation: [
+      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func windowDocument(key DocumentKey, order int, view windowWebviewFacts) WindowDocument {" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn window_document(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/exposure_webviews_test.go", id: "TestWindowDocumentReportsItsNativeBlur" },
+      { file: "packages/host/tauriv2/src/exposure_webviews_test.rs", id: "window_document_reports_its_native_blur" },
+    ],
+    expected: "host.window reports whether each document web view carries the native blur filter on both hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F292-25",
     implementation: [
       { file: "packages/host/wailsv3/src/exposure.go", symbol: "func modalOrder(nativeSurfaces, webviews int) int {" },

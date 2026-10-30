@@ -113,6 +113,7 @@ fn invalid_json_closes_connection() {
 | `window.responder.closed-window-sends-nothing` | close가 window를 지운 뒤 그 window에 닿은 first responder 변경은 받을 page가 없으므로 `window-responder` event를 보내지 않고 오류도 저장하지 않는다. window가 열려 있는 동안 실패한 responder 읽기는 오류로 보고한다. | both |
 | `window.facts.plugin-host-webviews-are-counted-apart` | `host.window`은 창의 plugin host 웹뷰를 `pluginHostWebviews`로 보고하고 그 행에 `pluginHost: true`를 표시한다. `appDomWebviews`는 그것을 빼고 앱 DOM과 view 웹뷰를 센다. | both |
 | `window.facts.modal-order-is-above-every-webview` | `host.window`은 열린 modal의 `order`를 창의 native surface 수와 web view 수의 합으로 보고한다. native surface의 order와 web view의 order는 두 목록의 index이고 modal은 둘 위에 붙으므로, 이 값은 모든 native surface, 모든 web view와 document region의 `order`보다 크다. | both |
+| `window.facts.document-reports-its-blur` | `host.window`은 dialog 배경의 native blur filter를 가진 각 document web view(view 표면의 page와 document region)에 `blurred: true`를, filter가 없는 것에 `blurred: false`를 보고한다. | both |
 | `links.open.accepts-web-and-mail-schemes` | 절대 `http`, `https`, `mailto` URL은 열기를 받아들인다. | both |
 | `links.open.rejects-other-schemes` | 다른 스킴의 URL, 해석되지 않는 URL, 8192자보다 긴 URL은 거부한다. | both |
 | `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | both |

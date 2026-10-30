@@ -123,7 +123,7 @@ fn host_declarations() -> Value {
                 "documents": {"type": "array", "items": {"type": "object", "properties": {
                     "surface": {"type": "string"}, "document": {"type": "string"}, "frame": rect,
                     "visible": {"type": "boolean"}, "focused": {"type": "boolean"}, "order": {"type": "integer"},
-                    "process": {"type": "integer"}}}},
+                    "process": {"type": "integer"}, "blurred": {"type": "boolean"}}}},
                 "regions": {"type": "array", "items": {"type": "object", "properties": {
                     "surface": {"type": "string"}, "name": {"type": "string"}, "frame": rect,
                     "visible": {"type": "boolean"}, "focused": {"type": "boolean"},
@@ -1736,6 +1736,34 @@ fn modal_order(native_surfaces: usize, webviews: usize) -> usize {
 }
 
 /// Returns the host.window row of the web view at drawing order `order` from its native facts.
+/// The host.window entry of the document web view `document` of `surface` at `order`.
+fn window_document(
+    surface: &str,
+    document: &str,
+    order: usize,
+    view: &Value,
+) -> Result<Value, Failure> {
+    let hidden = view["hidden"]
+        .as_bool()
+        .ok_or_else(|| internal("webview facts missing hidden"))?;
+    let focused = view["focused"]
+        .as_bool()
+        .ok_or_else(|| internal("webview facts missing focused"))?;
+    let process = view["process"]
+        .as_i64()
+        .ok_or_else(|| internal("webview facts missing process"))?;
+    // A document web view that the host blurs while a dialog is open carries the native blur filter.
+    let blurred = view["blurred"]
+        .as_bool()
+        .ok_or_else(|| internal("webview facts missing blurred"))?;
+    let frame =
+        json!({"x": view["x"], "y": view["y"], "width": view["width"], "height": view["height"]});
+    Ok(
+        json!({"surface": surface, "document": document, "frame": frame,
+        "visible": !hidden, "focused": focused, "order": order, "process": process, "blurred": blurred}),
+    )
+}
+
 fn window_webview_row(order: usize, view: &Value) -> Result<Value, Failure> {
     let flag = |name: &str| {
         view[name].as_bool().ok_or_else(|| {
@@ -1848,21 +1876,9 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
             .as_u64()
             .ok_or_else(|| internal("webview facts missing view"))?;
         let address = address as platform::Handle;
-        let hidden = view["hidden"]
-            .as_bool()
-            .ok_or_else(|| internal("webview facts missing hidden"))?;
-        let focused = view["focused"]
-            .as_bool()
-            .ok_or_else(|| internal("webview facts missing focused"))?;
-        let process = view["process"]
-            .as_i64()
-            .ok_or_else(|| internal("webview facts missing process"))?;
         webview_frames.push(window_webview_row(order, view)?);
         if let Some((surface, document)) = documents.get(&address) {
-            attached.push(
-                json!({"surface": surface, "document": document, "frame": rect(view),
-                "visible": !hidden, "focused": focused, "order": order, "process": process}),
-            );
+            attached.push(window_document(surface, document, order, view)?);
         } else if modal.is_object() && modal_view == Some(address) {
             modal["frame"] = rect(view);
             modal["order"] = json!(modal_order(native_surfaces.len(), webviews.len()));

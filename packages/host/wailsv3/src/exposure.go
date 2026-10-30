@@ -75,7 +75,7 @@ var hostStatus = map[string]hostEntry{
 			"documents": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"surface": map[string]any{"type": "string"}, "document": map[string]any{"type": "string"},
 				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "focused": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
-				"process": map[string]any{"type": "integer"},
+				"process": map[string]any{"type": "integer"}, "blurred": map[string]any{"type": "boolean"},
 			}}},
 			"regions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"surface": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
@@ -1179,6 +1179,7 @@ type windowWebviewFacts struct {
 	Draws      bool    `json:"draws"`
 	Alpha      float64 `json:"alpha"`
 	Process    int     `json:"process"`
+	Blurred    bool    `json:"blurred"`
 }
 
 // pluginHostProcessesForFacts matches only registered plugin-host handles to native WebContent process facts.
@@ -1226,6 +1227,14 @@ type WindowDocument struct {
 	Order    int    `json:"order"`
 	// Process is the WebContent process of the document web view, 0 before it has one.
 	Process int `json:"process"`
+	// Blurred is true while the host blurs the document web view natively, as it does while a dialog is open.
+	Blurred bool `json:"blurred"`
+}
+
+// windowDocument is the host.window entry of the document web view of key at order.
+func windowDocument(key DocumentKey, order int, view windowWebviewFacts) WindowDocument {
+	return WindowDocument{Surface: key.Surface, Document: key.Name,
+		Frame: view.frame, Visible: !view.Hidden, Focused: view.Focused, Order: order, Process: view.Process, Blurred: view.Blurred}
 }
 
 // WindowWebview is the frame of one web view in the window coordinate system.
@@ -1527,8 +1536,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	for order, view := range facts.Webviews {
 		out.Webviews = append(out.Webviews, windowWebviewRow(order, view))
 		if key, ok := documents[view.View]; ok {
-			out.Documents = append(out.Documents, WindowDocument{Surface: key.Surface, Document: key.Name,
-				Frame: view.frame, Visible: !view.Hidden, Focused: view.Focused, Order: order, Process: view.Process})
+			out.Documents = append(out.Documents, windowDocument(key, order, view))
 		}
 	}
 	out.Responder = windowResponder(facts.Responder.Class, facts.Responder.Webview, facts.Responder.Surface, facts.Responder.Main, named, documents, modalHandle)

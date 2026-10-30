@@ -33,3 +33,24 @@ fn modal_order_is_above_every_native_surface_and_webview() {
     // Two native surfaces have the orders 0 and 1, and five web views have the orders 0 to 4.
     assert_eq!(modal_order(2, 5), 7);
 }
+
+// contract: window.facts.document-reports-its-blur
+#[test]
+fn window_document_reports_its_native_blur() {
+    let view = |blurred: bool| {
+        json!({"view": 7, "x": 0, "y": 0, "width": 0, "height": 0, "hidden": false,
+        "focused": false, "process": 0, "blurred": blurred})
+    };
+    let entry = window_document("tab-a", "page", 2, &view(true)).unwrap();
+    assert_eq!(
+        entry["blurred"],
+        json!(true),
+        "document entry {entry} of a blurred web view"
+    );
+    let entry = window_document("tab-a", "page", 2, &view(false)).unwrap();
+    assert_eq!(
+        entry["blurred"],
+        json!(false),
+        "document entry {entry} of a web view without a filter"
+    );
+}
