@@ -92,7 +92,8 @@ if (requiresBoth(process.env)) test("both hosts answer the same page the same wa
   const logs = {};
   const states = {};
   for (const [name, s] of Object.entries(sessions)) {
-    await fresh(s);
+    // The call records show which phase of presentSurfaces held a commit that does not settle.
+    await fresh(s, { log: { call: "debug" }, reads: ["page.call"] });
     states[name] = { fresh: await layoutState(s) };
     // The settled layout of the drag is taken by stopping the recording before the settings modal opens. The modal is an overlay of the whole window and changes the next layout,
     // and the moment at which that layout enters the recording differs per host.
@@ -173,7 +174,8 @@ if (requiresBoth(process.env)) test("both hosts lay out the same page the same w
   const sessions = await both(t);
   const rested = {};
   for (const [name, s] of Object.entries(sessions)) {
-    await fresh(s);
+    // The call records show which phase of presentSurfaces held a commit that does not settle.
+    await fresh(s, { log: { call: "debug" }, reads: ["page.call"] });
     const log = await s.transcript();
     await s.run("host.window.resize", SIZE);
     await s.until("host.window", (w) => w.content.width === SIZE.width && w.content.height === SIZE.height,
