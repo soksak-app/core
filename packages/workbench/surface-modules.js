@@ -268,11 +268,20 @@ export function surfaceForTab(tab) {
   return { ...plugin(tab.plugin).surface(tab.id), surfaceId: tab.id, pluginId: tab.plugin, params: tab.params ?? null }; // default: a tab without stored params starts with null params.
 }
 
-/** Adds the document-start values to each view using the descriptor supplied by its slot or stored tab. */
-export function surfacePlacementsForHost(surfaces, project) {
-  const origins = surfaces.map((entry) => native && entry.surface.composition?.kind === "view"
-    ? viewStartOrigin(entry.surface)
-    : null);
+/**
+ * Adds the document-start values to each view using the descriptor supplied by its slot or stored tab. holderOf(entry) names the
+ * layout that made the entry a candidate, which the refusal of a view without an origin states (docs/spec/projects.md#tab-origin).
+ */
+export function surfacePlacementsForHost(surfaces, project, holderOf) {
+  if (typeof holderOf !== "function") throw new TypeError("surfacePlacementsForHost requires holderOf(entry)");
+  const origins = surfaces.map((entry) => {
+    if (!native || entry.surface.composition?.kind !== "view") return null;
+    try {
+      return viewStartOrigin(entry.surface);
+    } catch (error) {
+      throw new TypeError(`${error.message}, a commit candidate of ${holderOf(entry)}`);
+    }
+  });
   const declarations = origins.some((origin) => origin !== null) ? registry.surfaceDeclarations() : null;
   return surfaces.map((entry, index) => origins[index] === null
     ? entry

@@ -105,7 +105,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
       ]]));
     };
     try {
-      const starts = surfacePlacementsForHost(startValuesSurfaces, null).map(({ start }) => start);
+      const starts = surfacePlacementsForHost(startValuesSurfaces, null, () => "the drawn record").map(({ start }) => start);
       assert.equal(declarationReads, 1,
         "one placement must project the complete declaration registry once, not three times for each view");
       for (const start of starts) {
@@ -135,7 +135,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     const previousLogPolicy = logGate.classes();
     logGate.set({ ...previousLogPolicy, frame: "trace" });
     try {
-      await hostSurfaces.place({ ...initial, surfaces: surfacePlacementsForHost(initial.surfaces, null) });
+      await hostSurfaces.place({ ...initial, surfaces: surfacePlacementsForHost(initial.surfaces, null, () => "the drawn record") });
     } finally {
       logGate.set(previousLogPolicy);
     }
@@ -160,7 +160,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
       logGate.set({ ...priorTracePolicy, frame: "off" });
       const opensBeforeCompletion = holdNextSync();
       const openingPlacement = hostSurfaces.place({ ...initial, settled: false,
-        surfaces: surfacePlacementsForHost(initial.surfaces, null) });
+        surfaces: surfacePlacementsForHost(initial.surfaces, null, () => "the drawn record") });
       const openingRequest = await opensBeforeCompletion.started;
       logGate.set({ ...priorTracePolicy, frame: "trace" });
       opensBeforeCompletion.resolve(syncReply(openingRequest));
@@ -174,7 +174,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
 
       const closesBeforeCompletion = holdNextSync();
       const closingPlacement = hostSurfaces.place({ ...initial, settled: true,
-        surfaces: surfacePlacementsForHost(initial.surfaces, null) });
+        surfaces: surfacePlacementsForHost(initial.surfaces, null, () => "the drawn record") });
       const closingRequest = await closesBeforeCompletion.started;
       logGate.set({ ...priorTracePolicy, frame: "off" });
       closesBeforeCompletion.resolve(syncReply(closingRequest));
@@ -197,7 +197,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
 
     await compositor.publish();
     const record = compositor.latest();
-    const surfaces = surfacePlacementsForHost(record.surfaces, null);
+    const surfaces = surfacePlacementsForHost(record.surfaces, null, () => "the drawn record");
     authorizeSurface(opened.tab);
     await hostSurfaces.theme({ scheme: "light", tokens: {} });
     await hostSurfaces.place({ ...record, surfaces });
@@ -215,12 +215,12 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     recordOrigin("tab-dormant", null, "test fixture");
     const dormant = surfaceForTab({ id: "tab-dormant", plugin: pluginId, params: { path: "stored.txt" } });
     assert.deepEqual(dormant.params, { path: "stored.txt" }, "a dormant tab descriptor lost stored params");
-    const dormantPlacement = surfacePlacementsForHost([{ id: dormant.surfaceId, surface: dormant }], null)[0];
+    const dormantPlacement = surfacePlacementsForHost([{ id: dormant.surfaceId, surface: dormant }], null, () => "the drawn record")[0];
     assert.deepEqual(dormantPlacement.start.params, { path: "stored.txt" });
     recordOrigin("tab-null", null, "test fixture");
     const explicitNull = surfaceForTab({ id: "tab-null", plugin: pluginId, params: null });
     assert.strictEqual(explicitNull.params, null, "a dormant tab without params lost explicit null");
-    assert.strictEqual(surfacePlacementsForHost([{ id: explicitNull.surfaceId, surface: explicitNull }], null)[0].start.params, null);
+    assert.strictEqual(surfacePlacementsForHost([{ id: explicitNull.surfaceId, surface: explicitNull }], null, () => "the drawn record")[0].start.params, null);
   } finally {
     dom.window.close();
   }

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-22-1-2: origin이 없는 commit candidate의 거부는 그 tab을 candidate로 만든 holder로 끝난다. holder는 drawn record, current plane, 또는 이름이 붙은 space와 project의 stored layout이다. 전에는 거부가 origin을 버린 layout만 밝혀서, 어느 layout이 tab을 candidate로 남겼는지 보여 주는 기록이 없었다. 검증: `packages/workbench/test/surface-view.test.mjs`의 unit test가 변경 전에는 holder가 없는 메시지를 읽었고 변경 후에는 통과한다.
 - F292-33: view의 core status watch가 main page의 core 표에서 그 status를 따라 값과 각 변경을 전달한다. 전에는 registry가 그 이름을 등록한 surface를 찾다가 `null`을 전달해서, browser tabs section이 빈 목록을 보였다. 검증: `packages/workbench/test/surface-view.test.mjs`의 단위 시험이 변경 전에는 `null`을 읽었고 변경 후 통과한다.
 - F292-32: view call `document.subscribe`가 게시된 case `view.composition.stream-subscribe-and-close`대로 호스트 답 `{handle}`의 handle 숫자로 답하고, handle이 없는 호스트 답은 거부한다. 전에는 page가 객체로 답해서 view의 region record가 stream 메시지를 전달하지 못하고 그 객체로 구독을 닫았다. 검증: `packages/workbench/test/view-calls.test.mjs`의 단위 시험이 변경 전에는 `{handle: 7}`을 읽었고 변경 후 통과한다.
 - F292-31: `page.tab.restored`가 `history`에 복원이 읽은 저장된 session이 session history를 가졌는지를 적는다. 전에는 page가 mount 끝까지 history를 복원한 region으로 정했는데, view는 mount가 끝난 뒤에야 region을 붙이므로 view tab은 `false`를 알렸다. 검증: `packages/workbench/test/tab-session.test.mjs`의 단위 시험이 변경 전에는 `false`를 읽었고 변경 후 통과한다.

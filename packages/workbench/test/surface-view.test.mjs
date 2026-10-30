@@ -820,6 +820,26 @@ test("a view whose origin is missing names the tab, its plugin, space, project, 
   });
 });
 
+// The refusal of a commit candidate without an origin names the layout that made it a candidate, so a record tells which layout
+// still held a tab whose origin a stored layout dropped (docs/spec/projects.md#tab-origin).
+test("a commit candidate without an origin is refused with the holder that made it a candidate", async (t) => {
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: { ...actualHost, native: true } });
+  const { surfacePlacementsForHost } = await import("../surface-modules.js?view-origin-holder");
+  const { forgetTabsLeft, recordOrigin } = await import("../tab-reports.js");
+  recordOrigin("tab-held", null, "new tab");
+  forgetTabsLeft([{ id: "card-held", data: { tabs: [{ id: "tab-held", plugin: "fixture-view" }] } }], [], "close space spc-a, project prj-a");
+  const candidate = { id: "tab-held", surface: { surfaceId: "tab-held", pluginId: "fixture-view", declarations: {},
+    composition: { kind: "view", page: "ui/page.html" } } };
+  assert.throws(() => surfacePlacementsForHost([candidate], null, (entry) => `the stored layout of space spc-b, project prj-b (${entry.id})`),
+    (error) => {
+      assert.equal(error.message, "tab tab-held has no origin: plugin fixture-view, space none, project none, created by new tab, " +
+        "held by this session: yes, origin dropped by close space spc-a, project prj-a, whose stored layout held no tab, " +
+        "a commit candidate of the stored layout of space spc-b, project prj-b (tab-held)");
+      return true;
+    });
+});
+
 // contract: view.exposure.register
 // A registered call of the view applies the entry through the exposure registry, relays it to the host, and the view's port
 // consumes the forwarded exposure requests so the page never forwards them twice (docs/spec/exposure.md#relay).

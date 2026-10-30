@@ -165,13 +165,15 @@ const NOWHERE = { x: 0, y: 0, w: 0, h: 0 };
  * must be declared too for the host to keep them alive, so that the shell and the page stay as they are when moving across spaces or projects.
  * Without the declaration, the host treats them as surfaces without an owner and removes them.
  */
-function dormant(shown) {
+// default: holders is null for a reader that names no holder, the memory observation; a commit passes its map.
+function dormant(shown, holders = null) {
   const seen = new Set(shown.map((s) => s.id));
   const out = [];
-  const add = (tab, card) => {
+  const add = (tab, card, holder) => {
     // A tab of a plugin that is not loaded has no surface, only a placeholder (docs/spec/plugins.md).
     if (seen.has(tab.id) || !registry.hasPlugin(tab.plugin)) return;
     seen.add(tab.id);
+    holders?.set(tab.id, holder);
     const surface = surfaceForTab(tab);
     out.push({
       id: tab.id, plugin: tab.plugin, layer: 0,
@@ -184,14 +186,14 @@ function dormant(shown) {
     });
   };
   // Tabs of the current plane. Those that are not the active tab are collected here.
-  for (const card of currentGrid()?.cards ?? []) for (const t of tabsOf(card)) add(t, card);
+  for (const card of currentGrid()?.cards ?? []) for (const t of tabsOf(card)) add(t, card, "the current plane");
   // Tabs of the other spaces. For the active space, the plane above is correct, not the stored layout.
   const here = projects.active();
   for (const p of projects.local()) {
     for (const space of p.spaces) {
       if (!projects.inLibrary() && p === here && space.id === here.activeSpaceId) continue;
       for (const card of space.layout.state.cards) {
-        for (const t of card.data?.tabs ?? []) add(t, card);
+        for (const t of card.data?.tabs ?? []) add(t, card, `the stored layout of space ${space.id}, project ${p.id}`);
       }
     }
   }
@@ -261,22 +263,26 @@ function observeMemory(record, all) {
  * them as window.sokSurface before the page of the view runs. origin is the origin of the tab, and project is the project that
  * the window shows. A view whose origin the layout read refused starts no view and is marked refused.
  */
-function commitStarts(candidates) {
+function commitStarts(candidates, holders) {
   const refused = new Set(candidates.filter((entry) => entry.surface.composition?.kind === "view"
     && viewRefusal(entry.surface.surfaceId) !== null).map((entry) => entry.surface.surfaceId));
-  const started = surfacePlacementsForHost(candidates.filter((entry) => !refused.has(entry.surface.surfaceId)), projects.active());
+  // default: a candidate that dormant did not add is a surface of the drawn record.
+  const holderOf = (entry) => holders.get(entry.id) ?? "the drawn record";
+  const started = surfacePlacementsForHost(candidates.filter((entry) => !refused.has(entry.surface.surfaceId)), projects.active(), holderOf);
   return [...started, ...candidates.filter((entry) => refused.has(entry.surface.surfaceId)).map((entry) => ({ ...entry, refused: true }))];
 }
 
 onCommit((record) => {
-  const candidates = [...record.surfaces, ...dormant(record.surfaces)];
+  // The layout that made each dormant candidate a candidate, which the refusal of a view without an origin names.
+  const holders = new Map();
+  const candidates = [...record.surfaces, ...dormant(record.surfaces, holders)];
   // The start values are read now, in the state of this commit; a tab that an operation closes during the waits below leaves
   // its stored layout, which ends its origin (docs/spec/projects.md#tab-origin).
   const placing = memoryPlacement(record, candidates, {
     ready: memoryPlacementReady,
     saver: memorySaver,
     observe: observeMemory,
-    start: commitStarts,
+    start: (entries) => commitStarts(entries, holders),
   });
   return Promise.all([afterDeclaredSnapshotIngress(() => {}), placing]).then(async ([, { surfaces: all, retain: ids, unload }]) => {
     // An unloaded tab stays in the layout: it is not declared to the host, its surface is released in the unload mode, and
