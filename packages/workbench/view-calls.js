@@ -1,6 +1,6 @@
 // The call route of a view (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request and each cancel of a view as
 // the view-call event of the main page; answerViewCall answers it with the handlers that a DOM surface context uses.
-import { base64Of, bytesFrom, causeCids } from "@soksak/plugin-api";
+import { base64Of, bytesFrom, causeCids, surfaceDocumentEntry } from "@soksak/plugin-api";
 import { runCommandCall } from "./command-route.js";
 import { setViewFocus } from "./view-focus.js";
 
@@ -184,6 +184,11 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
         const payload = objectOf(fields.name, fields.payload);
         if (typeof payload.kind !== "string" || payload.kind === "") throw new TypeError(`view call ${fields.name} requires a non-empty kind`);
         if (typeof payload.name !== "string" || payload.name === "") throw new TypeError(`view call ${fields.name} requires a non-empty name`);
+        // A plugin command keeps the forwarding handler of runtime.command.register; a registration here would route its requests
+        // to the exposure-request listeners of the view instead.
+        if (payload.kind === "command" && !surfaceDocumentEntry(payload.name)) {
+          throw new Error(`view call ${fields.name}: command ${payload.name} is registered through runtime.command.register`);
+        }
         return runtime.exposure.registered(payload);
       }
       if (REGION_HOST_CALLS.has(fields.name)) {

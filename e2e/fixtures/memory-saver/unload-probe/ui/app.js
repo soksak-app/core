@@ -15,12 +15,10 @@ region.onState((state) => {
   if (state.url !== "") bridge.calls.request("tab.state.write", { url: state.url });
   bridge.snapshots.push("probeunload.location", current);
 });
-bridge.commands.register("probeunload.load", async ({ url }) => {
+await bridge.commands.register("probeunload.load", async ({ url }) => {
   await region.load(url);
   return null;
 });
-bridge.commands.register("probeunload.modified", ({ modified }) => bridge.calls.request("tab.modified", modified));
+await bridge.commands.register("probeunload.modified", ({ modified }) => bridge.calls.request("tab.modified", modified));
 await bridge.exposure.register("status", "probeunload.location");
-await bridge.exposure.register("command", "probeunload.load");
-await bridge.exposure.register("command", "probeunload.modified");
 bridge.snapshots.push("probeunload.location", current);

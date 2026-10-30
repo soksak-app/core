@@ -476,6 +476,16 @@ test("a registered call without its kind or name is refused and records nothing"
   assert.deepEqual(ran.registered, []);
 });
 
+test("a registered call of a plugin command is refused, because a view registers its commands with runtime.command.register", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(
+    answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "registered", payload: { kind: "command", name: "probe.run" } } }, options),
+    /view call registered: command probe\.run is registered through runtime\.command\.register/,
+  );
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.native.call", params: { name: "registered", payload: { kind: "command", name: "core.surface.hit" } } }, options), null);
+  assert.deepEqual(ran.registered, [{ kind: "command", name: "core.surface.hit" }]);
+});
+
 // contract: view.restart.limit-shows-error
 test("a view-stopped event becomes the error state of its surface with its reason", () => {
   const state = viewStopState({ surface: "probe-surface", plugin: "probe", reason: "the view failed 4 times within 300 seconds" });
