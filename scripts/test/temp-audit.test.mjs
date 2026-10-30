@@ -13,8 +13,8 @@ function parent(t) {
 }
 
 test('the leftovers are the soksak- entries except the window-check configuration folders', () => {
-  assert.deepEqual(leftovers(['soksak-b-1', 'soksak-check-tauriv2', 'other', 'soksak-a-1.event-offsets', 'soksak-check-x.event-offsets']),
-    ['soksak-a-1.event-offsets', 'soksak-b-1']);
+  assert.deepEqual(leftovers(['soksak-b-1', 'soksak-check-tauriv2', 'other', 'soksak-check-x', 'soksak-a-1']),
+    ['soksak-a-1', 'soksak-b-1']);
 });
 
 test('a command that leaves a soksak- folder fails the audit and the folder is named', { timeout: 10000 }, (t) => {

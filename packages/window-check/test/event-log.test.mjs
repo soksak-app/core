@@ -7,12 +7,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { currentEventOffsets, eventLine, eventOffsetFile, sessionEventBoot, sessionEventStart, readEvents, traceRows, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
+import { finishSession } from "../app.mjs";
+import { currentEventOffsets, eventLine, sessionEventBoot, sessionEventStart, readEvents, traceRows, readEventErrors, readEventLines, untilEventLine, untilEventLines } from "../event-log.mjs";
 
 function configDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-event-log-"));
-  // The offsets of a configuration folder are the file beside it (eventOffsetFile), which a test may write.
-  t.after(() => { rmSync(dir, { recursive: true }); rmSync(eventOffsetFile(dir), { force: true }); });
+  t.after(() => rmSync(dir, { recursive: true }));
   mkdirSync(join(dir, "logs"));
   return dir;
 }
@@ -111,19 +111,6 @@ test("a file that the writer rotated is read on from its generation and the new 
   assert.throws(() => readEvents(dir, first.offsets), /host-1-10\.debug\.jsonl was rotated, and no generation holds the \d+ bytes already read/);
 });
 
-test("the offsets of the event logs are kept beside the configuration folder", (t) => {
-  const dir = configDir(t);
-  assert.deepEqual(readEventOffsets(dir), {});
-  writeEventOffsets(dir, { "host-1-10.jsonl": { offset: 42, inode: "7" } });
-  assert.deepEqual(readEventOffsets(dir), { "host-1-10.jsonl": { offset: 42, inode: "7" } });
-  writeFileSync(`${dir}.event-offsets`, "[1]");
-  assert.throws(() => readEventOffsets(dir), /expected an object of positions \{offset, inode\}/);
-  // A position of another form is refused with the file and what it found.
-  writeFileSync(`${dir}.event-offsets`, `${JSON.stringify({ "host-1-10.jsonl": 42 })}\n`);
-  assert.throws(() => readEventOffsets(dir), /expected an object of positions \{offset, inode\}, found \{"host-1-10\.jsonl":42\}/);
-  rmSync(`${dir}.event-offsets`);
-});
-
 test("a record event reads as the line of the text form, and another event as its name and fields", () => {
   const record = { level: "error", layer: "host", event: "host.record.error", fields: { where: "page asset", text: "/missing.js: not found" } };
   assert.equal(eventLine(record), "error host page asset: /missing.js: not found");
@@ -219,11 +206,10 @@ test("traceRows turns the events of the trace of the page, the host and the samp
   ]);
 });
 
-test("currentEventOffsets is the end of the complete lines of every host event log, not the offsets that were stored", (t) => {
+test("currentEventOffsets is the end of the complete lines of every host event log", (t) => {
   const dir = configDir(t);
   const first = join(dir, "logs", "host-1-10.jsonl");
   writeFileSync(first, line(1, "info", "log.open") + line(2, "info", "host.record.info", { where: "a", text: "b" }) + '{"ts_us":1,"seq":3');
-  writeEventOffsets(dir, { "host-1-10.jsonl": { offset: 5, inode: "7" } });
   const now = currentEventOffsets(dir);
   assert.deepEqual(Object.keys(now), ["host-1-10.jsonl"]);
   assert.equal(now["host-1-10.jsonl"].offset, Buffer.byteLength(line(1, "info", "log.open") + line(2, "info", "host.record.info", { where: "a", text: "b" })));
@@ -251,43 +237,31 @@ test("the event file of a sidecar is read with the files of the host, and its ev
   ]);
 });
 
-test("without stored offsets the session starts at the end of the files of ended processes and at the start of the running one", (t) => {
+test("a session starts at the end of every host event log that exists at its start", (t) => {
   const dir = configDir(t);
-  // An earlier process left an error; the running process 20 writes its own.
+  // An earlier process left an error, and the running process 20 wrote one before the session started.
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "error", "host.test.earlier"));
-  writeFileSync(join(dir, "logs", "host-2-20.jsonl"), line(1, "error", "host.test.current"));
-  const { errors } = readEventErrors(dir, sessionEventStart(dir, 20));
-  assert.deepEqual(errors, ["error host host.test.current: {}"]);
-});
-
-test("stored offsets are the start of the session", (t) => {
-  const dir = configDir(t);
-  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "error", "host.test.read"));
-  writeEventOffsets(dir, readEventErrors(dir, {}).offsets);
-  appendFileSync(join(dir, "logs", "host-1-10.jsonl"), line(2, "error", "host.test.after"));
-  assert.deepEqual(readEventErrors(dir, sessionEventStart(dir, 10)).errors, ["error host host.test.after: {}"]);
-});
-
-test("with stored offsets, a file that the stored offsets do not name is judged from the end it had at the session start", (t) => {
-  const dir = configDir(t);
-  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
-  writeEventOffsets(dir, readEventErrors(dir, {}).offsets);
-  // A boot that ended before the session started wrote an error after the stored positions were taken.
-  writeFileSync(join(dir, "logs", "host-2-20.jsonl"), line(1, "error", "host.test.earlier.boot"));
-  const start = sessionEventStart(dir, 30);
-  // The running process 30 writes its error after the session started.
-  writeFileSync(join(dir, "logs", "host-3-30.jsonl"), line(1, "error", "host.test.current"));
+  writeFileSync(join(dir, "logs", "host-2-20.jsonl"), line(1, "error", "host.test.before.start"));
+  const start = sessionEventStart(dir);
+  appendFileSync(join(dir, "logs", "host-2-20.jsonl"), line(2, "error", "host.test.current"));
   assert.deepEqual(readEventErrors(dir, start).errors, ["error host host.test.current: {}"]);
 });
 
-test("a file of an earlier boot is not judged by a session of a later boot, even when its stored offset is old", (t) => {
+test("a host event log that appears after the session starts is read from its beginning", (t) => {
   const dir = configDir(t);
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
-  writeEventOffsets(dir, readEventErrors(dir, {}).offsets);
-  // The earlier host writes an error after the offsets were stored, as its records flush after its session ended.
+  const start = sessionEventStart(dir);
+  writeFileSync(join(dir, "logs", "host-2-20.jsonl"), line(1, "error", "host.test.new.file"));
+  assert.deepEqual(readEventErrors(dir, start).errors, ["error host host.test.new.file: {}"]);
+});
+
+test("a host event log of an earlier boot is not judged by a session of a later boot, even when it is written after the session starts", (t) => {
+  const dir = configDir(t);
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
+  const start = sessionEventStart(dir);
+  // The earlier host writes an error after the session started, as its records flush after its own session ended.
   appendFileSync(join(dir, "logs", "host-1-10.jsonl"), line(2, "error", "host.test.late.earlier"));
   writeFileSync(join(dir, "logs", "host-2-20.jsonl"), line(1, "info", "log.open"));
-  const start = sessionEventStart(dir, 20);
   appendFileSync(join(dir, "logs", "host-2-20.jsonl"), line(2, "error", "host.test.current"));
   assert.equal(sessionEventBoot(dir, 20), 2);
   assert.deepEqual(readEventErrors(dir, start, sessionEventBoot(dir, 20)).errors, ["error host host.test.current: {}"]);
@@ -325,4 +299,23 @@ test("untilEventLines waits on an event that passes every gate under the default
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "page.start", { url: "a" }, "page"));
   const lines = await untilEventLines(dir, {}, (all) => all.length === 1, 3000, { catalog: CATALOG, records: ["page.start"] });
   assert.deepEqual(lines, ['info page page.start: {"url":"a"}']);
+});
+
+// F292-26-7-3: an error that the application writes after one check ended and before the next check starts belongs to no
+// check, so the next check does not fail with it. The first check ends with the reading of its finish, and the second
+// check starts where the logs end at its start.
+test("an error written between two checks is not judged by the check that starts after it", async (t) => {
+  const dir = configDir(t);
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
+  const session = (eventStart) => ({
+    app: { name: "probe", configDir: dir }, cleanups: [], expectedErrors: [], recordings: new Set(), recordingsBefore: [],
+    failedRecordings: new Map(), eventStart, eventBoot: 1, markTest: async () => null,
+  });
+  const first = sessionEventStart(dir);
+  await finishSession({ name: "first check", passed: true, diagnostic() {} }, session(first), () => {});
+  appendFileSync(join(dir, "logs", "host-1-10.jsonl"), line(2, "error", "host.test.between", {}));
+  const second = sessionEventStart(dir);
+  await finishSession({ name: "second check", passed: true, diagnostic() {} }, session(second), () => {});
+  // The error stays in the log: a reader from the start of the first check still reports it.
+  assert.deepEqual(readEventErrors(dir, first).errors, ["error host host.test.between: {}"]);
 });

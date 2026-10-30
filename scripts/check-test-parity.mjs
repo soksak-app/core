@@ -5475,7 +5475,7 @@ const FEATURE_LINKS = [
   {
     id: "F174",
     implementation: [{ file: "packages/window-check/event-log.mjs", symbol: "export function sessionEventStart" }],
-    tests: [{ file: "packages/window-check/test/event-log.test.mjs", id: "without stored offsets the session starts at the end of the files of ended processes and at the start of the running one" }],
+    tests: [{ file: "packages/window-check/test/event-log.test.mjs", id: "a session starts at the end of every host event log that exists at its start" }],
     expected: "A window check judges the errors of the running process from its session start, never the history of earlier processes.",
     levels: ["unit"],
   },

@@ -133,8 +133,6 @@ const RESIZE = event(4, "error", "page.record.error", { where: "page", text: "Re
 
 function runLoggedError(t, expected, during) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-log-error-"));
-  // The check keeps the positions it read in a file beside the configuration folder.
-  t.after(() => rmSync(`${dir}.event-offsets`, { force: true }));
   t.after(() => rmSync(dir, { recursive: true }));
   mkdirSync(join(dir, "logs"));
   const started = writeEventLog(dir, { before: [OPEN, PREVIOUS], during });
@@ -186,7 +184,6 @@ test("a record event of level error fails the check as the line of the text form
 test("a recording folder that the check left fails the check and is preserved", { timeout: 30000 }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-recording-"));
   t.after(() => rmSync(dir, { recursive: true }));
-  t.after(() => rmSync(`${dir}.event-offsets`, { force: true }));
   mkdirSync(join(dir, "logs"));
   writeEventLog(dir, { before: [OPEN], during: [] });
   mkdirSync(join(dir, "logs", "captures", "earlier"), { recursive: true });
@@ -216,7 +213,6 @@ test("probe body passes", async (t) => {
 test("a failed check preserves its capture without an opt-in", { timeout: 30000 }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-failed-recording-"));
   t.after(() => rmSync(dir, { recursive: true }));
-  t.after(() => rmSync(`${dir}.event-offsets`, { force: true }));
   mkdirSync(join(dir, "logs"));
   writeEventLog(dir, { before: [OPEN], during: [] });
   const file = join(dir, "probe.test.mjs");

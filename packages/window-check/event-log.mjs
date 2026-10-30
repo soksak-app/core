@@ -1,6 +1,6 @@
 // Reads error events from the event log of the application under check. The host process writes one event per line to
 // `logs/host-<boot>.jsonl` for each run, and an event with level error is an error (docs/spec/logging.md#files).
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { untilFolderState } from "./folder-wait.mjs";
 import { policyFile, readPolicy, requireStored } from "./log-policy.mjs";
@@ -9,48 +9,17 @@ import { policyFile, readPolicy, requireStored } from "./log-policy.mjs";
 // main file (error, warn and info) and its debug file (debug and trace). A sidecar file is named by its role, so the role is any name.
 const HOST_LOG = /^[a-z][a-z0-9-]*-\d+-\d+(\.debug)?\.jsonl$/;
 
-/**
- * The file that records the last read position of each file. It is placed next to the configuration folder, so there is
- * one per configuration folder.
- */
-export const eventOffsetFile = (configDir) => `${configDir}.event-offsets`;
-
 /** The identity of a file: its inode as decimal text, read as a bigint so that no digit is lost. */
 const inodeOf = (path) => String(statSync(path, { bigint: true }).ino);
 
 /**
- * File name to last read position `{offset, inode}`: the byte offset and the inode of the file that held it, so a read finds
- * the file again after the writer rotated it. Without a record it is empty, so every file is read from the start.
+ * The position from which a check judges the errors of the application: the end of every host event log now. The records
+ * that precede the start of a check, including the records that an earlier check or a person's use of the application
+ * wrote, belong to no check. A file that appears after the start is absent from the result and is read from its beginning,
+ * so its records count.
  */
-export function readEventOffsets(configDir) {
-  const file = eventOffsetFile(configDir);
-  if (!existsSync(file)) return {};
-  const value = JSON.parse(readFileSync(file, "utf8"));
-  const position = (item) => item !== null && typeof item === "object" && Number.isInteger(item.offset) && item.offset >= 0 &&
-    typeof item.inode === "string" && /^\d+$/.test(item.inode) && Object.keys(item).length === 2;
-  if (value === null || typeof value !== "object" || Array.isArray(value) || !Object.values(value).every(position)) {
-    throw new Error(`${file}: expected an object of positions {offset, inode}, found ${JSON.stringify(value)}`);
-  }
-  return value;
-}
-
-/**
- * The position from which a session judges the errors of the application with the process identifier pid. A file that the
- * stored offsets name keeps its stored position. Every other file that exists at the start of the session is placed at its
- * end now: the stored offsets do not name it when an earlier session did not read it (a boot that ended before the earlier
- * session stored its offsets, or a configuration whose offsets were removed), and its records all precede the session. The
- * file of the running process pid starts at its beginning, because the records of that process belong to the session. A file
- * that appears after the start is absent from the result and is read from its beginning, so its records count.
- */
-export function sessionEventStart(configDir, pid) {
-  const stored = existsSync(eventOffsetFile(configDir)) ? readEventOffsets(configDir) : {};
-  const running = new RegExp(`-${pid}(\\.debug)?\\.jsonl$`);
-  const start = { ...stored };
-  for (const [name, position] of Object.entries(currentEventOffsets(configDir))) {
-    if (Object.hasOwn(stored, name) || running.test(name)) continue;
-    start[name] = position;
-  }
-  return start;
+export function sessionEventStart(configDir) {
+  return currentEventOffsets(configDir);
 }
 
 /** The boot of the host file of process pid, which is the start time that the file name carries; 0 when no file names pid. */
@@ -65,10 +34,6 @@ const bootOf = (name) => {
   const match = name.match(/-(\d+)-\d+(\.debug)?\.jsonl$/);
   return match === null ? null : Number(match[1]);
 };
-
-export function writeEventOffsets(configDir, offsets) {
-  writeFileSync(eventOffsetFile(configDir), `${JSON.stringify(offsets)}\n`);
-}
 
 const RECORD_EVENT = /^(host|page|native|sidecar|plugin)\.record\.(error|warn|info|debug|trace)$/;
 
@@ -231,9 +196,8 @@ export function traceRows(events) {
 }
 
 /**
- * The end of the complete lines of every host event log now. A check that reads what the application wrote after a moment
- * takes this position first; `readEventOffsets` is the position at which the earlier session ended, which the harness uses
- * to judge the errors between two checks.
+ * The end of the complete lines of every host event log now. A check takes this position when it starts, and its errors
+ * are the errors written after it (sessionEventStart).
  */
 export function currentEventOffsets(configDir) {
   const logs = join(configDir, "logs");
