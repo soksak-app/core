@@ -168,6 +168,27 @@ fn the_drain_fixture_receives_pending_child_output_before_cleanup() {
     );
 }
 
+/// The lines that the drain fixture received in order, with each run of queued bodies as its count.
+fn received_lines(lines: &[&str]) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let mut bodies = 0;
+    for line in lines {
+        if line.contains(r#""data":""#) {
+            bodies += 1;
+            continue;
+        }
+        if bodies > 0 {
+            parts.push(format!("{bodies} bodies"));
+            bodies = 0;
+        }
+        parts.push(line.to_string());
+    }
+    if bodies > 0 {
+        parts.push(format!("{bodies} bodies"));
+    }
+    format!("{} lines: [{}]", lines.len(), parts.join(", "))
+}
+
 /// The scenario of the queue that fills, the replies and closes that wait for it, and the drain.
 fn every_pending_reply_scenario() {
     let directory = folder::Folder::new();
@@ -209,12 +230,14 @@ fn every_pending_reply_scenario() {
     // Put a large message in the queue to fill the queue.
     let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut full = false;
+    let mut queued = 0;
     for _i in 0..4000 {
         if let Err(error) = sidecars.send(&owner, ECHO, "s1", &big) {
             assert!(error.contains("is not keeping up"), "{error}");
             full = true;
             break;
         }
+        queued += 1;
     }
     assert!(full, "the queue never filled");
 
@@ -357,17 +380,22 @@ fn every_pending_reply_scenario() {
         );
     }
 
-    // Verify the order: the close and the reply came after the body that was put in the queue.
-    let last_body = data.rfind(r#""data":""#).expect("no queued body arrived");
-    for want in &[
-        r#""name":"a""#,
-        r#""surface":"s2","root":"/p","closed":true"#,
-    ] {
-        let idx = data
-            .find(want)
-            .unwrap_or_else(|| panic!("{want} did not arrive"));
-        assert!(idx > last_body, "{} arrived before the queued bodies", want);
-    }
+    // Verify the order: every body that the queue accepted arrived before the first reply or close.
+    let lines: Vec<&str> = data.lines().collect();
+    let first_held = lines
+        .iter()
+        .position(|line| line.contains(r#""consumed""#) || line.contains(r#""closed":true"#))
+        .expect("no reply or close arrived");
+    let before = lines[..first_held]
+        .iter()
+        .filter(|line| line.contains(r#""data":""#))
+        .count();
+    assert_eq!(
+        before,
+        queued,
+        "{before} of the {queued} queued bodies arrived before the first reply or close; the sidecar received {}",
+        received_lines(&lines)
+    );
 }
 
 // contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain
