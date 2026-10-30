@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-296: stored layout의 terminal tab에 origin이 없고 attachment가 stale이 되는 원인은 F292-22-1과 같다. `forgetTabsLeft`가 surface가 아직 mount된 tab의 origin을 끝냈고, F292-22-1-3이 그것을 고쳤다. 검증: `packages/workbench/test/tab-origin.test.mjs`의 테스트; F292-16-2 commit에서 release workflow의 window run은 두 host 모두에서 `has no origin`과 `stale attachment` 기록을 남기지 않았다.
 - F292-22-1: stored layout이 담은 view tab은 surface가 mount되어 있는 동안 자기 space의 drawn layout을 거쳐도 origin을 유지한다. 이것은 F292-22-1-3의 `forgetTabsLeft` 수정이 보장한다. `packages/workbench/test/tab-origin.test.mjs`의 테스트 `a view tab of a stored layout keeps its origin through the drawn layout of its space while its surface is mounted`는 stored layout fixture에서 tab을 읽는다. mount된 tab의 이전 drop을 되돌린 코드에서 실패했고 현재 코드에서 통과한다. 검증: `tab-origin`, `tab-reports`, `surface-view`, `memory-placement-start`, `view-start-handoff`, `projects-switch`, `projects-close-window`의 workbench 테스트; F292-16-2 commit에서 release workflow의 window run은 두 host 모두에서 `has no origin` 기록을 남기지 않았다.
 - F292-54: `docs/spec/native-surfaces.md`는 surface의 root view가 AppKit point 좌표의 container에서 page zoom 1을 유지하고 display scale을 device scale factor로 쓰며, document region은 `document.zoom`이 정한 page zoom과 같은 device scale factor를 가진다고 적는다. 이전에는 모든 content web view가 장치 픽셀 좌표의 container에서 display scale을 page zoom으로 쓴다고 적어 `docs/spec/plugin-processes.md`와 `native/darwin/tests/webview_geometry_test.m`과 어긋났다. `plugin-processes.md`는 그 문장에서 surface의 root view를 이름으로 든다. 문서만 바꾸었다.
 
