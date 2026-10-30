@@ -5284,6 +5284,22 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F296",
+    implementation: [
+      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func readStored" },
+      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "fn read_stored" },
+      { file: "packages/workbench/plugin-data.js", symbol: "function checkStored" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestEarlierStoredFormsAreRejectedBySnapshot" },
+      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "earlier_stored_forms_are_rejected_by_snapshot" },
+      { file: "packages/workbench/test/plugin-data.test.mjs", id: "a value stored without a format entry is refused by the read and is not changed" },
+      { file: "scripts/test/workflows.test.mjs", id: "the release workflow runs no stored data migration step and no release step script" },
+    ],
+    expected: "The stored files of another format are refused with the file and the number they require, no migration step or record remains, and no stored value is converted.",
+    levels: ["unit"],
+  },
+  {
     id: "F188",
     implementation: [
       { file: "packages/sok/wailsv3/src/plugins.go", symbol: "func ReadInstalledManifests" },
