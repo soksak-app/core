@@ -8049,6 +8049,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F294",
+    implementation: [{ file: "packages/workbench/host.js", symbol: "if (name === \"exposureReply\" && replyGate !== null)" }],
+    tests: [{ file: "packages/workbench/test/surface-runtime.test.mjs", id: "an installed reply gate decides when the exposure reply of a view is sent" }],
+    expected: "The diagnostic reply gate holds the exposureReply call of a view surface as it holds the reply of a mounted surface.",
+    levels: ["unit"],
+  },
+  {
     id: "F293",
     implementation: [
       { file: "packages/host/wailsv3/src/endpoint.go", symbol: "func windowParam(params json.RawMessage) (string, error)" },

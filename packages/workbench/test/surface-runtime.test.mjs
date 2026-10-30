@@ -158,6 +158,28 @@ test("an installed reply gate decides when a surface exposure reply is sent", as
   }
 });
 
+test("an installed reply gate decides when the exposure reply of a view is sent", async () => {
+  // A view answers a forwarded exposure request through the native call exposureReply of its surface
+  // (docs/spec/native-surfaces.md#view-surfaces), so that reply passes the same gate as a reply of a mounted surface.
+  const { gateSurfaceReplies, surfaceContextRuntime } = await import("../host.js");
+  const surface = "gated-view-surface";
+  const gated = [];
+  gateSurfaceReplies((id, send) => new Promise((resolve) => gated.push({ id, send: () => resolve(send()) })));
+  try {
+    calls.length = 0;
+    const runtime = surfaceContextRuntime({ surfaceId: surface });
+    const sent = runtime.native.call("exposureReply", { id: 19, result: "ok" });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls, [], "the gate did not hold the reply of the view");
+    assert.deepEqual(gated.map((entry) => entry.id), [surface]);
+    gated[0].send();
+    await sent;
+    assert.deepEqual(calls, [["exposureReply", { id: 19, result: "ok", surface }]]);
+  } finally {
+    gateSurfaceReplies(null);
+  }
+});
+
 test("surface sidecar sends reach the host one at a time in send order", async () => {
   const { surfaceContextRuntime } = await import("../host.js");
   calls.length = 0;
