@@ -244,6 +244,45 @@ fn page_clock_anchor_passes_the_default_lifecycle_policy() {
     );
 }
 
+// contract: log.page.fixture-step-passes-default-policy
+#[test]
+fn page_fixture_step_passes_the_default_lifecycle_policy() {
+    let config = Folder::new("page-fixture-step");
+    let log = soksak_sok::start_tool_event_log(config.path()).unwrap();
+    assert_eq!(
+        log.emit_relayed(RelayedEvent {
+            ts_us: 1,
+            mono_ns: 9,
+            layer: "page".into(),
+            page: Some("page-origin".into()),
+            level: Level::Info,
+            event: "page.fixture.step".into(),
+            cids: Vec::new(),
+            fields: Fields::of(&serde_json::json!({
+                "step": "settings.set",
+                "phase": "start"
+            }))
+            .unwrap(),
+        }),
+        Ok(true),
+        "a fixture step is stored under the default policy"
+    );
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    log.close();
+    let lines: Vec<Value> = std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert!(
+        lines
+            .iter()
+            .any(|line| line["event"] == "page.fixture.step"),
+        "the default policy stored no page.fixture.step: {lines:?}"
+    );
+}
+
 /// Runs the tool with the arguments and the configuration directory, and returns the events that the run stored in the main file.
 fn tool_run_events(config: &Folder, args: &[&str]) -> Vec<Value> {
     let mut all: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();

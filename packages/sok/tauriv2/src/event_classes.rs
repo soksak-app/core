@@ -157,6 +157,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "page.background.session" => Some(Class::Lifecycle),
         "page.call" => Some(Class::Call),
         "page.command" => Some(Class::Call),
+        "page.fixture.step" => Some(Class::Lifecycle),
         "page.input.shortcut.failed" => Some(Class::Input),
         "page.log.clock" => Some(Class::Lifecycle),
         "page.log.dropped" => Some(Class::Lifecycle),

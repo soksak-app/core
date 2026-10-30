@@ -115,6 +115,7 @@ var eventClasses = map[string]Class{
 	"page.background.session":                 ClassLifecycle,
 	"page.call":                               ClassCall,
 	"page.command":                            ClassCall,
+	"page.fixture.step":                       ClassLifecycle,
 	"page.input.shortcut.failed":              ClassInput,
 	"page.log.clock":                          ClassLifecycle,
 	"page.log.dropped":                        ClassLifecycle,

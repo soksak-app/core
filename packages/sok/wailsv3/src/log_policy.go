@@ -48,11 +48,11 @@ func DefaultLogPolicy() LogPolicy {
 // PassesEveryGate names the events that pass every gate, so the policy never refuses them (docs/spec/logging.md#policy):
 // page.start, which marks a document before its page policy reaches the gate; page.log.clock, the one-time clock uncertainty
 // metadata required to compare that document's timestamps; host stall records, the only record of a main-thread stall;
-// host.view.killed, which states the loss of a view's unsent batch; and host.test.start/end, whose flushed positions delimit a
-// diagnostic window check under every selected policy.
+// host.view.killed, which states the loss of a view's unsent batch; host.test.start/end, whose flushed positions delimit a
+// diagnostic window check under every selected policy; and page.fixture.step, the steps of the fixture of a window check.
 func PassesEveryGate(event string) bool {
 	switch event {
-	case "page.start", "page.log.clock", "host.stall", "host.stall.sampled", "host.stall.dump", "host.view.killed", "host.test.start", "host.test.end":
+	case "page.start", "page.log.clock", "host.stall", "host.stall.sampled", "host.stall.dump", "host.view.killed", "host.test.start", "host.test.end", "page.fixture.step":
 		return true
 	}
 	return false

@@ -354,3 +354,18 @@ test("every event of a batch names the page that wrote it by its page identity, 
   const events = calls.flatMap((request) => request.events);
   assert.deepEqual(events.map((event) => [event.event, event.page]), [["page.log.clock", PAGE], ["page.start", PAGE]]);
 });
+
+test("a fixture step event passes a gate that refuses every lifecycle info event", async () => {
+  const calls = [];
+  const gate = { enabled: () => false };
+  const batcher = createEventBatcher({ page: PAGE,
+    call: answering(async (request) => { calls.push(request); }),
+    report: assert.ifError,
+    classify: (event) => (event === "page.fixture.step" ? "lifecycle" : undefined),
+    gate,
+  });
+  assert.equal(batcher.emit("info", "page.fixture.step", { step: "settings.set", phase: "start" }), true);
+  await batcher.flush();
+  assert.deepEqual(calls.flatMap((request) => request.events).filter(({ event }) => event === "page.fixture.step").map(({ fields }) => fields),
+    [{ step: "settings.set", phase: "start" }]);
+});

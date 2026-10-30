@@ -102,6 +102,7 @@ const EXACT = new Map([
   ["page.background.session", "lifecycle"],
   ["page.call", "call"],
   ["page.command", "call"],
+  ["page.fixture.step", "lifecycle"],
   ["page.input.shortcut.failed", "input"],
   ["page.log.clock", "lifecycle"],
   ["page.log.dropped", "lifecycle"],

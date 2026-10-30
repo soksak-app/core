@@ -1905,6 +1905,40 @@
       },
       "description": "A document of the main page started; a reload starts a new document with a new clock."
     },
+    "page.fixture.step": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string"
+          },
+          "phase": {
+            "enum": [
+              "start",
+              "end"
+            ]
+          },
+          "ms": {
+            "type": "number"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "step",
+          "phase"
+        ]
+      },
+      "description": "A step of the page that diagnostics.fixture awaits, at its start and at its end; the end has the elapsed milliseconds of the step and its error text, or null when the step succeeded."
+    },
     "page.call": {
       "layer": "page",
       "class": "call",

@@ -14,6 +14,7 @@ function modules(calls) {
       },
     },
     plane: { fresh: () => ({ cards: [] }) },
+    emitEvent: () => {},
   };
 }
 
@@ -28,4 +29,24 @@ test("the fixture of a window check changes the common settings as the actor dia
 test("the fixture refuses a missing root and settings that are not an object", async () => {
   await assert.rejects(prepareFixture({}, modules([])), /requires root/);
   await assert.rejects(prepareFixture({ root: "/tmp/x", settings: [] }, modules([])), /settings must be an object/);
+});
+
+test("each awaited step of the fixture records its start and its end with the elapsed time and the error", async () => {
+  const records = [];
+  await prepareFixture({ root: "/tmp/project" }, { ...modules([]), emitEvent: (level, event, fields) => records.push([event, fields]) });
+  assert.deepEqual(records.map(([event, fields]) => [event, fields.step, fields.phase]), [
+    ["page.fixture.step", "projects.flush", "start"], ["page.fixture.step", "projects.flush", "end"],
+    ["page.fixture.step", "settings.set", "start"], ["page.fixture.step", "settings.set", "end"],
+    ["page.fixture.step", "projects.open", "start"], ["page.fixture.step", "projects.open", "end"],
+    ["page.fixture.step", "projects.flush", "start"], ["page.fixture.step", "projects.flush", "end"],
+  ]);
+  for (const [, fields] of records.filter(([, value]) => value.phase === "end")) {
+    assert.equal(fields.error, null);
+    assert.ok(Number.isInteger(fields.ms) && fields.ms >= 0, `ms of ${fields.step} is ${fields.ms}`);
+  }
+  const failing = { ...modules([]), settings: { defaults: {}, set: async () => { throw new Error("settings refused"); } } };
+  records.length = 0;
+  await assert.rejects(prepareFixture({ root: "/tmp/project" }, { ...failing, emitEvent: (level, event, fields) => records.push([event, fields]) }), /settings refused/);
+  const last = records.at(-1);
+  assert.deepEqual([last[0], last[1].step, last[1].phase, last[1].error], ["page.fixture.step", "settings.set", "end", "settings refused"]);
 });

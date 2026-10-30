@@ -9,6 +9,7 @@
 // It does not run unless the host requests it.
 import { gateSurfaceReplies, registry } from "./exposure.js";
 import { log, native, watchCalls } from "./host.js";
+import { emitEvent } from "./page-log.js";
 import { createTranscript } from "./transcript.js";
 import { createSurfaceReplyHold } from "./surface-reply-hold.js";
 import { mountedSurface } from "./surface-modules.js";
@@ -25,6 +26,8 @@ registry.method("diagnostics.fixture", async (params) => {
     projects: await import("./projects.js"),
     settings: await import("./settings.js"),
     plane: await import("./plane.js"),
+    // events: forwarded
+    emitEvent: (level, event, fields) => emitEvent(level, event, fields),
   });
 });
 

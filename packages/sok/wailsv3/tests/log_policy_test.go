@@ -165,6 +165,35 @@ func TestPageClockAnchorPassesTheDefaultLifecyclePolicy(t *testing.T) {
 	}
 }
 
+// A fixture step of the page passes the default lifecycle policy, so a window check finds each step of its fixture in the log.
+// contract: log.page.fixture-step-passes-default-policy
+func TestPageFixtureStepPassesTheDefaultLifecyclePolicy(t *testing.T) {
+	config := t.TempDir()
+	log, err := sok.StartToolEventLog(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(log.Close)
+	stored, err := log.EmitRelayed(sok.RelayedEvent{
+		TsMicros: 1, MonoNs: 9, Layer: "page", Page: "page-origin", Level: sok.LevelInfo,
+		Event: "page.fixture.step", Fields: json.RawMessage(`{"step":"settings.set","phase":"start"}`),
+	})
+	if err != nil || !stored {
+		t.Fatalf("fixture step stored=%t error=%v, want stored under the default policy", stored, err)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	log.Close()
+	var stepStored bool
+	for _, event := range eventsOf(t, config) {
+		stepStored = stepStored || event.Event == "page.fixture.step"
+	}
+	if !stepStored {
+		t.Fatal("the default policy stored no page.fixture.step")
+	}
+}
+
 // The tool applies the policy file of its configuration directory at its start, as every process does, so a file that stores every
 // level makes the tool store its command event, which the default policy refuses.
 // contract: cli.log.applies-the-policy-file

@@ -43,8 +43,9 @@ function boundFields(fields) {
 }
 
 // The events that pass every gate: page.start marks the start of a document and is emitted by its first module, before the
-// policy of the setting reaches the gate, and a reader finds the reload of a page by it (docs/spec/logging.md#policy).
-const UNGATED = new Set(["page.start"]);
+// policy of the setting reaches the gate, and a reader finds the reload of a page by it (docs/spec/logging.md#policy);
+// page.fixture.step marks each step of a window check's fixture at the level that the diagnostic test marks use.
+const UNGATED = new Set(["page.start", "page.fixture.step"]);
 
 /**
  * The page has no wall clock or monotonic clock in microseconds: `Date.now()` has a resolution of a millisecond, and

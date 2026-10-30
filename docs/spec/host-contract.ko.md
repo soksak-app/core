@@ -446,6 +446,7 @@ fn invalid_json_closes_connection() {
 | `log.error.line-form` | 헬퍼로 쓴 호스트 오류는 애플리케이션 로그의 기록 `<time> error host <where>: <text>`다. | both |
 | `log.transcript.line-reaches-the-application-log` | 창의 진단 기록 줄은 `info host transcript <window>: <line>`으로도 쓰고, Wails host는 진단 기록이 싣는 오류를 `error host <operation> <window>: <error>`로도 써서, 진단 기록을 요청한 연결이 없어도 그 줄이 남는다. | both |
 | `log.page.clock-anchor-passes-default-policy` | Writer는 기본 lifecycle/error 정책에서 page.log.clock 시각 metadata를 저장하고 일반 lifecycle/info event는 계속 거부한다. | both |
+| `log.page.fixture-step-passes-default-policy` | Writer는 기본 lifecycle/error 정책에서 각 page.fixture.step event(lifecycle/info)를 저장하며, 진단 시험 표지와 같다. | both |
 | `log.info.record-form` | `LogInfo`(Go)나 `log_info`(Rust)로 쓴 호스트 관측은 애플리케이션 로그의 기록 `<time> info host <where>: <text>`다. | both |
 | `log.record.one-line` | 기록은 한 줄이다. 본문의 줄바꿈은 두 글자 `\n`으로 쓰고, 시각을 뺀 항목은 `<level> <layer> <where>: <text>`다. | both |
 | `sidecars.disconnect.record-end` | 영속 서비스 연결의 `host.sidecar.disconnect` 기록은 연결이 어떻게 끝났는지(`end`: `eof`, `unfinished line`, `read error: <text>`, `violation`)와 그 연결을 기다리던 요청 수(`waiting`)를 담는다. 서비스의 종료 상태는 기록하지 않는다. 호스트가 그 프로세스를 소유하지 않기 때문이다. | both |
