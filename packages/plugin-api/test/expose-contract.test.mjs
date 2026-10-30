@@ -34,13 +34,7 @@ async function runCase(testCase) {
     let request = null;
     for (const element of document.querySelectorAll("[id]")) {
       const rect = testCase.rects?.[element.id];
-      if (rect) {
-        element.getBoundingClientRect = () => ({ ...rect, right: rect.left + rect.width, bottom: rect.top + rect.height });
-        // jsdom has no layout, so the offset size comes from the case.
-        Object.defineProperties(element, {
-          offsetWidth: { value: rect.offsetWidth }, offsetHeight: { value: rect.offsetHeight },
-        });
-      }
+      if (rect) element.getBoundingClientRect = () => ({ ...rect, right: rect.left + rect.width, bottom: rect.top + rect.height });
       element.addEventListener("click", () => effects.push(`click ${element.id}`));
     }
     const port = {

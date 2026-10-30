@@ -1459,12 +1459,24 @@ export class ExposureError extends Error {
 /** The rectangle of an element, in CSS pixels relative to the viewport of the document that the element belongs to. */
 export function elementRect(element) {
   const r = element.getBoundingClientRect();
-  // zoom is the effective CSS zoom that the engine reports for the element. An engine without currentCSSZoom reports null.
-  return {
-    x: r.left, y: r.top, width: r.width, height: r.height,
-    offsetWidth: element.offsetWidth, offsetHeight: element.offsetHeight,
-    zoom: typeof element.currentCSSZoom === "number" ? element.currentCSSZoom : null,
-  };
+  return { x: r.left, y: r.top, width: r.width, height: r.height, zoom: effectiveZoom(element) };
+}
+
+/**
+ * The effective CSS zoom of the element: the product of the computed zoom of the element and of each ancestor of the flat tree
+ * (a slotted element continues at its slot, a shadow root at its host). Every engine computes the zoom of each element, while
+ * currentCSSZoom is absent from WebKit before 7624, so the product is read the same way on each supported engine.
+ */
+function effectiveZoom(element) {
+  const view = element.ownerDocument.defaultView;
+  let zoom = 1;
+  for (let node = element; node; node = node.assignedSlot ?? node.parentElement ?? node.getRootNode().host ?? null) {
+    const computed = view.getComputedStyle(node).zoom;
+    const value = Number(computed);
+    if (!Number.isFinite(value) || value <= 0) throw new Error(`computed zoom ${computed} is not a positive number`);
+    zoom *= value;
+  }
+  return zoom;
 }
 
 const KEYBOARD = /^key/;

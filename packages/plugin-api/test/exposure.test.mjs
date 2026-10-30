@@ -121,7 +121,7 @@ test("the package of a staged page is read from its path", () => {
 });
 
 /** Imitates one element without jsdom. The event constructors are read from the document of the element. */
-function element(rect = { left: 1, top: 2, width: 3, height: 4 }, engine = {}) {
+function element(rect = { left: 1, top: 2, width: 3, height: 4 }, { zoom = "1", parent = null, root = {} } = {}) {
   class Event { constructor(type, init) { this.type = type; this.init = init; } }
   class KeyboardEvent extends Event {}
   class MouseEvent extends Event {}
@@ -132,12 +132,13 @@ function element(rect = { left: 1, top: 2, width: 3, height: 4 }, engine = {}) {
     value: "",
     dataset: {},
     isConnected: true,
-    ownerDocument: { defaultView: { Event, KeyboardEvent, MouseEvent } },
+    // getComputedStyle reports the specified zoom of each element; the parent chain and the root node form the flat tree.
+    ownerDocument: { defaultView: { Event, KeyboardEvent, MouseEvent, getComputedStyle: (node) => ({ zoom: node.specifiedZoom }) } },
+    specifiedZoom: zoom,
+    parentElement: parent,
+    assignedSlot: null,
+    getRootNode: () => root,
     getBoundingClientRect: () => rect,
-    // The offset size of an element without transform is its layout size; engine supplies the zoom when it provides currentCSSZoom.
-    offsetWidth: rect.width,
-    offsetHeight: rect.height,
-    ...engine,
     click() { this.clicks++; },
     dispatchEvent(event) { events.push(event); return true; },
   };
@@ -183,7 +184,7 @@ test("a dom entry resolves one element, or one of many by index, and acts on it"
   entries.dom("probe.row", () => [rows[1]]);
   assert.equal(entries.registered("dom", "probe.row"), true);
   assert.deepEqual(await entries.answer("dom.rect", { name: "probe.input" }),
-    { x: 1, y: 2, width: 3, height: 4, offsetWidth: 3, offsetHeight: 4, zoom: null });
+    { x: 1, y: 2, width: 3, height: 4, zoom: 1 });
   assert.equal((await entries.answer("dom.rect", { name: "probe.row", index: 1 })).y, 5);
   await assert.rejects(entries.answer("dom.rect", { name: "probe.row", index: 2 }), /no element at index 2/);
 
@@ -265,18 +266,24 @@ test("a surface page registers declared names once through its port and answers 
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(replies.sort((a, b) => a[0] - b[0]), [
     [7, { result: 3 }],
-    [8, { result: { x: 1, y: 2, width: 3, height: 4, offsetWidth: 3, offsetHeight: 4, zoom: null } }],
+    [8, { result: { x: 1, y: 2, width: 3, height: 4, zoom: 1 } }],
     [9, { error: { code: EXPOSURE_ERRORS.unknownName, message: "unknown status probe.missing" } }],
   ]);
 });
 
-// dom.rect reports the size the engine gives the element beside its rectangle, so a zoomed element is measured as the engine reports it.
-test("dom.rect reports the offset size and the effective CSS zoom of the element", async () => {
+// dom.rect reports the effective CSS zoom of the element from the computed zoom of the element and of its flat-tree ancestors,
+// which every engine reports, so a reply is read the same way on an engine without currentCSSZoom.
+test("dom.rect reports the effective CSS zoom from the computed zoom of the element and its flat-tree ancestors", async () => {
   const entries = exposureEntries(declarationMap(exposes()));
-  const zoomed = element({ left: 1, top: 2, width: 39, height: 39 }, { offsetWidth: 26, offsetHeight: 26, currentCSSZoom: 1.5 });
-  entries.dom("probe.input", () => [zoomed]);
-  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.input" }),
-    { x: 1, y: 2, width: 39, height: 39, offsetWidth: 26, offsetHeight: 26, zoom: 1.5 });
+  const root = element(undefined, { zoom: "1" });
+  const strip = element(undefined, { zoom: "1.5", parent: root });
+  const tab = element({ left: 1, top: 2, width: 61, height: 26 }, { parent: strip });
+  const host = element(undefined, { zoom: "2", parent: strip });
+  const content = element({ left: 4, top: 5, width: 6, height: 7 }, { root: { host } });
+  entries.dom("probe.input", () => [tab]);
+  entries.dom("probe.row", () => [content]);
+  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.input" }), { x: 1, y: 2, width: 61, height: 26, zoom: 1.5 });
+  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.row" }), { x: 4, y: 5, width: 6, height: 7, zoom: 3 });
 });
 
 test("a rejected stale exposure reply is reported instead of becoming an unhandled promise", async () => {
@@ -408,7 +415,7 @@ test("a dom request gives an index or an address, never both, and an address res
     return found;
   });
   assert.deepEqual(await entries.answer("dom.rect", { name: "probe.row", address: { key: "go" } }),
-    { x: 9, y: 9, width: 1, height: 1, offsetWidth: 1, offsetHeight: 1, zoom: null });
+    { x: 9, y: 9, width: 1, height: 1, zoom: 1 });
   assert.deepEqual(seen, [{ address: { key: "go" }, count: 1 }], "the resolver did not receive the address and the elements");
   assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.row", address: { key: "none" } })), 1009);
 });

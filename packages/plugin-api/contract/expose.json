@@ -313,9 +313,7 @@
           "left": 10,
           "top": 20,
           "width": 100,
-          "height": 30,
-          "offsetWidth": 100,
-          "offsetHeight": 30
+          "height": 30
         }
       },
       "declarations": {
@@ -393,9 +391,7 @@
                     "y": 20,
                     "width": 100,
                     "height": 30,
-                    "offsetWidth": 100,
-                    "offsetHeight": 30,
-                    "zoom": null
+                    "zoom": 1
                   }
                 }
               }

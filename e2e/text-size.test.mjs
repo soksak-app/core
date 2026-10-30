@@ -69,6 +69,7 @@ for (const app of Object.values(APPS)) {
     // When the frame is pressed, the frame is the scope, the space row grows, and the board stays inside the window.
     const window = await s.get("host.window");
     const spaceTab = await s.rect("core.space-tab", 0);
+    const barBefore = await s.rect("core.chrome.bar");
     await press(s, spaceTab);
     await s.until("core.text", (value) => value.scope.kind === "frame", "pressing the frame did not make it the scope");
     // Raises three steps (1.1, 1.25, 1.5) from 1. Waits for the display at each step so that the page verification (V7b) judges whether the board and the native surface sit on the same device
@@ -80,13 +81,16 @@ for (const app of Object.values(APPS)) {
     }
     await s.until("core.text", (value) => value.frame === 1.5, "three frame steps did not reach factor 1.5");
     await s.presented();
+    // The first row is outside the CSS zoom subtree, so its rectangle is in document pixels on every engine, and its height is
+    // round(max(40, 36 × frame factor)) (docs/spec/text-size.md). The rectangle of the space tab is inside the subtree, and WebKit
+    // before 7624 reports it divided by the zoom, so the tab is judged by its effective zoom, which every engine reports.
+    const barAfter = await s.rect("core.chrome.bar");
     const spaceAfter = await s.rect("core.space-tab", 0);
-    // The measurement at each factor is printed with the offset size and the engine zoom, so a failure shows whether the rectangle
-    // includes the zoom of the frame.
-    const measured = (rect) => `rect ${rect.width} × ${rect.height}, offset ${rect.offsetWidth} × ${rect.offsetHeight}, zoom ${rect.zoom}`;
-    assert.ok(grew(spaceTab.height, spaceAfter.height, 1.5),
-      `the space tab height must grow by the frame factor: ${spaceTab.height} → ${spaceAfter.height} ` +
-      `(factor 1: ${measured(spaceTab)}; factor 1.5: ${measured(spaceAfter)})`);
+    assert.equal(barBefore.height, 40, `the first row must be 40 px at factor 1: ${barBefore.height}`);
+    assert.equal(barAfter.height, Math.round(Math.max(40, 36 * 1.5)),
+      `the first row must follow the frame factor 1.5: ${barBefore.height} → ${barAfter.height}`);
+    assert.equal(spaceTab.zoom, 1, `the space tab zoom must be 1 at factor 1: ${spaceTab.zoom}`);
+    assert.equal(spaceAfter.zoom, 1.5, `the space tab zoom must follow the frame factor 1.5: ${spaceAfter.zoom}`);
     const cardRect = await s.rect("core.card", 0);
     assert.ok(cardRect.y + cardRect.height <= window.content.height + 0.5,
       `the plane must stay inside the window: card bottom ${cardRect.y + cardRect.height}, content ${window.content.height}`);
