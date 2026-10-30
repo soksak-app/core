@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-27: debug timeline window check가 window check마다 저장되고 모든 gate를 통과하는 `host.test.start`를 거른다. `host.app.event`는 애플리케이션이 시작, 활성화, 종료될 때만 쓰이므로 필터에 행이 없었다. 검증: `e2e/modal.test.mjs`가 변경 전 두 호스트에서 두 검사가 실패했고 변경 후 두 호스트에서 통과한다.
 - F292-11-2: unload probe fixture가 `probeunload.location`을 view의 exposure로 제공하고 선언 UI snapshot을 push하지 않는다. 전에는 그 status 요청에 답이 없었다.
 - F292-11-1: view가 `runtime.command.register`로 등록한 command의 전달된 실행은 surface의 forwarding handler에서 실행되어 command 요청으로 view에 간다. 전에는 main page가 그것을 view가 답하는 요청으로 소비해서 command가 답하지 않았다.
 - F292-14-2: unload probe fixture가 snapshot을 plugin-local status 이름 `location`으로 push한다. qualified 이름은 snapshot ingress가 선언되지 않은 것으로 보고했다.

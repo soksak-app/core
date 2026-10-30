@@ -393,8 +393,9 @@ for (const app of Object.values(APPS)) {
     assert.equal(shown.timeline.channel, "other");
     assert.ok(shown.timeline.held <= 2000, `the view holds ${shown.timeline.held} rows`);
     assert.equal(shown.error, null);
-    await s.run("core.debug.timeline.filter", { layer: "host", text: "host.app.event" });
-    const filtered = await s.until("core.debug", (debug) => debug.timeline.layer === "host" && debug.timeline.text === "host.app.event",
+    // The filters read host.test.start, which the window check stores for each test and which passes every gate (docs/spec/logging.md#policy).
+    await s.run("core.debug.timeline.filter", { layer: "host", text: "host.test.start" });
+    const filtered = await s.until("core.debug", (debug) => debug.timeline.layer === "host" && debug.timeline.text === "host.test.start",
       "the filter was not applied");
     assert.ok(filtered.timeline.held > 0 && filtered.timeline.held <= shown.timeline.held, `the filter shows ${filtered.timeline.held} of ${shown.timeline.held} rows`);
     await s.run("core.debug.timeline.filter", { layer: "all", text: "", event: "no.such.event" });
@@ -485,10 +486,11 @@ for (const app of Object.values(APPS)) {
       "the debug view did not record the state and list the files");
     await s.run("core.debug.timeline");
     await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.held > 0, "the timeline did not show any row");
-    await s.run("core.debug.timeline.filter", { event: "host.app.event" });
-    const exact = await s.until("core.debug", (debug) => debug.timeline.event === "host.app.event", "the event filter was not applied");
-    await s.run("core.debug.timeline.filter", { event: "", event_prefix: "host.app" });
-    const prefix = await s.until("core.debug", (debug) => debug.timeline.event_prefix === "host.app", "the prefix filter was not applied");
+    // The filters read host.test.start, which the window check stores for each test and which passes every gate (docs/spec/logging.md#policy).
+    await s.run("core.debug.timeline.filter", { event: "host.test.start" });
+    const exact = await s.until("core.debug", (debug) => debug.timeline.event === "host.test.start", "the event filter was not applied");
+    await s.run("core.debug.timeline.filter", { event: "", event_prefix: "host.test" });
+    const prefix = await s.until("core.debug", (debug) => debug.timeline.event_prefix === "host.test", "the prefix filter was not applied");
     assert.ok(exact.timeline.held > 0, "the event filter shows no row");
     assert.ok(prefix.timeline.held >= exact.timeline.held, `the prefix shows ${prefix.timeline.held} rows, fewer than the exact name`);
     await s.run("core.debug.list");
