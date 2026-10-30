@@ -350,8 +350,11 @@ for (const app of Object.values(APPS)) {
     const requests = await s.until("browser.requests", (value) => listOf(value).includes(`img ${base}/pixel`),
       "browser.requests did not report the image request", { surface });
     assert.deepEqual(listOf(requests), [`navigation ${base}/inspect`, `img ${base}/pixel`]);
+    // A section text is the text content of its body, so the label and the detail of each request item join with no separator.
+    const address = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const network = new RegExp(`^navigation ${address}/inspect\\d+msimg ${address}/pixel\\d+ms$`);
     await s.until("core.sidebars", (value) => text(value, "browser.dom") === "htmlheadtitlebodydiv#box.a.bimg"
-      && text(value, "browser.network").startsWith(`navigation ${base}/inspect `) && text(value, "browser.network").includes(`img ${base}/pixel `),
+      && network.test(text(value, "browser.network")),
     "the DOM and network sections did not show the elements and requests");
   });
 }
