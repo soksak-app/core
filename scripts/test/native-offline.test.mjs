@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -120,4 +120,46 @@ test("offline fetch rejects a cached release file whose hash differs", { timeout
   assert.match(result.output, /FAILED|checksum|does not match/u);
   assert.deepEqual(curlCalls(h), []);
   assert.deepEqual(readFileSync(releaseFile), fixture);
+});
+
+test("the ZXing extraction target is not run again after a completed extraction", { timeout: 20000 }, (t) => {
+  const h = harness(t);
+  const commit = makeVariable("ZXING_COMMIT");
+  const sourceName = `zxing-cpp-${commit}`;
+  const releaseInput = join(h.directory, "release-input", sourceName);
+  mkdirSync(releaseInput, { recursive: true });
+  const license = join(releaseInput, "LICENSE");
+  writeFileSync(license, "pinned license fixture\n");
+  // Release entries keep their old modification time, as the pinned GitHub release does.
+  const oldTime = new Date("2001-01-01T00:00:00Z");
+  utimesSync(license, oldTime, oldTime);
+  utimesSync(releaseInput, oldTime, oldTime);
+  mkdirSync(h.build);
+  const releaseFile = join(h.build, `${sourceName}.tar.gz`);
+  const release = spawnSync("tar", ["-czf", releaseFile, "-C", join(h.directory, "release-input"), sourceName], {
+    encoding: "utf8",
+  });
+  assert.equal(release.status, 0, release.stderr);
+  const expectedHash = createHash("sha256").update(readFileSync(releaseFile)).digest("hex");
+  const variables = [`BUILD=${h.build}`, "OFFLINE=1", `ZXING_SHA256=${expectedHash}`];
+  const extracted = join(h.build, sourceName, "LICENSE");
+
+  const run = (args) => {
+    const result = spawnSync("make", ["-C", nativeDarwin, ...variables, ...args], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 15000,
+    });
+    assert.ifError(result.error);
+    return `${result.stdout ?? ""}${result.stderr ?? ""}`;
+  };
+
+  const first = run([extracted]);
+  assert.ok(existsSync(extracted), first);
+  assert.deepEqual(readdirSync(h.build).sort(), [sourceName, `${sourceName}.tar.gz`].sort());
+
+  for (const attempt of ["first dry run", "second dry run"]) {
+    const output = run(["-n", extracted]);
+    assert.doesNotMatch(output, /(?:^|\s)tar -x/mu, `${attempt} extracts the release again:\n${output}`);
+  }
 });

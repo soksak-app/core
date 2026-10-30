@@ -134,9 +134,22 @@ fetch: | $(BUILD)
 $(ZXING_RELEASE_FILE): | fetch
 	@test -f '$@' || { echo 'ERROR: pinned ZXing release file was not produced at $@' >&2; exit 1; }
 
+# The entries of the pinned release file have modification times older than the file itself, so the extracted files
+# are stamped with the extraction time (-m) and the LICENSE target is current after the extraction. The tree is
+# extracted into a temporary folder and moved into place, so a concurrent make never sees a partial tree; a tree that
+# another make has already moved into place (its LICENSE is newer than the release file) is kept.
 $(ZXING_SOURCE)/LICENSE: $(ZXING_RELEASE_FILE) | $(BUILD)
-	@mkdir -p $(ZXING_SOURCE)
-	@tar -xzf $(ZXING_RELEASE_FILE) --strip-components=1 -C $(ZXING_SOURCE)
+	@set -eu; \
+	  tmp=$$(mktemp -d '$(ZXING_SOURCE).XXXXXX'); \
+	  if tar -xmzf '$(ZXING_RELEASE_FILE)' --strip-components=1 -C "$$tmp" && test -f "$$tmp/LICENSE"; then \
+	    if [ '$(ZXING_SOURCE)/LICENSE' -nt '$(ZXING_RELEASE_FILE)' ]; then \
+	      rm -rf "$$tmp"; \
+	    else \
+	      rm -rf '$(ZXING_SOURCE)' && mv "$$tmp" '$(ZXING_SOURCE)'; \
+	    fi; \
+	  else \
+	    rm -rf "$$tmp"; exit 1; \
+	  fi
 	@test -f $@
 
 $(ZXING_LIBRARY): $(ZXING_SOURCE)/LICENSE
