@@ -190,6 +190,9 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
 // contract: performance.surface.dispatch-records-frame-only-boundaries
 #[test]
 fn surface_dispatch_records_frame_boundaries_when_performance_trace_is_off() {
+    let _switch = crate::performance::TEST_SWITCH
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let was_on = crate::performance::enabled();
     crate::performance::command(serde_json::json!({"action": "off"})).unwrap();
     let dispatch = surface_dispatch_context_with(

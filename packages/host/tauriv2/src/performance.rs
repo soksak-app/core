@@ -11,6 +11,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static ON: AtomicBool = AtomicBool::new(false);
 /// Orders the requests of the page to switch the trace.
 static SWITCHING: Mutex<()> = Mutex::new(());
+/// Held by each test that switches the trace or reads what the trace stored. The switch belongs to the process, so a test
+/// that switches it while another test runs would change what the other test stores.
+#[cfg(test)]
+pub(crate) static TEST_SWITCH: Mutex<()> = Mutex::new(());
 
 /// Whether the trace of this process is on.
 pub fn enabled() -> bool {

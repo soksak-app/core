@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F285-2: The tests of the Tauri host that switch the performance trace run one at a time, so they no longer read the records of each other.
 - F287: Open checklist items do not hold a release; the release gate lists them as carried into the next version.
 - F286: The window checks run on a hosted runner with a virtual display; the checks that record the screen and the native presentation tests run only in the local window checks.
 - F284: The view pages of the window-check fixture plugins hold no import map, which the native view handler refuses.

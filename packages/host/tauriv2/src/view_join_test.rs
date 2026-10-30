@@ -29,6 +29,9 @@ impl Drop for PerformanceTraceGuard {
 #[test]
 fn presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end() {
     const TRACE: &str = "host.trace.view.presentation-join";
+    let _switch = crate::performance::TEST_SWITCH
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
     let _trace_guard = PerformanceTraceGuard;
     let wait = PresentationWait::default();
@@ -64,6 +67,9 @@ fn presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end()
 #[test]
 fn held_and_late_native_callbacks_keep_their_exact_join_identity() {
     const TRACE: &str = "host.trace.view.presentation-join";
+    let _switch = crate::performance::TEST_SWITCH
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
     let _trace_guard = PerformanceTraceGuard;
     let wait = Arc::new(PresentationWait::default());
@@ -140,6 +146,9 @@ fn held_and_late_native_callbacks_keep_their_exact_join_identity() {
 #[test]
 fn synchronous_native_callback_precedes_the_join_result() {
     const TRACE: &str = "host.trace.view.presentation-join";
+    let _switch = crate::performance::TEST_SWITCH
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
     let _trace_guard = PerformanceTraceGuard;
     let wait = PresentationWait::default();

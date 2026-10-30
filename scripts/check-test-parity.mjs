@@ -7996,6 +7996,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F285-2",
+    implementation: [{ file: "packages/host/tauriv2/src/performance.rs", symbol: "pub(crate) static TEST_SWITCH: Mutex<()>" }],
+    tests: [{ file: "packages/host/tauriv2/src/view_join_test.rs", id: "presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end" }],
+    expected: "A Tauri host test that switches the performance trace or reads its records runs alone among those tests.",
+    levels: ["unit"],
+  },
+  {
     id: "F287",
     implementation: [{ file: "packages/plugin-api/release-gate.js", symbol: "const carried = openItems(checklistName, checklistText);" }],
     tests: [{ file: "packages/plugin-api/test/release-gate.test.mjs", id: "an item that is waiting, active or bypassed does not hold the release and is carried into the next version" }],
