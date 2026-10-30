@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
+import { processTable } from "./process-table.mjs";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
@@ -8,7 +9,7 @@ import { fresh } from "./fixture.mjs";
 import { failureWithSlowestPhase, readPhases, slowestPhase } from "./reload-phases.mjs";
 
 function processes(appName) {
-  return execFileSync("ps", ["-axo", "pid=,rss=,command="], { encoding: "utf8" })
+  return processTable("pid=,rss=,command=")
     .split("\n")
     .map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/))
     .filter(Boolean)

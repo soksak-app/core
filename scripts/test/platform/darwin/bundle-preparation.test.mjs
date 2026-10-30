@@ -90,3 +90,17 @@ test("bundle preparation recreates Contents when no process uses the bundle", { 
     rmSync(temporary, { recursive: true, force: true });
   }
 });
+
+test("bundle preparation reads the whole process table while other processes carry commands larger than a read buffer", { timeout: 20000, skip: process.platform !== "darwin" }, (t) => {
+  // Three processes carry arguments of 450 KB each, so the commands of all processes exceed the 1 MiB output buffer of spawnSync.
+  const large = Array.from({ length: 3 }, () => spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "x".repeat(450 * 1024)], { stdio: "ignore" }));
+  const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-large-"));
+  t.after(() => {
+    for (const child of large) child.kill("SIGKILL");
+    rmSync(temporary, { recursive: true, force: true });
+  });
+  const bundle = join(temporary, "soksak-tauriv2.app");
+  const result = runPreparation(makePreparationMakefile(temporary), bundle);
+  assert.equal(result.status, 0, `preparation failed: ${result.stderr}`);
+  assert.ok(existsSync(join(bundle, "Contents", "Info.plist")), "preparation did not write Info.plist");
+});

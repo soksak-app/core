@@ -32,7 +32,9 @@ function processUsesBundle(command, prefixes) {
 }
 
 function runningBundleProcesses(bundle) {
-  const result = spawnSync("ps", ["-axww", "-o", "pid=,command="], { encoding: "utf8" });
+  // The output has no bound, because the commands of other processes can exceed any fixed buffer, and every row is read to find
+  // a process of the bundle.
+  const result = spawnSync("ps", ["-axww", "-o", "pid=,command="], { encoding: "utf8", maxBuffer: Infinity });
   if (result.error || result.status !== 0) {
     throw new Error(`ps failed while checking bundle ${resolve(bundle)}: ${result.error?.message ?? result.stderr.trim()}`);
   }

@@ -1,8 +1,8 @@
 // Counts only the services and children that belong to the check configuration. Sessions of other running apps are not touched.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
+import { processTable } from "./process-table.mjs";
 
 export function processRows(text) {
   return text.trim().split("\n").filter(Boolean).map((line) => {
@@ -17,7 +17,7 @@ export function terminalProcessSnapshot(configDir) {
   const endpoint = JSON.parse(readFileSync(join(serviceDir, "endpoint.json"), "utf8"));
   assert.equal(endpoint.protocol, 1, "terminal service protocol does not match");
   assert.ok(Number.isInteger(endpoint.pid) && endpoint.pid > 0, "terminal service PID is missing");
-  const rows = processRows(execFileSync("ps", ["-axo", "pid=,ppid=,stat=,command="], { encoding: "utf8" }));
+  const rows = processRows(processTable("pid=,ppid=,stat=,command="));
   // The host passes the service folder and the log folder (docs/spec/sidecars.md#declaration-and-startup), so the argument
   // is matched as one argument of the command, wherever it stands.
   const services = rows.filter((row) => ` ${row.command} `.includes(` --service-dir ${serviceDir} `));
