@@ -1183,11 +1183,39 @@
               },
               "footprint_kb": {
                 "type": "number"
+              },
+              "internal_kb": {
+                "type": "number"
+              },
+              "compressed_kb": {
+                "type": "number"
+              },
+              "purgeable_kb": {
+                "type": "number"
+              },
+              "graphics_kb": {
+                "type": "number"
+              },
+              "media_kb": {
+                "type": "number"
+              },
+              "network_kb": {
+                "type": "number"
+              },
+              "neural_kb": {
+                "type": "number"
               }
             },
             "required": [
               "rss_host_kb",
-              "footprint_kb"
+              "footprint_kb",
+              "internal_kb",
+              "compressed_kb",
+              "purgeable_kb",
+              "graphics_kb",
+              "media_kb",
+              "network_kb",
+              "neural_kb"
             ],
             "not": {
               "anyOf": [
@@ -1280,6 +1308,41 @@
                   "required": [
                     "footprint_kb"
                   ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
+                  ]
                 }
               ]
             }
@@ -1307,6 +1370,27 @@
               },
               "footprint_kb": {
                 "type": "number"
+              },
+              "internal_kb": {
+                "type": "number"
+              },
+              "compressed_kb": {
+                "type": "number"
+              },
+              "purgeable_kb": {
+                "type": "number"
+              },
+              "graphics_kb": {
+                "type": "number"
+              },
+              "media_kb": {
+                "type": "number"
+              },
+              "network_kb": {
+                "type": "number"
+              },
+              "neural_kb": {
+                "type": "number"
               }
             },
             "required": [
@@ -1314,7 +1398,14 @@
               "name",
               "pid",
               "rss_kb",
-              "footprint_kb"
+              "footprint_kb",
+              "internal_kb",
+              "compressed_kb",
+              "purgeable_kb",
+              "graphics_kb",
+              "media_kb",
+              "network_kb",
+              "neural_kb"
             ],
             "not": {
               "anyOf": [
@@ -1395,6 +1486,41 @@
                   "required": [
                     "footprint_kb"
                   ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
+                  ]
                 }
               ]
             }
@@ -1416,6 +1542,27 @@
               },
               "footprint_kb": {
                 "type": "number"
+              },
+              "internal_kb": {
+                "type": "number"
+              },
+              "compressed_kb": {
+                "type": "number"
+              },
+              "purgeable_kb": {
+                "type": "number"
+              },
+              "graphics_kb": {
+                "type": "number"
+              },
+              "media_kb": {
+                "type": "number"
+              },
+              "network_kb": {
+                "type": "number"
+              },
+              "neural_kb": {
+                "type": "number"
               }
             },
             "required": [
@@ -1423,7 +1570,14 @@
               "window",
               "pid",
               "rss_kb",
-              "footprint_kb"
+              "footprint_kb",
+              "internal_kb",
+              "compressed_kb",
+              "purgeable_kb",
+              "graphics_kb",
+              "media_kb",
+              "network_kb",
+              "neural_kb"
             ],
             "not": {
               "anyOf": [
@@ -1498,6 +1652,41 @@
                 {
                   "required": [
                     "footprint_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
                   ]
                 }
               ]
@@ -1551,6 +1740,41 @@
                   "required": [
                     "footprint_kb"
                   ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
+                  ]
                 }
               ]
             }
@@ -1578,6 +1802,27 @@
               },
               "footprint_kb": {
                 "type": "number"
+              },
+              "internal_kb": {
+                "type": "number"
+              },
+              "compressed_kb": {
+                "type": "number"
+              },
+              "purgeable_kb": {
+                "type": "number"
+              },
+              "graphics_kb": {
+                "type": "number"
+              },
+              "media_kb": {
+                "type": "number"
+              },
+              "network_kb": {
+                "type": "number"
+              },
+              "neural_kb": {
+                "type": "number"
               }
             },
             "required": [
@@ -1587,7 +1832,14 @@
               "document",
               "pid",
               "rss_kb",
-              "footprint_kb"
+              "footprint_kb",
+              "internal_kb",
+              "compressed_kb",
+              "purgeable_kb",
+              "graphics_kb",
+              "media_kb",
+              "network_kb",
+              "neural_kb"
             ],
             "not": {
               "anyOf": [
@@ -1660,6 +1912,41 @@
                   "required": [
                     "footprint_kb"
                   ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
+                  ]
                 }
               ]
             }
@@ -1684,6 +1971,27 @@
               },
               "footprint_kb": {
                 "type": "number"
+              },
+              "internal_kb": {
+                "type": "number"
+              },
+              "compressed_kb": {
+                "type": "number"
+              },
+              "purgeable_kb": {
+                "type": "number"
+              },
+              "graphics_kb": {
+                "type": "number"
+              },
+              "media_kb": {
+                "type": "number"
+              },
+              "network_kb": {
+                "type": "number"
+              },
+              "neural_kb": {
+                "type": "number"
               }
             },
             "required": [
@@ -1692,7 +2000,14 @@
               "plugin",
               "pid",
               "rss_kb",
-              "footprint_kb"
+              "footprint_kb",
+              "internal_kb",
+              "compressed_kb",
+              "purgeable_kb",
+              "graphics_kb",
+              "media_kb",
+              "network_kb",
+              "neural_kb"
             ],
             "not": {
               "anyOf": [
@@ -1770,6 +2085,41 @@
                 {
                   "required": [
                     "footprint_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
                   ]
                 }
               ]
@@ -1777,7 +2127,7 @@
           }
         ]
       },
-      "description": "The sampler of the host, while the trace is on. The memory event `host.sampler.memory` is one reading every five seconds: role is host (rss_host_kb), a registered process role with name, page (the page web content process of the window `window`), document (the web content process of the document web view `surface` of the window `window`) or plugin-host (the WebContent process of the plugin host `plugin` in the window `window`). Each process reading holds pid, rss_kb and footprint_kb; a reading that cannot obtain a size holds error instead of the sizes, and a window whose facts cannot be read holds role, window and error. Rows identify owners, not unique processes: repeated PIDs refer to the same physical process and consumers deduplicate by PID when totaling process memory."
+      "description": "The sampler of the host, while the trace is on. The memory event `host.sampler.memory` is one reading every five seconds: role is host (rss_host_kb), a registered process role with name, page (the page web content process of the window `window`), document (the web content process of the document web view `surface` of the window `window`) or plugin-host (the WebContent process of the plugin host `plugin` in the window `window`). The host reading and each process reading hold footprint_kb with its parts internal_kb, compressed_kb, purgeable_kb, graphics_kb, media_kb, network_kb and neural_kb (docs/spec/performance-trace.md), and each process reading holds pid and rss_kb; a reading that cannot obtain a size holds error instead of the sizes, and a window whose facts cannot be read holds role, window and error. Rows identify owners, not unique processes: repeated PIDs refer to the same physical process and consumers deduplicate by PID when totaling process memory."
     },
     "host.buffer.dropped": {
       "layer": "host",

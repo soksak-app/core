@@ -379,3 +379,56 @@ func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
 		t.Fatalf("a window whose facts cannot be read has no error: %v", unreadable)
 	}
 }
+
+// footprintParts are the fields of a process reading that divide footprint_kb (docs/spec/performance-trace.md).
+var footprintParts = []string{"internal_kb", "compressed_kb", "purgeable_kb", "graphics_kb", "media_kb", "network_kb", "neural_kb"}
+
+// contract: performance.sampler.divides-the-footprint
+func TestTheSamplerDividesTheFootprintOfEachProcess(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	traceOn(t)
+	waitForFirstSample(t, config, log)
+	page := exec.Command("sleep", "30")
+	if err := page.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = page.Process.Kill(); _ = page.Wait() })
+	host.PerformanceWindowAdd("window-a", func() (host.PerformanceWindowProcesses, error) {
+		return host.PerformanceWindowProcesses{Page: page.Process.Pid, Documents: []host.PerformanceDocumentProcess{
+			{Surface: "surface-b", Document: "page", Process: 0},
+		}}, nil
+	})
+	t.Cleanup(func() { host.PerformanceWindowRemove("window-a") })
+	host.PerformanceSample()
+	var pageFields, hostFields, notStarted map[string]any
+	for _, fields := range traceFields(t, config, log, "host.sampler.memory") {
+		switch {
+		case fields["role"] == "page" && fields["window"] == "window-a":
+			pageFields = fields
+		case fields["role"] == "document" && fields["surface"] == "surface-b":
+			notStarted = fields
+		case fields["rss_host_kb"] != nil:
+			hostFields = fields
+		}
+	}
+	for name, fields := range map[string]map[string]any{"page": pageFields, "host": hostFields} {
+		for _, part := range footprintParts {
+			if size, ok := fields[part].(float64); !ok || size < 0 {
+				t.Fatalf("the %s sample holds no %s: %v", name, part, fields)
+			}
+		}
+		// Every running process holds anonymous memory, so its internal ledger is above zero.
+		if size, _ := fields["internal_kb"].(float64); size <= 0 {
+			t.Fatalf("the %s sample holds no internal memory: %v", name, fields)
+		}
+	}
+	if notStarted == nil {
+		t.Fatal("no document sample names surface-b")
+	}
+	for _, part := range footprintParts {
+		if _, ok := notStarted[part]; ok {
+			t.Fatalf("a web view whose process has not started was recorded with %s: %v", part, notStarted)
+		}
+	}
+}

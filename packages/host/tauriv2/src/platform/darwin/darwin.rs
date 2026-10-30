@@ -21,8 +21,8 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
-    ImagePresentation, Insets, Key, Listener, PersistentStream, Platform, Pointer, Raster,
-    WindowBuilder, WindowOverlay,
+    ImagePresentation, Insets, Key, Listener, PersistentStream, Platform, Pointer,
+    ProcessFootprint, Raster, WindowBuilder, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -200,8 +200,8 @@ impl Platform for Darwin {
     fn window_color_space(&self, window: Handle) -> Result<Value, String> {
         window::color_space(window)
     }
-    fn process_footprint_kb(&self, pid: u32) -> Result<u64, String> {
-        process_footprint::process_footprint_kb(pid)
+    fn process_footprint(&self, pid: u32) -> Result<ProcessFootprint, String> {
+        process_footprint::process_footprint(pid)
     }
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
         window::move_to(window, x, y)

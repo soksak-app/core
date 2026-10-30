@@ -315,7 +315,7 @@ pub fn sample() {
     }
 }
 
-/// Adds the memory of pid to the record: rss_kb and footprint_kb, or error when a reading fails. Pid 0 is a web view whose
+/// Adds the memory of pid to the record: rss_kb, footprint_kb and the parts of the footprint, or error when a reading fails. Pid 0 is a web view whose
 /// WebContent process has not started, so no process can be read for it and its error says so.
 fn process_memory(mut record: Value, pid: u32) -> Value {
     record["event"] = json!("memory");
@@ -324,19 +324,31 @@ fn process_memory(mut record: Value, pid: u32) -> Value {
         record["error"] = json!(format!("the web process has not started (pid {pid})"));
         return record;
     }
-    match (resident_kb(pid), footprint_kb(pid)) {
+    match (resident_kb(pid), footprint(pid)) {
         (Ok(size), Ok(footprint)) => {
             record["rss_kb"] = json!(size);
-            record["footprint_kb"] = json!(footprint);
+            add_footprint(&mut record, &footprint);
         }
         (Err(error), _) | (_, Err(error)) => record["error"] = json!(error),
     }
     record
 }
 
-/// The physical footprint (KB) of pid, read through the registered platform implementation.
-fn footprint_kb(pid: u32) -> Result<u64, String> {
-    platform::current()?.process_footprint_kb(pid)
+/// The physical footprint of pid with its parts, read through the registered platform implementation.
+fn footprint(pid: u32) -> Result<platform::ProcessFootprint, String> {
+    platform::current()?.process_footprint(pid)
+}
+
+/// Adds footprint_kb and the parts of the footprint to the record (docs/spec/performance-trace.md).
+fn add_footprint(record: &mut Value, footprint: &platform::ProcessFootprint) {
+    record["footprint_kb"] = json!(footprint.total);
+    record["internal_kb"] = json!(footprint.internal);
+    record["compressed_kb"] = json!(footprint.compressed);
+    record["purgeable_kb"] = json!(footprint.purgeable);
+    record["graphics_kb"] = json!(footprint.graphics);
+    record["media_kb"] = json!(footprint.media);
+    record["network_kb"] = json!(footprint.network);
+    record["neural_kb"] = json!(footprint.neural);
 }
 
 /// Stores a phase of the life of a surface (`created`, `placed`, `destroyed`) as the event `surface` of the trace. A
@@ -367,9 +379,11 @@ pub fn sampler_running() -> bool {
 
 /// The memory event of pid that the sampler records. When the read fails, it records the error instead of the size.
 pub fn memory_record(pid: u32) -> Value {
-    match (resident_kb(pid), footprint_kb(pid)) {
+    match (resident_kb(pid), footprint(pid)) {
         (Ok(size), Ok(footprint)) => {
-            json!({"event":"memory", "rss_host_kb":size, "footprint_kb":footprint})
+            let mut record = json!({"event":"memory", "rss_host_kb":size});
+            add_footprint(&mut record, &footprint);
+            record
         }
         (Err(error), _) | (_, Err(error)) => json!({"event":"memory", "error":error}),
     }

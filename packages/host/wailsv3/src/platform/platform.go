@@ -23,6 +23,21 @@ import (
 )
 
 // Rect is a region in CSS pixels relative to the page viewport.
+// ProcessFootprint is the physical footprint of one process (KB) with the ledgers that the system divides it into
+// (docs/spec/performance-trace.md). The parts do not sum to Total exactly: the footprint also counts mapped IOKit memory and
+// page tables, which the system does not report per process, and subtracts the internal memory that it also counts as mapped
+// IOKit memory.
+type ProcessFootprint struct {
+	Total      uint64
+	Internal   uint64
+	Compressed uint64
+	Purgeable  uint64
+	Graphics   uint64
+	Media      uint64
+	Network    uint64
+	Neural     uint64
+}
+
 type Rect struct {
 	X, Y, W, H float64
 }
@@ -310,10 +325,10 @@ type Platform interface {
 	// WindowColorSpace returns the current AppKit backing color space and ICC profile fingerprint as JSON.
 	// Call it on the UI thread for a one-shot diagnostic query.
 	WindowColorSpace(window unsafe.Pointer) (string, error)
-	// ProcessFootprintKB returns the physical footprint (KB) of the process pid: the size that the system attributes to the process,
-	// which counts the pages that no other process shares. The resident size counts the shared pages too. It returns an error when the
-	// process cannot be read, such as a process that has ended.
-	ProcessFootprintKB(pid int) (uint64, error)
+	// ProcessFootprint returns the physical footprint of the process pid and its parts: the size that the system attributes to the
+	// process, which counts the pages that no other process shares. The resident size counts the shared pages too. It returns an
+	// error when the process cannot be read, such as a process that has ended.
+	ProcessFootprint(pid int) (ProcessFootprint, error)
 	SetMainWebview(window unsafe.Pointer) error
 	// RevealAfterLoad keeps the window transparent and makes it opaque when the next display ends after the first load of the main web view finished.
 	// The caller puts the window on the screen after this call (native/darwin/src/window_reveal.h). Call it on the UI thread.

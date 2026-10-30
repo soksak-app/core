@@ -234,6 +234,22 @@ pub struct Hit {
     pub view_frame: Option<Frame>,
 }
 
+/// The physical footprint of one process (KB) with the ledgers that the system divides it into
+/// (docs/spec/performance-trace.md). The parts do not sum to total exactly: the footprint also counts mapped IOKit memory and
+/// page tables, which the system does not report per process, and subtracts the internal memory that it also counts as mapped
+/// IOKit memory.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ProcessFootprint {
+    pub total: u64,
+    pub internal: u64,
+    pub compressed: u64,
+    pub purgeable: u64,
+    pub graphics: u64,
+    pub media: u64,
+    pub network: u64,
+    pub neural: u64,
+}
+
 /// The CSS pixel insets of the surface viewport (left, top, right, bottom).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Insets {
@@ -375,9 +391,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Reads the AppKit backing color space and ICC fingerprint for one diagnostic query.
     #[cfg(feature = "diagnostics")]
     fn window_color_space(&self, window: Handle) -> Result<Value, String>;
-    /// Returns the physical footprint (KB) of the process pid, which counts the pages that no other process shares. It is an
-    /// error when the process cannot be read, such as a process that has ended.
-    fn process_footprint_kb(&self, pid: u32) -> Result<u64, String>;
+    /// Returns the physical footprint of the process pid and its parts, which count the pages that no other process shares. It
+    /// is an error when the process cannot be read, such as a process that has ended.
+    fn process_footprint(&self, pid: u32) -> Result<ProcessFootprint, String>;
     /// Moves the upper left of the window frame to the screen coordinates (x, y). Call it on the main thread.
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String>;
     /// Returns the displays [{x, y, width, height, scale}] in screen coordinates. Call it on the main thread.

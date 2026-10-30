@@ -510,3 +510,81 @@ fn the_sampler_reads_the_processes_of_every_window() {
         unreadable[0]
     );
 }
+
+/// The fields of a process reading that divide footprint_kb (docs/spec/performance-trace.md).
+const FOOTPRINT_PARTS: [&str; 7] = [
+    "internal_kb",
+    "compressed_kb",
+    "purgeable_kb",
+    "graphics_kb",
+    "media_kb",
+    "network_kb",
+    "neural_kb",
+];
+
+// contract: performance.sampler.divides-the-footprint
+#[test]
+fn the_sampler_divides_the_footprint_of_each_process() {
+    if let Some(config) = std::env::var_os(CHILD) {
+        let config = std::path::PathBuf::from(config);
+        let writer = records::start_writer(&config);
+        performance::command(json!({"action": "on"})).unwrap();
+        records::wait_for_first_sample(&config, &writer);
+        let mut page = Command::new("sleep").arg("30").spawn().unwrap();
+        let page_pid = page.id();
+        performance::window_add(
+            "window-a",
+            std::sync::Arc::new(move || {
+                Ok(performance::WindowProcesses {
+                    page: page_pid,
+                    documents: vec![performance::DocumentProcess {
+                        surface: "surface-b".into(),
+                        document: "page".into(),
+                        process: 0,
+                    }],
+                    plugin_hosts: vec![],
+                })
+            }),
+        );
+        performance::sample();
+        performance::window_remove("window-a");
+        performance::command(json!({"action": "off"})).unwrap();
+        page.kill().unwrap();
+        page.wait().unwrap();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = in_child("the_sampler_divides_the_footprint_of_each_process");
+    let samples = trace_fields(config.path(), "host.sampler.memory");
+    let page = samples
+        .iter()
+        .find(|s| s["role"] == "page" && s["window"] == "window-a")
+        .expect("a page sample names window-a");
+    let own = samples
+        .iter()
+        .find(|s| s.get("rss_host_kb").is_some())
+        .expect("a sample of the host");
+    for (name, fields) in [("page", page), ("host", own)] {
+        for part in FOOTPRINT_PARTS {
+            assert!(
+                fields[part].as_u64().is_some(),
+                "the {name} sample holds no {part}: {fields}"
+            );
+        }
+        // Every running process holds anonymous memory, so its internal ledger is above zero.
+        assert!(
+            fields["internal_kb"].as_u64().is_some_and(|size| size > 0),
+            "the {name} sample holds no internal memory: {fields}"
+        );
+    }
+    let not_started = samples
+        .iter()
+        .find(|s| s["role"] == "document" && s["surface"] == "surface-b")
+        .expect("a document sample names surface-b");
+    for part in FOOTPRINT_PARTS {
+        assert!(
+            not_started.get(part).is_none(),
+            "a web view whose process has not started was recorded with {part}: {not_started}"
+        );
+    }
+}

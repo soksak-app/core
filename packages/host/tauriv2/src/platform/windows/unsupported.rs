@@ -9,8 +9,8 @@ use tauri::webview::PlatformWebview;
 
 use super::super::{
     ClipboardValue, Connection, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
-    ImagePresentation, Insets, Key, Listener, PersistentStream, Pointer, Raster, WindowBuilder,
-    WindowOverlay,
+    ImagePresentation, Insets, Key, Listener, PersistentStream, Pointer, ProcessFootprint, Raster,
+    WindowBuilder, WindowOverlay,
 };
 
 /// Returns an error that contains operation in its name.
@@ -659,7 +659,7 @@ pub fn window_facts(_window: Handle) -> Result<Value, String> {
     missing("window state")
 }
 
-pub fn process_footprint_kb(_pid: u32) -> Result<u64, String> {
+pub fn process_footprint(_pid: u32) -> Result<ProcessFootprint, String> {
     missing("process footprint")
 }
 

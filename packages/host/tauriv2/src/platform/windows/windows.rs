@@ -17,7 +17,7 @@ use super::DocumentViewportMarker;
 use super::{
     ClipboardValue, Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame,
     Handle, Hit, ImagePresentation, Insets, Key, Listener, PersistentStream, Platform, Pointer,
-    Raster, WindowBuilder, WindowOverlay,
+    ProcessFootprint, Raster, WindowBuilder, WindowOverlay,
 };
 
 #[path = "identity.rs"]
@@ -93,8 +93,8 @@ impl Platform for Windows {
     fn window_facts(&self, window: Handle) -> Result<Value, String> {
         unsupported::window_facts(window)
     }
-    fn process_footprint_kb(&self, pid: u32) -> Result<u64, String> {
-        unsupported::process_footprint_kb(pid)
+    fn process_footprint(&self, pid: u32) -> Result<ProcessFootprint, String> {
+        unsupported::process_footprint(pid)
     }
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
         unsupported::move_window(window, x, y)

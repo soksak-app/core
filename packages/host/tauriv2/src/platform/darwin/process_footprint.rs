@@ -1,20 +1,121 @@
-//! The physical footprint of a process: ri_phys_footprint of proc_pid_rusage (libproc.h of the macOS SDK, RUSAGE_INFO_V0).
-//! The libc crate of the lock file declares proc_pid_rusage, rusage_info_v0 and RUSAGE_INFO_V0, so no declaration is written here.
+//! The physical footprint of a process and its parts: the ledgers of task_info TASK_VM_INFO (mach/task_info.h of the macOS SDK,
+//! revision 3), read through the task name port of task_name_for_pid (mach/mach_traps.h), which a process of the same user
+//! grants. The mach2 crate declares the calls and task_vm_info; it has no TASK_VM_INFO_REV3_COUNT, which is written here.
 
-use libc::{RUSAGE_INFO_V0, proc_pid_rusage, rusage_info_v0};
+use mach2::kern_return::KERN_SUCCESS;
+use mach2::mach_port::mach_port_deallocate;
+use mach2::message::mach_msg_type_number_t;
+use mach2::port::{MACH_PORT_NULL, mach_port_name_t};
+use mach2::task::task_info;
+use mach2::task_info::{TASK_VM_INFO, task_vm_info};
+use mach2::traps::{mach_task_self, task_name_for_pid};
 
-/// Returns the physical footprint (KB, rounded down) of the process pid. It is an error when proc_pid_rusage fails; the text
-/// names the errno number, which the Go host also names.
-pub fn process_footprint_kb(pid: u32) -> Result<u64, String> {
+use crate::platform::ProcessFootprint;
+
+/// TASK_VM_INFO_REV3_COUNT of mach/task_info.h: the words of task_vm_info up to ledger_tag_neural_nofootprint_compressed.
+const TASK_VM_INFO_REV3_COUNT: mach_msg_type_number_t = 84;
+
+/// Returns the physical footprint of the process pid and its ledger parts (KB, each rounded down). The error names the failed
+/// call and its kern_return_t, which the Go host also names.
+pub fn process_footprint(pid: u32) -> Result<ProcessFootprint, String> {
     let process =
         libc::c_int::try_from(pid).map_err(|_| format!("pid {pid} is not a process id"))?;
-    let mut info = std::mem::MaybeUninit::<rusage_info_v0>::zeroed();
-    let status = unsafe { proc_pid_rusage(process, RUSAGE_INFO_V0, info.as_mut_ptr().cast()) };
-    if status != 0 {
-        // The errno of the failed call is read at once, before another call can replace it.
-        let code = unsafe { *libc::__error() };
-        return Err(format!("proc_pid_rusage for pid {pid}: errno {code}"));
+    let mut name: mach_port_name_t = MACH_PORT_NULL;
+    let code = unsafe { task_name_for_pid(mach_task_self(), process, &mut name) };
+    if code != KERN_SUCCESS {
+        return Err(format!(
+            "task_name_for_pid for pid {pid}: kern_return {code}"
+        ));
     }
-    let info = unsafe { info.assume_init() };
-    Ok(info.ri_phys_footprint / 1024)
+    let mut info = task_vm_info::default();
+    let mut count = TASK_VM_INFO_REV3_COUNT;
+    let code = unsafe {
+        task_info(
+            name,
+            TASK_VM_INFO,
+            (&mut info as *mut task_vm_info).cast(),
+            &mut count,
+        )
+    };
+    let released = unsafe { mach_port_deallocate(mach_task_self(), name) };
+    if code != KERN_SUCCESS {
+        return Err(format!("task_info for pid {pid}: kern_return {code}"));
+    }
+    if released != KERN_SUCCESS {
+        return Err(format!(
+            "mach_port_deallocate for pid {pid}: kern_return {released}"
+        ));
+    }
+    if count < TASK_VM_INFO_REV3_COUNT {
+        return Err(format!(
+            "task_info for pid {pid}: {count} of {TASK_VM_INFO_REV3_COUNT} words"
+        ));
+    }
+    // Each ledger is a byte count that the kernel keeps at zero or above; a negative value is reported, not converted. The
+    // order is the order of the Go host, so the first negative ledger names itself in both hosts.
+    let ledgers: [(&str, i64); 13] = [
+        ("phys_footprint", info.phys_footprint as i64),
+        ("internal", info.internal as i64),
+        ("compressed", info.compressed as i64),
+        (
+            "ledger_purgeable_nonvolatile",
+            info.ledger_purgeable_nonvolatile,
+        ),
+        (
+            "ledger_purgeable_novolatile_compressed",
+            info.ledger_purgeable_novolatile_compressed,
+        ),
+        (
+            "ledger_tag_graphics_footprint",
+            info.ledger_tag_graphics_footprint,
+        ),
+        (
+            "ledger_tag_graphics_footprint_compressed",
+            info.ledger_tag_graphics_footprint_compressed,
+        ),
+        (
+            "ledger_tag_media_footprint",
+            info.ledger_tag_media_footprint,
+        ),
+        (
+            "ledger_tag_media_footprint_compressed",
+            info.ledger_tag_media_footprint_compressed,
+        ),
+        (
+            "ledger_tag_network_nonvolatile",
+            info.ledger_tag_network_nonvolatile,
+        ),
+        (
+            "ledger_tag_network_nonvolatile_compressed",
+            info.ledger_tag_network_nonvolatile_compressed,
+        ),
+        (
+            "ledger_tag_neural_footprint",
+            info.ledger_tag_neural_footprint,
+        ),
+        (
+            "ledger_tag_neural_footprint_compressed",
+            info.ledger_tag_neural_footprint_compressed,
+        ),
+    ];
+    if let Some((ledger, value)) = ledgers.iter().find(|(_, value)| *value < 0) {
+        return Err(format!("task_info for pid {pid}: {ledger} is {value}"));
+    }
+    let kb = |indexes: &[usize]| {
+        indexes
+            .iter()
+            .map(|&index| ledgers[index].1 as u64)
+            .sum::<u64>()
+            / 1024
+    };
+    Ok(ProcessFootprint {
+        total: kb(&[0]),
+        internal: kb(&[1]),
+        compressed: kb(&[2]),
+        purgeable: kb(&[3, 4]),
+        graphics: kb(&[5, 6]),
+        media: kb(&[7, 8]),
+        network: kb(&[9, 10]),
+        neural: kb(&[11, 12]),
+    })
 }

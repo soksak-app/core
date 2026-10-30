@@ -194,7 +194,7 @@ func PerformanceSample() {
 	}
 }
 
-// processMemory adds the memory of pid to record: rss_kb and footprint_kb, or error when a reading fails. Pid 0 is a web view whose
+// processMemory adds the memory of pid to record: rss_kb, footprint_kb and the parts of the footprint, or error when a reading fails. Pid 0 is a web view whose
 // WebContent process has not started, so no process can be read for it and its error says so.
 func processMemory(record map[string]any, pid int) map[string]any {
 	record["event"] = "memory"
@@ -208,23 +208,36 @@ func processMemory(record map[string]any, pid int) map[string]any {
 		record["error"] = err.Error()
 		return record
 	}
-	footprint, err := processFootprintKB(pid)
+	footprint, err := processFootprint(pid)
 	if err != nil {
 		record["error"] = err.Error()
 		return record
 	}
-	record["rss_kb"], record["footprint_kb"] = size, footprint
+	record["rss_kb"] = size
+	addFootprint(record, footprint)
 	return record
 }
 
-// processFootprintKB is the physical footprint (KB) of pid, read through the registered platform implementation. The platform
-// tests and the host both register it at package initialization, so an unregistered platform is an error.
-func processFootprintKB(pid int) (uint64, error) {
+// processFootprint is the physical footprint of pid with its parts, read through the registered platform implementation. The
+// platform tests and the host both register it at package initialization, so an unregistered platform is an error.
+func processFootprint(pid int) (platform.ProcessFootprint, error) {
 	current, err := platform.Current()
 	if err != nil {
-		return 0, err
+		return platform.ProcessFootprint{}, err
 	}
-	return current.ProcessFootprintKB(pid)
+	return current.ProcessFootprint(pid)
+}
+
+// addFootprint adds footprint_kb and the parts of the footprint to record (docs/spec/performance-trace.md).
+func addFootprint(record map[string]any, footprint platform.ProcessFootprint) {
+	record["footprint_kb"] = footprint.Total
+	record["internal_kb"] = footprint.Internal
+	record["compressed_kb"] = footprint.Compressed
+	record["purgeable_kb"] = footprint.Purgeable
+	record["graphics_kb"] = footprint.Graphics
+	record["media_kb"] = footprint.Media
+	record["network_kb"] = footprint.Network
+	record["neural_kb"] = footprint.Neural
 }
 
 // PerformanceWindowProcesses are the processes of one window that the sampler reads: the WebContent process of its page,
@@ -300,11 +313,13 @@ func PerformanceMemory(pid int) map[string]any {
 	if err != nil {
 		return map[string]any{"event": "memory", "error": err.Error()}
 	}
-	footprint, err := processFootprintKB(pid)
+	footprint, err := processFootprint(pid)
 	if err != nil {
 		return map[string]any{"event": "memory", "error": err.Error()}
 	}
-	return map[string]any{"event": "memory", "rss_host_kb": size, "footprint_kb": footprint}
+	record := map[string]any{"event": "memory", "rss_host_kb": size}
+	addFootprint(record, footprint)
+	return record
 }
 
 // residentKB is the resident size (KB) of pid. It is an error when ps cannot be run or returns no size (the process ended).
