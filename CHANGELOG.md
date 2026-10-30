@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-14-1: The declared UI snapshot ingress reports a snapshot whose status is not a status that its plugin declares, which it acknowledged and discarded with no record.
 - F292-11: The main page refuses a view exposure registration of a plugin command, which replaced the forwarding handler of a command that the view registered with `runtime.command.register` and left its requests unanswered; the unload probe registers its commands only with `commands.register`.
 - F292-24: `@soksak/plugin-api/view` exports `createViewReporter`, the report function of the view bridge that sends errors, call timeouts and lost peers to the global error hook of the page and keeps call counts and closed-surface reports in the console; the extension point provider, which dropped every report, and the unload and RAF probes use it, and the two copies of the reporter are removed.
 - F292-23: The provider view of the extension point fixture serves its status through `createExpose`, so it answers the exposure requests that the main page forwards.

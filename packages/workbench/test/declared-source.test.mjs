@@ -76,6 +76,15 @@ registry.declare("snapshot-probe", {
   commands: [],
   dom: [],
 });
+// The ingress delivers only a status that its plugin declares, so each plugin of the tests declares the statuses that it sends.
+for (const [plugin, names] of [["probe", ["lines", "other", "tree"]], ["other", ["lines"]], ["race-probe", ["lines"]],
+  ["race-probe-stale", ["lines"]], ["lifecycle-probe", ["tree"]], ["created-during-seed", ["lines"]]]) {
+  registry.declare(plugin, {
+    status: names.map((name) => ({ name: `${plugin}.${name}`, description: "Lines.", schema: { type: "object" } })),
+    commands: [],
+    dom: [],
+  });
+}
 
 function withGeneration(source, plugin) {
   return source.generation === undefined ? { ...source, generation: fixtureGeneration(plugin, source.surface) } : source;
@@ -334,7 +343,8 @@ test("the accepted snapshot status advances only after the delayed native acknow
   completeListenerRegistration = null;
   seedSourceOrigins({ floor: 9, pluginHosts: { "snapshot-probe": 9 }, views: {} });
   await startDeclaredSnapshotIngress();
-  const read = () => processState.acceptedSnapshots();
+  // The earlier tests leave the accepted records of their own plugins, so the test reads the records of its plugin.
+  const read = () => processState.acceptedSnapshots().filter((entry) => entry.plugin === "snapshot-probe");
   const accepted = (seq) => [{ plugin: "snapshot-probe", status: "tree", surface: null, generation: 9, seq }];
   let finishAck;
   emit("declared-ui-snapshot", {
@@ -364,11 +374,12 @@ test("the accepted snapshot status advances only after the delayed native acknow
   }, "the accepted snapshot status must expose the old value until the delayed new snapshot ACK is accepted");
 });
 
-test("the ingress acknowledges but does not publish an undeclared snapshot status", async () => {
+test("the ingress acknowledges, does not publish and reports an undeclared snapshot status", async () => {
   delayListenerRegistration = false;
   await startDeclaredSnapshotIngress();
   seedSourceOrigins({ floor: 10, pluginHosts: { "undeclared-probe": 10 }, views: {} });
   calls.length = 0;
+  reported.length = 0;
   const before = processState.acceptedSnapshots();
   emit("declared-ui-snapshot", {
     plugin: "undeclared-probe", generation: 10, status: "unregistered", seq: 1,
@@ -380,6 +391,10 @@ test("the ingress acknowledges but does not publish an undeclared snapshot statu
     arg: { plugin: "undeclared-probe", generation: 10, event: "declared-ui.snapshot.ack", data: { plugin: "undeclared-probe", status: "unregistered", seq: 1 } },
   }], "an undeclared status was not acknowledged through its current source");
   assert.deepEqual(processState.acceptedSnapshots(), before, "an undeclared status became public metadata");
+  assert.deepEqual(reported, [
+    "declared UI snapshot ingress: undeclared-probe sent a snapshot of status unregistered, which it does not declare as undeclared-probe.unregistered",
+  ], "the undeclared status was discarded without a record");
+  reported.length = 0;
 });
 
 test("a delayed declared snapshot acknowledgement cannot publish a retired source generation", { timeout: 5000 }, async () => {

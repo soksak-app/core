@@ -43,6 +43,13 @@ const list = (texts) => ({ elements: [{ kind: "list", key: "l1", empty: "none", 
 const tree = (nodes) => ({ elements: [{ kind: "tree", key: "t1", empty: "none", nodes }] });
 const branch = (key, children, extra = {}) => ({ key, label: key, children, ...extra });
 const leaf = (key) => ({ key, label: key });
+// The snapshot ingress delivers only a status that its plugin declares (docs/spec/declared-ui.md#status-mapping).
+const { registry } = await import("../exposure.js");
+registry.declare("demo", {
+  status: ["tree", "bookmarks"].map((name) => ({ name: `demo.${name}`, description: "Tree.", schema: { type: "object" } })),
+  commands: [],
+  dom: [],
+});
 
 let counter = 0;
 

@@ -68,9 +68,13 @@ function receive(event) {
     onSnapshot: (status, seq, value, skipped) => {
       const delivery = Promise.resolve(ack).then((accepted) => {
         if (!accepted || activeGeneration(event.plugin, surface) !== generation) return;
-        if (registry.declared("status", `${event.plugin}.${status}`)) {
-          acceptSnapshotSequence(event.plugin, status, surface ?? null, generation, seq); // default: absent surface identifies the plugin-host source.
+        // The status of a snapshot is the name within the plugin (docs/spec/declared-ui.md#status-mapping); a name that the plugin
+        // does not declare reaches no recipient and is reported, so a sender that uses another form of the name is visible.
+        if (!registry.declared("status", `${event.plugin}.${status}`)) {
+          report(`${event.plugin} sent a snapshot of status ${status}, which it does not declare as ${event.plugin}.${status}`);
+          return;
         }
+        acceptSnapshotSequence(event.plugin, status, surface ?? null, generation, seq); // default: absent surface identifies the plugin-host source.
         for (const recipient of targets) {
           if (listeners?.has(recipient) && activeGeneration(event.plugin, surface) === generation) {
             try {
