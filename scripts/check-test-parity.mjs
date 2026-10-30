@@ -8014,6 +8014,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F288",
+    implementation: [{ file: "scripts/check-release.mjs", symbol: "export function frontendSources(workbench, frontend, diagnostic)" }],
+    tests: [{ file: "scripts/test/check-release-paths.test.mjs", id: "the frontend sources are the files that staging wrote, which a release embeds" }],
+    expected: "The release check compares the release executable with the frontend files that staging wrote.",
+    levels: ["unit"],
+  },
+  {
     id: "F289",
     implementation: [{ file: "scripts/check-versions.mjs", symbol: "if (import.meta.main) {" }],
     tests: [{ file: "scripts/test/entry-guards.test.mjs", id: "check-versions.mjs can be imported by a process that has no script path" }],

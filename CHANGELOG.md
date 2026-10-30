@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F289: The version, host contract and event class scripts can be imported by a process without a script path.
+- F288: The release check compares the release executable with the frontend files that staging wrote.
 - F285-1: Every async command of the Tauri host runs its body on the blocking threads of the async runtime, so commands that wait for a page reply no longer stop the other commands and replies on a computer with few processors.
 - F285-2: The tests of the Tauri host that switch the performance trace run one at a time, so they no longer read the records of each other.
 - F287: Open checklist items do not hold a release; the release gate lists them as carried into the next version.

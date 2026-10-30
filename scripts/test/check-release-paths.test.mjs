@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { auditDiagnostics, auditFrontend, auditMinimum, diagnosticRelease, machoMinimum } from "../check-release.mjs";
+import { auditDiagnostics, auditFrontend, auditMinimum, diagnosticRelease, frontendSources, machoMinimum } from "../check-release.mjs";
 
 const script = fileURLToPath(new URL("../check-release.mjs", import.meta.url));
 
@@ -98,6 +98,33 @@ test("frontend audit accepts an executable that embeds every published file and 
 test("frontend audit rejects an executable whose frontend is not readable", () => {
   assert.deepEqual(audit(executable(release, "<compressed>")), ["app: does not embed a readable frontend; missing index.html, card.js"]);
   assert.deepEqual(audit(executable(page, card)), ["app: does not embed a readable frontend; missing release page diagnostics module"]);
+});
+
+test("the frontend sources are the files that staging wrote, which a release embeds", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "soksak-release-frontend-"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  const workbench = join(dir, "workbench");
+  const frontend = join(dir, "frontend");
+  mkdirSync(join(workbench, "runtime"), { recursive: true });
+  mkdirSync(join(frontend, "runtime"), { recursive: true });
+  writeFileSync(join(workbench, "package.json"), JSON.stringify({ files: ["index.html", "runtime"] }));
+  // Staging replaces the import map of the page and copies the page diagnostic module as diagnostics.js.
+  for (const [root, map] of [[workbench, "source map"], [frontend, "staged map"]]) {
+    writeFileSync(join(root, "index.html"), `<script type="importmap">${map}</script>`);
+    writeFileSync(join(root, "runtime/start.js"), "export {};");
+  }
+  writeFileSync(join(workbench, "observe.js"), "diagnostic module");
+  writeFileSync(join(workbench, "release-diagnostics.js"), "release module");
+  writeFileSync(join(frontend, "diagnostics.js"), "diagnostic module");
+  const { published, pageModule, pageModuleName } = frontendSources(workbench, frontend, true);
+  assert.deepEqual(published.map(({ path, bytes }) => [path, bytes.toString()]), [
+    ["index.html", '<script type="importmap">staged map</script>'],
+    [join("runtime", "start.js"), "export {};"],
+  ]);
+  assert.equal(pageModule.toString(), "diagnostic module");
+  assert.equal(pageModuleName, "page diagnostics module observe.js");
+  assert.throws(() => frontendSources(workbench, frontend, false),
+    /diagnostics\.js is not release-diagnostics\.js of the workbench; the frontend was staged for another kind of build/);
 });
 
 test("release CLI inspects the supplied bundles instead of default release paths", { timeout: 5000 }, (t) => {

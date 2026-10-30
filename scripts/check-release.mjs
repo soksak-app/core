@@ -126,16 +126,25 @@ function* expand(dir, path) {
 }
 
 /**
- * The published files of the workbench of an application and the page diagnostic module that a release embeds: the
- * diagnostic module (observe.js) in a diagnostic release, the release module otherwise.
+ * The files that a release embeds: each published file of the workbench as staging wrote it into the frontend folder of
+ * the application, and the page diagnostic module, which staging copies as diagnostics.js (the diagnostic module observe.js
+ * in a diagnostic release, the release module otherwise). Staging changes some published files, such as the import map
+ * of index.html, so the files of the workbench package are not the embedded files.
  */
+export function frontendSources(workbench, frontend, diagnostic) {
+  const { files } = JSON.parse(readFileSync(join(workbench, "package.json"), "utf8"));
+  const published = files.flatMap((file) => [...expand(workbench, file)]).map((path) => ({ path, bytes: readFileSync(join(frontend, path)) }));
+  const source = diagnostic ? "observe.js" : "release-diagnostics.js";
+  const pageModule = readFileSync(join(frontend, "diagnostics.js"));
+  if (!pageModule.equals(readFileSync(join(workbench, source)))) {
+    throw new Error(`${join(frontend, "diagnostics.js")} is not ${source} of the workbench; the frontend was staged for another kind of build`);
+  }
+  return { published, pageModule, pageModuleName: `page diagnostics module ${source}` };
+}
+
 function applicationSources(app, diagnostic) {
   const appDir = join(ROOT, "apps", app);
-  const workbench = packageDir(appDir, "@soksak/workbench");
-  const { files } = JSON.parse(readFileSync(join(workbench, "package.json"), "utf8"));
-  const published = files.flatMap((file) => [...expand(workbench, file)]).map((path) => ({ path, bytes: readFileSync(join(workbench, path)) }));
-  const module = diagnostic ? "observe.js" : "release-diagnostics.js";
-  return { published, pageModule: readFileSync(join(workbench, module)), pageModuleName: `page diagnostics module ${module}` };
+  return frontendSources(packageDir(appDir, "@soksak/workbench"), join(appDir, "src/frontend"), diagnostic);
 }
 
 // Runs the check only when executed directly as a CLI.
