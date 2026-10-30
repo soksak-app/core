@@ -10,20 +10,7 @@ const [folder, count] = process.argv.slice(2);
 const cycles = Number(count);
 if (!folder || !Number.isInteger(cycles) || cycles < 1) throw new Error(`usage: folder-wait-churn.mjs FOLDER CYCLES, got ${process.argv.slice(2).join(" ")}`);
 
-const writer = new Worker(`
-const fs = require("node:fs");
-const { join } = require("node:path");
-const { workerData: folder } = require("node:worker_threads");
-for (let i = 0; ; i++) {
-  const nested = join(folder, "nested-" + (i % 4));
-  fs.mkdirSync(join(nested, "a", "b"), { recursive: true });
-  fs.writeFileSync(join(nested, "a", "file"), String(i));
-  fs.renameSync(join(nested, "a", "file"), join(nested, "moved"));
-  fs.writeFileSync(join(folder, ".state.tmp"), String(i));
-  fs.renameSync(join(folder, ".state.tmp"), join(folder, "state"));
-  fs.rmSync(nested, { recursive: true });
-}
-`, { eval: true, workerData: folder });
+const writer = new Worker(new URL("./folder-wait-churn-writer.mjs", import.meta.url), { workerData: folder });
 writer.on("error", (error) => {
   process.stderr.write(`writer: ${error.stack}\n`);
   process.exit(2);
