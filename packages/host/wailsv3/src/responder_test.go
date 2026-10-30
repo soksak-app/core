@@ -18,7 +18,7 @@ func TestTheResponderEventFollowsTheFirstResponderAfterThePageIsReady(t *testing
 	emit := func(event *responderEvent) { sent = append(sent, *event) }
 	send := func(force bool) {
 		t.Helper()
-		if err := state.send(force, func() bool { return ready }, read, emit); err != nil {
+		if err := state.send(force, func() bool { return ready }, read, emit, func(error) bool { return false }); err != nil {
 			t.Fatalf("send: %v", err)
 		}
 	}
@@ -37,7 +37,7 @@ func TestTheResponderEventFollowsTheFirstResponderAfterThePageIsReady(t *testing
 		t.Fatalf("sent %+v, want the ready value, one value for the change and the value at the next ready %+v", sent, want)
 	}
 	failed := errors.New("window facts missing responder")
-	if err := state.send(false, func() bool { return true }, func() (*responderEvent, error) { return nil, failed }, emit); !errors.Is(err, failed) {
+	if err := state.send(false, func() bool { return true }, func() (*responderEvent, error) { return nil, failed }, emit, func(error) bool { return false }); !errors.Is(err, failed) {
 		t.Fatalf("a failed read returned %v", err)
 	}
 }
@@ -56,5 +56,23 @@ func TestTheFirstResponderInTheViewOfAViewSurfaceIsOwnerSurface(t *testing.T) {
 	region := windowResponder("WKWebView", 30, 10, false, named, documents, 0)
 	if want := (WindowResponder{Class: "WKWebView", Owner: "document", Surface: text("tab-view"), Document: text("page")}); !reflect.DeepEqual(region, want) {
 		t.Fatalf("region responder %+v, want %+v", region, want)
+	}
+}
+
+// A read that fails because the window closed sends nothing and is no error: the close removed the page that the event goes to.
+// A read that fails while the window is open is the error of the read.
+// contract: window.responder.closed-window-sends-nothing
+func TestAResponderChangeOfAClosedWindowSendsNothing(t *testing.T) {
+	var state responderState
+	gone := errors.New("window closed")
+	var sent []responderEvent
+	emit := func(event *responderEvent) { sent = append(sent, *event) }
+	closed := func(err error) bool { return errors.Is(err, gone) }
+	if err := state.send(true, func() bool { return true }, func() (*responderEvent, error) { return nil, gone }, emit, closed); err != nil || len(sent) != 0 {
+		t.Fatalf("a closed window returned %v and sent %v", err, sent)
+	}
+	failed := errors.New("window facts missing responder")
+	if err := state.send(true, func() bool { return true }, func() (*responderEvent, error) { return nil, failed }, emit, closed); !errors.Is(err, failed) {
+		t.Fatalf("a failed read of an open window returned %v", err)
 	}
 }

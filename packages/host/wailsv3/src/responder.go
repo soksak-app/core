@@ -1,6 +1,7 @@
 package host
 
 import (
+	"errors"
 	"reflect"
 	"sync"
 
@@ -49,15 +50,21 @@ func (s *Surfaces) sendResponder(force bool) {
 		return s.ready
 	}
 	emit := func(event *responderEvent) { s.windowEvent("window-responder", event) }
-	if err := s.responder.send(force, pageReady, read, emit); err != nil {
+	// A read fails with 1003 when the window closed before it.
+	closed := func(err error) bool {
+		var coded *RPCError
+		return errors.As(err, &coded) && coded.Code == codeNoWindow
+	}
+	if err := s.responder.send(force, pageReady, read, emit, closed); err != nil {
 		LogError("window responder", err)
 	}
 }
 
 // send reads the first responder and emits it when it differs from the last emitted one. force is the ready of a page, which
 // has received none: it emits the current responder. Without force, a page that is not ready receives nothing, because its
-// ready sends the current responder.
-func (r *responderState) send(force bool, pageReady func() bool, read func() (*responderEvent, error), emit func(*responderEvent)) error {
+// ready sends the current responder. A read that fails is no error when closed reports that the window closed, because the
+// close removed the page.
+func (r *responderState) send(force bool, pageReady func() bool, read func() (*responderEvent, error), emit func(*responderEvent), closed func(error) bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if force {
@@ -67,6 +74,10 @@ func (r *responderState) send(force bool, pageReady func() bool, read func() (*r
 	}
 	event, err := read()
 	if err != nil {
+		if closed(err) {
+			// silent: the close removed the page of the window, so no page receives the responder.
+			return nil
+		}
 		return err
 	}
 	if reflect.DeepEqual(event, r.sent) {

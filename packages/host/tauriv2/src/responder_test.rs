@@ -23,6 +23,7 @@ fn the_responder_event_follows_the_first_responder_after_the_page_is_ready() {
                 sent.borrow_mut().push(value);
                 Ok(())
             },
+            |_| false,
         )
         .unwrap()
     };
@@ -53,6 +54,47 @@ fn the_responder_event_follows_the_first_responder_after_the_page_is_ready() {
         || true,
         || Err("window facts missing responder".to_string()),
         |_| Ok(()),
+        |_| false,
     );
     assert_eq!(failed, Err("window facts missing responder".to_string()));
+}
+
+/// A read that fails because the window closed sends nothing and is no error: the close removed the page that the event goes
+/// to. A read that fails while the window is open is the error of the read.
+// contract: window.responder.closed-window-sends-nothing
+#[test]
+fn a_responder_change_of_a_closed_window_sends_nothing() {
+    let state = Mutex::new(None);
+    let sent = RefCell::new(Vec::new());
+    let emit = |value| {
+        sent.borrow_mut().push(value);
+        Ok(())
+    };
+    assert_eq!(
+        send_changed_responder(
+            &state,
+            true,
+            || true,
+            || Err("project window is closed".to_string()),
+            emit,
+            |_| true,
+        ),
+        Ok(())
+    );
+    assert!(
+        sent.borrow().is_empty(),
+        "a closed window sent {:?}",
+        sent.borrow()
+    );
+    assert_eq!(
+        send_changed_responder(
+            &state,
+            true,
+            || true,
+            || Err("window facts missing responder".to_string()),
+            |_| Ok(()),
+            |_| false,
+        ),
+        Err("window facts missing responder".to_string())
+    );
 }

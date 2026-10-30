@@ -1665,9 +1665,9 @@ fn responder_page_ready(window: &Window) {
 }
 
 fn send_responder(window: &Window, ready: bool) {
-    let data = match window_data(window) {
-        Ok(data) => data,
-        Err(error) => return log_error("window responder", error),
+    // silent: a window whose records the close removed has no page that receives the responder.
+    let Some(data) = window_data_if_registered(window) else {
+        return;
     };
     let result = crate::responder::send_changed_responder(
         &data.responder,
@@ -1677,6 +1677,8 @@ fn send_responder(window: &Window, ready: bool) {
         |responder| {
             emit_window(window, "window-responder", responder).map_err(|error| error.to_string())
         },
+        // The close of the window removes its records; a read after that finds no window.
+        |_| window_data_if_registered(window).is_none(),
     );
     if let Err(error) = result {
         log_error("window responder", error);

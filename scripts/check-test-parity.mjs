@@ -7996,6 +7996,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F281-1",
+    implementation: [
+      { file: "packages/host/wailsv3/src/responder.go", symbol: "closed func(error) bool" },
+      { file: "packages/host/tauriv2/src/responder.rs", symbol: "closed: impl FnOnce(&str) -> bool" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/responder_test.go", id: "TestAResponderChangeOfAClosedWindowSendsNothing" },
+      { file: "packages/host/tauriv2/src/responder_test.rs", id: "a_responder_change_of_a_closed_window_sends_nothing" },
+    ],
+    expected: "A first responder change of a closed window sends nothing and returns no error, and a failed read of an open window is an error.",
+    levels: ["unit"],
+  },
+  {
     id: "F281",
     implementation: [{ file: "native/darwin/src/window_facts.m", symbol: "void sp_window_end_responder_observation(void *observation)" }],
     tests: [{ file: "native/darwin/tests/window_responder_test.m", id: "an observation ends after its window was released" }],

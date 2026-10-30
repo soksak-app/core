@@ -110,6 +110,7 @@ fn invalid_json_closes_connection() {
 | `deep-link.launch.later-link-runs-at-once` | 첫 창이 준비된 뒤 도착한 링크는 바로 실행하며, 두 번째 준비 알림은 보관한 링크를 다시 실행하지 않는다. | both |
 | `window.responder.sent-at-ready-and-on-each-change` | 호스트는 창의 first responder를 page가 ready를 알릴 때와 그 뒤 바뀔 때마다 창 event `window-responder {owner, surface, document}`로 보내고, ready가 아닌 page에는 보내지 않으며, 바뀌지 않은 값은 한 번만 보내고, 읽기 실패를 돌려준다. | both |
 | `window.responder.view-is-owner-surface` | host가 surface의 document `""`로 등록하는 view surface의 view에 first responder가 있으면 `{owner: "surface", surface, document: null}`로 보고한다. document region에 first responder가 있으면 `{owner: "document", surface, document}`다. | both |
+| `window.responder.closed-window-sends-nothing` | close가 window를 지운 뒤 그 window에 닿은 first responder 변경은 받을 page가 없으므로 `window-responder` event를 보내지 않고 오류도 저장하지 않는다. window가 열려 있는 동안 실패한 responder 읽기는 오류로 보고한다. | both |
 | `links.open.accepts-web-and-mail-schemes` | 절대 `http`, `https`, `mailto` URL은 열기를 받아들인다. | both |
 | `links.open.rejects-other-schemes` | 다른 스킴의 URL, 해석되지 않는 URL, 8192자보다 긴 URL은 거부한다. | both |
 | `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | both |
