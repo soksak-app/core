@@ -49,8 +49,8 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 		request map[string]any
 		message string
 	}{
-		"no action":      {map[string]any{"events": []any{}}, "action must be batch, clock, policy or policy-read"},
-		"another action": {map[string]any{"action": "line", "events": []any{}}, "action must be batch, clock, policy or policy-read, not \"line\""},
+		"no action":      {map[string]any{"events": []any{}}, "action must be batch, clock, policy, policy-read or transcript"},
+		"another action": {map[string]any{"action": "line", "events": []any{}}, "action must be batch, clock, policy, policy-read or transcript, not \"line\""},
 		"no events":      {map[string]any{"action": "batch"}, "events must be an array"},
 		"an event that names no page": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "fields": map[string]any{}}}},
 			"events[0]: page must name the document that wrote the event"},
@@ -119,6 +119,53 @@ func TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords(t *testing.T) {
 	bad := map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.record.info", "page": "1791948729050", "fields": map[string]any{"where": 7}}}}
 	if _, err := host.LogCommand(log, bad); err == nil || !strings.Contains(err.Error(), "events[0]: fields where and text must be strings") {
 		t.Fatalf("error %v", err)
+	}
+}
+
+// contract: log.transcript.answers-the-whole-line
+func TestATranscriptRequestStoresTheCutRecordAndAnswersTheWholeLine(t *testing.T) {
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	support.StoreEveryLevel(t, log)
+	// The payload holds ": " inside a value and is longer than the record bound, as the call of a layout with its compositions is.
+	line := `host syncSurfaces {"description":"Sets the state: on or off","text":"` + strings.Repeat("x", 9000) + `"} -> null`
+	reply, err := host.LogCommand(log, map[string]any{"action": "transcript", "page": "1791948729050", "line": line})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "info page page: " + line; len(reply.Lines) != 1 || reply.Lines[0] != want {
+		t.Fatalf("lines %q, want the whole line %q", reply.Lines, want)
+	}
+	for _, c := range []struct {
+		request map[string]any
+		message string
+	}{
+		{map[string]any{"action": "transcript", "line": line}, "page must name the document that wrote the line"},
+		{map[string]any{"action": "transcript", "page": "1791948729050", "line": ""}, "line must be a non-empty string"},
+	} {
+		if _, err := host.LogCommand(log, c.request); err == nil || err.Error() != c.message {
+			t.Errorf("error %v, want %q", err, c.message)
+		}
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var stored []map[string]any
+	for _, event := range readEventLog(t, log.Path()) {
+		if event["event"] == "page.record.info" {
+			stored = append(stored, event)
+		}
+	}
+	if len(stored) != 1 {
+		t.Fatalf("page.record.info events %v, want the one record of the line", stored)
+	}
+	fields, _ := stored[0]["fields"].(map[string]any)
+	text, _ := fields["text"].(string)
+	if stored[0]["page"] != "1791948729050" || stored[0]["layer"] != "page" || fields["where"] != "page" || fields["truncated"] != true ||
+		len(text) != 8192 || !strings.HasPrefix(line, text) {
+		t.Fatalf("the stored record %v is not the line cut to 8192 bytes with the place page", stored[0])
 	}
 }
 

@@ -64,6 +64,50 @@ fn a_relayed_batch_is_stored_in_order_in_the_layer_page() {
     assert_eq!(events[3]["ts_us"], 1_791_000_000_000_002u64);
 }
 
+// contract: log.transcript.answers-the-whole-line
+#[test]
+fn a_transcript_request_stores_the_cut_record_and_answers_the_whole_line() {
+    let directory = folder::Folder::new();
+    let log = start(directory.path());
+    // The payload holds ": " inside a value and is longer than the record bound, as the call of a layout with its compositions is.
+    let line = format!(
+        "host syncSurfaces {{\"description\":\"Sets the state: on or off\",\"text\":\"{}\"}} -> null",
+        "x".repeat(9000)
+    );
+    let reply = log_command(
+        &log,
+        json!({"action": "transcript", "page": "1791948729050", "line": line}),
+    )
+    .unwrap();
+    assert_eq!(reply.lines, vec![format!("info page page: {line}")]);
+    for (request, message) in [
+        (
+            json!({"action": "transcript", "line": line}),
+            "page must name the document that wrote the line",
+        ),
+        (
+            json!({"action": "transcript", "page": "1791948729050", "line": ""}),
+            "line must be a non-empty string",
+        ),
+    ] {
+        assert_eq!(log_command(&log, request).unwrap_err(), message);
+    }
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    let stored: Vec<Value> = read(&path)
+        .into_iter()
+        .filter(|event| event["event"] == "page.record.info")
+        .collect();
+    assert_eq!(stored.len(), 1, "{stored:?}");
+    let text = stored[0]["fields"]["text"].as_str().unwrap();
+    assert_eq!(stored[0]["page"], "1791948729050");
+    assert_eq!(stored[0]["layer"], "page");
+    assert_eq!(stored[0]["fields"]["where"], "page");
+    assert_eq!(stored[0]["fields"]["truncated"], true);
+    assert_eq!(text.len(), 8192);
+    assert!(line.starts_with(text));
+}
+
 // contract: log.batch.rejects-an-invalid-batch-without-writing, log.batch.requires-the-page
 #[test]
 fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
@@ -78,12 +122,12 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
         (
             "no action",
             json!({"events": []}),
-            "action must be batch, clock, policy or policy-read",
+            "action must be batch, clock, policy, policy-read or transcript",
         ),
         (
             "another action",
             json!({"action": "line", "events": []}),
-            "action must be batch, clock, policy or policy-read, not \"line\"",
+            "action must be batch, clock, policy, policy-read or transcript, not \"line\"",
         ),
         (
             "an event that names no page",

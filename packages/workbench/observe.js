@@ -10,7 +10,8 @@
 import { gateSurfaceReplies, registry } from "./exposure.js";
 import { log, native, watchCalls } from "./host.js";
 import { emitEvent } from "./page-log.js";
-import { createTranscript } from "./transcript.js";
+import { pageIdentity } from "./page-identity.js";
+import { createTranscript, transcriptSender } from "./transcript.js";
 import { createSurfaceReplyHold } from "./surface-reply-hold.js";
 import { mountedSurface } from "./surface-modules.js";
 import { watchResizeLoop } from "./resize-loop.js";
@@ -32,7 +33,7 @@ registry.method("diagnostics.fixture", async (params) => {
 });
 
 // Call recorder. The recorder is in this package, so both applications write the same format and order.
-const transcript = createTranscript(log);
+const transcript = createTranscript(transcriptSender(host.call, pageIdentity));
 if (native) watchCalls((name, payload, answered) => transcript.record(name, payload, answered));
 
 registry.method("diagnostics.transcript", ({ on }) => {

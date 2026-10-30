@@ -185,8 +185,8 @@ async fn performance(
 }
 
 /// Relays a batch of page events to the event writer of the host (docs/spec/logging.md#writers) and shows the page records of
-/// the batch in the transcript of the window. It answers a `clock` request with the clocks of the host and a `policy-read`
-/// request with `{classes}` of the policy in force.
+/// the batch in the transcript of the window. It stores the line of a `transcript` request and shows it whole in the transcript, and
+/// it answers a `clock` request with the clocks of the host and a `policy-read` request with `{classes}` of the policy in force.
 #[tauri::command]
 async fn log(
     window: Window,

@@ -41,9 +41,9 @@ type ClockReading struct {
 	MonoNs   uint64 `json:"mono_ns"`
 }
 
-// LogReply is the answer of the `log` call: the lines `<level> page <where>: <text>` of the records of the page in a batch,
-// which the host shows in the transcript of the window, the clocks of a `clock` request, or the classes of the policy in force of a
-// `policy-read` request.
+// LogReply is the answer of the `log` call: the lines `<level> page <where>: <text>` of the records of the page in a batch or of
+// the transcript line of a `transcript` request, which the host shows in the transcript of the window, the clocks of a `clock`
+// request, or the classes of the policy in force of a `policy-read` request.
 type LogReply struct {
 	Lines   []string
 	Clock   *ClockReading
@@ -55,7 +55,7 @@ type LogReply struct {
 func LogCommand(log *EventLog, request map[string]any) (LogReply, error) {
 	action, ok := request["action"].(string)
 	if !ok {
-		return LogReply{}, fmt.Errorf("action must be batch, clock, policy or policy-read")
+		return LogReply{}, fmt.Errorf("action must be batch, clock, policy, policy-read or transcript")
 	}
 	if action == "clock" {
 		return LogReply{Clock: &ClockReading{TsMicros: time.Now().UnixMicro(), MonoNs: monotonicNanos()}}, nil
@@ -66,11 +66,43 @@ func LogCommand(log *EventLog, request map[string]any) (LogReply, error) {
 	if action == "policy-read" {
 		return LogReply{Classes: log.Policy().Classes()}, nil
 	}
+	if action == "transcript" {
+		return transcriptLine(log, request)
+	}
 	if action != "batch" {
-		return LogReply{}, fmt.Errorf("action must be batch, clock, policy or policy-read, not %q", action)
+		return LogReply{}, fmt.Errorf("action must be batch, clock, policy, policy-read or transcript, not %q", action)
 	}
 	lines, err := logBatch(log, request)
 	return LogReply{Lines: lines}, err
+}
+
+// transcriptLine stores the transcript line of a host call of the page as the record `page.record.info` with the place `page`, cut
+// to RecordTextBytes like every record, and answers the whole line, which the host sends to the connections that enabled the
+// diagnostic transcript of the window. A batch record carries only the text that the page cut to the bound, so the whole line of a
+// long call travels in this request (docs/spec/logging.md#bounds).
+func transcriptLine(log *EventLog, request map[string]any) (LogReply, error) {
+	page, ok := request["page"].(string)
+	if !ok || page == "" {
+		return LogReply{}, fmt.Errorf("page must name the document that wrote the line")
+	}
+	line, ok := request["line"].(string)
+	if !ok || line == "" {
+		return LogReply{}, fmt.Errorf("line must be a non-empty string")
+	}
+	text, cut := sok.CutText(line, RecordTextBytes)
+	record := map[string]any{"where": "page", "text": text}
+	if cut {
+		record["truncated"] = true
+	}
+	fields, err := json.Marshal(record)
+	if err != nil {
+		return LogReply{}, fmt.Errorf("the transcript record cannot be serialized: %w", err)
+	}
+	if _, err := log.EmitRelayed(RelayedEvent{TsMicros: time.Now().UnixMicro(), MonoNs: monotonicNanos(), Layer: "page", Page: page,
+		Level: LevelInfo, Event: "page.record.info", Fields: fields}); err != nil {
+		return LogReply{}, err
+	}
+	return LogReply{Lines: []string{Entry{Level: "info", Layer: "page", Where: "page", Text: line}.Line()}}, nil
 }
 
 func logBatch(log *EventLog, request map[string]any) ([]string, error) {
@@ -177,7 +209,7 @@ func relayedEventOf(item any) (relayedEvent, error) {
 }
 
 // Log relays a batch of page events to the event writer of the host and shows its page records in the transcript of the
-// window. It answers a `clock` request with the clocks of the host, a `policy-read` request with `{classes}` of the policy in force,
+// window; it stores the line of a `transcript` request and shows it whole in the transcript. It answers a `clock` request with the clocks of the host, a `policy-read` request with `{classes}` of the policy in force,
 // and a batch with nothing.
 func (h *Host) Log(ctx context.Context, requestJSON json.RawMessage) (any, error) {
 	request, err := argument[map[string]any]("request", requestJSON)

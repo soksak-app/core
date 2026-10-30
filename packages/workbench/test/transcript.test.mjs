@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTranscript } from "../transcript.js";
+import { createTranscript, transcriptSender } from "../transcript.js";
 
 /** A fake transport that records the lines sent and the function that ends each transmission. */
 function fakeSend() {
@@ -69,4 +69,18 @@ test("nothing is recorded while recording is off or for failed calls", async () 
   transcript.record("failed", null, Promise.reject(new Error("no")));
   await settle();
   assert.deepEqual(bridge.started, []);
+});
+
+test("the sender passes the whole line of a call to the host call log with the action transcript and the page identity", async () => {
+  const calls = [];
+  const transcript = createTranscript(transcriptSender((name, request) => {
+    calls.push({ name, request });
+    return Promise.resolve(null);
+  }, "page-1"));
+  transcript.set(true);
+  // The payload holds ": " inside a value and is longer than the record bound of 8192 bytes.
+  const payload = { description: "Sets the state: on or off", text: "x".repeat(9000) };
+  transcript.record("syncSurfaces", payload, Promise.resolve(null));
+  await settle();
+  assert.deepEqual(calls, [{ name: "log", request: { action: "transcript", page: "page-1", line: `host syncSurfaces ${JSON.stringify(payload)} -> null` } }]);
 });

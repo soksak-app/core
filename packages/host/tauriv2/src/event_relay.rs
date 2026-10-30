@@ -126,8 +126,8 @@ pub struct ClockReading {
     pub mono_ns: u64,
 }
 
-/// What the `log` call answers: the transcript lines of the page records of a batch, the clocks of a clock request, or the classes
-/// of the policy in force of a `policy-read` request.
+/// What the `log` call answers: the transcript lines of the page records of a batch or the transcript line of a `transcript`
+/// request, the clocks of a clock request, or the classes of the policy in force of a `policy-read` request.
 #[derive(Debug)]
 pub struct LogReply {
     pub lines: Vec<String>,
@@ -140,8 +140,11 @@ pub struct LogReply {
 /// A `clock` answers the clocks of the host and stores no event.
 pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
     match request.get("action").and_then(Value::as_str) {
-        None => return Err("action must be batch, clock, policy or policy-read".into()),
+        None => {
+            return Err("action must be batch, clock, policy, policy-read or transcript".into());
+        }
         Some("batch") => {}
+        Some("transcript") => return transcript_line(log, &request),
         Some("policy") => {
             crate::log_policy::set_log_policy(log, &request)?;
             return Ok(LogReply {
@@ -174,7 +177,7 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
         }
         Some(other) => {
             return Err(format!(
-                "action must be batch, clock, policy or policy-read, not {other:?}"
+                "action must be batch, clock, policy, policy-read or transcript, not {other:?}"
             ));
         }
     }
@@ -208,6 +211,49 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
     }
     Ok(LogReply {
         lines,
+        clock: None,
+        classes: None,
+    })
+}
+
+/// Stores the transcript line of a host call of the page as the record `page.record.info` with the place `page`, cut to
+/// `RECORD_TEXT_BYTES` like every record, and answers the whole line, which the host sends to the connections that enabled the
+/// diagnostic transcript of the window. A batch record carries only the text that the page cut to the bound, so the whole line of
+/// a long call travels in this request (docs/spec/logging.md#bounds).
+fn transcript_line(log: &EventLog, request: &Value) -> Result<LogReply, String> {
+    let page = request
+        .get("page")
+        .and_then(Value::as_str)
+        .filter(|page| !page.is_empty())
+        .ok_or_else(|| "page must name the document that wrote the line".to_string())?;
+    let line = request
+        .get("line")
+        .and_then(Value::as_str)
+        .filter(|line| !line.is_empty())
+        .ok_or_else(|| "line must be a non-empty string".to_string())?;
+    let (text, cut) = cut_text(line, crate::bounds::RECORD_TEXT_BYTES);
+    let mut record = serde_json::json!({"where": "page", "text": text});
+    if cut {
+        record["truncated"] = serde_json::json!(true);
+    }
+    let fields = Fields::of(&record)?;
+    let ts_us = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| format!("the clock is before the Unix epoch: {error}"))?
+        .as_micros() as u64;
+    log.emit_relayed(RelayedEvent {
+        ts_us,
+        mono_ns: monotonic_ns(),
+        layer: "page".to_string(),
+        page: Some(page.to_string()),
+        level: Level::Info,
+        event: "page.record.info".to_string(),
+        cids: Vec::new(),
+        fields,
+    })
+    .map_err(|error| error.to_string())?;
+    Ok(LogReply {
+        lines: vec![crate::application_log::Entry::new("info", "page", "page", line).line()],
         clock: None,
         classes: None,
     })
