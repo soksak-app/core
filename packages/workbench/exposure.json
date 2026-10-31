@@ -148,7 +148,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in document order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, `mounted`, `error`, `text`, `controls`, and whether its tab text is clipped (always false in list layout). A declared section also reports its chosen `source` (`id` and `surface`) or null, snapshot `subscription` stage, current `pull` phase with reply sequence and whether its value is null when resolved, and `acceptedSeq` or null. These fields expose delivery progress without copying the status value. For a declared section, `mounted` is true while the section draws an accepted value and false when the section is cleared, which is before its first accepted value and after a rejected value; `error` is the text of the current rejection while the last value is rejected, and null otherwise; `text` is the text content of the body; `controls` is the number of its core.sidebar.section.control elements. For a module section, `mounted` is its mount state, `error` its mount error or null, `text` the text content the module drew, and `controls` the number of its core.sidebar.section.control elements.",
+        "description": "The drawn sidebars in document order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
         "schema": {
           "type": "array",
           "items": {
@@ -190,63 +190,18 @@
                   "null"
                 ]
               },
-              "sections": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "folded": {
-                      "type": "boolean"
-                    },
-                    "clipped": {
-                      "type": "boolean"
-                    },
-                    "mounted": {
-                      "type": "boolean"
-                    },
-                    "error": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "text": {
-                      "type": "string"
-                    },
-                    "controls": {
-                      "type": "integer"
-                    },
-                    "source": {
-                      "type": ["object", "null"],
-                      "properties": {
-                        "id": { "type": "string" },
-                        "surface": { "type": ["string", "null"] }
-                      }
-                    },
-                    "subscription": {
-                      "type": "string",
-                      "enum": ["none", "pending", "ready", "failed"]
-                    },
-                    "pull": {
-                      "type": "object",
-                      "properties": {
-                        "phase": { "type": "string", "enum": ["idle", "pending", "resolved", "cancelled", "failed"] },
-                        "seq": { "type": ["integer", "null"] },
-                        "valueNull": { "type": ["boolean", "null"] }
-                      }
-                    },
-                    "acceptedSeq": {
-                      "type": ["integer", "null"]
-                    }
-                  }
-                }
-              }
+              "sections": { "type": "array", "items": { "type": "object", "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "folded": { "type": "boolean" },
+                "clipped": { "type": "boolean" },
+                "surfaceId": { "type": "string" },
+                "surface": { "type": ["string", "null"] },
+                "height": { "type": ["string", "integer"] },
+                "mounted": { "type": "boolean" },
+                "phase": { "type": ["string", "null"], "enum": ["loading", "ready", "error", null] },
+                "error": { "type": ["string", "null"] }
+              } } }
             }
           }
         }
@@ -493,12 +448,24 @@
       },
       {
         "name": "core.surfaces",
-        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, host or unread); a mounted surface reports placeholder null. state is the memory saver state of the tab: loaded, unloaded or restoring.",
+        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, host or unread); a mounted surface reports placeholder null. state is the memory saver state of the tab: loaded, unloaded or restoring. kind is tab for the surface of a tab and section for a section surface, and sidebar is the sidebar id of a section surface or null.",
         "schema": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
+              "kind": {
+                "enum": [
+                  "tab",
+                  "section"
+                ]
+              },
+              "sidebar": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "state": {
                 "enum": [
                   "loaded",

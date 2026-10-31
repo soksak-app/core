@@ -11,7 +11,7 @@ const environmentFile = {
   sidebars: { sets: [], links: [] },
 };
 const accepted = { id: "side", package: "@fixture/side", version: "0.0.1",
-  manifest: { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", status: "side.list" }], host: { page: "ui/host.html" }, exposes: { status: [{ name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] } } };
+  manifest: { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", composition: { kind: "view", page: "ui/list.html" }, height: "fill" }], exposes: { status: [{ name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] } } };
 const refused = { id: "earlier", package: "@fixture/earlier", version: "0.0.1", manifest: { id: "earlier", description: "이름이 없는 manifest." } };
 
 test("an installed plugin whose manifest is refused is left out with its error and the other plugins are registered", async () => {

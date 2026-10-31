@@ -40,7 +40,7 @@ import { latest, seated } from "./compositor.js";
 import { filePlace, modalState, onFilesDropped, onModalState, onWindowResponder } from "./host.js";
 import { plugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
-import { retainedSurfaceEntries } from "./surface-listing.js";
+import { retainedSurfaceEntries, surfaceKindOf } from "./surface-listing.js";
 import { liveMounts, onMountedChange } from "./surface-modules.js";
 import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
@@ -227,13 +227,13 @@ function surfacesState() {
   // The tab of a plugin that is not loaded shows a placeholder instead of a surface, and the placeholder reports the reason (docs/spec/plugins.md).
   const placeholders = [...document.querySelectorAll("[data-plugin-placeholder]")].map((el) => ({
     surface: el.dataset.surfaceId, plugin: el.dataset.plugin, visible: true, placeholder: el.dataset.pluginPlaceholder,
-    composition: null,
+    composition: null, kind: "tab", sidebar: null,
   }));
   const record = seated();
   // A mounted view that the record does not hold is a retained view; it is listed without a placement (docs/spec/exposure.md).
-  const retained = (seatedIds) => retainedSurfaceEntries(liveMounts().map((mount) => ({
-    ...mount, exposes: registry.namesOf(mount.surface),
-    composition: compositionKindOf(plugin(mount.plugin).surface(mount.surface)),
+  const retained = (seatedIds) => retainedSurfaceEntries(liveMounts().map(({ descriptor, ...mount }) => ({
+    ...mount, ...surfaceKindOf(descriptor), exposes: registry.namesOf(mount.surface),
+    composition: compositionKindOf(descriptor),
     state: memory.unloaded(mount.surface) ? "unloaded" : "loaded",
   })), seatedIds);
   if (!record) return [...placeholders, ...retained(new Set())];
@@ -242,7 +242,7 @@ function surfacesState() {
     surface: s.id, plugin: s.plugin, visible: s.visible, dim: s.dim,
     declared: shift(s.declared, at), applied: shift(s.applied, at),
     exposes: registry.namesOf(s.id), status: surfaceState(s.id), placeholder: null,
-    composition: compositionKindOf(plugin(s.plugin).surface(s.id)),
+    composition: compositionKindOf(s.surface), ...surfaceKindOf(s.surface),
     state: memory.unloaded(s.id) ? "unloaded" : "loaded",
   })), ...placeholders, ...retained(new Set(record.surfaces.map((s) => s.id)))];
 }

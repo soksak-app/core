@@ -30,9 +30,6 @@ function choiceOf(sidebar) {
 /** The surface id of a section in a sidebar (docs/spec/plugins.md#sections). */
 export const sectionSurfaceId = (sidebar, sectionId) => `${sidebar}/${sectionId}`;
 
-/** Whether a surface id names a section surface. A tab id holds no "/" (docs/spec/plugins.md#sections). */
-export const isSectionSurface = (surfaceId) => surfaceId.includes("/");
-
 /** Mounts the view of a section once; a hidden section keeps its surface, which the compositor places invisible. */
 function mount(entry) {
   if (entry.mount) return;
@@ -163,7 +160,6 @@ export function drawSet(container, sidebar, set, context) {
       const entry = { section, element, header: null, tab: null, body: document.createElement("div"),
         surface: section.surface(surfaceId, start), mount: null, mounted: false, phase: null, error: null };
       entry.body.className = "set__body slot";
-      entry.body.dataset.expose = "core.sidebar.section.body";
       entry.body.dataset.nativeSurface = "view";
       entry.body.dataset.nativeSurfaceId = surfaceId;
       entry.body.dataset.nativeLayer = "10";

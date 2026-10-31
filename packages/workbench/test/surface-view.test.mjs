@@ -523,7 +523,7 @@ test("a mounted view is listed by liveMounts until it is disposed, and each chan
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     await waitSurfaceCompositionDeclared(surfaceId);
-    assert.deepEqual(liveMounts(), [{ surface: surfaceId, plugin: pluginId, status: { phase: "ready", error: null } }],
+    assert.deepEqual(liveMounts(), [{ surface: surfaceId, plugin: pluginId, descriptor: surface, status: { phase: "ready", error: null } }],
       "the mounted view is not listed with its plugin and phase");
     const before = changes;
     await disposeSurface(surfaceId);
@@ -838,6 +838,7 @@ test("the start values of a view carry its params, origin, project, declarations
     project: { id: "prj-one", root: "/work/one" },
     declarations: { status: [], commands: [], dom: [] },
     diagnostics,
+    section: null,
   });
   recordOrigin("tab-without-directory", null, "test fixture");
   assert.deepEqual(viewStartValues({ surfaceId: "tab-without-directory", declarations: {}, diagnostics: null }, null), {
@@ -846,6 +847,7 @@ test("the start values of a view carry its params, origin, project, declarations
     project: null,
     declarations: { status: [], commands: [], dom: [] },
     diagnostics: null,
+    section: null,
   });
 });
 

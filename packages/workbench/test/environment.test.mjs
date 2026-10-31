@@ -24,15 +24,16 @@ const files = {
   card: {
     id: "card", name: "Card", description: "검사용 카드.", mark: "c", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, exposes: { status: [{ name: "card.info", description: "검사용 상태.", schema: { type: "object" } }] },
-    sections: [{ id: "card.info", name: "Info", status: "card.info" }],
+    sections: [{ id: "card.info", name: "Info", composition: { kind: "view", page: "ui/info.html" }, height: 120 }],
     preview: { ink: "--fixture-ink" }, dependencies: { "@fixture/sidecar-card": "^0.1.0" },
     sidebars: { sets: [{ id: "info", title: "Info", sections: ["card.info"], layout: "tabs" }], card: { top: "info" } },
     settings: { "cursor.shape": { label: "커서 모양", type: "enum", default: "block", values: ["block", "beam"] } },
   },
   side: {
-    id: "side", name: "Side", description: "검사용 섹션.", host: { page: "ui/host.html" },
+    id: "side", name: "Side", description: "검사용 섹션.",
     exposes: { status: [{ name: "side.count", description: "검사용 상태.", schema: { type: "object" } }, { name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] },
-    sections: [{ id: "side.list", name: "List", status: "side.list" }, { id: "side.count", name: "Count", status: "side.count" }],
+    sections: [{ id: "side.list", name: "List", composition: { kind: "view", page: "ui/list.html" }, height: "fill" },
+      { id: "side.count", name: "Count", composition: { kind: "view", page: "ui/count.html" }, height: 48, unload: { format: 1, maxBytes: 4096 } }],
   },
 };
 // The install list of a release build has no diagnostics declaration.
@@ -62,9 +63,14 @@ test("the environment registers card plugins, sections, and sidebar defaults fro
   assert.equal(await pluginDiagnostics("card"), null, "a release build has no plugin diagnostic module");
   assert.equal(registry.section("side.list").name, "List");
   assert.equal(registry.section("card.info").name, "Info");
-  assert.equal(registry.section("side.list").module, undefined, "a status section has no module");
-  assert.equal(registry.section("side.count").status, "side.count", "a status section keeps its status");
-  assert.equal(registry.section("side.count").module, undefined, "a status section has a module");
+  assert.equal(registry.section("side.list").height, "fill");
+  assert.equal(registry.section("side.count").plugin, "side");
+  // A section registers the builder of its section surface, which carries its composition, unload and start value section.
+  const start = { id: "side.count", sidebar: "left", card: null };
+  const counted = registry.section("side.count").surface("left/side.count", start);
+  assert.deepEqual([counted.composition, counted.surfaceId, counted.pluginId, counted.unload, counted.params, counted.section],
+    [{ kind: "view", page: "ui/count.html" }, "left/side.count", "side", { format: 1, maxBytes: 4096 }, null, start]);
+  assert.equal(registry.section("side.list").surface("left/side.list", start).unload, false, "a section without unload is never unloaded");
   assert.deepEqual(settings.defaults.sets, files["/environment.json"].sidebars.sets);
   assert.deepEqual(settings.defaults.links, files["/environment.json"].sidebars.links);
   assert.equal(settings.value("card.cursor.shape"), "beam");

@@ -66,7 +66,7 @@ export function liveMounts() {
   return [...mounted.values()].filter((entry) => !entry.disposed).map((entry) => {
     const state = entry.context.status.read();
     return {
-      surface: entry.surfaceId, plugin: entry.pluginId,
+      surface: entry.surfaceId, plugin: entry.pluginId, descriptor: entry.descriptor,
       status: { phase: state.phase, error: state.phase === "error" ? surfaceErrorText(state) : null },
     };
   });
@@ -882,7 +882,7 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
     entry = { slot, host, shadow, context, closing, lifetime, state, exposure: null, composition: compositionReady.promise,
       compositionDisposed, resolveCompositionDisposed,
       mounted: null, ready: null, authorized: false, disposed: false, compositionDeclared: false,
-      surfaceId: surface.surfaceId, pluginId: surface.pluginId, mountRegistration: registration,
+      surfaceId: surface.surfaceId, pluginId: surface.pluginId, descriptor: surface, mountRegistration: registration,
       setViewport: (next) => { viewport = next; } };
     if (registration) {
       registration.attempt = ++nextMountAttempt;
