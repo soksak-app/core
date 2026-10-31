@@ -432,4 +432,4 @@ View channel은 기존 writer request인 `action: "clock"`과 `action: "batch"`�
 
 이 writer request는 중계하는 application call이 아니므로 실제로 발생하지 않은 `page.view.call`, `page.view.reply`나 workbench 전달을 주장하는 `host.view.call`을 내보내지 않는다. 실제 record 및 기존 writer clock, gate와 loss report가 결과를 설명한다. 전달 실패는 기존 view error 경로를 사용한다. 종료된 view의 미전송 queue는 기존 `host.view.killed {unsent: true}`로 설명한다.
 
-공유 SDK bridge는 주입된 start context로 선언된 channel을 선택한다. Plugin-host page에는 `window.sokHost`가 있으며 `level`, plugin prefix를 제외한 `event`, `fields`와 선택적인 `cids`를 가진 개별 `runtime.log` record를 보낸다. Surface view page는 직접 batch writer를 쓴다. 두 경로는 별도 channel 계약이며 record 요청 실패는 `runtime.error`로 보고한다.
+tab이든 section이든 모든 view page는 직접 batch writer를 쓰며, record 요청 실패는 `runtime.error`로 보고한다.

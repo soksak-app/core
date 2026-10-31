@@ -40,11 +40,11 @@
 | command | `timeout` | 선택. 명령이 답하는 데 걸릴 수 있는 시간(ms, 1–600000). 없으면 10초다. 호스트는 표면 페이지로 전달한 명령에, 메인 페이지는 스스로 실행하는 명령의 handler에 이를 적용하며, 넘으면 -32000과 `command <name> did not reply within <ms>ms`로 실패한다. 동기든 비동기든 예외를 던진 handler는 자기 오류로 명령을 실패시키며, 시간 제한도 그때 끝난다. core 명령은 그 뒤 배치 표시를 기다린다. 이 기다림은 timeout에 포함하지 않는다. 표시 경로의 각 단계가 자기 한도 안에 자기 오류로 실패하기 때문이다([네이티브 호스트](native-host.ko.md)) |
 | dom | `name` | 항목 이름 |
 | dom | `description` | 한 문장 설명 |
-| dom | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정하거나, [선언된 UI](declared-ui.ko.md)가 주소를 정하는 곳에서는 `address`로 지정한다 |
+| dom | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정한다 |
 
 스키마는 `type`, `properties`, `items`, `enum` 키워드만 쓰는 JSON Schema 부분집합이다. `type`은 `string`, `number`, `integer`, `boolean`, `object`, `array`, `null` 이름 가운데 하나이거나 그 이름들의 비어 있지 않은 목록이며, 그 밖의 값은 거부한다. `null`과 목록 안의 목록도 거부한다. `enum`은 비어 있지 않은 목록이고, 값은 같은 JSON 값일 때 항목과 일치하며, 객체의 member는 순서와 무관하게 비교한다.
 
-dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다. [선언된 UI](declared-ui.ko.md) 값이 그리는 조작 가능한 요소는 [선언된 UI](declared-ui.ko.md)가 정하는 속성과 주소를 가진다.
+dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다.
 
 ## 사용자 인터페이스
 
@@ -53,7 +53,6 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 - 문서의 모든 사용자 조작은 선언된 명령을 실행한다. 컨트롤은 `data-command="<이름>"`으로 명령을 가리키고, 고정 매개변수는 `data-params`에 JSON 객체로 적는다. 값을 입력하는 컨트롤은 그 값을 `data-value`가 가리키는 매개변수 이름(기본 `value`)으로 더한다. 명령을 먼저 선언하고(`exposure.json`, `plugin.json`), 문서는 `@soksak/plugin-api`의 `createBinder(run)`으로 선언된 명령에만 요소를 연결한다. `bind(요소, 이름, 매개변수, {event, when, stop, failed})`는 이벤트에서 명령을 실행하고, `mark(요소, 이름, 매개변수, 값 이름)`은 속성을 붙이며, `delegate(루트)`는 `bind`가 연결하지 않은 표시된 하위 요소의 누름과 값 변경을 실행한다. `bind`로 연결한 요소는 자기 이벤트에서만 명령을 실행하므로, Enter에 연결한 텍스트 필드는 같은 Enter가 일으키는 `change`에서 명령을 다시 실행하지 않는다. 선언되지 않은 이름을 연결하거나 표시하면 예외를 던진다. 워크벤치는 `packages/workbench/commands.js`(등록소 위의 연결기)를, 플러그인 페이지는 페이지가 등록한 명령을 실행하는 `expose.bind`, `expose.mark`, `expose.delegate`를 쓴다. 처리기는 모듈 함수를 직접 부르지 않는다. 탭 드래그 같은 연속 조작은 결과를 만드는 명령(`core.tab.move`)을 가지며, 키보드 단축키도 명령을 실행한다. `bind`의 `params`가 함수이면 실행마다 이벤트를 받아 그 실행의 매개변수가 되며, 그 요소에는 `data-params`가 없으므로 `mark`는 아무것도 쓰지 않는다.
 - 문서에 보이는 모든 상태는 status로 읽을 수 있다.
 - 모든 조작 요소(`button`, `input`, `select`, `textarea`, `role="button"`, `contenteditable`)는 명령에 연결되고(직접 연결되거나, 위임한 루트 안에서 `data-command`를 가짐) dom 이름을 가진다.
-- `open`이 있는 선언 tree 노드는 Enter keydown을 처리해 `open`을 실행하고 native click을 막는다. 두 번 누르기의 두 번째 클릭(`event.detail === 2`)은 일반 `command` 대신 `open`을 실행한다. 선언 UI tree 노드는 [선언된 UI](declared-ui.ko.md#트리-키) 절이 규정하는 키를 처리한다. 다른 선언 UI 요소에는 키 처리기가 없다([선언된 UI](declared-ui.ko.md#묶기)).
 - 다시 그리기는 문서에 남는 모든 컨트롤을 제자리에 두고, 순서가 틀린 컨트롤만 옮긴다. WebKit은 누름과 뗌 사이에 요소가 문서에서 빠진 누름에 `click`을 보내지 않고, `insertBefore`로 요소를 옮기면 요소가 먼저 문서에서 빠지므로, 컨트롤을 옮긴 다시 그리기는 그동안 누른 click을 잃었다. plugin page는 key마다 요소를 제자리에 두는 `@soksak/plugin-api`의 `drawList`로 컨트롤 목록을 그린다.
 - 네이티브 모달은 요소의 사본을 그리고 컨트롤의 key로 답한다. 메인 페이지는 자기 요소에서 그 컨트롤을 찾아 명령을 실행한다.
 
@@ -94,14 +93,6 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `Enter` | workbench | core.library.form.submit | — | 라이브러리 양식 필드에 포커스가 있음 |
 | `Escape` | workbench | core.picker.close | — | 선택 layer가 열려 있음 |
 | `Escape` | workbench | core.modal.dismiss | — | 네이티브 modal 메뉴가 열려 있고 키보드 포커스가 있음 |
-| `ArrowDown` | workbench | core.declared-ui.tree.move | — | 선언 tree 노드의 label 또는 펼침 컨트롤에 키보드 포커스가 있음 |
-| `ArrowUp` | workbench | core.declared-ui.tree.move | — | 선언 tree 노드의 label 또는 펼침 컨트롤에 키보드 포커스가 있음 |
-| `Home` | workbench | core.declared-ui.tree.move | — | 선언 tree 노드의 label 또는 펼침 컨트롤에 키보드 포커스가 있음 |
-| `End` | workbench | core.declared-ui.tree.move | — | 선언 tree 노드의 label 또는 펼침 컨트롤에 키보드 포커스가 있음 |
-| `ArrowRight` | workbench | core.declared-ui.tree.expand | — | 접힌 가지에 키보드 포커스가 있음 |
-| `ArrowRight` | workbench | core.declared-ui.tree.move | — | 펼쳐진 가지에 키보드 포커스가 있음 |
-| `ArrowLeft` | workbench | core.declared-ui.tree.expand | — | 펼쳐진 가지에 키보드 포커스가 있음 |
-| `ArrowLeft` | workbench | core.declared-ui.tree.move | — | 접힌 가지나 잎에 키보드 포커스가 있음 |
 | `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. view가 키를 직접 처리하며, 넘길 때만 열린 picker의 Escape 명령을 실행한다 |
 | `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view가 키를 직접 처리하며 기본 동작을 유지한다 |
 
@@ -137,11 +128,11 @@ Surface별 mount registration은 이전 entry의 dispose를 기다리기 전에 
 
 네이티브 호스트는 [사이드카](sidecars.ko.md) 메시지를 전달하는 방식과 같은 방식으로 표면 페이지와 메인 페이지 등록소 사이에서 등록과 요청을 전달한다. 표면 페이지가 닫히면 등록소는 그 페이지의 등록을 제거한다.
 
-페이지는 자신을 식별하는 key, 즉 그 등록의 owner key 아래에서 등록한다. 표면 페이지는 자기 surface id 아래에서 자기 plugin을 owner로 하여 등록한다. plugin host 페이지는 자기 channel을 통해 owner key `plugin:<plugin id>` 아래에서 등록하며([plugin host](plugin-host.ko.md#exposure)), plugin host의 등록은 자기 프로세스와 함께 끝나고 restart limit 안에서 다시 만들어진 프로세스는 같은 key로 다시 등록한다.
+페이지는 자신을 식별하는 key, 즉 그 등록의 owner key 아래에서 등록한다. 표면 페이지는 자기 surface id 아래에서 자기 plugin을 owner로 하여 등록한다.
 
 ### 표면 문서
 
-core view bridge는 surface start values가 있는 실제 view document에 다음 항목을 등록한다. plugin host에는 surface start values가 없으므로 등록하지 않는다. plugin은 이를 구현하지 않는다. core는 선언을 surface start values와 함께 전달하고 `exposure.json`에 선언한다. surface page가 등록하는 core 항목은 이 세 이름뿐이며 `core.surface.menu`는 main document의 명령이다. core document 요청은 bridge가 한 번 답하며 plugin exposure listener로 전달하지 않는다. main-page placeholder는 view의 document나 input 상태를 보고하지 않는다.
+core view bridge는 surface start values가 있는 실제 view document에 다음 항목을 등록한다. plugin은 이를 구현하지 않는다. core는 선언을 surface start values와 함께 전달하고 `exposure.json`에 선언한다. surface page가 등록하는 core 항목은 이 세 이름뿐이며 `core.surface.menu`는 main document의 명령이다. core document 요청은 bridge가 한 번 답하며 plugin exposure listener로 전달하지 않는다. main-page placeholder는 view의 document나 input 상태를 보고하지 않는다.
 
 document audit는 open shadow tree를 포함하여 그 document의 모든 shared binder가 실제 연결한 항목을 집계하며, 각 binder의 `audit(root)`는 자기 binding 범위를 유지한다. binder를 dispose하면 document audit에서도 그 연결을 제거한다. document read는 현재 open shadow tree를 순회하고, document·viewport·관찰 중인 DOM·binding 변경은 watcher에 알린다. 발견한 shadow root는 각각 관찰한다. 기존 host에 binding 변경이나 관찰 중인 DOM 변경 없이 만든 unbound shadow root는 mutation notification을 만들지 않지만, 다음 document read에는 포함된다. page exit는 input listener, observer, binding subscription, exposure watch를 해제한다.
 
@@ -165,13 +156,13 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 ### 표면 선택
 
-여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. [plugin host](plugin-host.ko.md)가 등록하고 어떤 표면 페이지도 등록하지 않은 이름에 대한 `surface` 없는 요청은 plugin host의 등록이 답한다. `surface`를 naming하는 요청은 plugin host가 답하지 않는다. plugin host는 surface가 아니기 때문이다.
+여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. `surface` 없이 고르는 경우는 탭 표면만 고른다. section 표면은 그 이름을 적은 요청에만 답한다. 한 plugin의 여러 section이 같은 이름을 등록하고, section은 `core.sidebars`가 알리는 탭을 따르기 때문이다.
 
 ## Tab memory
 
 메인 페이지의 [메모리 절약](plugins.ko.md#메모리-절약)에는 다음 항목이 있다.
 
-- Status `core.tab.memory`: `{enabled, delay, pressure: {level, seq}, tabs: [{tab, plugin, state, reasons, hiddenAt, unloadAt, checkedAt}]}`이며 바뀔 때마다 알린다. `enabled`는 설정 `memorySaver`, `delay`는 분 단위 설정 `memorySaverDelay`, `pressure`는 마지막 [memory pressure](hosts.ko.md#memory-pressure) 보고다. `state`는 `loaded`, `unloaded`, `restoring` 중 하나다. `reasons`는 탭을 보호하는 이유를 하나의 열거 `shown`, `recent`, `keep:modified`, `keep:busy`, `media`, `media-unknown`, `capture`, `form`, `kept`, `off`, `undeclared`, `background`에서 나열한다. `hiddenAt`은 탭이 숨겨진 시각이나 `null`, `unloadAt`은 다음 지연 기한이나 `null`, `checkedAt`은 `media`, `media-unknown`, `capture`를 읽은 마지막 결정의 시각이나 `null`이다. `core.surfaces`는 탭마다 같은 `state`를 알리고, unload된 표면에 대한 요청은 `tab <id> is unloaded`로 실패한다.
+- Status `core.tab.memory`: `{enabled, delay, pressure: {level, seq}, tabs: [{tab, kind, plugin, state, reasons, hiddenAt, unloadAt, checkedAt}]}`이며 바뀔 때마다 알린다. `enabled`는 설정 `memorySaver`, `delay`는 분 단위 설정 `memorySaverDelay`, `pressure`는 마지막 [memory pressure](hosts.ko.md#memory-pressure) 보고다. `kind`는 `tab` 또는 `section`이며, section 항목의 `tab`은 그 section 표면의 id다([메모리 절약](plugins.ko.md#메모리-절약)). `state`는 `loaded`, `unloaded`, `restoring` 중 하나다. `reasons`는 탭을 보호하는 이유를 하나의 열거 `shown`, `recent`, `keep:modified`, `keep:busy`, `media`, `media-unknown`, `capture`, `form`, `kept`, `off`, `undeclared`, `background`에서 나열한다. `hiddenAt`은 탭이 숨겨진 시각이나 `null`, `unloadAt`은 다음 지연 기한이나 `null`, `checkedAt`은 `media`, `media-unknown`, `capture`를 읽은 마지막 결정의 시각이나 `null`이다. `core.surfaces`는 탭마다 같은 `state`를 알리고, unload된 표면에 대한 요청은 `tab <id> is unloaded`로 실패한다.
 - Command `core.tab.unload {tab}`은 숨겨진 탭을 지금 unload한다. 사람이 직접 정한 것이므로 `recent`, `media`, `media-unknown`, `capture`, `form`을 기다리지 않는다. 남은 이유(`shown`, `keep:modified`, `keep:busy`, `kept`, `off`, `undeclared`, `background`)와 시도를 끝낸 이유에는 오류 `tab <id> is protected: <reasons>`로, 알 수 없는 탭에는 -32602(invalid params)로 실패한다.
 - Command `core.tab.keep {tab, keep}`은 사람의 표시 `kept`를 정하거나(`true`) 지우고(`false`) `tab-state.json`에 저장한다. 멱등이며 바뀔 때마다 `page.tab.keep.changed`를 하나 낸다. 알 수 없는 탭이나 boolean이 아닌 `keep`에는 -32602로, 절대 unload될 수 없는 탭에는 이유 `undeclared`나 `background`를 담은 `tab <id> can never be unloaded: <reason>`로 실패한다.
 - 각 탭 단추는 자기 `state`(`loaded`, `unloaded`, `restoring`)를 담은 `data-tab-state`를 가진다. 보호는 `reasons`로만 보인다.
@@ -182,11 +173,10 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 메인 페이지는 [plugin process 설계](plugin-processes.ko.md#메시지와-event)의 status 네 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. plugin process가 상태를 메인 페이지에 보고하기 전까지 각 목록은 `[]`이다.
 
-- status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 열린 call이 있는 각 plugin의 값이다. 응답 확인을 기다리는 snapshot도 포함한다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
-- status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
+- status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 열린 call이 있는 각 plugin의 값이다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
+- status `core.plugin.losses`: `[{plugin, abandoned, lateReplies, timeouts, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
 - status `core.plugin.views`: `[{plugin, surface, responsive}]`, 각 plugin view surface의 응답 상태다.
-- status `core.plugin.snapshots`: `[{plugin, status, surface, generation, seq}]`, 현재 source와 선언된 status마다 native가 확인한 마지막 snapshot sequence다. `status`는 snapshot event에 실린 이름이다. Plugin host의 `surface`는 null이다. 첫 snapshot 전에 record는 없고, source 등록은 이전 generation record를 지우며, source 종료는 record를 제거한다. Sidebar section이 mount되지 않은 source도 포함하고 snapshot value는 담지 않으며, sidebar drawing이 아니라 transport 수락을 뜻한다.
-- status `core.surfaces`: 각 표면 항목은 선언된 합성의 종류인 `composition`(`view`)을 가진다. plugin이 그 표면을 선언하지 않으면 `null`이다. compositor record가 가지지 않은 mount된 view는 retained view이며([native surfaces](native-surfaces.ko.md)), `visible: false`, `dim`, `declared`와 `applied`가 `null`인 항목으로 나열되고, `exposes`, 자신의 mount의 `status`(`{phase, error}`), `composition`, `state`를 가진다. retained view는 배치가 아니다. mount가 시작되거나, status가 바뀌거나, dispose될 때와 그 표면의 등록이 바뀔 때 알린다.
+- status `core.surfaces`: 각 표면 항목은 `kind`를 가진다. `kind`는 탭 표면이면 `tab`, [section 표면](plugins.ko.md#섹션)이면 `section`이며, section 표면 항목은 `sidebar`도 가진다. 각 표면 항목은 선언된 합성의 종류인 `composition`(`view`)을 가진다. plugin이 그 표면을 선언하지 않으면 `null`이다. compositor record가 가지지 않은 mount된 view는 retained view이며([native surfaces](native-surfaces.ko.md)), `visible: false`, `dim`, `declared`와 `applied`가 `null`인 항목으로 나열되고, `exposes`, 자신의 mount의 `status`(`{phase, error}`), `composition`, `state`를 가진다. retained view는 배치가 아니다. mount가 시작되거나, status가 바뀌거나, dispose될 때와 그 표면의 등록이 바뀔 때 알린다.
 
 ## 창
 
@@ -233,12 +223,12 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 | `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다 |
 | `status.unwatch` | `{window, name, surface?}` | `null` |
 | `command.run` | `{window, name, params, surface?, cids?}` | 명령 결과. `cids`는 실행의 원인인 상관 식별자이며, view의 명령이 받는다([view 표면](native-surfaces.ko.md#view-표면)) |
-| `dom.rect` | `{window, name, index?, address?}` | `{x, y, width, height}`: 소유 문서의 CSS 픽셀로 나타낸 요소의 `getBoundingClientRect()`, `zoom`: 요소의 유효 CSS zoom으로, 요소와 flat tree의 각 ancestor의 computed `zoom`을 곱한 값, 그리고 창 좌표로 나타낸 문서 원점 `{document}`. CSS `zoom` subtree 안에서 WebKit 7624 이후는 CSS Viewport zoom object model이 정의하는 대로 zoom을 적용한 rectangle을 보고하고, 그 이전 WebKit은 `zoom`으로 나눈 rectangle을 보고한다 |
-| `dom.act` | `{window, name, index?, address?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
+| `dom.rect` | `{window, name, index?}` | `{x, y, width, height}`: 소유 문서의 CSS 픽셀로 나타낸 요소의 `getBoundingClientRect()`, `zoom`: 요소의 유효 CSS zoom으로, 요소와 flat tree의 각 ancestor의 computed `zoom`을 곱한 값, 그리고 창 좌표로 나타낸 문서 원점 `{document}`. CSS `zoom` subtree 안에서 WebKit 7624 이후는 CSS Viewport zoom object model이 정의하는 대로 zoom을 적용한 rectangle을 보고하고, 그 이전 WebKit은 `zoom`으로 나눈 rectangle을 보고한다 |
+| `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `activate`는 `move`에 적용한다 |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key`는 키 이름(`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) 또는 문자 하나다. `modifiers`는 `shift`, `control`, `option`, `command`의 배열이다. `phase`는 `down` 또는 `up`이다 |
 
-요청은 `index`나 `address` 가운데 하나만 준다. `index`는 0 이상의 정수다. control address는 [선언된 UI](declared-ui.ko.md)가 정하는 대로 `{sidebar, section, key, path?, role?}`이며, `sidebar`, `section`, `key`는 문자열이고 `path`는 문자열 배열이다. `core.sidebar.section.control` DOM 항목은 `many`로 선언되어 있으므로, 그 요청은 `index`나 `address`를 준다. 둘 다 주거나, 다른 DOM 항목에 `address`를 주거나, 타입이 틀리거나, 허용되지 않거나 빠진 `path`나 `role`이 있는 요청은 -32602로 거부하며, 어느 control과도 맞지 않는 control address는 1009로 거부한다.
+`index`는 0 이상의 정수이며, 타입이 다른 `index`를 준 요청은 -32602로 거부한다.
 
 네이티브 포인터 주입은 창과 버튼별로 누름을 받은 뷰를 유지한다. 포인터가 다른 뷰를 가로질러도 끌기와 뗌을 그 뷰에 전달하며 뗌의 수신 확인은 누름을 받은 문서를 기다린다. 일치하는 누름 없는 끌기·뗌, 같은 버튼을 누른 상태에서의 추가 누름, 제거된 누름 대상 뷰는 명시적 입력 거부를 반환한다. 스크롤과 버튼 없는 이동은 현재 포인터 위치를 사용한다.
 
@@ -275,7 +265,7 @@ workbench page와 card 요소는 app DOM document를 공유하고 view surface�
 | 호스트 → 메인 페이지 | 이벤트 `diagnostics-tick` | 내용 없음. 진단 빌드에서만 `diagnostics.drag`의 단계마다 한 번 보낸다 |
 | 표면 페이지 → 메인 페이지 | 없음 | view는 call `runtime.status.watch`로 status를 따라간다. 메인 페이지는 이 document의 registry observation으로 답한다. core status는 이 document에서 따라가고, plugin status는 그것을 등록한 표면을 통해 따라가며, 이 표의 `status.watch`, `status.next`, `status.unwatch`를 쓴다. 이 watch에는 호스트 메시지가 없다([view 표면](native-surfaces.ko.md#view-표면)). |
 
-메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 불러온 배치에 아직 없는 표면의 등록은 보관했다가, 그 표면을 담은 배치를 불러오면 반영하거나 거부한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다. `core.sidebar.section.control` 요청에서는 메인 페이지가 응답하기 전에 `index`나 `address`를 검증하며, 호스트는 그 요청을 읽지 않고 중계한다.
+메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 불러온 배치에 아직 없는 표면의 등록은 보관했다가, 그 표면을 담은 배치를 불러오면 반영하거나 거부한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다.
 
 표면 페이지는 표면이 제거된 뒤에 전달된 요청에 답할 수 있다. 예를 들어 표면이 닫히면서 답하는 `status.next`가 그렇다. 호스트는 표면을 제거할 때 그 표면에 보낸 모든 요청을 이미 1003으로 끝냈으므로 그 답에는 답할 요청이 없다. 호스트는 호출을 거부하지 않고 그 답을 버리며, 관측 `exposure reply <id> of removed surface "<surface>" arrived after its request ended`를 애플리케이션 로그에 쓴다. 표면은 남은 채 문서가 닫히거나 다시 불러와져서 호스트가 1003으로 끝낸 요청도 같다. 그 요청에 대한 답은 버리고 관측 `exposure reply <id> arrived after its request ended`로 쓴다. 호스트는 끝난 요청을 최근 256개까지 기억하며, 그 밖의 id에 대한 답은 여전히 `exposure reply <id> has no matching request`로 실패한다.
 
@@ -295,7 +285,7 @@ workbench page와 card 요소는 app DOM document를 공유하고 view surface�
 | 코드 | 의미 |
 | --- | --- |
 | -32601 | 선언되지 않은 메서드 |
-| -32602 | 잘못된 매개변수. `core.sidebar.section.control` 요청에서 `index`와 `address`를 둘 다 준 경우, 다른 DOM 항목에 `address`를 준 경우, 타입이 틀린 경우, 허용되지 않거나 빠진 `path`나 `role`을 포함한다 |
+| -32602 | 잘못된 매개변수. 타입이 틀린 값을 포함한다 |
 | 1001 | 알 수 없는 이름 |
 | 1002 | 선언되었지만 등록되지 않은 이름 |
 | 1003 | 소유 문서가 더 이상 없음 |
@@ -304,7 +294,6 @@ workbench page와 card 요소는 app DOM document를 공유하고 view surface�
 | 1006 | 창이 활성 상태가 아님: 포인터 `move`에는 키 창이 필요하거나, 시스템이 애플리케이션을 활성화하지 않음 |
 | 1007 | AppKit이 0이 아닌 `NSEvent.pressedMouseButtons` 마스크를 보고해 합성 포인터 `down`이나 `up`을 전달하지 않음. 메시지는 거부 시점의 마스크와 frontmost 애플리케이션을 보고함 |
 | 1008 | 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 포인터 `down`을 전달하지 않음 |
-| 1009 | `core.sidebar.section.control` 요청의 `address`가 어느 control과도 맞지 않음 |
 | -32000 | 등록된 명령이나 status 처리기가 실패함. `message`는 그 오류 메시지다 |
 
 중계한 요청의 1005 오류 메시지는 `the document did not reply within <ms> ms`다. 두 host는 시간이 초과된 최근 요청 256개를 기억하고 가장 오래된 것을 버린다. 그중 하나에 온 답은 `exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`로 실패하고, 기억하지 않는 요청에 온 답은 `exposure reply <id> has no matching request`로 실패하므로, 늦은 답의 지연이 page가 보고하는 오류에 들어간다. 표면 페이지로 전달한 command가 시간 초과되면 `host.call.timeout`을 plugin과 command와 함께 쓰고, 그 늦은 답은 `host.trace.call.late-reply`를 지연과 함께 쓴다.

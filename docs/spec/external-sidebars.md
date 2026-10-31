@@ -24,7 +24,7 @@ Rail means only the border joining a content card and its overridden external si
 
 `core.rail` exposes aggregate path and groups identifying the associated content card and fixed sidebar IDs. `core.sidebars` exposes placement, applied plugin or null, card and active tab or null, selected set, orientation, section tabs and presented rectangle. Window sidebar sections use vertical implementations; internal sections follow their card-side orientation.
 
-Commands in a declared window-sidebar section run against the source selected for that section's declared status. A view source uses its exact surface registration; a plugin-host source uses the host registration of that plugin. The source may differ from the focused card's active surface. A missing source or command registration fails; the command does not fall back to another surface or owner.
+A window-sidebar section is a section surface whose view runs the commands of its plugin with the surface that `core.sidebars` reports for it, the active tab of the focused card, which may differ from the surface that the person last clicked ([sections](plugins.md#sections)). A missing surface or command registration fails; the command does not fall back to another surface or owner.
 
 ## Acceptance
 

@@ -261,7 +261,7 @@
     },
     {
       "term": "view",
-      "definition": "A separate web view of a plugin on its soksak://<plugin id> origin, with one view per tab, that runs plugin code the declared UI vocabulary cannot express (free DOM, text input with an input method, a canvas or editor, or a document region or image region).",
+      "definition": "A separate web view of a plugin on its soksak://<plugin id> origin, with one view per tab and one per sidebar section, in which the plugin draws its screen by any means (free DOM, a framework or library, text input with an input method, a canvas or editor, or a document region or image region).",
       "rejected": [],
       "allowed": []
     },
@@ -386,8 +386,8 @@
       "allowed": []
     },
     {
-      "term": "card surface",
-      "definition": "A surface placed in a card that a `button` in the sidebar opens when the plugin that declares it needs a view.",
+      "term": "section surface",
+      "definition": "The view surface of one sidebar section, with the surface id <sidebar id>/<section id>, which the sidebar places in the body of the section (docs/spec/plugins.md#sections).",
       "rejected": [],
       "allowed": []
     },

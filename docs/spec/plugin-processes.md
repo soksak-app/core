@@ -2,11 +2,11 @@
 
 [한국어](plugin-processes.ko.md)
 
-This specification states where plugin code runs and how its processes communicate: the layers of a plugin, the pass values of a plugin view, the declared UI snapshots, the calls across a process boundary, the origin and core root of a view, restarts, presentation, input, theme, the messages and events, the boundary between core and plugins, the process assignment of views, the binary path, the plugin host, the identity of a plugin, and the context of a view. [Declared UI](declared-ui.md) defines the declared UI schema, [native surfaces](native-surfaces.md#view-surfaces) defines the view channel and the placement of a view, and [plugins](plugins.md) defines the manifest.
+This specification states where plugin code runs and how its processes communicate: the layers of a plugin, the pass values of a plugin view, the sidebar sections, the calls across a process boundary, the origin and core root of a view, restarts, presentation, input, theme, the messages and events, the boundary between core and plugins, the process assignment of views, the binary path, the identity of a plugin, and the context of a view. [Native surfaces](native-surfaces.md#view-surfaces) defines the view channel and the placement of a view, and [plugins](plugins.md) defines the manifest.
 
 ## Decision
 
-Plugin code runs outside the workbench page. Each plugin view is a separate web view on the `soksak://<plugin id>` origin, with one view per tab. Declared UI is drawn by the workbench from [declared UI snapshots](native-surfaces.md#view-surfaces) that the plugin sends. A plugin host exists only for a declared status of a sidebar section that must be served while no view of the plugin is open ([declared status](declared-ui.md#declared-status)).
+Plugin code runs outside the workbench page. Each plugin view is a separate web view on the `soksak://<plugin id>` origin, with one view per tab and one view per sidebar section ([sections](plugins.md#sections)). A plugin draws every screen it owns in its views by any means, and the workbench draws no plugin content.
 
 Measurements do not reverse this decision. They fix the process counts, the per-plugin budgets and the pass values. When a pass value is not met, the design reopens. It does not return to mounting plugin surfaces on the workbench page.
 
@@ -25,10 +25,9 @@ A plugin view's WebContent process uses the display label `soksak://plugin/<plug
 
 ## Layer rules
 
-- **Declared UI:** a sidebar section whose every element is one of list, tree, button or status-line is declared UI.
-- **View:** any other screen is a view. A tree that needs inline rename, a tree with drag and drop, and a tree with a context menu placed at a pointer are views. A view holds free DOM, text input that needs IME, a canvas or an editor, and a screen with a document region or an image region.
-- **Sidebar section:** only declared UI can be a sidebar section. A plugin whose sidebar section must show values while none of its views is open needs its [plugin host](#plugin-host). A section that needs a view becomes a card surface, and the sidebar holds only the declared item that opens it. The `core.declared-ui.tree.expand` command is declared in `packages/workbench/exposure.json` together with its handler.
-- **Plugin host:** created only when a declared status of a sidebar section must be served while no view of the plugin is open. A sidecar holds the native functionality of one domain and a view exists only while its tab is open, so the host builds the declared values of those statuses from the data that the plugin's sidecar supplies, serves them, and relays its plugin's sidecar messages and command requests. The presentation of its declared statuses is its own logic; it holds no native logic, and the sidecar supplies only data.
+- **View:** every screen of a plugin is a view: a tab surface or a section surface. A view holds free DOM, a framework or a library, text input that needs IME, a canvas or an editor, and a document region or an image region.
+- **Sidebar section:** a sidebar section is a [section surface](plugins.md#sections), a view of its plugin that the sidebar places in the body of the section; core draws the frame of the sidebar only. A section that shows values while no tab of its plugin is open reads them in its own view, from the sidecars of its plugin and from its project data.
+- **Exposure:** every view requires only the exposure contract: every interactive element binds a declared command through the shared binder and has a dom name, and every visible state is a declared status ([exposure](exposure.md)).
 - The layer of a screen is not chosen by measurement.
 
 ## Pass values
@@ -81,19 +80,13 @@ The drag evaluator validates shared recording evidence before judging geometry, 
 ## Rules
 
 1. Plugin code does not run on the workbench page.
-2. **Declared UI snapshots.** A plugin view or plugin host pushes its declared UI snapshot to the workbench (push). When the main page loads, including a reload, the workbench requests the current value of each declared status once, from the source chosen for it (pull). The workbench also pulls the current value of a declared status once when its source changes. A running view has no other way to send its last value to a new reader. No other pull is made. Message names and fields are in [messages and events](#messages-and-events).
-   - A status has at most one snapshot in transit.
-   - One window ingress receiver validates and acknowledges each pushed snapshot exactly once, independent of the number of section recipients. It acknowledges and discards a snapshot when no matching section is mounted, so an unmounted status does not hold the sender's in-transit slot. Source and status routing is defined in [declared UI](declared-ui.md#status-mapping).
-   - A change made while a snapshot is in transit marks the status dirty. When the acknowledgement arrives, the next snapshot carries the latest value.
-   - The number of skipped values is counted in `losses.skipped` of the core status `core.plugin.losses`. The count reaches the main page as the field `skipped` of each snapshot message: the number of values of the status that were overwritten while a snapshot was in transit, since the previous snapshot of the status was sent. While the performance trace is on, the main page writes `page.trace.declared-ui.snapshot.skipped {plugin, status, count}` for each overwritten value. The host relays no snapshot and writes no event for it, because `host.*` events are written only by host code.
-   - When a plugin process starts (or starts again), the first snapshot of each status is the full value of that status. The workbench discards the stopped snapshot and the pending acknowledgement of the previous process. A restarted plugin builds its values from its saved state (rule 5).
-   - When the view process ends or the surface closes while an acknowledgement is pending, the value is counted in `losses.stalled` and no event is written. The receiver acknowledges each snapshot at once, so only the sender in the view waits for an acknowledgement; a sender that waits ends with its view process, and a surface close also ends the view. No live observer exists, so the next process sends full values, as rule 2 states for a restarted process. A restarted process sends the latest value of each status as its first snapshot and clears the dirty mark. When the surface is closed, the dirty values are discarded and the reason says so. No timer is used.
+2. **Sidebar sections.** A section surface is a view surface with the rules of every view: the view channel of rule 4, the restarts of rule 5, the presentation of rule 6, the input of rule 7 and the unload of rule 10. The values that a section shows reach its view through view calls and view events, as they reach a tab view; no value of a section passes through the workbench to be drawn.
 3. **Calls across a boundary.**
    - A command declares `timeout` as stated in [exposure](exposure.md) (at most 600000 ms; 10 seconds when omitted). The timer remains for a live peer that does not reply to a command, because no event reports a slow command reply. `host.trace.view.unresponsive` reports a view process that stops answering WebKit's responsiveness check; it is not a command reply, so it does not replace the timer. When the time limit passes, the call is rejected with -32000 and `command <name> did not reply within <ms>ms`, the error that exposure.md states at its command timeout entry. This design does not change the message. `host.call.timeout {plugin, command}` is written, and `losses.timeouts` counts it.
    - A view answers a request of the main page for its command with `{sok: 1, reply: id, result}` or `{sok: 1, reply: id, error}`, which the host forwards as `view-reply` ([native surfaces](native-surfaces.md#view-surfaces), view commands). The main page applies the command's declared time limit to that request, and a reply after the limit is discarded as a late reply.
-   - When the peer disappears, the call ends before its time limit through an event. The peers whose end ends a call are: a view or host process that ends, a surface that closes, and a sidecar that ends. The promise is rejected with an error that gives the reason. The reason is one of `process-ended`, `surface-closed` or `sidecar-ended`. `host.call.peer-lost {plugin, command, reason}` is written for `process-ended`, which ends the view calls that the view has open (the calls that the main page has not answered); `surface-closed` writes no event and increments `losses.peerLost`. A sidecar end follows the sidecar failure contract instead: each request with correlation identifiers that waits for a reply gets a `host.sidecar.reply` error with its surface, its sidecar and its identifiers, and each surface that sent to the sidecar gets `sidecar-failure`; a host stop or detach records the same error for each waiting request. The sidecar request carries no command, so no `host.call.peer-lost` is written for it. `host.trace.view.unresponsive` does not end a call; it is written and used only by the presentation wait of rule 6 and by the status of the view. A call ends only by its declared timeout or by one of these peers.
+   - When the peer disappears, the call ends before its time limit through an event. The peers whose end ends a call are: a view process that ends, a surface that closes, and a sidecar that ends. The promise is rejected with an error that gives the reason. The reason is one of `process-ended`, `surface-closed` or `sidecar-ended`. `host.call.peer-lost {plugin, command, reason}` is written for `process-ended`, which ends the view calls that the view has open (the calls that the main page has not answered); `surface-closed` writes no event and increments `losses.peerLost`. A sidecar end follows the sidecar failure contract instead: each request with correlation identifiers that waits for a reply gets a `host.sidecar.reply` error with its surface, its sidecar and its identifiers, and each surface that sent to the sidecar gets `sidecar-failure`; a host stop or detach records the same error for each waiting request. The sidecar request carries no command, so no `host.call.peer-lost` is written for it. `host.trace.view.unresponsive` does not end a call; it is written and used only by the presentation wait of rule 6 and by the status of the view. A call ends only by its declared timeout or by one of these peers.
    - A late reply to a call that has ended is discarded. It is not passed to any promise, and no error is sent to the document that sent it. The host writes `host.trace.call.late-reply {plugin, command, delay}` and increments `losses.lateReplies`. The host-contract cases `exposure-reply.removed-surface-discarded` and `exposure.relay.foreign-document-reply-ignored-timeout-1005` state this behavior.
-   - The number of open calls, including snapshots waiting for acknowledgement, and the start time of the oldest open call are exposed as the core status `core.plugin.open-calls {plugin, count, oldestStartedAt}`.
+   - The number of open calls and the start time of the oldest open call are exposed as the core status `core.plugin.open-calls {plugin, count, oldestStartedAt}`.
    - The relay timeout is product behavior of exposure. The two paths are: the host applies the timeout to a command forwarded to a surface page, and the main page applies the timeout to a handler that it runs itself ([exposure](exposure.md), command `timeout`). exposure.md already states both paths (its command timeout entry and its relay section).
    - Cancellation is part of the call envelope: a call carries `id`, a reply carries the same `id` with a result or an error, and a cancel carries `id`. A binary payload uses the [binary path](#binary-path).
 4. **Origin and core root.**
@@ -115,9 +108,9 @@ The drag evaluator validates shared recording evidence before judging geometry, 
    - A request for a file of plugin B that rule 4 does not grant answers not found and writes `error: core root: <path> is not granted to <plugin>` in both hosts. Document regions receive no core root grant.
    - The core root is served through a callback that the host contract declares and each host registers with its scheme handler, with a contract case.
    - A request from a view of plugin A for a file of plugin B that rule 4 does not grant, for a file of a plugin that A lists in `dependencies`, for `/start.json`, `/environment.json`, `/index.html` or `/runtime/...`, and for a file of a contribution item whose point the provider does not declare each answers not found.
-5. **Restarts.** Sidecars, plugin hosts and view processes restart within the limit of pass value (vi). When the limit is exceeded, the host reports `error:` and stops.
-   - A view process that ends is created again by the host, and the new view restores its state from its saved tab state. The limit is counted per view surface. After the limit is exceeded, the card shows the error through the error display, and the view is created again only when the person reopens the tab.
-   - After the limit is exceeded, the next request fails with `sidecar-failure` (reason `restart limit`) without starting the process. The failure record is kept. It is cleared only when the person opens a surface that needs the process; the process then starts, and the host writes `host.trace.sidecar.restart-reset {sidecar, surface}`. A plugin host writes `host.trace.plugin-host.restart-reset {plugin}`.
+5. **Restarts.** Sidecars and view processes restart within the limit of pass value (vi). When the limit is exceeded, the host reports `error:` and stops.
+   - A view process that ends is created again by the host, and the new view restores its state from its saved tab state. The limit is counted per view surface, a section surface included. After the limit is exceeded, the card or the section body shows the error through the error display, and the view is created again only when the person reopens the tab, or for a section surface when the person unfolds the section, selects its tab or changes the set of its sidebar.
+   - After the limit is exceeded, the next request fails with `sidecar-failure` (reason `restart limit`) without starting the process. The failure record is kept. It is cleared only when the person opens a surface that needs the process, which for a section surface is unfolding the section, selecting its tab or changing the set of its sidebar; the process then starts, and the host writes `host.trace.sidecar.restart-reset {sidecar, surface}`.
    - The restart limit of a sidecar of standard input and output is stated in [sidecars](sidecars.md#failure), and the restart rule of a persistent service in [persistent services](persistent-services.md).
    - A restart restores the state from the last saved value. A state that was not saved is lost, and each plugin states which state that is.
    - Fault injection exists only in diagnostic builds.
@@ -152,21 +145,12 @@ The drag evaluator validates shared recording evidence before judging geometry, 
 
 ## Messages and events
 
-**Messages**
-
-| message | direction | fields | note |
-|---|---|---|---|
-| `declared-ui.snapshot` | plugin → workbench (event) | `{plugin, status, seq, value, skipped}`; `skipped` is the count of values overwritten since the previous snapshot of the status | the push of rule 2 |
-| `declared-ui.snapshot.ack` | workbench → plugin (event) | `{plugin, status, seq}` | confirms receipt; releases the in-transit slot |
-| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`; the reply is `{seq, value}`, where `seq` is the seq of the source's last declared UI snapshot, or 0 when `value` is `null` | the pull of rule 2 (load, source change). `value` is `null` when the source has no value yet |
-
 The RPC protocol number is 1 in the 0.0 series.
 
 **Events.** Each event name starts with its layer (`host` or `page`). Its class names its concern (`call`, `lifecycle`, `input`). Each event is declared in the [event catalog](events.json) together with the code that emits it.
 
 | event | class | level | fields |
 |---|---|---|---|
-| `page.trace.declared-ui.snapshot.skipped` | call | debug | `{plugin, status, count}`: values skipped while a snapshot was in transit; counter `losses.skipped`; written by the main page |
 | `host.call.timeout` | call | error | `{plugin, command}`; counter `losses.timeouts` |
 | `host.call.peer-lost` | call | error | `{plugin, command, reason}` for `process-ended` (view calls); `surface-closed` writes no event and counts `losses.peerLost`; a sidecar end follows the sidecar failure contract |
 | `host.trace.call.late-reply` | call | debug | `{plugin, command, delay}`; counter `losses.lateReplies` |
@@ -178,31 +162,26 @@ The RPC protocol number is 1 in the 0.0 series.
 | `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`; counter `losses.abandoned`; written by the host, which owns the wait |
 | `host.trace.view.presentation-join` | call | debug | `{phase, surface, generation, ticket}`; `phase` is `requested`, `result`, `presented` or `abandoned`; `result` also has `joined`, and `abandoned` also has `reason`; a presented callback may follow abandonment and does not mean the layout committed |
 | `page.input.shortcut.failed` | input | error | `{plugin, command}` |
-| `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |
-| `host.plugin-host.restart-limit` | lifecycle | error | `{plugin}` |
-| `host.trace.plugin-host.restart-reset` | call | debug | `{plugin}` |
-| `host.trace.plugin-host.message-stale` | call | debug | `{plugin}`: a delayed callback from a disposed host instance was canceled before dispatch |
 | `host.trace.sidecar.restart-reset` | call | debug | `{sidecar, surface}` |
 
-The statuses `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views` and `core.plugin.snapshots` are declared in `packages/workbench/exposure.json`. `core.plugin.snapshots` contains the last accepted `{plugin, status, surface, generation, seq}` for each active process source and declared status; `status` is the name sent in the snapshot event. `surface` is null for a plugin host. A source registration clears the previous generation's record, and the source end removes its record. The workbench updates a record only after the native host accepts the snapshot acknowledgement and the exact source generation remains current. This records transport acceptance, not sidebar drawing. A repeated or lower sequence in the same generation does not move the record backward. A snapshot is recorded even when no section is mounted, so consumers can wait for the publisher's event before pulling its current value. This status carries no snapshot value. Each change notifies status subscribers. The events of this specification have level `error` or `debug` only, within the class budget of the [event catalog](events.json). The restart state of a plugin host or a sidecar is shown in `core.plugin.views` or in the sidecar status.
+The statuses `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views` are declared in `packages/workbench/exposure.json`.
 
 **Event levels in a release.** A 0.0.x release stores only error events (AGENTS.md, Diagnostic code). Each occurrence of this design is therefore classified once:
 (a) a failure or a rejected operation is an event at level `error`;
-(b) a loss, a skip, a transient state or a presentation degradation is not an event. It is counted in the declared status `core.plugin.losses {plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}`, and it is a state of the declared status `core.plugin.views {plugin, surface, responsive, queued}`. Each count is notified to status watchers when it changes. The counts are per plugin and are kept until the application ends; they are not reset when a surface closes. A surface that closes with a dirty value increments `losses.stalled` before its values are discarded, so the loss is counted in every build.
+(b) a loss, a skip, a transient state or a presentation degradation is not an event. It is counted in the declared status `core.plugin.losses {plugin, abandoned, lateReplies, timeouts, peerLost}`, and it is a state of the declared status `core.plugin.views {plugin, surface, responsive, queued}`. Each count is notified to status watchers when it changes. The counts are per plugin and are kept until the application ends; they are not reset when a surface closes.
 While the performance trace is on (the 디버그 switch of the settings window), each change of a count also writes the trace event named in the table. The event log of a release stores only errors.
 
 The identifiers in code use the names as written here.
 ## Boundary (no coupling)
 
-- The core of this design provides only the mechanisms: view configuration kinds, the declared UI schema and its drawing, the RPC and binary channels, the core root, the restart limit, and the contract cases.
+- The core of this design provides only the mechanisms: view configuration kinds, the places of tab and section views, the RPC and binary channels, the core root, the restart limit, and the contract cases.
 - The view channel of rule 4 is the only transport of a view.
 - The layer of each plugin, the move of a plugin state to a sidecar, and the move of an editor buffer are work of the plugin and sidecar repositories. Core code and tests do not know plugin or sidecar names, paths or implementations.
-- The [plugin host](#plugin-host) of core serves a plugin whose declared status of a sidebar section must be served while no view of the plugin is open. It is built only when the contract requires it.
 - Relations are declared only by the `dependencies`, `extends` and `contributes` fields of a manifest. The core root serves a plugin's file to another plugin only for a granted item or a shared target (rule 4), which the granted item rule decides from these declarations and the installation record.
 - Plugin repository requirement: the repository of each plugin that contributes a module or provides a shared module checks in its own tests that each such module is one self-contained ES module. A relative import inside one is a build error of that plugin.
 - Tests:
   - Core tests verify its boundary with fake plugin fixtures.
-  - Common contract cases (RPC, snapshot, restart) are run by the owning package, core, and by both hosts. Core publishes the fixtures that a consumer needs. Each plugin repository tests only its own modules with those fixtures; it does not run core's cases or read core's paths.
+  - Common contract cases (RPC, restart) are run by the owning package, core, and by both hosts. Core publishes the fixtures that a consumer needs. Each plugin repository tests only its own modules with those fixtures; it does not run core's cases or read core's paths.
   - Measurements with real plugins and window checks are end-to-end checks of the installed environment, not package tests.
 ## Tabs and processes
 
@@ -227,12 +206,6 @@ The identifiers in code use the names as written here.
 ## Binary path
 
 A plugin document uploads bytes by `POST soksak://<plugin>/.binary` and downloads them by `GET soksak://<plugin>/.binary/<id>`, where the host mints the id and the document region keeps the bytes in its binary store ([native surfaces](native-surfaces.md#document-regions)). The owner check is the `view.plugin` of the region against the URL host. An upload is at most 16 MiB, which is the clipboard bound of both hosts (`MAX_BYTES` in the darwin clipboard, `clipboardMaxBytes` in wailsv3). A page holds at most 64 MiB, which is four uploads of the largest size per page. An id is released when a download finishes, when a native take returns its bytes, or when the region closes. The `.binary` path segment is refused in a plugin release: the host answers that path before it looks up a file, so a plugin file under it would be unreachable. The release check is `validateReleaseFiles` of `@soksak/plugin-api`, and `sok plugin pack` applies the same refusal.
-
-## Plugin host
-
-- A platform operation creates the plugin host web view. It attaches to the window, not to a `SurfaceHost`. Its throttling while hidden and its `requestAnimationFrame` behavior are measured before a plugin uses it.
-- The exposure owner key of a plugin host is `plugin:<plugin id>`, because the plugin id is the identity of a plugin ([identity](#identity)). A view needs no new key: it registers under its surface id with the owner from the plugin of its tab, as every surface does.
-- A plugin host restarts within the limit of rule 5, and its state is restored from the last saved value.
 
 ## Responsiveness
 

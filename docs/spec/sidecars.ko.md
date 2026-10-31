@@ -60,7 +60,7 @@ Persistent layout reconciliation은 `retain`으로 누락된 session을 닫고 `
 
 Host는 state mutation을 직렬화하는 동안 각 immutable `host.sidecars` 값을 enqueue한다. 따라서 빠른 answer가 pending-close 전이를 없애거나 notification 순서를 뒤집을 수 없다. Status read는 하나의 state 및 declaration snapshot에서 closing과 outdated service를 관측한다. Notification consumer는 전달받은 값만 enqueue하며 sidecar state를 읽거나 window registry를 잠그지 않는다. Window UI invalidation은 sidecar state lock 밖에서 실행한다. Lock 안에서 값을 만들고 나중에 발행하는 방식은 mutation 순서를 보존하지 못하며 지연된 UI task에서 state를 다시 읽는 방식은 일시적인 값을 보존하지 못한다. Declaration 교체와 그 version-change 발행은 같은 state lock으로 직렬화한다. 거절된 declaration은 값을 바꾸지 않으며 표시되는 status가 같은 declaration은 변경을 보내지 않는다. Stale connection 종료는 현재 connection을 제거하거나 알릴 수 없다. Version-only 변경과 현재 connection 종료의 outdated 제거는 pending close와 독립적으로 발행한다. Stop은 running 항목을 제거한 뒤 발행한다. Authoritative retain은 누락된 일반 owner를 제거한 뒤 변경된 owned-session count를 발행하며 plugin 및 state session은 명시적인 lifecycle을 유지한다. Owner가 제거된 surface ID를 재사용하면 process가 그 ID를 기억하더라도 복원된 count를 발행한다. 표시되는 status 변경이 없는 반복 operation은 발행하지 않는다.
 
-사이드카는 `sidecar.json`에 메시지 형식을 `message: {form, operationField}`로 선언한다. `form`은 `json-object`이고, `operationField`는 요청 본문에서 작업을 고르는 문자열 필드 이름이다. plugin host가 작업을 부를 수 있게 하는 사이드카는 `hostReadOperations`에 읽기 전용 작업을 나열하며, plugin 매니페스트는 그 가운데 것만 `hostOperations`에 쓸 수 있다([plugins](plugins.ko.md#pluginjson)). 나열이 없는 사이드카는 plugin host에 작업을 허용하지 않는다. 메인 페이지는 선언된 형식으로 각 host 요청을 검사하고, 그 밖의 작업을 사이드카에 닿기 전에 거절한다([plugin host](plugin-host.ko.md#channel)). `@soksak/plugin-api`는 이 선언을 `validateSidecar`와 `checkHostOperations`로 검사한다.
+사이드카는 `sidecar.json`에 메시지 형식을 `message: {form, operationField}`로 선언한다. `form`은 `json-object`이고, `operationField`는 요청 본문에서 작업을 고르는 문자열 필드 이름이다. `hostReadOperations`가 있는 `sidecar.json`은 `sidecar <name>: hostReadOperations is removed`로 거절된다. `@soksak/plugin-api`는 이 선언을 `validateSidecar`로 검사한다.
 
 ## 실패
 
@@ -79,17 +79,9 @@ Host는 state mutation을 직렬화하는 동안 각 immutable `host.sidecars` �
 
 재시작 한도는 두 transport의 사이드카에 적용된다. 표준 입출력 사이드카의 실패는 위의 것이고, 영속 서비스의 실패는 [영속 서비스](persistent-services.ko.md#서비스-전송)이 적는 것이다. 호스트는 각 실패의 시각으로 사이드카의 실패를 센다. 시각은 실패 event가 도착할 때 잡으며, timer는 돌지 않는다. 새 실패보다 300초 넘게 앞선 실패는 세지 않는다(sliding window). 네 번째 실패가 세어지면 호스트는 로그에 `error: sidecar <name>: restart limit: 4 failures within 300 s`를 쓰고, `{sidecar}`를 가진 event `host.sidecar.restart-limit`을 level `error`로 쓰며, 그 사이드카의 재시작을 멈춘다. 멈춘 사이드카에 대한 요청은 표면이 실패한 프로세스에 보냈든 나중에 열렸든 어느 표면에서 오든 프로세스를 시작하지 않는다. 호스트는 `error: sidecar <name>: restart limit: request for <surface> refused`를 쓰고, 표면의 소유 창에 `{sidecar, surface, reason: "restart limit"}`인 `sidecar-failure`를 전달하며, 전송은 `sidecar <name>: restart limit`로 실패한다. 거부된 전송의 `sidecar-failure` 전달은 표준 입출력 transport의 보고다. 영속 서비스는 [영속 서비스](persistent-services.ko.md#서비스-전송)이 적는 대로 거부된 전송을 연결 알림으로 보고한다.
 
-멈춤을 푸는 것은 사람의 두 행위뿐이다. 표면을 여는 것과 plugin을 사용하는 것이다. 호스트가 `plugin.json`의 `dependencies`에 그 사이드카를 적은 plugin의 표면을 만들거나, 사람이 그런 plugin을 사용하면, 호스트는 그 사이드카의 실패 기록을 지우고 `{sidecar, surface}`(사용이면 `{sidecar, plugin}`)인 event `host.trace.sidecar.restart-reset`을 level `debug`로 쓰며, 다음 요청이 프로세스를 시작한다. 이미 열린 표면의 요청은 멈춤을 풀지 않으며, 그 사이드카를 적지 않은 plugin의 표면을 만드는 것도 풀지 않는다. 두 행위가 사이드카 멈춤을 푸는 트리거다. 각각은 같은 단계에서 그 plugin의 plugin host 멈춤도 풀므로([plugin host](plugin-host.ko.md#restarts)), 그 뒤 plugin host가 다시 여는 세션은 사이드카 멈춤도 풀린 상태를 만난다. 한도 안의 plugin host 자동 재시작은 어떤 사이드카 멈춤도 풀지 않는다. 표면이 없는 plugin에도 사용 행위는 있으므로, 그 멈춤은 사용으로 풀린다.
+멈춤을 푸는 것은 사람의 두 행위뿐이다. 표면을 여는 것과 plugin을 사용하는 것이다. 호스트가 `plugin.json`의 `dependencies`에 그 사이드카를 적은 plugin의 표면을 만들거나, 사람이 그런 plugin을 사용하면, 호스트는 그 사이드카의 실패 기록을 지우고 `{sidecar, surface}`(사용이면 `{sidecar, plugin}`)인 event `host.trace.sidecar.restart-reset`을 level `debug`로 쓰며, 다음 요청이 프로세스를 시작한다. 이미 열린 표면의 요청은 멈춤을 풀지 않으며, 그 사이드카를 적지 않은 plugin의 표면을 만드는 것도 풀지 않는다. 두 행위가 사이드카 멈춤을 푸는 트리거다.
 
 호스트가 사이드카를 종료하는 동안 출력의 끝은 실패가 아니다. 멈추는 동안의 다른 실패는 호스트 로그에 `sidecar <name>: failed: <reason>`으로 쓰고, 중지 뒤의 전송은 실패해 페이지가 세션을 다시 열 수 없으므로 호스트는 실패 이벤트를 보내지 않는다. 그다음 [선언과 시작](#선언과-시작)의 종료 규칙이 프로세스를 끝낸다. 멈추는 동안이든 아니든 실패 뒤 호스트가 사이드카의 출력을 더 읽지 않으면 파이프의 자기 쪽 끝을 닫으므로, 사이드카의 이후 쓰기는 막히지 않고 실패한다. 재시작 한도를 뺀 이 실패 규칙은 표준 입출력 transport에 적용된다. 영속 transport는 [영속 서비스](persistent-services.ko.md)이 정의하는 대로 연결 끊김을 알린다.
-
-## Plugin host sessions
-
-[plugin host](plugin-host.ko.md#channel)는 자기 plugin의 `dependencies`에 든 sidecar로 보낸다. 세션 id의 형식은 `plugin:<plugin id>:<project id>:<sidecar name>`이다. plugin id, project id, sidecar 이름 어디에도 `:`이 없으므로 형식은 모호하지 않게 분해된다. `plugin:` 세션에 대한 표면의 send는 `sidecar session <id> is reserved for a plugin host`로 거부되며, 그 세션에는 plugin의 host만 보낸다.
-
-창의 메인 페이지는 host 호출 `pluginHostSidecarSend {plugin, sidecar, id, body, cids}`로 host의 요청을 보낸다. host 호출은 메인 창이 아닌 호출자, plugin이 목록에 두지 않은 sidecar, 다른 plugin이나 sidecar의 이름을 가진 세션 id를 거부한다. 전송은 창이 세션의 project id에 대해 기록한 폴더 root를 쓴다. 창이 보유하지 않은 project나 기록된 root가 빈 project는 시작 전에 거부된다. sidecar의 owner 기록은 다른 표면과 같이 세션에 적용된다. 첫 전송이 창을 owner로 기록한다.
-
-plugin 세션의 실패는 그 sidecar의 실패 기록에 더해지며, 그 기록은 같은 sidecar의 다른 모든 세션과 공유된다. restart limit은 [실패](#실패)가 정하는 대로 적용된다. host는 자기 세션을 닫는다. 메인 페이지는 host가 끝날 때 host 호출 `pluginHostSidecarClose {plugin}`을 부르고, 이는 호출한 창이 소유한 그 plugin의 세션을 닫는다. host는 창이 reload되거나 닫힐 때, 그리고 보유 창이 project를 해제할 때 창의 세션을 닫는다. 각 닫기는 [메시지](#메시지)가 정하는 대로 세션에 `closed`를 보낸다.
 
 ## 로그
 
@@ -101,7 +93,7 @@ plugin 세션의 실패는 그 sidecar의 실패 기록에 더해지며, 그 기
 
 `page.sidecar(name)`은 사이드카 이름을 받아 `send(surface, body, cids)`, `on(surface, fn)`, `onFailure(surface, fn)`을 반환한다. `cids`는 요청이 잇는 입력의 상관 식별자이며, host 호출 `sidecarSend`가 이를 요청 줄에 넘긴다([logging](logging.ko.md#상관-식별자)). `on`은 그 사이드카와 표면의 `sidecar-message` 이벤트마다 `fn(body)`를, `onFailure`는 그 사이드카와 표면의 `sidecar-failure` 이벤트마다 `fn(reason)`을 호출한다. 둘 다 구독 등록 후 완료되는 promise를 반환한다. 페이지는 첫 요청 전에 구독한다. 한 사이드카의 전송은 호출한 순서대로 host에 닿고, 실패한 전송은 호출자를 reject하되 이후 전송을 막지 않으며, 표면 문서는 `page.report({level, where, text})`로, 메인 페이지는 host 호출 `report`로 `error page sidecar <name>: send failed: <reason>`을 애플리케이션 로그에 쓴다. 표면의 문서는 `page.report({level, where, text})`로 layer page의 기록을 쓴다(메인 페이지의 host 호출 `report`도 같은 일을 한다).
 
-애플리케이션 문서에서 워크벤치는 첫 사이드카 요청을 보내기 전에 `sidecar-failure` listener 하나를 설치한다. 이 listener는 view·plugin host·background 세션이 워크벤치를 통해 그 사이드카와 표면에 등록한 실패 handler를 호출한다. 등록된 handler가 없으면 워크벤치는 실패를 페이지 오류로 보고한다. 창에 `error` 이벤트를 보내고, 이 이벤트가 실패를 애플리케이션 로그에 쓰고 애플리케이션 오류 알림에 표시한다.
+애플리케이션 문서에서 워크벤치는 첫 사이드카 요청을 보내기 전에 `sidecar-failure` listener 하나를 설치한다. 이 listener는 view·background 세션이 워크벤치를 통해 그 사이드카와 표면에 등록한 실패 handler를 호출한다. 등록된 handler가 없으면 워크벤치는 실패를 페이지 오류로 보고한다. 창에 `error` 이벤트를 보내고, 이 이벤트가 실패를 애플리케이션 로그에 쓰고 애플리케이션 오류 알림에 표시한다.
 
 ## 그림 봉투
 

@@ -67,21 +67,19 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `surface.unload` | 아니오. `background`와 함께 쓰면 거부 | 코어가 탭을 unload하고 탭이 쓴 상태로 restore할 수 있는 plugin의 `{ "format": <양의 정수>, "maxBytes": <양의 정수> }`([메모리 절약](#메모리-절약)). `background`와 함께 쓰면 거부한다. 선언이 없는 표면은 unload하지 않는다(`undeclared`) |
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
-| `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "status" }`. `status`는 workbench가 선언된 UI 값을 그리는 plugin의 status다([선언된 UI](declared-ui.ko.md#사이드바-section-형태)). 선택 항목 `fill: true`는 섹션에 남은 사이드바 높이를 준다([섹션](#섹션)) |
+| `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "composition", "height", "unload"? }`. 각 섹션은 [section surface](#섹션), 즉 사이드바에 그려지는 plugin의 view다. `composition`은 `view` 합성이고, `height`는 `"fill"` 또는 포인트 단위 양의 정수다 |
 | `sidebars` | 아니오 | 로컬 기본 세트와 선택적인 네 변 `card` 연결([기본 사이드바 세트](#기본-사이드바-세트)) |
 | `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
-| `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 표면 페이지나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`, `state`나 `host`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. registry index나 `installed.json`의 plugin이 그 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
-| `hostOperations` | 아니오; `host`와 `dependencies`의 sidecar가 필요 | `{ "<sidecar name>": ["<operation>", ...] }`: plugin host가 각 sidecar 의존에 대해 부를 수 있는 작업. 각 작업은 sidecar의 `sidecar.json`의 `hostReadOperations`에 있어야 하고, 메인 페이지는 그 밖의 작업을 거절한다([plugin host](plugin-host.ko.md#channel), [sidecars](sidecars.ko.md#메시지)) |
+| `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 plugin의 view나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`, `sections`나 `state`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. registry index나 `installed.json`의 plugin이 그 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
 | `events` | 아니오 | plugin의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
 | `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface`가 필요하다 |
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
-| `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: plugin host가 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `host`가 필요하다 |
+| `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: plugin의 view가 프로젝트마다 읽고 쓰는 [프로젝트 데이터](#프로젝트-데이터). `surface` 또는 `sections`가 필요하다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
-| `host` | 아니오 | `{ "page": "<경로>", "state"?: { "format": <양의 정수>, "maxBytes": <양의 정수> } }`: [plugin host](plugin-host.ko.md). plugin의 view가 하나도 열려 있지 않은 동안 sidebar section의 선언 status를 제공하는 숨은 web view다. `page`는 `view` composition의 페이지 규칙을 따르고, `state`는 host 페이지가 저장하여 프로세스의 재시작에서 복구되는 상태를 선언한다 |
 
-이 표에 없는 manifest member는 알 수 없는 member이며 그 manifest는 거부된다. 0.0.x release version인 동안은 저장 데이터 마이그레이션을 싣지 않으므로 어떤 manifest도 migration member를 선언하지 않는다.
+이 표에 없는 manifest member는 알 수 없는 member이며 그 manifest는 거부된다. 제거된 member `host`와 `hostOperations`는 `plugin <id>: <member> is removed; a section is a view of the plugin`으로 거부된다. 0.0.x release version인 동안은 저장 데이터 마이그레이션을 싣지 않으므로 어떤 manifest도 migration member를 선언하지 않는다.
 
-플러그인은 `surface`, `sections`, `contributes` 중 하나 이상이 필요하다. 표면이 있는 플러그인만 추가 메뉴에 표시되고 레일을 갖는다. 워크벤치는 표면에 대해 아무것도 import하지 않으며, 페이지는 view가 불러온다([view 표면](#view-표면)). 표면 식별자는 URL 쿼리가 아닌 명시적인 context 멤버다. 기존 `page` 선언은 거부하며 별도 구현 경로를 선택하지 않는다. 정의되지 않은 필드는 거부한다.
+플러그인은 `surface`, `sections`, `contributes` 중 하나 이상이 필요하며, `data`를 가진 플러그인은 `surface` 또는 `sections`가 필요하다. 표면이 있는 플러그인만 추가 메뉴에 표시되고 레일을 갖는다. 워크벤치는 표면에 대해 아무것도 import하지 않으며, 페이지는 view가 불러온다([view 표면](#view-표면)). 표면 식별자는 URL 쿼리가 아닌 명시적인 context 멤버다. 기존 `page` 선언은 거부하며 별도 구현 경로를 선택하지 않는다. 정의되지 않은 필드는 거부한다.
 
 `surface.params`가 있으면 plugin의 탭 인자의 schema이며, `type`이 `object`인 exposure 선언 schema 부분집합이다. `core.card.add-tab {card, plugin, params}`는 `params`를 그것으로 검사하고 space layout에 탭과 함께 저장하며, 맞지 않으면 `params do not match <plugin> surface.params`로, `surface.params`가 없는 plugin이면 `plugin <plugin> declares no tab params`로 실패한다. surface context는 그것을 복사본 `tab.params`로 주고, 인자가 없는 탭이면 `null`이다. 저장된 탭의 인자가 불러온 plugin의 선언과 맞지 않으면 그 탭은 이유와 함께 `<plugin> <version> 탭의 인자가 선언과 맞지 않습니다`를 보이는 placeholder로 열리며, 인자는 변환하지 않는다.
 
@@ -108,28 +106,26 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 ## 섹션
 section id와 plugin id는 한 번 공개되면 불변이다. tab·저장된 settings·저장된 project data가 그것들을 참조하고, 이름을 바꾸면 저장된 참조가 해석되지 않는다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)).
 
-섹션은 `status`를 선언하며, `status`는 같은 plugin이 `exposes.status`에 선언한 status 이름이다. `module`을 가진 섹션은 manifest를 읽을 때 `plugin <id>: section <section id> module is removed; a section takes status`로 거부하고, `status`가 없는 섹션은 `plugin <id>: section <section id> requires a status`로 거부한다. status 하나는 섹션 하나만 뒷받침한다. 형태와 값 규칙은 [선언된 UI](declared-ui.ko.md#사이드바-section-형태)에 있다.
+섹션은 `composition`을 선언한다. `composition`은 페이지, 영역, 쌓임 항목을 가진 `surface.composition`의 형태인 `view` 합성이다([view surface](#view-표면)). 섹션은 `height`를 선언하고, 선택 항목 `unload`를 선언할 수 있다. `unload`는 `surface.unload`의 형태이며 [메모리 절약](#메모리-절약)이 section surface를 unload할 수 있게 한다. `status`, `module`이나 `fill`을 가진 섹션은 manifest를 읽을 때 `plugin <id>: section <section id> <field> is removed; a section takes composition and height`로 거부한다. `composition`이나 `height`가 없는 섹션은 `plugin <id>: section <section id> requires <field>`로 거부하며, `"fill"`도 양의 정수도 아닌 `height`는 `plugin <id>: section <section id> height must be "fill" or a positive integer`로 거부한다.
 
-워크벤치는 섹션의 본문을 선언된 status로 그리고, 본문의 요소를 사이드바의 방향에 따라 배치한다. 카드 레이아웃은 상·하에 `horizontal`, 좌·우와 외부 창 사이드바에 `vertical`을 선택하며, `core.sidebars`는 방향을 공개한다. 방향이 바뀌어도 섹션의 확정된 값과 출처는 유지된다([선언된 UI](declared-ui.ko.md)). 가로 `list`는 섹션을 좌우로 배치하고 세로 `list`는 상하로 배치한다.
+Section surface는 창 스페이스의 사이드바에 있는 각 섹션마다 하나 있다. 그것은 자기 plugin의 view surface이며, view를 하나 가진다. tab surface가 view를 하나 가지는 것과 같다. plugin은 그 view에서 섹션의 본문을 어떤 방법으로든 그리며, 코어는 view의 [exposure](exposure.ko.md) 계약만 요구한다. 표면 id는 `<sidebar id>/<section id>`이며, 예를 들어 `left/files.tree`나 `c3:right/browser.dom`이다. 사이드바는 섹션을 한 번만 가지므로, 두 사이드바에 연결된 세트는 section surface를 두 개 만든다. `core.surfaces`는 각 section surface를 `kind` `section`과 그 `sidebar`로 나열하며, tab surface는 `kind` `tab`으로 함께 나열한다. section view의 시작 값은 `section` `{id, sidebar, card}`를 담는다. `card`는 사이드바를 담은 카드의 id이며 창 사이드바이면 `null`이다. `params`는 `null`이고 `origin`은 `{directory: null}`이다([start values](native-surfaces.ko.md#view-표면)).
 
-섹션은 워크벤치가 애플리케이션 문서 안에 그리는 사이드바의 한 부분이며 네이티브 표면을 갖지 않는다. `context.card`는 사이드바가 속한 카드의 id이고 `context.surface`는 그 카드의 활성 탭이며, 좌측 사이드바에서는 둘 다 `null`이다.
+section surface는 그 섹션이 창 스페이스의 사이드바에 있는 동안 존재하며, tab view는 그 탭이 그런 스페이스에 있는 동안 존재하는 것과 같다. 접힌 섹션, `tabs` 세트에서 선택되지 않은 탭의 섹션, 꺼진 사이드바의 섹션, 보이지 않는 스페이스의 섹션은 비활성 탭이 숨겨지듯 숨겨진다. [메모리 절약](#메모리-절약)은 section surface를 탭과 함께 관찰하며, 숨겨진 section surface를 숨겨진 탭의 규칙으로 unload하고, 그 섹션이 다시 보일 때 restore한다. 섹션이 사이드바의 세트에서 빠지거나, 사이드바가 제거되거나, 사이드바를 가진 카드가 닫히면 section surface를 놓는다. 페이지 reload는 모든 section surface를 폐기하고, tab surface와 같이 다시 불러온 페이지의 섹션을 다시 만든다.
 
-섹션은 플러그인이 선언한 status로 그 플러그인의 상태를 보이고, 플러그인이 선언한 명령으로 상태를 바꾼다. 섹션은 그 상태의 사본을 갖지 않는다. status의 출처는 그 status를 등록한 표면이나 plugin host다([선언된 status](declared-ui.ko.md#선언된-status)). 섹션의 조작 요소는 dom 이름 `core.sidebar.section.control`을 갖고, 공통 binder로 섹션 plugin이나 코어의 선언된 명령에 연결된다. 섹션은 다른 플러그인의 이름을 쓰지 못한다. `core.sidebars`는 각 섹션이 그린 텍스트와 조작 요소의 수를 보고하므로, 검사는 섹션이 보이는 내용을 읽고 `core.sidebar.section.control` 요소 중 그 섹션의 조작 요소를 찾는다. 선언된 status section에는 고른 source(`id`, `surface`) 또는 null, snapshot `subscription` 단계(`none`, `pending`, `ready`, `failed`), reply `seq`와 resolved 시 `valueNull`을 포함한 `pull` 단계(`idle`, `pending`, `resolved`, `cancelled`, `failed`), 마지막 `acceptedSeq` 또는 null도 보고한다. Source가 바뀌면 진행 중인 pull을 취소하고 source와 accepted sequence를 비우며 늦게 도착한 reply를 무시한다. 이후 선택한 source는 idle pull과 새 subscription에서 시작한다. 이 field들은 status value를 복사하지 않고 전달 진행 상태를 보고한다. Module section에는 이 선언 status field들을 보고하지 않는다.
+`core.sidebars`는 각 섹션마다 그 섹션이 따르는 `surface`를 보고한다. 값은 사이드바를 가진 카드의 활성 탭이며, 창 사이드바이면 포커스된 카드의 활성 탭이고, 없으면 `null`이다. section view는 이 값을 읽고 [view calls](native-surfaces.ko.md#view-표면)의 `runtime.status.watch {name, surface}`로 그 surface의 자기 plugin status를 따른다. 보고된 surface가 바뀌면 이전 surface를 unwatch하고 새 surface를 watch한다. Card layout은 상·하에 `horizontal`, 좌·우와 창 사이드바에 `vertical`을 선택하며, `core.sidebars`는 사이드바마다 방향을 보고하고, section view는 그 방향에 따라 내용을 배치한다. 가로 `list`는 섹션을 좌우로 배치하고 세로 `list`는 상하로 배치한다.
 
-세트는 어느 플러그인의 섹션이든 순서대로 묶고, 세트를 만들 때 고른 `layout`을 가진다. `list`에서 사이드바는 세트의 모든 섹션을 세로 방향에서는 위에서 아래로, 가로 방향에서는 왼쪽에서 오른쪽으로 보이며, 각 섹션은 이름 머리 아래에 있고 머리로 접고 편다. `tabs`에서 사이드바는 섹션 이름의 탭 줄과 고른 탭의 섹션 하나만 보인다. 고른 탭과 접은 섹션은 사이드바마다 유지되고 스페이스와 함께 저장되므로([프로젝트](projects.ko.md#저장)) 다시 불러오기와 다시 시작 뒤에도 그대로 보인다. 카드 레이아웃은 변에 따라 섹션의 방향과 배치를 선택한다.
+세트는 어느 플러그인의 섹션이든 순서대로 묶고, 세트를 만들 때 고른 `layout`을 가진다. `list`에서 사이드바는 세트의 모든 섹션을 세로 방향에서는 위에서 아래로, 가로 방향에서는 왼쪽에서 오른쪽으로 보이며, 각 섹션은 이름 머리 아래에 있고 머리로 접고 편다. `tabs`에서 사이드바는 섹션 이름의 탭 줄과 고른 탭의 섹션 하나만 보인다. 고른 탭과 접은 섹션은 사이드바마다 유지되고 스페이스와 함께 저장되므로([프로젝트](projects.ko.md#저장)) 다시 불러오기와 다시 시작 뒤에도 그대로 보인다.
 
-사이드바는 세트 제목이나 자리 이름을 보이지 않는다. 섹션은 사이드바 맨 위에서 시작한다. 창 사이드바는 자리를 말하고 끝에 접기 컨트롤(`core.sidebar.fold`)을 둔 상태 줄로 끝난다. 접기 컨트롤은 `core.settings.set`(`left`나 `right`를 false로)으로 사이드바를 끄고, 창 머리의 컨트롤이 다시 켠다. 카드 안 사이드바는 자기 면과 세트를 말하는 상태 줄로 끝난다([카드 배치](example-model.ko.md)). 접은 섹션은 머리만 남는다. 섹션은 내용의 높이를 가지며, `fill: true`로 선언한 펼친 섹션만 다른 섹션이 쓰고 남은 사이드바 높이를 나눠 갖고 그 안에서 내용을 스크롤한다. 접힌 fill 섹션은 그 자리를 다른 fill 섹션에 준다. 높이를 선언으로 정하는 이유는, 파일 트리 같은 가상 목록은 워크벤치가 자리가 필요함을 알 내용 높이가 없고, 짧은 목록을 늘리면 빈 공간이 보이기 때문이다. 섹션 머리는 카드 머리의 높이, 상태 줄은 카드 발의 높이를 가져 선이 이웃 카드의 선과 한 줄에 놓인다. 섹션은 빈 목록을 기록 없음 같은 말로 알린다.
+코어는 사이드바의 틀만 그린다. 틀은 섹션 머리와 그 이름, 접기, 탭, 높이, 상태 줄이다. 사이드바는 세트 제목이나 자리 이름을 보이지 않으며 섹션은 사이드바 맨 위에서 시작한다. 창 사이드바는 자리를 말하고 끝에 접기 컨트롤(`core.sidebar.fold`)을 둔 상태 줄로 끝난다. 접기 컨트롤은 `core.settings.set`(`left`나 `right`를 false로)으로 사이드바를 끄고, 창 머리의 컨트롤이 다시 켠다. 카드 안 사이드바는 자기 면과 세트를 말하는 상태 줄로 끝난다([카드 배치](example-model.ko.md)). 접은 섹션은 머리만 남는다. 정수 `height`를 가진 펼친 섹션은 그 높이를 가지며, `height`가 `"fill"`인 펼친 섹션은 다른 섹션이 쓰고 남은 사이드바 높이를 나눠 갖는다. 접힌 fill 섹션은 그 자리를 다른 fill 섹션에 준다. 높이를 선언으로 정하는 이유는 코어가 view의 내용 높이를 읽지 않으므로, 내용이 바뀌어도 레이아웃이 시작되지 않기 때문이다. 사이드바가 머리와 선언된 높이보다 작으면 섹션을 줄이지 않고 세트 전체를 스크롤한다. 섹션 머리는 카드 머리의 높이, 상태 줄은 카드 발의 높이를 가져 선이 이웃 카드의 선과 한 줄에 놓인다.
 
-사이드바는 그것을 담은 카드의 id로 식별한다. `left`, `right`, 또는 카드 내부 사이드바의 `카드id:변`(`top`, `bottom`, `left`, `right`)이다. 섹션 머리를 접고 펴면 `core.sidebar.section.fold`를, 탭을 고르면 `core.sidebar.section.select`를 `{sidebar, section}`으로 실행한다. status `core.sidebars`는 그려진 모든 사이드바의 세트, 레이아웃, 고른 탭, 각 섹션의 접힘과 마운트 상태를 알린다.
-
-세로 목록의 펼친 fill 섹션은 머리와 본문의 고유 최소 높이를 유지한다. 사이드바가 더 작으면 세트 전체를 스크롤하며 섹션을 높이 0으로 줄이지 않는다. 플러그인이 가상 목록을 사용하면 플러그인이 최소 가시 행 높이를 선언한다. 파일 트리는 28포인트 도구 줄과 최소 한 행 20포인트를 확보한다. 이 동작은 카드 콘텐츠의 잔여 높이를 늘리거나 저장한 사이드바 크기를 바꾸지 않는다.
+사이드바는 그것을 담은 카드의 id로 식별한다. `left`, `right`, 또는 카드 내부 사이드바의 `카드id:변`(`top`, `bottom`, `left`, `right`)이다. 섹션 머리를 접고 펴면 `core.sidebar.section.fold`를, 탭을 고르면 `core.sidebar.section.select`를 `{sidebar, section}`으로 실행한다. status `core.sidebars`는 그려진 모든 사이드바의 세트, 레이아웃, 방향, 고른 탭, 각 섹션의 접힘 상태, surface id, 따르는 `surface`를 알린다. 컴포지터는 각 섹션의 본문을 그 section surface의 [섹션 자리](native-surfaces.ko.md#섹션-자리)로 측정한다.
 
 ## 프로젝트 데이터
 per-key 형식은 코어가 소유한 file 안의 값마다 형태를 정하며, 다른 형태의 값은 변환되지 않고 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)).
 
-`data`는 plugin host가 프로젝트마다 저장하는 키를 선언한다. plugin host는 [프로젝트 데이터 호출](plugin-host.ko.md#프로젝트-데이터-호출)로 이 키를 읽고 쓰며, 메인 페이지가 표시된 프로젝트에 대해 답한다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
+`data`는 plugin의 view가 프로젝트마다 읽고 쓰는 키를 선언한다. view는 [view calls](native-surfaces.ko.md#view-표면)의 `runtime.data.get {key}`와 `runtime.data.set {key, value}`로 이 키를 읽고 쓰며, 메인 페이지는 호출한 view의 시작 값에 있는 프로젝트에 대해 답한다. 그러므로 창이 더 이상 보여 주지 않는 프로젝트의 숨은 view는 자기 프로젝트만 읽고 쓰며, 표시되지 않는 프로젝트에 대한 쓰기는 그 프로젝트에 저장된다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `runtime.data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `runtime.data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
 
-저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 창이 프로젝트를 표시할 때 그 프로젝트에 저장된 선언 키를 확인한다. 선언한 format과 다른 format으로 저장된 항목, format 없이 저장된 값, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다. 워크벤치는 저장된 값을 변환하지 않는다.
+저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 창이 프로젝트를 표시할 때 그 프로젝트에 저장된 선언 키를 확인한다. 선언한 format과 다른 format으로 저장된 항목, format 없이 저장된 값, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `runtime.data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다. 워크벤치는 저장된 값을 변환하지 않는다.
 
 ## 확장 지점
 
@@ -145,7 +141,7 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 
 ## 외부 라이브러리
 
-스테이징은 패키지 `files`를 복사하고 페이지 import map은 코어 모듈과 `@soksak/shared/`만 가리키므로, 플러그인 페이지는 자기 plugin 안의 파일과 [확장 지점](#확장-지점)의 공유 module만 불러오고, 제공자 페이지는 자기 지점의 기여 module도 불러온다. 외부 브라우저 라이브러리를 쓰는 플러그인은 자기 `scripts/build-vendor.mjs`(esbuild)로 라이브러리를 `ui/vendor/` 아래 ES 모듈 하나로 번들하고, 번들에 든 모든 패키지의 라이선스와 고지를 담은 `.LICENSE.txt` 파일과 함께 커밋하며, `ui`를 통해 `files`에 나열한다. 라이브러리와 esbuild는 정확한 버전의 `devDependencies`다. 플러그인의 `pnpm test`는 스크립트를 `--check`로 실행하며, 커밋된 파일이 새 빌드와 다르면 실패한다. 파일 플러그인은 바닐라 진입점 `@pierre/trees`로 `@pierre/trees` 1.0.0-beta.4(Apache-2.0)와 그 의존성 `preact`(MIT)를 번들한다. 플러그인은 React를 쓰지 않는다.
+스테이징은 패키지 `files`를 복사하고 페이지 import map은 코어 모듈과 `@soksak/shared/`만 가리키므로, 플러그인 페이지는 자기 plugin 안의 파일과 [확장 지점](#확장-지점)의 공유 module만 불러오고, 제공자 페이지는 자기 지점의 기여 module도 불러온다. 외부 브라우저 라이브러리를 쓰는 플러그인은 자기 `scripts/build-vendor.mjs`(esbuild)로 라이브러리를 `ui/vendor/` 아래 ES 모듈 하나로 번들하고, 번들에 든 모든 패키지의 라이선스와 고지를 담은 `.LICENSE.txt` 파일과 함께 커밋하며, `ui`를 통해 `files`에 나열한다. 라이브러리와 esbuild는 정확한 버전의 `devDependencies`다. 플러그인의 `pnpm test`는 스크립트를 `--check`로 실행하며, 커밋된 파일이 새 빌드와 다르면 실패한다. 파일 플러그인은 바닐라 진입점 `@pierre/trees`로 `@pierre/trees` 1.0.0-beta.4(Apache-2.0)와 그 의존성 `preact`(MIT)를 번들한다.
 
 ## 진단 선언
 
@@ -192,7 +188,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면의 카드 
 
 ## 메모리 절약
 
-코어는 숨겨진 탭을 **unload**하고(layout에 남는 탭의 표면을 놓는다), 탭이 다시 보이면 **restore**한다(unload된 탭을 그 상태로 다시 마운트한다). 이 두 동작은 다른 말로 부르지 않는다. 전역 설정 `memorySaver`가 이것을 켜고 끄며 `memorySaverDelay`가 지연을 정한다([설정](settings.ko.md#값)). 탭을 언제 unload하고 restore할지는 코어만 정한다. plugin에는 타이머도 unload 결정도 없다. plugin은 자기 탭을 unload할 수 있는지 선언하고 자기 상태를 최신으로 둔다.
+코어는 숨겨진 탭을 **unload**하고(layout에 남는 탭의 표면을 놓는다), 탭이 다시 보이면 **restore**한다(unload된 탭을 그 상태로 다시 마운트한다). 이 두 동작은 다른 말로 부르지 않는다. 전역 설정 `memorySaver`가 이것을 켜고 끄며 `memorySaverDelay`가 지연을 정한다([설정](settings.ko.md#값)). 탭을 언제 unload하고 restore할지는 코어만 정한다. plugin에는 타이머도 unload 결정도 없다. plugin은 자기 탭을 unload할 수 있는지 선언하고 자기 상태를 최신으로 둔다. [section surface](#섹션)는 탭과 같은 규칙으로 unload되고 restore된다. 섹션은 `unload`를 선언하고, 그 view는 탭 view와 같이 상태를 쓰며, 저장소는 상태, session, 표시를 section surface id로 묶는다. `core.tab.memory`는 그것을 `kind` `section`으로 나열하고, `core.tab.unload`, `core.tab.keep`, `core.tab.menu`는 탭을 받으며 section surface id는 `<id> is a section surface, not a tab`으로 거부한다. 따라서 섹션은 메모리 절약만 unload한다.
 
 **선언.** `background`가 없는 plugin의 표면은 `surface.unload`를 선언할 수 있고, 선언이 없는 표면은 unload하지 않으므로(`undeclared`) 선언은 요구가 아니라 plugin의 선택이다. `background`가 있는 plugin의 표면은 그것을 선언하지 않는다. background 세션은 background 경로로 세션을 유지하기 때문이다. `validateManifest`는 `background` 옆의 선언과 다른 형태의 선언을 거부한다. 선언이 없는 표면은 유효하고 영구적인 형태다. 그 탭은 unload되지 않고, 상태에 이유 `undeclared`로 나타나며, `core.tab.menu-keep` 항목을 받지 않고, `tab-state.json`에 label cache를 받지 않는다. `validateManifest`는 `false`를 포함한 다른 모든 형태를 plugin을 이름하는 오류로 거부한다. `background`가 있는 plugin의 탭은 이유 `background`로 나타난다. `{format, maxBytes}`는 plugin이 쓰는 상태의 형식 번호와 byte 단위 크기 한도를 선언한다.
 
@@ -344,7 +340,7 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 | `chooseFolder()` | 폴더 선택 대화상자를 표시한다. 브라우저 애플리케이션은 호출을 거부한다 |
 | `createFolder({ parent, name })` | 프로젝트 폴더를 만든다. 브라우저 애플리케이션은 호출을 거부한다 |
 | `openProject({ id, root, geometry, separate, current })` | 프로젝트 owner를 열거나 예약하고 `{ local, staged }`를 반환한다. `local`은 호출 창이 열기를 소유하면 `true`이고, `staged`는 그 owner가 `projectShown`으로 프로젝트를 확정할 때까지 `true`다. 브라우저 애플리케이션은 별도 창으로 여는 프로젝트를 새 탭에서 연다 |
-| `projectShown(project)` | `{id, root, title}` 또는 `null`을 창이 표시하는 프로젝트로 확정하고 ready plugin host에 보낸다. 페이지는 일치하는 준비된 project-data context를 설치한 뒤에만 호출한다. |
+| `projectShown(project)` | `{id, root, title}` 또는 `null`을 창이 표시하는 프로젝트로 확정한다. 페이지는 일치하는 준비된 project-data context를 설치한 뒤에만 호출한다. |
 | `releaseProject(id)` | 호출한 창의 프로젝트 소유를 해제한다 |
 
 워크벤치는 이 내보내는 값만 사용하고 런타임에 따라 분기하지 않는다. `host`가 `null`이면 사이드카를 선언한 플러그인의 표면은 실행할 수 없다. 그 사이드카, 네이티브 영역, 공개 전달에 호스트가 필요하기 때문이다. 워크벤치는 그 표면의 모듈을 가져오지 않으며, 표면 자리는 자리 표시 "<플러그인 이름> 표면은 네이티브 호스트가 있어야 열립니다"를 보이고, 표면은 `ready`를 보고하며 포커스를 받지 않고, 자리 표시는 탭과 함께 사라진다. 호스트가 없으면 `report`는 그 줄을 오류로 콘솔에 쓴다.

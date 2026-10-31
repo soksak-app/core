@@ -24,7 +24,7 @@
 
 `core.rail`은 전체 경로와 연결된 내용 카드·고정 사이드바 ID를 식별하는 묶음을 공개한다. `core.sidebars`는 배치, 적용 플러그인 또는 null, 카드·활성 탭 또는 null, 선택 세트, 방향, 섹션 탭, 실제 표시 사각형을 공개한다. 창 사이드바 섹션은 세로 구현을 사용하고 내부 섹션은 카드 변의 방향을 따른다.
 
-선언된 창 사이드바 섹션의 명령은 해당 declared status에 선택된 source에서 실행한다. View source는 정확한 surface 등록을 사용하고 plugin-host source는 해당 플러그인의 host 등록을 사용한다. Source는 포커스 카드의 활성 surface와 다를 수 있다. Source나 명령 등록이 없으면 실패하며 다른 surface나 owner로 fallback하지 않는다.
+창 사이드바 섹션은 section surface이며, 그 view는 자기 플러그인의 명령을 `core.sidebars`가 그 섹션에 보고하는 surface에서 실행한다. 이 surface는 포커스 카드의 활성 탭이며, 사람이 마지막으로 클릭한 surface와 다를 수 있다([섹션](plugins.ko.md#섹션)). Surface나 명령 등록이 없으면 실패하며 다른 surface나 owner로 fallback하지 않는다.
 
 ## 인수
 

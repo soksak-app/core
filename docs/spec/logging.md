@@ -434,4 +434,4 @@ The view channel handles `runtime.log` directly with only the existing writer re
 
 These writer requests are not forwarded application calls: they emit no synthetic `page.view.call` or `page.view.reply` and no `host.view.call` claiming workbench delivery. Actual records and the existing writer clock, gate and loss reports describe their outcomes. A failed delivery uses the existing view error path. An ended view's unsent queue remains covered by `host.view.killed {unsent: true}`.
 
-The shared SDK bridge selects the declared channel from the injected start context: a plugin-host page has `window.sokHost` and sends individual `runtime.log` records with `level`, an unprefixed plugin `event`, `fields` and optional `cids`. Surface view pages use the direct batch writer. These are separate channel contracts; a failed record request is reported through `runtime.error`.
+Every view page, of a tab or of a section, uses the direct batch writer; a failed record request is reported through `runtime.error`.

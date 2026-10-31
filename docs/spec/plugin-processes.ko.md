@@ -2,11 +2,11 @@
 
 [English](plugin-processes.md)
 
-이 명세는 plugin 코드가 어디에서 실행되고 그 프로세스들이 어떻게 통신하는지 정한다. plugin의 층, plugin view의 통과값, declared UI snapshot, 프로세스 경계를 넘는 호출, view의 origin과 core root, 재시작, 표시, 입력, 테마, 메시지와 event, core와 plugin의 경계, view의 프로세스 배정, binary 경로, plugin host, plugin의 신원, view의 context를 다룬다. [선언 UI](declared-ui.ko.md)는 선언 UI schema를, [native surfaces](native-surfaces.ko.md#view-표면)는 view channel과 view의 배치를, [plugin](plugins.ko.md)은 manifest를 정한다.
+이 명세는 plugin 코드가 어디에서 실행되고 그 프로세스들이 어떻게 통신하는지 정한다. plugin의 층, plugin view의 통과값, sidebar section, 프로세스 경계를 넘는 호출, view의 origin과 core root, 재시작, 표시, 입력, 테마, 메시지와 event, core와 plugin의 경계, view의 프로세스 배정, binary 경로, plugin의 신원, view의 context를 다룬다. [native surfaces](native-surfaces.ko.md#view-표면)는 view channel과 view의 배치를, [plugin](plugins.ko.md)은 manifest를 정한다.
 
 ## 결정
 
-Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 `soksak://<plugin id>` origin의 별도 웹뷰이며 탭마다 하나다. 선언 UI는 plugin이 보내는 [declared UI snapshot](native-surfaces.ko.md#view-표면)으로 workbench가 그린다. plugin host는 plugin의 view가 하나도 열려 있지 않은 동안 제공해야 하는 sidebar section의 선언 status가 있을 때만 존재한다([declared status](declared-ui.ko.md#선언된-status)).
+Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 `soksak://<plugin id>` origin의 별도 웹뷰이며 탭마다 하나, sidebar section마다 하나다([섹션](plugins.ko.md#섹션)). Plugin은 자기가 가진 모든 화면을 어떤 수단으로든 자기 view에 그리며, workbench는 plugin 내용을 그리지 않는다.
 
 측정은 이 결정을 뒤집지 않는다. 측정은 프로세스 수, plugin별 예산, 통과값을 정한다. 통과값을 만족하지 못하면 설계를 다시 연다. workbench 페이지에 plugin surface를 mount하는 방식으로 돌아가지 않는다.
 
@@ -25,10 +25,9 @@ Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름
 
 ## 층 규칙
 
-- **선언 UI:** 요소가 모두 목록, tree, 버튼, 상태줄 가운데 하나인 사이드바 section이 선언 UI다.
-- **view:** 그 밖의 화면은 view다. 인라인 이름 바꾸기가 필요한 tree, 끌어 놓기가 있는 tree, 포인터 위치에 놓는 문맥 메뉴가 있는 tree는 view다. view는 자유 DOM, IME가 필요한 글 입력, canvas나 편집기, document region 또는 image region을 담은 화면을 맡는다.
-- **sidebar section:** 선언 UI만 sidebar section이 될 수 있다. 열린 view가 없는 동안에도 sidebar section이 값을 보여야 하는 plugin은 [plugin host](#plugin-host)가 필요하다. view가 필요한 section은 card 표면이 되고, sidebar에는 그것을 여는 선언 항목만 둔다. `core.declared-ui.tree.expand` 명령은 그 처리기와 함께 `packages/workbench/exposure.json`에 선언한다.
-- **plugin host:** plugin의 view가 하나도 열려 있지 않은 동안 sidebar section의 선언 status를 제공해야 할 때만 만든다. sidecar는 한 domain의 native 기능을 갖고 view는 그 탭이 열려 있는 동안만 있으므로, host는 plugin의 sidecar가 주는 데이터로 그 status들의 선언 값을 만들어 제공하고, plugin의 sidecar 메시지와 명령 요청을 중계한다. 선언 status의 presentation은 host 자신의 로직이다. host는 native 로직을 갖지 않으며, sidecar는 데이터만 준다.
+- **view:** plugin의 모든 화면은 view다. 탭 표면 또는 section 표면이다. view는 자유 DOM, framework나 library, IME가 필요한 글 입력, canvas나 편집기, document region 또는 image region을 담는다.
+- **sidebar section:** sidebar section은 [section 표면](plugins.ko.md#섹션)이다. 사이드바가 section의 본문에 배치하는 자기 plugin의 view이며, core는 사이드바의 틀만 그린다. 자기 plugin의 탭이 하나도 열려 있지 않은 동안 값을 보여야 하는 section은 자기 view에서 그 값을 읽는다. 값은 자기 plugin의 sidecar와 프로젝트 데이터에서 온다.
+- **exposure:** 모든 view는 exposure 계약만 요구한다. 모든 조작 요소는 공유 binder로 선언된 명령에 연결되고 dom 이름을 가지며, 보이는 모든 상태는 선언된 status다([exposure](exposure.ko.md)).
 - 화면의 층은 측정으로 정하지 않는다.
 
 ## 통과값
@@ -81,19 +80,13 @@ Drag evaluator는 공통 recording 증거를 검증한 뒤 geometry, source cade
 ## 규칙
 
 1. workbench 페이지에서는 plugin 코드를 실행하지 않는다.
-2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 각 선언된 status의 현재 값을 그 status의 출처로 고른 곳에서 한 번 요청한다(pull). 상태의 출처가 바뀌면 workbench는 그 status의 현재 값을 한 번 pull한다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없다. 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
-   - status 하나에는 전송 중인 snapshot이 최대 1개다.
-   - window ingress receiver 하나가 section recipient 수와 관계없이 pushed snapshot마다 한 번 검사하고 확인 응답한다. 일치하는 section이 mount되지 않은 snapshot도 확인 응답한 뒤 버리므로, mount되지 않은 status가 sender의 전송 중 슬롯을 유지하지 않는다. 출처와 status routing은 [선언된 UI](declared-ui.ko.md#status-대응)에 정의한다.
-   - 전송 중에 생긴 변경은 dirty로 표시한다. 확인(ack)이 오면 최신 값을 담아 다음 snapshot을 보낸다.
-   - 건너뛴 값의 수는 core status `core.plugin.losses`의 `losses.skipped`로 센다. 이 수는 각 snapshot message의 필드 `skipped`로 메인 페이지에 닿는다. 전송 중에 덮어쓴 값의 수이며, status의 이전 snapshot이 보내진 뒤의 수다. 성능 trace가 켜져 있으면 메인 페이지는 덮어쓴 값마다 `page.trace.declared-ui.snapshot.skipped {plugin, status, count}`를 쓴다. host는 snapshot을 중계하지 않으며 이 경우 event를 쓰지 않는다. `host.*` event는 host 코드만 쓰기 때문이다.
-   - plugin 프로세스가 (다시) 시작하면 그 프로세스의 첫 snapshot이 각 status의 전체 값이다. workbench는 이전 프로세스의 멈춘 snapshot과 확인 대기를 버린다. 다시 시작한 plugin은 저장한 state에서 값을 만들어 보낸다(규칙 5).
-   - 확인을 기다리는 동안 view 프로세스가 끝나거나 표면이 닫히면, 값은 `losses.stalled`로 세고 event는 쓰지 않는다. receiver는 각 snapshot을 즉시 확인하므로 확인을 기다리는 것은 view 안의 sender뿐이다. 기다리는 sender는 view 프로세스와 함께 끝나고, 표면이 닫히는 것도 view를 끝낸다. 따라서 이를 관찰하는 live 관찰자가 없으며, 규칙 2가 다시 시작한 프로세스에 대해 말하는 대로 다음 프로세스는 전체 값을 보낸다. 다시 시작한 프로세스는 첫 snapshot으로 각 status의 최신 값을 보내고 dirty 표시를 지운다. 표면이 닫힌 것이면 dirty 값은 버리고 그 사실을 reason에 적는다. timer는 쓰지 않는다.
+2. **Sidebar sections.** section 표면은 모든 view의 규칙을 따르는 view 표면이다. 규칙 4의 view channel, 규칙 5의 재시작, 규칙 6의 표시, 규칙 7의 입력, 규칙 10의 unload가 그것이다. section이 보여 주는 값은 탭 view가 받는 것과 같이 view call과 view event로 자기 view에 닿으며, section의 어떤 값도 그리기 위해 workbench를 거치지 않는다.
 3. **경계를 넘는 호출.**
    - 명령은 [exposure](exposure.ko.md)에 적힌 대로 `timeout`을 선언한다(최대 600000 ms, 없으면 10초). timer는 살아 있는 상대가 명령에 답하지 않는 경우에만 남긴다. 느린 명령 답을 알려 주는 event가 없기 때문이다. `host.trace.view.unresponsive`는 WebKit의 응답성 검사에 답하지 않는 view 프로세스를 알리며, 명령 답이 아니므로 timer를 대신하지 않는다. 기한을 넘기면 호출을 -32000과 `command <name> did not reply within <ms>ms`로 거부한다. 이 오류는 [exposure](exposure.ko.md)의 명령 `timeout` 항목이 적는 것이며, 이 설계는 메시지를 바꾸지 않는다. `host.call.timeout {plugin, command}`를 쓰고 `losses.timeouts`를 센다.
    - view는 메인 page의 요청에 자기 command로 답할 때 `{sok: 1, reply: id, result}` 또는 `{sok: 1, reply: id, error}`를 보내며, 호스트는 이를 `view-reply`로 전달한다([native surface](native-surfaces.ko.md#view-표면), view command). 메인 page는 그 요청에 command가 선언한 제한 시간을 적용하며, 제한 시간 뒤의 응답은 늦은 응답으로 버린다.
-   - 상대가 사라지면 기한 전에 event로 호출을 끝낸다. 호출을 끝내는 상대는 view나 host 프로세스의 종료, 표면 닫기, sidecar 종료다. promise는 그 이유를 밝힌 오류로 거부한다. reason은 `process-ended`, `surface-closed`, `sidecar-ended` 중 하나다. `process-ended`는 view가 열어 둔 call(메인 page가 답하지 않은 call)을 끝내며 `host.call.peer-lost {plugin, command, reason}`을 쓰고, `surface-closed`는 event를 쓰지 않으며 `losses.peerLost`를 센다. sidecar 종료는 sidecar 실패 계약이 알린다. 응답을 기다리는 식별자 있는 요청마다 surface, sidecar, 식별자를 밝힌 `host.sidecar.reply` 오류가 쓰이고, sidecar에 보낸 각 surface는 `sidecar-failure`를 받는다. host가 멈추거나 떼어내면 기다리는 요청마다 같은 오류를 쓴다. sidecar 요청은 command를 갖지 않으므로 그 경우에 `host.call.peer-lost`는 쓰지 않는다. `host.trace.view.unresponsive`는 호출을 끝내지 않는다. 이 event는 규칙 6의 presentation wait와 view의 status에서만 쓴다. 호출은 선언한 timeout이나 이 상대들 가운데 하나로만 끝난다.
+   - 상대가 사라지면 기한 전에 event로 호출을 끝낸다. 호출을 끝내는 상대는 view 프로세스의 종료, 표면 닫기, sidecar 종료다. promise는 그 이유를 밝힌 오류로 거부한다. reason은 `process-ended`, `surface-closed`, `sidecar-ended` 중 하나다. `process-ended`는 view가 열어 둔 call(메인 page가 답하지 않은 call)을 끝내며 `host.call.peer-lost {plugin, command, reason}`을 쓰고, `surface-closed`는 event를 쓰지 않으며 `losses.peerLost`를 센다. sidecar 종료는 sidecar 실패 계약이 알린다. 응답을 기다리는 식별자 있는 요청마다 surface, sidecar, 식별자를 밝힌 `host.sidecar.reply` 오류가 쓰이고, sidecar에 보낸 각 surface는 `sidecar-failure`를 받는다. host가 멈추거나 떼어내면 기다리는 요청마다 같은 오류를 쓴다. sidecar 요청은 command를 갖지 않으므로 그 경우에 `host.call.peer-lost`는 쓰지 않는다. `host.trace.view.unresponsive`는 호출을 끝내지 않는다. 이 event는 규칙 6의 presentation wait와 view의 status에서만 쓴다. 호출은 선언한 timeout이나 이 상대들 가운데 하나로만 끝난다.
    - 끝난 호출에 늦게 온 답은 버린다. promise에 전달하지 않으며, 답을 보낸 문서에 오류를 보내지도 않는다. 호스트는 `host.trace.call.late-reply {plugin, command, delay}`를 쓰고 `losses.lateReplies`를 센다. host-contract case `exposure-reply.removed-surface-discarded`와 `exposure.relay.foreign-document-reply-ignored-timeout-1005`가 이 동작을 명시한다.
-   - 열린 호출 수(확인을 기다리는 snapshot 포함)와 가장 오래된 열린 호출의 시작 시각을 core status `core.plugin.open-calls {plugin, count, oldestStartedAt}`로 노출한다.
+   - 열린 호출 수와 가장 오래된 열린 호출의 시작 시각을 core status `core.plugin.open-calls {plugin, count, oldestStartedAt}`로 노출한다.
    - relay timeout은 exposure의 제품 동작이다. 두 경로가 있다. 호스트는 surface page로 보낸 명령에 timeout을 적용하고, 메인 페이지는 자기가 직접 실행하는 handler에 timeout을 적용한다([exposure](exposure.ko.md), 명령 `timeout`). exposure.md는 두 경로를 이미 적고 있다(명령 timeout 항목과 relay 절).
    - 취소는 호출 envelope의 일부다. 호출은 `id`를 가지고, 응답은 같은 `id`로 결과나 오류를 담고, 취소는 `id`를 가진다. binary payload는 [binary 경로](#binary-경로)를 쓴다.
 4. **Origin과 core root.**
@@ -115,9 +108,9 @@ Drag evaluator는 공통 recording 증거를 검증한 뒤 geometry, source cade
    - Rule 4가 허용하지 않은 plugin B의 파일 요청은 not found로 답하고, 두 호스트 모두 `error: core root: <path> is not granted to <plugin>`을 쓴다. 문서 영역은 core root grant를 받지 않는다.
    - core root는 host 계약이 선언하고 각 호스트가 scheme handler에 등록하는 callback으로 제공하며, 계약 case를 둔다.
    - plugin A의 view가 Rule 4에 따라 허용되지 않은 plugin B의 파일, A가 `dependencies`로 지정한 plugin의 파일, `/start.json`, `/environment.json`, `/index.html`, `/runtime/...`, 그리고 provider가 그 확장점을 선언하지 않은 기여 항목의 파일을 요청하면 각각 not found로 답한다.
-5. **재시작.** sidecar, plugin host와 view 프로세스는 통과값 (vi)의 한도 안에서 다시 띄운다. 한도를 넘으면 호스트는 `error:`를 보고하고 멈춘다.
-   - 끝난 view 프로세스는 호스트가 다시 만들고, 새 view는 저장된 탭 상태에서 상태를 복원한다. 한도는 view 표면마다 센다. 한도를 넘으면 card가 표시 경로로 오류를 보여 주며, 사용자가 탭을 다시 열 때에만 view를 다시 만든다.
-   - 한도를 넘은 뒤의 다음 요청은 프로세스를 띄우지 않고 `sidecar-failure`(reason `restart limit`)로 실패한다. 실패 기록은 남긴다. 그 프로세스가 필요한 표면을 사용자가 열 때만 기록을 비우고 프로세스를 띄우며, 호스트는 `host.trace.sidecar.restart-reset {sidecar, surface}`를 쓴다. plugin host는 `host.trace.plugin-host.restart-reset {plugin}`을 쓴다.
+5. **재시작.** sidecar와 view 프로세스는 통과값 (vi)의 한도 안에서 다시 띄운다. 한도를 넘으면 호스트는 `error:`를 보고하고 멈춘다.
+   - 끝난 view 프로세스는 호스트가 다시 만들고, 새 view는 저장된 탭 상태에서 상태를 복원한다. 한도는 view 표면마다 센다. section 표면도 포함한다. 한도를 넘으면 card나 section 본문이 표시 경로로 오류를 보여 주며, 사용자가 탭을 다시 열 때에만 view를 다시 만든다. section 표면은 사용자가 section을 펼치거나, 그 탭을 고르거나, sidebar 집합을 바꿀 때 다시 만든다.
+   - 한도를 넘은 뒤의 다음 요청은 프로세스를 띄우지 않고 `sidecar-failure`(reason `restart limit`)로 실패한다. 실패 기록은 남긴다. 그 프로세스가 필요한 표면을 사용자가 열 때만 기록을 비운다. section 표면에서는 section을 펼치거나, 그 탭을 고르거나, sidebar 집합을 바꾸는 것이 여는 일이다. 그 뒤 프로세스를 띄우며, 호스트는 `host.trace.sidecar.restart-reset {sidecar, surface}`를 쓴다.
    - 표준 입출력 sidecar의 재시작 한도는 [sidecars](sidecars.ko.md#실패)에, persistent service의 재시작 규칙은 [persistent services](persistent-services.ko.md)에 적는다.
    - 다시 띄우면 state는 마지막으로 저장한 값에서 복원한다. 저장하지 않은 state는 잃으며, plugin마다 어떤 state인지 밝힌다.
    - 고장 주입은 진단 build에서만 둔다.
@@ -152,21 +145,12 @@ Drag evaluator는 공통 recording 증거를 검증한 뒤 geometry, source cade
 
 ## 메시지와 event
 
-**메시지**
-
-| 메시지 | 방향 | field | 비고 |
-|---|---|---|---|
-| `declared-ui.snapshot` | plugin → workbench (event) | `{plugin, status, seq, value, skipped}`. `skipped`는 status의 이전 snapshot이 보내진 뒤 덮어쓴 값의 수다 | 규칙 2의 push |
-| `declared-ui.snapshot.ack` | workbench → plugin (event) | `{plugin, status, seq}` | 수신을 확인하고 전송 슬롯을 비운다 |
-| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`, 응답은 `{seq, value}`이며 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이고, `value`가 `null`이면 0이다 | 규칙 2의 pull(load, 출처 변경). 출처에 아직 값이 없으면 `value`는 `null`이다 |
-
 RPC protocol 번호는 0.0 계열에서 1이다.
 
 **Event.** 각 event 이름은 층(`host` 또는 `page`)으로 시작한다. class는 다루는 관심사(`call`, `lifecycle`, `input`)를 나타낸다. 각 event는 그것을 쓰는 코드와 함께 [event catalog](events.json)에 선언한다.
 
 | event | class | level | field |
 |---|---|---|---|
-| `page.trace.declared-ui.snapshot.skipped` | call | debug | `{plugin, status, count}`: 전송 중일 때 건너뛴 값. 카운터 `losses.skipped`. 메인 페이지가 쓴다 |
 | `host.call.timeout` | call | error | `{plugin, command}`. 카운터 `losses.timeouts` |
 | `host.call.peer-lost` | call | error | `{plugin, command, reason}`: `process-ended`(view call). `surface-closed`는 event를 쓰지 않고 `losses.peerLost`를 센다. sidecar 종료는 sidecar 실패 계약이 알린다 |
 | `host.trace.call.late-reply` | call | debug | `{plugin, command, delay}`. 카운터 `losses.lateReplies` |
@@ -178,31 +162,26 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 | `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`. 카운터 `losses.abandoned`. host가 wait를 소유하므로 host가 쓴다 |
 | `host.trace.view.presentation-join` | call | debug | `{phase, surface, generation, ticket}`. `phase`는 `requested`, `result`, `presented`, `abandoned` 중 하나다. `result`에는 `joined`, `abandoned`에는 `reason`이 추가된다. abandonment 뒤 callback이 올 수 있으며 `presented`는 layout commit을 뜻하지 않는다 |
 | `page.input.shortcut.failed` | input | error | `{plugin, command}` |
-| `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |
-| `host.plugin-host.restart-limit` | lifecycle | error | `{plugin}` |
-| `host.trace.plugin-host.restart-reset` | call | debug | `{plugin}` |
-| `host.trace.plugin-host.message-stale` | call | debug | `{plugin}`: 처분된 host instance의 늦은 callback을 dispatch 전에 취소했다 |
 | `host.trace.sidecar.restart-reset` | call | debug | `{sidecar, surface}` |
 
-status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`, `core.plugin.snapshots`는 `packages/workbench/exposure.json`에 선언한다. `core.plugin.snapshots`는 활성 process source와 선언된 status마다 마지막으로 수락된 `{plugin, status, surface, generation, seq}`를 담으며 `status`는 snapshot event에 실린 이름이다. Plugin host의 `surface`는 null이다. Source 등록은 이전 generation의 record를 지우고 source 종료는 해당 record를 제거한다. Workbench는 native host가 snapshot acknowledgment를 수락하고 동일 source generation이 여전히 현재일 때만 record를 갱신한다. 이 기록은 transport 수락을 뜻하며 sidebar가 그렸다는 뜻은 아니다. 같은 generation의 중복 또는 낮은 sequence는 record를 뒤로 움직이지 않는다. Mounted section이 없어도 snapshot을 기록하므로 consumer는 현재 값을 pull하기 전에 publisher event를 기다릴 수 있다. 이 status는 snapshot value를 포함하지 않는다. 각 변경은 status subscriber에 알린다. 이 명세의 event는 [event catalog](events.json)의 class 예산 안에서 level `error` 또는 `debug`만 쓴다. Plugin host와 sidecar의 재시작 상태는 `core.plugin.views` 또는 sidecar status에 보인다.
+status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `packages/workbench/exposure.json`에 선언한다.
 
 **릴리스의 event level.** 0.0.x 릴리스는 error event만 저장한다(AGENTS.md, Diagnostic code). 따라서 이 설계의 각 발생은 한 번 분류한다.
 (a) 실패나 거부된 연산은 level `error`의 event다.
-(b) 손실, 건너뜀, 일시 상태, 표시 품질 저하는 event가 아니다. 선언된 status `core.plugin.losses {plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}`에 센다. 이것은 선언된 status `core.plugin.views {plugin, surface, responsive, queued}`의 상태이기도 하다. 각 수는 바뀔 때마다 status 구독자에게 알린다. 수는 plugin마다 세며 앱이 끝날 때까지 유지한다. 표면이 닫힐 때 0으로 되돌리지 않는다. dirty 값이 있는 채로 닫히는 표면은 그 값을 버리기 전에 `losses.stalled`를 늘려, 모든 build에서 그 손실을 센다.
+(b) 손실, 건너뜀, 일시 상태, 표시 품질 저하는 event가 아니다. 선언된 status `core.plugin.losses {plugin, abandoned, lateReplies, timeouts, peerLost}`에 센다. 이것은 선언된 status `core.plugin.views {plugin, surface, responsive, queued}`의 상태이기도 하다. 각 수는 바뀔 때마다 status 구독자에게 알린다. 수는 plugin마다 세며 앱이 끝날 때까지 유지한다. 표면이 닫힐 때 0으로 되돌리지 않는다.
 성능 trace가 켜져 있으면(설정 창의 디버그 switch) 수가 바뀔 때마다 표에 적힌 trace event도 쓴다. 릴리스의 event log는 error event만 저장한다.
 
 코드의 식별자는 여기에 적은 이름을 그대로 쓴다.
 ## 경계 (결합 금지)
 
-- core가 하는 일은 기구뿐이다. view 구성 종류, 선언 UI schema와 그리기, RPC와 binary 통로, core root, 재시작 한도, 계약 case가 여기에 든다.
+- core가 하는 일은 기구뿐이다. view 구성 종류, tab과 section view의 자리, RPC와 binary 통로, core root, 재시작 한도, 계약 case가 여기에 든다.
 - 규칙 4의 view channel이 view의 유일한 전송 통로다.
 - 각 plugin의 층, plugin state를 sidecar로 옮기는 일, editor buffer를 옮기는 일은 plugin과 sidecar 저장소의 일이다. core 코드와 시험은 plugin과 sidecar의 이름, 경로, 구현을 모른다.
-- core의 [plugin host](#plugin-host)는 view가 하나도 열려 있지 않은 동안 sidebar section의 선언 status를 제공해야 하는 plugin을 위한 것이다. 계약이 그것을 요구할 때만 만든다.
 - 관계는 manifest의 `dependencies`, `extends`, `contributes`로만 맺는다. core root가 plugin B의 파일을 plugin A에게 주는 것은 granted item이나 공용 대상일 때뿐이며, 그 판단도 이 선언과 설치 기록으로 한다(규칙 4).
 - 플러그인 저장소 요구: 기여 module이나 공용 module을 제공하는 plugin의 저장소는 자기 시험에서 그 module이 각각 자체완결 ES module 하나인지 확인한다. 그 안의 상대 import는 그 plugin의 빌드 오류다.
 - 시험:
   - core 시험은 자기 경계를 fake plugin fixture로 검증한다.
-  - 공통 계약 case(RPC, snapshot, 재시작)는 소유 package인 core와 두 호스트가 구현하고 실행한다. core는 소비자에게 필요한 fixture를 공개한다. 각 plugin 저장소는 그 fixture로 자기 module만 시험하며, core의 case를 실행하거나 core의 경로를 읽지 않는다.
+  - 공통 계약 case(RPC, 재시작)는 소유 package인 core와 두 호스트가 구현하고 실행한다. core는 소비자에게 필요한 fixture를 공개한다. 각 plugin 저장소는 그 fixture로 자기 module만 시험하며, core의 case를 실행하거나 core의 경로를 읽지 않는다.
   - 실제 plugin을 띄우는 측정과 창 검사는 설치된 환경의 end-to-end 검사이고, package 시험이 아니다.
 ## 탭과 프로세스
 
@@ -227,12 +206,6 @@ status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`, `cor
 ## binary 경로
 
 plugin 문서는 `POST soksak://<plugin>/.binary`로 byte를 올리고 `GET soksak://<plugin>/.binary/<id>`로 내려받는다. id는 host가 만들고, byte는 문서 영역이 자기 binary store에 보관한다([native surfaces](native-surfaces.ko.md#문서-영역)). 소유자 검사는 영역의 `view.plugin`을 URL host와 비교하는 것이다. 한 번의 upload는 16 MiB 이하이며, 이는 두 호스트의 클립보드 상한이다(darwin 클립보드의 `MAX_BYTES`, wailsv3의 `clipboardMaxBytes`). 한 페이지는 64 MiB 이하를 가지며, 이는 가장 큰 upload 4개 분량이다. id는 download가 끝날 때, native take가 byte를 돌려줄 때, 또는 영역이 닫힐 때 해제한다. plugin release는 `.binary` 경로 부분을 거부한다. host가 파일 조회보다 먼저 그 경로에 응답하므로, 그 아래의 plugin 파일은 닿을 수 없기 때문이다. release 검사는 `@soksak/plugin-api`의 `validateReleaseFiles`이며, `sok plugin pack`도 같은 거부를 적용한다.
-
-## plugin host
-
-- 플랫폼 연산이 plugin host 웹뷰를 만든다. 이 웹뷰는 `SurfaceHost`가 아니라 창에 붙인다. 숨었을 때의 throttle과 `requestAnimationFrame` 동작은 plugin이 이를 쓰기 전에 잰다.
-- plugin host의 exposure owner key는 `plugin:<plugin id>`다. plugin id가 plugin의 신원이기 때문이다([신원](#신원)). view에는 새 key가 필요 없다. view는 모든 surface처럼 surface id 아래에 등록하고, owner는 그 tab의 plugin이다.
-- plugin host는 규칙 5의 한도 안에서 다시 띄우고, state는 마지막으로 저장한 값에서 복원한다.
 
 ## 응답성
 
