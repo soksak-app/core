@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F301-2: Row H21 of the allowed host differences states why the Tauri test of the surface close has no Wails counterpart.
 - F301-1: The close of a surface in the Tauri host ends its presentation waits and view source in the window records that it took and tells the page only while the window is open, so a window that closed first no longer logs `view channel: project window is closed` twice for each surface.
 - F300-1: A runtime fatal error of the Wails host writes its output to `logs/host-<boot>.crash` and ends the process with `SIGABRT`, so the system writes a crash report with the native frames of every thread. Before, the runtime ended the process with the status 2, and a fault in native code left no native frame.
 - F298-7: The core release holds `sok-<version>-darwin-arm64`, the `sok` of the Wails release bundle, and the packed releases `soksak-plugin-api-<version>.tgz` and `soksak-native-process-identity-darwin-<version>.tgz`, so the plugin and sidecar workflows can build without a checkout of core source. `scripts/test/workflows.test.mjs` fails when the release job does not make them.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F301-2: 허용된 host 차이의 행 H21이 Tauri의 surface close 테스트에 Wails 짝이 없는 이유를 밝힌다.
 - F301-1: Tauri host에서 surface의 close는 잡은 창 기록에서 presentation wait와 view source를 끝내고 창이 열려 있을 때만 페이지에 알린다. 그래서 먼저 닫힌 창이 surface마다 `view channel: project window is closed`를 두 번 기록하지 않는다.
 - F300-1: Wails host의 runtime 치명 오류는 출력을 `logs/host-<boot>.crash`에 쓰고 `SIGABRT`로 process를 끝낸다. 그래서 시스템이 모든 thread의 native frame을 담은 crash report를 쓴다. 전에는 runtime이 status 2로 process를 끝내서 native code의 fault가 native frame을 남기지 않았다.
 - F298-7: core release가 Wails release bundle의 `sok`인 `sok-<version>-darwin-arm64`와 packed release `soksak-plugin-api-<version>.tgz`, `soksak-native-process-identity-darwin-<version>.tgz`를 담는다. 그래서 plugin과 sidecar workflow는 core source를 checkout하지 않고 build할 수 있다. release job이 이것을 만들지 않으면 `scripts/test/workflows.test.mjs`가 실패한다.
