@@ -450,12 +450,12 @@ fn sync_request_check_refuses_a_view_section_of_another_form() {
     );
     for section in [
         serde_json::json!([]),
-        serde_json::json!("left/files.tree"),
-        serde_json::json!({"id": "files.tree", "sidebar": "left"}),
+        serde_json::json!("left/probe.tree"),
+        serde_json::json!({"id": "probe.tree", "sidebar": "left"}),
         serde_json::json!({"id": "", "sidebar": "left", "card": null}),
-        serde_json::json!({"id": "files.tree", "sidebar": "", "card": null}),
-        serde_json::json!({"id": "files.tree", "sidebar": "c3:right", "card": ""}),
-        serde_json::json!({"id": "files.tree", "sidebar": "left", "card": null, "name": "Files"}),
+        serde_json::json!({"id": "probe.tree", "sidebar": "", "card": null}),
+        serde_json::json!({"id": "probe.tree", "sidebar": "c3:right", "card": ""}),
+        serde_json::json!({"id": "probe.tree", "sidebar": "left", "card": null, "name": "Files"}),
     ] {
         assert_eq!(
             check(Some(section.clone())).unwrap_err(),
@@ -465,8 +465,8 @@ fn sync_request_check_refuses_a_view_section_of_another_form() {
     }
     for section in [
         serde_json::json!(null),
-        serde_json::json!({"id": "files.tree", "sidebar": "left", "card": null}),
-        serde_json::json!({"id": "browser.dom", "sidebar": "c3:right", "card": "c3"}),
+        serde_json::json!({"id": "probe.tree", "sidebar": "left", "card": null}),
+        serde_json::json!({"id": "probe.dom", "sidebar": "c3:right", "card": "c3"}),
     ] {
         assert!(
             check(Some(section.clone())).is_ok(),

@@ -504,8 +504,8 @@ func TestTabSessionNamesASectionSurfaceFile(t *testing.T) {
 	regions := host.Record{"page": map[string]any{"session": "AAAA"}}
 	for _, c := range []struct{ tab, file string }{
 		{"tab-a", "tab-a.json"},
-		{"left/files.tree", "left%2Ffiles.tree.json"},
-		{"c3:right/browser.dom", "c3%3Aright%2Fbrowser.dom.json"},
+		{"left/probe.tree", "left%2Fprobe.tree.json"},
+		{"c3:right/probe.dom", "c3%3Aright%2Fprobe.dom.json"},
 	} {
 		if _, err := store.Apply(host.WorkspaceRequest{Kind: "tabSessionPut", Tab: c.tab, Regions: regions}); err != nil {
 			t.Fatalf("put of %s: %v", c.tab, err)
@@ -519,10 +519,10 @@ func TestTabSessionNamesASectionSurfaceFile(t *testing.T) {
 		}
 	}
 	listed, err := store.Apply(host.WorkspaceRequest{Kind: "tabSessions"})
-	if err != nil || !slices.Equal(listed.([]string), []string{"c3:right/browser.dom", "left/files.tree", "tab-a"}) {
+	if err != nil || !slices.Equal(listed.([]string), []string{"c3:right/probe.dom", "left/probe.tree", "tab-a"}) {
 		t.Fatalf("the listing is %v (%v)", listed, err)
 	}
-	for _, tab := range []string{"left/Files.tree", "files.tree", "left/files.tree/x", "c3:middle/files.tree"} {
+	for _, tab := range []string{"left/Probe.tree", "probe.tree", "left/probe.tree/x", "c3:middle/probe.tree"} {
 		if _, err := store.Apply(host.WorkspaceRequest{Kind: "tabSession", Tab: tab}); err == nil || err.Error() != "invalid tab session tab: "+tab {
 			t.Fatalf("a read of %q returned %v, want the invalid tab error", tab, err)
 		}

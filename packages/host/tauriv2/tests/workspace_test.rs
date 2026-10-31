@@ -502,8 +502,8 @@ fn tab_session_names_a_section_surface_file() {
     let store = Workspace::new(config.path().into());
     for (tab, file) in [
         ("tab-a", "tab-a.json"),
-        ("left/files.tree", "left%2Ffiles.tree.json"),
-        ("c3:right/browser.dom", "c3%3Aright%2Fbrowser.dom.json"),
+        ("left/probe.tree", "left%2Fprobe.tree.json"),
+        ("c3:right/probe.dom", "c3%3Aright%2Fprobe.dom.json"),
     ] {
         apply(
             &store,
@@ -520,13 +520,13 @@ fn tab_session_names_a_section_surface_file() {
     }
     assert_eq!(
         apply(&store, json!({"kind":"tabSessions"})),
-        json!(["c3:right/browser.dom", "left/files.tree", "tab-a"])
+        json!(["c3:right/probe.dom", "left/probe.tree", "tab-a"])
     );
     for tab in [
-        "left/Files.tree",
-        "files.tree",
-        "left/files.tree/x",
-        "c3:middle/files.tree",
+        "left/Probe.tree",
+        "probe.tree",
+        "left/probe.tree/x",
+        "c3:middle/probe.tree",
     ] {
         let error = store
             .apply(serde_json::from_value(json!({"kind":"tabSession", "tab":tab})).unwrap())

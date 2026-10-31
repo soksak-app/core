@@ -284,17 +284,17 @@ func TestSyncRequestRefusesASectionOfAnotherForm(t *testing.T) {
 	const start = `"origin":{"directory":null},"diagnostics":null,"section":`
 	cases := []struct{ name, section, want string }{
 		{"tab section null", `null`, ""},
-		{"section object", `{"id":"files.tree","sidebar":"left","card":null}`, ""},
-		{"card sidebar section", `{"id":"browser.dom","sidebar":"c3:right","card":"c3"}`, ""},
+		{"section object", `{"id":"probe.tree","sidebar":"left","card":null}`, ""},
+		{"card sidebar section", `{"id":"probe.dom","sidebar":"c3:right","card":"c3"}`, ""},
 		{"section of another type", `[]`, malformed},
-		{"text section", `"left/files.tree"`, malformed},
-		{"missing card", `{"id":"files.tree","sidebar":"left"}`, malformed},
+		{"text section", `"left/probe.tree"`, malformed},
+		{"missing card", `{"id":"probe.tree","sidebar":"left"}`, malformed},
 		{"null id", `{"id":null,"sidebar":"left","card":null}`, malformed},
 		{"empty id", `{"id":"","sidebar":"left","card":null}`, malformed},
-		{"empty sidebar", `{"id":"files.tree","sidebar":"","card":null}`, malformed},
-		{"empty card", `{"id":"files.tree","sidebar":"c3:right","card":""}`, malformed},
-		{"card of another type", `{"id":"files.tree","sidebar":"c3:right","card":3}`, malformed},
-		{"another member", `{"id":"files.tree","sidebar":"left","card":null,"name":"Files"}`, malformed},
+		{"empty sidebar", `{"id":"probe.tree","sidebar":"","card":null}`, malformed},
+		{"empty card", `{"id":"probe.tree","sidebar":"c3:right","card":""}`, malformed},
+		{"card of another type", `{"id":"probe.tree","sidebar":"c3:right","card":3}`, malformed},
+		{"another member", `{"id":"probe.tree","sidebar":"left","card":null,"name":"Files"}`, malformed},
 	}
 	for _, tc := range cases {
 		err := checkViewSurface(t, `{`+view+`,"start":{`+start+tc.section+`}}`)
@@ -312,10 +312,10 @@ func TestSyncRequestRefusesASectionOfAnotherForm(t *testing.T) {
 // contract: view.start-values.first-script
 func TestSurfaceStartScriptInjectsTheSection(t *testing.T) {
 	var start ViewStart
-	if err := json.Unmarshal([]byte(`{"origin":{"directory":null},"diagnostics":null,"section":{"card":"c3","id":"files.tree","sidebar":"c3:right"}}`), &start); err != nil {
+	if err := json.Unmarshal([]byte(`{"origin":{"directory":null},"diagnostics":null,"section":{"card":"c3","id":"probe.tree","sidebar":"c3:right"}}`), &start); err != nil {
 		t.Fatalf("start values: %v", err)
 	}
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":Object.freeze({"card":"c3","id":"files.tree","sidebar":"c3:right"})});`
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"})});`
 	got, err := surfaceStartScript("probe-surface", start)
 	if err != nil {
 		t.Fatalf("start values script: %v", err)

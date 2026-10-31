@@ -15,12 +15,12 @@ fn the_start_values_script_freezes_the_start_values_for_the_first_page_script() 
         "project": {"id": "prj-one", "root": "/work/one"},
         "declarations": {"commands": []},
         "diagnostics": {"module": "ui/probe-diagnostics.js", "exposes": {}},
-        "section": {"card": "c3", "id": "files.tree", "sidebar": "c3:right"},
+        "section": {"card": "c3", "id": "probe.tree", "sidebar": "c3:right"},
     }))
     .expect("the start values have their form");
     assert_eq!(
         surface_start_script("probe-surface", &start).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"}),"section":Object.freeze({"card":"c3","id":"files.tree","sidebar":"c3:right"})});"##,
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"}),"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"})});"##,
         "the script sets the frozen start values"
     );
 }
@@ -66,11 +66,11 @@ fn the_start_values_script_refuses_a_section_of_another_form() {
     let text = r#"surface "probe-surface": view start section is not {id, sidebar, card}"#;
     for section in [
         json!([]),
-        json!("left/files.tree"),
-        json!({"id": "files.tree", "sidebar": "left"}),
+        json!("left/probe.tree"),
+        json!({"id": "probe.tree", "sidebar": "left"}),
         json!({"id": "", "sidebar": "left", "card": null}),
-        json!({"id": "files.tree", "sidebar": "left", "card": ""}),
-        json!({"id": "files.tree", "sidebar": "left", "card": null, "name": "Files"}),
+        json!({"id": "probe.tree", "sidebar": "left", "card": ""}),
+        json!({"id": "probe.tree", "sidebar": "left", "card": null, "name": "Files"}),
     ] {
         let start: ViewStart = serde_json::from_value(json!({
             "origin": {"directory": null},
