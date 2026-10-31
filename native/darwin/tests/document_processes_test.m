@@ -128,7 +128,10 @@ static void changed(void *context, const char *text) {
         check(NO, [NSString stringWithFormat:@"the state of region %@ is a JSON object: %s", region->address, text]);
         return;
     }
-    printf("region %s state event: %s\n", region->address.UTF8String, text);
+    // The WebContent process of each state names whether a region that does not load has a process and whether it is a
+    // process of an earlier scenario (F335-2).
+    pid_t process = region->document ? ((WKWebView *)region->document)._webProcessIdentifier : 0;
+    printf("region %s process %d state event: %s\n", region->address.UTF8String, process, text);
     fflush(stdout);
     [region->state release];
     region->state = [state retain];
