@@ -120,7 +120,8 @@ if (requiresBoth(process.env)) test("both hosts answer the same page the same wa
       const grid = await s.get("core.grid");
       error.message += `\nstart x ${start}; drag result boundary ${JSON.stringify(results[name].boundary)}, steps ` +
         `${results[name].steps}, took ${results[name].took}; surfaces now ` +
-        `${JSON.stringify(now.surfaces.map((item) => [item.frame.x, item.frame.width]))}; grid ${JSON.stringify(grid).slice(0, 600)}`;
+        `${JSON.stringify(now.surfaces.map((item) => [item.frame.x, item.frame.width]))}; grid ${JSON.stringify(grid).slice(0, 600)}` +
+        `; expected frames ${JSON.stringify(expectedFrames)}; last settled frames ${JSON.stringify(settledFrames(dragLog.lines) ?? null)}`;
       throw error;
     }
     dragged[name] = await dragLog.stop();
