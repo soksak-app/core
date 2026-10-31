@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F298-1: AGENTS.md와 `docs/operations/examples.md`(test 종류)가 unit test와 end-to-end 검사를 정의한다. end-to-end 검사는 실행 중인 애플리케이션, frame을 내보내는 display, 또는 사람이나 애플리케이션의 활성화가 필요하며 로컬에서 make로만 실행한다. CI와 release job은 자기 저장소의 unit test와 구조 검사만 실행하고 workspace의 다른 저장소를 checkout하지 않는다. workflow는 F298-2부터 F298-6에서 따른다.
 - F292-75: sidecar-files 0.0.8과 새 plugin 판은 모두 core 0.0.21이 필요하다. core 0.0.20에서 editor 0.0.4, files 0.0.6, hwp 0.0.2를 위해 files sidecar를 새로 선택하면 sidecar-files 0.0.8이 선택되어 `sidecar.json: unknown field displayName`으로 실패한다. core 0.0.20의 reader가 `sidecar.json`의 이전 필드만 받기 때문이다. 이전 files sidecar를 이미 쓰는 설치는 그것을 유지한다. core 0.0.20 설치는 앱을 0.0.21로 갱신한다(registry G54.1).
 - F292-74: `docs/spec/persistent-services.md`는 다른 연결이 표면을 가져갔을 때만 연결이 오래된 것이라고 밝힌다. owner close나 retain이 세션을 끝낸 표면은 다음 메시지를 새 표면으로 처리한다. 서비스의 수정은 vt S109이며 다음 vt release로 사용자에게 간다.
 - F292-73: 입력 기록 검사는 sidecar send의 host 요청을 page call의 시작, 곧 그 시각에서 `micros`를 뺀 값과 비교한다. page는 call이 끝날 때 `page.call`을 쓰기 때문이다. 검증: 다음 release run의 window check를 기다린다.

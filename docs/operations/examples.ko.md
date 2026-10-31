@@ -88,6 +88,12 @@ core의 release는 registry를 읽지 않는다. registry가 자기 `core.json`�
 
 `SOKSAK_NATIVE_TEST_RUN_FOLDER=<unique-dir> make -C native/darwin benchmark-webview-resize-cadence`로 host layout과 plugin 작업에서 root-view ResizeObserver-to-next-requestAnimationFrame 전달을 분리한다. 비활성 native fixture는 초기 300×200 source row를 관측한 뒤 폭을 1 point씩 48회 증가시킨다. Baseline, 각 native setter interval, 예측 display-link timestamp, 실제 setter clock과 source row를 보존한다. Pulse response row 사이 간격만 변경하지 않은 33 ms 기준으로 판정하며 baseline idle 시간과 first-pulse response latency는 판정하지 않는다. 이 target은 기본 native suite 밖의 전용 성능 재현 target이다. Rendered pixel을 녹화하거나 application drag, initial-response 또는 convergence 통과를 입증하지 않는다. 실패한 측정을 포함해 runner manifest와 executable output을 보존한다.
 
+## test 종류
+
+test는 unit test이거나 end-to-end 검사다. end-to-end 검사는 CI runner가 제공하지 않는 셋 중 하나가 필요하다: 실행 중인 애플리케이션(`e2e/`의 window check. `e2e/activation/`, `e2e/person/`, `e2e/real/`, `e2e/observation/`을 포함한다), frame을 내보내는 display(`native/darwin/Makefile`의 `NATIVE_PRESENTATION_TESTS`, `make -C native/darwin test-presentation`), 또는 사람이나 애플리케이션의 활성화(activation tier인 `make -C native/darwin test-activation`과 `pnpm -F @soksak/e2e verify:activation`, 그리고 `verify:person`). 그 밖의 test는 모두 unit test다: `scripts/node-tests.mjs`가 실행하는 Node test(harness 자신의 test인 `e2e/test/`, `packages/window-check/test/`를 포함한다), host test, `NATIVE_TESTS`, process identity test.
+
+저장소의 CI와 release job은 자기 unit test와 구조 검사만 실행하고 workspace의 다른 저장소를 checkout하지 않는다. end-to-end 검사는 display가 있는 컴퓨터에서 make로 로컬에서만 실행한다.
+
 ## 창 검사
 
 `make e2e-check`는 설치된 TypeScript compiler API로 activation fixture의 unresolved name을 감사하고 선언된 source의 TS2304, TS18004 및 TS2552를 판정한다. 관련 없는 semantic type diagnostic은 lexical 감사를 중단하지 않는다. Compiler configuration, global 및 syntax 오류는 명시적으로 실패하며 유효한 source metadata가 없는 diagnostic을 거부하고 external-library 제외에는 compiler metadata를 요구한다. Compiler session과 임시 configuration cleanup 오류는 분석 오류와 함께 보고한다. 이 source 검사는 입력을 보내거나 application을 활성화하지 않는다.
