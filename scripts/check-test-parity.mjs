@@ -8230,6 +8230,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F321-5",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn check_declaration(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "declaration_notifies_each_outdated_version_change" },
+    ],
+    expected: "A declaration whose sidecar.json does not parse succeeds on both hosts, notifies host.sidecars once and leaves the running service reported with an empty installed version.",
+    levels: ["native"],
+  },
+  {
     id: "F321-2",
     implementation: [
       { file: "packages/host/wailsv3/src/workspace.go", symbol: "func projectSettings(" },

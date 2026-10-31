@@ -486,10 +486,21 @@ fn declaration_notifies_each_outdated_version_change() {
     sidecars.on_status_changed(move |_| {
         counted.fetch_add(1, Ordering::SeqCst);
     });
+    // A declaration whose sidecar.json does not parse refuses the sidecar: the running service stays and is reported
+    // without an installed version, and the change is notified once.
     declaration.data = b"{".to_vec();
-    assert!(sidecars.declare(&[declaration]).is_err());
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
-    assert_eq!(sidecars.status(), before);
+    sidecars.declare(&[declaration]).unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(before.outdated[0].installed, "0.0.7");
+    assert_eq!(
+        sidecars.status().outdated,
+        vec![super::OutdatedSidecar {
+            sidecar: "fixture-service".into(),
+            running: Some("0.0.6".into()),
+            installed: String::new(),
+            sessions: 1,
+        }]
+    );
 }
 
 // contract: sidecars-transport.hello.reports-a-service-of-another-version

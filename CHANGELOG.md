@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F321-5: The internal declaration tests of both hosts assert the contract of F321: a declaration whose `sidecar.json` does not parse succeeds and notifies `host.sidecars` once.
 - F321-2: A project settings file that is refused is reported at its project: the snapshot gives the project `settingsError`, the window does not open that project and reports the error, and the other projects and the page start. Before, one such file failed the snapshot and the page did not start.
 - F321-1: A host whose `installed.json` or `plugin.json` cannot be read records `installed plugins: <error>` and starts without sidecars instead of ending its start.
 - F321: An installed sidecar whose declaration cannot be read or checked is refused alone: the host records the error, a request for that sidecar fails with it, and the other sidecars and the application start. Before, one such sidecar ended the start of both hosts.
