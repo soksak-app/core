@@ -181,7 +181,6 @@ pub fn class_of(name: &str) -> Option<Class> {
         "page.tab.unload.failed" => Some(Class::Lifecycle),
         "page.tab.unload.skipped" => Some(Class::Lifecycle),
         "page.tab.unloaded" => Some(Class::Lifecycle),
-        "page.trace.declared-ui.snapshot.skipped" => Some(Class::Call),
         "page.trace.layout" => Some(Class::Frame),
         "page.trace.modal.answer" => Some(Class::Call),
         "page.trace.picker.close" => Some(Class::Call),

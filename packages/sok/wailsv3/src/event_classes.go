@@ -139,7 +139,6 @@ var eventClasses = map[string]Class{
 	"page.tab.unload.failed":                  ClassLifecycle,
 	"page.tab.unload.skipped":                 ClassLifecycle,
 	"page.tab.unloaded":                       ClassLifecycle,
-	"page.trace.declared-ui.snapshot.skipped": ClassCall,
 	"page.trace.layout":                       ClassFrame,
 	"page.trace.modal.answer":                 ClassCall,
 	"page.trace.picker.close":                 ClassCall,

@@ -600,32 +600,6 @@
       },
       "description": "The outcome of a complete surface synchronization request, recorded only if the frame log gate is open when the host call settles, independently of the performance trace switch. The declaration byte counters compare only the UTF-8 JSON values of declarations repeated inline across view starts with the UTF-8 JSON encoding of the request-local declaration table; they exclude the rest of the request and transport overhead. Normalization retains each serialized value and its request-local reference count; byte lengths are computed once per distinct value at completion only when the gate is open. A closed completion gate creates no fields, reads no mount metadata, and computes no byte lengths. `views` names the exact view surfaces and their page-local mount attempts."
     },
-    "page.trace.declared-ui.snapshot.skipped": {
-      "layer": "page",
-      "class": "call",
-      "level": "debug",
-      "fields": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "plugin": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "count": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "plugin",
-          "status",
-          "count"
-        ]
-      },
-      "description": "A value of a declared UI status was overwritten while its snapshot was in transit, while the performance trace is on: the main page writes it with the count of the overwritten values, which the snapshot message carries as its skipped field (docs/spec/plugin-processes.md, rule 2)."
-    },
     "page.trace.modal.answer": {
       "layer": "page",
       "class": "call",
