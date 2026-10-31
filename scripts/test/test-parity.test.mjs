@@ -1,9 +1,26 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
-import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, repositoryFiles } from "../check-test-parity.mjs";
+import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles } from "../check-test-parity.mjs";
 
 const files = repositoryFiles();
+
+test("the package index holds only the packages of this checkout and reads no declared repository", (t) => {
+  // A CI job checks out only core, so a declared repository folder such as ../plugins/browser does not exist beside it.
+  const away = mkdtempSync(join(tmpdir(), "soksak-parity-index-"));
+  const previous = process.cwd();
+  process.chdir(away);
+  t.after(() => {
+    process.chdir(previous);
+    rmSync(away, { recursive: true, force: true });
+  });
+  const index = packageIndex();
+  assert.ok(index.has("@soksak/plugin-api"));
+  assert.deepEqual([...index.values()].filter((entry) => entry.dir.startsWith("..") || entry.dir.startsWith("/")), []);
+});
 
 test("language coverage audit rejects missing and extra adapter languages", () => {
   assert.deepEqual(auditExecutableLanguageCoverage(["src/app.rs", "scripts/check.sh"], ["rust"]), [

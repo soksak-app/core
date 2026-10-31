@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { components, corePackageNames } from "./check-boundaries.mjs";
+import { corePackageNames } from "./check-boundaries.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
@@ -8196,6 +8196,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F298-3-1",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "export function packageIndex(root = ROOT)" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "the package index holds only the packages of this checkout and reads no declared repository" }],
+    expected: "The package index of the parity check holds only the packages of the checkout and reads no folder of another repository.",
+    levels: ["unit"],
+  },
+  {
     id: "F298-4",
     implementation: [{ file: "packages/window-check/app.mjs", symbol: "request(method, params = {}, { timeout = REQUEST } = {})" }],
     tests: [
@@ -9663,9 +9670,9 @@ function isDeclaration(file) {
 }
 
 /**
- * The packages of the checkout and of the declared repositories, by their exact names (decision D3, rules 2, 3 and 5):
- * the folder (relative to the checkout for core packages, absolute for declared repositories), the owner, and the
- * exports map of the package.json. Core holds no list of the packages of other repositories.
+ * The packages of the checkout, by their exact names (decision D3, rules 2, 3 and 5): the folder relative to the checkout,
+ * the owner, and the exports map of the package.json. Core holds no list of the packages of other repositories and reads
+ * no other repository, so a core source that names a package of another repository names an undeclared package.
  */
 export function packageIndex(root = ROOT) {
   const index = new Map();
@@ -9679,10 +9686,6 @@ export function packageIndex(root = ROOT) {
   // The core-served prefix (@soksak/shared) has no package.json; core serves every subpath of it.
   for (const name of corePackageNames(root)) {
     if (!index.has(name)) index.set(name, { dir: "", owner: "core", exports: { "./*": "./*" } });
-  }
-  for (const item of components(root)) {
-    if (item.kind === "core") continue;
-    index.set(item.name, { dir: item.dir, owner: item.kind, exports: JSON.parse(readFileSync(join(item.dir, "package.json"), "utf8")).exports });
   }
   return index;
 }
