@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F311: The crash file test of the Wails host closes the channel of its child only after the nil map assignment, so the child no longer ends with the status 0 before its crash.
 - F298-3-1: `make parity-check` reads no folder of another repository, so it passes in a CI job that checks out only core.
 - F309: A tab session write skips a region whose attachment ended or was replaced while its state was read, so the end of a view no longer logs `document "page" is not attached`.
 - F307: A retain that a persistent service does not answer within 10 seconds fails with the stage of its request line, queued, being written or written, and the time since the last line that the host read from the service.

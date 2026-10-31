@@ -8230,6 +8230,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F311",
+    implementation: [{ file: "packages/host/wailsv3/src/application_log.go", symbol: "func StartStandardError(" }],
+    tests: [{ file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" }],
+    expected: "The child of the crash file test ends only through its crash, so the test checks the crash file and the signal SIGABRT.",
+    levels: ["unit"],
+  },
+  {
     id: "F309",
     implementation: [{ file: "packages/workbench/document-regions.js", symbol: "const attachmentOf = (tab, name)" }],
     tests: [{ file: "packages/workbench/test/document-regions.test.mjs", id: "a region whose attachment ends while its state is read yields no state, and a held attachment reports its failure" }],

@@ -300,9 +300,11 @@ func TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithT
 		}
 		var table map[string]int
 		done := make(chan struct{})
+		// The channel closes only after the assignment: a panicking goroutine runs its deferred calls before the runtime writes the
+		// fatal error, so a deferred close would let os.Exit(0) end the child before the crash.
 		go func() {
-			defer close(done)
 			table["entry"] = 1
+			close(done)
 		}()
 		<-done
 		os.Exit(0)
