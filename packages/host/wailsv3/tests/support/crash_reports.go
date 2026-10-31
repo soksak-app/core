@@ -33,6 +33,12 @@ func WatchCrashReports(t *testing.T, application string) *CrashReports {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return WatchCrashReportsIn(t, directory, application)
+}
+
+// WatchCrashReportsIn starts the watch of the crash reports of application in directory.
+func WatchCrashReportsIn(t *testing.T, directory, application string) *CrashReports {
+	t.Helper()
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		t.Fatal(err)

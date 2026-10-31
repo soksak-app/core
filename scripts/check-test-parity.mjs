@@ -8230,6 +8230,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F313",
+    implementation: [
+      { file: "packages/host/tauriv2/tests/support/crash_reports.rs", symbol: "pub fn watch_in(directory: PathBuf, application: &str) -> Self" },
+      { file: "packages/host/wailsv3/tests/support/crash_reports.go", symbol: "func WatchCrashReportsIn(" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/crash_reports_test.rs", id: "the_watch_removes_the_saved_report_and_not_the_hidden_file_that_the_system_renames" },
+      { file: "packages/host/wailsv3/tests/crash_reports_test.go", id: "TestTheWatchRemovesTheSavedReportAndNotTheHiddenFileThatTheSystemRenames" },
+    ],
+    expected: "The crash report watch of both host tests removes the saved report of its process and not the hidden file that the system renames.",
+    levels: ["unit"],
+  },
+  {
     id: "F312",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" }],
     tests: [

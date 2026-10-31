@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F313: Tauri host test의 crash report watch는 `<application>-*.ips`만 받아들인다. 그래서 시스템이 저장된 report로 rename하는 숨김 파일을 지우지 않는다.
 - F312: F301-1, F303, F305-2의 Tauri host test가 `tauriv2 only` contract case를 선언한다.
 - F311: Wails host의 crash file test는 nil map 할당 뒤에만 child의 channel을 닫는다. 그래서 child가 crash 전에 status 0으로 끝나지 않는다.
 - F298-3-1: `make parity-check`는 다른 저장소의 폴더를 읽지 않는다. 그래서 core만 checkout하는 CI job에서 통과한다.

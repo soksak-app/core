@@ -1,5 +1,6 @@
 //! The watch of the folder in which the system writes crash reports, so a test whose child crashes on purpose removes the report
-//! that the system writes for that child.
+//! that the system writes for that child. Each test binary that includes this module uses a part of it.
+#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
@@ -12,15 +13,21 @@ pub struct CrashReports {
     _watcher: RecommendedWatcher,
     events: Receiver<notify::Result<Event>>,
     directory: PathBuf,
+    application: String,
 }
 
 impl CrashReports {
-    /// Starts the watch of the crash reports before the test starts the child that crashes.
-    pub fn watch() -> Self {
+    /// Starts the watch of the crash reports of application before the test starts the child that crashes.
+    pub fn watch(application: &str) -> Self {
         let directory = soksak_host_tauriv2::platform::current()
             .unwrap()
             .diagnostic_reports_directory()
             .unwrap();
+        Self::watch_in(directory, application)
+    }
+
+    /// Starts the watch of the crash reports of application in directory.
+    pub fn watch_in(directory: PathBuf, application: &str) -> Self {
         let (sender, events) = channel();
         let mut watcher = notify::recommended_watcher(sender)
             .unwrap_or_else(|error| panic!("crash report watch: {error}"));
@@ -31,6 +38,7 @@ impl CrashReports {
             _watcher: watcher,
             events,
             directory,
+            application: application.to_string(),
         }
     }
 
@@ -52,9 +60,13 @@ impl CrashReports {
                 }
             };
             for path in event.paths {
-                if path.extension().is_some_and(|extension| extension == "ips")
-                    && report_pid(&path) == Some(pid)
-                {
+                // The system writes a report into a hidden file and renames it to `<application>-<time>.ips`, so only a name
+                // with that prefix is a saved report.
+                let saved = path.file_name().is_some_and(|name| {
+                    let name = name.to_string_lossy();
+                    name.starts_with(&format!("{}-", self.application)) && name.ends_with(".ips")
+                });
+                if saved && report_pid(&path) == Some(pid) {
                     std::fs::remove_file(&path).unwrap_or_else(|error| {
                         panic!("remove the crash report {path:?}: {error}")
                     });

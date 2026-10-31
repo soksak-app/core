@@ -26,8 +26,14 @@ fn a_fatal_signal_writes_an_error_line_to_the_standard_error_file() {
         std::process::abort();
     }
     let config = folder::Folder::new();
-    let reports = crash_reports::CrashReports::watch();
-    let child = Command::new(std::env::current_exe().unwrap())
+    let executable = std::env::current_exe().unwrap();
+    let application = executable
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let reports = crash_reports::CrashReports::watch(&application);
+    let child = Command::new(&executable)
         .args([
             "--exact",
             "a_fatal_signal_writes_an_error_line_to_the_standard_error_file",
