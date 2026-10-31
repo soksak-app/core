@@ -2,6 +2,7 @@ import { LOG_LEVELS, createSurfaceContext, releaseSurfaceReady } from "@soksak/p
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { surfaceErrorText } from "./surface-status.js";
 import { markViewSurface, registry } from "./exposure.js";
+import { viewDataOf } from "./plugin-data.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
@@ -32,6 +33,9 @@ let nextMountAttempt = 0;
 const placeholders = new Map();
 
 const authorization = new Map();
+// The project of the start values that the host holds for each view, by surface id. The view calls of a view answer for that project,
+// which may be a project that the window no longer shows (docs/spec/native-surfaces.md#view-surfaces, view calls).
+const viewStartProjects = new Map();
 // The listeners (surfaceId, error) of the end of each mount; error is null for a mount that ended.
 const mountListeners = new Set();
 
@@ -293,6 +297,14 @@ export function viewStartValues(surface, project) {
   return viewStartValuesFromDeclarations(surface, project, origin, registry.surfaceDeclarations());
 }
 
+/**
+ * The project of the start values that the host holds for the view of surfaceId: the last one the workbench placed for the view, or null
+ * when that project is none or no start values were placed (docs/spec/native-surfaces.md#view-surfaces, view calls).
+ */
+export function viewStartProjectOf(surfaceId) {
+  return viewStartProjects.get(surfaceId) ?? null;
+}
+
 /** Builds the canonical surface descriptor from the tab, including its stored start parameters. */
 export function surfaceForTab(tab) {
   return { ...plugin(tab.plugin).surface(tab.id), surfaceId: tab.id, pluginId: tab.plugin, params: tab.params ?? null }; // default: a tab without stored params starts with null params.
@@ -313,9 +325,12 @@ export function surfacePlacementsForHost(surfaces, project, holderOf) {
     }
   });
   const declarations = origins.some((origin) => origin !== null) ? registry.surfaceDeclarations() : null;
-  return surfaces.map((entry, index) => origins[index] === null
-    ? entry
-    : { ...entry, start: viewStartValuesFromDeclarations(entry.surface, project, origins[index], declarations) });
+  return surfaces.map((entry, index) => {
+    if (origins[index] === null) return entry;
+    const start = viewStartValuesFromDeclarations(entry.surface, project, origins[index], declarations);
+    viewStartProjects.set(entry.surface.surfaceId, start.project);
+    return { ...entry, start };
+  });
 }
 
 /**
@@ -416,7 +431,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     settings: (listener) => Promise.resolve(context.runtime.settings.on(listener)),
     // The value of a status of the view: the registry follows the status and reports each value to the listener. A status that the
     // exposure declares names no status of the view, so the declaration is checked before the observation (view-calls.js).
-    status: (name, listener) => registry.observe(name, undefined, (value) => listener(value)),
+    status: (name, watched, listener) => registry.observe(name, watched, (value) => listener(value), { exact: watched !== undefined }),
     // The stored levels of a record of the plugin, read again at each change of the policy of the page gate.
     logLevels: {
       read: () => LOG_LEVELS.filter((level) => eventEnabled(level)),
@@ -487,6 +502,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     emitEvent,
     runCore: (name, params, cids) => scoped.call(name, params, cids),
     runOwned: (name, params, owner, cids) => registry.runOwned(name, params, owner, cids),
+    startProject: () => viewStartProjectOf(surface.surfaceId),
     runtime: {
       native: gate,
       sidecar: {
@@ -496,6 +512,10 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
           return page.sidecar().send(id, body, cids);
         },
       },
+      // Whether a surface is a surface of the plugin in the window, which a status watch with surface checks (view-calls.js).
+      holdsSurface: (plugin, watched) => registry.holdsSurface(plugin, watched),
+      // The project data of the plugin for a project, which the data calls of the view read and write (view-calls.js).
+      data: { of: viewDataOf },
       clipboard: scoped.clipboard,
       links: scoped.links,
       // The record path of the error display: the host call report of the surface writes the error line to the application log.
@@ -509,11 +529,11 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
         textSize: () => subscriptions.textSize(),
         settings: () => subscriptions.settings(),
         logLevels: () => subscriptions.logLevels(),
-        statusWatch: (name) => {
+        statusWatch: (name, watched) => {
           if (!registry.declared("status", name)) throw new Error(`view call runtime.status.watch ${name} is not a declared status`);
-          return subscriptions.statusWatch(name);
+          return subscriptions.statusWatch(name, watched);
         },
-        statusUnwatch: (name) => subscriptions.statusUnwatch(name),
+        statusUnwatch: (name, watched) => subscriptions.statusUnwatch(name, watched),
       },
       command: {
         // The command is declared through the exposure of the surface, so the registry checks its declaration and owner.

@@ -37,6 +37,20 @@ const ownerOf = (name) => name.slice(0, name.indexOf("."));
 /** Whether the name is registered by a surface document: a plugin name or one of the three core document entries. */
 const surfaceName = (name) => ownerOf(name) !== "core" || surfaceDocumentEntry(name);
 
+/**
+ * Whether a surface id names a section surface, `<sidebar id>/<section id>` (docs/spec/plugins.md#sections). A tab id has no "/",
+ * so the form tells the two kinds apart.
+ */
+export function isSectionSurface(surface) {
+  return surface.includes("/");
+}
+
+/**
+ * The surfaces of owners that a request without surface may choose, in registration order: the tab surfaces. A section surface answers
+ * only a request that names it (docs/spec/exposure.md#choosing-a-surface).
+ */
+const tabSurfacesOf = (owners) => [...(owners?.keys() ?? [])].filter((surface) => !isSectionSurface(surface));
+
 /** The key of one watch. A watch that names a surface and a watch that does not are different. */
 // default: as stated above, the surface of a watch that names no surface is null.
 const watchKey = (name, surface) => JSON.stringify([name, surface ?? null]);
@@ -184,10 +198,11 @@ export function createRegistry({ call = null, report = null } = {}) {
       }
       return requested;
     }
-    if (!owners?.size) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `${kind} ${name} is not registered`);
-    const first = options.preferred().find((surface) => owners.has(surface));
+    const choices = tabSurfacesOf(owners);
+    if (!choices.length) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `${kind} ${name} is not registered`);
+    const first = options.preferred().find((surface) => choices.includes(surface));
     // default: when the preferred surface has not registered, the surface registered last answers.
-    return first ?? [...owners.keys()].at(-1);
+    return first ?? choices.at(-1);
   }
 
   /**
@@ -280,7 +295,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     const requested = params.surface;
     // A request without surface for a name that no surface page registered is answered by the plugin host that registered
     // it (docs/spec/plugin-host.md#exposure).
-    const hostPlugin = requested === undefined && !surfaces.get(declarationKey(kind, name))?.size
+    const hostPlugin = requested === undefined && !tabSurfacesOf(surfaces.get(declarationKey(kind, name))).length
       ? hosts.get(declarationKey(kind, name)) : undefined;
     if (hostPlugin !== undefined) return forwardHost(hostPlugin.plugin, method, params);
     const key = watchKey(name, requested);
@@ -332,8 +347,9 @@ export function createRegistry({ call = null, report = null } = {}) {
     if (!owners?.size) return null;
     if (wanted && owners.has(wanted)) return wanted;
     if (exact) return null;
+    const choices = tabSurfacesOf(owners);
     // default: when the preferred surface has not registered, the surface registered last answers.
-    return options.preferred().find((surface) => owners.has(surface)) ?? [...owners.keys()].at(-1);
+    return options.preferred().find((surface) => choices.includes(surface)) ?? choices.at(-1) ?? null;
   }
 
   /** Reports the failure of an observation with the name and the surface attached. */
@@ -518,6 +534,12 @@ export function createRegistry({ call = null, report = null } = {}) {
 
     /** Whether the name is declared. */
     declared: (kind, name) => declared.has(declarationKey(kind, name)),
+
+    /**
+     * Whether surface is a surface of plugin in this window, by the plugin that the workbench reports for the surface
+     * (docs/spec/native-surfaces.md#view-surfaces).
+     */
+    holdsSurface: (plugin, surface) => options.surfacePlugin(surface) === plugin,
 
     /** Registers a method that handles a request by its name. Diagnostic methods use it. */
     method(name, fn) {

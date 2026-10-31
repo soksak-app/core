@@ -12,7 +12,7 @@ const dom = new JSDOM(`<body>
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 
-const { createRegistry, installExposure, markViewSurface, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
+const { createRegistry, installExposure, isSectionSurface, markViewSurface, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
 const { keepHostCommands } = await import("../plugin-host.js");
 
 test("mounted surface exposure routes through its registered module and releases ownership", async () => {
@@ -689,6 +689,29 @@ test("observe follows a surface status in the page, switches surfaces on registr
   const unwatched = host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.unwatch")
     .map(([, arg]) => arg.surface);
   assert.deepEqual(unwatched, ["tab-a", "tab-b"]);
+});
+
+test("a section surface id is recognized by its sidebar and section form, and a tab id is not", () => {
+  assert.equal(isSectionSurface("left/files.tree"), true);
+  assert.equal(isSectionSurface("c3:right/browser.dom"), true);
+  assert.equal(isSectionSurface("tab-a"), false);
+  assert.equal(isSectionSurface("c3:tab"), false);
+});
+
+test("a request without surface chooses a tab surface, and a section surface answers only a request that names it", async () => {
+  const host = fakeHost(({ surface }) => ({ result: surface }));
+  const made = coreRegistry(host);
+  made.configure({ surfacePlugin: () => "probe", preferred: () => ["left/files.tree"] });
+  made.registered({ surface: "tab-a", kind: "command", name: "probe.send" });
+  made.registered({ surface: "left/files.tree", kind: "command", name: "probe.send" });
+  made.registered({ surface: "right/browser.dom", kind: "command", name: "probe.send" });
+  assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send", params: {} } }), { result: "tab-a" },
+    "the preferred and the latest registrations are section surfaces, so the tab surface answers");
+  made.registered({ surface: "left/files.tree", kind: "status", name: "probe.lines" });
+  assert.equal((await made.handle({ method: "status.get", params: { name: "probe.lines" } })).error.code, EXPOSURE_ERRORS.unregistered,
+    "a status that only a section surface registers is not chosen without surface");
+  assert.deepEqual(await made.handle({ method: "status.get", params: { name: "probe.lines", surface: "left/files.tree" } }),
+    { result: "left/files.tree" }, "the section surface answers a request that names it");
 });
 
 test("run forwards a plugin command to the named surface", async () => {

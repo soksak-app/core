@@ -105,6 +105,17 @@ function accessOf(plugin, context) {
   throw new Error(`plugin ${plugin} data of project ${context.project.id} is not loaded`);
 }
 
+/**
+ * The project data of a plugin for the project that a view names in its start values (docs/spec/plugins.md#project-data). The
+ * project may be one that the window does not show, so the view reads and writes its own project. declares(key) tells whether the
+ * plugin declares the key, and get(key) and set(key, value) run the checks of the plugin host.
+ */
+export function viewDataOf(project, plugin) {
+  const declared = declaredData.get(plugin) ?? {};
+  const access = dataOf(project, plugin, declared, checkStored(project, plugin, declared));
+  return { declares: (key) => Object.hasOwn(declared, key), get: access.get, set: access.set };
+}
+
 /** Prepares a project's declared data without changing the project that plugin-host calls currently use. */
 export function prepareData(project) {
   const done = turn.then(() => prepare(project));

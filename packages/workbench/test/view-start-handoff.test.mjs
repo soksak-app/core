@@ -75,7 +75,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const plane = await import("../plane.js");
   const compositor = await import("../compositor.js");
-  const { authorizeSurface, surfacePlacementsForHost, viewStartValues } = await import("../surface-modules.js");
+  const { authorizeSurface, surfacePlacementsForHost, viewStartProjectOf, viewStartValues } = await import("../surface-modules.js");
   const { recordOrigin } = await import("../tab-reports.js");
   const { surfaces: hostSurfaces } = await import("../host.js");
   const holdNextSync = () => {
@@ -218,6 +218,10 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     assert.deepEqual(dormant.params, { path: "stored.txt" }, "a dormant tab descriptor lost stored params");
     const dormantPlacement = surfacePlacementsForHost([{ id: dormant.surfaceId, surface: dormant }], null, () => "the drawn record")[0];
     assert.deepEqual(dormantPlacement.start.params, { path: "stored.txt" });
+    // The view calls of the view answer for the project that its last placement named (view-calls.js).
+    assert.equal(viewStartProjectOf("tab-dormant"), null, "a placement with no project names none for the view");
+    surfacePlacementsForHost([{ id: dormant.surfaceId, surface: dormant }], { id: "p-dormant", root: "/work/p-dormant" }, () => "the drawn record");
+    assert.deepEqual(viewStartProjectOf("tab-dormant"), { id: "p-dormant", root: "/work/p-dormant" });
     recordOrigin("tab-null", null, "test fixture");
     const explicitNull = surfaceForTab({ id: "tab-null", plugin: pluginId, params: null });
     assert.strictEqual(explicitNull.params, null, "a dormant tab without params lost explicit null");

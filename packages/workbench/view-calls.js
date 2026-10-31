@@ -16,6 +16,7 @@ import { setViewFocus } from "./view-focus.js";
  *               runCore(name, params): runs a core command, as runtime.command does
  *               runOwned(name, params, owner): runs a command that the plugin registered, as the exposure owner check does
  *               shortcuts: the rows of the shortcut table (packages/workbench/shortcuts.json)
+ *               startProject(): the project {id, root} of the start values of the view, or null when they carry none
  *               emitEvent(level, event, fields): the event writer of the page, which stores the shortcut records of the view
  *               contributions(point): the connected items of the point, as contributions of the surface context returns them
  *               tab: the tab handlers of the surface context, as context.tab has: the reports title(text), footer(text),
@@ -35,8 +36,11 @@ import { setViewFocus } from "./view-focus.js";
  *                 subscribe.native(name), subscribe.sidecarMessage(id), subscribe.sidecarFailure(id), subscribe.textSize(),
  *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (view-events.js); each resolves when it is
  *                   registered
- *                 subscribe.statusWatch(name), subscribe.statusUnwatch(name): follow the value of a status of the view and end it (view-events.js);
- *                   the names are checked by statusNameOf, and the declaration is checked by the page subscription
+ *                 holdsSurface(plugin, surface): whether the surface is a surface of the plugin in the window (surface-modules.js)
+ *                 data.of(project, plugin): the project data of the plugin for the project, as viewDataOf of plugin-data.js has it
+ *                 subscribe.statusWatch(name, surface), subscribe.statusUnwatch(name, surface): follow the value of a status of the view on
+ *                   the surface, or on the workbench when surface is undefined, and end it (view-events.js); the names are checked by
+ *                   statusNameOf, the surface by holdsSurface, and the declaration is checked by the page subscription
  *                 command.register(name): declares the command of the view on the page through the exposure registry, so a command of
  *                   another plugin or an undeclared name is refused (view-commands.js)
  *                 exposure.registered({kind, name}): applies the status or dom registration of the view through the exposure registry
@@ -166,7 +170,7 @@ function regionOf(command, params) {
   return fields;
 }
 
-async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent, contributions, runCore, runOwned, runtime, composition }) {
+async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent, contributions, runCore, runOwned, startProject, runtime, composition }) {
 
   switch (command) {
     case "tab.state.read":
@@ -241,11 +245,26 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       return null;
     }
     case "runtime.status.watch":
-      await runtime.subscribe.statusWatch(statusNameOf(command, params, plugin));
+    case "runtime.status.unwatch": {
+      const watch = statusWatchOf(command, params, plugin, runtime.holdsSurface);
+      if (command === "runtime.status.watch") await runtime.subscribe.statusWatch(watch.name, watch.surface);
+      else await runtime.subscribe.statusUnwatch(watch.name, watch.surface);
       return null;
-    case "runtime.status.unwatch":
-      await runtime.subscribe.statusUnwatch(statusNameOf(command, params, plugin));
+    }
+    // The project data of the plugin for the project of the start values of the view (docs/spec/plugins.md#project-data). A view of a
+    // project that the window does not show reads and writes that project, so the project is not the shown one.
+    case "runtime.data.get":
+    case "runtime.data.set": {
+      const fields = objectOf(command, params);
+      const project = startProject();
+      if (project === null) throw new Error(`view call ${command} requires a project`);
+      if (typeof fields.key !== "string" || fields.key === "") throw new TypeError(`view call ${command} requires a non-empty key`);
+      const data = runtime.data.of(project, plugin);
+      if (!data.declares(fields.key)) throw new Error(`view call ${command} ${fields.key} is not a data key of ${plugin}`);
+      if (command === "runtime.data.get") return data.get(fields.key);
+      await data.set(fields.key, fields.value);
       return null;
+    }
     case "runtime.links.open":
       if (typeof params !== "string" || params === "") throw new TypeError(`view call ${command} requires a non-empty URL`);
       await runtime.links.open(params);
@@ -397,11 +416,24 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
 }
 
 /**
+ * The name and the surface of a status watch (docs/spec/native-surfaces.md#view-surfaces, view calls). surface is undefined when the
+ * call names none. A named surface must be a surface of the plugin of the view that the window holds; any other surface is refused and
+ * runs nothing.
+ */
+function statusWatchOf(command, params, plugin, holdsSurface) {
+  const fields = objectOf(command, params);
+  const name = statusNameOf(command, fields.name, plugin);
+  if (fields.surface === undefined) return { name, surface: undefined };
+  if (typeof fields.surface !== "string" || fields.surface === "") throw new TypeError(`view call ${command} requires a non-empty surface`);
+  if (!holdsSurface(plugin, fields.surface)) throw new Error(`view call ${command} surface ${fields.surface} is not a surface of ${plugin}`);
+  return { name, surface: fields.surface };
+}
+
+/**
  * The status name of a status watch (docs/spec/native-surfaces.md#view-surfaces, view calls): a core status, whose owner is core, or a
  * status of the plugin of the view. A name without an owner or with another owner is refused, and runs nothing.
  */
-function statusNameOf(command, params, plugin) {
-  const { name } = objectOf(command, params);
+function statusNameOf(command, name, plugin) {
   if (typeof name !== "string" || name === "") throw new TypeError(`view call ${command} requires a non-empty name`);
   const dot = name.indexOf(".");
   const owner = dot < 0 ? null : name.slice(0, dot);
