@@ -8,6 +8,9 @@ use std::process::{Command, Stdio};
 #[path = "support/records.rs"]
 mod records;
 
+#[path = "support/crash_reports.rs"]
+mod crash_reports;
+
 use soksak_host_tauriv2::application_log::start_standard_error;
 
 const CHILD: &str = "SOKSAK_FATAL_SIGNAL_CHILD";
@@ -23,7 +26,8 @@ fn a_fatal_signal_writes_an_error_line_to_the_standard_error_file() {
         std::process::abort();
     }
     let config = folder::Folder::new();
-    let output = Command::new(std::env::current_exe().unwrap())
+    let reports = crash_reports::CrashReports::watch();
+    let child = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
             "a_fatal_signal_writes_an_error_line_to_the_standard_error_file",
@@ -32,8 +36,11 @@ fn a_fatal_signal_writes_an_error_line_to_the_standard_error_file() {
         ])
         .env(CHILD, config.path())
         .stdin(Stdio::null())
-        .output()
+        .stdout(Stdio::piped())
+        .spawn()
         .unwrap();
+    let pid = child.id();
+    let output = child.wait_with_output().unwrap();
     use std::os::unix::process::ExitStatusExt;
     assert_eq!(
         output.status.signal(),
@@ -42,6 +49,8 @@ fn a_fatal_signal_writes_an_error_line_to_the_standard_error_file() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
+    // The system writes a crash report of the child that ended with the signal; the test removes it.
+    reports.remove(pid, std::time::Duration::from_secs(60));
     let log = records::standard_error_text(config.path());
     // A record is `<time> <level> <layer> <where>: <text>`; the fatal record of the native library has no other text.
     let fatal: Vec<&str> = log
