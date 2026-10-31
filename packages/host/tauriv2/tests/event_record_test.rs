@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
-use soksak_host_tauriv2::application_log::{log_error, log_info};
+use soksak_host_tauriv2::application_log::{log_error, log_failure, log_info};
 use soksak_host_tauriv2::event_log::{EventLog, Options};
 use soksak_host_tauriv2::event_record::{
     START_BUFFER_RECORDS, flush_records, record_input_relay, use_host_event_log,
@@ -112,6 +112,36 @@ fn an_error_and_an_observation_are_events_with_where_and_text() {
         assert_eq!(got["fields"]["where"], *place, "{got}");
         assert_eq!(got["fields"]["text"], *text, "{got}");
     }
+}
+
+// contract: log.record.site-names-the-call
+#[test]
+fn a_record_of_a_helper_names_the_file_and_line_of_its_call() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    use_host_event_log(None);
+    let directory = folder::Folder::new();
+    let log = start(directory.path(), 64);
+    use_host_event_log(Some(Arc::clone(&log)));
+    let error_line = line!() + 1;
+    log_error("view channel", "project window is closed");
+    let failure_line = line!() + 1;
+    log_failure("view channel", Err("project window is closed".to_string()));
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    use_host_event_log(None);
+    let events = read(&path);
+    let sites: Vec<&Value> = events[2..]
+        .iter()
+        .map(|event| &event["fields"]["site"])
+        .collect();
+    assert_eq!(
+        sites,
+        [
+            &json!(format!("event_record_test.rs:{error_line}")),
+            &json!(format!("event_record_test.rs:{failure_line}")),
+        ],
+        "{events:?}"
+    );
 }
 
 // contract: log.record.start-buffer-holds-records-until-the-writer-exists

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F305-1: host의 record helper가 쓰는 기록마다 호출의 파일 이름과 줄인 field `site`를 담는다. 그래서 여러 호출이 같은 place와 text로 쓰는 오류도 자기 호출을 밝힌다.
 - F303: Tauri host의 layout step은 등록이 아직 surface handle을 가질 때만 그 handle을 쓴다. 그래서 창 close가 넣어진 step보다 먼저 닫은 surface가 더 이상 host를 `webviewSetSurfaceHidden`의 `SIGTRAP`으로 끝내지 않는다.
 - F300-3: Tauri의 fatal signal 테스트는 Wails test support의 짝인 `tests/support/crash_reports.rs`로 시스템이 자식에 대해 쓴 crash report를 지운다.
 - F301-2: 허용된 host 차이의 행 H21이 Tauri의 surface close 테스트에 Wails 짝이 없는 이유를 밝힌다.

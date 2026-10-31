@@ -101,7 +101,13 @@ pub fn use_host_event_log(log: Option<Arc<EventLog>>) {
 
 /// Stores a record as the event `<layer>.record.<level>`. The place and the text are cut to `RECORD_PLACE_BYTES` and
 /// `RECORD_TEXT_BYTES` on a character boundary, and the fields say `truncated` when either was cut.
-pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
+pub fn emit_record(
+    level: &str,
+    layer: &str,
+    place: &str,
+    text: String,
+    site: Option<&std::panic::Location<'_>>,
+) {
     let parsed = match level {
         "error" => Level::Error,
         "warn" => Level::Warn,
@@ -120,6 +126,9 @@ pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
     if cut_place || cut_body {
         record["truncated"] = json!(true);
     }
+    if let Some(site) = site {
+        record["site"] = json!(record_site(site.file(), site.line()));
+    }
     let fields = match Fields::of(&record) {
         Ok(fields) => fields,
         Err(error) => {
@@ -131,6 +140,16 @@ pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
     };
     // events: host.record.<level>, sidecar.record.<level>
     store_event(parsed, layer, &name, place, Vec::new(), fields);
+}
+
+/// The site of a record, `<file name>:<line>` of the call that wrote it. The file name is the last component of the path, so the
+/// site does not depend on the folder of the build.
+fn record_site(file: &str, line: u32) -> String {
+    let name = std::path::Path::new(file).file_name().map_or_else(
+        || file.to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    format!("{name}:{line}")
 }
 
 /// Hands an event to the writer of the host, or to the start buffer while no writer exists. `place` names the record in the

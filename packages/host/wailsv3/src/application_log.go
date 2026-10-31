@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -80,17 +81,29 @@ func ErrorLine(where string, text any) string {
 
 // LogError writes one error record of the host.
 func LogError(where string, text any) {
-	Log(Entry{"error", "host", where, text})
+	logHost("error", where, text)
 }
 
 // LogInfo writes one observation record of the host. An observation records an expected state and is not a failure.
 func LogInfo(where string, text any) {
-	Log(Entry{"info", "host", where, text})
+	logHost("info", where, text)
 }
 
 // LogWarn writes one warning record of the host. A warning records a loss or a degradation that the host recovers from.
 func LogWarn(where string, text any) {
-	Log(Entry{"warn", "host", where, text})
+	logHost("warn", where, text)
+}
+
+// logHost stores a record of the host with the site of the call of the record helper that called it (docs/spec/logging.md#writers):
+// the caller two frames up is the call of LogError, LogInfo or LogWarn.
+func logHost(level, where string, text any) {
+	site := ""
+	if _, file, line, ok := runtime.Caller(2); ok {
+		site = fmt.Sprintf("%s:%d", filepath.Base(file), line)
+	} else {
+		fmt.Fprintf(os.Stderr, "event writer: the record %q has no caller frame, so it is stored without site\n", where)
+	}
+	emitRecordAt(Entry{level, "host", where, text}, site)
 }
 
 // fatalError writes an error record and ends the process with status 1. A fatal failure after the log is open uses it.

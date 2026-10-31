@@ -5,7 +5,9 @@ package host_test
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +55,26 @@ func TestAnErrorAndAnObservationAreEventsWithWhereAndText(t *testing.T) {
 		if event["level"] != w.level || event["layer"] != w.layer || event["event"] != w.event || fields["where"] != w.where || fields["text"] != w.text {
 			t.Fatalf("event %d is %v, want %+v", index, event, w)
 		}
+	}
+}
+
+// contract: log.record.site-names-the-call
+func TestARecordOfAHelperNamesTheFileAndLineOfItsCall(t *testing.T) {
+	log := useEventLog(t)
+	_, _, line, _ := runtime.Caller(0)
+	host.LogError("view channel", "project window is closed")
+	host.LogWarn("view channel", "project window is closed")
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	want := []string{fmt.Sprintf("event_record_test.go:%d", line+1), fmt.Sprintf("event_record_test.go:%d", line+2)}
+	var got []any
+	for _, event := range events[2:] {
+		got = append(got, event["fields"].(map[string]any)["site"])
+	}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("sites %v, want %v; events %v", got, want, events)
 	}
 }
 
@@ -107,7 +129,9 @@ func TestTheStartBufferRefusesRecordsBeyondItsBoundAndTheWriterCountsThem(t *tes
 		host.LogInfo("flood", "record")
 	}
 	options := eventLogOptions(t.TempDir())
+	// The writer holds every record of the start buffer, as in the Rust test, so the test counts only the refusals of the start buffer.
 	options.QueueEvents = 4 * host.StartBufferRecords
+	options.QueueBytes = 64 << 20
 	log, err := host.StartEventLog(options)
 	if err != nil {
 		t.Fatal(err)

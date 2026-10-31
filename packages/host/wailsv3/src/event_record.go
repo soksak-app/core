@@ -138,6 +138,11 @@ func UseHostEventLog(log *EventLog) {
 // emitRecord stores an entry as the event `<layer>.record.<level>`. The place and the text are cut to RecordPlaceBytes and
 // RecordTextBytes on a character boundary before they are copied, and the fields say `truncated` when either was cut.
 func emitRecord(e Entry) {
+	emitRecordAt(e, "")
+}
+
+// emitRecordAt stores the record e; a site that is not empty is the field site, `<file name>:<line>` of the call that wrote it.
+func emitRecordAt(e Entry, site string) {
 	var level Level
 	switch e.Level {
 	case "error":
@@ -162,6 +167,9 @@ func emitRecord(e Entry) {
 	record := map[string]any{"where": where, "text": body}
 	if cutWhere || cutBody {
 		record["truncated"] = true
+	}
+	if site != "" {
+		record["site"] = site
 	}
 	fields, err := json.Marshal(record)
 	if err != nil {

@@ -1026,6 +1026,7 @@ Items:
 | `log.retention.runs-after-a-rotation` | A rotation of the writer runs the retention again. | both |
 | `log.retention.requires-a-bound` | A writer started without a positive retention bound fails to start with an error that names the option. | both |
 | `log.record.error-and-info-are-events` | A host record of level `error` or `info`, and a record that the page reports, are stored as the event `<layer>.record.<level>` with the fields `where` and `text` in the event log, with the time of the call and the text unchanged, a line feed included. | both |
+| `log.record.site-names-the-call` | A record that a record helper of the host writes carries the field `site`, the file name and line of the call of the helper. | both |
 | `log.record.start-buffer-holds-records-until-the-writer-exists` | A record written before the writer of the host exists waits in a start buffer, and the writer receives it in its order with the time it was written. | both |
 | `log.record.start-buffer-counts-its-loss` | The start buffer holds 1024 records and refuses the records beyond them; the writer records the refused records in a `log.dropped` with their count. | both |
 | `log.plugin-catalog.classifies-plugin-events` | The writer stores a plugin event with the class that the plugin classes give it, and an event that no catalog declares with `undeclared`. | both |

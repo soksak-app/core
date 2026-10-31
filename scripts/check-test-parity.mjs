@@ -8223,6 +8223,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F305-1",
+    implementation: [
+      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "fn record_site(" },
+      { file: "packages/host/wailsv3/src/application_log.go", symbol: "func logHost(" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/event_record_test.rs", id: "a_record_of_a_helper_names_the_file_and_line_of_its_call" },
+      { file: "packages/host/wailsv3/tests/event_record_test.go", id: "TestARecordOfAHelperNamesTheFileAndLineOfItsCall" },
+    ],
+    expected: "A record that a record helper of a host writes names the file and line of its call.",
+    levels: ["unit"],
+  },
+  {
     id: "F303",
     implementation: [{ file: "packages/host/tauriv2/src/surfaces.rs", symbol: "pub fn with_registered_surface<T>(" }],
     tests: [{ file: "packages/host/tauriv2/src/surfaces_test.rs", id: "a_sync_step_that_runs_after_the_close_of_its_surface_does_not_use_the_closed_handle" }],

@@ -52,7 +52,19 @@ pub fn error_line(place: &str, text: impl std::fmt::Display) -> String {
 
 /// Stores a record as an event of the writer of the host (event_record.rs).
 pub fn log_record(level: &str, layer: &str, place: &str, text: impl std::fmt::Display) {
-    crate::event_record::emit_record(level, layer, place, text.to_string());
+    crate::event_record::emit_record(level, layer, place, text.to_string(), None);
+}
+
+/// Stores a record of the host with the site of the call of the record helper that wrote it (docs/spec/logging.md#writers).
+#[track_caller]
+fn log_host(level: &str, place: &str, text: impl std::fmt::Display) {
+    crate::event_record::emit_record(
+        level,
+        "host",
+        place,
+        text.to_string(),
+        Some(std::panic::Location::caller()),
+    );
 }
 
 /// The record line of a window's diagnostic record, which is also written to the application log. The diagnostic record
@@ -62,22 +74,26 @@ pub fn transcript_entry(label: &str, line: &str) -> Entry {
 }
 
 /// Writes one error record of the host.
+#[track_caller]
 pub fn log_error(place: &str, text: impl std::fmt::Display) {
-    log_record("error", "host", place, text);
+    log_host("error", place, text);
 }
 
 /// Writes one observation record of the host. An observation records an expected state and is not a failure.
+#[track_caller]
 pub fn log_info(place: &str, text: impl std::fmt::Display) {
-    log_record("info", "host", place, text);
+    log_host("info", place, text);
 }
 
 /// Writes one warning record of the host. A warning records a loss or a degradation that the host recovers from.
+#[track_caller]
 pub fn log_warn(place: &str, text: impl std::fmt::Display) {
-    log_record("warn", "host", place, text);
+    log_host("warn", place, text);
 }
 
 /// Writes the error of result as the error line of place when result failed. It is used by an operation whose result
 /// cannot be returned to the caller.
+#[track_caller]
 pub fn log_failure(place: &str, result: Result<(), String>) {
     if let Err(error) = result {
         log_error(place, error);

@@ -1016,6 +1016,7 @@ fn invalid_json_closes_connection() {
 | `log.retention.runs-after-a-rotation` | writer의 회전은 보존을 다시 실행한다. | both |
 | `log.retention.requires-a-bound` | 양의 보존 상한 없이 시작한 writer는 옵션 이름을 담은 오류로 시작에 실패한다. | both |
 | `log.record.error-and-info-are-events` | level이 `error`나 `info`인 host 기록과 page가 보고한 기록은 호출한 시각과 줄바꿈을 포함한 원문 그대로의 `text`를 가진 event `<layer>.record.<level>`로 event log에 저장된다. | both |
+| `log.record.site-names-the-call` | host의 record helper가 쓰는 기록은 helper를 부른 호출의 파일 이름과 줄인 field `site`를 담는다. | both |
 | `log.record.start-buffer-holds-records-until-the-writer-exists` | host의 writer가 생기기 전에 쓴 기록은 시작 buffer에서 기다리고, writer는 그 기록을 쓴 시각 그대로 순서대로 받는다. | both |
 | `log.record.start-buffer-counts-its-loss` | 시작 buffer는 1024개를 담고 그 너머의 기록은 거부하며, writer는 거부한 기록을 그 수와 함께 `log.dropped`로 기록한다. | both |
 | `log.plugin-catalog.classifies-plugin-events` | writer는 plugin event를 plugin class가 주는 class로, 어느 catalog도 선언하지 않은 event를 `undeclared`로 저장한다. | both |
