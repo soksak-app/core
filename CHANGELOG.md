@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-75: Core 0.0.21 is required by sidecar-files 0.0.8 and every new plugin version. On core 0.0.20, a fresh selection of the files sidecar for editor 0.0.4, files 0.0.6 or hwp 0.0.2 selects sidecar-files 0.0.8 and fails with `sidecar.json: unknown field displayName`, because the reader of core 0.0.20 accepts only the earlier fields of `sidecar.json`; an installation that already uses an earlier files sidecar keeps it. A core 0.0.20 installation updates the application to 0.0.21 (registry G54.1).
 - F292-74: `docs/spec/persistent-services.md` states that an attachment is stale only when another attachment took its surface; a surface whose session an owner close or a retain ended handles its next message as a new surface. The correction of the service is vt S109 and reaches users with the next vt release.
 - F292-73: The input record check compares the host request of a sidecar send with the start of the page call, its time less `micros`, because the page writes `page.call` when the call ends. Validation: pending the window checks of the next release run.
 - F292-9-5: The host comparison check after a resize compares the planes of the two hosts with the configuration directory of each host replaced by one name, because the project root of the start values lies in that directory. Validation: pending the window checks of the next release run.
