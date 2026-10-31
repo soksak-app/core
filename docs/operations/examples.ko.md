@@ -213,6 +213,8 @@ Core는 스스로 release하며, 저장소는 설치 기록(`plugin.json`, `inst
 
 Gate가 release하면 같은 run이 두 host를 build하고 package하며, registry manifest를 검사한다. `publish` job은 이 job이 모두 성공하고, run의 commit이 여전히 `main`의 head이며, tag가 여전히 없을 때만 실행된다. 이 job은 그 commit에 tag `v<version>`을 release와 함께 만든다. Workflow는 한 번에 하나의 run만 실행하므로(`concurrency: release`) 두 push가 한 version을 두 번 publish하지 않는다. Workflow token으로 push한 tag는 다른 workflow를 시작하지 않으므로 release job은 tag push가 아니라 같은 run에서 실행된다.
 
+Release는 plugin과 sidecar 저장소가 build에 쓰는 것을 담으므로, 그 workflow는 core의 source를 checkout하지 않는다. Wails release bundle의 `sok`인 `sok-<version>-darwin-arm64`, 그리고 `pnpm pack`이 `packages/plugin-api`와 `native/darwin/process-identity`에서 만든 packed release `soksak-plugin-api-<version>.tgz`, `soksak-native-process-identity-darwin-<version>.tgz`이다. process identity package의 tarball은 release job이 build한 static library를 담는다.
+
 ## page 메모리
 
 `make page-memory APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]`는 실행 중인 애플리케이션(기본은 release 빌드)의 main page process를 잰다: 번들의 `sok`으로 `host.window`에서 window의 `pageProcess`를 읽고, 시작 시점, 입력 없는 `MINUTES`분 뒤, `host.window.reload`를 `RELOADS`번 실행한 뒤에 `footprint`가 보고하는 physical footprint를 기록하며, 각각 JSON 한 줄 `{phase, elapsedMs, pageProcess, footprint}`를 출력한다. 유휴를 알리는 event가 없으므로 유휴 단계는 시간을 기다린다. 다시 읽기는 page를 새 process에서 열므로, 마지막 줄은 시작 때의 page process가 아직 있는지(`startProcessAlive`)도 기록한다. 측정은 값을 판정하지 않으며, window에 page process가 없으면 실패한다. 측정이 대화형 설정을 쓰지 않도록 애플리케이션을 일회용 설정 폴더로 시작한다(`open -g -n <bundle> --args --config-dir DIR`).

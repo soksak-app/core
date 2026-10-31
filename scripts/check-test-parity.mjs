@@ -8244,6 +8244,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F298-7",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "name: Package the releases that plugins and sidecars build with" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release publishes sok and the packed releases that plugins and sidecars build with" }],
+    expected: "The core release holds sok and the packed releases of @soksak/plugin-api and @soksak/native-process-identity-darwin.",
+    levels: ["unit"],
+  },
+  {
     id: "F275-2",
     implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "// make -C runs the target in the repository, so the paths that it receives are absolute." }],
     tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a relative output folder and sok executable of a pack resolve from the working directory, not from the plugin repository" }],
