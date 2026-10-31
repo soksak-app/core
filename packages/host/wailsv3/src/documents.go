@@ -493,12 +493,20 @@ func surfaceStartScript(surface string, start ViewStart) (string, error) {
 	if text := strings.TrimSpace(string(start.Diagnostics)); text != "null" {
 		diagnostics = "Object.freeze(" + text + ")"
 	}
+	if err := checkViewSection(surface, start.Section); err != nil {
+		return "", err
+	}
+	section := "null"
+	if text := strings.TrimSpace(string(start.Section)); text != "null" {
+		section = "Object.freeze(" + text + ")"
+	}
 	return "window.sokSurface = Object.freeze({\"surface\":" + string(id) +
 		",\"params\":" + params +
 		",\"origin\":Object.freeze({\"directory\":" + directory + "})" +
 		",\"project\":" + project +
 		",\"declarations\":Object.freeze(" + declarations + ")" +
-		",\"diagnostics\":" + diagnostics + "});", nil
+		",\"diagnostics\":" + diagnostics +
+		",\"section\":" + section + "});", nil
 }
 
 // viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the

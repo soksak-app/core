@@ -13,6 +13,7 @@
 
 - F332-8: `validateManifest`와 `sok`의 manifest reader는 sidebar section을 view `{id, name, composition, height, unload?}`로 받고, section의 `status`, `module`, `fill`, plugin.json의 `host`와 `hostOperations`, sidecar.json의 `hostReadOperations`를 각각의 문구로 거부한다. `data`와 `exposes`는 surface 또는 sections를 요구하며, `dependencies`는 sections를 받는다. 공유 manifest 사례가 각 거부와 허용을 다룬다.
 - F332-9: main page는 view call `runtime.status.watch`와 `runtime.status.unwatch`를 `surface`와 함께 답한다. 그 status는 창이 가진 plugin의 surface에서 따른다. `runtime.data.get`과 `runtime.data.set`은 view 시작 값의 project에 대해 답한다. `surface`가 없는 요청은 tab surface만 고른다.
+- F332-3: 두 host는 view 시작 값 `section`을 검사하고 주입한다(`surface "<id>": view start section is missing`과 `surface "<id>": view start section is not {id, sidebar, card}`). section surface id의 tab session 파일 이름은 그 id의 RFC 3986 percent 인코딩이며, tab id가 session에서 받아들여지는 자리에서 section surface id도 받아들여서 공유 계약 case가 각각을 다룬다.
 - F331: `surface.opens`는 더 이상 `"*"`를 받지 않는다. 각 plugin은 자기가 여는 확장자를 선언하고, `core.file.open`은 그 확장자를 선언한 불러온 plugin이 없는 파일을 `"*"`를 선언한 plugin에서 여는 대신 `no plugin opens <path>`로 실패한다.
 - F330: view 시작 값은 plugin의 진단 선언 또는 `null`인 `diagnostics`를 담고, 두 host는 이 값을 요구하며 `window.sokSurface`에 주입한다. 그래서 view page는 release에 없는 `diagnostics.json`을 요청하지 않고 진단 선언을 읽는다.
 - F328: plugin 카드와 업데이트 목록의 최신 버전은 설치가 실행 중인 core에 고르는 version이고, 그런 version이 없는 plugin은 core <version>에 맞는 버전 없음을 보인다. `pluginsState`가 실행 중인 core를 `core`로 보고한다.

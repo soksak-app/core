@@ -10,9 +10,10 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// viewStart is the start values of a view surface whose tab recorded no directory and whose plugin has no diagnostic declaration.
+// viewStart is the start values of a view surface whose tab recorded no directory, whose plugin has no diagnostic declaration
+// and which is a tab view, so its section is null.
 func viewStart() *host.ViewStart {
-	return &host.ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`)}
+	return &host.ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`), Section: json.RawMessage(`null`)}
 }
 
 // contract: surfaces-geometry.rect.accepts-zero-size, surfaces-geometry.rect.rejects-negative-size, surfaces-geometry.rect.rejects-non-finite

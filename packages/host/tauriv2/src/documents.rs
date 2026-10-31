@@ -3268,9 +3268,14 @@ pub fn surface_start_script(surface: &str, start: &ViewStart) -> Result<String, 
         Some(value @ Value::Object(_)) => format!("Object.freeze({value})"),
         _ => "null".to_string(),
     };
+    crate::surfaces::check_view_section(surface, start.section.as_ref())?;
+    let section = match start.section.as_ref() {
+        Some(value @ Value::Object(_)) => format!("Object.freeze({value})"),
+        _ => "null".to_string(),
+    };
     let id = Value::String(surface.to_string());
     Ok(format!(
-        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations}),\"diagnostics\":{diagnostics}}});"
+        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations}),\"diagnostics\":{diagnostics},\"section\":{section}}});"
     ))
 }
 

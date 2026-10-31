@@ -83,6 +83,10 @@ pub struct ViewStart {
     /// the Go host runs the same check.
     #[serde(default, deserialize_with = "present_value")]
     pub(crate) diagnostics: Option<Value>,
+    /// The section of the view or null, kept raw so that a missing section is refused (check_view_section); the Go host runs the
+    /// same check.
+    #[serde(default, deserialize_with = "present_value")]
+    pub(crate) section: Option<Value>,
 }
 
 /// The wire start values of a view. `declarations` is an index into the request-local table and has no default, so a
@@ -98,6 +102,8 @@ struct ViewStartRequest {
     declarations: u64,
     #[serde(default, deserialize_with = "present_value")]
     diagnostics: Option<Value>,
+    #[serde(default, deserialize_with = "present_value")]
+    section: Option<Value>,
 }
 
 /// Keeps a present value, null included, so that an absent field and a null field are told apart.
@@ -171,7 +177,8 @@ fn validate_view_start(surface: &str, start: &ViewStart) -> Result<(), String> {
         ));
     }
     view_origin_directory(surface, start.origin.as_ref())?;
-    check_view_diagnostics(surface, start.diagnostics.as_ref())
+    check_view_diagnostics(surface, start.diagnostics.as_ref())?;
+    check_view_section(surface, start.section.as_ref())
 }
 
 /// Checks the diagnostic declaration of the start values of the view of surface: it is required, and it is an object or null
@@ -188,6 +195,41 @@ pub(crate) fn check_view_diagnostics(
         Some(_) => Err(format!(
             "surface {surface:?}: view start diagnostics is not an object or null"
         )),
+    }
+}
+
+/// Checks the section of the start values of the view of surface: it is required, and it is null or an object with exactly a
+/// non-empty id, a non-empty sidebar and a card that is a non-empty text or null (docs/spec/native-surfaces.md#view-surfaces).
+pub(crate) fn check_view_section(surface: &str, section: Option<&Value>) -> Result<(), String> {
+    let Some(section) = section else {
+        return Err(format!(
+            "surface {surface:?}: view start section is missing"
+        ));
+    };
+    if section.is_null() {
+        return Ok(());
+    }
+    let malformed =
+        || format!("surface {surface:?}: view start section is not {{id, sidebar, card}}");
+    let fields = section
+        .as_object()
+        .filter(|fields| fields.len() == 3)
+        .ok_or_else(malformed)?;
+    let non_empty_text = |key: &str| {
+        fields
+            .get(key)
+            .and_then(Value::as_str)
+            .is_some_and(|text| !text.is_empty())
+    };
+    let card_ok = match fields.get("card") {
+        Some(Value::Null) => true,
+        Some(Value::String(card)) => !card.is_empty(),
+        _ => false,
+    };
+    if non_empty_text("id") && non_empty_text("sidebar") && card_ok {
+        Ok(())
+    } else {
+        Err(malformed())
     }
 }
 
@@ -512,6 +554,7 @@ impl SyncRequest {
                         project: start.project,
                         declarations: Some(declarations.clone()),
                         diagnostics: start.diagnostics,
+                        section: start.section,
                     })
                 }
                 None => None,

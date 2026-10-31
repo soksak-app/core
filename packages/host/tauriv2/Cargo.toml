@@ -41,6 +41,8 @@ wait-timeout = "0.2"
 base64 = "0.22"
 crc32fast = "1"
 url = "2"
+# The session file name is the RFC 3986 percent-encoding of the session id (workspace.rs tab_session_name).
+percent-encoding = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
