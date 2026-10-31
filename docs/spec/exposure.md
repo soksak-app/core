@@ -124,7 +124,8 @@ The per-surface mount registration is reserved before it waits for disposal of t
 | --- | --- |
 | `expose.status(name, read, subscribe)` | `read()` returns the current value; `subscribe(fn)` calls `fn(value)` on each change |
 | `expose.command(name, run)` | `run(params)` returns the result or a promise of it |
-| `expose.dom(name, element)` | The element for a dom entry |
+| `expose.dom(name, element)` | The element for a dom entry, which the exposure marks with the name |
+| `expose.dom(name, provide)` | For a dom entry of `many`, a function that returns the current elements; each request reads it again, so a list that replaces its row elements keeps none that it removed, and the page marks each element with the name (`dataset.expose`) when it draws it |
 
 The native host relays registrations and requests between a surface page and the registry of the main page in the same way that it relays [sidecar](sidecars.md) messages. When a surface page closes, the registry removes its registrations.
 

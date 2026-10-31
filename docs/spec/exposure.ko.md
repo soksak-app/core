@@ -124,7 +124,8 @@ Surface별 mount registration은 이전 entry의 dispose를 기다리기 전에 
 | --- | --- |
 | `expose.status(name, read, subscribe)` | `read()`는 현재 값을 반환하고, `subscribe(fn)`은 값이 바뀔 때마다 `fn(value)`를 호출한다 |
 | `expose.command(name, run)` | `run(params)`는 결과 또는 결과의 Promise를 반환한다 |
-| `expose.dom(name, element)` | dom 항목의 요소 |
+| `expose.dom(name, element)` | dom 항목의 요소. exposure가 그 요소에 이름을 표시한다 |
+| `expose.dom(name, provide)` | `many`인 dom 항목에서 현재 요소들을 돌려주는 함수. 요청마다 다시 읽으므로, 행 요소를 바꾸는 목록은 지운 요소를 들고 있지 않는다. 페이지는 각 요소를 그릴 때 이름(`dataset.expose`)을 표시한다 |
 
 네이티브 호스트는 [사이드카](sidecars.ko.md) 메시지를 전달하는 방식과 같은 방식으로 표면 페이지와 메인 페이지 등록소 사이에서 등록과 요청을 전달한다. 표면 페이지가 닫히면 등록소는 그 페이지의 등록을 제거한다.
 

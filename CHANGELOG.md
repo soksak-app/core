@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F332-12: `expose.dom(name, provide)` registers a function that returns the current elements of a dom entry of many, which each request reads again, so a view that replaces its row elements keeps none that it removed.
 - F332-11: A view follows the changes of the project data of its project with `runtime.data.on(listener)`, the view call `runtime.data.on` and the event `data` `{key}`, for its own writes and for the writes of other windows.
 - F332-8-1: The exposure check accepts a section id of the manifest as a declared name, a command registered through `commands.register` of the view bridge, and a declared command of the plugin run through `runtime.command`.
 - F332-4-2: The event catalog and the `sok` event classes no longer declare `page.trace.declared-ui.snapshot.skipped`.

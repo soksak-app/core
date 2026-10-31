@@ -1843,10 +1843,19 @@ export function createExpose(port, load) {
     },
     status: (name, read, subscribe) => register("status", name, (e) => e.status(name, read, subscribe)),
     command: (name, run) => register("command", name, (e) => e.command(name, run)),
-    dom: (name, element) => register("dom", name, (e) => {
-      e.dom(name, () => [element]);
-      element.dataset.expose = name;
-    }),
+    // target is one element, which the exposure marks with the name, or a function that returns the current elements of a dom entry
+    // of many, which each request reads again, so a list that replaces its row elements keeps no element it removed. The page marks
+    // each element that such a function returns with the name (dataset.expose) when it draws it (docs/spec/exposure.md).
+    dom: (name, target) => {
+      if (typeof target === "function") return register("dom", name, (e) => e.dom(name, target));
+      if (typeof target?.dataset !== "object") {
+        return Promise.reject(new TypeError(`dom ${name} takes an element or a function that returns the current elements`));
+      }
+      return register("dom", name, (e) => {
+        e.dom(name, () => [target]);
+        target.dataset.expose = name;
+      });
+    },
     dispose: async () => {
       disposed = true;
       binder.dispose();

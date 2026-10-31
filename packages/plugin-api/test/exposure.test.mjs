@@ -271,6 +271,35 @@ test("a surface page registers declared names once through its port and answers 
   ]);
 });
 
+test("a dom entry of many elements takes a provider of the current elements, which each request reads again", async () => {
+  const registered = [];
+  const replies = [];
+  let request = null;
+  const port = {
+    register: async (kind, name) => { registered.push([kind, name]); },
+    onRequest: async (fn) => { request = fn; },
+    reply: (id, payload) => { replies.push([id, payload]); },
+    report: async (message) => { throw new Error(`unexpected report: ${message}`); },
+  };
+  const expose = createExpose(port, async () => exposes());
+  // A list that draws only its visible rows replaces its row elements; the provider returns the rows drawn now.
+  let rows = [element({ left: 0, top: 0, width: 10, height: 10 }), element({ left: 0, top: 10, width: 10, height: 10 })];
+  await expose.dom("probe.row", () => rows);
+  assert.deepEqual(registered, [["dom", "probe.row"]]);
+  request({ id: 1, method: "dom.rect", params: { name: "probe.row", index: 1 } });
+  await new Promise((resolve) => setImmediate(resolve));
+  rows = [element({ left: 0, top: 40, width: 10, height: 10 })];
+  request({ id: 2, method: "dom.rect", params: { name: "probe.row", index: 0 } });
+  request({ id: 3, method: "dom.rect", params: { name: "probe.row", index: 1 } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(replies.sort((x, y) => x[0] - y[0]), [
+    [1, { result: { x: 0, y: 10, width: 10, height: 10, zoom: 1 } }],
+    [2, { result: { x: 0, y: 40, width: 10, height: 10, zoom: 1 } }],
+    [3, { error: { code: EXPOSURE_ERRORS.unregistered, message: "dom probe.row has no element at index 1" } }],
+  ], "a request reads the rows that the provider returns at that request, so a replaced row is not kept");
+  await assert.rejects(expose.dom("probe.row", 5), /dom probe.row takes an element or a function that returns the current elements/);
+});
+
 // dom.rect reports the effective CSS zoom of the element from the computed zoom of the element and of its flat-tree ancestors,
 // which every engine reports, so a reply is read the same way on an engine without currentCSSZoom.
 test("dom.rect reports the effective CSS zoom from the computed zoom of the element and its flat-tree ancestors", async () => {
