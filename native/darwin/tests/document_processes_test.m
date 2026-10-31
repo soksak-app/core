@@ -40,16 +40,45 @@ static long physicalFootprint(pid_t pid) {
 
 static NSString *const kPage = @"<!doctype html><title>Region</title><body>region</body>";
 
-// An HTTP server on the loopback address that answers every request with the page and closes each connection.
+// The text of a network error for the records of the test server, or none.
+static NSString *networkError(nw_error_t error) {
+    if (!error) return @"none";
+    CFErrorRef cf = nw_error_copy_cf_error(error);
+    NSString *text = [NSString stringWithFormat:@"%@", (__bridge NSError *)cf];
+    CFRelease(cf);
+    return text;
+}
+
+// The number of connections that the test servers accepted, which names each connection in the records.
+static int connectionCount;
+
+// An HTTP server on the loopback address that answers every request with the page and closes each connection. Each
+// connection writes a record when it is accepted, when its request arrives and when its answer is sent, so a region that
+// does not load shows whether its request reached the server.
 static nw_listener_t serve(void) {
     nw_parameters_t parameters = nw_parameters_create_secure_tcp(NW_PARAMETERS_DISABLE_PROTOCOL, NW_PARAMETERS_DEFAULT_CONFIGURATION);
     nw_parameters_set_local_endpoint(parameters, nw_endpoint_create_host("127.0.0.1", "0"));
     nw_listener_t listener = nw_listener_create(parameters);
     nw_listener_set_queue(listener, dispatch_get_main_queue());
     nw_listener_set_new_connection_handler(listener, ^(nw_connection_t connection) {
+        int number = ++connectionCount;
+        nw_endpoint_t remote = nw_connection_copy_endpoint(connection);
+        printf("server connection %d accepted from %s\n", number, nw_endpoint_get_hostname(remote));
+        nw_release(remote);
+        fflush(stdout);
         nw_connection_set_queue(connection, dispatch_get_main_queue());
         nw_connection_start(connection);
         nw_connection_receive(connection, 1, 65536, ^(dispatch_data_t content, nw_content_context_t context, bool complete, nw_error_t error) {
+            size_t received = content ? dispatch_data_get_size(content) : 0;
+            printf("server connection %d received %zu bytes, complete %d, error %s\n", number, received, complete, networkError(error).UTF8String);
+            fflush(stdout);
+            if (error || received == 0) {
+                // A connection that ends without a request is closed without an answer; WebKit opens such connections ahead of
+                // a request. A receive error is a failure of the server.
+                if (error) check(NO, [NSString stringWithFormat:@"server connection %d receives its request: %@", number, networkError(error)]);
+                nw_connection_cancel(connection);
+                return;
+            }
             NSData *bytes = [kPage dataUsingEncoding:NSUTF8StringEncoding];
             NSString *head = [NSString stringWithFormat:@"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
                 "Content-Length: %lu\r\nConnection: close\r\n\r\n", (unsigned long)bytes.length];
@@ -57,6 +86,9 @@ static nw_listener_t serve(void) {
             [response appendData:bytes];
             dispatch_data_t out = dispatch_data_create(response.bytes, response.length, dispatch_get_main_queue(), DISPATCH_DATA_DESTRUCTOR_DEFAULT);
             nw_connection_send(connection, out, NW_CONNECTION_FINAL_MESSAGE_CONTEXT, true, ^(nw_error_t sent) {
+                printf("server connection %d sent its answer, error %s\n", number, networkError(sent).UTF8String);
+                fflush(stdout);
+                if (sent) check(NO, [NSString stringWithFormat:@"server connection %d sends its answer: %@", number, networkError(sent)]);
                 nw_connection_cancel(connection);
             });
         });
