@@ -12,7 +12,7 @@ use super::{
     committed_view_updates, complete_layout_presentation, create_registered_surface,
     mark_first_commit, prepare_surface_visibility, pressed_surface, removed_surfaces,
     surface_dispatch_clock_from, surface_dispatch_context_with, surface_dispatch_fields,
-    surface_dispatch_result_with,
+    surface_dispatch_result_with, with_registered_surface,
 };
 
 mod declaration_table {
@@ -674,6 +674,34 @@ fn a_status_read_during_surface_close_finds_the_registered_surface() {
         "the native surface of tab-2 has no registered surface before its close"
     );
     assert!(named.lock().unwrap().contains_key(&7));
+}
+
+#[test]
+fn a_sync_step_that_runs_after_the_close_of_its_surface_does_not_use_the_closed_handle() {
+    // The sync reads the handle of tab-2 and queues a main-thread step with it; a window close queued before that step closes the
+    // native surface and forgets its registration, so the handle no longer names a view when the step runs.
+    let named = Mutex::new(HashMap::new());
+    let surface_hosts = Mutex::new(HashMap::new());
+    let handle = create_registered_surface(&named, &surface_hosts, "tab-2", || Ok(7usize)).unwrap();
+    assert_eq!(
+        close_registered_surface(&named, &surface_hosts, "tab-2", handle, |_| Ok(())),
+        Ok(true)
+    );
+    let mut used = Vec::new();
+    let applied = with_registered_surface(&surface_hosts, "tab-2", handle, |handle| {
+        used.push(handle);
+        Ok(())
+    });
+    assert_eq!(
+        used,
+        Vec::<usize>::new(),
+        "the step used the handle of a closed surface"
+    );
+    assert_eq!(
+        applied,
+        Ok(None),
+        "a step of a closed surface applies nothing"
+    );
 }
 
 // contract: view.composition.page-and-regions

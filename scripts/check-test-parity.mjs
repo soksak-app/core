@@ -8223,6 +8223,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F303",
+    implementation: [{ file: "packages/host/tauriv2/src/surfaces.rs", symbol: "pub fn with_registered_surface<T>(" }],
+    tests: [{ file: "packages/host/tauriv2/src/surfaces_test.rs", id: "a_sync_step_that_runs_after_the_close_of_its_surface_does_not_use_the_closed_handle" }],
+    expected: "A layout step of the Tauri host uses a surface handle only while its registration still holds it.",
+    levels: ["unit"],
+  },
+  {
     id: "F301-1",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_closed_surface(" }],
     tests: [

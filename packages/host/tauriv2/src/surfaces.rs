@@ -1366,17 +1366,27 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             };
             let dispatch =
                 surface_dispatch(window, Some(ticket), "sync", "sync-surface-prepare-ui");
+            let prepared_hosts = Arc::clone(&context);
+            let prepared = s.id.clone();
             exposure::on_main(window, move || {
                 surface_dispatch_result(dispatch, || {
-                    // Visible surfaces keep their current visibility until present applies the transaction; invisible surfaces hide now.
-                    prepare_surface_visibility(visible, |hidden| {
-                        platform.set_surface_hidden_handle(handle, hidden)
-                    })?;
-                    platform.set_surface_alpha_handle(handle, solid)?;
-                    if visible {
-                        platform.place_surface(handle, ax, ay, aw, ah)?;
-                    }
-                    Ok(())
+                    with_registered_surface(
+                        &prepared_hosts.surface_hosts,
+                        &prepared,
+                        handle,
+                        |handle| {
+                            // Visible surfaces keep their current visibility until present applies the transaction; invisible surfaces hide now.
+                            prepare_surface_visibility(visible, |hidden| {
+                                platform.set_surface_hidden_handle(handle, hidden)
+                            })?;
+                            platform.set_surface_alpha_handle(handle, solid)?;
+                            if visible {
+                                platform.place_surface(handle, ax, ay, aw, ah)?;
+                            }
+                            Ok(())
+                        },
+                    )
+                    .map(|_| ())
                 })
             })?;
             // The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
@@ -1388,18 +1398,22 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             // builds the start values script, and CheckSyncRequest refuses it first.
             let start = s.start.clone().unwrap_or_default();
             let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-view-ui");
+            let view_hosts = Arc::clone(&context);
             exposure::on_main(window, move || {
                 surface_dispatch_result(dispatch, || {
-                    documents::sync_view(
-                        &view_window,
-                        platform,
-                        handle,
-                        &surface,
-                        &plugin,
-                        &page,
-                        visible,
-                        start,
-                    )
+                    with_registered_surface(&view_hosts.surface_hosts, &surface, handle, |handle| {
+                        documents::sync_view(
+                            &view_window,
+                            platform,
+                            handle,
+                            &surface,
+                            &plugin,
+                            &page,
+                            visible,
+                            start,
+                        )
+                    })
+                    .map(|_| ())
                 })
             })?;
         }
@@ -1486,12 +1500,19 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         }
         let placed = read_surface_placements(targets, |targets| {
             let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-placement-read-ui");
+            let placed_hosts = Arc::clone(&context);
             exposure::on_main(window, move || {
                 surface_dispatch_result(dispatch, || {
                     targets
                         .into_iter()
-                        .map(|(handle, id, visible)| {
-                            surface_handle_placement(platform, handle, &id, visible)
+                        .filter_map(|(handle, id, visible)| {
+                            with_registered_surface(
+                                &placed_hosts.surface_hosts,
+                                &id,
+                                handle,
+                                |handle| surface_handle_placement(platform, handle, &id, visible),
+                            )
+                            .transpose()
                         })
                         .collect()
                 })
@@ -2013,6 +2034,30 @@ pub fn close_registered_surface(
         .unwrap_or_else(PoisonError::into_inner)
         .remove(&handle);
     closed.map(|()| true)
+}
+
+/// Runs `apply` with the native surface `handle` of `id` in a step of the main thread while `hosts` still registers `handle` for
+/// `id`, and returns its result. The sync reads `handle` from `hosts` before it queues the step, and a window close queued before the
+/// step closes the native surface and forgets its registration (close_registered_surface, close_window_surfaces), so a handle that
+/// is no longer registered names no view: the step applies nothing and returns Ok(None). Every close runs on the main thread, as this
+/// step does, so no close runs between the check and `apply`.
+pub fn with_registered_surface<T>(
+    hosts: &Mutex<HashMap<String, Handle>>,
+    id: &str,
+    handle: Handle,
+    apply: impl FnOnce(Handle) -> Result<T, String>,
+) -> Result<Option<T>, String> {
+    let registered = hosts
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(id)
+        == Some(&handle);
+    if !registered {
+        return Ok(None);
+    }
+    apply(handle).map(Some)
 }
 
 /// Returns the surfaces of `hosts` that the list `alive` of the page no longer holds, with their handles. It does not

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F303: Tauri host의 layout step은 등록이 아직 surface handle을 가질 때만 그 handle을 쓴다. 그래서 창 close가 넣어진 step보다 먼저 닫은 surface가 더 이상 host를 `webviewSetSurfaceHidden`의 `SIGTRAP`으로 끝내지 않는다.
 - F300-3: Tauri의 fatal signal 테스트는 Wails test support의 짝인 `tests/support/crash_reports.rs`로 시스템이 자식에 대해 쓴 crash report를 지운다.
 - F301-2: 허용된 host 차이의 행 H21이 Tauri의 surface close 테스트에 Wails 짝이 없는 이유를 밝힌다.
 - F301-1: Tauri host에서 surface의 close는 잡은 창 기록에서 presentation wait와 view source를 끝내고 창이 열려 있을 때만 페이지에 알린다. 그래서 먼저 닫힌 창이 surface마다 `view channel: project window is closed`를 두 번 기록하지 않는다.
