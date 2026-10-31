@@ -127,10 +127,10 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/windows_front_test.rs", "packages/host/tauriv2/src/images_test.rs", "packages/host/tauriv2/src/images_relay_test.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/composition_overlay_test.rs", "packages/host/tauriv2/src/platform/darwin/webview_overlay_test.rs", "packages/host/tauriv2/src/platform/darwin/document_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_performance_test.rs", "packages/host/tauriv2/src/exposure_webviews_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/src/notifications_test.rs", "packages/host/tauriv2/src/project_removal_test.rs", "packages/host/tauriv2/src/endpoint_lock_test.rs", "packages/host/tauriv2/src/windows_records_test.rs", "packages/host/tauriv2/src/responder_test.rs", "packages/host/tauriv2/src/sidecars_lock_test.rs", "packages/host/tauriv2/src/image_detach_test.rs", "packages/host/tauriv2/src/start_test.rs", "packages/host/tauriv2/src/performance_lock_test.rs", "packages/host/tauriv2/src/workspace_lock_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/view_origin_test.rs", "packages/host/tauriv2/src/view_responsiveness_test.rs", "packages/host/tauriv2/src/view_theme_test.rs", "packages/host/tauriv2/src/surface_close_test.rs", "packages/host/tauriv2/src/presentation_end_test.rs", "packages/host/tauriv2/src/view_start_test.rs", "packages/host/tauriv2/src/view_call_peer_test.rs", "packages/host/tauriv2/src/document_binary_take_test.rs", "packages/host/tauriv2/src/presentation_wait_test.rs", "packages/host/tauriv2/src/view_join_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json", "packages/host/tauriv2/src/diagnostics_lock_test.rs", "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", "packages/host/tauriv2/src/diagnostics_test.rs", "packages/host/tauriv2/src/plugins_starter_test.rs", "packages/host/tauriv2/src/platform/darwin/input_reference_test.rs", "packages/host/tauriv2/src/log_policy_watch_hook_lock_test.rs", "packages/host/tauriv2/src/process_lock_hook_lock_test.rs", "packages/host/tauriv2/src/assets_lock_test.rs", "packages/host/tauriv2/src/deep_link_lock_test.rs", "packages/host/tauriv2/src/log_query_lock_test.rs", "packages/host/tauriv2/src/debug_follow_lock_test.rs", "packages/host/tauriv2/src/plugin_host_test.rs", "packages/host/tauriv2/src/plugin_host_channel_test.rs", "packages/host/tauriv2/src/source_origins_test.rs", "packages/host/tauriv2/src/plugin_host_sidecar_test.rs", "packages/host/tauriv2/src/sidecars_session_retention_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/windows_front_test.rs", "packages/host/tauriv2/src/document_post_test.rs", "packages/host/tauriv2/src/images_test.rs", "packages/host/tauriv2/src/images_relay_test.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/composition_overlay_test.rs", "packages/host/tauriv2/src/platform/darwin/webview_overlay_test.rs", "packages/host/tauriv2/src/platform/darwin/document_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_webviews_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/src/notifications_test.rs", "packages/host/tauriv2/src/project_removal_test.rs", "packages/host/tauriv2/src/endpoint_lock_test.rs", "packages/host/tauriv2/src/windows_records_test.rs", "packages/host/tauriv2/src/responder_test.rs", "packages/host/tauriv2/src/sidecars_lock_test.rs", "packages/host/tauriv2/src/image_detach_test.rs", "packages/host/tauriv2/src/start_test.rs", "packages/host/tauriv2/src/performance_lock_test.rs", "packages/host/tauriv2/src/workspace_lock_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/view_origin_test.rs", "packages/host/tauriv2/src/view_responsiveness_test.rs", "packages/host/tauriv2/src/view_theme_test.rs", "packages/host/tauriv2/src/surface_close_test.rs", "packages/host/tauriv2/src/presentation_end_test.rs", "packages/host/tauriv2/src/view_start_test.rs", "packages/host/tauriv2/src/view_call_peer_test.rs", "packages/host/tauriv2/src/document_binary_take_test.rs", "packages/host/tauriv2/src/presentation_wait_test.rs", "packages/host/tauriv2/src/view_join_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json", "packages/host/tauriv2/src/diagnostics_lock_test.rs", "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", "packages/host/tauriv2/src/diagnostics_test.rs", "packages/host/tauriv2/src/plugins_starter_test.rs", "packages/host/tauriv2/src/platform/darwin/input_reference_test.rs", "packages/host/tauriv2/src/log_policy_watch_hook_lock_test.rs", "packages/host/tauriv2/src/process_lock_hook_lock_test.rs", "packages/host/tauriv2/src/assets_lock_test.rs", "packages/host/tauriv2/src/deep_link_lock_test.rs", "packages/host/tauriv2/src/log_query_lock_test.rs", "packages/host/tauriv2/src/debug_follow_lock_test.rs", "packages/host/tauriv2/src/source_origins_test.rs", "packages/host/tauriv2/src/sidecars_session_retention_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/projects_test.go", "packages/host/wailsv3/src/images_relay_test.go", "packages/host/wailsv3/src/image_detach_test.go", "packages/host/wailsv3/src/responder_test.go", "packages/host/wailsv3/src/start_test.go", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/diagnostics_input_reference_test.go", "packages/host/wailsv3/src/diagnostics_clock_test.go", "packages/host/wailsv3/src/composition_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/webview_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/document_test.go", "packages/host/wailsv3/src/platform/darwin/input_reference_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/exposure_performance_test.go", "packages/host/wailsv3/src/exposure_webviews_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_start_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/view_call_record_test.go", "packages/host/wailsv3/src/view_error_test.go", "packages/host/wailsv3/src/document_binary_take_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go", "packages/host/wailsv3/src/view_origin_test.go", "packages/host/wailsv3/src/plugin_host_test.go", "packages/host/wailsv3/src/plugin_host_channel_test.go", "packages/host/wailsv3/src/source_origins_test.go", "packages/host/wailsv3/src/plugin_host_sidecar_test.go", "packages/host/wailsv3/src/sidecars_session_retention_test.go", "packages/host/wailsv3/src/plugins_starter_test.go", "packages/host/wailsv3/src/images_test.go", "packages/host/wailsv3/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/projects_test.go", "packages/host/wailsv3/src/document_post_test.go", "packages/host/wailsv3/src/images_relay_test.go", "packages/host/wailsv3/src/image_detach_test.go", "packages/host/wailsv3/src/responder_test.go", "packages/host/wailsv3/src/start_test.go", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/diagnostics_input_reference_test.go", "packages/host/wailsv3/src/diagnostics_clock_test.go", "packages/host/wailsv3/src/composition_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/webview_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/document_test.go", "packages/host/wailsv3/src/platform/darwin/input_reference_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/exposure_webviews_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_start_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/view_call_record_test.go", "packages/host/wailsv3/src/view_error_test.go", "packages/host/wailsv3/src/document_binary_take_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go", "packages/host/wailsv3/src/view_origin_test.go", "packages/host/wailsv3/src/source_origins_test.go", "packages/host/wailsv3/src/sidecars_session_retention_test.go", "packages/host/wailsv3/src/plugins_starter_test.go", "packages/host/wailsv3/src/images_test.go", "packages/host/wailsv3/src/windows_front_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go", "packages/sok/wailsv3/src/diagnostics_test.go", "packages/sok/wailsv3/src/dev_test.go", "packages/sok/wailsv3/src/debug_test.go", "packages/sok/wailsv3/src/event_log_loss_test.go"]),
   lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs", "packages/sok/tauriv2/src/event_log_lock_test.rs", "packages/sok/tauriv2/src/debug_test.rs", "packages/sok/tauriv2/src/event_log_loss_test.rs", "packages/sok/tauriv2/src/process_wait_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
@@ -1127,27 +1127,6 @@ const FEATURE_LINKS = [
   },
 
   {
-  "id": "F239-220",
-  "implementation": [
-    {
-      "file": "packages/host/wailsv3/src/bindings.go",
-      "symbol": "func (h *Host) PluginHostSidecarClose(ctx context.Context, requestJSON json.RawMessage) error"
-    },
-    {
-      "file": "packages/host/wailsv3/src/plugin_host_sidecar.go",
-      "symbol": "type PluginHostSidecarCloseRequest struct {"
-    }
-  ],
-  "tests": [
-    {
-      "file": "packages/host/wailsv3/src/plugin_host_sidecar_test.go",
-      "id": "TestPluginHostSidecarCloseBindingAcceptsTheDeclaredRequestObject"
-    }
-  ],
-  "expected": "Wails decodes the declared plugin-host close request object and retains strict field validation.",
-  "levels": ["unit"]
-},
-  {
   "id": "F239-226",
   "implementation": [
     {
@@ -1388,33 +1367,6 @@ const FEATURE_LINKS = [
     }
   ],
   "expected": "The collector preserves process identities, unique physical footprints, sampler errors and cleanup; owner verification does not establish measured application values.",
-  "levels": [
-    "unit"
-  ]
-},
-  {
-  "id": "F212.9a-1",
-  "implementation": [
-    {
-      "file": "packages/host/wailsv3/src/exposure.go",
-      "symbol": "func pluginHostProcessesForFacts("
-    },
-    {
-      "file": "packages/host/tauriv2/src/exposure.rs",
-      "symbol": "fn plugin_host_processes_for_facts("
-    }
-  ],
-  "tests": [
-    {
-      "file": "packages/host/wailsv3/src/exposure_performance_test.go",
-      "id": "TestPluginHostProcessesUseRegisteredHandlesOnly"
-    },
-    {
-      "file": "packages/host/tauriv2/src/exposure_performance_test.rs",
-      "id": "plugin_host_facts_match_registered_handles_only"
-    }
-  ],
-  "expected": "Registered plugin-host handles identify their WebContent process rows; unrelated WebViews are excluded and unstarted or missing processes remain explicit.",
   "levels": [
     "unit"
   ]
@@ -2122,15 +2074,11 @@ const FEATURE_LINKS = [
   {
     id: "F212.12-1-15",
     implementation: [
-      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "PluginHostReply" },
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "revivePersistent" },
       { file: "e2e/view-display.mjs", symbol: "core.tab.close" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/arguments_test.rs", id: "a_plugin_host_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value" },
       { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
-      { file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_closing_window_keeps_its_plugin_host_records_for_the_close_step" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "the_end_of_a_host_whose_window_is_closed_is_not_reported" },
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
       { file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" },
     ],
@@ -2334,17 +2282,15 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentRetainSendsOnlyLayoutSurfaces" },
-      { file: "packages/host/wailsv3/src/plugin_host_sidecar_test.go", id: "TestNativeViewRemovalRetainsPersistentSession" },
-      { file: "packages/host/wailsv3/src/plugin_host_sidecar_test.go", id: "TestRetainClosesPersistentSessionAbsentFromTheLayout" },
-      { file: "packages/host/wailsv3/src/plugin_host_sidecar_test.go", id: "TestRetainKeepsAnOrdinarySurfaceFirstSentDuringTheStart" },
-      { file: "packages/host/wailsv3/src/plugin_host_sidecar_test.go", id: "TestRetainKeepsASessionFirstSentDuringTheStart" },
       { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestNativeViewRemovalStillClosesAStandardIOSession" },
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestNativeViewRemovalRetainsPersistentSession" },
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestRetainClosesPersistentSessionAbsentFromTheLayout" },
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestRetainKeepsAnOrdinarySurfaceFirstSentDuringTheStart" },
       { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "persistent_retain_sends_only_layout_surfaces" },
-      { file: "packages/host/tauriv2/src/plugin_host_sidecar_test.rs", id: "native_view_removal_does_not_close_a_persistent_layout_session" },
-      { file: "packages/host/tauriv2/src/plugin_host_sidecar_test.rs", id: "logical_retain_closes_a_persistent_session_absent_from_the_layout" },
-      { file: "packages/host/tauriv2/src/plugin_host_sidecar_test.rs", id: "a_retain_keeps_an_ordinary_surface_first_sent_during_its_start" },
-      { file: "packages/host/tauriv2/src/plugin_host_sidecar_test.rs", id: "a_retain_keeps_a_session_first_sent_during_its_start" },
       { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "native_view_removal_still_closes_a_standard_io_session" },
+      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "native_view_removal_does_not_close_a_persistent_layout_session" },
+      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "logical_retain_closes_a_persistent_session_absent_from_the_layout" },
+      { file: "packages/host/tauriv2/src/sidecars_session_retention_test.rs", id: "a_retain_keeps_an_ordinary_surface_first_sent_during_its_start" },
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "closing a tab removes its session file after the layout write, and the start removes the files of tabs in no layout" },
     ],
     expected: "Native-view removal keeps a persistent session for a surface still held by a layout while closing stdio sessions; authoritative retain removes surface owners absent from every layout after the final tab occurrence leaves.",
@@ -2543,22 +2489,6 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-runner.test.mjs", id: "a process that outlives its test process is ended at that exit, and the failure names it" },
     ],
     expected: "The test runner ends a process group that a test file leaves running and fails that file with the names of the processes, at the exit of the file process or at its limit, checked by two runner tests.",
-    levels: ["unit"],
-  },
-  {
-    id: "F249",
-    implementation: [
-      { file: "packages/workbench/command-route.js", symbol: "export function runCommandCall" },
-      { file: "packages/host/wailsv3/src/plugin_host_channel.go", symbol: "func servedPluginHostCall" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "pub fn forwarded_call" },
-    ],
-    tests: [
-      { file: "packages/host/wailsv3/src/plugin_host_channel_test.go", id: "TestPluginHostChannelForwardsTheCommandCall" },
-      { file: "packages/host/wailsv3/src/plugin_host_channel_test.go", id: "TestPluginHostChannelForwardsTheLogCall" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "the_host_forwards_the_command_call_to_the_main_page" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "the_host_forwards_the_log_call_to_the_main_page" },
-    ],
-    expected: "A plugin host page runs a command with runtime.command and writes an event with runtime.log; both hosts forward the calls and the main page answers them with the checks of the view calls, each checked by a workbench, a Go and a Rust test.",
     levels: ["unit"],
   },
   {
@@ -4966,24 +4896,6 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
-    id: "F239-43",
-    implementation: [
-      { file: "packages/host/wailsv3/src/plugin_host.go", symbol: "pluginHostReceived(plugin string, instance *pluginHostChannel" },
-      { file: "packages/host/wailsv3/src/plugin_host_channel.go", symbol: "func (c *pluginHostChannels) current(plugin string, instance *pluginHostChannel) bool" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "pub fn receive_from(" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "pub(crate) fn late_message_error(" },
-    ],
-    tests: [
-      { file: "packages/host/wailsv3/src/plugin_host_test.go", id: "TestPluginHostDelayedMessageFromDisposedInstanceIsNotRelayedAfterRecreate" },
-      { file: "packages/host/wailsv3/src/plugin_host_test.go", id: "TestPluginHostMessageDuringCreationUsesTheRegisteredInstance" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_delayed_callback_from_a_disposed_host_is_not_received_by_a_recreated_host" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_callback_during_creation_uses_the_registered_instance_before_the_native_handle_is_stored" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_late_provider_error_is_preserved_after_window_records_are_removed" },
-    ],
-    expected: "A callback from a disposed plugin-host instance is canceled before a replacement channel receives it, while current and creation-time callbacks remain valid; an explicit late provider error retains its captured plugin identity.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-46.1",
     implementation: [
       { file: "packages/host/wailsv3/src/source_origins.go", symbol: "func (o *sourceOrigins) create(" },
@@ -4993,10 +4905,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestSourceOriginsDoesNotIssueAnUnsafeGeneration" },
-      { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestPluginHostStartupReportsGenerationExhaustionBeforeCreatingAProvider" },
-      { file: "packages/host/tauriv2/src/source_origins_test.rs", id: "the_atomic_origin_snapshot_keeps_the_floor_and_only_current_plugin_hosts" },
       { file: "packages/host/tauriv2/src/source_origins_test.rs", id: "issuing_a_generation_past_the_javascript_safe_integer_limit_changes_no_state" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_plugin_host_lifecycle_snapshot_and_status_call_share_the_issued_generation" },
     ],
     expected: "Both hosts assign unique per-window source generations, preserve the greatest issued generation in an atomic snapshot, and reject unsafe generation values without changing source state; plugin-host channel events carry the issued generation.",
     levels: ["unit"],
@@ -5018,19 +4927,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "scripts/check-e2e.mjs", symbol: "auditE2ESource" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" }],
     expected: "The window-check source audit accepts a timer that records an observation through report and does not apply its timer rule to the harness tests, which run on mocked time.",
-    levels: ["unit"],
-  },
-  {
-    id: "F212.9-3-1",
-    implementation: [
-      { file: "packages/host/wailsv3/src/plugin_host_channel.go", symbol: "pluginHostMessage" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "receive" },
-    ],
-    tests: [
-      { file: "packages/host/wailsv3/src/plugin_host_channel_test.go", id: "TestPluginHostChannelForwardsOnlyTheRegistrationCalls" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "the_host_forwards_only_the_registration_calls_and_refuses_every_other_call" },
-    ],
-    expected: "Both hosts relay the replies, the registration calls and the snapshots of a plugin host page to the main page without a surface, refuse every other call, post the theme and the messages of the main page to the ready document, and send plugin-host-ended when the host ends.",
     levels: ["unit"],
   },
 
@@ -7214,21 +7110,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-40",
-    implementation: [
-      { file: "packages/host/wailsv3/src/plugin_host_channel.go", symbol: "func pluginHostErrorText" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "fn plugin_host_error_text" },
-    ],
-    tests: [
-      { file: "packages/host/wailsv3/src/plugin_host_channel_test.go", id: "TestPluginHostViewErrorNamesItsPluginOnce" },
-      { file: "packages/host/wailsv3/src/plugin_host_test.go", id: "TestViewErrorWithoutAReasonIsRefused" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_view_error_names_its_plugin_once" },
-      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_view_error_without_a_reason_is_refused" },
-    ],
-    expected: "Both host channels include the known plugin identity once in a view.error reason and refuse an empty reason; the JavaScript source of a generic Script error remains unknown.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-40-1",
     implementation: [{ file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) processPersistent" }],
     tests: [{ file: "packages/host/wailsv3/src/sidecar_reply_test.go", id: "TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts" }],
@@ -7590,7 +7471,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/wailsv3/src/projects_test.go", id: "TestProjectShownDecodesStandardArguments" },
-      { file: "packages/host/wailsv3/src/projects_test.go", id: "TestProjectShownPostsTheCommittedProjectAndNull" },
       { file: "packages/host/wailsv3/tests/arguments_test.go", id: "TestEveryBindingDecodesItsArgumentsFirst" },
     ],
     expected: "Wails ProjectShown arguments use the standard host decoder, keep explicit null projects, and ignore undeclared fields.",
@@ -7831,21 +7711,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: ".github/workflows/ci.yml", symbol: "run: make -C core/native/darwin test" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the hosted native job runs the native unit tests" }],
     expected: "The native-darwin job runs every native test that a hosted runner can run, and the presentation tests run in the local checks.",
-    levels: ["unit"],
-  },
-  {
-    id: "F292-7",
-    implementation: [
-      { file: "native/darwin/src/window_facts.m", symbol: "@\"pluginHostWebviews\": @(pluginHosts)" },
-      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func windowWebviewCounts(facts windowFacts) (appDom, document, pluginHost int)" },
-      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn window_webview_counts(facts: &Value) -> Result<(u64, u64, u64), Failure>" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/plugin_host_view_test.m", id: "the window facts count the host web view as a plugin host web view" },
-      { file: "packages/host/wailsv3/src/exposure_webviews_test.go", id: "TestWindowStatusCountsPluginHostWebviewsApart" },
-      { file: "packages/host/tauriv2/src/exposure_webviews_test.rs", id: "window_status_counts_plugin_host_webviews_apart" },
-    ],
-    expected: "host.window counts the plugin host web views apart from the app DOM and the view web views.",
     levels: ["unit"],
   },
   {
@@ -8757,31 +8622,14 @@ const FEATURE_LINKS = [
   {
     id: "F239-107",
     implementation: [
-      { file: "packages/host/wailsv3/src/plugin_host.go", symbol: "func (s *Surfaces) createPluginHost(" },
-      { file: "packages/host/tauriv2/src/source_origins.rs", symbol: "pub(crate) fn issue_plugin_host(" },
       { file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) viewFailed(" },
       { file: "packages/host/tauriv2/src/documents.rs", symbol: "fn retire_view_before_replacement(" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestPluginHostStartupReportsGenerationExhaustionBeforeCreatingAProvider" },
-      { file: "packages/host/tauriv2/src/source_origins_test.rs", id: "an_exhausted_plugin_host_generation_does_not_start_provider_creation" },
       { file: "packages/host/wailsv3/src/view_lifecycle_test.go", id: "TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement" },
       { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_view_process_end_retires_its_origin_before_replacement_registration" },
     ],
     expected: "Provider creation follows successful source-generation allocation, and view-process-ended precedes replacement source registration.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-107-1",
-    implementation: [
-      { file: "packages/host/wailsv3/src/plugin_host.go", symbol: "func (s *Surfaces) createPluginHost(" },
-      { file: "packages/host/tauriv2/src/source_origins.rs", symbol: "pub(crate) fn issue_plugin_host(" },
-    ],
-    tests: [
-      { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestPluginHostStartupReportsGenerationExhaustionBeforeCreatingAProvider" },
-      { file: "packages/host/tauriv2/src/source_origins_test.rs", id: "an_exhausted_plugin_host_generation_does_not_start_provider_creation" },
-    ],
-    expected: "Exhausted plugin-host generation allocation leaves source state unchanged and does not create a provider.",
     levels: ["unit"],
   },
   {
@@ -8976,13 +8824,6 @@ const FEATURE_LINKS = [
   {
     id: "F262-4",
     implementation: [{ file: "packages/workbench/tab-reports.js", symbol: "export function restoreOrigin(" }],
-    tests: [{ file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" }],
-    expected: "Project windows preserve saved state and complete close and reopen without application errors.",
-    levels: ["application"],
-  },
-  {
-    id: "F212.12-1-15-5",
-    implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "fn dispose_plugin_hosts_of(" }],
     tests: [{ file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" }],
     expected: "Project windows preserve saved state and complete close and reopen without application errors.",
     levels: ["application"],
@@ -9523,7 +9364,6 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/tauriv2/tests/arguments_test.rs", id: "a_view_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value" },
       { file: "packages/host/tauriv2/tests/arguments_test.rs", id: "a_view_event_keeps_a_null_data_as_its_value" },
-      { file: "packages/host/tauriv2/tests/arguments_test.rs", id: "a_plugin_host_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value" },
       { file: "packages/host/tauriv2/tests/start_test.rs", id: "start_document_is_served_at_the_core_owner_of_soksak" },
     ],
     expected: "Tauri host-contract fixtures provide required request identities while preserving explicit null values and the current application address.",
@@ -10368,7 +10208,11 @@ const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F
 // declared source, the snapshot channel, the failed pull of a declared section and the plugin-host log of the workbench and the view
 // bridge, which F332-2 and F332-4-1 remove: the declared UI and the plugin host are removed, and a sidebar section is a view of its
 // plugin.
-const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68",
+// F212.12-1-15-5, F212.9-3-1, F212.9a-1, F239-107-1, F239-220, F239-40, F239-43, F249 and F292-7 wrote the plugin host: the host disposal of a
+// project window, the relay of the plugin host channel, the memory sampling of the plugin host processes, the provider creation of the
+// plugin host, its binding, its view error identity, its callback identity, its command route and the plugin host window counts, which
+// F332-4-3 removes with the plugin host.
+const REMOVED_COMPLETIONS = new Set(["F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43", "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68",
   "F278", "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
   "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8"]);
 

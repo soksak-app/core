@@ -122,9 +122,6 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 	var reloadErr error
 	s.invoke(func() {
 		detachments, reloadErr = s.reloadSurfaceDocuments()
-		if reloadErr == nil {
-			s.disposePluginHosts()
-		}
 	})
 	if reloadErr != nil {
 		return nil, fmt.Errorf("page reload: %w", reloadErr)
@@ -132,8 +129,6 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 	if err := s.beginImageDetaches(detachments); err != nil {
 		return nil, fmt.Errorf("page reload image detach: %w", err)
 	}
-	// The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md rule 7).
-	s.sidecars.closePluginSessions(s, func(pluginSession) bool { return true })
 	s.discardOverlay()
 	snapshot, snapshotErr := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
 	// The first draw of the page does not wait for the preparation, so the title bar is first set to the height of that first row and then the controls are read.

@@ -38,10 +38,7 @@ fn source_events_are_sent_to_the_current_channel_in_call_order() {
         )
         .expect("snapshot is sent");
     stream
-        .send(
-            "plugin-host-call",
-            json!({"plugin":"probe","generation":4,"id":7}),
-        )
+        .send("view-call", json!({"plugin":"probe","generation":4,"id":7}))
         .expect("host call is sent");
 
     assert_eq!(
@@ -58,7 +55,7 @@ fn source_events_are_sent_to_the_current_channel_in_call_order() {
                 value: json!({"plugin":"probe","generation":4,"seq":1}),
             },
             DeclaredSourceEvent {
-                name: "plugin-host-call".into(),
+                name: "view-call".into(),
                 value: json!({"plugin":"probe","generation":4,"id":7}),
             },
         ]
@@ -153,10 +150,8 @@ fn channel_send_failures_are_returned_to_the_source_handler() {
     stream.install(failing);
 
     assert_eq!(
-        stream.send("plugin-host-call", Value::Null),
-        Err(
-            "declared source event plugin-host-call: asset not found: injected send failure".into()
-        )
+        stream.send("view-call", Value::Null),
+        Err("declared source event view-call: asset not found: injected send failure".into())
     );
 }
 

@@ -186,11 +186,6 @@ func PerformanceSample() {
 				return processMemory(map[string]any{"role": "document", "window": window, "surface": document.Surface, "document": document.Document}, document.Process)
 			})
 		}
-		for _, pluginHost := range processes.PluginHosts {
-			PerformanceObserve("sampler", func() map[string]any {
-				return processMemory(map[string]any{"role": "plugin-host", "window": window, "plugin": pluginHost.Plugin}, pluginHost.Process)
-			})
-		}
 	}
 }
 
@@ -241,12 +236,10 @@ func addFootprint(record map[string]any, footprint platform.ProcessFootprint) {
 }
 
 // PerformanceWindowProcesses are the processes of one window that the sampler reads: the WebContent process of its page,
-// each document web view with its surface, and each registered plugin-host web view with its plugin. A process is 0
-// before it starts.
+// each document web view with its surface. A process is 0 before it starts.
 type PerformanceWindowProcesses struct {
-	Page        int
-	Documents   []PerformanceDocumentProcess
-	PluginHosts []PerformancePluginHostProcess
+	Page      int
+	Documents []PerformanceDocumentProcess
 }
 
 // PerformanceDocumentProcess is the WebContent process of one document web view of a window: a document region or the page of
@@ -255,12 +248,6 @@ type PerformanceDocumentProcess struct {
 	Surface  string
 	Document string
 	Process  int
-}
-
-// PerformancePluginHostProcess is the WebContent process of one plugin host web view of a window.
-type PerformancePluginHostProcess struct {
-	Plugin  string
-	Process int
 }
 
 // PerformanceWindowReader reads the processes of a window. The sampler calls it on its own goroutine, not on the UI thread.

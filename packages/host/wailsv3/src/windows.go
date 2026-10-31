@@ -69,10 +69,6 @@ type Host struct {
 	owners     map[string]*Surfaces
 	sidecars   *Sidecars
 	plugins    *Plugins
-	// pluginHostStates are the saved values of the plugin hosts, one per plugin over every window (plugin_host.go).
-	pluginHostStates *pluginHostStates
-	// pluginHostRestarts are the restart-limit records of the plugin hosts, one per plugin over every window (plugin_host.go).
-	pluginHostRestarts *pluginHostRestarts
 	// buttons is the value of host.buttons. It installs the watch after the application started and before endpoint.json is written.
 	buttons *Buttons
 	// logNotices publishes the value of host.log and the host event debug-log-changed. It starts with the event log.
@@ -128,8 +124,7 @@ func nativeError(code int, err error) error {
 
 func newHost(directory string, quit *Quit) (*Host, error) {
 	h := &Host{quit: quit, workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{},
-		relay: NewRelay[relayTarget](), pluginHostStates: newPluginHostStates(),
-		pluginHostRestarts: newPluginHostRestarts()}
+		relay: NewRelay[relayTarget]()}
 	// apply applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page that
 	// reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
 	apply := func() error {
@@ -232,7 +227,6 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	s.imageDetachPageReady()
 	s.responderPageReady()
 	s.replayRegistrations()
-	s.loadPluginHosts()
 	routine.Go("windows-changed", h.windowsChanged)
 	routine.Go("deep-link-ready", func() { h.deepLinks.Ready(h.runDeepLink) })
 	for _, ready := range readied {
@@ -350,7 +344,6 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	})
 	s := NewSurfaces(win, h.sidecars)
 	s.host, s.name, s.title = h, name, windowTitle
-	s.pluginHostStates, s.pluginHostRestarts = h.pluginHostStates, h.pluginHostRestarts
 	h.mu.Lock()
 	h.windows[win.ID()] = s
 	h.mu.Unlock()
@@ -658,7 +651,6 @@ func (s *Surfaces) close() {
 			// A view of the surface ends with its window (docs/spec/logging.md#principles).
 			s.viewRecords().recordEnd(id)
 		}
-		s.disposePluginHosts()
 		err := CloseWindowSurfaces(handles, s.documents, s.streams, s.images, func(native WindowNative) error {
 			switch native.Kind {
 			case WindowNativeDocument:

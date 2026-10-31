@@ -56,7 +56,7 @@ fn a_stale_view_ack_is_not_posted_and_a_stale_pull_is_cancelled() {
     channels.register_origin("surface", "probe", current);
     let posts = std::cell::Cell::new(0);
 
-    let accepted = crate::plugin_host_channel::post_if_generation_current(
+    let accepted = crate::source_origins::post_if_generation_current(
         old,
         origins.current_view("surface"),
         || channels.generation("surface") == Some(old),

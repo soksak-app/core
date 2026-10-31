@@ -431,12 +431,12 @@ type Surfaces struct {
 	host  *Host
 	name  string
 	title string
-	// projects holds the projects that this window shows, by project id, with the folder root of each (docs/plans/plugin-host-routes.md rule 3).
+	// projects holds the projects that this window shows, by project id, with the folder root of each.
 	projects map[string]string
 	// pendingProjects holds owner reservations that have not been committed by ProjectShown. Host.mu protects it.
 	pendingProjects map[string]bool
 	// shown is the project that the window shows, empty when it shows none, and root is its folder root. owner.mu protects both.
-	// A release of the shown project clears both at once (docs/plans/plugin-host-routes.md F229-1).
+	// A release of the shown project clears both at once.
 	shown string
 	root  string
 	ready bool
@@ -487,18 +487,8 @@ type Surfaces struct {
 	shapes    map[string]*nativeShape
 	// documents are the document regions that the surface pages attached.
 	documents *Documents
-	// pluginHosts are the plugin host web views of the window, by plugin id (plugin_host.go).
-	pluginHosts map[string]unsafe.Pointer
-	// sourceOrigins assigns generations to plugin-host and view incarnations and exposes their current window snapshot.
+	// sourceOrigins assigns generations to view incarnations and exposes their current window snapshot.
 	sourceOrigins *sourceOrigins
-	// pluginHostChannels are the channels of the plugin host pages of the window, by plugin id (plugin_host_channel.go).
-	pluginHostChannels *pluginHostChannels
-	// pluginHostStates are the saved values of the plugin hosts of the application, shared by every window
-	// (plugin_host.go).
-	pluginHostStates *pluginHostStates
-	// pluginHostRestarts are the restart-limit records of the plugin hosts of the application, shared by every window
-	// (plugin_host.go).
-	pluginHostRestarts *pluginHostRestarts
 	// streams are the stream subscriptions of the document regions.
 	streams *DocumentStreams
 	// images are the image regions that the surface pages attached.
@@ -535,9 +525,7 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		live:                 map[string]bool{},
 		shapes:               map[string]*nativeShape{},
 		documents:            NewDocuments(),
-		pluginHosts:          map[string]unsafe.Pointer{},
 		sourceOrigins:        newSourceOrigins(),
-		pluginHostChannels:   newPluginHostChannels(),
 		streams:              NewDocumentStreams(),
 		images:               NewImages(),
 		invoke:               application.InvokeSync,
@@ -588,10 +576,6 @@ func (s *Surfaces) shownProjectValue() *SurfaceProject {
 
 // SidecarSend passes a message that a surface page of this window sent to a sidecar.
 func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage, cids []string) error {
-	// A plugin session is reached only through the plugin host call (docs/plans/plugin-host-routes.md rule 2).
-	if strings.HasPrefix(surface, "plugin:") {
-		return fmt.Errorf("sidecar session %s is reserved for a plugin host", surface)
-	}
 	if err := s.pendingImageDetachError(surface); err != nil {
 		return err
 	}
@@ -1546,7 +1530,6 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 	}
 	for _, surface := range opened {
 		s.sidecars.SurfaceOpened(surface.Plugin, surface.ID)
-		s.pluginHostReset(surface.Plugin, application.InvokeSync)
 	}
 	return gone, placed, nil
 }

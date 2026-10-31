@@ -88,7 +88,6 @@ const METHOD = {
   documentPost: "DocumentPost",
   viewEvent: "ViewEvent", viewReply: "ViewReply", viewRequest: "ViewRequest",
   declaredSourceOrigins: "DeclaredSourceOrigins",
-  pluginHostReply: "PluginHostReply", pluginHostRequest: "PluginHostRequest", pluginHostEvent: "PluginHostEvent", pluginHostSidecarSend: "PluginHostSidecarSend", pluginHostSidecarClose: "PluginHostSidecarClose",
   documentDetach: "DocumentDetach",
   documentSubscribe: "DocumentSubscribe",
   documentUnsubscribe: "DocumentUnsubscribe",

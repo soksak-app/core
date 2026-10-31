@@ -214,7 +214,6 @@ pub fn process_remove(pid: u32) {
 pub struct WindowProcesses {
     pub page: u32,
     pub documents: Vec<DocumentProcess>,
-    pub plugin_hosts: Vec<PluginHostProcess>,
 }
 
 /// The WebContent process of one document web view of a window: a document region or the page of a view surface, named by
@@ -223,13 +222,6 @@ pub struct WindowProcesses {
 pub struct DocumentProcess {
     pub surface: String,
     pub document: String,
-    pub process: u32,
-}
-
-/// The WebContent process of one plugin host webview of a window.
-#[derive(Debug, Eq, PartialEq)]
-pub struct PluginHostProcess {
-    pub plugin: String,
     pub process: u32,
 }
 
@@ -295,14 +287,6 @@ pub fn sample() {
                         process_memory(
                             json!({"role": "document", "window": window, "surface": document.surface, "document": document.document}),
                             document.process,
-                        )
-                    });
-                }
-                for plugin_host in processes.plugin_hosts {
-                    observe("sampler", || {
-                        process_memory(
-                            json!({"role": "plugin-host", "window": window, "plugin": plugin_host.plugin}),
-                            plugin_host.process,
                         )
                     });
                 }

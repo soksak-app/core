@@ -136,7 +136,6 @@ char *sp_window_facts(void *handle) {
     collectSurfaces(window, content, surfaces);
     NSMutableArray *webviews = [NSMutableArray array];
     NSUInteger documents = 0;
-    NSUInteger pluginHosts = 0;
     for (WKWebView *view in views) {
         NSRect rect = [view convertRect:view.bounds toView:nil];
         NSMutableDictionary *row = [windowRect(window, rect) mutableCopy];
@@ -158,9 +157,6 @@ char *sp_window_facts(void *handle) {
         BOOL document = view != mainWebview(window) && nativePlane && [view isDescendantOf:nativePlane];
         row[@"document"] = @(document);
         if (document) documents++;
-        BOOL pluginHost = sp_webview_is_plugin_host(view);
-        row[@"pluginHost"] = @(pluginHost);
-        if (pluginHost) pluginHosts++;
         [webviews addObject:row];
         [row release];
     }
@@ -204,9 +200,8 @@ char *sp_window_facts(void *handle) {
         @"controls": controls,
         @"webviews": webviews,
         @"nativeSurfaces": surfaces,
-        @"appDomWebviews": @(views.count - documents - pluginHosts),
+        @"appDomWebviews": @(views.count - documents),
         @"documentWebviews": @(documents),
-        @"pluginHostWebviews": @(pluginHosts),
     });
 }
 

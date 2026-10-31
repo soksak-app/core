@@ -356,7 +356,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	if err := s.documents.Reserve(key); err != nil {
 		return err
 	}
-	generation, err := s.sourceOriginState().create(surfaceID, true)
+	generation, err := s.sourceOriginState().create(surfaceID)
 	if err != nil {
 		s.documents.Remove(key)
 		return fmt.Errorf("view of surface %q cannot start: %w", surfaceID, err)
@@ -376,7 +376,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		s.documents.registerView(surfaceID, plugin, generation, handle)
 		if !s.documents.Set(key, handle) {
 			s.documents.unregisterView(surfaceID, generation)
-			s.sourceOriginState().retire(surfaceID, true, generation)
+			s.sourceOriginState().retire(surfaceID, generation)
 			system.CloseDocument(handle)
 			return fmt.Errorf("surface %q closed while its view was created", surfaceID)
 		}
@@ -414,7 +414,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	}
 	if err != nil {
 		s.documents.Remove(key)
-		if s.sourceOriginState().retire(surfaceID, true, generation) && registeredEvent {
+		if s.sourceOriginState().retire(surfaceID, generation) && registeredEvent {
 			s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": plugin, "surface": surfaceID, "generation": generation})
 		}
 		if handle != nil {
@@ -829,7 +829,7 @@ func (s *Surfaces) surfaceTerminated(viewID uint64) {
 func (s *Surfaces) closeSurfaceDocuments(surface string) {
 	// The view of the surface closes with its documents (docs/spec/logging.md#principles).
 	s.viewRecords().recordEnd(surface)
-	if channel, ok := s.documents.view(surface); ok && s.sourceOriginState().retire(surface, true, channel.generation) {
+	if channel, ok := s.documents.view(surface); ok && s.sourceOriginState().retire(surface, channel.generation) {
 		s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": channel.generation})
 	}
 	// The regions close with their documents, so their stream effects are not applied.
@@ -1570,7 +1570,7 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation 
 	}
 	// The view ends here, whether its process ended or its queue overflowed (docs/spec/logging.md#principles).
 	s.viewRecords().recordEnd(surface)
-	if s.sourceOriginState().retire(surface, true, generation) {
+	if s.sourceOriginState().retire(surface, generation) {
 		s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": generation})
 	}
 	// The open calls are taken before the view is removed, because the removal drops the channel of the view.
@@ -1948,7 +1948,7 @@ func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]
 const declaredSnapshotEvent = "declared-ui.snapshot"
 
 // declaredSnapshotWindowEvent is the window event that relays a declared UI snapshot to the main page. It is not the message name, so the
-// relay name is the one that the Tauri host also uses (docs/spec/plugin-host.md#declared-ui-snapshots).
+// relay name is the one that the Tauri host also uses.
 const declaredSnapshotWindowEvent = "declared-ui-snapshot"
 
 // DeclaredSnapshotEvent returns the payload of the declared-ui.snapshot event for a snapshot of the view of surface, which has the
@@ -2177,7 +2177,7 @@ func validateViewGeneration(where string, generation uint64) error {
 }
 
 func (s *Surfaces) currentViewGeneration(surface string, generation uint64) bool {
-	current, active := s.sourceOriginState().current(surface, true)
+	current, active := s.sourceOriginState().current(surface)
 	channel, exists := s.documents.view(surface)
 	return active && exists && current == generation && channel.generation == generation
 }

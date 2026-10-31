@@ -24,7 +24,7 @@ test("Tauri page regions expose operations but only composition places geometry"
           if (command === "log") logged.push([command, { ...args, request: { ...args.request, events: args.request.events.filter((event) => event.event !== "page.log.clock") } }]);
           else recorded.push([command, args]);
           return Promise.resolve(command === "wait_presented" ? { displayed: 42 }
-            : command === "declared_source_origins" ? { floor: 0, pluginHosts: {}, views: {} } : undefined);
+            : command === "declared_source_origins" ? { floor: 0, views: {} } : undefined);
         },
       },
       event: {
@@ -112,7 +112,7 @@ test("Tauri page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["document_post", { request: { surface: "s1", document: "doc", message: { ping: 1 } } }]);
   assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });
   assert.deepEqual(recorded.at(-1), ["wait_presented", {}]);
-  assert.deepEqual(await host.call("declaredSourceOrigins"), { floor: 0, pluginHosts: {}, views: {} });
+  assert.deepEqual(await host.call("declaredSourceOrigins"), { floor: 0, views: {} });
   assert.deepEqual(recorded.at(-1), ["declared_source_origins", {}]);
   // An invalid argument is reported as a rejected promise, like the Wails runtime. Every call of the main page goes through settlingCalls.
   await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] });

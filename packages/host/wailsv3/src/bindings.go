@@ -266,33 +266,6 @@ func (h *Host) ViewEvent(ctx context.Context, reqJSON json.RawMessage) (bool, er
 	return s.pushViewEvent(req)
 }
 
-// PluginHostReply receives the reply of the main page to a call request of a plugin host (docs/spec/plugin-host.md#channel).
-func (h *Host) PluginHostReply(ctx context.Context, reqJSON json.RawMessage) error {
-	req, err := argument[PluginHostReplyRequest]("request", reqJSON)
-	if err != nil {
-		return err
-	}
-	s, err := h.surface(ctx)
-	if err != nil {
-		return err
-	}
-	return s.answerPluginHostCall(req)
-}
-
-// PluginHostRequest receives a request of the main page to a plugin host, such as the pull of a declared status
-// (docs/spec/plugin-host.md#declared-ui-snapshots).
-func (h *Host) PluginHostRequest(ctx context.Context, reqJSON json.RawMessage) (any, error) {
-	req, err := argument[PluginHostRequestRequest]("request", reqJSON)
-	if err != nil {
-		return nil, err
-	}
-	s, err := h.surface(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return s.pushPluginHostRequest(req)
-}
-
 // DeclaredSourceOrigins returns the current source generations and issued generation floor of the window.
 func (h *Host) DeclaredSourceOrigins(ctx context.Context) (sourceOriginSnapshot, error) {
 	s, err := h.surface(ctx)
@@ -302,49 +275,6 @@ func (h *Host) DeclaredSourceOrigins(ctx context.Context) (sourceOriginSnapshot,
 	return s.sourceOriginState().snapshot(), nil
 }
 
-// PluginHostSidecarSend receives a sidecar request of the host of a plugin from the main page (docs/plans/plugin-host-routes.md
-// rule 2). A Wails binding is called from the page of its window, and a surface web view has no binding, so the caller is the
-// main page of the window whose host it is.
-func (h *Host) PluginHostSidecarSend(ctx context.Context, reqJSON json.RawMessage) error {
-	req, err := argument[PluginHostSidecarSendRequest]("request", reqJSON)
-	if err != nil {
-		return err
-	}
-	s, err := h.surface(ctx)
-	if err != nil {
-		return err
-	}
-	return s.pluginHostSidecarSend(req)
-}
-
-// PluginHostSidecarClose closes the plugin sessions of a plugin host that the calling window owns, when the main page receives
-// plugin-host-ended (docs/plans/plugin-host-routes.md rule 7). Like PluginHostSidecarSend, the caller is the main page whose window
-// the host call resolves to.
-func (h *Host) PluginHostSidecarClose(ctx context.Context, requestJSON json.RawMessage) error {
-	request, err := argument[PluginHostSidecarCloseRequest]("request", requestJSON)
-	if err != nil {
-		return err
-	}
-	s, err := h.surface(ctx)
-	if err != nil {
-		return err
-	}
-	return s.pluginHostSidecarClose(request.Plugin)
-}
-
-// PluginHostEvent receives an event that the main page pushes to a plugin host, such as the acknowledgement of a declared
-// UI snapshot (docs/spec/plugin-host.md#declared-ui-snapshots).
-func (h *Host) PluginHostEvent(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
-	req, err := argument[PluginHostEventRequest]("request", reqJSON)
-	if err != nil {
-		return false, err
-	}
-	s, err := h.surface(ctx)
-	if err != nil {
-		return false, err
-	}
-	return s.pushPluginHostEvent(req)
-}
 func (h *Host) DocumentGo(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)
 	if err != nil {

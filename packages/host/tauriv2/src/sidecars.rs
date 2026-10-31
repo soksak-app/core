@@ -1020,7 +1020,7 @@ struct Core<O> {
     /// The upper limit of the time until a newly started persistent service prints its endpoint.
     ready_timeout: Duration,
     /// Called with the name of each persistent service after retain has started it and before retain reads the sessions to
-    /// keep (docs/plans/plugin-host-routes.md rule 7). A check injects a session here.
+    /// keep. A check injects a session here.
     retain_sending: Option<RetainHook>,
     /// The upper limit of the time until a persistent service answers hello. A check gives a short limit.
     hello_timeout: Duration,
@@ -1455,37 +1455,8 @@ impl<O: Owner> Sidecars<O> {
         self.clear_dependency_stops(plugin, "surface", surface);
     }
 
-    /// Counts the restart limit of sidecar as a failed process does, so that its restarts stop. A test seam for the stop of
-    /// a sidecar that a plugin host creation must keep (docs/spec/sidecars.md#failure).
-    #[cfg(test)]
-    pub(crate) fn stop_restarts_for_test(&self, sidecar: &str) {
-        let mut state = self
-            .core
-            .state
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the sidecar state; the panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner);
-        let record = state.restarts.entry(sidecar.to_string()).or_default();
-        let now = Instant::now();
-        for _ in 0..RESTART_LIMIT {
-            record.count(now);
-        }
-    }
-
-    /// Returns true when the restart limit stopped sidecar. A test seam (docs/spec/sidecars.md#failure).
-    #[cfg(test)]
-    pub(crate) fn restart_stopped_for_test(&self, sidecar: &str) -> bool {
-        let state = self
-            .core
-            .state
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the sidecar state; the panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner);
-        restart_stopped(&state, sidecar)
-    }
-
     /// Called when the person enables plugin. It clears the restart limit of each stopped sidecar that the plugin lists in
-    /// dependencies, in the same step as the plugin host stop of the plugin (docs/spec/sidecars.md#failure).
+    /// dependencies (docs/spec/sidecars.md#failure).
     pub fn plugin_enabled(&self, plugin: &str) {
         self.clear_dependency_stops(plugin, "plugin", plugin);
     }
@@ -1573,20 +1544,6 @@ impl<O: Owner> Sidecars<O> {
     ) -> Result<(), String> {
         let current = owner.root()?;
         self.send_in_root(owner, name, surface, current, body, cids)
-    }
-
-    /// Sends a plugin session request with the project root that the plugin host passes, in place of the root of the window
-    /// (docs/plans/plugin-host-routes.md rule 3).
-    pub fn send_plugin_with_cids(
-        &self,
-        owner: &O,
-        name: &str,
-        surface: &str,
-        root: &str,
-        body: &RawValue,
-        cids: &[String],
-    ) -> Result<(), String> {
-        self.send_in_root(owner, name, surface, root.to_string(), body, cids)
     }
 
     /// Sends a page request with current as the root of the surface unless the surface has a recorded root.
@@ -1782,8 +1739,7 @@ impl<O: Owner> Sidecars<O> {
     }
 
     /// Closes the surfaces that owner holds and for which selected returns true, with the close of each running sidecar
-    /// (docs/spec/sidecars.md#messages). A plugin session ends this way with its host, its project or its window
-    /// (docs/plans/plugin-host-routes.md rule 7).
+    /// (docs/spec/sidecars.md#messages).
     pub fn close_owned(&self, owner: &O, selected: &dyn Fn(&str) -> bool) -> Result<(), String> {
         self.close_owned_mode(owner, selected, false)
     }
@@ -2214,7 +2170,7 @@ impl<O: Owner> Sidecars<O> {
                 }
             }
             // The hook runs after the service started and before the sessions to keep are read, so a session first sent during
-            // the start is kept (docs/plans/plugin-host-routes.md rule 7).
+            // the start is kept.
             if let Some(hook) = &self.core.retain_sending {
                 hook(&name);
             }
@@ -3558,7 +3514,7 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
     notify_connection(core, name, outcome.map(|_| ()));
 }
 
-/// Removes omitted layout owners while retaining explicitly managed plugin and state sessions.
+/// Removes the layout owners that the layout does not list.
 fn retain_layout_owners<O>(
     core: &Core<O>,
     state: &mut State<O>,
@@ -3568,11 +3524,7 @@ fn retain_layout_owners<O>(
     let stale: Vec<String> = state
         .roots
         .keys()
-        .filter(|surface| {
-            !listed.contains(surface.as_str())
-                && crate::plugin_host_sidecar::parse_session(surface).is_none()
-                && crate::plugin_host_sidecar::parse_state_session(surface).is_none()
-        })
+        .filter(|surface| !listed.contains(surface.as_str()))
         .cloned()
         .collect();
     for surface in stale {
@@ -3942,8 +3894,7 @@ pub(crate) const RESTART_WINDOW: Duration = Duration::from_secs(300);
 pub(crate) const RESTART_LIMIT: usize = 4;
 
 /// The restart-limit record of one sidecar. `failures` are the times of the counted failures, oldest first. When the
-/// limit stops the restarts, `stopped` is true. The plugin hosts count their failures with the same record
-/// (docs/spec/plugin-host.md#restarts).
+/// limit stops the restarts, `stopped` is true.
 #[derive(Default)]
 pub(crate) struct RestartRecord {
     failures: Vec<Instant>,
@@ -3962,11 +3913,6 @@ impl RestartRecord {
         }
         self.stopped = true;
         true
-    }
-
-    /// Returns true when the limit stopped the restarts.
-    pub(crate) fn stopped(&self) -> bool {
-        self.stopped
     }
 }
 

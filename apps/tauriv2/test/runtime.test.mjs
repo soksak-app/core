@@ -54,7 +54,6 @@ test("ordered main events register before subscribers proceed and dispatch throu
     const delivered = [];
     const eventNames = [
       "declared-ui-source-registered", "declared-ui-source-ended", "declared-ui-snapshot",
-      "plugin-host-call", "plugin-host-reply", "plugin-host-ended",
       "view-call", "view-reply", "view-process-ended", "view-stopped", "view-responsiveness",
     ];
     let queryStarted = false;
