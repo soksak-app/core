@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -132,8 +133,11 @@ func OpenLog(path string) (*os.File, error) {
 
 // StartStandardError opens the stderr file of this run, `logs/host-<boot>.stderr`, makes it the standard error of the process
 // and of its children, and stores the run record (docs/spec/logging.md#files). The file holds only what no writer
-// of the contract writes: the crash output of the runtime and the fatal lines of the native library. Call it once, after the
-// process lock of the configuration directory is held.
+// of the contract writes: the output of the frameworks and the fatal lines of the native library. A runtime fatal error also
+// writes its output to `logs/host-<boot>.crash`, and the traceback level `crash` ends the process with SIGABRT after that
+// output, so the system writes a crash report with the native frames of every thread; with the default level the runtime
+// ends the process with the status 2 and a fault in native code leaves no native frame. Call it once, after the process lock
+// of the configuration directory is held.
 func StartStandardError(config, identifier string) error {
 	system, err := platform.Current()
 	if err != nil {
@@ -149,6 +153,17 @@ func StartStandardError(config, identifier string) error {
 	if err := errors.Join(replaceErr, closeErr); err != nil {
 		return fmt.Errorf("standard error file: %w", err)
 	}
+	crash, err := OpenLog(CrashOutputPath(config))
+	if err != nil {
+		return fmt.Errorf("crash output file: %w", err)
+	}
+	// SetCrashOutput holds a duplicate of the descriptor, so the opened file is closed.
+	setErr := debug.SetCrashOutput(crash, debug.CrashOptions{})
+	closeErr = crash.Close()
+	if err := errors.Join(setErr, closeErr); err != nil {
+		return fmt.Errorf("crash output file: %w", err)
+	}
+	debug.SetTraceback("crash")
 	LogInfo("run", fmt.Sprintf("%s pid %d", identifier, os.Getpid()))
 	return nil
 }

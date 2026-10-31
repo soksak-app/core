@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -275,5 +276,59 @@ func TestTranscriptLinesReachTheApplicationLog(t *testing.T) {
 	if got, want := host.TranscriptFailure("main", "rewatch core.layout", errors.New("page timed out")).Line(),
 		"error host rewatch core.layout main: page timed out"; got != want {
 		t.Fatalf("transcript failure = %q, want %q", got, want)
+	}
+}
+
+// crashOutputChild is the environment variable that tells the crashing child process the configuration directory.
+const crashOutputChild = "SOKSAK_CRASH_OUTPUT_CHILD"
+
+// A runtime fatal error of the host writes its output to logs/host-<boot>.crash and ends the process with SIGABRT, so the
+// system writes a crash report that holds the native frames of every thread (docs/spec/logging.md#files). The test removes the
+// crash report that the system writes for its child.
+func TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash(t *testing.T) {
+	if config := os.Getenv(crashOutputChild); config != "" {
+		log, err := host.StartHostEventLog(config)
+		if err != nil {
+			os.Stdout.WriteString(err.Error() + "\n")
+			os.Exit(2)
+		}
+		host.UseHostEventLog(log)
+		if err := host.StartStandardError(config, "com.soksak.test"); err != nil {
+			os.Stdout.WriteString(err.Error() + "\n")
+			os.Exit(2)
+		}
+		var table map[string]int
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			table["entry"] = 1
+		}()
+		<-done
+		os.Exit(0)
+	}
+	reports := support.WatchCrashReports(t, filepath.Base(os.Args[0]))
+	config := t.TempDir()
+	command := exec.Command(os.Args[0], "-test.run=^TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash$")
+	command.Env = append(os.Environ(), crashOutputChild+"="+config)
+	output, err := command.Output()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) {
+		t.Fatalf("child ended with %v, output %q", err, output)
+	}
+	status := exit.Sys().(syscall.WaitStatus)
+	if !status.Signaled() || status.Signal() != syscall.SIGABRT {
+		t.Fatalf("child ended with %v, expected the signal SIGABRT; output %q", exit, output)
+	}
+	reports.Remove(t, command.Process.Pid)
+	crash, err := filepath.Glob(filepath.Join(config, "logs", "host-*.crash"))
+	if err != nil || len(crash) != 1 {
+		t.Fatalf("crash files %v, %v", crash, err)
+	}
+	data, err := os.ReadFile(crash[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "panic: assignment to entry in nil map") {
+		t.Fatalf("crash file %q", data)
 	}
 }

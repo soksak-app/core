@@ -160,6 +160,11 @@ func StandardErrorPath(config string) string {
 	return filepath.Join(config, "logs", "host-"+processBoot()+".stderr")
 }
 
+// CrashOutputPath is the file of this run under the logs folder of config that holds the output of a runtime fatal error.
+func CrashOutputPath(config string) string {
+	return filepath.Join(config, "logs", "host-"+processBoot()+".crash")
+}
+
 // StartHostEventLog starts the writer of the host in logs/ of the configuration folder; the boot identifier is the
 // start time in seconds and the process identifier.
 func StartHostEventLog(config string) (*EventLog, error) {
