@@ -39,6 +39,18 @@ function surfaceOf(name, pluginId, surface) {
     contributions: (point) => contributionsOf(pluginId, point) });
 }
 
+/**
+ * Converts a section declaration into a function that returns the target of its section surface for a surface id and the start
+ * value section {id, sidebar, card} (docs/spec/plugins.md#sections). A section surface has no tab parameters.
+ */
+function sectionSurfaceOf(pluginId, section, declarations, diagnostics, sidecars) {
+  return (surfaceId, start) => ({ composition: section.composition, surfaceId, pluginId, declarations, sidecars, diagnostics,
+    // default: a section without unload is never unloaded, as a surface without surface.unload (docs/spec/plugins.md#memory-saver).
+    unload: section.unload ?? false,
+    params: null, section: start,
+    contributions: (point) => contributionsOf(pluginId, point) });
+}
+
 /* Diagnostic module loaded for each plugin id in a diagnostic build. The registration starts the loading and waits for it when it raises a surface. */
 let diagnosticModules = Promise.resolve(new Map());
 
@@ -109,7 +121,11 @@ export function installEnvironment(environmentDocument, installedDocument) {
       });
     }
     // default: sections is an optional field of plugin.json; without it there are no sections.
-    for (const section of manifest.sections ?? []) registerSection(section);
+    for (const section of manifest.sections ?? []) {
+      registerSection({ id: section.id, name: section.name, height: section.height, plugin: manifest.id,
+        // default: exposes is an optional field of plugin.json; without it there is no declaration.
+        surface: sectionSurfaceOf(manifest.id, section, exposes ?? {}, diagnostics, manifestSidecars(manifest, pluginNames)) });
+    }
     if (exposes) exposure.declare(manifest.id, exposes);
     // default: data is an optional field of plugin.json; without it the plugin declares no project data.
     declareProjectData(manifest.id, manifest.data ?? {});

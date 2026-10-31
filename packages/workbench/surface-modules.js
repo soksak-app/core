@@ -264,6 +264,8 @@ function originOf(surface) {
 }
 
 function viewStartOrigin(surface) {
+  // A section surface has no opening tab, so its origin records no directory (docs/spec/native-surfaces.md#view-surfaces).
+  if (surface.section) return { directory: null };
   // The layout read refuses a view tab first and the place leaves it out; a refusal that reaches this point is a defect, so it throws.
   const refusal = viewRefusal(surface.surfaceId);
   if (refusal !== null) throw new TypeError(refusal);
@@ -280,6 +282,8 @@ function viewStartValuesFromDeclarations(surface, project, origin, declarations)
       [kind, [...declarations[kind], ...(surface.declarations[kind] ?? [])]])), // default: a surface without plugin declarations contributes none beyond core declarations.
     // The surface of each plugin carries its diagnostic declaration, which is null without one (docs/spec/native-surfaces.md#view-surfaces).
     diagnostics: surface.diagnostics,
+    // default: the surface of a tab has no section, so its start value section is null (docs/spec/native-surfaces.md#view-surfaces).
+    section: surface.section ?? null,
   };
 }
 

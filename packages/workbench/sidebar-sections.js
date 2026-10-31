@@ -1,28 +1,19 @@
 // Draws the sections of the set that a sidebar shows (docs/spec/plugins.md#sections).
 //
-// Keeps the section selection and collapse for each sidebar id.
-// list lays out all sections according to the direction, and tabs mounts only the one selected section.
+// Each section is a section surface: a view of its plugin whose slot is the body of the section, with the surface id
+// <sidebar id>/<section id>. The sidebar draws only the frame (headers, tabs, heights); the plugin draws the body.
 // This module holds the tab selection and the section collapse for each sidebar.
 import { bind } from "./commands.js";
-import { chooseSource, createDeclaredSection } from "./declared-section.js";
-import { createDeclaredSource } from "./declared-source.js";
-import { trace } from "./performance.js";
-import { hasIcon, icon } from "./icons.js";
-import { registry } from "./exposure.js";
-import { sourceOrigin } from "./source-origins.js";
+import { clearSlotSurface, setSlotSurface } from "./compositor.js";
+import { icon } from "./icons.js";
 import { hasSection, section } from "./registry.js";
+import { disposeSurface, mountSurface } from "./surface-modules.js";
 
 /* Selected tab and collapsed sections for each sidebar id. */
 const choices = new Map();
 /* For each drawn set element, its sidebar, set and section items. */
 const drawn = new Map();
 const listeners = new Set();
-
-registry.onRegistrationChange(() => {
-  for (const record of drawn.values()) {
-    for (const entry of record.entries) entry.declared?.reconcile();
-  }
-});
 
 const notify = () => { for (const fn of listeners) fn(); };
 
@@ -36,42 +27,25 @@ function choiceOf(sidebar) {
   return choices.get(sidebar);
 }
 
-/** Releases the module of an item. If the mount has not finished, it releases after the mount finishes. */
-function unmount(entry) {
-  if (!entry.mount) return;
-  const pending = entry.mount;
-  entry.mount = null;
-  entry.mounted = false;
-  entry.error = null;
-  // A mount failure and a release failure during the release are reported as page errors (docs/spec/plugins.md). The item has already been released,
-  // so it does not appear as the error of core.sidebars. A declared section closes in the release, before the next value of the new section is drawn.
-  pending.then((result) => result.dispose()).catch((error) => {
-    dispatchEvent(new ErrorEvent("error", { message: `section ${entry.section.id}: ${error.message}` }));
-  });
-  for (const stop of entry.observing.splice(0)) stop();
-}
+/** The surface id of a section in a sidebar (docs/spec/plugins.md#sections). */
+export const sectionSurfaceId = (sidebar, sectionId) => `${sidebar}/${sectionId}`;
 
-/**
- * The bind function of a declared section: it connects a control to a command of the section's plugin or of the core
- * (docs/spec/declared-ui.md). A section uses only the names of its own plugin and of the core.
- */
-function sectionBind(entry) {
-  const owner = entry.section.id.slice(0, entry.section.id.indexOf("."));
-  const own = (name) => {
-    if (!name.startsWith(`${owner}.`) && !name.startsWith("core.")) {
-      throw new Error(`section ${entry.section.id} cannot use ${name}`);
-    }
-  };
-  return (el, name, params, options) => {
-    own(name);
-    el.dataset.expose = "core.sidebar.section.control";
-    return bind(el, name, params, options);
-  };
-}
+/** Whether a surface id names a section surface. A tab id holds no "/" (docs/spec/plugins.md#sections). */
+export const isSectionSurface = (surfaceId) => surfaceId.includes("/");
 
-function mount(entry, record) {
+/** Mounts the view of a section once; a hidden section keeps its surface, which the compositor places invisible. */
+function mount(entry) {
   if (entry.mount) return;
-  const mountOnce = entry.mount = mountDeclared(entry, record);
+  const surface = entry.surface;
+  setSlotSurface(entry.body, surface);
+  const mountOnce = entry.mount = mountSurface(entry.body, surface, {
+    onState: (state) => {
+      if (entry.mount !== mountOnce) return;
+      entry.phase = state.phase;
+      entry.error = state.phase === "error" ? state.error?.message ?? String(state.error) : null;
+      notify();
+    },
+  });
   mountOnce.then(() => {
     if (entry.mount !== mountOnce) return;
     entry.mounted = true;
@@ -79,73 +53,29 @@ function mount(entry, record) {
   }, (error) => {
     if (entry.mount !== mountOnce) return;
     entry.error = error.message;
+    // A mount failure is shown through the page error display (docs/spec/plugins.md#sections).
+    dispatchEvent(new ErrorEvent("error", { message: `section ${surface.surfaceId}: ${error.message}` }));
     notify();
   });
 }
 
-/**
- * Draws a declared section from its status (docs/spec/declared-ui.md, sidebar section form and status mapping). The body draws
- * the accepted value through declared-ui.js, and a rejection shows in the body through the display path. The source is chosen
- * among the surfaces that the registry holds for the status. The snapshot
- * channel and the pull come from the view transport of the main page (createDeclaredSource of declared-source.js).
- */
-function mountDeclared(entry, record) {
-  const owner = entry.section.id.slice(0, entry.section.id.indexOf("."));
-  // The manifest holds the full status name in the section (validateManifest refuses a short name). The snapshot channel
-  // and the pull name the status inside the plugin (docs/spec/declared-ui.md, status mapping).
-  const statusId = entry.section.status;
-  const status = statusId.slice(owner.length + 1);
-  const bindControl = sectionBind(entry);
-  const transport = createDeclaredSource({ plugin: owner, status });
-  let declared = null;
-  declared = createDeclaredSection({
-    statusId,
-    body: entry.body,
-    options: { declared: (name) => registry.declared("command", name), hasIcon, bind: bindControl },
-    expanded: (source, request) => transport.expanded(source, request),
-    // default: the context of a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
-    // The plugin host that registered the status, under plugin:<plugin id>, is the source after the surfaces
-    // (docs/spec/declared-ui.md#declared-status).
-    choose: () => {
-      const active = record.context.surface ?? null; // default: a sidebar without a linked surface has no active tab.
-      const host = registry.hostRegistrant("status", statusId);
-      return chooseSource({
-        // default: a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
-        active,
-        activeGeneration: active === null ? null : sourceOrigin(owner, active),
-        registrants: registry.registrants("status", statusId),
-        host: host?.id ?? null, // default: a status without a plugin-host registrant has no host source.
-        hostGeneration: host === null ? null : host.generation === sourceOrigin(owner, null) ? host.generation : null,
-      });
-    },
-    channel: transport.channel,
-    pull: transport.pull,
-    changed: () => {
-      const source = declared.state().source;
-      if (source === null) delete entry.body.dataset.commandSource;
-      else entry.body.dataset.commandSource = source.id;
-      notify();
-    },
-    // The count of the overwritten values reaches the main page in each snapshot (docs/spec/plugin-processes.md, rule 2).
-    skipped: (count) => trace("declared-ui.snapshot.skipped", { plugin: owner, status, count }),
-    failed: (error) => dispatchEvent(new ErrorEvent("error", { message: `${statusId}: ${error.message}` })),
+/** Releases the surface of a section: when its section leaves the set, its sidebar is removed or its card closes. */
+function release(entry) {
+  if (!entry.mount) return;
+  entry.mount = null;
+  entry.mounted = false;
+  entry.error = null;
+  clearSlotSurface(entry.body);
+  disposeSurface(entry.surface.surfaceId).catch((error) => {
+    dispatchEvent(new ErrorEvent("error", { message: `section ${entry.surface.surfaceId}: ${error.message}` }));
   });
-  entry.declared = declared;
-  declared.reconcile();
-  return Promise.resolve({ dispose() {
-    entry.declared = null;
-    declared.close();
-  } });
 }
 
 /** Releases all sections of one set element and clears its record. */
 export function clearSet(container) {
   const record = drawn.get(container);
   if (!record) return;
-  for (const entry of record.entries) {
-    unmount(entry);
-    entry.watcher?.disconnect();
-  }
+  for (const entry of record.entries) release(entry);
   drawn.delete(container);
   container.replaceChildren();
   delete container.dataset.sidebar;
@@ -161,8 +91,8 @@ function sweep() {
 }
 
 /**
- * Applies the selected tab and the collapse to the elements and the mounts. A declared section keeps its accepted value and its
- * source across a change of orientation, because no declared value depends on orientation (docs/spec/declared-ui.md).
+ * Applies the selected tab and the collapse to the elements. Every section of the set keeps its surface mounted; a folded section
+ * and the section of an unselected tab are hidden, as an inactive tab is hidden (docs/spec/plugins.md#sections).
  */
 function apply(record) {
   const choice = choiceOf(record.sidebar);
@@ -172,14 +102,13 @@ function apply(record) {
       const selected = choice.tab === id;
       entry.tab.setAttribute("aria-selected", String(selected));
       entry.element.hidden = !selected;
-      if (selected) mount(entry, record);
-      else unmount(entry);
     } else {
       const folded = choice.folded.has(id);
       entry.element.dataset.folded = String(folded);
       entry.header.setAttribute("aria-expanded", String(!folded));
-      mount(entry, record);
+      entry.body.hidden = folded;
     }
+    mount(entry);
   }
 }
 
@@ -196,8 +125,9 @@ export function drawSet(container, sidebar, set, context) {
   const choice = choiceOf(sidebar);
   // default: a set without sections has no tab to select (null).
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
-  // The orientation is not part of the key: a change of orientation keeps the elements, and a declared section keeps its value and source.
-  const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface, context.window === true]);
+  // Neither the orientation nor the followed surface is part of the key: a change of either keeps the section surfaces, and the
+  // section views read the change from core.sidebars (docs/spec/plugins.md#sections).
+  const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.window === true]);
   let record = drawn.get(container);
   if (record?.key !== key) {
     if (record) clearSet(container);
@@ -223,18 +153,23 @@ export function drawSet(container, sidebar, set, context) {
       element.className = "set__section";
       element.dataset.expose = "core.sidebar.section";
       element.dataset.section = section.id;
-      // A fill section shares the remaining height in the list layout (docs/spec/plugins.md#sections).
-      if (section.fill) element.dataset.fill = "true";
+      // An integer height is the height of the open section; fill sections share the height left after the other sections
+      // (docs/spec/plugins.md#sections).
+      element.dataset.height = String(section.height);
+      if (section.height !== "fill") element.style.setProperty("--section-height", `${section.height}px`);
+      const surfaceId = sectionSurfaceId(sidebar, section.id);
+      // default: a window sidebar has no card (docs/spec/native-surfaces.md#view-surfaces).
+      const start = { id: section.id, sidebar, card: context.card ?? null };
       const entry = { section, element, header: null, tab: null, body: document.createElement("div"),
-        mount: null, mounted: false, error: null, declared: null, observing: [] };
-      entry.body.className = "set__body";
-      // The body of a declared section lays its root elements by the orientation of the sidebar (docs/spec/declared-ui.md).
-      entry.body.dataset.declared = "";
-      if (context.surface) entry.body.dataset.surface = context.surface;
-      if (context.window) entry.body.dataset.windowSidebar = "";
-      // The content that a section drew is exposed as text of core.sidebars, so a change of the content is notified.
-      entry.watcher = typeof MutationObserver === "function" ? new MutationObserver(notify) : null;
-      entry.watcher?.observe(entry.body, { subtree: true, childList: true, characterData: true });
+        surface: section.surface(surfaceId, start), mount: null, mounted: false, phase: null, error: null };
+      entry.body.className = "set__body slot";
+      entry.body.dataset.expose = "core.sidebar.section.body";
+      entry.body.dataset.nativeSurface = "view";
+      entry.body.dataset.nativeSurfaceId = surfaceId;
+      entry.body.dataset.nativeLayer = "10";
+      entry.body.dataset.nativePlugin = section.plugin;
+      entry.body.dataset.nativeTitle = section.name;
+      entry.body.dataset.nativeDim = "false";
       const params = { sidebar, section: section.id };
       if (strip) {
         entry.tab = document.createElement("button");
@@ -334,26 +269,19 @@ export function sidebarsState() {
         // default: the context of a card sidebar has no plugin and side of a window sidebar.
         side: record.context.side ?? null,
         rect: (() => { const {x,y,width:w,height:h} = record.container.getBoundingClientRect(); return {x,y,w,h}; })(),
-        sections: record.entries.map((entry) => {
-          const declared = entry.declared?.state();
-          return {
+        sections: record.entries.map((entry) => ({
           id: entry.section.id, name: entry.section.name,
           folded: record.layout === "list" && choice.folded.has(entry.section.id),
-          // A declared section reports its accepted value and its rejection.
-          mounted: declared ? declared.mounted : entry.mounted,
-          error: declared ? declared.error : entry.error,
-          text: entry.body.textContent,
+          // The section surface and the surface that its view follows (docs/spec/plugins.md#sections).
+          surfaceId: entry.surface.surfaceId,
+          surface: record.context.surface,
+          height: entry.section.height,
+          mounted: entry.mounted,
+          phase: entry.phase,
+          error: entry.error,
           // Whether the tab text fits in the tab width. It is true if wrapping or shrinking cuts it off.
           clipped: entry.tab ? entry.tab.scrollWidth > entry.tab.clientWidth || entry.tab.scrollHeight > entry.tab.clientHeight : false,
-          controls: entry.body.querySelectorAll('[data-expose="core.sidebar.section.control"]').length,
-          ...(declared ? {
-            source: declared.source,
-            subscription: declared.subscription,
-            pull: declared.pull,
-            acceptedSeq: declared.acceptedSeq,
-          } : {}),
-          };
-        }),
+        })),
       };
     });
 }
