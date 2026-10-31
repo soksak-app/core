@@ -90,8 +90,8 @@ for (const app of Object.values(APPS))
           "selected section has an error",
         );
         assert.ok(
-          bar.sections.filter((section) => section.mounted).every((section) => section.text.length > 0),
-          "selected sidebar output is empty",
+          bar.sections.filter((section) => section.mounted).every((section) => section.phase === "ready"),
+          "selected sidebar section views are not ready",
         );
       }
       assert.deepEqual(

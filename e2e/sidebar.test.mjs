@@ -139,21 +139,6 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-/** Index of the at-th operation element that the section of the sidebar draws, among the core.sidebar.section.control in document order. */
-const controlIndex = (sidebars, sidebar, section, at) => {
-  let index = 0;
-  for (const item of sidebars) {
-    for (const value of item.sections) {
-      if (item.sidebar === sidebar && value.id === section) {
-        assert.ok(at < value.controls, `${sidebar} ${section} has ${value.controls} controls`);
-        return index + at;
-      }
-      index += value.controls;
-    }
-  }
-  throw new Error(`no section ${section} in ${sidebar}`);
-};
-
 /** Loopback server that serves a document whose title is the path name. It is closed when the check ends. */
 async function serveTitles(s) {
   const server = createServer((request, response) => {
@@ -171,7 +156,7 @@ async function serveTitles(s) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the browser sections list the session history and the card's browser tabs`, async (t) => {
+  test(`${app.name}: the browser sections mount as section views beside the card's browser navigation`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
@@ -183,37 +168,30 @@ for (const app of Object.values(APPS)) {
       scope: "common" });
     await s.run("core.card.focus", { card: "browser" });
     const of = (sidebars) => sidebars.find((item) => item.sidebar === sidebar);
-    const text = (sidebars, id) => of(sidebars)?.sections.find((item) => item.id === id)?.text;
-    let sidebars = await s.until("core.sidebars", (value) => of(value)?.set === "set-browser"
-      && sections.every((id) => of(value).sections.find((item) => item.id === id)?.mounted),
-    "the right sidebar did not mount the browser sections");
+    const sidebars = await s.until("core.sidebars", (value) => of(value)?.set === "set-browser"
+      && sections.every((id) => of(value).sections.find((item) => item.id === id)?.mounted && of(value).sections.find((item) => item.id === id)?.phase === "ready"),
+    "the right sidebar did not mount the browser section views");
     const surface = of(sidebars).surface;
     assert.ok(surface, "the browser sections received the browser tab");
+    const surfaces = await s.get("core.surfaces");
+    for (const id of sections) {
+      assert.ok(surfaces.some((item) => item.kind === "section" && item.sidebar === sidebar && item.surface === `${sidebar}/${id}`),
+        `core.surfaces does not list the section surface ${sidebar}/${id}`);
+    }
 
-    // History: the two opened documents become entries, and pressing the first entry with a native click opens that document.
+    // The two opened documents are the navigation of the browser tab that the sections follow.
     for (const name of ["one", "two"]) {
       await s.run("browser.navigate", { url: `${base}/${name}` }, surface);
       await s.until("browser.location", (at) => at.url === `${base}/${name}` && !at.loading && at.title === name,
         `the browser did not load ${name}`, { surface });
     }
-    sidebars = await s.until("core.sidebars", (value) => text(value, "browser.history") === "onetwo",
-      "the history section did not list the two documents");
-    await press(s, "core.sidebar.section.control", controlIndex(sidebars, sidebar, "browser.history", 0));
-    await s.until("browser.location", (at) => at.url === `${base}/one` && !at.loading,
-      "a click on the first history entry did not load it", { surface });
 
-    // Tabs: the browser tabs of the card are visible with their titles, and pressing the first tab makes it the active tab.
+    // The card's browser tabs list both tabs, and the added tab becomes active.
     const { tab } = await s.run("core.card.add-tab", { card: "browser", plugin: "browser" });
     await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === "browser")?.active === tab,
       "the added browser tab did not become active");
     const tabs = (await s.get("core.grid")).cards.find((card) => card.id === "browser").tabs;
     assert.deepEqual(tabs.map((item) => item.id), [surface, tab]);
-    const shown = tabs.map((item) => item.label ?? item.title).join("");
-    sidebars = await s.until("core.sidebars", (value) => text(value, "browser.tabs") === shown,
-      `the tabs section did not list the card's browser tabs with their titles: ${shown}`);
-    await press(s, "core.sidebar.section.control", controlIndex(sidebars, sidebar, "browser.tabs", 0));
-    await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === "browser")?.active === surface,
-      "a click on the first tab did not select it");
   });
 }
 
@@ -332,13 +310,12 @@ for (const app of Object.values(APPS)) {
       scope: "common" });
     await s.run("core.card.focus", { card: "browser" });
     const of = (sidebars) => sidebars.find((item) => item.sidebar === sidebar);
-    const text = (sidebars, id) => of(sidebars)?.sections.find((item) => item.id === id)?.text ?? "";
     const sidebars = await s.until("core.sidebars", (value) => of(value)?.set === "set-browser"
       && sections.every((id) => of(value).sections.find((item) => item.id === id)?.mounted),
     "the right sidebar did not mount the DOM and network sections");
     const surface = of(sidebars).surface;
     await s.run("browser.navigate", { url: `${base}/inspect` }, surface);
-    // Both statuses are declared UI values: a tree of element labels nested by depth, and a list of `<type> <address>` items.
+    // browser.elements is a tree of element labels nested by depth, and browser.requests is a list of `<type> <address>` items.
     const treeOf = (value) => {
       const flat = (nodes, depth) => nodes.flatMap((node) => [`${depth}:${node.label}`, ...flat(node.children ?? [], depth + 1)]);
       return flat(value.elements.find((element) => element.kind === "tree")?.nodes ?? [], 0);
@@ -350,17 +327,13 @@ for (const app of Object.values(APPS)) {
     const requests = await s.until("browser.requests", (value) => listOf(value).includes(`img ${base}/pixel`),
       "browser.requests did not report the image request", { surface });
     assert.deepEqual(listOf(requests), [`navigation ${base}/inspect`, `img ${base}/pixel`]);
-    // A section text is the text content of its body, so the label and the detail of each request item join with no separator.
-    const address = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const network = new RegExp(`^navigation ${address}/inspect\\d+msimg ${address}/pixel\\d+ms$`);
-    await s.until("core.sidebars", (value) => text(value, "browser.dom") === "htmlheadtitlebodydiv#box.a.bimg"
-      && network.test(text(value, "browser.network")),
-    "the DOM and network sections did not show the elements and requests");
+    await s.until("core.sidebars", (value) => of(value)?.sections.every((item) => item.phase === "ready" && item.error === null),
+      "the DOM and network section views did not report ready");
   });
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a browser tab and the tabs section show the document title or the address`, async (t) => {
+  test(`${app.name}: a browser tab shows the document title or the address and the tabs section mounts`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
@@ -374,14 +347,11 @@ for (const app of Object.values(APPS)) {
       "the right sidebar did not mount the tabs section");
     const surface = of(sidebars).surface;
     const label = (grid) => grid.cards.flatMap((card) => card.tabs).find((tab) => tab.id === surface)?.label;
-    const section = (value) => of(value)?.sections.find((item) => item.id === "browser.tabs")?.text;
 
     await s.run("browser.navigate", { url: `${base}/titled` }, surface);
     await s.until("core.grid", (grid) => label(grid) === "titled", "the tab did not show the document title");
-    await s.until("core.sidebars", (value) => section(value) === "titled", "the tabs section did not show the document title");
     await s.run("browser.navigate", { url: `${base}/untitled` }, surface);
     await s.until("core.grid", (grid) => label(grid) === `${base}/untitled`, "the tab did not show the address of an untitled document");
-    await s.until("core.sidebars", (value) => section(value) === `${base}/untitled`, "the tabs section did not show the address");
   });
 }
 

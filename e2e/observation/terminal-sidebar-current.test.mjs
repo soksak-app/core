@@ -28,10 +28,10 @@ for (const app of Object.values(APPS))
             (bar) =>
               bar.sidebar === `${target.id}:right` &&
               bar.set === link.set &&
-              bar.sections.some((section) => section.mounted && section.text.length > 0) &&
+              bar.sections.some((section) => section.mounted && section.phase === "ready") &&
               bar.sections.every((section) => section.error === null),
           ),
-        `${mode}: right section output absent`,
+        `${mode}: right section view not ready`,
       );
       const grid = await s.get("core.grid"),
         card = grid.cards.find((card) => card.id === target.id);

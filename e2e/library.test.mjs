@@ -356,9 +356,9 @@ for (const app of Object.values(APPS)) {
     // The files tree of the project window reads the removed folder and shows that failure. The text depends on the step
     // that meets the removal first: the read of the folder, git in its removed working directory, or git changing into it.
     const removed = folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    // An unhandled rejection of the plugin host page is a defect of the plugin, which reports the removal through its files tree
-    // report, so the check does not declare the host relay of one (docs/spec/plugin-host.md#channel).
-    s.expectError(new RegExp(`^error page plugin files files tree: (lstat ${removed}: no such file or directory|git rev-parse --show-toplevel: exit status 128: fatal: (Unable to read current working directory|cannot change to '${removed}'): No such file or directory)$`));
+    // The files tree section view reports the removal with runtime.error, which writes `error page surface <surface> <where>: <text>`
+    // (docs/spec/native-surfaces.md#view-surfaces).
+    s.expectError(new RegExp(`^error page surface left/files\\.tree files tree: (lstat ${removed}: no such file or directory|git rev-parse --show-toplevel: exit status 128: fatal: (Unable to read current working directory|cannot change to '${removed}'): No such file or directory)$`));
 
     await s.run("core.projects.browse");
     const library = await s.until("core.library", (state) => state.folderErrors?.[missing.id] !== undefined,

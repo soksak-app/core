@@ -1,4 +1,4 @@
-// Editor check: a file opens from the declared Files tree in the plugin whose surface.opens declares its extension, native keys
+// Editor check: a file opens from the Files tree section view in the plugin whose surface.opens declares its extension, native keys
 // edit it and Command-S saves it, a failed save shows the tab error until a save succeeds, the tab keeps its params
 // after the page reloads, and closing a modified tab asks before it closes (docs/spec/plugins.md#tab-reports).
 import assert from "node:assert/strict";
@@ -10,42 +10,11 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 
-const filesTree = (snapshot) => snapshot.value?.elements.find((element) => element.key === "files" && element.kind === "tree");
-
 /** Waits until the view has registered the status before the first status watch. */
 const editorDocumentRegistered = (s, surface) => s.until("core.surfaces", (all) => {
   const view = all.find((item) => item.surface === surface);
   return view?.exposes.includes("status editor.document") ? view : undefined;
 }, "the editor did not register status editor.document");
-
-const treeNode = (snapshot, path) => filesTree(snapshot)?.nodes?.flatMap(function flatten(node) {
-  return [node, ...(node.children ?? []).flatMap(flatten)];
-}).find((node) => node.params?.path === path) ?? null;
-
-/** Returns the public control address for a node's label or expand control. */
-const treeNodeAddress = (snapshot, path, role = "label") => {
-  const tree = filesTree(snapshot);
-  assert.ok(tree, "files.tree has no declared tree element");
-  const find = (nodes, parents = []) => {
-    for (const node of nodes ?? []) {
-      const keys = [...parents, node.key];
-      if (node.params?.path === path) return keys;
-      const nested = find(node.children, keys);
-      if (nested) return nested;
-    }
-    return null;
-  };
-  const keys = find(tree.nodes);
-  assert.ok(keys, `${path} is not a node of files.tree`);
-  return { sidebar: "left", section: "files.tree", key: tree.key, path: keys, role };
-};
-
-/** Clicks an interactive tree control using its declared DOM address. */
-const clickTreeControl = async (s, address) => {
-  const rect = await s.request("dom.rect", { name: "core.sidebar.section.control", address });
-  assert.ok(rect.width > 0 && rect.height > 0, `control ${JSON.stringify(address)} has no area`);
-  await s.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
-};
 
 /** Gives an inactive editor view the native first responder through its declared text element. */
 const focusEditorForKeys = async (s, surface) => {
@@ -54,55 +23,6 @@ const focusEditorForKeys = async (s, surface) => {
   await s.click(content.x + content.width / 2, content.y + content.height / 2);
   await s.until("host.window", (window) => window.responder?.surface === surface,
     "the editor view did not take native focus after a press on editor.content");
-};
-
-/** Focuses the public control whose rectangle resolves from its address, without assuming its DOM order. */
-const focusTreeControl = async (s, address) => {
-  const name = "core.sidebar.section.control";
-  const target = await s.request("dom.rect", { name, address });
-  const sidebars = await s.get("core.sidebars");
-  const count = sidebars.flatMap((sidebar) => sidebar.sections).reduce((sum, section) => sum + section.controls, 0);
-  const matches = [];
-  for (let index = 0; index < count; index += 1) {
-    const rect = await s.rect(name, index);
-    if (["x", "y", "width", "height"].every((key) => rect[key] === target[key])) matches.push(index);
-  }
-  assert.equal(matches.length, 1, `control ${JSON.stringify(address)} maps to ${matches.length} DOM indexes`);
-  const [index] = matches;
-  await s.run("core.focus.set", { name, index });
-  await s.until("core.focus", (focus) => focus?.name === name && focus.index === index && focus.surface === null,
-    `core.focus.set did not focus control ${JSON.stringify(address)}`);
-};
-
-/** Waits for a newer rendered Files snapshot that records a node selection. */
-const treeAfterSelection = async (s, sequence, path, message) => {
-  let accepted = sequence;
-  for (;;) {
-    const sidebars = await s.until("core.sidebars", (value) => {
-      const section = value.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
-      return Number.isInteger(section?.acceptedSeq) && section.acceptedSeq > accepted ? section.acceptedSeq : undefined;
-    }, message);
-    accepted = sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree").acceptedSeq;
-    const snapshot = await s.get("files.tree");
-    const node = treeNode(snapshot, path);
-    if (node?.selected === true) return snapshot;
-  }
-};
-
-const acceptedTreeSequence = async (s) => {
-  const sidebars = await s.get("core.sidebars");
-  const section = sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
-  assert.ok(Number.isInteger(section?.acceptedSeq), "the Files section has no accepted snapshot sequence");
-  return section.acceptedSeq;
-};
-
-/** Waits for a newer rendered Files snapshot after an expand-control request. */
-const treeAfterAcceptedPush = async (s, sequence, message) => {
-  await s.until("core.sidebars", (sidebars) => {
-    const section = sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
-    return Number.isInteger(section?.acceptedSeq) && section.acceptedSeq > sequence;
-  }, message);
-  return s.get("files.tree");
 };
 
 for (const app of Object.values(APPS)) {
@@ -120,37 +40,16 @@ for (const app of Object.values(APPS)) {
     writeFileSync(file, "alpha\r\nbeta\r\n");
     s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
 
-    // The declared snapshot and DOM addresses identify each tree control; no row geometry or plugin-private DOM is assumed.
-    await s.run("files.refresh");
-    let tree = await s.get("files.tree");
-    assert.ok(treeNode(tree, folder), "files.tree did not list the folder");
+    // The Files tree section view lists the folder after its refresh. files.open on that section surface runs core.file.open.
+    await s.run("files.refresh", {}, "left/files.tree");
     await s.until("core.sidebars", (sidebars) => {
       const section = sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
-      return section?.mounted && section.controls > 0;
-    }, "the Files tree section did not render its snapshot");
-
-    let sequence = await acceptedTreeSequence(s);
-    const folderSelection = treeAfterSelection(s, sequence, folder, "the folder label did not publish its selection");
-    await clickTreeControl(s, treeNodeAddress(tree, folder));
-    tree = await folderSelection;
-    sequence = await acceptedTreeSequence(s);
-    const expandedTree = treeAfterAcceptedPush(s, sequence, "the folder expand control did not publish its tree");
-    await clickTreeControl(s, treeNodeAddress(tree, folder, "expand"));
-    tree = await expandedTree;
-    assert.ok(treeNode(tree, folder)?.children?.some((child) => child.params?.path === path),
-      "files.tree did not list the file under the expanded folder");
-
-    sequence = await acceptedTreeSequence(s);
-    const fileSelection = treeAfterSelection(s, sequence, path, "the file label did not publish its selection");
-    await clickTreeControl(s, treeNodeAddress(tree, path));
-    tree = await fileSelection;
-    const selectedNode = treeNode(tree, path);
-    assert.equal(selectedNode?.selected, true, "the file tree did not mark the file selection");
-    await focusTreeControl(s, treeNodeAddress(tree, path));
-    await s.press("Enter");
+      return section?.mounted && section.phase === "ready";
+    }, "the Files tree section view was not mounted and ready");
+    assert.equal(await s.run("files.open", { path }, "left/files.tree"), null);
     // The editor reports ready after it read the file; a surface error ends the wait with its text.
     const editor = await s.until("core.surfaces", (all) => all.some((x) => x.visible && x.plugin === "editor"
-      && x.status.phase !== "loading"), "Enter on the selected file opened no editor tab");
+      && x.status.phase !== "loading"), "files.open on the selected file opened no editor tab");
     const opened = editor.find((x) => x.visible && x.plugin === "editor");
     const surface = opened.surface;
     // The editor tab does not outlive the check: a later start would open it on the removed folder. A modified tab

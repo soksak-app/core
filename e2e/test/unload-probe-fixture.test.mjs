@@ -9,8 +9,8 @@ const manifestPath = fileURLToPath(new URL("../fixtures/memory-saver/unload-prob
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
 // The main page forwards a status request of the probe surface to the view (docs/spec/native-surfaces.md#view-surfaces, view
-// exposure), so the view serves the declared status probeunload.location through its exposure and pushes no declared UI snapshot,
-// because the probe declares no section.
+// exposure), so the view serves the declared status probeunload.location through its exposure. The probe is a tab view, so the
+// fake bridge carries no section channel.
 test("the unload probe serves its declared status through its exposure and follows the region state", { timeout: 1000 }, async () => {
   const declared = manifest.exposes.status.map((status) => status.name);
   const served = new Map();
@@ -19,7 +19,6 @@ test("the unload probe serves its declared status through its exposure and follo
     calls: { request: async (name) => (name === "tab.state.read" ? { url: "https://example.test/" } : null) },
     composition: { create: async () => ({ region: () => ({ onState: (listener) => { onState = listener; }, load: async () => {} }) }) },
     commands: { register: async () => {} },
-    snapshots: { push: () => { throw new Error("the probe pushed a declared UI snapshot"); } },
   };
   const expose = { status: async (name, read, subscribe) => { served.set(name, { read, subscribe }); } };
 

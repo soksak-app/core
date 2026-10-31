@@ -831,30 +831,6 @@ const FEATURE_LINKS = [
   ]
 },
 {
-  "id": "F212.9a",
-  "implementation": [
-    {
-      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
-      "symbol": "export function reducePluginHostRafMeasurement("
-    }
-  ],
-  "tests": [
-    {
-      "file": "e2e/benchmark/plugin-host-throttle.test.mjs",
-      "id": "a built plugin host reports its observed RAF rate"
-    },
-    {
-      "file": "e2e/test/plugin-host-throttle.test.mjs",
-      "id": "plugin-host RAF measurement reports window-facts errors before missing plugin rows"
-    }
-  ],
-  "expected": "A built plugin host has same-document callback deltas, exact process physical-footprint samples and verified fixture and registry cleanup on both hosts.",
-  "levels": [
-    "unit",
-    "application"
-  ]
-},
-{
   "id": "F239-231",
   "implementation": [
     {
@@ -869,29 +845,6 @@ const FEATURE_LINKS = [
     }
   ],
   "expected": "The terminal observer-start consumer accepts the current successful source-clock reply and leaves clock validation to the shared bracket owner.",
-  "levels": [
-    "unit"
-  ]
-},
-{
-  "id": "F239-230",
-  "implementation": [
-    {
-      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
-      "symbol": "export async function cleanupPluginHostFixture("
-    }
-  ],
-  "tests": [
-    {
-      "file": "e2e/test/plugin-host-throttle.test.mjs",
-      "id": "plugin-host cleanup accepts an available registry row after successful removal"
-    },
-    {
-      "file": "e2e/test/plugin-host-throttle.test.mjs",
-      "id": "plugin-host cleanup retains its directory when failed removal leaves the fixture installed"
-    }
-  ],
-  "expected": "Fixture cleanup confirms removal only from the current null installed record while the fixture registry is active, restores the original registry and retains evidence on unconfirmed cleanup.",
   "levels": [
     "unit"
   ]
@@ -1148,39 +1101,6 @@ const FEATURE_LINKS = [
   "levels": ["unit"]
 },
   {
-  "id": "F239-226",
-  "implementation": [
-    {
-      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
-      "symbol": "export async function waitForPluginHostRegistrations("
-    },
-    {
-      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
-      "symbol": "export async function readPluginHostSample("
-    },
-    {
-      "file": "e2e/fixtures/plugin-host-throttle/raf-probe/ui/raf-probe.js",
-      "symbol": "export async function startRafProbe("
-    }
-  ],
-  "tests": [
-    {
-      "file": "e2e/test/plugin-host-throttle.test.mjs",
-      "id": "plugin-host readiness waits for its declared status and command registrations"
-    },
-    {
-      "file": "e2e/test/plugin-host-throttle.test.mjs",
-      "id": "plugin-host sample reads use the command and status.get snapshot pull"
-    },
-    {
-      "file": "e2e/test/plugin-host-throttle-fixture.test.mjs",
-      "id": "plugin-host RAF fixture registers a qualified status and pushes its local snapshot key"
-    }
-  ],
-  "expected": "The RAF benchmark waits for declared plugin-host registrations, reads through command.run and status.get, and publishes snapshots under the local key.",
-  "levels": ["unit"]
-},
-  {
     id: "F239-225",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "const byProcess = new Map();" }],
     tests: [
@@ -1260,45 +1180,6 @@ const FEATURE_LINKS = [
     }
   ],
   "expected": "E2E fixture payloads belong to the E2E owner while independent core implementation reads remain rejected.",
-  "levels": [
-    "unit"
-  ]
-},
-  {
-  "id": "F212.9a-2",
-  "implementation": [
-    {
-      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
-      "symbol": "export function reducePluginHostRafMeasurement("
-    },
-    {
-      "file": "e2e/benchmark/cases/plugin-host-throttle.mjs",
-      "symbol": "export async function cleanupPluginHostFixture("
-    }
-  ],
-  "tests": [
-    {
-      "file": "e2e/test/plugin-host-throttle.test.mjs",
-      "id": "plugin-host RAF measurement records a valid zero-callback result without a rate threshold"
-    },
-    {
-      "file": "e2e/test/plugin-host-throttle.test.mjs",
-      "id": "plugin-host RAF measurement reports window-facts errors before missing plugin rows"
-    },
-    {
-      "file": "e2e/test/plugin-host-throttle.test.mjs",
-      "id": "plugin-host cleanup retains its directory when failed removal leaves the fixture installed"
-    },
-    {
-      "file": "e2e/test/plugin-host-throttle-fixture.test.mjs",
-      "id": "plugin-host RAF fixture manifest uses the public plugin exposure contract"
-    },
-    {
-      "file": "e2e/test/plugin-host-throttle.test.mjs",
-      "id": "plugin-host RAF measurement rejects samples from different page origins"
-    }
-  ],
-  "expected": "The fixture collector preserves RAF measurements, process identity, explicit errors and cleanup evidence without claiming application benchmark values.",
   "levels": [
     "unit"
   ]
@@ -4338,7 +4219,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/file-open.js", symbol: "export function chooseOpener" },
     ],
     tests: [
-      { file: "e2e/files.test.mjs", id: "the failure to open a file is shown in the message row of the file tree and not in the error display" },
+      // The message-row part of the expected result is held (F332-4-4-1); this test covers the error display part.
+      { file: "e2e/files.test.mjs", id: "a file that no plugin opens from the files tree section stays out of the error display" },
     ],
     expected: "The failure of core.file.open for a file that no plugin opens is shown in the message row of the file tree of the files plugin and not in the error display of the main document.",
     levels: ["application"],
@@ -7543,26 +7425,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-51",
-    implementation: [{ file: "e2e/files-open-failure.mjs", symbol: "export function treeNodes(snapshot)" }],
-    tests: [
-      { file: "e2e/test/files-open-failure.test.mjs", id: "the Files tree node lookup finds a nested path in its declared snapshot" },
-      { file: "e2e/test/files-open-failure.test.mjs", id: "file-open failure check reads the declared tree snapshot, not removed status values" },
-    ],
-    expected: "The Files open-failure consumer finds the nested selected path in the declared tree snapshot and does not read removed status values.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-52",
-    implementation: [{ file: "e2e/project-close-snapshot.mjs", symbol: "export async function getClosedProjectSnapshot(" }],
-    tests: [
-      { file: "e2e/test/project-close-snapshot.test.mjs", id: "a closed-project pull waits through a stale accepted snapshot for the exact current source" },
-      { file: "e2e/test/project-close-snapshot.test.mjs", id: "a closed-project pull rejects a source id that does not match the plugin host contract" },
-    ],
-    expected: "The project-close consumer pulls the declared Files status through the exact current plugin-host source and rejects a mismatched source before pulling.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-53",
     implementation: [{ file: "packages/window-check/app.mjs", symbol: "async click(x, y)" }],
     tests: [
@@ -10368,9 +10230,11 @@ const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F
 // declared source, the snapshot channel, the failed pull of a declared section and the plugin-host log of the workbench and the view
 // bridge, which F332-2 and F332-4-1 remove: the declared UI and the plugin host are removed, and a sidebar section is a view of its
 // plugin.
+// F212.9a, F212.9a-2, F239-226, F239-230, F239-51 and F239-52 wrote the plugin-host throttle benchmark and the Files open-failure and
+// closed-project snapshot helpers, which F332-4-4 removes with the declared section controls and the plugin-host snapshots.
 const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68",
   "F278", "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
-  "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8"]);
+  "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

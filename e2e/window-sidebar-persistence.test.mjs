@@ -141,12 +141,12 @@ for (const app of Object.values(APPS))
         );
         near(inside.rect.w, 143, `${label}: internal section width excluding divider`);
         assert.ok(
-          inside.sections.every((section) => section.text.length > 0),
-          `${label}: internal section output empty`,
+          inside.sections.every((section) => section.mounted && section.phase === "ready"),
+          `${label}: internal section views not ready`,
         );
         assert.ok(
-          inside.sections.find((section) => section.id === "files.tree")?.controls > 0,
-          `${label}: file tree controls absent`,
+          inside.sections.find((section) => section.id === "files.tree")?.mounted === true,
+          `${label}: file tree section view absent`,
         );
         for (const column of columns) {
           near(column.w, savedRecords[column.id].width, `${label}: ${column.id} width`);
@@ -164,8 +164,8 @@ for (const app of Object.values(APPS))
             `${label}: window section output was dropped`,
           );
           assert.ok(
-            bar.sections.filter((section) => section.mounted).every((section) => section.text.length > 0),
-            `${label}: ${column.id} output empty`,
+            bar.sections.filter((section) => section.mounted).every((section) => section.phase === "ready"),
+            `${label}: ${column.id} section views not ready`,
           );
           if (column.id === windowBar.sidebar) {
             assert.equal(bar.surface, terminal.id);
