@@ -8223,6 +8223,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F307",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (p *lineProgress) describe(" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn describe(&self, now: Instant, last_read: Instant)" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentRetainTimeoutNamesHowFarTheRequestWent" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_retain_timeout_names_how_far_the_request_went" },
+    ],
+    expected: "A retain that the service does not answer fails with the stage of its request line and the time since the last line from the service.",
+    levels: ["unit"],
+  },
+  {
     id: "F306",
     implementation: [{ file: "scripts/e2e-run.mjs", symbol: "export function finishRoot" }],
     tests: [{ file: "scripts/test/e2e-run.test.mjs", id: "a failed run keeps the logs and removes the service folders, so the services of a host that ended without host.quit exit" }],

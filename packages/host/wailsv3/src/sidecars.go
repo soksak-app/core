@@ -107,7 +107,9 @@ type sidecar struct {
 	readyRecorded bool
 	outbox        chan queuedLine
 	// writing is the size in bytes of the line that the writer is writing, and 0 between lines.
-	writing       atomic.Int64
+	writing atomic.Int64
+	// lastRead is the monotonic time at which the host read the last line from a persistent service, 0 before the first.
+	lastRead      atomic.Uint64
 	exited        chan struct{}
 	muClosed      sync.Mutex
 	pendingCloses pendingLines // The pending closed messages, in the order of sending
@@ -1347,8 +1349,10 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 		}
 		line = append(line, '\n')
 		process.closeWaiters[request] = waiter
+		queued := queue(line)
+		queued.progress = &lineProgress{}
 		select {
-		case process.outbox <- queue(line):
+		case process.outbox <- queued:
 		default:
 			delete(process.closeWaiters, request)
 			c.mu.Unlock()
@@ -1363,7 +1367,8 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 				return total, fmt.Errorf("sidecar %s: retain: %w", name, err)
 			}
 		case <-timer.C:
-			return total, fmt.Errorf("sidecar %s: retain was not answered within %s", name, retainTimeout)
+			return total, fmt.Errorf("sidecar %s: retain was not answered within %s: %s", name, retainTimeout,
+				queued.progress.describe(monotonicNanos(), process.lastRead.Load()))
 		}
 		c.mu.Lock()
 		total += process.retained[request]
@@ -1707,6 +1712,7 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 		return nil, fmt.Errorf("sidecar %s: hello deadline: %w", name, err)
 	}
 	responseLine, err := reader.ReadBytes('\n')
+	helloRead := monotonicNanos()
 	if errors.Is(err, os.ErrDeadlineExceeded) {
 		conn.Close()
 		return nil, serviceStartFailure{fmt.Sprintf("sidecar %s: the service did not answer hello within %v", name, c.HelloTimeout)}
@@ -1748,6 +1754,7 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 		outbox: make(chan queuedLine, 256), exited: make(chan struct{}),
 		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),
 	}
+	process.lastRead.Store(helloRead)
 	process.begin = func() {
 		routine.Go("sidecar-write-persistent", func() { c.writePersistent(process) })
 		routine.Go("sidecar-read-persistent", func() { c.readPersistent(process, reader) })
@@ -1832,13 +1839,20 @@ func (c *Sidecars) writePersistent(process *sidecar) {
 
 func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
 	started := monotonicNanos()
+	if line.progress != nil {
+		line.progress.started.Store(started)
+	}
 	process.writing.Store(int64(len(line.bytes)))
 	defer process.writing.Store(0)
 	if _, err := process.conn.Write(line.bytes); err != nil {
 		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
 		return false
 	}
-	recordWriteWait(process.name, line, started, monotonicNanos())
+	ended := monotonicNanos()
+	if line.progress != nil {
+		line.progress.ended.Store(ended)
+	}
+	recordWriteWait(process.name, line, started, ended)
 	return true
 }
 
@@ -2167,6 +2181,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 	unfinished := 0
 	scanner.Split(MessageLines(&unfinished))
 	for scanner.Scan() {
+		process.lastRead.Store(monotonicNanos())
 		recordReady(process)
 		line := scanner.Bytes()
 		var value map[string]json.RawMessage
@@ -2607,6 +2622,30 @@ func (c *Sidecars) traceMessage(event, sidecar, surface string, body json.RawMes
 type queuedLine struct {
 	bytes  []byte
 	queued uint64
+	// progress is the write progress of a request line whose timeout names it, and nil for other lines.
+	progress *lineProgress
+}
+
+// lineProgress is the write progress of a request line: the monotonic times at which its write started and ended, 0 before.
+type lineProgress struct {
+	started atomic.Uint64
+	ended   atomic.Uint64
+}
+
+// describe states how far the request line went at now, given the monotonic time of the last line that the host read from the
+// service, 0 when none arrived.
+func (p *lineProgress) describe(now, lastRead uint64) string {
+	if ended := p.ended.Load(); ended != 0 {
+		read := "no line from the service arrived"
+		if lastRead != 0 {
+			read = fmt.Sprintf("the last line from the service arrived %d ms ago", (now-lastRead)/uint64(time.Millisecond))
+		}
+		return fmt.Sprintf("the request line was written %d ms ago, and %s", (now-ended)/uint64(time.Millisecond), read)
+	}
+	if p.started.Load() != 0 {
+		return "the request line is being written"
+	}
+	return "the request line is queued"
 }
 
 // queue stamps line with the moment it enters the write queue of a sidecar.

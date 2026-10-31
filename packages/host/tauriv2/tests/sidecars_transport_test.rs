@@ -1281,6 +1281,92 @@ fn persistent_retain_sends_only_layout_surfaces() {
     service.join().unwrap();
 }
 
+// A retain that the service reads and does not answer fails after the retain timeout with the stage of its request line:
+// written, and the time since the last line from the service.
+// contract: sidecars.retain.timeout-names-the-request-stage
+#[test]
+fn a_retain_timeout_names_how_far_the_request_went() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("retain.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "retain-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+
+    let (read, retain_read) = channel::<()>();
+    let service = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                return;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let reply = match request["operation"].as_str() {
+                Some("hello") => {
+                    serde_json::json!({"operation": "hello", "protocol": 1, "ok": true})
+                }
+                // The service reads the retain and does not answer it.
+                Some("retain") => {
+                    read.send(()).unwrap();
+                    continue;
+                }
+                Some("close-owner") => {
+                    serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true})
+                }
+                Some("shutdown") => {
+                    let reply = serde_json::json!({"operation": "shutdown", "request": request["request"], "ok": true});
+                    writeln!(stream, "{}", reply).unwrap();
+                    return;
+                }
+                _ => continue,
+            };
+            writeln!(stream, "{}", reply).unwrap();
+        }
+    });
+
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let sidecars = Sidecars::<FakeOwner>::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let error = sidecars.retain_sessions(&[]).unwrap_err();
+    assert!(
+        retain_read.try_recv().is_ok(),
+        "the service did not read the retain"
+    );
+    let prefix = format!(
+        "sidecar {ECHO}: retain was not answered within 10s: the request line was written "
+    );
+    let stage = error.strip_prefix(prefix.as_str()).and_then(|rest| {
+        let (written, rest) =
+            rest.split_once(" ms ago, and the last line from the service arrived ")?;
+        let arrived = rest.strip_suffix(" ms ago")?;
+        Some((written.parse::<u64>().ok()?, arrived.parse::<u64>().ok()?))
+    });
+    assert!(
+        stage.is_some(),
+        "retain error {error:?} does not name the stage of its request line after {prefix:?}"
+    );
+    sidecars.stop();
+    service.join().unwrap();
+}
+
 // contract: sidecars.retain.rejects-after-stop
 #[test]
 fn persistent_retain_after_stop_sends_nothing() {

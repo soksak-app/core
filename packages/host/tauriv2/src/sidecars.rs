@@ -758,6 +758,14 @@ fn write_socket_line(
     writing: &AtomicUsize,
 ) -> bool {
     let started = Instant::now();
+    if let Some(progress) = &line.progress
+        && progress.started.set(started).is_err()
+    {
+        log_error(
+            &format!("sidecar {name}"),
+            "a request line started its write twice",
+        );
+    }
     writing.store(line.bytes.len(), Ordering::Release);
     let written = stream.write_all(&line.bytes).and_then(|_| stream.flush());
     writing.store(0, Ordering::Release);
@@ -765,7 +773,16 @@ fn write_socket_line(
         log_error(&format!("sidecar {name}"), format!("write: {error}"));
         return false;
     }
-    record_write_wait(name, line, started, Instant::now());
+    let ended = Instant::now();
+    if let Some(progress) = &line.progress
+        && progress.ended.set(ended).is_err()
+    {
+        log_error(
+            &format!("sidecar {name}"),
+            "a request line ended its write twice",
+        );
+    }
+    record_write_wait(name, line, started, ended);
     true
 }
 
@@ -773,6 +790,8 @@ fn write_socket_line(
 pub(crate) struct QueuedLine {
     pub(crate) bytes: Vec<u8>,
     queued: Instant,
+    /// The write progress of a request line whose timeout names it, and `None` for other lines.
+    progress: Option<Arc<LineProgress>>,
 }
 
 impl QueuedLine {
@@ -781,7 +800,32 @@ impl QueuedLine {
         QueuedLine {
             bytes,
             queued: Instant::now(),
+            progress: None,
         }
+    }
+}
+
+/// The write progress of a request line: the moments at which its write started and ended.
+#[derive(Default)]
+struct LineProgress {
+    started: std::sync::OnceLock<Instant>,
+    ended: std::sync::OnceLock<Instant>,
+}
+
+impl LineProgress {
+    /// States how far the request line went at `now`, given the moment of the last line that the host read from the service.
+    fn describe(&self, now: Instant, last_read: Instant) -> String {
+        if let Some(ended) = self.ended.get() {
+            return format!(
+                "the request line was written {} ms ago, and the last line from the service arrived {} ms ago",
+                now.duration_since(*ended).as_millis(),
+                now.duration_since(last_read).as_millis()
+            );
+        }
+        if self.started.get().is_some() {
+            return "the request line is being written".to_string();
+        }
+        "the request line is queued".to_string()
     }
 }
 
@@ -891,6 +935,8 @@ struct PersistentConnection {
     connected: Arc<AtomicBool>,
     /// The process of the service endpoint that this connection reached.
     service_pid: u32,
+    /// The moment at which the host read the last line from the service, the hello reply first.
+    last_read: Arc<Mutex<Instant>>,
 }
 
 /// The versions of a persistent service that is being replaced.
@@ -2069,6 +2115,8 @@ impl<O: Owner> Sidecars<O> {
                 RETAIN_REQUESTS.fetch_add(1, Ordering::Relaxed)
             );
             let (waiter, answer) = sync_channel(1);
+            let progress = Arc::new(LineProgress::default());
+            let last_read;
             {
                 let mut state = self
                     .core
@@ -2158,15 +2206,26 @@ impl<O: Owner> Sidecars<O> {
                 }))
                 .map_err(|e| e.to_string())?;
                 line.push(b'\n');
+                last_read = Arc::clone(&connection.last_read);
+                let mut queued = QueuedLine::new(line);
+                queued.progress = Some(Arc::clone(&progress));
                 process
                     .outbox
-                    .try_send(Outgoing::Line(QueuedLine::new(line)))
+                    .try_send(Outgoing::Line(queued))
                     .map_err(|_| format!("sidecar {name} is not keeping up"))?;
             }
             total += answer
                 .recv_timeout(RETAIN_TIMEOUT)
                 .map_err(|_| {
-                    format!("sidecar {name}: retain was not answered within {RETAIN_TIMEOUT:?}")
+                    let last_read = *last_read
+                        .lock()
+                        // default: a lock that a panicking thread poisoned still holds the moment, which is only read;
+                        // the panic hook records the panic.
+                        .unwrap_or_else(PoisonError::into_inner);
+                    format!(
+                        "sidecar {name}: retain was not answered within {RETAIN_TIMEOUT:?}: {}",
+                        progress.describe(Instant::now(), last_read)
+                    )
                 })?
                 .map_err(|error| format!("sidecar {name}: retain: {error}"))?;
         }
@@ -2887,6 +2946,7 @@ impl<O: Owner> Core<O> {
                 }
                 _ => format!("sidecar {name}: hello response: {e}"),
             })?;
+        let hello_read = Instant::now();
         let response: serde_json::Value = serde_json::from_str(&response)
             .map_err(|e| format!("sidecar {name}: hello response: {e}"))?;
         if response.get("operation").and_then(|v| v.as_str()) != Some("hello") {
@@ -3008,6 +3068,8 @@ impl<O: Owner> Core<O> {
         let reader_service_pid = endpoint.pid;
         let mut reader_ready = spawn_clock;
         let reader_connected = Arc::clone(&connected);
+        let last_read = Arc::new(Mutex::new(hello_read));
+        let reader_last_read = Arc::clone(&last_read);
         threads.push(Box::new(move || {
             struct ConnectionGuard(Arc<AtomicBool>);
             impl Drop for ConnectionGuard {
@@ -3026,6 +3088,11 @@ impl<O: Owner> Core<O> {
                 loop {
                     match read_message_line(&mut reader, MESSAGE_LIMIT, &mut line) {
                         Ok(MessageLine::Complete) => {
+                            *reader_last_read
+                                .lock()
+                                // default: a lock that a panicking thread poisoned still holds the moment, which is only
+                                // replaced; the panic hook records the panic.
+                                .unwrap_or_else(PoisonError::into_inner) = Instant::now();
                             record_ready(&mut reader_ready, &sidecar);
                         }
                         Ok(MessageLine::End) => return None,
@@ -3315,6 +3382,7 @@ impl<O: Owner> Core<O> {
                     owner_closed: Arc::new(Mutex::new(false)),
                     connected,
                     service_pid: endpoint.pid,
+                    last_read,
                 }),
             },
             threads,

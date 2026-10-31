@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -1039,6 +1040,78 @@ func TestPersistentRetainSkipsAServiceWithoutEndpoint(t *testing.T) {
 	}
 	if _, err := sidecars.Retain(nil); err == nil {
 		t.Fatal("retain without a surfaces list was accepted")
+	}
+}
+
+// TestPersistentRetainTimeoutNamesHowFarTheRequestWent verifies that a retain that the service reads and does not answer fails
+// after the retain timeout with the stage of its request line: written, and the time since the last line from the service.
+// contract: sidecars.retain.timeout-names-the-request-stage
+func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
+	root := t.TempDir()
+	socketDirectory := socketParent(t)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+
+	read := make(chan struct{}, 1)
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if json.Unmarshal(line, &request) != nil {
+				return
+			}
+			var reply map[string]any
+			switch request["operation"] {
+			case "hello":
+				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+			case "close-owner":
+				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
+			case "shutdown":
+				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
+			case "retain":
+				// The service reads the retain and does not answer it.
+				read <- struct{}{}
+			}
+			if reply != nil {
+				encoded, _ := json.Marshal(reply)
+				if _, err := connection.Write(append(encoded, '\n')); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sidecars.Stop()
+	_, err = sidecars.Retain([]host.RetainedSurface{})
+	select {
+	case <-read:
+	default:
+		t.Fatal("the service did not read the retain")
+	}
+	if err == nil {
+		t.Fatal("a retain that the service did not answer succeeded")
+	}
+	pattern := regexp.MustCompile(`^sidecar fixture-service: retain was not answered within 10s: the request line was written \d+ ms ago, and the last line from the service arrived \d+ ms ago$`)
+	if !pattern.MatchString(err.Error()) {
+		t.Fatalf("retain error = %q, want it to match %s", err, pattern)
 	}
 }
 

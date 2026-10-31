@@ -579,6 +579,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.sends-authoritative-layout` | retain은 실행 중이거나 엔드포인트가 게시된 영속 서비스마다 authoritative layout 표면과 host가 관리하는 plugin/state session, request preparation 중 허용된 session을 담은 요청을 보낸다. 이전에 알려진 일반 surface 중 layout에 없는 항목은 제외하며 남은 항목이 없으면 빈 keep 목록을 보낸다. 서비스가 닫은 수를 반환한다. | both |
 | `sidecars.retain.reports-service-failure` | `ok: false`인 `retained` 응답은 서비스의 사유를 담은 오류로 반환한다. | both |
 | `sidecars.retain.skips-service-without-endpoint` | 실행 중인 서비스와 그 엔드포인트 파일이 없으면 retain은 서비스를 시작하지 않고 아무것도 닫지 않는다. | both |
+| `sidecars.retain.timeout-names-the-request-stage` | service가 읽고 답하지 않은 retain은 10초 뒤 요청 줄의 stage, 즉 쓰인 뒤의 시간과 service에서 마지막 줄이 도착한 뒤의 시간으로 실패한다. | both |
 | `sidecars.retain.keeps-session-first-sent-during-start` | Persistent service가 시작된 뒤 keep 목록을 모으기 전에 처음 보낸 plugin 및 state session도 해당 retain에 포함된다. | both |
 | `sidecars.retain.keeps-surface-first-sent-during-start` | Persistent service가 시작된 뒤 keep 목록을 모으기 전에 처음 보낸 일반 surface session도 해당 retain에 포함된다. | both |
 | `sidecars.retain.closes-sessions-absent-from-layout` | 이전에 알려진 일반 surface를 retain에서 생략하면 stale owner와 root를 제거하고 persistent service에 그 surface가 없는 keep 목록을 보낸다. | both |
