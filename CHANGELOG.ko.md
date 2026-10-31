@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F337: section surface는 없는 tab origin을 읽지 않고 context origin `{directory: null}`로 mount된다.
 - F336: 작업공간 version은 release 후보 `0.0.25`이며 게시된 `v0.0.24`와 구별된다.
 - F332-4-8: plugin.json의 `state` 거부 오류는 `state is removed; a plugin declares its project data with data`이다.
 - F332-4-7: 두 host는 `hostReadOperations`가 있는 `sidecar.json`을 `<path of sidecar.json>: hostReadOperations is removed`로 거부하며, installed document는 사이드카 의존마다 `message`만 담는다.

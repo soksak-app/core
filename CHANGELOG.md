@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F337: A section surface mounts with the context origin `{directory: null}` instead of reading a tab origin that it does not have.
 - F336: The workspace version is release candidate `0.0.25`, distinct from published `v0.0.24`.
 - F332-4-8: The refusal of `state` in plugin.json reads `state is removed; a plugin declares its project data with data`.
 - F332-4-7: A `sidecar.json` with `hostReadOperations` is refused by both hosts with `<path of sidecar.json>: hostReadOperations is removed`, and the installed document carries only the `message` of each sidecar dependency.

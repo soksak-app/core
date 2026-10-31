@@ -8001,6 +8001,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F337",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "function surfaceOrigin(surface)" }],
+    tests: [{ file: "packages/workbench/test/section-surface-mount.test.mjs", id: "a section surface mounts with an origin that records no directory" }],
+    expected: "A section surface mounts with the context origin {directory: null} and reads no tab origin.",
+    levels: ["unit"],
+  },
+  {
     id: "F336",
     implementation: [
       { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.25"' },

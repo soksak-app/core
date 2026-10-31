@@ -267,9 +267,16 @@ function originOf(surface) {
   }
 }
 
+/**
+ * The origin of the context and the start values of surface. A section surface has no opening tab, so its origin records no
+ * directory (docs/spec/native-surfaces.md#view-surfaces).
+ */
+function surfaceOrigin(surface) {
+  return surface.section ? { directory: null } : originOf(surface);
+}
+
 function viewStartOrigin(surface) {
-  // A section surface has no opening tab, so its origin records no directory (docs/spec/native-surfaces.md#view-surfaces).
-  if (surface.section) return { directory: null };
+  if (surface.section) return surfaceOrigin(surface);
   // The layout read refuses a view tab first and the place leaves it out; a refusal that reaches this point is a defect, so it throws.
   const refusal = viewRefusal(surface.surfaceId);
   if (refusal !== null) throw new TypeError(refusal);
@@ -837,7 +844,7 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
         keep: (reason, on) => reportKeep(surface.surfaceId, reason, on),
         ...(surface.unload ? { state: tabState(surface, () => entry.disposed) } : {}),
         params: surface.params },
-      origin: originOf(surface),
+      origin: surfaceOrigin(surface),
       // Canonical root of the project that the surface window shows (docs/spec/plugins.md#tab-reports). A library window has none.
       project: active() ? { root: active().root } : null,
       icon,
