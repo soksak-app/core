@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F301-1: Tauri host에서 surface의 close는 잡은 창 기록에서 presentation wait와 view source를 끝내고 창이 열려 있을 때만 페이지에 알린다. 그래서 먼저 닫힌 창이 surface마다 `view channel: project window is closed`를 두 번 기록하지 않는다.
 - F300-1: Wails host의 runtime 치명 오류는 출력을 `logs/host-<boot>.crash`에 쓰고 `SIGABRT`로 process를 끝낸다. 그래서 시스템이 모든 thread의 native frame을 담은 crash report를 쓴다. 전에는 runtime이 status 2로 process를 끝내서 native code의 fault가 native frame을 남기지 않았다.
 - F298-7: core release가 Wails release bundle의 `sok`인 `sok-<version>-darwin-arm64`와 packed release `soksak-plugin-api-<version>.tgz`, `soksak-native-process-identity-darwin-<version>.tgz`를 담는다. 그래서 plugin과 sidecar workflow는 core source를 checkout하지 않고 build할 수 있다. release job이 이것을 만들지 않으면 `scripts/test/workflows.test.mjs`가 실패한다.
 - F298-6: `make e2e`, `make e2e-activation`, `make e2e-real`, `make e2e-person`는 두 debug 애플리케이션과 workspace registry를 build하고 `scripts/e2e-run.mjs`를 실행한다. 이 script는 `target/e2e` 아래 새 설정 root에서 tier의 검사를 실행한다. 플러그인을 설치하고, 두 애플리케이션을 시작하고, 창 검사와 native end-to-end target을 실행하고, `host.quit`으로 애플리케이션을 끝내고, 남은 프로세스가 있으면 실패하고, 통과한 실행 뒤에만 root를 지운다. 실행마다 새 root에서 시작하므로 같은 source를 두 번 실행해도 결과가 같다. `scripts/test/e2e-run.test.mjs`가 단계, 실패한 단계의 보고, 실행마다 새 root, 남은 프로세스로 인한 실패를 검사한다.

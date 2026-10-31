@@ -2678,6 +2678,47 @@ pub(crate) fn main_page_process_ended(window: &Window) -> Result<(), String> {
     Ok(())
 }
 
+/// What the close of a surface leaves for the page of its window: the presentation waits that ended without presentation, the
+/// view source that ended with its plugin and generation, and the failures to report.
+#[derive(Debug, Default, PartialEq)]
+pub(crate) struct SurfaceClose {
+    pub abandoned: usize,
+    pub ended: Option<(String, u64)>,
+    pub errors: Vec<String>,
+}
+
+/// Ends the presentation waits and the view source of a closed surface in `data`, the records of its window that close_surface
+/// took. `current` is the lookup of the window's records when the close runs on the main thread. A window that closed before the
+/// close ran has no page to tell: the close of the window abandoned its presentation waits and removed its page (windows.rs,
+/// the Destroyed event), so the close returns no notice and records the cancellation.
+pub(crate) fn end_closed_surface(
+    data: &WindowData,
+    current: &Result<std::sync::Arc<WindowData>, String>,
+    surface: &str,
+) -> SurfaceClose {
+    let mut close = SurfaceClose::default();
+    match data.documents.presentation().end_surface(surface, "hidden") {
+        Ok(ended) => close.abandoned = ended.len(),
+        Err(error) => close.errors.push(error.to_string()),
+    }
+    data.documents.presentation().forget_surface(surface);
+    if let Some(generation) = data.declared_source_origins.current_view(surface)
+        && let Some(plugin) = data
+            .documents
+            .views()
+            .forget_generation(surface, generation)
+        && data.declared_source_origins.end_view(surface, generation)
+    {
+        close.ended = Some((plugin, generation));
+    }
+    if current.is_err() {
+        record_view_message_cancelled(surface, "window-closed");
+        close.abandoned = 0;
+        close.ended = None;
+    }
+    close
+}
+
 /// Closes every document region of a surface. It does not wait for main-thread work, so it can be called from any
 /// thread.
 pub(crate) fn close_surface(window: &Window, surface: &str) {
@@ -2699,15 +2740,12 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
         "document close",
         window
             .run_on_main_thread(move || {
-                end_surface_presentation_wait(&host, &surface, "hidden");
-                data.documents.presentation().forget_surface(&surface);
-                if let Some(generation) = data.declared_source_origins.current_view(&surface)
-                    && let Some(plugin) = data
-                        .documents
-                        .views()
-                        .forget_generation(&surface, generation)
-                    && data.declared_source_origins.end_view(&surface, generation)
-                {
+                let close = end_closed_surface(&data, &window_data(&host), &surface);
+                for error in close.errors {
+                    log_error("view channel", error);
+                }
+                report_ended_presentation_waits(&host, &surface, "hidden", Ok(close.abandoned));
+                if let Some((plugin, generation)) = close.ended {
                     emit_source_ended(&host, &plugin, &surface, generation);
                 }
                 // The regions close with the surface, so their stream effects are not applied.
@@ -3234,6 +3272,10 @@ pub fn surface_start_script(surface: &str, start: &ViewStart) -> Result<String, 
 #[cfg(test)]
 #[path = "view_theme_test.rs"]
 mod theme_tests;
+
+#[cfg(test)]
+#[path = "surface_close_test.rs"]
+mod surface_close_tests;
 
 #[cfg(test)]
 #[path = "view_start_test.rs"]
