@@ -8223,6 +8223,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F309",
+    implementation: [{ file: "packages/workbench/document-regions.js", symbol: "const attachmentOf = (tab, name)" }],
+    tests: [{ file: "packages/workbench/test/document-regions.test.mjs", id: "a region whose attachment ends while its state is read yields no state, and a held attachment reports its failure" }],
+    expected: "A region whose attachment ended during the read of its state yields no state, and a held attachment reports its failure.",
+    levels: ["unit"],
+  },
+  {
     id: "F307",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (p *lineProgress) describe(" },

@@ -7,7 +7,8 @@ import { documents, report } from "./host.js";
 
 /** Creates the region record of the page over the declared host calls of the document regions. */
 export function createDocumentRegions() {
-  // tab id -> the names of the regions that its surface attached and has not detached
+  // tab id -> name -> the attachment of each region that its surface attached and has not detached; each attach gives a new
+  // attachment, so a read can tell whether the region it started with still holds.
   const attachedNames = new Map();
   // tab id -> the promise of {name: interactionState} that the next attach of each name restores once
   const pending = new Map();
@@ -25,7 +26,9 @@ export function createDocumentRegions() {
   const leaving = new Map();
 
   // default: a tab whose surface attached no region has no names.
-  const namesOf = (tab) => [...(attachedNames.get(tab) ?? [])];
+  const namesOf = (tab) => [...(attachedNames.get(tab)?.keys() ?? [])];
+  // default: a region that is not attached has no attachment.
+  const attachmentOf = (tab, name) => attachedNames.get(tab)?.get(name);
 
   // Reads the stored session of tab for its next attaches; a failed read is logged and the regions attach without it.
   function seed(tab) {
@@ -44,8 +47,8 @@ export function createDocumentRegions() {
   return {
     attached(tab, name) {
       let names = attachedNames.get(tab);
-      if (!names) attachedNames.set(tab, names = new Set());
-      names.add(name);
+      if (!names) attachedNames.set(tab, names = new Map());
+      names.set(name, {});
     },
     detached(tab, name) {
       attachedNames.get(tab)?.delete(name);
@@ -93,7 +96,15 @@ export function createDocumentRegions() {
       await leaving.get(tab);
       const history = {};
       for (const name of namesOf(tab)) {
-        const state = await documents.interactionState(tab, name);
+        const attachment = attachmentOf(tab, name);
+        let state;
+        try {
+          state = await documents.interactionState(tab, name);
+        } catch (error) {
+          // A region whose attachment ended or was replaced during the read was closed by the host, so it has no state to store.
+          if (attachmentOf(tab, name) !== attachment) continue;
+          throw error;
+        }
         if (state) history[name] = state;
       }
       return Object.keys(history).length ? history : undefined;

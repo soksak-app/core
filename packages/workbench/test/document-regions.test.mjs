@@ -55,6 +55,20 @@ test("a failed query gives media-unknown and is logged", async () => {
   assert.deepEqual(reports, ["memory saver: tab tab: document page: the document region is closed"]);
 });
 
+test("a region whose attachment ends while its state is read yields no state, and a held attachment reports its failure", async () => {
+  const regions = createDocumentRegions();
+  regions.attached("tab", "page");
+  // The view of the tab ends during the read: the page releases the regions and the restarted view attaches the same name.
+  answers.documentInteractionState = async () => {
+    regions.released("tab");
+    regions.attached("tab", "page");
+    throw new Error('document "page" is not attached');
+  };
+  assert.equal(await regions.interaction("tab"), undefined);
+  answers.documentInteractionState = async () => { throw new Error("document page: the read failed"); };
+  await assert.rejects(regions.interaction("tab"), /document page: the read failed/);
+});
+
 // Document regions whose stored sessions are sessions, {tab: {name: interactionState}}.
 function withSessions(sessions = {}) {
   const regions = createDocumentRegions();

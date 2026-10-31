@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F309: tab session 쓰기는 state를 읽는 동안 attachment가 끝나거나 바뀐 region을 건너뛴다. 그래서 view가 끝나도 `document "page" is not attached`를 기록하지 않는다.
 - F307: persistent service가 10초 안에 답하지 않은 retain은 요청 줄의 stage(queued, being written, written)와 host가 service에서 마지막 줄을 읽은 뒤의 시간으로 실패한다.
 - F306: 실패한 end-to-end run은 각 애플리케이션의 `services` 폴더를 지운다. 그래서 run이 logs를 남기는 동안에도 `host.quit` 없이 끝난 host의 persistent service가 끝난다.
 - F305-2: Tauri host가 presentation이나 presentation 한도 뒤에 넣는 presentation 대기 종료는 실행 전에 닫힌 창에 오류를 쓰지 않는다. 창의 close가 그 창의 모든 presentation 대기를 이미 끝냈기 때문이다.
