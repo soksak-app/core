@@ -57,10 +57,13 @@ type presentationWait struct {
 	waiting   map[string]presentationJoin
 	committed map[string]presentationPlacement
 	pending   map[uint64]*pendingPresentation
+	// timedOut holds, for each surface, the view generation whose wait ended at the presentation limit. That generation joins no
+	// later wait, so a view that does not present holds no later transaction for the limit again.
+	timedOut map[string]uint64
 }
 
 // presentationEnds are reasons that end a presentation wait. Cancellation is separate because it aborts its layout transaction.
-var presentationEnds = map[string]bool{"presented": true, "process-ended": true, "hidden": true, "unresponsive": true}
+var presentationEnds = map[string]bool{"presented": true, "process-ended": true, "hidden": true, "unresponsive": true, "timeout": true}
 
 // prepare records the placements and returns the visible root views whose placement or generation changed.
 func (w *presentationWait) prepare(ticket uint64, placements []Placement, generations map[string]uint64) []Placement {
@@ -108,6 +111,18 @@ func (w *presentationWait) beginFor(surface string, ticket, generation uint64, p
 	}
 	w.waiting[surface] = presentationJoin{ticket: ticket, generation: generation, presented: presented, abandon: abandon}
 	return true
+}
+
+// waitsFor reports whether the current wait of surface is the join that ticket and generation identify.
+func (w *presentationWait) waitsFor(surface string, ticket, generation uint64) bool {
+	join, ok := w.waiting[surface]
+	return ok && join.ticket == ticket && join.generation == generation
+}
+
+// endedAtLimit reports whether the wait of generation of surface ended at the presentation limit.
+func (w *presentationWait) endedAtLimit(surface string, generation uint64) bool {
+	ended, ok := w.timedOut[surface]
+	return ok && ended == generation
 }
 
 // waits reports whether the view of surface waits for its presentation.
@@ -162,6 +177,12 @@ func (w *presentationWait) endFor(surface string, ticket, generation uint64, rea
 	// wait as presented: it writes no abandoned record and abandons no native join.
 	if join.presented.completed() {
 		return false, nil
+	}
+	if reason == "timeout" {
+		if w.timedOut == nil {
+			w.timedOut = map[string]uint64{}
+		}
+		w.timedOut[surface] = join.generation
 	}
 	tracePresentationJoin("abandoned", surface, join.generation, join.ticket, false, reason)
 	EmitHost(LevelDebug, "host.trace.view.presentation-abandoned", map[string]any{"surface": surface, "reason": reason})
@@ -276,6 +297,9 @@ func (s *Surfaces) joinShownViews(window unsafe.Pointer, ticket uint64, placemen
 		if !p.Visible || s.presentation.waits(p.ID) || s.viewRecords().specs[p.ID] == nil {
 			continue
 		}
+		if channel, ok := s.documents.view(p.ID); ok && s.presentation.endedAtLimit(p.ID, channel.generation) {
+			continue
+		}
 		if _, _, err := s.joinViewForPresentation(window, ticket, p); err != nil {
 			return err
 		}
@@ -318,6 +342,11 @@ func (s *Surfaces) joinViewForPresentation(window unsafe.Pointer, ticket uint64,
 	if state := s.presentation.pending[ticket]; state != nil {
 		state.joined[surface] = generation
 	}
+	// WebKit reports a page process unresponsive only after input or a load, so a visible view whose process stops before it presents
+	// sends no end; the limit ends its wait (docs/spec/native-surfaces.md#view-surfaces).
+	if err := system.EnqueueUIAfter(pageTimeout, func() { s.endPresentationWaitAtLimit(surface, ticket, generation) }); err != nil {
+		return generation, true, fmt.Errorf("arming the presentation limit of view %s: %w", surface, err)
+	}
 	return generation, true, nil
 }
 
@@ -332,7 +361,18 @@ func (s *Surfaces) endPresentationWaitFor(surface string, ticket, generation uin
 		LogError("view channel", err)
 	}
 	if abandoned {
+		if reason == "timeout" {
+			LogError("view presentation", fmt.Errorf("surface %s did not present within %s", surface, pageTimeout))
+		}
 		s.emitToSurface(surface, "view-presentation-abandoned", map[string]any{"surface": surface, "reason": reason})
+	}
+}
+
+// endPresentationWaitAtLimit ends the wait of the join that ticket and generation identify at the presentation limit. A limit
+// whose join already ended changes nothing, because its end would invalidate a placement of a later state.
+func (s *Surfaces) endPresentationWaitAtLimit(surface string, ticket, generation uint64) {
+	if s.presentation.waitsFor(surface, ticket, generation) {
+		s.endPresentationWaitFor(surface, ticket, generation, "timeout")
 	}
 }
 

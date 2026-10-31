@@ -498,3 +498,67 @@ func TestSynchronousPresentationJoinCallbackPrecedesNativeJoinResult(t *testing.
 		t.Fatalf("native join result = %#v, want joined true", got[2])
 	}
 }
+
+// contract: view.presentation-wait.ends-at-the-presentation-limit
+func TestAJoinedViewThatDoesNotPresentEndsItsWaitAtThePresentationLimit(t *testing.T) {
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
+	request := PresentRequest{Ticket: 41, Placements: []Placement{placement}}
+	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
+		t.Fatalf("join the view: %v", err)
+	}
+	if len(fake.joins) != 1 {
+		t.Fatalf("the shown view joined %d times, want 1", len(fake.joins))
+	}
+	if len(fake.delayed) != 1 || fake.delayed[0].delay != pageTimeout {
+		t.Fatalf("the join queued %d delayed steps %#v, want one step after the presentation limit %s", len(fake.delayed), fake.delayed, pageTimeout)
+	}
+	// The view neither presents nor ends, and no unresponsive notice arrives, as for a page process whose main thread waits.
+	fake.delayed[0].run()
+	if s.presentation.waits(placement.ID) {
+		t.Fatalf("the wait of a view that did not present still holds the layout transaction %s after its join", pageTimeout)
+	}
+	if fake.joins[0].abandons != 1 {
+		t.Fatalf("the native join was abandoned %d times at the limit, want 1", fake.joins[0].abandons)
+	}
+	// The same generation joins no later wait, so it does not hold each later transaction for the limit again.
+	moved := placement
+	moved.Rect.X = 40
+	next := PresentRequest{Ticket: 42, Placements: []Placement{moved}}
+	if err := s.joinViewsForPresentRequest(window, next, next.Placements); err != nil {
+		t.Fatalf("join the moved view: %v", err)
+	}
+	if len(fake.joins) != 1 {
+		t.Fatalf("the generation whose wait ended at the limit joined again: %d joins", len(fake.joins))
+	}
+}
+
+// contract: view.presentation-wait.ends-at-the-presentation-limit
+func TestTheLimitOfAPresentedJoinChangesNothing(t *testing.T) {
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
+	request := PresentRequest{Ticket: 41, Placements: []Placement{placement}}
+	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
+		t.Fatalf("join the view: %v", err)
+	}
+	fake.joins[0].presented()
+	if s.presentation.waits(placement.ID) || len(fake.delayed) != 1 {
+		t.Fatalf("the presented view still waits or queued %d limits, want no wait and one limit", len(fake.delayed))
+	}
+	fake.delayed[0].run()
+	if fake.joins[0].abandons != 0 {
+		t.Fatalf("the limit of a presented join abandoned it %d times", fake.joins[0].abandons)
+	}
+	// The presented generation joins the next transaction, because its wait did not end at the limit.
+	moved := placement
+	moved.Rect.X = 40
+	next := PresentRequest{Ticket: 42, Placements: []Placement{moved}}
+	if err := s.joinViewsForPresentRequest(window, next, next.Placements); err != nil {
+		t.Fatalf("join the moved view: %v", err)
+	}
+	if len(fake.joins) != 2 {
+		t.Fatalf("the presented generation joined %d times after the limit of its first join, want 2", len(fake.joins))
+	}
+}

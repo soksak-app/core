@@ -170,6 +170,7 @@ export const MAIN_THREAD_FREE = {
   sp_capture_error: "the capture error is a string that the capture library returns for an error code",
   sp_facts_free: "the function frees a string that a native function returned",
   sp_ui_enqueue: "the function adds a C function to the main queue of libdispatch, which any thread may do",
+  sp_ui_enqueue_after: "the function adds a C function to the main queue of libdispatch after a delay, which any thread may do",
 };
 
 const mainThreadFree = (name) => Object.keys(MAIN_THREAD_FREE)

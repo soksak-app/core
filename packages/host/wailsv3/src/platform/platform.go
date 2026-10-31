@@ -299,6 +299,8 @@ type Platform interface {
 	// EnqueueUI runs work once as a main-thread step after the current framework event callback ends. On macOS the step runs work
 	// on the worker of the framework while the main thread waits in C (docs/spec/hosts.md, main thread of the Wails host).
 	EnqueueUI(work func()) error
+	// EnqueueUIAfter runs work once as a main-thread step of EnqueueUI after delay has passed.
+	EnqueueUIAfter(delay time.Duration, work func()) error
 	// PrepareWindow fits the sizes of the content view of the window and the main web view.
 	PrepareWindow(window unsafe.Pointer) error
 	// Fullscreen switches the window to full screen or back and calls done on the UI thread when the transition

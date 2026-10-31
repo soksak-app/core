@@ -148,6 +148,13 @@ impl Platform for Darwin {
         ui_queue::enqueue(work);
         Ok(())
     }
+    fn enqueue_ui_after(
+        &self,
+        delay: std::time::Duration,
+        work: Box<dyn FnOnce() + Send>,
+    ) -> Result<(), String> {
+        ui_queue::enqueue_after(delay, work)
+    }
     fn prepare_window<'a>(&self, builder: WindowBuilder<'a>) -> Result<WindowBuilder<'a>, String> {
         Ok(window::prepare(builder))
     }

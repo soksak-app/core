@@ -42,6 +42,13 @@ impl Platform for Windows {
     fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
         unsupported::enqueue_ui(work)
     }
+    fn enqueue_ui_after(
+        &self,
+        delay: std::time::Duration,
+        work: Box<dyn FnOnce() + Send>,
+    ) -> Result<(), String> {
+        unsupported::enqueue_ui_after(delay, work)
+    }
     fn prepare_window<'a>(&self, builder: WindowBuilder<'a>) -> Result<WindowBuilder<'a>, String> {
         unsupported::prepare_window(builder)
     }

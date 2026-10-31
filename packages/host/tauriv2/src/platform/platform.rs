@@ -344,6 +344,12 @@ pub trait CoreRootHost {
 pub trait Platform: CoreRootHost + Send + Sync {
     /// Runs work once on the main queue after the current framework event callback ends.
     fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String>;
+    /// Runs work once on the main queue after delay has passed.
+    fn enqueue_ui_after(
+        &self,
+        delay: std::time::Duration,
+        work: Box<dyn FnOnce() + Send>,
+    ) -> Result<(), String>;
 
     // Window
 

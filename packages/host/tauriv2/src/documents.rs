@@ -3365,6 +3365,26 @@ pub(crate) fn join_shown_views(
                     .presentation()
                     .attach_abandon(surface, generation, ticket, abandon);
                 outcome.joined.push((surface.to_string(), generation));
+                // WebKit reports a page process unresponsive only after input or a load, so a visible view whose process stops
+                // before it presents sends no end; the limit ends its wait (docs/spec/native-surfaces.md#view-surfaces).
+                let limit_window = window.clone();
+                let limit_surface = surface.to_string();
+                platform
+                    .enqueue_ui_after(
+                        crate::exposure::TIMEOUT,
+                        Box::new(move || {
+                            end_ticket_presentation_wait(
+                                &limit_window,
+                                &limit_surface,
+                                generation,
+                                ticket,
+                                "timeout",
+                            )
+                        }),
+                    )
+                    .map_err(|error| {
+                        format!("arming the presentation limit of view {surface}: {error}")
+                    })?;
             }
             Ok(None) => data
                 .documents
@@ -3442,6 +3462,15 @@ fn report_ended_presentation_waits(
 ) {
     match result {
         Ok(ended) if reason != "presented" => {
+            if reason == "timeout" && ended > 0 {
+                log_error(
+                    "view presentation",
+                    format!(
+                        "surface {surface} did not present within {}s",
+                        crate::exposure::TIMEOUT.as_secs()
+                    ),
+                );
+            }
             for _ in 0..ended {
                 let payload = presentation_abandoned_payload(surface, reason);
                 if let Err(error) = emit_window(window, "view-presentation-abandoned", payload) {

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-70-2: 두 host의 presentation wait는 참여한 view가 10초의 presentation limit까지 표시하지도 끝나지도 않으면 reason `timeout`으로 wait를 끝내고, native join을 중단하며, `error: view presentation: surface <surface> did not present within 10s`를 쓰고, 그 view generation이 이후 wait에 참여하지 않게 한다. 표시하기 전에 page 프로세스가 멈춘 보이는 view가 창의 commit을 잡았고, 그런 멈춤을 알리는 event가 없어 page의 이후 모든 배치가 그것을 기다렸다. limit은 지연된 main queue 단계(`sp_ui_enqueue_after`)로 실행한다. 검증: native UI queue 시험, Go host 시험 두 개, Rust host 시험 두 개가 변경 전에 실패하고 변경 뒤 통과한다.
 - F292-70-1: `diagnostics.fixture`가 도는 동안, 그것이 실행하는 project 작업 안의 각 await 단계가 `projects.<operation>.<step>` 이름의 `page.fixture.step`으로 기록되므로, 끝나지 않은 fixture 단계는 그 작업이 기다리는 단계를 밝힌다. 검증: `packages/workbench`의 새 시험 두 개는 단계 실행기가 없을 때 실패했고 그 뒤 통과한다.
 - F292-72: `docs/spec/logging.md`는 모든 gate를 지나는 event를 한 번만 적는다. 제거된 migration 기록 `log.migrated`를 아직 들던 사본은 없어졌고, 남은 문장은 `log.plugins`를 든다.
 - F292-10: 창이 key window가 될 때 registry를 다시 읽는지 보는 check는 activation tier(`e2e/activation/registry-active.test.mjs`)에서 실행되고 먼저 application을 활성화한다. active application의 창만 key window가 되고 hosted runner는 application을 활성화하지 않기 때문이다.

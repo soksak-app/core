@@ -21,7 +21,7 @@ func TestAViewJoinsThePresentationWaitOncePerChange(t *testing.T) {
 // Each end without presentation writes host.trace.view.presentation-abandoned with the surface and the reason, and each end ends the
 // wait once: an end of a view that does not wait writes nothing.
 func TestEachEndWithoutPresentationWritesTheAbandonedEvent(t *testing.T) {
-	for _, reason := range []string{"process-ended", "hidden", "unresponsive"} {
+	for _, reason := range []string{"process-ended", "hidden", "unresponsive", "timeout"} {
 		isolateTraceRecords(t)
 		var w presentationWait
 		w.begin("probe-surface", nil)
@@ -78,8 +78,9 @@ func TestPresentationEndsTheWaitWithoutAnAbandonedEvent(t *testing.T) {
 	if got := bufferedTraces(t, "host.trace.view.presentation-abandoned"); len(got) != 0 {
 		t.Fatalf("abandoned records after a presentation: %v, want none", got)
 	}
-	if _, err := w.end("probe-surface", "timeout"); err == nil {
-		t.Fatalf("an end with the reason timeout was accepted")
+	// Cancellation aborts its layout transaction (cancelTicket), so it is not a reason that ends a wait.
+	if _, err := w.end("probe-surface", "cancelled"); err == nil {
+		t.Fatalf("an end with the reason cancelled was accepted")
 	}
 }
 

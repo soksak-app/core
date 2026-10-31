@@ -341,6 +341,13 @@ pub fn enqueue_ui(_work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
     missing("UI queue")
 }
 
+pub fn enqueue_ui_after(
+    _delay: std::time::Duration,
+    _work: Box<dyn FnOnce() + Send>,
+) -> Result<(), String> {
+    missing("UI queue")
+}
+
 pub fn cancel_layout(_window: Handle) -> Result<(), String> {
     missing("surface layout cancel")
 }

@@ -37,6 +37,10 @@ func (implementation) EnqueueUI(func()) error {
 	return unsupported("UI queue")
 }
 
+func (implementation) EnqueueUIAfter(time.Duration, func()) error {
+	return unsupported("UI queue")
+}
+
 func (implementation) Fullscreen(unsafe.Pointer, bool, func()) error {
 	return unsupported("full screen")
 }

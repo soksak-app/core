@@ -80,6 +80,14 @@ type lifecyclePlatform struct {
 	cancelledLayouts []unsafe.Pointer
 	cancelledTickets []uint64
 	layoutOperations []string
+	// delayed holds the work of EnqueueUIAfter with its delay, in order; the test runs it.
+	delayed []delayedUI
+}
+
+// delayedUI is one call of EnqueueUIAfter.
+type delayedUI struct {
+	delay time.Duration
+	run   func()
 }
 
 // viewJoin is one join of a view to a layout transaction. abandons counts the calls of its abandon.
@@ -105,6 +113,12 @@ func (p *lifecyclePlatform) JoinView(window unsafe.Pointer, ticket uint64, view 
 // EnqueueUI runs the function at once, because the test runs on the only thread.
 func (p *lifecyclePlatform) EnqueueUI(run func()) error {
 	run()
+	return nil
+}
+
+// EnqueueUIAfter records the work and its delay, so the test runs the work in place of the passing of the delay.
+func (p *lifecyclePlatform) EnqueueUIAfter(delay time.Duration, run func()) error {
+	p.delayed = append(p.delayed, delayedUI{delay: delay, run: run})
 	return nil
 }
 
