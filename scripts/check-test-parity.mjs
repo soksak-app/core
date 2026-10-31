@@ -6498,9 +6498,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/index.html", symbol: "for (const text of installEnvironment(environmentFile, installedPlugins)) showError(text);" },
     ],
     tests: [
-      { file: "e2e/start-failure.test.mjs", id: "a rejected installed plugin manifest stops the page start with a shown and logged error" },
+      { file: "e2e/start-failure.test.mjs", id: "a rejected installed plugin manifest is shown and logged and the page starts without that plugin" },
     ],
-    expected: "A rejected installed plugin manifest stops the page start with the error shown and logged.",
+    expected: "A rejected installed plugin manifest is shown and logged, and the page starts without that plugin.",
     levels: ["application"],
   },
   {

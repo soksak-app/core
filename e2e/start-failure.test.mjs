@@ -1,4 +1,5 @@
-// An error that stops the page start is shown as an error display and in the application log, not as an empty window (docs/features.md F86).
+// An installed plugin whose manifest the page refuses is left out with its error shown and in the application log, and the page
+// starts without it (docs/spec/installation.md#serving-installed-plugins).
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -9,7 +10,7 @@ import { readEventErrors } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a rejected installed plugin manifest stops the page start with a shown and logged error`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: a rejected installed plugin manifest is shown and logged and the page starts without that plugin`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     // Changes the manifest of the installed terminal plugin to the earlier form that lists the sidecar in sidecars instead of dependencies.
@@ -28,11 +29,8 @@ for (const app of Object.values(APPS)) {
 
     const pattern = /^error page page: installed plugin terminal \S+ \(@soksak\/plugin-terminal\): plugin\.json: unknown field sidecars/;
     s.expectError(pattern);
-    // The reload of a page that cannot start ends with the timeout of its request, which the host records (docs/spec/diagnostics.md).
-    s.expectError(/^error host endpoint timeout: command\.run: the reloaded page did not report ready within 10s; running host calls: .+$/);
-    // A page whose start stopped does not report readiness, so the reload command exceeds its deadline. The page records the error during the start,
-    // so after that deadline the record is in the log.
-    await assert.rejects(s.run("host.window.reload"), /did not|not ready|within/);
+    // The page starts without the refused plugin, so the reload reports ready, and the error display wrote the refusal to the log.
+    await s.run("host.window.reload");
     await s.flushLog();
     const { errors } = readEventErrors(s.app.configDir, s.eventStart);
     const line = errors.find((item) => pattern.test(item));
