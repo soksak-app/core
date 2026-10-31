@@ -4,14 +4,13 @@
 // of the view (the sok-view webkit message handler in the application).
 //
 // The module imports nothing under runtime/ and no @soksak/workbench/ specifier, so the core root serves it to a view with
-// the view import map (rule 4). Its imports are the call layer, the snapshot channel, the plugin runtime and the composition
-// controller with its region handles, which import nothing else.
+// the view import map (rule 4). Its imports are the call layer, the plugin runtime and the composition controller with its
+// region handles, which import nothing else.
 
 import { causeCids, createCalls } from "./calls.js";
 import { createOperationCids } from "./operation.js";
 import { createPluginRuntime } from "./plugin-runtime.js";
 import { createEventBatcher } from "./log-batch.js";
-import { createSnapshotSender, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
 import { createSurfaceCompositionController } from "./surface-composition.js";
 import { createExpose } from "./index.js";
 import { observeSurfaceDocument, surfaceDocumentEntry } from "./surface-document.js";
@@ -22,8 +21,6 @@ const PLUGIN = /^[a-z][a-z0-9-]*$/;
 const UNREGISTERED_COMMAND = 1002;
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of index.js. */
 const FAILED_COMMAND = -32000;
-/** The code of a request whose parameters are invalid: EXPOSURE_ERRORS.invalidParams of index.js, which this module does not import. */
-const INVALID_PARAMS = -32602;
 /** Runs a command handler with its params and its context and settles with the reply payload {result} or {error: {code, message}}, as the exposure relay expects. */
 async function runCommand(run, params, context) {
   try {
@@ -71,8 +68,8 @@ export function createViewChannel({ handler }) {
 /**
  * Creates the report function of createViewBridge for a view page. An error report, a call that ended by a timeout and a peer that
  * was lost for another reason than a closed surface reach reportError, which the view page passes as its global error hook, so the
- * start script of the view writes them to the application log. The open-call counts are console debug records, and a skipped
- * snapshot and a call or snapshot that ended because its surface closed are console info records.
+ * start script of the view writes them to the application log. The open-call counts are console debug records, and a call that
+ * ended because its surface closed is a console info record.
  */
 export function createViewReporter({ reportError, console }) {
   if (typeof reportError !== "function") throw new TypeError("createViewReporter requires reportError");
@@ -84,10 +81,8 @@ export function createViewReporter({ reportError, console }) {
       console.debug("view bridge open calls", event);
       return;
     }
-    if (event?.kind === "skipped" ||
-        (event?.kind === "peer-lost" && event.reason === "surface-closed") ||
-        (event?.kind === "stalled" && event.reason === "surface-closed")) {
-      console.info("view bridge closed or coalesced", event);
+    if (event?.kind === "peer-lost" && event.reason === "surface-closed") {
+      console.info("view bridge closed call", event);
       return;
     }
     const fields = [];
@@ -111,15 +106,13 @@ function requireDataKey(command, key) {
 }
 
 /**
- * Creates the calls and the declared UI snapshots of a view over one view channel. The calls are createCalls() and the snapshot
- * sender is createSnapshotSender(), both sending through the channel. The channel has one listener, which passes each
- * acknowledgement of a snapshot to the sender and every other message to the calls.
+ * Creates the calls of a view over one view channel. The calls are createCalls(), sending through the channel. The channel has one
+ * listener, which passes every message to the calls.
  *
  *     handler   the sok-view message handler of the view, as for createViewChannel
- *     report    report(event) receives the counts and losses of the calls and the snapshots, as createCalls and createSnapshotSender
- *               report them; a view page passes createViewReporter()
+ *     report    report(event) receives the counts and losses of the calls, as createCalls reports them; a view page passes createViewReporter()
  *
- * Returns {calls, snapshots}. runtime serves the context entries of the view page: native.on, sidecar(name).on, .onFailure and .send,
+ * Returns {calls, runtime, commands, exposure, contributions, composition}. runtime serves the context entries of the view page: native.on, sidecar(name).on, .onFailure and .send,
  * theme, status.watch, data.get and data.set, and textSize and settings with read and on each. composition.create({regions, overlays})
  * creates the composition of the declared regions of the view (docs/spec/native-surfaces.md#view-surfaces, regions).
  */
@@ -128,15 +121,12 @@ export function createViewBridge({ handler, report }) {
   const plugin = pluginOfView();
   const channel = createViewChannel({ handler });
   let onCall = null;
-  let onAcknowledgement = null;
   let onCoreExposure = null;
   // The listeners of the view by key (see keyOf), and the last theme that the host sent. A key has one subscription call on the
   // page, made by its first listener; a theme has none, because the host sends it.
   const listeners = new Map();
   const subscriptions = new Map();
   let lastTheme;
-  // The last project of the window that the host sent to a plugin host page; undefined until the host sends one.
-  let lastProject;
   const listen = (key, call, listener) => {
     if (typeof listener !== "function") throw new TypeError(`${key} requires a listener`);
     if (!listeners.has(key)) listeners.set(key, new Set());
@@ -203,13 +193,6 @@ export function createViewBridge({ handler, report }) {
   const nextOperationCids = createOperationCids(window.sokView.page);
   let eventBatcher = null;
   const writeLog = (level, event, fields, cids) => {
-    // A plugin-host page uses the host's declared single-record runtime.log call; only surface pages use the view batch writer.
-    if (window.sokHost !== undefined) {
-      const prefix = `plugin.${plugin}.`;
-      calls.request("runtime.log", { level, event: event.slice(prefix.length), fields, ...(cids === undefined ? {} : { cids }) })
-        .catch(recordError(`log ${event}`));
-      return;
-    }
     if (eventBatcher === null) {
       eventBatcher = createEventBatcher({
         call: (request) => calls.request("runtime.log", request),
@@ -302,19 +285,10 @@ export function createViewBridge({ handler, report }) {
       if (lastTheme !== undefined) listener(lastTheme);
       return { ready: Promise.resolve(), dispose: Promise.resolve(() => listeners.get("theme")?.delete(listener)) };
     },
-    // The project that the window shows reaches a plugin host page as the project message, as the theme does (docs/spec/plugin-host.md).
-    // The listener gets the last project at once, and a null project is a value of its own.
-    project: (listener) => {
-      if (typeof listener !== "function") throw new TypeError("runtime.project requires a listener");
-      if (!listeners.has("project")) listeners.set("project", new Set());
-      listeners.get("project").add(listener);
-      if (lastProject !== undefined) listener(lastProject);
-      return { ready: Promise.resolve(), dispose: Promise.resolve(() => listeners.get("project")?.delete(listener)) };
-    },
   };
   // The key of the listeners of a host event: a sidecar event has the session id in its data, and a theme has one key.
   const keyOf = (message) => {
-    if (message.event === "theme" || message.event === "project" || message.event === "textSize" || message.event === "settings" || message.event === "log.levels") {
+    if (message.event === "theme" || message.event === "textSize" || message.event === "settings" || message.event === "log.levels") {
       return message.event;
     }
     if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;
@@ -339,40 +313,10 @@ export function createViewBridge({ handler, report }) {
       });
     },
   };
-  // The pull of the current value of a status (docs/spec/plugin-processes.md, rule 2 and messages and events): the reply is
-  // {seq, value}, with seq 0 and value null when the source has no value yet.
-  const answerSnapshotRequest = (request) => {
-    const status = request.params?.status;
-    if (typeof status !== "string" || status === "") {
-      channel.send({ sok: 1, reply: request.id, error: { code: INVALID_PARAMS, message: "declared-ui.snapshot.request requires a status name" } });
-      return;
-    }
-    // A status with no pushed value is not an error of the pull: the reply says that the source has none yet, with seq 0 and value null
-    // (docs/spec/declared-ui.md, pull). Any other error of the store answers the request with its error and is reported.
-    if (!snapshots.has(status)) {
-      channel.send({ sok: 1, reply: request.id, result: { seq: 0, value: null } });
-      return;
-    }
-    let value;
-    try {
-      value = snapshots.pull(status);
-    } catch (error) {
-      // default: a thrown value that is not an Error carries its value as the text.
-      const text = String(error?.message ?? error);
-      report({ where: `declared-ui.snapshot.request ${status}`, text });
-      channel.send({ sok: 1, reply: request.id, error: { code: FAILED_COMMAND, message: text } });
-      return;
-    }
-    channel.send({ sok: 1, reply: request.id, result: value });
-  };
   // A request of the page for a command of the view is answered with {sok: 1, reply: id, result} or {sok: 1, reply: id, error}.
   // A command that the view did not register is refused with the unregistered code of the exposure errors (docs/spec/plugin-processes.md, rule 3).
   const answerRequest = (request) => {
     if (!Number.isInteger(request.id)) throw new TypeError("command request has no integer id");
-    if (request.command === SNAPSHOT_REQUEST_COMMAND) {
-      answerSnapshotRequest(request);
-      return;
-    }
     const run = handlers.get(request.command);
     // The context of the handler holds the cids of the cause of the request, and no cids member when the request has none.
     const context = request.cids === undefined ? {} : { cids: request.cids };
@@ -388,7 +332,6 @@ export function createViewBridge({ handler, report }) {
       return;
     }
     if (message.event === "theme") lastTheme = message.data;
-    if (message.event === "project") lastProject = message.data;
     // A status value reaches its listeners as the value, without the name that keys the event.
     const data = message.event === "status" ? message.data.value : message.data;
     // default: an event that no listener has has no listener to pass it to, so it is passed to none.
@@ -417,25 +360,7 @@ export function createViewBridge({ handler, report }) {
     register: (kind, name) => calls.request("runtime.native.call", { name: "registered", payload: { kind, name } }),
     reply: (id, payload) => calls.request("runtime.native.call", { name: "exposureReply", payload: { id, ...payload } }),
   };
-  const snapshots = createSnapshotSender({
-    plugin,
-    send: channel.send,
-    onMessage: (next) => {
-      onAcknowledgement = next;
-      return () => {
-        onAcknowledgement = null;
-      };
-    },
-    report,
-  });
   channel.onMessage((message) => {
-    if (message.event === SNAPSHOT_ACK_EVENT) {
-      if (!onAcknowledgement) throw new Error(`view channel for ${plugin} has no snapshot layer`);
-      // The acknowledgement arrives as the view event declared-ui.snapshot.ack with {plugin, status, seq} as its data
-      // (docs/spec/native-surfaces.md#view-surfaces, view events).
-      onAcknowledgement({ event: SNAPSHOT_ACK_EVENT, ...message.data });
-      return;
-    }
     if (typeof message.event === "string") {
       dispatch(message);
       return;
@@ -498,7 +423,7 @@ export function createViewBridge({ handler, report }) {
       return createSurfaceCompositionController(port, declaration, { regions, overlays }, window);
     },
   };
-  // A plugin host uses this bridge too but has no surface start values. Only a surface document owns these entries.
+  // Only a surface document, which has window.sokSurface, owns these entries.
   if (window.sokSurface !== undefined) {
     const view = window;
     const state = observeSurfaceDocument(view);
@@ -546,5 +471,5 @@ export function createViewBridge({ handler, report }) {
       expose.dispose().catch(recordError("core surface entries"));
     }, { once: true });
   }
-  return { calls, snapshots, runtime, commands, exposure, contributions, composition };
+  return { calls, runtime, commands, exposure, contributions, composition };
 }

@@ -1,5 +1,5 @@
 // The call layer of a plugin process boundary (docs/spec/plugin-processes.md, rule 3). It runs over the send function and
-// the onMessage subscription of a transport, so the same code serves a view, a plugin host and a sidecar.
+// the onMessage subscription of a transport, so the same code serves a view and a sidecar.
 //
 // Messages of the call envelope: a request is {id, command, params}, and it carries the member cids when its cause has correlation
 // identifiers (causeCids); a reply is {id, result} or {id, error: {code, message}}; a cancel is {id, cancel: true}. The transport

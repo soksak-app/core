@@ -30,16 +30,14 @@ test("a failed view error report reaches the injected global error hook", { time
   assert.equal(h.errors[0].message, "view command: request failed: report error: runtime.error refused");
 });
 
-test("ordinary call counts and close or coalescing reports stay out of the application error path", { timeout: 1000 }, () => {
+test("ordinary call counts and closed-surface call ends stay out of the application error path", { timeout: 1000 }, () => {
   const h = fixture();
   h.report({ kind: "open-calls", plugin: "probe", count: 2, oldestStartedAt: 5 });
   h.report({ kind: "peer-lost", plugin: "probe", command: "tab.state.write", reason: "surface-closed" });
-  h.report({ kind: "skipped", plugin: "probe", status: "probe.location", count: 1 });
-  h.report({ kind: "stalled", plugin: "probe", status: "probe.location", reason: "surface-closed", count: 1 });
 
   assert.deepEqual(h.errors, []);
   assert.equal(h.debug.length, 1);
-  assert.equal(h.info.length, 3);
+  assert.equal(h.info.length, 1);
 });
 
 test("unexpected transport loss reaches the injected global error hook", { timeout: 1000 }, () => {

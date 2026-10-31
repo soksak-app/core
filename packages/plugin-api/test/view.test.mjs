@@ -216,54 +216,6 @@ test("exposure.reply sends the reply of a forwarded exposure request with its id
   assert.equal(await sent, null);
 });
 
-test("createViewBridge sends a snapshot and takes its acknowledgement without a call error", (t) => {
-  const { posted, host } = setup(t);
-  const reports = [];
-  const { snapshots } = createViewBridge({
-    handler: { postMessage: (message) => posted.push(message) },
-    report: (event) => reports.push(event),
-  });
-  snapshots.push("state", { count: 1 });
-  assert.deepEqual(posted.at(-1), {
-    event: "declared-ui.snapshot", plugin: "probe", status: "state", seq: 1, value: { count: 1 }, skipped: 0,
-  });
-  // The acknowledgement arrives as the view event declared-ui.snapshot.ack with {plugin, status, seq} as its data
-  // (docs/spec/native-surfaces.md#view-surfaces, view events).
-  host({ sok: 1, event: "declared-ui.snapshot.ack", data: { plugin: "probe", status: "state", seq: 1 } });
-  snapshots.push("state", { count: 2 });
-  assert.deepEqual(posted.at(-1), {
-    event: "declared-ui.snapshot", plugin: "probe", status: "state", seq: 2, value: { count: 2 }, skipped: 0,
-  });
-  assert.deepEqual(reports, []);
-});
-
-test("createViewBridge answers the declared UI snapshot request with the value and its seq", (t) => {
-  const { posted, host } = setup(t);
-  const { snapshots } = createViewBridge({
-    handler: { postMessage: (message) => posted.push(message) },
-    report: () => {},
-  });
-  snapshots.push("state", { count: 1 });
-  host({ sok: 1, id: 5, command: "declared-ui.snapshot.request", params: { status: "state" } });
-  assert.deepEqual(posted.at(-1), { sok: 1, reply: 5, result: { seq: 1, value: { count: 1 } } });
-});
-
-test("the declared UI snapshot request for a status without a value replies seq 0 and value null", (t) => {
-  const { posted, host } = setup(t);
-  createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
-  host({ sok: 1, id: 6, command: "declared-ui.snapshot.request", params: { status: "other" } });
-  assert.deepEqual(posted.at(-1), { sok: 1, reply: 6, result: { seq: 0, value: null } });
-});
-
-test("the declared UI snapshot request without a status name is refused", (t) => {
-  const { posted, host } = setup(t);
-  createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
-  host({ sok: 1, id: 7, command: "declared-ui.snapshot.request", params: {} });
-  assert.deepEqual(posted.at(-1), {
-    sok: 1, reply: 7, error: { code: -32602, message: "declared-ui.snapshot.request requires a status name" },
-  });
-});
-
 test("runtime.native.on sends one subscription call per name and passes each host event of that name to its listener", async (t) => {
   const { posted, host } = setup(t);
   const seen = [];
@@ -328,18 +280,6 @@ test("runtime.theme gives the listener the last theme that the host sent, then e
   runtime.theme((theme) => seen.push(theme));
   host({ sok: 1, event: "theme", data: { scheme: "light", tokens: { bg: "#fff" } } });
   assert.deepEqual(seen, [{ scheme: "dark", tokens: { bg: "#000" } }, { scheme: "light", tokens: { bg: "#fff" } }]);
-});
-
-test("runtime.project gives the listener the last project that the host sent, then each later project, with no call to the host", (t) => {
-  const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
-  assert.equal(typeof runtime.project, "function", "runtime.project is not served by the view bridge");
-  host({ sok: 1, event: "project", data: { id: "project-a", root: "/work/a" } });
-  const seen = [];
-  runtime.project((project) => seen.push(project));
-  host({ sok: 1, event: "project", data: null });
-  assert.deepEqual(seen, [{ id: "project-a", root: "/work/a" }, null]);
-  assert.equal(posted.some((message) => message.call === "runtime.native.on" || /project/.test(JSON.stringify(message))), false);
 });
 
 test("runtime.textSize.read reads the scale of the surface and runtime.textSize.on subscribes once", async (t) => {
@@ -494,35 +434,6 @@ test("the view bridge keeps the public log API and batches source-clocked record
   assert.equal(built, 1, "the builder of a record was not run once");
   assert.equal(calls.openCalls().count, 0, "the batch call remained open after its reply");
   assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), [], "a successful writer reply reported an error");
-});
-
-test("a plugin-host page writes one record through the plugin-host log contract", { timeout: 5000 }, async (t) => {
-  const { posted, host } = setup(t);
-  globalThis.window.sokHost = Object.freeze({ declarations: {} });
-  let clock = 0;
-  let receiveLogRequest;
-  const firstLogRequest = new Promise((resolve) => { receiveLogRequest = resolve; });
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => {
-    posted.push(plain(message));
-    if (message.command !== "runtime.log") return;
-    receiveLogRequest(plain(message));
-    if (message.params.action === "clock") {
-      clock += 1;
-      queueMicrotask(() => host({ sok: 1, id: message.id, result: { ts_us: 1_000_000 + clock, mono_ns: 2_000_000 + clock } }));
-    } else {
-      queueMicrotask(() => host({ sok: 1, id: message.id, result: null }));
-    }
-  } }, report: () => {} });
-  posted.splice(0);
-
-  runtime.log.info("host.report", { kind: "fixture" }, { cids: ["host.1"] });
-  const request = await firstLogRequest;
-
-  assert.deepEqual(request.params, {
-    level: "info", event: "host.report", fields: { kind: "fixture" }, cids: ["host.1"],
-  });
-  assert.equal(posted.some(({ command, params }) => command === "runtime.log" && params?.action), false,
-    "the plugin-host logger used the view batch wire format");
 });
 
 /** Dispatches a cancelable keydown on the window of the view and returns the event. */

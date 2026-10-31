@@ -1,10 +1,9 @@
 // Core statuses of the plugin processes (docs/spec/plugin-processes.md, rules 2, 3 and 6). Each status holds a list of records
 // that carry the plugin id. The call layer of a plugin process reports its open calls and its losses through callReporter
-// (F212.3-1); the declared UI snapshots (F212.3-2) and the presentation and responsiveness of views (F212.7) fill the others.
+// (F212.3-1); the presentation and responsiveness of views (F212.7) fill the others.
 //
 // core-exposure.js registers each reader under the name that exposure.json declares.
 
-import { trace } from "./performance.js";
 
 /** The losses of each plugin, in the order of their first count. */
 const lossCounts = new Map();
@@ -13,8 +12,6 @@ const layers = new Map();
 const listeners = new Set();
 /** The responsiveness of each view surface, in the order of its first notice. */
 const viewStates = [];
-/** Latest native-accepted snapshot sequence for each active plugin/status/source tuple. */
-const acceptedSnapshotSequences = new Map();
 
 const announce = () => {
   for (const listener of listeners) listener();
@@ -22,7 +19,7 @@ const announce = () => {
 
 const lossesOf = (plugin) => {
   if (!lossCounts.has(plugin)) {
-    lossCounts.set(plugin, { plugin, skipped: 0, stalled: 0, abandoned: 0, lateReplies: 0, timeouts: 0, peerLost: 0 });
+    lossCounts.set(plugin, { plugin, abandoned: 0, lateReplies: 0, timeouts: 0, peerLost: 0 });
   }
   return lossCounts.get(plugin);
 };
@@ -31,48 +28,6 @@ const lossesOf = (plugin) => {
 export function onPluginProcessChange(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
-}
-
-/** Returns metadata for snapshots accepted by the native source transport, without snapshot values. */
-export const acceptedSnapshots = () => [...acceptedSnapshotSequences.values()].map((entry) => ({ ...entry }));
-
-/** Records a snapshot only after its native acknowledgement and current-generation check succeed. */
-export function acceptSnapshotSequence(plugin, status, surface, generation, seq) {
-  if (typeof plugin !== "string" || plugin === "" || typeof status !== "string" || status === "" ||
-      (surface !== null && (typeof surface !== "string" || surface === "")) ||
-      !Number.isSafeInteger(generation) || generation < 1 || !Number.isSafeInteger(seq) || seq < 1) {
-    throw new TypeError("accepted snapshot sequence requires a source tuple and positive generation and sequence");
-  }
-  const key = JSON.stringify([plugin, status, surface]);
-  const previous = acceptedSnapshotSequences.get(key);
-  if (previous?.generation === generation && seq <= previous.seq) return false;
-  acceptedSnapshotSequences.set(key, { plugin, status, surface, generation, seq });
-  announce();
-  return true;
-}
-
-/** Removes watermarks from prior generations when a source is replaced. */
-export function replaceSnapshotSource(plugin, surface, generation) {
-  let changed = false;
-  for (const [key, entry] of acceptedSnapshotSequences) {
-    if (entry.plugin === plugin && entry.surface === surface && entry.generation !== generation) {
-      acceptedSnapshotSequences.delete(key);
-      changed = true;
-    }
-  }
-  if (changed) announce();
-}
-
-/** Removes watermarks only for the exact source generation that ended. */
-export function retireSnapshotSource(plugin, surface, generation) {
-  let changed = false;
-  for (const [key, entry] of acceptedSnapshotSequences) {
-    if (entry.plugin === plugin && entry.surface === surface && entry.generation === generation) {
-      acceptedSnapshotSequences.delete(key);
-      changed = true;
-    }
-  }
-  if (changed) announce();
 }
 
 /**
@@ -102,27 +57,6 @@ export function callReporter(plugin) {
   };
 }
 
-/**
- * Returns the report function of one declared UI snapshot channel (createSnapshotSender of @soksak/plugin-api). A value that a
- * newer value overwrites counts losses.skipped, and a stall counts losses.stalled.
- */
-export function snapshotReporter(plugin) {
-  return (event) => {
-    const entry = lossesOf(plugin);
-    // The page writes each event through the page trace while the trace is on (docs/spec/performance-trace.md).
-    if (event.kind === "skipped") {
-      entry.skipped += event.count;
-      trace("declared-ui.snapshot.skipped", { plugin, status: event.status, count: event.count });
-    } else if (event.kind === "stalled") {
-      // A stalled value is counted only: no live observer waits for its acknowledgement, so it writes no trace event.
-      entry.stalled += event.count;
-    } else {
-      throw new TypeError(`unknown snapshot report kind ${event.kind}`);
-    }
-    announce();
-  };
-}
-
 /** Counts one view presentation wait of plugin that ended without its presentation (the host sends the notice to the surface). */
 export function presentationAbandoned(plugin) {
   lossesOf(plugin).abandoned += 1;
@@ -144,7 +78,7 @@ export const openCalls = () => {
   return [...totals.values()];
 };
 
-/** The losses of each plugin that has counted one: `{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}`. */
+/** The losses of each plugin that has counted one: `{plugin, abandoned, lateReplies, timeouts, peerLost}`. */
 export const losses = () => [...lossCounts.values()].map((entry) => ({ ...entry }));
 
 /** The responsiveness of each plugin view surface: `{plugin, surface, responsive}`. */

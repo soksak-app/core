@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check declared-ui-benchmark benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -67,11 +67,6 @@ host-calls:
 app-usage:
 	@case "$(CONFIG_DIR)" in '') echo "app-usage requires CONFIG_DIR=DIR [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
 	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --interval $(or $(INTERVAL),10)
-
-# Measures each declared UI case with its own process timeout and the bounds of docs/spec/declared-ui.md.
-declared-ui-benchmark:
-	@node scripts/test-command.mjs --id declared-ui-tree --timeout-ms 30000 -- node --experimental-test-module-mocks --no-warnings packages/workbench/benchmark/declared-ui.mjs --case tree
-	@node scripts/test-command.mjs --id declared-ui-list --timeout-ms 30000 -- node --experimental-test-module-mocks --no-warnings packages/workbench/benchmark/declared-ui.mjs --case list
 
 # Measures the share of the diagnostics in the memory of a running host: with the debug switch on and then off, it runs five repetitions of
 # object-counts and prints the footprint of the host process (docs/operations/examples.md).

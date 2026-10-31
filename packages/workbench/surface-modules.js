@@ -5,7 +5,7 @@ import { markViewSurface, registry } from "./exposure.js";
 import { viewDataOf } from "./plugin-data.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
-import { createViewCommands, keepViewCommands } from "./view-commands.js";
+import { createViewCommands } from "./view-commands.js";
 import { onSourceOriginEnded, onSourceOriginRegistered, sourceOrigin } from "./source-origins.js";
 import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
@@ -457,7 +457,6 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   // sends it to the view as a command request; its forwarded run is not an exposure request of the view.
   const pageAnswers = (request) => request?.method === "command.run" && registeredViewCommands.has(request.params?.name);
   let viewCommands;
-  let forgetCommands;
   const installViewCommands = (generation) => {
     const commands = createViewCommands({
       plugin: surface.pluginId,
@@ -467,15 +466,11 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       report: callReporter(surface.pluginId),
     });
     viewCommands = commands;
-    forgetCommands = keepViewCommands(surface.surfaceId, commands, generation);
   };
   if (Number.isSafeInteger(viewGeneration) && viewGeneration > 0) installViewCommands(viewGeneration);
   const refreshViewCommands = (generation = sourceOrigin(surface.pluginId, surface.surfaceId)) => {
     if (!Number.isSafeInteger(generation) || generation < 1 || (generation === viewGeneration && viewCommands)) return false;
-    if (viewCommands) {
-      forgetCommands();
-      viewCommands.close();
-    }
+    if (viewCommands) viewCommands.close();
     viewGeneration = generation;
     installViewCommands(generation);
     return true;
@@ -659,10 +654,8 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     pending.clear();
     pending = new Map();
     if (viewCommands) {
-      forgetCommands();
       viewCommands.close();
       viewCommands = undefined;
-      forgetCommands = undefined;
     }
     viewGeneration = undefined;
     subscriptions.restart().catch((error) => {
@@ -694,7 +687,6 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     closed = true;
     stopObservingSource();
     stopObservingSourceEnd();
-    if (viewCommands) forgetCommands();
     unmarkView();
     viewCommands?.close();
     await subscriptions.close();

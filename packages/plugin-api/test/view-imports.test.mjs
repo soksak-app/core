@@ -100,7 +100,6 @@ test("every import of index.js and view.js is served by the core targets or the 
   assert.deepEqual(problems, []);
   assert.ok(files.includes("view.js"));
   assert.ok(files.includes("calls.js"));
-  assert.ok(files.includes("snapshots.js"));
 });
 
 test("view.js imports nothing under runtime/ and no workbench specifier", () => {

@@ -1,4 +1,4 @@
-// Checks the project data that a plugin declares for the shown project, and the reads and writes of its plugin host.
+// Checks the project data that a plugin declares, read and written by its views for the project that each view names.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
@@ -9,7 +9,7 @@ globalThis.document = dom.window.document;
 globalThis.dispatchEvent = (event) => dom.window.dispatchEvent(event);
 globalThis.ErrorEvent = dom.window.ErrorEvent;
 
-const { commitData, configureData, declareProjectData, pluginHostData, prepareData, showData, viewDataOf } = await import("../plugin-data.js");
+const { configureData, declareProjectData, viewDataOf } = await import("../plugin-data.js");
 
 const stored = new Map();
 configureData({
@@ -19,109 +19,49 @@ configureData({
   },
 });
 
-test("a plugin host reads and writes the project data of the shown project, and is refused without one", async () => {
+test("a view reads the declared defaults and writes the keys of the project it names, and refuses an undeclared key or a value outside the schema", async () => {
   declareProjectData("probe", {
     marks: { schema: { type: "array", items: { type: "string" } }, default: [] },
     note: { schema: { type: "string" }, default: "" },
     names: { schema: { type: "array", items: { type: "object", properties: { name: { type: "string" } } } }, default: [], format: 2 },
   });
-  await assert.rejects(pluginHostData.get("probe", "note"), /plugin host probe: no project is shown/);
-  await assert.rejects(pluginHostData.set("probe", "note", "x"), /plugin host probe: no project is shown/);
+  const project = { id: "p1", root: "/work/p1" };
   stored.set("p1/probe", { names: { format: 1, value: ["a"] } });
-  await showData({ id: "p1", root: "/work/p1" });
-  assert.deepEqual(await pluginHostData.get("probe", "marks"), []);
-  assert.equal(await pluginHostData.get("probe", "note"), "");
-  await pluginHostData.set("probe", "note", "kept");
+  const access = viewDataOf(project, "probe");
+  assert.deepEqual(await access.get("marks"), []);
+  assert.equal(await access.get("note"), "");
+  await access.set("note", "kept");
   assert.deepEqual(stored.get("p1/probe").note, { format: 1, value: "kept" });
-  assert.equal(await pluginHostData.get("probe", "note"), "kept");
+  assert.equal(await access.get("note"), "kept");
   // A key that the manifest does not declare, and a value that does not match its schema, are refused without a write.
-  await assert.rejects(pluginHostData.get("probe", "other"), /probe data other is not declared/);
-  await assert.rejects(pluginHostData.set("probe", "other", "x"), /probe data other is not declared/);
-  await assert.rejects(pluginHostData.set("probe", "note", 5), /probe data note does not match its schema/);
+  await assert.rejects(async () => access.get("other"), /probe data other is not declared/);
+  await assert.rejects(async () => access.set("other", "x"), /probe data other is not declared/);
+  await assert.rejects(async () => access.set("note", 5), /probe data note does not match its schema/);
   assert.deepEqual(stored.get("p1/probe").note, { format: 1, value: "kept" });
   // A stored value of an earlier format is refused by the read and stays unchanged; no conversion runs.
-  await assert.rejects(pluginHostData.get("probe", "names"),
+  await assert.rejects(async () => access.get("names"),
     /project p1 plugin probe data names: stored format 1 is not declared format 2/);
   assert.deepEqual(stored.get("p1/probe").names, { format: 1, value: ["a"] });
-  await showData(null);
-  await assert.rejects(pluginHostData.get("probe", "note"), /plugin host probe: no project is shown/);
 });
 
 test("a stored value in another format fails the read and is not changed", async () => {
   declareProjectData("later", { note: { schema: { type: "string" }, default: "", format: 1 } });
   stored.set("p2/later", { note: { format: 3, value: "x" } });
-  await showData({ id: "p2", root: "/work/p2" });
-  await assert.rejects(pluginHostData.get("later", "note"),
+  await assert.rejects(async () => viewDataOf({ id: "p2", root: "/work/p2" }, "later").get("note"),
     /project p2 plugin later data note: stored format 3 is not declared format 1/);
   assert.deepEqual(stored.get("p2/later").note, { format: 3, value: "x" });
-  await showData(null);
 });
 
 test("a value stored without a format entry is refused by the read and is not changed", async () => {
   declareProjectData("bare", { legacy: { schema: { type: "array", items: { type: "string" } }, default: [] } });
   stored.set("p3/bare", { legacy: ["d"] });
-  await showData({ id: "p3", root: "/work/p3" });
-  await assert.rejects(pluginHostData.get("bare", "legacy"),
+  await assert.rejects(async () => viewDataOf({ id: "p3", root: "/work/p3" }, "bare").get("legacy"),
     /project p3 plugin bare data legacy: stored without a format is not declared format 1/);
   assert.deepEqual(stored.get("p3/bare").legacy, ["d"]);
-  await showData(null);
-});
-
-test("a data call invoked during preparation stays bound to the previous project", async () => {
-  stored.set("p1/probe", { ...stored.get("p1/probe"), note: { format: 1, value: "old value" } });
-  stored.set("p-new/probe", { note: { format: 1, value: "new value" } });
-  await showData({ id: "p1", root: "/work/p1" });
-
-  const change = showData({ id: "p-new", root: "/work/new" });
-  // The call is made before the new context commits, so the previous project serves it.
-  const inFlight = pluginHostData.get("probe", "note");
-  await change;
-  assert.equal(await inFlight, "old value");
-});
-
-test("a write started before preparation keeps its project after the new context commits", async () => {
-  await showData({ id: "p1", root: "/work/p1" });
-  let started;
-  const writing = new Promise((resolve) => { started = resolve; });
-  let release;
-  const wait = new Promise((resolve) => { release = resolve; });
-  configureData({
-    data: {
-      get: (id, plugin) => stored.get(`${id}/${plugin}`) ?? {},
-      set: async (id, plugin, key, value) => {
-        if (id === "p1" && plugin === "probe") {
-          started();
-          await wait;
-        }
-        stored.set(`${id}/${plugin}`, { ...stored.get(`${id}/${plugin}`), [key]: value });
-      },
-    },
-  });
-  const write = pluginHostData.set("probe", "note", "written to previous project");
-  await writing;
-  const next = await prepareData({ id: "p-new", root: "/work/new" });
-  commitData(next);
-  release();
-  await write;
-  assert.deepEqual(stored.get("p1/probe").note, { format: 1, value: "written to previous project" });
-  assert.equal(await pluginHostData.get("probe", "note"), "new value");
-});
-
-test("failed data preparation leaves the active project-data owner unchanged", async () => {
-  configureData({ data: {
-    get: (id, plugin) => {
-      if (id === "p-bad" && plugin === "probe") throw new Error("project data read failed");
-      return stored.get(`${id}/${plugin}`) ?? {};
-    },
-    set: async (id, plugin, key, value) => { stored.set(`${id}/${plugin}`, { ...stored.get(`${id}/${plugin}`), [key]: value }); },
-  } });
-  await assert.rejects(prepareData({ id: "p-bad", root: "/work/bad" }), /project data read failed/);
-  assert.equal(await pluginHostData.get("probe", "note"), "new value");
 });
 
 test("a view reads and writes the declared keys of the project it names, whether or not the window shows that project", async () => {
   declareProjectData("view-probe", { note: { schema: { type: "string" }, default: "" } });
-  await showData({ id: "p3", root: "/work/p3" });
   const access = viewDataOf({ id: "p4", root: "/work/p4" }, "view-probe");
   assert.equal(access.declares("note"), true);
   assert.equal(access.declares("other"), false);
@@ -129,8 +69,7 @@ test("a view reads and writes the declared keys of the project it names, whether
   await access.set("note", "stored for p4");
   assert.deepEqual(stored.get("p4/view-probe").note, { format: 1, value: "stored for p4" });
   assert.equal(await viewDataOf({ id: "p4", root: "/work/p4" }, "view-probe").get("note"), "stored for p4");
-  assert.equal(await pluginHostData.get("view-probe", "note"), "");
-  await assert.rejects(access.set("note", 5), /view-probe data note does not match its schema/);
+  assert.equal(await viewDataOf({ id: "p5", root: "/work/p5" }, "view-probe").get("note"), "");
+  await assert.rejects(async () => access.set("note", 5), /view-probe data note does not match its schema/);
   assert.deepEqual(stored.get("p4/view-probe").note, { format: 1, value: "stored for p4" });
-  await showData(null);
 });

@@ -12,7 +12,6 @@ import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
 import { gatedExposureReply, registerSurfacePort, registry } from "./exposure.js";
-import { pluginSessionOf } from "./plugin-host.js";
 import { logGate } from "./log-gate.js";
 import { pageIdentity } from "./page-identity.js";
 import { surfaceSyncRequestWithDeclarationTable } from "./surface-sync-request.js";
@@ -148,8 +147,6 @@ let failureListener = null;
 function listenSidecarFailures() {
   // default: the first request or subscription of a document installs the listener, and later ones wait for the same installation.
   failureListener ??= Promise.resolve(bridge.on("sidecar-failure", (failure) => {
-    // A failure of a plugin session goes to its plugin host, which the registry of plugin-host.js delivers; no alert is shown for it.
-    if (pluginSessionOf(failure?.surface) !== null) return;
     // default: a surface without a registered handler has nowhere to receive the failure, so the failure is reported as a page error.
     const handlers = [...(failureHandlers.get(failureKey(failure.sidecar, failure.surface)) ?? [])];
     if (handlers.length === 0) {

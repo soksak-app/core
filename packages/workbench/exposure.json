@@ -1737,7 +1737,7 @@
       },
       {
         "name": "core.plugin.open-calls",
-        "description": "The open calls of each plugin, including declared UI snapshots waiting for acknowledgement: `{plugin, count, oldestStartedAt}`, where oldestStartedAt is the start time of the oldest open call, or null without open calls.",
+        "description": "The open calls of each plugin: `{plugin, count, oldestStartedAt}`, where oldestStartedAt is the start time of the oldest open call, or null without open calls.",
         "schema": {
           "type": "array",
           "items": {
@@ -1761,7 +1761,7 @@
       },
       {
         "name": "core.plugin.losses",
-        "description": "The counts of each plugin's losses kept until the application ends: `{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}`, one count per kind of loss in the plugin process design.",
+        "description": "The counts of each plugin's losses kept until the application ends: `{plugin, abandoned, lateReplies, timeouts, peerLost}`, one count per kind of loss in the plugin process design.",
         "schema": {
           "type": "array",
           "items": {
@@ -1769,12 +1769,6 @@
             "properties": {
               "plugin": {
                 "type": "string"
-              },
-              "skipped": {
-                "type": "number"
-              },
-              "stalled": {
-                "type": "number"
               },
               "abandoned": {
                 "type": "number"
@@ -1809,23 +1803,6 @@
               "responsive": {
                 "type": "boolean"
               }
-            }
-          }
-        }
-      },
-      {
-        "name": "core.plugin.snapshots",
-        "description": "The last native-acknowledged declared UI snapshot sequence of each current source and status: `{plugin, status, surface, generation, seq}`. Surface is null for a plugin host. Records are absent before the first accepted snapshot, replaced when a source generation changes, and removed when the source ends. The status includes sources whose sidebar section is not mounted and carries no snapshot value.",
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "plugin": { "type": "string" },
-              "status": { "type": "string" },
-              "surface": { "type": ["string", "null"] },
-              "generation": { "type": "integer" },
-              "seq": { "type": "integer" }
             }
           }
         }
@@ -3216,33 +3193,6 @@
         }
       },
       {
-        "name": "core.declared-ui.tree.move",
-        "description": "Moves keyboard focus between the nodes of a declared UI tree of the status: the arrow keys, Home and End, from the label or expand control of a node. It changes only the focus in the drawn tree and sends no request to the source; the expand rows run core.declared-ui.tree.expand.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "status": {
-              "type": "string"
-            },
-            "tree": {
-              "type": "string"
-            },
-            "path": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "key": {
-              "type": "string"
-            }
-          }
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
         "name": "core.sidebar.section.select",
         "description": "Shows one section of a sidebar whose set uses the tabs layout; the selection is kept for that sidebar.",
         "params": {
@@ -3253,33 +3203,6 @@
             },
             "section": {
               "type": "string"
-            }
-          }
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.declared-ui.tree.expand",
-        "description": "Requests an expanded value from the source of a declared UI tree status. The source is asked to update the branch named by the status, tree key, and path; the workbench changes the tree only after it accepts the source's next snapshot.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "status": {
-              "type": "string"
-            },
-            "tree": {
-              "type": "string"
-            },
-            "path": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "expanded": {
-              "type": "boolean"
             }
           }
         },
@@ -4076,22 +3999,12 @@
       },
       {
         "name": "core.sidebar.section",
-        "description": "The section elements of drawn sidebars in document order; each holds the content its plugin module draws, or the elements of its declared UI value when the section names a status.",
-        "many": true
-      },
-      {
-        "name": "core.sidebar.section.control",
-        "description": "The interactive elements that section modules and declared UI values draw, in document order; each runs a command of the section's plugin, or core.declared-ui.tree.expand for the expand control of a declared tree branch. An element of a declared UI value carries data-key with its key.",
-        "many": true
-      },
-      {
-        "name": "core.sidebar.section.status-line",
-        "description": "The static status-line roots that declared UI values draw in section order. Each carries data-key with its declared element key and resolves a {sidebar, section, key} address to its exact rectangle; it has no command.",
+        "description": "The section elements of drawn sidebars in document order; each holds the view of its section surface.",
         "many": true
       },
       {
         "name": "core.sidebar.section.header",
-        "description": "The fold headers of sections in list-layout sidebars in document order, for module sections and declared UI sections.",
+        "description": "The fold headers of sections in list-layout sidebars in document order.",
         "many": true
       },
       {

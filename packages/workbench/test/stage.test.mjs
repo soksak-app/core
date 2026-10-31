@@ -112,7 +112,7 @@ const MANIFESTS = {
   probe: { id: "probe", name: "Probe", description: "검사용 표면.", mark: "P", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     extends: { language: { version: "1.0.0", schema: { type: "object" }, modules: { "@scope/library": "ui/vendor/library.js" } } } },
-  alpha: { id: "alpha", name: "Alpha", description: "검사용 섹션.", sections: [{ id: "alpha.list", name: "List", status: "alpha.list" }], host: { page: "ui/host.html" }, exposes: { status: [{ name: "alpha.list", description: "검사용 상태.", schema: { type: "object" } }] } },
+  alpha: { id: "alpha", name: "Alpha", description: "검사용 섹션.", sections: [{ id: "alpha.list", name: "List", composition: { kind: "view", page: "ui/list.html", regions: [{ name: "list", kind: "document", input: "native" }], overlays: [] }, height: "fill" }], exposes: { status: [{ name: "alpha.list", description: "검사용 상태.", schema: { type: "object" } }] } },
 };
 
 const DIAGNOSTICS = {
@@ -140,9 +140,9 @@ test("an application without a host stages the enabled installed plugins as a ho
     /installed\.json does not exist; install plugins with sok first/);
 });
 
-test("an application without a host stages the sidecar facts of each sidecar dependency of an installed plugin", (t) => {
+test("an application without a host stages the installed plugins without sidecar facts", (t) => {
   const app = fixtureApp(t);
-  const configuration = mkdtempSync(join(tmpdir(), "soksak-sidecar-facts-"));
+  const configuration = mkdtempSync(join(tmpdir(), "soksak-installed-plugins-"));
   t.after(() => rmSync(configuration, { recursive: true, force: true }));
   const write = (path, text) => {
     mkdirSync(join(configuration, path, ".."), { recursive: true });
@@ -152,16 +152,13 @@ test("an application without a host stages the sidecar facts of each sidecar dep
     probe: { version: "0.1.0", path: "plugins/probe/0.1.0", enabled: true, sidecars: { "@fixture/sidecar-probe": "^0.1.0" } },
   }, sidecars: { "@fixture/sidecar-probe": { version: "0.1.0", path: "sidecars/fixture-sidecar-probe/0.1.0/darwin-arm64" } } }));
   write("plugins/probe/0.1.0/package.json", JSON.stringify({ name: "@fixture/probe" }));
-  write("plugins/probe/0.1.0/plugin.json", JSON.stringify({ id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, host: { page: "ui/host.html" },
-    dependencies: { "@fixture/sidecar-probe": "^0.1.0" }, hostOperations: { "@fixture/sidecar-probe": ["list"] } }));
-  write("plugins/probe/0.1.0/ui/host.html", "<main></main>\n");
+  write("plugins/probe/0.1.0/plugin.json", JSON.stringify({ id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
+    dependencies: { "@fixture/sidecar-probe": "^0.1.0" } }));
   write("sidecars/fixture-sidecar-probe/0.1.0/darwin-arm64/sidecar.json", JSON.stringify({ executable: "build/worker", protocol: 1,
-    message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"] }));
+    message: { form: "json-object", operationField: "operation" } }));
   stage(app, "--installed", configuration);
   const [plugin] = JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")).plugins;
-  assert.deepEqual(plugin.sidecars, { "@fixture/sidecar-probe": {
-    message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"],
-  } });
+  assert.equal(Object.hasOwn(plugin, "sidecars"), false, "the staged document carries sidecar facts");
 });
 
 test("staging reads the installed state format that sok writes and refuses every other format by name", (t) => {

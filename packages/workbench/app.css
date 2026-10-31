@@ -629,30 +629,6 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set__head[aria-expanded=false] .set__chevron{transform:rotate(-90deg)}
 .set__name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set__section[data-folded=true] .set__body{display:none}
-/* Declared UI (docs/spec/declared-ui.md): a tree indents the children of an expanded branch, and the expand control and the icons draw the core icons at the text size. */
-.declared-row{display:flex;align-items:center;gap:.25em;min-width:0}
-.declared-actions{display:flex;flex:0 0 auto;align-items:center;gap:.25em}
-.declared-children{padding-left:1em}
-/* Declared UI uses buttons for every interactive control. Remove the browser button box so only the declared content draws. */
-.set__body[data-declared] button{appearance:none;margin:0;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;
-  letter-spacing:inherit;text-align:left;cursor:pointer}
-.declared-expand{display:flex;flex:0 0 1em;width:1em;height:1em;color:var(--muted)}
-.declared-icon{display:flex;flex:0 0 1em;width:1em;height:1em}
-.declared-icon svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.declared-status-line{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* The body of a declared section stacks its root elements, and lays them left to right in one row that wraps at the section
-   width when the sidebar is horizontal (docs/spec/declared-ui.md, sidebar section form). */
-.set__body[data-declared]{display:flex;flex-direction:column;gap:6px}
-.set__body[data-declared]:has(> .declared-tree){padding:0}
-/* Keep the declared project line and tree ink on the section head's first-icon grid while the tree body stays full-bleed. */
-.set__body[data-declared]:has(> .declared-tree) > .declared-status-line{padding-inline-start:var(--space-3)}
-.set__body[data-declared]:has(> .declared-tree) > .declared-tree{padding-inline-start:var(--space-2)}
-.set[data-orientation=horizontal] .set__body[data-declared]{flex-direction:row;flex-wrap:wrap;align-items:flex-start}
-/* A tree takes a full line of a horizontal section, because its width follows its deepest visible row, which changes when a branch expands
-   or collapses; in a row flow that change would reflow the sibling elements. A tree box scrolls horizontally, with a thin scrollbar, when a
-   label is wider than the box, so no label is hidden without a visible scrollbar (docs/spec/declared-ui.md, sidebar section form). */
-.set[data-orientation=horizontal] .set__body[data-declared] > .declared-tree{flex:1 1 100%;min-width:0}
-.declared-tree{overflow-x:auto;scrollbar-width:thin}
 /* The tab strip scrolls horizontally when it overflows, like the card tab strip, and tabs neither wrap nor shrink. The bottom line is a shadow, so
    the tabs fill the full height of the strip. */
 .set__tabs{display:flex;flex:0 0 var(--head);height:var(--head);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
