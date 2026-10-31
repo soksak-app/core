@@ -23,6 +23,7 @@ mock.module("../compositor.js", { namedExports: {
 } });
 mock.module("../surface-modules.js", { namedExports: {
   mountSurface: (slot, surface) => { mounts.push({ slot, surface }); return Promise.resolve(); },
+  // The sidebar never disposes a surface itself; a call is recorded so that a test can show it.
   disposeSurface: (surfaceId) => { disposed.push(surfaceId); return Promise.resolve(); },
 } });
 mock.module("../host.js", { namedExports: { report: () => {} } });
@@ -31,6 +32,7 @@ const { registry } = await import("../exposure.js");
 const { registerSection } = await import("../registry.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 const { drawSet, sidebarsState, clearSet, foldSection, selectSection } = await import("../sidebar-sections.js");
+const { shownSectionSurfaces } = await import("../section-surfaces.js");
 
 const composition = { kind: "view", page: "ui/tree.html" };
 const descriptor = (pluginId, section) => (surfaceId, start) => ({ composition: section.composition, surfaceId, pluginId,
@@ -118,15 +120,20 @@ test("a change of the active tab keeps the section surfaces and core.sidebars re
   } finally { clearSet(container); container.remove(); }
 });
 
-test("clearing a set releases its section surfaces", async () => {
+test("a drawn set records its section surfaces as shown, and clearing it leaves their release to the commit", async () => {
   disposed.length = 0;
   const container = sidebar();
   drawSet(container, "c4:left", list, { card: "c4", surface: null, orientation: "vertical" });
   await settle();
+  assert.deepEqual(shownSectionSurfaces().filter((id) => id.startsWith("c4:")), ["c4:left/probe.tree", "c4:left/probe.marks"]);
+  const bodies = [...container.querySelectorAll(".set__body")];
   clearSet(container);
   container.remove();
   await settle();
-  assert.deepEqual(disposed.sort(), ["c4:left/probe.marks", "c4:left/probe.tree"]);
+  assert.deepEqual(shownSectionSurfaces().filter((id) => id.startsWith("c4:")), []);
+  assert.ok(bodies.every((body) => !slots.has(body)), "a cleared section body must hold no surface descriptor");
+  // A commit that no longer holds the surface releases it, as it releases the surface of a closed tab (docs/spec/plugins.md#sections).
+  assert.deepEqual(disposed, []);
 });
 
 test("a section has its declared height and a fill section shares the remaining height", async () => {

@@ -172,7 +172,7 @@ test("closing a tab removes its file after the layout write, and the reconcile r
   await sessions.capture("tab-a");
   assert.equal(files.sessions.has("tab-a"), false);
   emitted.length = 0;
-  await sessions.reconcile(new Set(["tab-b"]));
+  await sessions.reconcile((tab) => tab === "tab-b");
   assert.deepEqual([...files.sessions.keys()], ["tab-b"]);
   assert.deepEqual(emitted, [{ level: "info", event: "page.tab.session.orphan", fields: { tab: "tab-c" } }]);
 });

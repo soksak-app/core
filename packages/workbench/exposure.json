@@ -556,7 +556,7 @@
       },
       {
         "name": "core.tab.memory",
-        "description": "The memory saver of the main page: the settings memorySaver (enabled) and memorySaverDelay (delay, minutes), the last memory pressure report, and each tab with its state, the reasons that protect it, the time it was hidden, its next delay deadline and the time of the last decision that read the regions.",
+        "description": "The memory saver of the main page: the settings memorySaver (enabled) and memorySaverDelay (delay, minutes), the last memory pressure report, and each tab with its state, the reasons that protect it, the time it was hidden, its next delay deadline and the time of the last decision that read the regions. kind is tab for a tab and section for a section surface, which the tab commands refuse.",
         "schema": {
           "type": "object",
           "properties": {
@@ -586,6 +586,12 @@
               "items": {
                 "type": "object",
                 "properties": {
+                  "kind": {
+                    "enum": [
+                      "tab",
+                      "section"
+                    ]
+                  },
                   "tab": {
                     "type": "string"
                   },

@@ -2566,20 +2566,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F248-8",
-    implementation: [
-      { file: "packages/workbench/declared-section.js", symbol: "export function createDeclaredSection" },
-      { file: "packages/workbench/page-layout.js", symbol: "export function reportUncaught" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/declared-section.test.mjs", id: "a failed pull leaves the section cleared, reports its error once, and is not retried" },
-      { file: "packages/workbench/test/sidebar-sections.test.mjs", id: "a declared section whose pull fails reports the error once through the page error event and draws nothing" },
-      { file: "packages/workbench/test/page-error-display.test.mjs", id: "an error event without a source location writes no location detail" },
-    ],
-    expected: "A failed declared pull leaves the section cleared, reports its error once through the page error event, is not retried on a timer, and an error event without a source location writes no location detail, each checked by a workbench test.",
-    levels: ["unit"],
-  },
-  {
     id: "F248-7",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
@@ -4784,13 +4770,6 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a plugin repository whose sources match its declarations passes" },
     ],
     expected: "The exposure check reads a manifest whose sections are status-form sections, which carry no module source, so a manifest with a status section is checked instead of crashing.",
-    levels: ["unit"],
-  },
-  {
-    id: "F226",
-    implementation: [{ file: "packages/workbench/sidebar-sections.js", symbol: "mountDeclared" }],
-    tests: [{ file: "packages/workbench/test/sidebar-sections.test.mjs", id: "a declared section draws the value of its source, shows its rejection, and reports mounted, error, text and controls" }],
-    expected: "The workbench uses the declared full status name of a section for the registry and the display, so a declared section of a view matches its registration and draws.",
     levels: ["unit"],
   },
   {
@@ -7350,16 +7329,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/test_mark_test.rs", id: "a_test_mark_is_stored_when_lifecycle_is_off" },
     ],
     expected: "Both hosts store and flush host.test.start and host.test.end at info under lifecycle=error and lifecycle=off, return their event positions, and still gate ordinary lifecycle/info records.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-39",
-    implementation: [
-      { file: "packages/workbench/exposure.js", symbol: "onRegistrationChange(listener)" },
-      { file: "packages/workbench/sidebar-sections.js", symbol: "entry.declared?.reconcile()" },
-    ],
-    tests: [{ file: "packages/workbench/test/sidebar-sections.test.mjs", id: "a declared section selects and pulls a host that registers after the section is drawn" }],
-    expected: "A drawn declared section reselects and pulls its host status source after registration changes, and the same test verifies repeated registration, source changes, and cleanup.",
     levels: ["unit"],
   },
   {
@@ -10513,8 +10482,10 @@ const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F
 // files and the crash reports of the window-check workflow, which F298-2 removes: no workflow runs an end-to-end check.
 // F286, F290 and F292-26-3 wrote the options that skip a window check in a run without a display or a person, which F298-4
 // removes: window checks run only on a computer with a display and a person.
+// F226, F239-39 and F248-8 wrote the drawing, the source selection and the failed pull of a declared section, which F332-2
+// removes: a sidebar section is a view of its plugin, which draws the section itself.
 const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68",
-  "F278", "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3"]);
+  "F278", "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F248-8"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

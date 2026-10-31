@@ -7,7 +7,8 @@ import { bind } from "./commands.js";
 import { clearSlotSurface, setSlotSurface } from "./compositor.js";
 import { icon } from "./icons.js";
 import { hasSection, section } from "./registry.js";
-import { disposeSurface, mountSurface } from "./surface-modules.js";
+import { hideSectionSurface, showSectionSurface } from "./section-surfaces.js";
+import { mountSurface } from "./surface-modules.js";
 
 /* Selected tab and collapsed sections for each sidebar id. */
 const choices = new Map();
@@ -35,6 +36,7 @@ function mount(entry) {
   if (entry.mount) return;
   const surface = entry.surface;
   setSlotSurface(entry.body, surface);
+  showSectionSurface(surface.surfaceId);
   const mountOnce = entry.mount = mountSurface(entry.body, surface, {
     onState: (state) => {
       if (entry.mount !== mountOnce) return;
@@ -56,16 +58,18 @@ function mount(entry) {
   });
 }
 
-/** Releases the surface of a section: when its section leaves the set, its sidebar is removed or its card closes. */
+/**
+ * Clears the slot of a section whose element the sidebar removes: its section left the set, its sidebar is removed, its card
+ * closed or the shown space changed. The next commit no longer holds the surface and releases it, as it releases the surface of a
+ * closed tab; a sidebar that draws the section again mounts the surface in its new slot (docs/spec/plugins.md#sections).
+ */
 function release(entry) {
   if (!entry.mount) return;
   entry.mount = null;
   entry.mounted = false;
   entry.error = null;
   clearSlotSurface(entry.body);
-  disposeSurface(entry.surface.surfaceId).catch((error) => {
-    dispatchEvent(new ErrorEvent("error", { message: `section ${entry.surface.surfaceId}: ${error.message}` }));
-  });
+  hideSectionSurface(entry.surface.surfaceId);
 }
 
 /** Releases all sections of one set element and clears its record. */

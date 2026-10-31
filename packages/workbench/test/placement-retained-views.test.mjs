@@ -126,7 +126,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
       changed: () => {},
       failed: () => {},
     });
-    saver.observe(new Set(["retained-view"]), [{ id: "retained-view", plugin: "placement-probe" }]);
+    saver.observe(new Set(["retained-view"]), [{ id: "retained-view", plugin: "placement-probe", kind: "tab" }]);
     const undrawn = { surfaces: [], drawn: false, settled: false, titlebar: 40 };
     const classified = await memoryPlacement(undrawn, [retained], {
       ready: Promise.resolve(), saver, observe: () => {}, start: (entries) => entries,
@@ -456,7 +456,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
     let resolveReady;
     const ready = new Promise((resolve) => { resolveReady = resolve; });
     const observe = (_record, tabs) => {
-      if (initialized) memory.observe(new Set(), tabs.map(({ id, plugin }) => ({ id, plugin })));
+      if (initialized) memory.observe(new Set(), tabs.map(({ id, plugin }) => ({ id, plugin, kind: "tab" })));
     };
     const undrawn = { surfaces: [], settled: true, drawn: false, titlebar: 40 };
     const beforeDraw = await memoryPlacement(undrawn, candidates, { ready, saver: memory, observe, start: (entries) => entries });
@@ -483,7 +483,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
     });
     await Promise.resolve();
     assert.equal(classificationFinished, false, "drawn placement did not wait for startup memory classification");
-    memory.observe(new Set(), [{ id: cold.id, plugin: cold.plugin }]);
+    memory.observe(new Set(), [{ id: cold.id, plugin: cold.plugin, kind: "tab" }]);
     memory.start();
     initialized = true;
     resolveReady();
@@ -565,11 +565,11 @@ test("a disabled memory saver mounts a cold hidden view at startup", async (t) =
       surface: { surfaceId: "cold-loaded-view", pluginId: "placement-probe",
         composition: { kind: "view", page: "ui/page.html" } }, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } };
     const candidates = [cold];
-    memory.observe(new Set(), [{ id: cold.id, plugin: cold.plugin }]);
+    memory.observe(new Set(), [{ id: cold.id, plugin: cold.plugin, kind: "tab" }]);
     memory.start();
     const classified = await memoryPlacement({ surfaces: [], drawn: true }, candidates, {
       ready: Promise.resolve(), saver: memory, start: (entries) => entries,
-      observe: (_record, tabs) => memory.observe(new Set(), tabs.map(({ id, plugin }) => ({ id, plugin }))),
+      observe: (_record, tabs) => memory.observe(new Set(), tabs.map(({ id, plugin }) => ({ id, plugin, kind: "tab" }))),
     });
     const answer = await placeCompositorRecord({ surfaces: [], drawn: true, settled: true, titlebar: 40 },
       classified.surfaces, (request) => host.surfaces.place(request), ["placement-probe"], {

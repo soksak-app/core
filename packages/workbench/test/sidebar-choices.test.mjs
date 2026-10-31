@@ -12,7 +12,7 @@ globalThis.dispatchEvent = () => true;
 
 // The section surfaces mount through the compositor and the surface modules, which are fakes at the boundary of the module.
 mock.module("../compositor.js", { namedExports: { setSlotSurface: () => {}, clearSlotSurface: () => {} } });
-mock.module("../surface-modules.js", { namedExports: { mountSurface: () => Promise.resolve(), disposeSurface: () => Promise.resolve() } });
+mock.module("../surface-modules.js", { namedExports: { mountSurface: () => Promise.resolve() } });
 
 const { registry } = await import("../exposure.js");
 const { registerSection } = await import("../registry.js");

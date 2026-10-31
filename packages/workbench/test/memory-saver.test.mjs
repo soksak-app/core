@@ -11,7 +11,7 @@ const MINUTE = 60_000;
 // Lets the awaited steps of an attempt run; the fakes resolve in microtasks.
 const settle = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const pluginOf = (id) => (id.startsWith("u-") ? "undeclared" : id.startsWith("g-") ? "background" : "fixture");
-const tabs = (...ids) => ids.map((id) => ({ id, plugin: pluginOf(id) }));
+const tabs = (...ids) => ids.map((id) => ({ id, plugin: pluginOf(id), kind: "tab" }));
 const named = (name) => emitted.filter((entry) => entry.event === name).map((entry) => entry.fields);
 
 /** A saver over fakes at its declared dependencies, started before any tab; the clock is the mocked Date. */
@@ -23,7 +23,7 @@ function harness(options = {}) {
     now: () => Date.now(),
     enabled: () => state.enabled,
     delay: () => state.delay,
-    declaration: (plugin) => ({ undeclared: "undeclared", background: "background" })[plugin] ?? "unload",
+    declaration: ({ plugin }) => ({ undeclared: "undeclared", background: "background" })[plugin] ?? "unload",
     keeps: (tab) => state.keeps.get(tab) ?? [],
     kept: (tab) => state.kept.has(tab),
     setKept: (tab, on) => (on ? state.kept.add(tab) : state.kept.delete(tab)),
@@ -267,7 +267,7 @@ test("a restart with the setting on starts hidden declaring tabs unloaded with t
   const labels = [];
   const create = (enabled) => createMemorySaver({
     now: () => Date.now(), enabled: () => enabled, delay: () => 120,
-    declaration: (plugin) => (plugin === "undeclared" ? "undeclared" : "unload"),
+    declaration: ({ plugin }) => (plugin === "undeclared" ? "undeclared" : "unload"),
     keeps: () => [], kept: () => false, setKept: () => {}, changed: () => {}, regions: async () => [], interaction: async () => undefined, restore: () => {},
     commit: async () => {}, showLabel: (tab) => labels.push(tab), failed: () => {}, stateChanged: () => {},
   });
@@ -344,14 +344,14 @@ test("the status lists each tab with its state, reasons and times", async () => 
   assert.deepEqual(saver.status(), {
     pressure: { level: "normal", seq: 3 },
     tabs: [
-      { tab: "x", plugin: "fixture", state: "loaded", reasons: ["shown"], hiddenAt: null, unloadAt: null, checkedAt: null },
-      { tab: "a", plugin: "fixture", state: "loaded", reasons: [], hiddenAt: hidden, unloadAt: hidden + 120 * MINUTE,
+      { tab: "x", plugin: "fixture", kind: "tab", state: "loaded", reasons: ["shown"], hiddenAt: null, unloadAt: null, checkedAt: null },
+      { tab: "a", plugin: "fixture", kind: "tab", state: "loaded", reasons: [], hiddenAt: hidden, unloadAt: hidden + 120 * MINUTE,
         checkedAt: null },
     ],
   });
   mock.timers.tick(120 * MINUTE);
   await settle();
-  assert.deepEqual(saver.status().tabs[1], { tab: "a", plugin: "fixture", state: "unloaded", reasons: [], hiddenAt: hidden,
+  assert.deepEqual(saver.status().tabs[1], { tab: "a", plugin: "fixture", kind: "tab", state: "unloaded", reasons: [], hiddenAt: hidden,
     unloadAt: null, checkedAt: hidden + 120 * MINUTE });
 });
 
@@ -438,4 +438,21 @@ test("a refused session history keeps the restore open, and the later mount stil
   saver.historyRefused("a", "fixture", "document region page: refused");
   assert.equal(saver.state("a"), "loaded");
   assert.equal(named("page.tab.restore.failed").length, 2);
+});
+
+test("a section surface is observed with the tabs and listed with kind section", async () => {
+  const { saver } = harness();
+  saver.observe(new Set(["a"]), [{ id: "a", plugin: "p", kind: "tab" }, { id: "left/probe.tree", plugin: "probe", kind: "section" }]);
+  assert.deepEqual(saver.status().tabs.map(({ tab, kind, state }) => ({ tab, kind, state })), [
+    { tab: "a", kind: "tab", state: "loaded" },
+    { tab: "left/probe.tree", kind: "section", state: "loaded" },
+  ]);
+});
+
+test("the tab commands refuse a section surface id, so only the memory saver unloads a section", async () => {
+  const { saver } = harness();
+  saver.observe(new Set(), [{ id: "a", plugin: "p", kind: "tab" }, { id: "left/probe.tree", plugin: "probe", kind: "section" }]);
+  assert.equal(saver.tab("a"), "a");
+  assert.throws(() => saver.tab("left/probe.tree"), /^Error: left\/probe.tree is a section surface, not a tab$/);
+  assert.throws(() => saver.tab("missing"), /unknown tab "missing"/);
 });

@@ -105,11 +105,13 @@ test("an entry is removed only after the layout write that drops its tab is conf
 });
 
 test("load reconciliation removes each orphan entry with an event", async () => {
-  const store = fakeStore({ format: 1, tabs: { a: { kept: true }, gone: { label: "x" }, lost: { kept: true } } });
+  const store = fakeStore({ format: 1, tabs: { a: { kept: true }, gone: { label: "x" }, lost: { kept: true },
+    "left/files.tree": { state: { format: 1, value: {} } } } });
   const events = emitted;
   const states = await open(store);
-  await states.reconcile(new Set(["a", "b"]));
-  assert.deepEqual(Object.keys(store.document.tabs), ["a"]);
+  const kept = new Set(["a", "b", "left/files.tree"]);
+  await states.reconcile((tab) => kept.has(tab));
+  assert.deepEqual(Object.keys(store.document.tabs), ["a", "left/files.tree"]);
   assert.deepEqual(events.filter((e) => e.event === "page.tab.state.orphan").map((e) => [e.level, e.fields]),
     [["info", { tab: "gone" }], ["info", { tab: "lost" }]]);
   assert.equal(states.entry("gone"), null);

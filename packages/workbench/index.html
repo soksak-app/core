@@ -29,6 +29,7 @@ import { pageStart } from "./page-start-errors-install.js";
 import { defaultRegistry, installEnvironment, pluginUnits, starterPack } from "./environment.js";
 import { appUpdate, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { installExposure } from "./exposure.js";
+import { surfaceKindOf } from "./surface-listing.js";
 /* The declaration files and the installed list are imported as a module graph so that the first screen is drawn before the first await (docs/spec/native-host.md#page-start). */
 import exposureFile from "./exposure.json" with { type: "json" };
 import environmentFile from "./environment.json" with { type: "json" };
@@ -225,10 +226,11 @@ const memorySaver = createMemorySaver({
   now: () => performance.now(),
   enabled: () => value("memorySaver"),
   delay: () => value("memorySaverDelay"),
-  declaration: (id) => {
-    if (registry.plugin(id).background) return "background";
-    // default: a plugin that is not loaded declares no surface.unload.
-    return pluginUnits().find((unit) => unit.id === id)?.unload ? "unload" : "undeclared";
+  // The unload of a tab comes from surface.unload of its plugin and the unload of a section surface from its section, as the
+  // descriptor of the surface carries it (docs/spec/plugins.md#memory-saver).
+  declaration: ({ plugin, unload }) => {
+    if (registry.plugin(plugin).background) return "background";
+    return unload ? "unload" : "undeclared";
   },
   keeps: tabKeeps,
   kept: (tab) => projects.tabStateStore()?.entry(tab)?.kept === true,
@@ -277,8 +279,12 @@ onDocumentState((event) => projects.tabSessionStore()?.navigated(event.surface, 
 /** Gives the memory saver the shown tabs and every layout tab of a loaded plugin of a commit. */
 function observeMemory(record, all) {
   if (!memoryObserved) return;
-  memorySaver.observe(new Set(record.surfaces.map((surface) => surface.id)),
-    all.map((surface) => ({ id: surface.id, plugin: surface.plugin })));
+  // A seated tab is shown. A section surface has a seat while it is folded or in an unselected tab, so only its visible seat is
+  // shown (docs/spec/plugins.md#sections).
+  memorySaver.observe(new Set(record.surfaces.filter((surface) => surfaceKindOf(surface.surface).kind === "tab" || surface.visible)
+    .map((surface) => surface.id)),
+    all.map((surface) => ({ id: surface.id, plugin: surface.plugin, kind: surfaceKindOf(surface.surface).kind,
+      unload: Boolean(surface.surface.unload) })));
 }
 
 /**

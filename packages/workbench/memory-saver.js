@@ -15,7 +15,8 @@ const ORDER = ["shown", "recent", "keep:modified", "keep:busy", "media", "media-
  * Creates the memory saver over its dependencies:
  *   now()               the monotonic time in milliseconds;
  *   enabled(), delay()  the settings memorySaver and memorySaverDelay (minutes);
- *   declaration(plugin) "unload" for a plugin that declares surface.unload, otherwise "undeclared" or "background";
+ *   declaration(entry) "unload" for a tab or section surface {id, plugin, kind, unload} whose descriptor declares unload,
+ *                       otherwise "undeclared" or "background";
  *   keeps(tab)          the keep reasons of the tab reports (keep:modified, keep:busy); kept(tab) the stored mark, which
  *                       setKept(tab, on) stores;
  *   regions(tab)        resolves the reasons of the document regions of the tab at a decision (media, media-unknown,
@@ -32,7 +33,8 @@ export function createMemorySaver({
   now, enabled, delay, declaration, keeps, kept, setKept, regions, interaction, restore, commit, showLabel, changed, failed,
   stateChanged,
 }) {
-  // tab id -> {id, plugin, state, hiddenAt, shownAt, unloadAt, region, checkedAt, generation, attempting}
+  // tab or section surface id -> {id, plugin, kind, unload, state, hiddenAt, shownAt, unloadAt, region, checkedAt, generation,
+  // attempting}
   let entries = new Map();
   let timer = null;
   let pressure = { level: "normal", seq: 0 };
@@ -44,7 +46,7 @@ export function createMemorySaver({
   /** The reasons that protect an entry; under pressure recent does not protect. */
   function reasonsOf(entry, { underPressure = false, region = true } = {}) {
     const reasons = new Set();
-    const kind = declaration(entry.plugin);
+    const kind = declaration(entry);
     if (kind !== "unload") reasons.add(kind);
     if (!enabled()) reasons.add("off");
     if (entry.hiddenAt === null) reasons.add("shown");
@@ -209,17 +211,19 @@ export function createMemorySaver({
 
   return {
     /**
-     * Takes the tabs of every layout [{id, plugin}] of loaded plugins and the ids of the shown tabs at a commit. A tab seen
-     * first while hidden takes this time as its hidden time; showing an unloaded tab restores it.
+     * Takes the tabs of every layout and the section surfaces [{id, plugin, kind, unload}] of loaded plugins and the ids of the
+     * shown ones at a commit. A tab seen first while hidden takes this time as its hidden time; showing an unloaded tab restores
+     * it.
      */
     observe(shown, tabs) {
       const time = now();
       const next = new Map();
-      for (const { id, plugin } of tabs) {
+      for (const { id, plugin, kind, unload } of tabs) {
+        if (kind !== "tab" && kind !== "section") throw new TypeError(`memory saver: surface ${id} has kind ${kind}`);
         let entry = entries.get(id);
         const isShown = shown.has(id);
         if (!entry) {
-          entry = { id, plugin, state: "loaded", hiddenAt: isShown ? null : time, shownAt: isShown ? time : null,
+          entry = { id, plugin, kind, unload, state: "loaded", hiddenAt: isShown ? null : time, shownAt: isShown ? time : null,
             unloadAt: null, region: [], checkedAt: null, generation: 0, attempting: false };
         } else if (isShown && entry.hiddenAt !== null) {
           entry.hiddenAt = null;
@@ -250,7 +254,7 @@ export function createMemorySaver({
       let changed = false;
       for (const entry of entries.values()) {
         if (entry.state !== "loaded" || entry.hiddenAt === null || entry.shownAt !== null) continue;
-        if (declaration(entry.plugin) !== "unload") continue;
+        if (declaration(entry) !== "unload") continue;
         setState(entry, "unloaded");
         showLabel(entry.id);
         changed = true;
@@ -277,6 +281,16 @@ export function createMemorySaver({
     /** Whether the memory saver knows the tab. */
     known: (tab) => entries.has(tab),
     /**
+     * Returns the id of a known tab for core.tab.unload, core.tab.keep and core.tab.menu. A section surface id is refused, so
+     * only the memory saver unloads a section (docs/spec/plugins.md#memory-saver).
+     */
+    tab(id) {
+      const entry = entries.get(id);
+      if (!entry) throw new Error(`unknown tab ${JSON.stringify(id)}`);
+      if (entry.kind === "section") throw new Error(`${id} is a section surface, not a tab`);
+      return id;
+    },
+    /**
      * Unloads a hidden tab now (core.tab.unload). It does not wait for recent and the reasons of the regions; it refuses the
      * other reasons and the reasons that ended the attempt with `tab <id> is protected: <reasons>`.
      */
@@ -299,7 +313,7 @@ export function createMemorySaver({
     keep(tab, on) {
       const entry = entries.get(tab);
       if (!entry) throw new Error(`unknown tab ${tab}`);
-      const kind = declaration(entry.plugin);
+      const kind = declaration(entry);
       if (kind !== "unload") throw new Error(`tab ${tab} can never be unloaded: ${kind}`);
       if (kept(tab) === on) return;
       setKept(tab, on);
@@ -310,7 +324,7 @@ export function createMemorySaver({
     status: () => ({
       pressure: { ...pressure },
       tabs: [...entries.values()].map((entry) => ({
-        tab: entry.id, plugin: entry.plugin, state: entry.state, reasons: reasonsOf(entry), hiddenAt: entry.hiddenAt,
+        tab: entry.id, plugin: entry.plugin, kind: entry.kind, state: entry.state, reasons: reasonsOf(entry), hiddenAt: entry.hiddenAt,
         // default: a tab without a next deadline (shown, unloaded, or protected by a standing reason) has null.
         unloadAt: entry.state === "loaded" && entry.hiddenAt !== null && enabled() && standing(entry, false).length === 0
           ? deadline(entry) : null,

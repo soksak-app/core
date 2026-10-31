@@ -11,6 +11,7 @@ import { commitData, configureData, prepareData, restoreData, showData } from ".
 import { openTabStates } from "./tab-state.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
+import { shownSectionSurfaces, storedSurfaceKept } from "./section-surfaces.js";
 
 let store;
 let projects = [];
@@ -93,15 +94,26 @@ function projectTabs(project) {
 }
 
 /**
- * Returns the tabs of the layouts of all spaces of all projects as surfaces with the root of their project. A sidecar session of a surface that is not in this list has nowhere to attach again (docs/spec/persistent-services.md).
+ * Returns the tabs of the layouts of all spaces of all projects as surfaces with the root of their project, and the section
+ * surfaces of the shown space with the root of the active project (docs/spec/plugins.md#sections). A sidecar session of a surface
+ * that is not in this list has nowhere to attach again (docs/spec/persistent-services.md).
  */
 export function layoutSurfaces() {
-  return projects.flatMap((project) => project.spaces.flatMap((space) => {
+  const tabs = projects.flatMap((project) => project.spaces.flatMap((space) => {
     const cards = space.layout?.state?.cards;
     if (!Array.isArray(cards)) throw new Error(`project ${project.id} space ${space.id} has no layout cards`);
     // default: a seat card has null data, so it has no tabs.
     return cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => ({ surface: tab.id, root: project.root })));
   }));
+  const shown = active();
+  // The library shows no project, so its sidebars hold no section surface of a project.
+  if (!shown || browsing) return tabs;
+  return [...tabs, ...shownSectionSurfaces().map((surface) => ({ surface, root: shown.root }))];
+}
+
+/** The ids of the cards of the layouts of all spaces of all projects, which the stored section surface entries name. */
+function layoutCards() {
+  return new Set(projects.flatMap((project) => project.spaces.flatMap((space) => space.layout.state.cards.map((card) => card.id))));
 }
 // default: a window without an active project (the library) has null.
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
@@ -260,8 +272,8 @@ async function initialiseWindow(storage, unloadOf) {
   // A stored layout that cannot be read leaves the tab ids unknown, so the store keeps every entry and the error is
   // shown; opening that project reports the same layout again.
   try {
-    const tabIds = new Set(layoutSurfaces().map((item) => item.surface));
-    await Promise.all([tabStates.reconcile(tabIds), tabSessions.reconcile(tabIds)]);
+    const kept = storedSurfaceKept(new Set(layoutSurfaces().map((item) => item.surface)), layoutCards());
+    await Promise.all([tabStates.reconcile(kept), tabSessions.reconcile(kept)]);
   } catch (error) {
     failed(error);
   }

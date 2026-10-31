@@ -94,9 +94,9 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
       await layoutWrite;
       await Promise.all(dropped.map(remove));
     },
-    /** Removes each file whose tab is not in tabIds, the tab identifiers of projects.json, with an event per file. */
-    async reconcile(tabIds) {
-      const orphans = (await store.tabSessions()).filter((tab) => !tabIds.has(tab));
+    /** Removes each file that kept(id) does not keep (storedSurfaceKept of section-surfaces.js), with an event per file. */
+    async reconcile(kept) {
+      const orphans = (await store.tabSessions()).filter((tab) => !kept(tab));
       for (const tab of orphans) emitEvent("info", "page.tab.session.orphan", { tab });
       await Promise.all(orphans.map(remove));
     },

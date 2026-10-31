@@ -217,10 +217,12 @@ let memory = null;
 
 /** The tab of a core.tab command: a string that the memory saver knows, otherwise invalid params. */
 function memoryTab(tab) {
-  if (typeof tab !== "string" || !memory.known(tab)) {
-    throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `unknown tab ${JSON.stringify(tab)}`);
+  if (typeof tab !== "string") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `unknown tab ${JSON.stringify(tab)}`);
+  try {
+    return memory.tab(tab);
+  } catch (error) {
+    throw new ExposureError(EXPOSURE_ERRORS.invalidParams, error.message);
   }
-  return tab;
 }
 
 function surfacesState() {

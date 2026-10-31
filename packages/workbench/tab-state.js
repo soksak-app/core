@@ -85,9 +85,9 @@ export async function openTabStates({ store, failed, unloadOf }) {
       await layoutWrite;
       await Promise.all(tabs.filter((tab) => entries.has(tab) || pending.has(tab)).map(remove));
     },
-    /** Removes each entry whose tab is not in tabIds, the tab identifiers of projects.json, with an event per entry. */
-    async reconcile(tabIds) {
-      const orphans = [...entries.keys()].filter((tab) => !tabIds.has(tab));
+    /** Removes each entry that kept(id) does not keep (storedSurfaceKept of section-surfaces.js), with an event per entry. */
+    async reconcile(kept) {
+      const orphans = [...entries.keys()].filter((tab) => !kept(tab));
       for (const tab of orphans) emitEvent("info", "page.tab.state.orphan", { tab });
       await Promise.all(orphans.map(remove));
     },
