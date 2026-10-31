@@ -103,10 +103,11 @@ let controlsWidth = 0;
 if (chrome) applyControls(start.controls);
 
 installExposure(exposureFile);
-// When the manifest of an installed plugin is rejected, the page cannot start. The error is shown and the start stops here. The reload
-// is done by host.window.reload (docs/spec/installation.md).
+// An installed plugin that the page refuses is left out and its error is shown, so the other plugins and the page start. An
+// environment.json that the page cannot use stops the start here with its error shown; the reload is done by host.window.reload
+// (docs/spec/installation.md#serving-installed-plugins).
 try {
-  installEnvironment(environmentFile, installedPlugins);
+  for (const text of installEnvironment(environmentFile, installedPlugins)) showError(text);
 } catch (error) {
   showError(error.message);
   await new Promise(() => {});

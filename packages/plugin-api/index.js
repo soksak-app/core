@@ -1322,52 +1322,99 @@ export function mergeExposes(first, second) {
 }
 
 /**
- * Validates /installed-plugins.json that the host provides and returns the plugin list. An entry is { id, package, version,
- * diagnostics? }; diagnostics comes only from a diagnostic build. When the host cannot read the installation state, the document is { error }
- * and the function throws with that text.
+ * Checks the form of /installed-plugins.json that the host provides. It returns { plugins } with the plugin list, or { error }
+ * with the error text when the host cannot read the installation state and the document is { error }; a document of another
+ * form throws.
  */
-export function validateInstalledPlugins(document) {
+function installedDocument(document) {
   if (!isObject(document)) throw new Error(`${INSTALLED_PLUGINS}: expected an object`);
   if (document.error !== undefined) {
     if (!isText(document.error)) throw new Error(`${INSTALLED_PLUGINS}: error must be text`);
-    throw new Error(`installed plugins: ${document.error}`);
+    return { error: `installed plugins: ${document.error}` };
   }
   only(INSTALLED_PLUGINS, document, ["plugins"]);
   if (!Array.isArray(document.plugins)) throw new Error(`${INSTALLED_PLUGINS}: plugins must be an array`);
+  return { plugins: document.plugins };
+}
+
+/**
+ * Checks one entry of /installed-plugins.json: { id, package, version, manifest, sidecars?, diagnostics? }; diagnostics comes only
+ * from a diagnostic build. The error names the plugin.
+ */
+function checkInstalledPlugin(plugin) {
+  if (!isObject(plugin)) throw new Error(`${INSTALLED_PLUGINS}: every plugin must be an object`);
+  only(`${INSTALLED_PLUGINS} plugin ${plugin.id}`, plugin, ["id", "package", "version", "manifest", "sidecars", "diagnostics"]);
+  if (!isText(plugin.id) || !ID.test(plugin.id)) throw new Error(`${INSTALLED_PLUGINS}: plugin id ${plugin.id} is invalid`);
+  if (!isText(plugin.package) || !PACKAGE.test(plugin.package)) {
+    throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} package must be a package.json name`);
+  }
+  if (!isText(plugin.version)) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} version is required`);
+  if (plugin.manifest === undefined) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} manifest is required`);
+  if (!isObject(plugin.manifest) || plugin.manifest.id !== plugin.id) {
+    throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} has a plugin.json with id ${plugin.manifest?.id}`);
+  }
+  try {
+    validateManifest(plugin.manifest);
+  } catch (error) {
+    // States which installed plugin the rejected manifest belongs to. That file is plugins/<id>/<version>/plugin.json.
+    throw new Error(`installed plugin ${plugin.id} ${plugin.version} (${plugin.package}): ${error.message}`);
+  }
+  // default: sidecars is an optional field of the installed plugin; without it the plugin has no sidecar facts.
+  if (plugin.sidecars !== undefined) {
+    // default: dependencies is an optional field of plugin.json; without it the plugin has no sidecar whose facts are checked.
+    checkSidecarFacts(`${INSTALLED_PLUGINS}: plugin ${plugin.id}`, plugin.sidecars, plugin.manifest.dependencies ?? {});
+  }
+  if (plugin.diagnostics !== undefined && !isObject(plugin.diagnostics)) {
+    throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} diagnostics must be an object`);
+  }
+}
+
+/** Throws when two plugins of the list have the same id or the same package. */
+function checkUniquePlugins(plugins) {
   const ids = new Set();
   const packages = new Set();
-  for (const plugin of document.plugins) {
-    if (!isObject(plugin)) throw new Error(`${INSTALLED_PLUGINS}: every plugin must be an object`);
-    only(`${INSTALLED_PLUGINS} plugin ${plugin.id}`, plugin, ["id", "package", "version", "manifest", "sidecars", "diagnostics"]);
-    if (!isText(plugin.id) || !ID.test(plugin.id)) throw new Error(`${INSTALLED_PLUGINS}: plugin id ${plugin.id} is invalid`);
-    if (!isText(plugin.package) || !PACKAGE.test(plugin.package)) {
-      throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} package must be a package.json name`);
-    }
-    if (!isText(plugin.version)) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} version is required`);
-    if (plugin.manifest === undefined) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} manifest is required`);
-    if (!isObject(plugin.manifest) || plugin.manifest.id !== plugin.id) {
-      throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} has a plugin.json with id ${plugin.manifest?.id}`);
-    }
-    try {
-      validateManifest(plugin.manifest);
-    } catch (error) {
-      // States which installed plugin the rejected manifest belongs to. That file is plugins/<id>/<version>/plugin.json.
-      throw new Error(`installed plugin ${plugin.id} ${plugin.version} (${plugin.package}): ${error.message}`);
-    }
-    // default: sidecars is an optional field of the installed plugin; without it the plugin has no sidecar facts.
-    if (plugin.sidecars !== undefined) {
-      // default: dependencies is an optional field of plugin.json; without it the plugin has no sidecar whose facts are checked.
-      checkSidecarFacts(`${INSTALLED_PLUGINS}: plugin ${plugin.id}`, plugin.sidecars, plugin.manifest.dependencies ?? {});
-    }
-    if (plugin.diagnostics !== undefined && !isObject(plugin.diagnostics)) {
-      throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} diagnostics must be an object`);
-    }
+  for (const plugin of plugins) {
     if (ids.has(plugin.id)) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} appears twice`);
     if (packages.has(plugin.package)) throw new Error(`${INSTALLED_PLUGINS}: package ${plugin.package} appears twice`);
     ids.add(plugin.id);
     packages.add(plugin.package);
   }
-  return document.plugins;
+}
+
+/**
+ * Validates /installed-plugins.json and returns the plugin list. It throws at the first plugin that it refuses, and with the error
+ * text of an { error } document.
+ */
+export function validateInstalledPlugins(document) {
+  const { plugins, error } = installedDocument(document);
+  if (error !== undefined) throw new Error(error);
+  for (const plugin of plugins) checkInstalledPlugin(plugin);
+  checkUniquePlugins(plugins);
+  return plugins;
+}
+
+/**
+ * Accepts the plugins of /installed-plugins.json one by one and returns { plugins, errors }: a plugin whose entry or manifest is
+ * refused is left out and its error is returned, so the page registers the other plugins and shows the errors
+ * (docs/spec/installation.md#serving-installed-plugins). An { error } document accepts no plugin and returns its error; a document of
+ * another form throws.
+ */
+export function acceptInstalledPlugins(document) {
+  const { plugins, error } = installedDocument(document);
+  if (error !== undefined) return { plugins: [], errors: [error] };
+  const accepted = [];
+  const errors = [];
+  for (const plugin of plugins) {
+    try {
+      checkInstalledPlugin(plugin);
+      accepted.push(plugin);
+    } catch (refusal) {
+      // The caller shows the error of the plugin that is left out.
+      errors.push(refusal.message);
+    }
+  }
+  checkUniquePlugins(accepted);
+  return { plugins: accepted, errors };
 }
 
 /** Validates one core declaration file (exposure.json). The owner of a name is core. */
@@ -1442,8 +1489,11 @@ export async function pageIdentity(location, read) {
     if (manifest.id !== page.host) throw new Error(`plugin.json id ${manifest.id} differs from the page plugin ${page.host}`);
     return { id: page.host, manifest };
   }
-  const entry = validateInstalledPlugins(await read(`/${INSTALLED_PLUGINS}`)).find((plugin) => plugin.package === page.package);
-  if (!entry) throw new Error(`${page.package}: no installed plugin has this package in ${INSTALLED_PLUGINS}`);
+  // The entry of this page's plugin is found among the accepted plugins, so a plugin that another installed plugin cannot be
+  // accepted beside still starts; when this plugin is refused, the error names the refusals.
+  const { plugins, errors } = acceptInstalledPlugins(await read(`/${INSTALLED_PLUGINS}`));
+  const entry = plugins.find((plugin) => plugin.package === page.package);
+  if (!entry) throw new Error([`${page.package}: no installed plugin has this package in ${INSTALLED_PLUGINS}`, ...errors].join("; "));
   if (manifest.id !== entry.id) throw new Error(`plugin.json id ${manifest.id} differs from the installed plugin ${entry.id}`);
   return { id: entry.id, manifest };
 }

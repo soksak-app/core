@@ -69,6 +69,23 @@ test("a staged page whose module has no installed entry fails with the package",
   })), /^Error: other-name: no installed plugin has this package in installed-plugins\.json$/);
 });
 
+test("a staged page starts when another installed plugin is refused", async () => {
+  const refused = { id: "earlier", package: "earlier-name", version: "0.0.1", manifest: { id: "earlier", description: "이름이 없는 manifest." } };
+  const identity = await pageIdentity(locationOf("https://example.test/modules/probe-name/ui/index.html"), reader({
+    "/installed-plugins.json": { plugins: [refused, ...installed.plugins] },
+    "/modules/probe-name/plugin.json": manifest("probe-id"),
+  }));
+  assert.equal(identity.id, "probe-id");
+});
+
+test("a staged page whose installed plugin is refused fails with the package and the refusal", async () => {
+  const refused = { ...installed.plugins[0], manifest: { id: "probe-id", description: "이름이 없는 manifest." } };
+  await assert.rejects(pageIdentity(locationOf("https://example.test/modules/probe-name/ui/index.html"), reader({
+    "/installed-plugins.json": { plugins: [refused] },
+    "/modules/probe-name/plugin.json": manifest("probe-id"),
+  })), /^Error: probe-name: no installed plugin has this package in installed-plugins\.json; installed plugin probe-id 0\.1\.0 \(probe-name\): /);
+});
+
 test("a staged page whose plugin.json id differs from its installed entry fails with both ids", async () => {
   await assert.rejects(pageIdentity(locationOf("https://example.test/modules/probe-name/ui/index.html"), reader({
     "/installed-plugins.json": installed,

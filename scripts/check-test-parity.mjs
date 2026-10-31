@@ -6495,7 +6495,7 @@ const FEATURE_LINKS = [
   {
     id: "F86",
     implementation: [
-      { file: "packages/workbench/index.html", symbol: "installEnvironment(environmentFile, installedPlugins);" },
+      { file: "packages/workbench/index.html", symbol: "for (const text of installEnvironment(environmentFile, installedPlugins)) showError(text);" },
     ],
     tests: [
       { file: "e2e/start-failure.test.mjs", id: "a rejected installed plugin manifest stops the page start with a shown and logged error" },
@@ -8227,6 +8227,21 @@ const FEATURE_LINKS = [
       { file: "scripts/test/e2e-host-parity.test.mjs", id: "a window-check file that does not run both adapters is an error whatever its name" },
     ],
     expected: "The name of a make target decides the kind of its checks: test runs unit tests only and a target whose name starts with e2e runs end-to-end checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F321-3",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function acceptInstalledPlugins(" },
+      { file: "packages/workbench/environment.js", symbol: "const { plugins: installed, errors } = acceptInstalledPlugins(installedDocument);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/environment-refused-plugins.test.mjs", id: "an installed plugin whose manifest is refused is left out with its error and the other plugins are registered" },
+      { file: "packages/workbench/test/environment-refused-plugins.test.mjs", id: "an installed plugins document that carries the error of the host registers no plugin and returns the error" },
+      { file: "packages/plugin-api/test/page-identity.test.mjs", id: "a staged page starts when another installed plugin is refused" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "accepting the installed plugin document leaves out each refused plugin with its error and keeps the others" },
+    ],
+    expected: "The page registers the installed plugins that it accepts and shows the error of each refused plugin or of an error document, and a staged page finds its plugin among the accepted plugins.",
     levels: ["unit"],
   },
   {

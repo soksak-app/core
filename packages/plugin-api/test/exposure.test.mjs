@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   EXPOSURE_ERRORS, ExposureError, actOn, createExpose, declarationMap, exposureEntries, matchesSchema, pagePackage,
-  mergeExposes, replyPayload, validateInstalledPlugins, validateDiagnostics, validateExposes, validateExposureFile,
+  acceptInstalledPlugins, mergeExposes, replyPayload, validateInstalledPlugins, validateDiagnostics, validateExposes, validateExposureFile,
   validateManifest,
 } from "../index.js";
 
@@ -345,6 +345,22 @@ test("diagnostic declarations extend a surface plugin once and are rejected othe
   assert.throws(() => validateDiagnostics(manifest, { module: "ui/probe-diagnostics.js", exposes: { commands: [{ ...inject, name: "other.inject" }] } }),
     /must be probe\.<name>/);
 
+});
+
+test("accepting the installed plugin document leaves out each refused plugin with its error and keeps the others", () => {
+  const alpha = { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: { id: "alpha", name: "Alpha", description: "검사용.", host: { page: "ui/host.html" }, exposes: { status: [{ name: "alpha.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "alpha.list", name: "List", status: "alpha.list" }] } };
+  const unnamed = { id: "beta", package: "plugin-beta", version: "0.0.1", manifest: { id: "beta", description: "이름이 없는 manifest." } };
+  const badPackage = { ...alpha, id: "gamma", package: "Bad", manifest: { ...alpha.manifest, id: "gamma" } };
+  const { plugins, errors } = acceptInstalledPlugins({ plugins: [unnamed, alpha, badPackage] });
+  assert.deepEqual(plugins, [alpha]);
+  assert.equal(errors.length, 2);
+  assert.match(errors[0], /^installed plugin beta 0\.0\.1 \(plugin-beta\): /);
+  assert.match(errors[1], /plugin gamma package must be a package\.json name/);
+  assert.deepEqual(acceptInstalledPlugins({ error: "plugins/installed.json: format must be 3" }),
+    { plugins: [], errors: ["installed plugins: plugins/installed.json: format must be 3"] });
+  // A document of another form and two accepted plugins with one id are errors of the document.
+  assert.throws(() => acceptInstalledPlugins([]), /expected an object/);
+  assert.throws(() => acceptInstalledPlugins({ plugins: [alpha, alpha] }), /plugin alpha appears twice/);
 });
 
 test("the installed plugin document lists plugins with their manifests and diagnostics and reports the host's error", () => {

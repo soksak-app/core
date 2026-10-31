@@ -11,7 +11,7 @@ import { compositionKindOf } from "./surface-composition-kind.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
   checkReferences, manifestSidecars, mergeExposes, modulePath, validateDiagnostics, normalizeSidebarDefaults, validateEnvironment,
-  validateInstalledPlugins,
+  acceptInstalledPlugins,
 } from "@soksak/plugin-api";
 
 let loaded = null;
@@ -43,6 +43,8 @@ let diagnosticModules = Promise.resolve(new Map());
 
 /**
  * Validates environment.json and the list of installed plugins (with manifests) and registers the plugins, sections and sidebar defaults.
+ * It returns the errors of the installed plugins that it refuses and leaves out, which the page shows; an environment.json that it cannot
+ * use throws.
  * It registers synchronously so the first screen is drawn before the first await (docs/spec/native-host.md#page-start). The host of a diagnostic build sends the declaration of
  * diagnostics.json for each plugin; that declaration is added to the surface declaration of the plugin, and the diagnostic module is given out as pluginDiagnostics.
  */
@@ -53,7 +55,7 @@ export function installEnvironment(environmentDocument, installedDocument) {
   starter = environment.starter ?? null;
   // default: if environment.json has no registry, there is no default registry for the first run to set.
   registry = environment.registry ?? null;
-  const installed = validateInstalledPlugins(installedDocument);
+  const { plugins: installed, errors } = acceptInstalledPlugins(installedDocument);
   const manifests = installed.map(({ package: name, version, manifest, sidecars }) => ({ name, manifest, version, sidecars }));
   // A dependency that names the package of an installed plugin is a plugin dependency, not a sidecar (docs/spec/plugins.md#pluginjson).
   const pluginNames = new Set(installed.map((plugin) => plugin.package));
@@ -119,6 +121,7 @@ export function installEnvironment(environmentDocument, installedDocument) {
     dependencies: manifest.dependencies ?? {},
   }));
   loaded = environment;
+  return errors;
 }
 
 /** Diagnostic module of a plugin id. It exists only in some plugins of a diagnostic build; without it the value is null. A load failure is a rejection. */

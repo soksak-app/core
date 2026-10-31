@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F321-3: The main page registers the installed plugins that it accepts and shows the error of each refused plugin, or of an `error` document of `/installed-plugins.json`, instead of stopping its start; a staged page of a plugin starts beside a refused plugin. `@soksak/plugin-api` exports `acceptInstalledPlugins`.
 - F321-5: The internal declaration tests of both hosts assert the contract of F321: a declaration whose `sidecar.json` does not parse succeeds and notifies `host.sidecars` once.
 - F321-2: A project settings file that is refused is reported at its project: the snapshot gives the project `settingsError`, the window does not open that project and reports the error, and the other projects and the page start. Before, one such file failed the snapshot and the page did not start.
 - F321-1: A host whose `installed.json` or `plugin.json` cannot be read records `installed plugins: <error>` and starts without sidecars instead of ending its start.
