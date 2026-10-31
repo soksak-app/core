@@ -494,7 +494,7 @@ fn plugin_pack_refuses_removed_manifest_fields() {
     for (manifest, want) in [
         (
             r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}"#,
-            "plugin probe: section probe.list module is removed; a section takes status (docs/spec/declared-ui.md)",
+            "plugin probe: section probe.list module is removed; a section takes composition and height",
         ),
         (
             r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}"#,
@@ -527,7 +527,7 @@ fn plugin_pack_refuses_a_schema_outside_the_subset() {
         ),
         (
             r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "string"}}]}}"#,
-            "plugin probe: exposes require a surface or a plugin host",
+            "plugin probe: exposes require a surface or sections",
         ),
         (
             r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"dom": [{"name": "probe.x", "description": "X.", "many": "yes"}]}}"#,

@@ -19,7 +19,7 @@ const MENU_TITLE_MAX: usize = 40;
 const COMMAND_TIMEOUT_MAX: f64 = 600000.0;
 
 /// The members that plugin.json may hold (validateManifest).
-const TOP_LEVEL_KEYS: [&str; 19] = [
+const TOP_LEVEL_KEYS: [&str; 17] = [
     "id",
     "name",
     "description",
@@ -37,8 +37,6 @@ const TOP_LEVEL_KEYS: [&str; 19] = [
     "extends",
     "contributes",
     "events",
-    "host",
-    "hostOperations",
 ];
 
 /// The keywords that a schema may hold (checkSchema of packages/plugin-api).
@@ -474,22 +472,6 @@ fn declared_commands(manifest: &Map<String, Value>) -> Vec<&str> {
         .unwrap_or_default()
 }
 
-/// The status names that exposes declares (`exposes.status` when it is a list, else none).
-fn declared_statuses(manifest: &Map<String, Value>) -> Vec<&str> {
-    manifest
-        .get("exposes")
-        .and_then(|exposes| exposes.get("status"))
-        .and_then(Value::as_array)
-        .map(|statuses| {
-            statuses
-                .iter()
-                .filter_map(|status| status.get("name").and_then(Value::as_str))
-                .collect()
-        })
-        // default: names that are not text declare no status; the section check then refuses the status.
-        .unwrap_or_default()
-}
-
 /// Checks the dependencies of plugin.json and returns the names with their ranges (checkDependencies of the reader).
 fn check_dependencies(where_: &str, raw: &Value) -> Result<Map<String, Value>, String> {
     let deps = raw.as_object().ok_or_else(|| {
@@ -509,76 +491,6 @@ fn check_dependencies(where_: &str, raw: &Value) -> Result<Map<String, Value>, S
         }
     }
     Ok(deps.clone())
-}
-
-/// Checks the plugin host declaration (checkHost of the reader).
-fn check_host(where_: &str, raw: &Value) -> Result<(), String> {
-    let host = raw
-        .as_object()
-        .ok_or_else(|| format!("{where_}: host must be an object"))?;
-    only(&format!("{where_} host"), host, &["page", "state"])?;
-    let page = host.get("page").and_then(Value::as_str);
-    if !page
-        .is_some_and(|p| !p.is_empty() && !p.starts_with('/') && !p.split('/').any(|s| s == ".."))
-    {
-        return Err(format!(
-            "{where_}: host page must be a path inside the package"
-        ));
-    }
-    let Some(state_raw) = host.get("state") else {
-        return Ok(());
-    };
-    let state = state_raw
-        .as_object()
-        .ok_or_else(|| format!("{where_}: host state must be an object"))?;
-    only(
-        &format!("{where_} host state"),
-        state,
-        &["format", "maxBytes"],
-    )?;
-    for key in ["format", "maxBytes"] {
-        if !integer_value(state.get(key)).is_some_and(|f| f >= 1.0) {
-            return Err(format!(
-                "{where_}: host state {key} must be a positive integer"
-            ));
-        }
-    }
-    Ok(())
-}
-
-/// Checks the plugin host operations: each name is a dependency and each value is a list of distinct operation names
-/// (checkHostOperationsDeclaration of the reader).
-fn check_host_operations(
-    where_: &str,
-    raw: &Value,
-    dependencies: &Map<String, Value>,
-) -> Result<(), String> {
-    let operations = raw
-        .as_object()
-        .ok_or_else(|| format!("{where_}: hostOperations must map sidecars to operations"))?;
-    for name in sorted_keys(operations) {
-        if !dependencies.contains_key(name.as_str()) {
-            return Err(format!(
-                "{where_}: hostOperations {name} is not a dependency"
-            ));
-        }
-        let shape =
-            format!("{where_}: hostOperations {name} must be a list of distinct operation names");
-        let list = operations[name.as_str()]
-            .as_array()
-            .ok_or_else(|| shape.clone())?;
-        if list.is_empty() {
-            return Err(shape);
-        }
-        let mut seen = BTreeSet::new();
-        for item in list {
-            match item.as_str() {
-                Some(operation) if !operation.is_empty() && seen.insert(operation) => {}
-                _ => return Err(shape),
-            }
-        }
-    }
-    Ok(())
 }
 
 /// Checks the extension point declarations of a provider (checkExtends of the reader).
@@ -974,6 +886,29 @@ fn check_opens(where_: &str, raw: &Value, params: Option<&Value>) -> Result<(), 
 }
 
 /// Checks the surface declaration (validateManifest of the reader).
+/// Checks an unload declaration of a surface or a section: {format, maxBytes} with positive integers
+/// (docs/spec/plugins.md#memory-saver). `label` names the owner in the messages.
+fn check_unload(where_: &str, label: &str, raw: &Value) -> Result<(), String> {
+    let unload = raw.as_object();
+    let valid = unload.is_some_and(|u| {
+        integer_value(u.get("format")).is_some_and(|f| f >= 1.0)
+            && integer_value(u.get("maxBytes")).is_some_and(|m| m >= 1.0)
+    });
+    let unload = match (valid, unload) {
+        (true, Some(unload)) => unload,
+        _ => {
+            return Err(format!(
+                "{where_}: {label} unload must be {{format, maxBytes}} with positive integers"
+            ));
+        }
+    };
+    only(
+        &format!("{where_} {label} unload"),
+        unload,
+        &["format", "maxBytes"],
+    )
+}
+
 fn check_surface(
     where_: &str,
     manifest: &Map<String, Value>,
@@ -1044,24 +979,7 @@ fn check_surface(
                 "{where_}: surface unload is forbidden beside background"
             ));
         }
-        let unload = raw.as_object();
-        let valid = unload.is_some_and(|u| {
-            integer_value(u.get("format")).is_some_and(|f| f >= 1.0)
-                && integer_value(u.get("maxBytes")).is_some_and(|m| m >= 1.0)
-        });
-        let unload = match (valid, unload) {
-            (true, Some(unload)) => unload,
-            _ => {
-                return Err(format!(
-                    "{where_}: surface unload must be {{format, maxBytes}} with positive integers"
-                ));
-            }
-        };
-        only(
-            &format!("{where_} surface unload"),
-            unload,
-            &["format", "maxBytes"],
-        )?;
+        check_unload(where_, "surface", raw)?;
     }
     if !is_text(manifest.get("mark")) {
         return Err(format!("{where_}: mark is required with a surface"));
@@ -1072,33 +990,29 @@ fn check_surface(
     Ok(())
 }
 
-/// Checks the sections of plugin.json (validateManifest of the reader).
-fn check_sections(
-    where_: &str,
-    id: &str,
-    manifest: &Map<String, Value>,
-    raw: &Value,
-) -> Result<(), String> {
+/// Checks the sections of plugin.json (validateManifest of the reader). A section is a view with a composition and a height.
+fn check_sections(where_: &str, id: &str, sidecars: &[&str], raw: &Value) -> Result<(), String> {
     let sections = raw
         .as_array()
         .ok_or_else(|| format!("{where_}: sections must be an array"))?;
-    let statuses = declared_statuses(manifest);
     let mut seen = BTreeSet::new();
-    let mut backing: Vec<(&str, &str)> = Vec::new();
     for item in sections {
         let section = item
             .as_object()
             .ok_or_else(|| format!("{where_}: section must be an object"))?;
-        if section.contains_key("module") {
-            return Err(format!(
-                "{where_}: section {} module is removed; a section takes status (docs/spec/declared-ui.md)",
-                js_field_text(section, "id")
-            ));
+        // The status, module and fill members are removed (docs/spec/plugins.md#sections).
+        for field in ["fill", "module", "status"] {
+            if section.contains_key(field) {
+                return Err(format!(
+                    "{where_}: section {} {field} is removed; a section takes composition and height",
+                    js_field_text(section, "id")
+                ));
+            }
         }
         only(
             &format!("{where_} section"),
             section,
-            &["id", "name", "fill", "status"],
+            &["id", "name", "composition", "height", "unload"],
         )?;
         let section_id = section.get("id").and_then(Value::as_str);
         let section_id = match section_id {
@@ -1116,28 +1030,26 @@ fn check_sections(
         if !is_text(section.get("name")) {
             return Err(format!("{where_}: section {section_id} requires a name"));
         }
-        let status = section
-            .get("status")
-            .ok_or_else(|| format!("{where_}: section {section_id} requires a status"))?;
-        let name = status.as_str().filter(|name| statuses.contains(name));
-        let Some(name) = name else {
+        let composition = section
+            .get("composition")
+            .ok_or_else(|| format!("{where_}: section {section_id} requires composition"))?;
+        check_composition(
+            &format!("{where_} section {section_id}"),
+            composition,
+            sidecars,
+        )?;
+        let height = section
+            .get("height")
+            .ok_or_else(|| format!("{where_}: section {section_id} requires height"))?;
+        let height_ok = height.as_str() == Some("fill")
+            || integer_value(Some(height)).is_some_and(|h| h >= 1.0);
+        if !height_ok {
             return Err(format!(
-                "{where_}: section {section_id} status {} is not a status of plugin {id}",
-                js_value_text(status)
-            ));
-        };
-        if let Some((_, other)) = backing.iter().find(|(status, _)| *status == name) {
-            return Err(format!(
-                "{where_}: status {name} backs section {other} and section {section_id}"
+                "{where_}: section {section_id} height must be \"fill\" or a positive integer"
             ));
         }
-        backing.push((name, section_id));
-        if let Some(fill) = section.get("fill")
-            && !fill.is_boolean()
-        {
-            return Err(format!(
-                "{where_}: section {section_id} fill must be a boolean"
-            ));
+        if let Some(raw) = section.get("unload") {
+            check_unload(where_, &format!("section {section_id}"), raw)?;
         }
     }
     Ok(())
@@ -1292,11 +1204,11 @@ fn check_settings(where_: &str, raw: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Checks the data declarations (validateManifest of the reader): a plugin host is required, and each key holds a schema
-/// and a default that matches it, with a positive integer format.
+/// Checks the data declarations (validateManifest of the reader): a surface or sections is required, and each key holds a
+/// schema and a default that matches it, with a positive integer format.
 fn check_data(where_: &str, manifest: &Map<String, Value>, raw: &Value) -> Result<(), String> {
-    if !manifest.contains_key("host") {
-        return Err(format!("{where_}: data requires a plugin host"));
+    if !manifest.contains_key("surface") && !manifest.contains_key("sections") {
+        return Err(format!("{where_}: data requires a surface or sections"));
     }
     let data = raw
         .as_object()
@@ -1461,6 +1373,15 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
             js_field_text(manifest, "id")
         ));
     }
+    // The plugin host members are removed: a section is a view of the plugin (docs/spec/plugins.md#sections).
+    for member in ["host", "hostOperations"] {
+        if manifest.contains_key(member) {
+            return Err(format!(
+                "plugin {}: {member} is removed; a section is a view of the plugin",
+                js_field_text(manifest, "id")
+            ));
+        }
+    }
     only("plugin.json", manifest, &TOP_LEVEL_KEYS)?;
     if let Some(events) = manifest.get("events") {
         let valid = events.as_str().is_some_and(|path| {
@@ -1501,9 +1422,9 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
     }
     let mut dependencies = Map::new();
     if let Some(raw) = manifest.get("dependencies") {
-        if !has("surface") && !has("host") && !has("contributes") {
+        if !has("surface") && !has("sections") && !has("contributes") {
             return Err(format!(
-                "{where_}: dependencies require a surface, a plugin host or contributes"
+                "{where_}: dependencies require a surface, sections or contributes"
             ));
         }
         dependencies = check_dependencies(&where_, raw)?;
@@ -1512,15 +1433,6 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         .into_iter()
         .map(String::as_str)
         .collect();
-    if let Some(raw) = manifest.get("host") {
-        check_host(&where_, raw)?;
-    }
-    if let Some(raw) = manifest.get("hostOperations") {
-        if !has("host") {
-            return Err(format!("{where_}: hostOperations requires host"));
-        }
-        check_host_operations(&where_, raw, &dependencies)?;
-    }
     if let Some(raw) = manifest.get("extends") {
         if !has("surface") {
             return Err(format!("{where_}: extends requires a surface"));
@@ -1540,7 +1452,7 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         check_surface(&where_, manifest, raw, &sidecars)?;
     }
     if let Some(raw) = manifest.get("sections") {
-        check_sections(&where_, id, manifest, raw)?;
+        check_sections(&where_, id, &sidecars, raw)?;
     }
     if let Some(raw) = manifest.get("preview") {
         if !has("surface") {
@@ -1549,10 +1461,8 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         check_preview(&where_, raw)?;
     }
     if let Some(raw) = manifest.get("exposes") {
-        if !has("surface") && !has("host") {
-            return Err(format!(
-                "{where_}: exposes require a surface or a plugin host"
-            ));
+        if !has("surface") && !has("sections") {
+            return Err(format!("{where_}: exposes require a surface or sections"));
         }
         check_exposes(id, raw)?;
     }

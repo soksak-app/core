@@ -46,7 +46,7 @@ const (
 
 // topLevelKeys are the members that plugin.json may hold (validateManifest).
 var topLevelKeys = []string{"id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background",
-	"exposes", "settings", "data", "sidebars", "extends", "contributes", "events", "host", "hostOperations"}
+	"exposes", "settings", "data", "sidebars", "extends", "contributes", "events"}
 
 // utf16Length is the length of a string in UTF-16 code units, the length that the reader's string checks count.
 func utf16Length(s string) int {
@@ -346,6 +346,12 @@ func ValidateManifest(value any) error {
 	if _, ok := manifest["state"]; ok {
 		return fmt.Errorf("plugin %s: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)", jsFieldText(manifest, "id"))
 	}
+	// The plugin host members are removed: a section is a view of the plugin (docs/spec/plugins.md#sections).
+	for _, member := range []string{"host", "hostOperations"} {
+		if _, ok := manifest[member]; ok {
+			return fmt.Errorf("plugin %s: %s is removed; a section is a view of the plugin", jsFieldText(manifest, "id"), member)
+		}
+	}
 	if err := only("plugin.json", manifest, topLevelKeys...); err != nil {
 		return err
 	}
@@ -369,16 +375,15 @@ func ValidateManifest(value any) error {
 		return fmt.Errorf("%s: description must be 1 to %d characters", where, pluginDescriptionMax)
 	}
 	_, hasSurface := manifest["surface"]
-	_, hasHost := manifest["host"]
 	_, hasSections := manifest["sections"]
 	_, hasContributes := manifest["contributes"]
-	if err := checkData(where, manifest, hasHost); err != nil {
+	if err := checkData(where, manifest); err != nil {
 		return err
 	}
 	dependencies := map[string]any{}
 	if raw, ok := manifest["dependencies"]; ok {
-		if !hasSurface && !hasHost && !hasContributes {
-			return fmt.Errorf("%s: dependencies require a surface, a plugin host or contributes", where)
+		if !hasSurface && !hasSections && !hasContributes {
+			return fmt.Errorf("%s: dependencies require a surface, sections or contributes", where)
 		}
 		deps, err := checkDependencies(where, raw)
 		if err != nil {
@@ -387,19 +392,6 @@ func ValidateManifest(value any) error {
 		dependencies = deps
 	}
 	sidecars := sortedKeys(dependencies)
-	if raw, ok := manifest["host"]; ok {
-		if err := checkHost(where, raw); err != nil {
-			return err
-		}
-	}
-	if raw, ok := manifest["hostOperations"]; ok {
-		if !hasHost {
-			return fmt.Errorf("%s: hostOperations requires host", where)
-		}
-		if err := checkHostOperations(where, raw, dependencies); err != nil {
-			return err
-		}
-	}
 	if raw, ok := manifest["extends"]; ok {
 		if !hasSurface {
 			return fmt.Errorf("%s: extends requires a surface", where)
@@ -427,7 +419,7 @@ func ValidateManifest(value any) error {
 		}
 	}
 	if raw, ok := manifest["sections"]; ok {
-		if err := checkSections(where, id, manifest, raw); err != nil {
+		if err := checkSections(where, id, sidecars, raw); err != nil {
 			return err
 		}
 	}
@@ -440,8 +432,8 @@ func ValidateManifest(value any) error {
 		}
 	}
 	if raw, ok := manifest["exposes"]; ok {
-		if !hasSurface && !hasHost {
-			return fmt.Errorf("%s: exposes require a surface or a plugin host", where)
+		if !hasSurface && !hasSections {
+			return fmt.Errorf("%s: exposes require a surface or sections", where)
 		}
 		if err := checkExposes(id, raw); err != nil {
 			return err
@@ -463,15 +455,17 @@ func ValidateManifest(value any) error {
 	return nil
 }
 
-// checkData checks the data declarations (validateManifest): a plugin host is required, and each key holds a schema and
-// a default that matches it, with a positive integer format.
-func checkData(where string, manifest map[string]any, hasHost bool) error {
+// checkData checks the data declarations (validateManifest): a surface or sections is required, and each key holds a schema
+// and a default that matches it, with a positive integer format.
+func checkData(where string, manifest map[string]any) error {
 	raw, ok := manifest["data"]
 	if !ok {
 		return nil
 	}
-	if !hasHost {
-		return fmt.Errorf("%s: data requires a plugin host", where)
+	_, hasSurface := manifest["surface"]
+	_, hasSections := manifest["sections"]
+	if !hasSurface && !hasSections {
+		return fmt.Errorf("%s: data requires a surface or sections", where)
 	}
 	data, ok := raw.(map[string]any)
 	if !ok {
@@ -523,64 +517,6 @@ func checkDependencies(where string, raw any) (map[string]any, error) {
 		}
 	}
 	return deps, nil
-}
-
-// checkHost checks the plugin host declaration (checkHost of the reader).
-func checkHost(where string, raw any) error {
-	host, ok := raw.(map[string]any)
-	if !ok {
-		return fmt.Errorf("%s: host must be an object", where)
-	}
-	if err := only(where+" host", host, "page", "state"); err != nil {
-		return err
-	}
-	if !isText(host["page"]) || strings.HasPrefix(host["page"].(string), "/") || slices.Contains(strings.Split(host["page"].(string), "/"), "..") {
-		return fmt.Errorf("%s: host page must be a path inside the package", where)
-	}
-	raw, ok = host["state"]
-	if !ok {
-		return nil
-	}
-	state, ok := raw.(map[string]any)
-	if !ok {
-		return fmt.Errorf("%s: host state must be an object", where)
-	}
-	if err := only(where+" host state", state, "format", "maxBytes"); err != nil {
-		return err
-	}
-	for _, key := range []string{"format", "maxBytes"} {
-		if f, isInteger := integerValue(state[key]); !isInteger || f < 1 {
-			return fmt.Errorf("%s: host state %s must be a positive integer", where, key)
-		}
-	}
-	return nil
-}
-
-// checkHostOperations checks the plugin host operations: each name is a dependency and each value is a list of distinct
-// operation names (checkHostOperationsDeclaration of the reader).
-func checkHostOperations(where string, raw any, dependencies map[string]any) error {
-	operations, ok := raw.(map[string]any)
-	if !ok {
-		return fmt.Errorf("%s: hostOperations must map sidecars to operations", where)
-	}
-	for _, name := range sortedKeys(operations) {
-		if _, ok := dependencies[name]; !ok {
-			return fmt.Errorf("%s: hostOperations %s is not a dependency", where, name)
-		}
-		list, ok := operations[name].([]any)
-		if !ok || len(list) == 0 {
-			return fmt.Errorf("%s: hostOperations %s must be a list of distinct operation names", where, name)
-		}
-		seen := map[string]bool{}
-		for _, item := range list {
-			operation, ok := item.(string)
-			if !ok || operation == "" || seen[operation] {
-				return fmt.Errorf("%s: hostOperations %s must be a list of distinct operation names", where, name)
-			}
-			seen[operation] = true
-		}
-	}
-	return nil
 }
 
 // checkExtends checks the extension point declarations of a provider (checkExtends of the reader).
@@ -766,13 +702,7 @@ func checkSurface(where string, manifest map[string]any, raw any, sidecars []str
 		if _, hasBackground := manifest["background"]; hasBackground {
 			return fmt.Errorf("%s: surface unload is forbidden beside background", where)
 		}
-		unload, ok := raw.(map[string]any)
-		format, isFormat := integerValue(unload["format"])
-		maxBytes, isMax := integerValue(unload["maxBytes"])
-		if !ok || !isFormat || format < 1 || !isMax || maxBytes < 1 {
-			return fmt.Errorf("%s: surface unload must be {format, maxBytes} with positive integers", where)
-		}
-		if err := only(where+" surface unload", unload, "format", "maxBytes"); err != nil {
+		if err := checkUnload(where, "surface", raw); err != nil {
 			return err
 		}
 	}
@@ -783,6 +713,18 @@ func checkSurface(where string, manifest map[string]any, raw any, sidecars []str
 		return fmt.Errorf("%s: icon is required with a surface", where)
 	}
 	return nil
+}
+
+// checkUnload checks an unload declaration of a surface or a section: {format, maxBytes} with positive integers
+// (docs/spec/plugins.md#memory-saver). label names the owner in the messages.
+func checkUnload(where, label string, raw any) error {
+	unload, ok := raw.(map[string]any)
+	format, isFormat := integerValue(unload["format"])
+	maxBytes, isMax := integerValue(unload["maxBytes"])
+	if !ok || !isFormat || format < 1 || !isMax || maxBytes < 1 {
+		return fmt.Errorf("%s: %s unload must be {format, maxBytes} with positive integers", where, label)
+	}
+	return only(where+" "+label+" unload", unload, "format", "maxBytes")
 }
 
 // checkMenu checks the context menu of a surface (validateManifest of the reader).
@@ -855,24 +797,26 @@ func checkOpens(where string, raw any, params any) error {
 	return nil
 }
 
-// checkSections checks the sections of plugin.json (validateManifest of the reader).
-func checkSections(where, id string, manifest map[string]any, raw any) error {
+// checkSections checks the sections of plugin.json (validateManifest of the reader). A section is a view with a composition and a
+// height.
+func checkSections(where, id string, sidecars []string, raw any) error {
 	sections, ok := raw.([]any)
 	if !ok {
 		return fmt.Errorf("%s: sections must be an array", where)
 	}
-	statuses := declaredStatuses(manifest)
 	seen := map[string]bool{}
-	backing := map[string]string{}
 	for _, item := range sections {
 		section, ok := item.(map[string]any)
 		if !ok {
 			return fmt.Errorf("%s: section must be an object", where)
 		}
-		if _, ok := section["module"]; ok {
-			return fmt.Errorf("%s: section %s module is removed; a section takes status (docs/spec/declared-ui.md)", where, jsFieldText(section, "id"))
+		// The status, module and fill members are removed (docs/spec/plugins.md#sections).
+		for _, field := range []string{"fill", "module", "status"} {
+			if _, has := section[field]; has {
+				return fmt.Errorf("%s: section %s %s is removed; a section takes composition and height", where, jsFieldText(section, "id"), field)
+			}
 		}
-		if err := only(where+" section", section, "id", "name", "fill", "status"); err != nil {
+		if err := only(where+" section", section, "id", "name", "composition", "height", "unload"); err != nil {
 			return err
 		}
 		sectionID, ok := section["id"].(string)
@@ -886,42 +830,30 @@ func checkSections(where, id string, manifest map[string]any, raw any) error {
 		if !isText(section["name"]) {
 			return fmt.Errorf("%s: section %s requires a name", where, sectionID)
 		}
-		status, has := section["status"]
+		composition, has := section["composition"]
 		if !has {
-			return fmt.Errorf("%s: section %s requires a status", where, sectionID)
+			return fmt.Errorf("%s: section %s requires composition", where, sectionID)
 		}
-		name, isName := status.(string)
-		if !isName || !slices.Contains(statuses, name) {
-			return fmt.Errorf("%s: section %s status %s is not a status of plugin %s", where, sectionID, jsValueText(status), id)
+		if err := checkComposition(where+" section "+sectionID, composition, sidecars); err != nil {
+			return err
 		}
-		if other, taken := backing[name]; taken {
-			return fmt.Errorf("%s: status %s backs section %s and section %s", where, name, other, sectionID)
+		height, has := section["height"]
+		if !has {
+			return fmt.Errorf("%s: section %s requires height", where, sectionID)
 		}
-		backing[name] = sectionID
-		if fill, has := section["fill"]; has {
-			if _, isBool := fill.(bool); !isBool {
-				return fmt.Errorf("%s: section %s fill must be a boolean", where, sectionID)
+		keyword, isKeyword := height.(string)
+		count, isCount := integerValue(height)
+		if !(isKeyword && keyword == "fill") && (!isCount || count < 1) {
+			return fmt.Errorf("%s: section %s height must be \"fill\" or a positive integer", where, sectionID)
+		}
+		// default: unload is optional; a section without it is never unloaded.
+		if raw, has := section["unload"]; has {
+			if err := checkUnload(where, "section "+sectionID, raw); err != nil {
+				return err
 			}
 		}
 	}
 	return nil
-}
-
-// declaredStatuses returns the names of the status entries of exposes.
-func declaredStatuses(manifest map[string]any) []string {
-	// default: exposes that is not an object declares no status; the section check then refuses the status.
-	exposes, _ := manifest["exposes"].(map[string]any)
-	// default: status that is not a list declares no status; the section check then refuses the status.
-	entries, _ := exposes["status"].([]any)
-	var names []string
-	for _, item := range entries {
-		if entry, ok := item.(map[string]any); ok {
-			if name, ok := entry["name"].(string); ok {
-				names = append(names, name)
-			}
-		}
-	}
-	return names
 }
 
 // checkPreview checks the preview colors (validateManifest of the reader).
