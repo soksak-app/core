@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F325-2: The release gate and both host bundle builds run beside the checks, and publication still requires the success of all of them, so a release run no longer waits for the checks before it builds.
 - F321-6-1: The module mocks of `environment.js` in four workbench tests export `refusedPlugins`, which `installed-plugins.js` imports, so these tests pass.
 - F324: The workspace version is release candidate `0.0.23`, distinct from published `v0.0.22`, which reloaded its page while an installed plugin was refused and was not listed in the registry.
 - F321-7: With a `plugins/installed.json` that cannot be read, both hosts serve the paths under `/modules/` from the bundled frontend instead of answering 500, so the core modules load and the page starts with the error of the installation.

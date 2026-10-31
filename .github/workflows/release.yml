@@ -20,8 +20,9 @@ jobs:
   checks:
     uses: ./.github/workflows/ci.yml
 
+  # The gate and the bundle builds run beside the checks, so a release run takes the time of its longest job; publish requires
+  # the success of the checks and of both builds.
   gate:
-    needs: checks
     runs-on: ubuntu-26.04-arm
     outputs:
       release: ${{ steps.gate.outputs.release }}

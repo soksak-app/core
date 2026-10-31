@@ -8277,6 +8277,17 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F325-2",
+    implementation: [
+      { file: ".github/workflows/release.yml", symbol: "The gate and the bundle builds run beside the checks" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "the release bundles build beside the checks and publication waits for both" },
+    ],
+    expected: "The gate and both release bundle builds run beside the checks, and publish requires the success of the checks, the gate and both builds.",
+    levels: ["unit"],
+  },
+  {
     id: "F321-6-1",
     implementation: [
       { file: "packages/workbench/installed-plugins.js", symbol: "refused: refusedPlugins" },

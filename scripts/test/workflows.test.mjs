@@ -238,6 +238,17 @@ test('the hosted native job runs the native unit tests', () => {
   assert.match(hosted.text, /run: make -C core\/native\/darwin test$/m);
 });
 
+test('the release bundles build beside the checks and publication waits for both', () => {
+  const release = read('.github/workflows/release.yml');
+  // The gate and the bundle builds do not wait for the checks; publish requires the success of the checks and of both builds.
+  assert.match(release, /^ {2}gate:\n {4}runs-on: /m, 'gate waits for the checks, so the bundle builds start after every check');
+  for (const job of ['release-wailsv3', 'release-tauriv2']) {
+    assert.match(release, new RegExp(`^ {2}${job}:\\n {4}needs: gate\\n`, 'm'), `${job} waits for a job other than gate`);
+  }
+  assert.match(release, /^ {2}publish:\n(?: {4}.+\n)*? {4}needs: \[checks, gate, release-wailsv3, release-tauriv2\]$/m,
+    'publish does not require the checks and both builds');
+});
+
 test('a push to main releases the declared version after the checks and the gate succeed', () => {
   const release = read('.github/workflows/release.yml');
   assert.match(release, /^on:\n {2}push:\n {4}branches: \[main\]\n/m, 'release.yml starts on a push to main');
