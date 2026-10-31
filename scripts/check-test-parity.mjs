@@ -8277,6 +8277,17 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F325-1",
+    implementation: [
+      { file: ".github/workflows/ci.yml", symbol: "run: make -C core host-test-tauriv2" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
+    ],
+    expected: "Each host suite runs once per CI run, in its host job, and equivalence runs only the static comparison and the script tests.",
+    levels: ["unit"],
+  },
+  {
     id: "F325-2",
     implementation: [
       { file: ".github/workflows/release.yml", symbol: "The gate and the bundle builds run beside the checks" },

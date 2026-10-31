@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F325-1: `equivalence` job은 host job이 실행한 두 host suite를 다시 실행하지 않는다. 두 host의 정적 비교는 유지하며, CI run이 약 11분 짧아진다.
 - F325-2: release gate와 두 host bundle build가 검사 옆에서 실행되고, publish는 여전히 그 모두의 성공을 요구하므로 release run이 build 전에 검사를 기다리지 않는다.
 - F321-6-1: workbench test 네 개의 `environment.js` module mock이 `installed-plugins.js`가 import하는 `refusedPlugins`를 export하므로 이 test가 통과한다.
 - F324: 작업공간 version은 release candidate `0.0.23`이고, 게시된 `v0.0.22`와 구별된다. `v0.0.22`는 설치 plugin이 거부되는 동안 page를 다시 불러왔고 registry에 올리지 않았다.

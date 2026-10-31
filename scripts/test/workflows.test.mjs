@@ -136,10 +136,15 @@ test('ci keeps language host checks independent and gates release on every requi
   assert.match(wailsSteps.find((step) => step.name === 'Go format checks')?.text ?? '', /make -C core go-format-check/);
   const tauriSteps = steps(job('macos-tauriv2'));
   assert.match(tauriSteps.find((step) => step.name === 'Rust format and clippy checks')?.text ?? '', /make -C core rust-format-check rust-clippy-check/);
-  const equivalenceHostTests = steps(job('equivalence')).find((step) => step.name === 'Host tests')?.text ?? '';
-  assert.match(equivalenceHostTests, /run: make -C core host-contract-check$/m);
-  assert.doesNotMatch(equivalenceHostTests, /go-format-check|rust-format-check|rust-clippy-check/,
-    'language-owned format and lint checks are duplicated in equivalence');
+  // Each host suite runs once: the host jobs run it, and the audit of each host is separable, so equivalence runs no host suite.
+  for (const name of jobNames) {
+    const text = job(name);
+    const suites = (text.match(/host-contract-check|host-test-wailsv3|host-test-tauriv2/g) ?? []);
+    const expected = { 'macos-wailsv3': ['host-test-wailsv3'], 'macos-tauriv2': ['host-test-tauriv2'] }[name] ?? [];
+    assert.deepEqual(suites, expected, `${name} runs the host suites ${JSON.stringify(suites)}`);
+  }
+  assert.match(steps(job('macos-tauriv2')).find((step) => step.name === 'Tauri host tests')?.text ?? '', /CARGO_INCREMENTAL: '0'/,
+    'the Tauri host tests keep incremental build state that the job does not reuse');
   assert.doesNotMatch(job('equivalence'), /Fetch workspace sidecar dependencies|sidecars\/files mod download|sidecars\/vt\/Cargo\.toml/,
     'equivalence fetches sidecar build dependencies that host contract tests do not use');
   const gate = job('required');
@@ -175,8 +180,8 @@ test('ci keeps language host checks independent and gates release on every requi
   assert.match(native[nativeTest].text, /OFFLINE: '1'/);
   const equivalence = steps(job('equivalence'));
   const eqFetch = equivalence.findIndex((step) => step.name === 'Fetch pinned native release file');
-  const eqChecks = equivalence.findIndex((step) => step.name === 'Host tests');
-  assert.ok(eqFetch >= 0 && eqChecks > eqFetch, 'equivalence does not fetch native dependency before offline host checks');
+  const eqChecks = equivalence.findIndex((step) => step.name === 'Structure checks');
+  assert.ok(eqFetch >= 0 && eqChecks > eqFetch, 'equivalence does not fetch native dependency before offline structure checks');
   assert.match(equivalence[eqChecks].text, /OFFLINE: '1'/);
   // A hosted runner serves one job, so its Rust builds use every processor; a one-job limit builds each crate on one processor.
   assert.doesNotMatch(job('equivalence'), /CARGO_BUILD_JOBS/, 'equivalence limits its Rust builds to fewer jobs than the runner has processors');

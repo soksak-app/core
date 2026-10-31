@@ -102,6 +102,7 @@ jobs:
         env:
           npm_config_offline: 'true'
           CARGO_NET_OFFLINE: 'true'
+          CARGO_INCREMENTAL: '0'
           GOPROXY: 'off'
           GOFLAGS: -mod=readonly
           OFFLINE: '1'
@@ -219,15 +220,6 @@ jobs:
           CARGO_INCREMENTAL: '0'
           OFFLINE: '1'
         run: make -C core docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check events-check census-check
-      - name: Host tests
-        env:
-          GOPROXY: 'off'
-          GOSUMDB: 'off'
-          GOFLAGS: -mod=readonly
-          CARGO_NET_OFFLINE: 'true'
-          CARGO_INCREMENTAL: '0'
-          OFFLINE: '1'
-        run: make -C core host-contract-check
       - name: Cross-toolchain script tests
         env:
           npm_config_offline: 'true'
