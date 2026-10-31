@@ -5195,7 +5195,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F209",
-    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "export function pluginRows(loaded, state)" }],
+    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "export function pluginRows(loaded, state, refused)" }],
     tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a plugin whose every registry version is revoked is not offered, and an installed one keeps its row without an update" }],
     expected: "A plugin whose every registry version is revoked has no install action and no latest version.",
     levels: ["unit"],
@@ -8233,7 +8233,7 @@ const FEATURE_LINKS = [
     id: "F321-3",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "export function acceptInstalledPlugins(" },
-      { file: "packages/workbench/environment.js", symbol: "const { plugins: installed, errors } = acceptInstalledPlugins(installedDocument);" },
+      { file: "packages/workbench/environment.js", symbol: "const { plugins: installed, errors, refused: refusedIds } = acceptInstalledPlugins(installedDocument);" },
     ],
     tests: [
       { file: "packages/workbench/test/environment-refused-plugins.test.mjs", id: "an installed plugin whose manifest is refused is left out with its error and the other plugins are registered" },
@@ -8275,6 +8275,18 @@ const FEATURE_LINKS = [
     ],
     expected: "exposure.list with owner host answers the host entries without the main page on both hosts, and sok checks a host command against them, so host.quit runs whatever the state of the page.",
     levels: ["native"],
+  },
+  {
+    id: "F321-6",
+    implementation: [
+      { file: "packages/workbench/plugin-operations.js", symbol: 'else if (!unit && record.enabled && refused.has(id)) status = "refused";' },
+      { file: "packages/workbench/environment.js", symbol: "export const refusedPlugins = () => refused;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plugin-operations.test.mjs", id: "an installed plugin that the window refused has the state refused and does not wait for a page reload" },
+    ],
+    expected: "An installed plugin that the window refused has the state refused, which does not make the page wait for a reload.",
+    levels: ["unit"],
   },
   {
     id: "F323",

@@ -41,7 +41,7 @@ function folderReason(message) {
 const PAGES = [['projects', '프로젝트'], ['plugins', '플러그인']];
 
 /** Status text of a plugin card. */
-const PLUGIN_STATES = { loaded: '사용 중', disabled: '사용 안 함', available: '설치 안 됨', reload: '창을 다시 불러오면 적용' };
+const PLUGIN_STATES = { loaded: '사용 중', disabled: '사용 안 함', available: '설치 안 됨', reload: '창을 다시 불러오면 적용', refused: '불러오지 못함' };
 // The states of contributions to extension points (docs/spec/plugins.md#extension-points); invalid shows through the error display.
 const CONTRIBUTION_STATES = { connected: '연결됨', 'provider-missing': '제공자 없음', 'version-mismatch': 'version 불일치', invalid: '오류' };
 

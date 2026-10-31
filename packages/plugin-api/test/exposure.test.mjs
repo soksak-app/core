@@ -352,12 +352,14 @@ test("accepting the installed plugin document leaves out each refused plugin wit
   const unnamed = { id: "beta", package: "plugin-beta", version: "0.0.1", manifest: { id: "beta", description: "이름이 없는 manifest." } };
   const badPackage = { ...alpha, id: "gamma", package: "Bad", manifest: { ...alpha.manifest, id: "gamma" } };
   const { plugins, errors } = acceptInstalledPlugins({ plugins: [unnamed, alpha, badPackage] });
+  const { refused } = acceptInstalledPlugins({ plugins: [unnamed, alpha, badPackage] });
   assert.deepEqual(plugins, [alpha]);
+  assert.deepEqual(refused, ["beta", "gamma"]);
   assert.equal(errors.length, 2);
   assert.match(errors[0], /^installed plugin beta 0\.0\.1 \(plugin-beta\): /);
   assert.match(errors[1], /plugin gamma package must be a package\.json name/);
   assert.deepEqual(acceptInstalledPlugins({ error: "plugins/installed.json: format must be 3" }),
-    { plugins: [], errors: ["installed plugins: plugins/installed.json: format must be 3"] });
+    { plugins: [], errors: ["installed plugins: plugins/installed.json: format must be 3"], refused: [] });
   // A document of another form and two accepted plugins with one id are errors of the document.
   assert.throws(() => acceptInstalledPlugins([]), /expected an object/);
   assert.throws(() => acceptInstalledPlugins({ plugins: [alpha, alpha] }), /plugin alpha appears twice/);

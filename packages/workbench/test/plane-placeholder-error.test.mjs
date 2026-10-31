@@ -65,7 +65,7 @@ test("a placeholder whose install state cannot be read is an error shown once, a
     placePluginPlaceholder: (slot, surfaceId, element) => slot.append(element),
   } });
   // The card of the layout holds a tab of a plugin that is not registered and a tab of a registered plugin.
-  t.mock.module("../environment.js", { exports: {
+  t.mock.module("../environment.js", { exports: { refusedPlugins: () => new Set(),
     environment: () => ({ workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: missingId, title: "gone" }, { plugin: pluginId, title: "main" }] }],

@@ -477,6 +477,7 @@ const PLACEHOLDER_LINES = {
   missing: (id) => `${id} 플러그인이 설치되어 있지 않습니다.`,
   disabled: (id) => `${id} 플러그인을 사용하지 않습니다.`,
   reload: (id) => `창을 다시 불러오면 ${id} 플러그인이 열립니다.`,
+  refused: (id) => `${id} 플러그인의 설치된 버전을 불러오지 못했습니다.`,
   host: (id) => `${id} 플러그인은 네이티브 호스트가 있어야 설치됩니다.`,
   unread: (id) => `${id} 플러그인의 설치 상태를 읽지 못했습니다.`,
 };
@@ -487,6 +488,7 @@ function placeholderReason(id) {
   if (pluginOperations.failure()?.kind === "state") return "unread";
   const row = pluginOperations.status().plugins.find((entry) => entry.id === id);
   if (!row?.installed) return "missing";
+  if (row.state === "refused") return "refused";
   return row.installed.enabled ? "reload" : "disabled";
 }
 

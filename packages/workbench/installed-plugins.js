@@ -1,6 +1,6 @@
 // The one plugin operation state of this window (plugin-operations.js). The core.plugins status and the plugin section of the settings window use it together.
 import { host } from "@soksak/runtime";
-import { pluginUnits } from "./environment.js";
+import { pluginUnits, refusedPlugins } from "./environment.js";
 import { createAppUpdate } from "./app-update.js";
 import { createPluginOperations } from "./plugin-operations.js";
 import { emitEvent } from "./page-log.js";
@@ -8,7 +8,7 @@ import { emitEvent } from "./page-log.js";
 const listeners = new Set();
 const notify = () => { for (const fn of listeners) fn(); };
 
-export const pluginOperations = createPluginOperations({ host, loaded: pluginUnits, changed: notify });
+export const pluginOperations = createPluginOperations({ host, loaded: pluginUnits, refused: refusedPlugins, changed: notify });
 
 /** The application update of this window (app-update.js), which redraws the same listeners. */
 export const appUpdate = createAppUpdate({ host, plugins: () => pluginOperations.state(), changed: notify });

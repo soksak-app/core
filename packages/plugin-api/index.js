@@ -1394,16 +1394,18 @@ export function validateInstalledPlugins(document) {
 }
 
 /**
- * Accepts the plugins of /installed-plugins.json one by one and returns { plugins, errors }: a plugin whose entry or manifest is
- * refused is left out and its error is returned, so the page registers the other plugins and shows the errors
+ * Accepts the plugins of /installed-plugins.json one by one and returns { plugins, errors, refused }: a plugin whose entry or
+ * manifest is refused is left out, its error is returned, and its id is in refused when it is text, so the page registers the
+ * other plugins, shows the errors and states the refused plugins
  * (docs/spec/installation.md#serving-installed-plugins). An { error } document accepts no plugin and returns its error; a document of
  * another form throws.
  */
 export function acceptInstalledPlugins(document) {
   const { plugins, error } = installedDocument(document);
-  if (error !== undefined) return { plugins: [], errors: [error] };
+  if (error !== undefined) return { plugins: [], errors: [error], refused: [] };
   const accepted = [];
   const errors = [];
+  const refused = [];
   for (const plugin of plugins) {
     try {
       checkInstalledPlugin(plugin);
@@ -1411,10 +1413,11 @@ export function acceptInstalledPlugins(document) {
     } catch (refusal) {
       // The caller shows the error of the plugin that is left out.
       errors.push(refusal.message);
+      if (isText(plugin?.id)) refused.push(plugin.id);
     }
   }
   checkUniquePlugins(accepted);
-  return { plugins: accepted, errors };
+  return { plugins: accepted, errors, refused };
 }
 
 /** Validates one core declaration file (exposure.json). The owner of a name is core. */

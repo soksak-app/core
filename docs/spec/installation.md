@@ -181,6 +181,7 @@ A card shows:
 | `disabled` | 사용 안 함 | `installed.json` lists the plugin disabled, and the window did not load it |
 | `available` | 설치 안 됨 | Only the registry index lists the plugin |
 | `reload` | 창을 다시 불러오면 적용 | `installed.json` differs from what the window loaded, because the window kept its page when a modified tab was kept ([applying a change](#applying-a-change)) |
+| `refused` | 불러오지 못함 | `installed.json` lists the plugin enabled, and the window refused its entry or manifest ([serving installed plugins](#serving-installed-plugins)); a reload does not load it, so the state does not make the page wait for one |
 
 - The description of the loaded manifest, else of the registry entry ([plugins](plugins.md) and [registry index](#registry-index) require one); a plugin that only `installed.json` lists has no description and shows its id as its name.
 - A version line with 설치된 버전 <version> and 최신 버전 <version>, the newest version that the registry index lists and that is not revoked, each when present.
@@ -201,7 +202,7 @@ While `updates` is not empty, the plugin screen shows an update list above the c
 | `error` | The registry index error or the plugin state error, or `null` |
 | `plugins` | One entry per card, sorted by id: `{id, name, description, state, composition, installed, latest, sidecars}`; `composition` is the surface composition kind of the manifest loaded in this window, or `null` when no surface declaration is loaded; it does not depend on whether a tab is open. `installed` is `{version, enabled}` or `null`, `latest` is the newest version that the registry index lists and that is not revoked, or `null`, and `sidecars` lists `{name, range, version}` sorted by name, where `range` and `version` are `null` when unknown |
 | `operation` | `null` before the first operation, then `{action, plugin, state, error}` of the latest one: `state` is `running`, `done` or `failed`, and `error` is the message of a failed operation or `null` |
-| `reload` | `true` when a plugin has the state `reload` |
+| `reload` | `true` when a plugin has the state `reload`; a plugin of the state `refused` does not set it |
 | `updates` | The installed plugins for which the registry index lists a newer version that is not revoked, sorted by id: `{id, installed, latest}` |
 
 Acceptance:

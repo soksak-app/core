@@ -61,7 +61,7 @@ test("a call that continues an operation passes its identifiers to the transport
 test("a plugin operation is stored first and carried out with the same identifiers", async () => {
   calls.length = 0;
   const host = { calls: [], async call(name, arg, options) { host.calls.push([name, arg, options]); return name === "pluginsState" ? { installed: { plugins: {}, sidecars: {} }, index: null, registry: null } : undefined; } };
-  const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  const operations = createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
   await operations.run("install", "term");
   await settled();
   const [operation] = events().filter(({ event }) => event === "page.plugin.operation");

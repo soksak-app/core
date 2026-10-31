@@ -10,7 +10,7 @@ test("the plugin state and the application update are read again each time the h
     call: async (name) => { calls.push(name); return name === "appUpdateState" ? { version: "0.0.8", available: null } : name === "pluginsState" ? { registry: null, index: null, installed: { plugins: {}, sidecars: {} } } : []; },
     on: (event, fn) => { handlers.set(event, fn); },
   } } });
-  t.mock.module("../environment.js", { namedExports: { pluginUnits: () => [] } });
+  t.mock.module("../environment.js", { namedExports: { pluginUnits: () => [], refusedPlugins: () => new Set() } });
   const emitted = [];
   t.mock.module("../page-log.js", { namedExports: { emitEvent: (level, event, fields) => { emitted.push([level, event, fields]); } } });
   const { followActivation } = await import("../installed-plugins.js");

@@ -43,7 +43,7 @@ test("closing the picker writes picker.close with the reason of the close", { ti
     mountSurface: () => Promise.resolve(),
     disposeSurface: () => Promise.resolve(), placePluginPlaceholder: () => {},
   } });
-  t.mock.module("../environment.js", { exports: {
+  t.mock.module("../environment.js", { exports: { refusedPlugins: () => new Set(),
     environment: () => ({ workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],

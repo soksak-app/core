@@ -16,6 +16,7 @@ import {
 
 let loaded = null;
 let units = [];
+let refused = new Set();
 let starter = null;
 let registry = null;
 
@@ -55,7 +56,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
   starter = environment.starter ?? null;
   // default: if environment.json has no registry, there is no default registry for the first run to set.
   registry = environment.registry ?? null;
-  const { plugins: installed, errors } = acceptInstalledPlugins(installedDocument);
+  const { plugins: installed, errors, refused: refusedIds } = acceptInstalledPlugins(installedDocument);
+  refused = new Set(refusedIds);
   const manifests = installed.map(({ package: name, version, manifest, sidecars }) => ({ name, manifest, version, sidecars }));
   // A dependency that names the package of an installed plugin is a plugin dependency, not a sidecar (docs/spec/plugins.md#pluginjson).
   const pluginNames = new Set(installed.map((plugin) => plugin.package));
@@ -133,6 +135,9 @@ export const pluginDiagnostics = (id) => diagnosticModules.then((modules) => mod
  * It includes plugins without a surface. An item is {id, name, description, version, surface, composition, sections, dependencies}.
  */
 export const pluginUnits = () => units;
+
+/** Returns the ids of the installed plugins whose entry or manifest the window refused (docs/spec/installation.md#serving-installed-plugins). */
+export const refusedPlugins = () => refused;
 
 /** Returns the loaded environment.json. Throws before it is loaded. */
 export function environment() {

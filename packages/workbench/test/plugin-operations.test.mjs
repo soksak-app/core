@@ -33,21 +33,21 @@ test("plugin rows report loaded surface compositions before any tab is open", { 
     loaded[1],
   ];
   const compositions = (rows) => rows.map(({ id, composition }) => ({ id, composition }));
-  assert.deepEqual(compositions(pluginRows(units, state)), [
+  assert.deepEqual(compositions(pluginRows(units, state, new Set())), [
     { id: "db", composition: null },
     { id: "fresh", composition: null },
     { id: "notes", composition: null },
     { id: "off", composition: null },
     { id: "term", composition: "view" },
   ], "the plugin status omits the surface kind of a view without a tab");
-  assert.deepEqual(compositions(pluginRows(units, null)), [
+  assert.deepEqual(compositions(pluginRows(units, null, new Set())), [
     { id: "notes", composition: null },
     { id: "term", composition: "view" },
   ], "a window without a native host must report the same loaded declaration");
 });
 
 test("plugin rows join loaded, installed and registry plugins by id with their states", () => {
-  assert.deepEqual(pluginRows(loaded, state), [
+  assert.deepEqual(pluginRows(loaded, state, new Set()), [
     { id: "db", name: "DB", description: "DB 설명.", state: "available", composition: null, installed: null, latest: "2.0.0", sidecars: [] },
     { id: "fresh", name: "fresh", description: "", state: "reload", composition: null, installed: { version: "0.1.0", enabled: true }, latest: null, sidecars: [] },
     { id: "gone", name: "지운 것", description: "지운 플러그인.", state: "reload", composition: null, installed: null, latest: null, sidecars: [] },
@@ -67,15 +67,24 @@ test("a plugin whose every registry version is revoked is not offered, and an in
     installed: { format: 2, plugins: { appview: { version: "0.0.2", enabled: true, sidecars: {} } }, sidecars: {} },
   };
   // The installed row keeps its version and has no latest version, so the update action is not offered for it.
-  assert.deepEqual(pluginRows([], withdrawn).map((row) => [row.id, row.state, row.latest]), [["appview", "reload", null], ["term", "available", "0.1.0"]]);
+  assert.deepEqual(pluginRows([], withdrawn, new Set()).map((row) => [row.id, row.state, row.latest]), [["appview", "reload", null], ["term", "available", "0.1.0"]]);
   // Without an installed version, the plugin with only revoked versions has no row.
   const uninstalled = { ...withdrawn, installed: { ...withdrawn.installed, plugins: {} } };
-  assert.deepEqual(pluginRows([], uninstalled).map((row) => row.id), ["term"]);
+  assert.deepEqual(pluginRows([], uninstalled, new Set()).map((row) => row.id), ["term"]);
+});
+
+test("an installed plugin that the window refused has the state refused and does not wait for a page reload", async () => {
+  assert.equal(pluginRows(loaded, state, new Set(["fresh"])).find((row) => row.id === "fresh").state, "refused");
+  const refusedOnly = { ...state, installed: { ...state.installed, plugins: { term: state.installed.plugins.term, fresh: state.installed.plugins.fresh } } };
+  const operations = createPluginOperations({ host: fakeHost({ pluginsState: [refusedOnly] }), loaded: () => [loaded[0]],
+    refused: () => new Set(["fresh"]), changed: () => {} });
+  await operations.refresh();
+  assert.equal(operations.status().reload, false, "a refused plugin made the page wait for a reload, which reloads it again");
 });
 
 test("a loaded plugin that was disabled after the window loaded waits for a page reload", () => {
   const disabled = { ...state, installed: { ...state.installed, plugins: { term: { version: "0.1.0", enabled: false, sidecars: {} } } } };
-  assert.equal(pluginRows([loaded[0]], disabled).find((row) => row.id === "term").state, "reload");
+  assert.equal(pluginRows([loaded[0]], disabled, new Set()).find((row) => row.id === "term").state, "reload");
 });
 
 test("a row names its sidecars from the installed entry, else the newest registry version, else the manifest", () => {
@@ -93,17 +102,17 @@ test("a row names its sidecars from the installed entry, else the newest registr
     },
   };
   const term = { ...loaded[0], dependencies: { [probe]: "^0.1.0" } };
-  const rows = pluginRows([term], withSidecars);
+  const rows = pluginRows([term], withSidecars, new Set());
   assert.deepEqual(rows.find((row) => row.id === "term").sidecars, [{ name: probe, range: "^0.1.0", version: "0.1.2" }]);
   assert.deepEqual(rows.find((row) => row.id === "db").sidecars,
     [{ name: "@a/b", range: "1.0.0", version: null }, { name: "@x/db", range: "^1.0.0", version: null }]);
   // Without a host, it uses the dependencies of the loaded manifest.
-  assert.deepEqual(pluginRows([term], null)[0].sidecars, [{ name: probe, range: "^0.1.0", version: null }]);
+  assert.deepEqual(pluginRows([term], null, new Set())[0].sidecars, [{ name: probe, range: "^0.1.0", version: null }]);
 });
 
 test("without a host only the loaded plugins are listed, all loaded, and operations fail", async () => {
   let changes = 0;
-  const operations = createPluginOperations({ host: null, loaded: () => loaded, changed: () => { changes++; } });
+  const operations = createPluginOperations({ host: null, loaded: () => loaded, refused: () => new Set(), changed: () => { changes++; } });
   await operations.refresh();
   assert.deepEqual(operations.status().plugins.map((row) => [row.id, row.state]), [["gone", "loaded"], ["notes", "loaded"], ["term", "loaded"]]);
   await assert.rejects(operations.run("install", "db"), /plugin operations need a native host/);
@@ -111,7 +120,7 @@ test("without a host only the loaded plugins are listed, all loaded, and operati
 });
 
 test("status reports the installed plugins that the registry lists in a newer version", async () => {
-  const operations = createPluginOperations({ host: fakeHost({ pluginsState: [state] }), loaded: () => loaded, changed: () => {} });
+  const operations = createPluginOperations({ host: fakeHost({ pluginsState: [state] }), loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await operations.refresh();
   assert.deepEqual(operations.status().updates, [{ id: "term", installed: "0.1.0", latest: "0.10.0" }]);
 });
@@ -132,7 +141,7 @@ function fakeHost(answers) {
 test("an operation is recorded as running before the host call and its result after it", async () => {
   const seen = [];
   const host = fakeHost({ pluginsState: [state, state, state], pluginsRun: [{}, new Error("plugin db is not installed")] });
-  const operations = createPluginOperations({ host, loaded: () => loaded, changed: () => seen.push(operations.status().operation) });
+  const operations = createPluginOperations({ host, loaded: () => loaded, refused: () => new Set(), changed: () => seen.push(operations.status().operation) });
   await operations.refresh();
   await operations.run("install", "db");
   await assert.rejects(operations.run("remove", "db"), /plugin db is not installed/);
@@ -153,7 +162,7 @@ test("an operation is recorded as running before the host call and its result af
 test("an unreadable registry index keeps the installed rows and an unreadable state lists none", async () => {
   const broken = { ...state, index: { error: "/registry/index.json: no such file" } };
   const host = fakeHost({ pluginsState: [broken, new Error("installed.json is not valid JSON")] });
-  const operations = createPluginOperations({ host, loaded: () => loaded, changed: () => {} });
+  const operations = createPluginOperations({ host, loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await operations.refresh();
   assert.equal(operations.status().error, "/registry/index.json: no such file");
   assert.deepEqual(operations.failure(), { kind: "index", message: "/registry/index.json: no such file" });
@@ -207,7 +216,7 @@ const starterIndex = { plugins: [], revoked: { plugins: [], sidecars: [], core: 
 
 test("the first run installs the starter pack in its order and asks for a reload", async () => {
   const host = starterHost({ index: starterIndex });
-  const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  const operations = createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
   await operations.refresh();
   assert.equal(await operations.installStarter("starter", null, () => assert.fail("nothing to log")), true);
   assert.deepEqual(host.calls.filter(([method]) => method === "pluginsRun").map(([, params]) => params),
@@ -218,17 +227,17 @@ test("the first run installs the starter pack in its order and asks for a reload
 
 test("the first run installs nothing without a pack, a host state or a first run", async () => {
   const later = starterHost({ index: starterIndex, firstRun: false });
-  const operations = createPluginOperations({ host: later, loaded: () => [], changed: () => {} });
+  const operations = createPluginOperations({ host: later, loaded: () => [], refused: () => new Set(), changed: () => {} });
   await operations.refresh();
   assert.equal(await operations.installStarter("starter", null, () => {}), false);
   assert.equal(await operations.installStarter(null, null, () => {}), false);
-  const hostless = createPluginOperations({ host: null, loaded: () => [], changed: () => {} });
+  const hostless = createPluginOperations({ host: null, loaded: () => [], refused: () => new Set(), changed: () => {} });
   assert.equal(await hostless.installStarter("starter", null, () => {}), false);
 });
 
 test("the first run without a registry logs and a missing pack or unreadable index fails", async () => {
   const lines = [];
-  const unset = createPluginOperations({ host: starterHost({ registry: null, index: null }), loaded: () => [], changed: () => {} });
+  const unset = createPluginOperations({ host: starterHost({ registry: null, index: null }), loaded: () => [], refused: () => new Set(), changed: () => {} });
   await unset.refresh();
   const shown = [];
   assert.equal(await unset.installStarter("starter", null, (line) => lines.push(line), (message) => shown.push(message)), false);
@@ -246,7 +255,7 @@ test("a first run that cannot read the registry starts the window without the pa
       "https://soksak-app.github.io/registry/index.json", "https://soksak-app.github.io/registry/index.json: cannot connect: offline"],
   ];
   for (const [state, registry, error] of cases) {
-    const operations = createPluginOperations({ host: starterHost(state), loaded: () => [], changed: () => {} });
+    const operations = createPluginOperations({ host: starterHost(state), loaded: () => [], refused: () => new Set(), changed: () => {} });
     await operations.refresh();
     const lines = [];
     const shown = [];
@@ -267,7 +276,7 @@ test("a first-run package-format failure preserves the error without promising n
     }
     return call(method, params);
   };
-  const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  const operations = createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
   await operations.refresh();
   const lines = [];
   const shown = [];
@@ -286,7 +295,7 @@ test("a structured starter failure keeps its code and data in operation, log, an
     }
     return call(method, params);
   };
-  const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  const operations = createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
   await operations.refresh();
   const lines = [];
   const shown = [];
@@ -299,7 +308,7 @@ test("a structured starter failure keeps its code and data in operation, log, an
 
 test("the first run sets the default registry of the environment before it installs the starter pack", async () => {
   const host = starterHost({ registry: null, index: starterIndex });
-  const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  const operations = createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
   await operations.refresh();
   const registry = "https://soksak-app.github.io/registry/index.json";
   assert.equal(await operations.installStarter("starter", registry, () => assert.fail("nothing to log"), () => assert.fail("nothing to show")), true);
@@ -355,7 +364,7 @@ test("a pending starter job resumes missing plugins after restart and stops enfo
       throw new Error(`unexpected host method ${method}`);
     },
   };
-  const makeOperations = () => createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  const makeOperations = () => createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
   const first = makeOperations();
   await first.refresh();
   assert.equal(await first.installStarter("starter", null, () => {}, () => {}), false);
@@ -382,20 +391,20 @@ test("a pending starter job resumes missing plugins after restart and stops enfo
 
 test("setting the registry runs pluginsUseRegistry and reads the state again", async () => {
   const host = starterHost({ registry: null, index: starterIndex, firstRun: false });
-  const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  const operations = createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
   await operations.refresh();
   assert.equal(operations.status().registry, null);
   await operations.useRegistry("https://127.0.0.1:8443/index.json");
   assert.deepEqual(host.calls.at(-2), ["pluginsUseRegistry", { index: "https://127.0.0.1:8443/index.json" }]);
   assert.deepEqual(host.calls.at(-1), ["pluginsState", null]);
   assert.equal(operations.status().registry, "https://127.0.0.1:8443/index.json");
-  const hostless = createPluginOperations({ host: null, loaded: () => [], changed: () => {} });
+  const hostless = createPluginOperations({ host: null, loaded: () => [], refused: () => new Set(), changed: () => {} });
   await assert.rejects(hostless.useRegistry("https://127.0.0.1:8443/index.json"), /plugin operations need a native host/);
 });
 
 test("status reports the outdated sidecars that the host lists", async () => {
   const outdated = [{ sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2 }];
-  const operations = createPluginOperations({ host: fakeHost({ sidecarsOutdated: [outdated] }), loaded: () => loaded, changed: () => {} });
+  const operations = createPluginOperations({ host: fakeHost({ sidecarsOutdated: [outdated] }), loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   assert.deepEqual(operations.status().outdated, []);
   await operations.refreshOutdated();
   assert.deepEqual(operations.status().outdated, outdated);
@@ -406,7 +415,7 @@ test("replacing a sidecar runs the host call and reads the outdated sidecars aga
     sidecarsReplace: [{}, new Error("sidecar probe: replace: close owner: boom")],
     sidecarsOutdated: [[], [{ sidecar: "probe", running: "0.0.3", installed: "0.0.7", sessions: 0 }]],
   });
-  const operations = createPluginOperations({ host, loaded: () => loaded, changed: () => {} });
+  const operations = createPluginOperations({ host, loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await operations.replace("probe");
   await assert.rejects(operations.replace("probe"), /close owner: boom/);
   assert.deepEqual(host.calls, [
@@ -416,7 +425,7 @@ test("replacing a sidecar runs the host call and reads the outdated sidecars aga
 });
 
 test("without a host the outdated sidecars are empty and replacing fails", async () => {
-  const operations = createPluginOperations({ host: null, loaded: () => loaded, changed: () => {} });
+  const operations = createPluginOperations({ host: null, loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await operations.refreshOutdated();
   assert.deepEqual(operations.status().outdated, []);
   await assert.rejects(operations.replace("probe"), /plugin operations need a native host/);
@@ -430,7 +439,7 @@ test("update-all updates the plugins of updates one after the other and stops at
     pluginsState: [outdated, outdated, outdated, outdated],
     pluginsRun: [{}, new Error("plugin term cannot be updated")],
   });
-  const operations = createPluginOperations({ host, loaded: () => loaded, changed: () => {} });
+  const operations = createPluginOperations({ host, loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await operations.refresh();
   assert.deepEqual(operations.status().updates.map((update) => update.id), ["db", "term"]);
   await assert.rejects(operations.updateAll(), /plugin term cannot be updated/);
@@ -441,7 +450,7 @@ test("update-all updates the plugins of updates one after the other and stops at
   // Without an update the command does nothing and asks the host for nothing.
   const newest = { ...state, installed: { ...state.installed, plugins: { term: { version: "0.10.0", enabled: true, sidecars: {} } } } };
   const current = fakeHost({ pluginsState: [newest] });
-  const quiet = createPluginOperations({ host: current, loaded: () => loaded, changed: () => {} });
+  const quiet = createPluginOperations({ host: current, loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await quiet.refresh();
   assert.deepEqual(quiet.status().updates, []);
   await quiet.updateAll();
@@ -450,7 +459,7 @@ test("update-all updates the plugins of updates one after the other and stops at
 
 test("a host call that rejects with a value that is not an Error is reported with its text", async () => {
   const host = { call: async () => { throw "installed.json is not valid JSON"; } };
-  const operations = createPluginOperations({ host, loaded: () => loaded, changed: () => {} });
+  const operations = createPluginOperations({ host, loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await operations.refresh();
   assert.deepEqual(operations.failure(), { kind: "state", message: "installed.json is not valid JSON" });
 });

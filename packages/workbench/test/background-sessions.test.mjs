@@ -71,7 +71,7 @@ test("a background session opens only for a tab without a mounted surface and en
     storedTabTaken: () => false,
   } });
   // One card with two tabs of the plugin that declares the background session; the first is shown.
-  t.mock.module("../environment.js", { exports: {
+  t.mock.module("../environment.js", { exports: { refusedPlugins: () => new Set(),
     environment: () => ({ workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [

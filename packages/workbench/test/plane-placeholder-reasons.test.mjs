@@ -65,7 +65,7 @@ test("the placeholder reasons that are designed states write no error", { timeou
       slot.append(element);
     },
   } });
-  t.mock.module("../environment.js", { exports: {
+  t.mock.module("../environment.js", { exports: { refusedPlugins: () => new Set(),
     environment: () => ({ workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "gone" }] }],

@@ -181,6 +181,7 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 | `disabled` | 사용 안 함 | `installed.json`이 plugin을 끈 상태로 나열하고, 창이 불러오지 않았다 |
 | `available` | 설치 안 됨 | Registry index만 plugin을 나열한다 |
 | `reload` | 창을 다시 불러오면 적용 | 수정된 탭을 유지해 창이 page를 유지했으므로 `installed.json`이 창이 불러온 것과 다르다([변경 적용](#변경-적용)) |
+| `refused` | 불러오지 못함 | `installed.json`이 plugin을 켠 상태로 나열하고, 창이 그 entry나 manifest를 거부했다([설치된 plugin 제공](#설치된-plugin-제공)). 다시 불러와도 불러오지 않으므로 이 상태는 page가 다시 불러오기를 기다리게 하지 않는다 |
 
 - 불러온 manifest의 설명, 없으면 registry 항목의 설명([plugins](plugins.ko.md)와 [registry index](#registry-index)가 설명을 요구한다). `installed.json`만 나열한 plugin은 설명이 없고 id를 이름으로 보여 준다.
 - 설치된 버전 <version>과 최신 버전 <version>(registry index가 나열한 철회되지 않은 가장 새 버전)을 있을 때 보여 주는 버전 줄.
@@ -201,7 +202,7 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 | `error` | Registry index 오류 또는 plugin 상태 오류, 또는 `null` |
 | `plugins` | 카드마다 id 순서로 `{id, name, description, state, composition, installed, latest, sidecars}`. `composition`은 이 창에 로드한 manifest의 surface composition kind이며 surface 선언을 로드하지 않았으면 `null`이다. 열린 tab의 유무와 무관하다. `installed`는 `{version, enabled}` 또는 `null`, `latest`는 registry index가 나열한 철회되지 않은 가장 새 버전 또는 `null`, `sidecars`는 이름 순서의 `{name, range, version}` 목록이며 모르는 `range`와 `version`은 `null`이다 |
 | `operation` | 첫 작업 전에는 `null`, 그 뒤에는 마지막 작업의 `{action, plugin, state, error}`. `state`는 `running`, `done`, `failed`이고, `error`는 실패한 작업의 message 또는 `null`이다 |
-| `reload` | 상태가 `reload`인 plugin이 있으면 `true` |
+| `reload` | 상태가 `reload`인 plugin이 있으면 `true`. 상태가 `refused`인 plugin은 이 값을 바꾸지 않는다 |
 | `updates` | registry index가 더 새 철회되지 않은 version을 나열하는 설치 plugin을 id 순으로: `{id, installed, latest}` |
 
 완료 기준:

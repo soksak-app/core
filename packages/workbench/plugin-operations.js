@@ -30,10 +30,11 @@ export function hasUpdate(row) {
 }
 
 /**
- * Builds the list rows in id order. loaded holds the manifests of the plugins that the window loaded;
- * state is the result of pluginsState of the host, and null if there is no host.
+ * Builds the list rows in id order. loaded holds the manifests of the plugins that the window loaded; state is the result
+ * of pluginsState of the host, and null if there is no host; refused holds the ids of the installed plugins whose entry or
+ * manifest the window refused (docs/spec/installation.md#serving-installed-plugins).
  */
-export function pluginRows(loaded, state) {
+export function pluginRows(loaded, state, refused) {
   const byId = new Map(loaded.map((unit) => [unit.id, unit]));
   if (!state) {
     return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id)).map((unit) => ({
@@ -61,6 +62,8 @@ export function pluginRows(loaded, state) {
     if (unit && record && record.enabled && record.version === unit.version) status = "loaded";
     else if (!unit && record && !record.enabled) status = "disabled";
     else if (!unit && !record) status = "available";
+    // A refused plugin is not loaded by a reload either, so it does not wait for one.
+    else if (!unit && record.enabled && refused.has(id)) status = "refused";
     else status = "reload";
     const latest = entry?.versions.length ? entry.versions.map((v) => v.version).sort(compareVersions).at(-1) : null;
     // default: name and description are decided in the order of the loaded manifest, the registry entry, and the plugin id (docs/spec/installation.md).
@@ -80,7 +83,7 @@ export function pluginRows(loaded, state) {
  * Plugin operation state. If host is null, it reports only the loaded plugins, without operations. changed is called
  * whenever the state changes.
  */
-export function createPluginOperations({ host, loaded, changed }) {
+export function createPluginOperations({ host, loaded, refused, changed }) {
   let state = null;
   // A read failure is {kind, message}. kind is index if the registry index could not be read, or state if the plugin state could not be read.
   let failure = null;
@@ -160,7 +163,7 @@ export function createPluginOperations({ host, loaded, changed }) {
 
   /** Value of the core.plugins status. */
   function status() {
-    const rows = host && !state ? [] : pluginRows(loaded(), state);
+    const rows = host && !state ? [] : pluginRows(loaded(), state, refused());
     return {
       // default: before the state is read or if it could not be read, there is no registry address (null).
       registry: state?.registry ?? null,
