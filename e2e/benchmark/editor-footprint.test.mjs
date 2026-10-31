@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { viewContentCases } from "../view-content.mjs";
 import { monotonicTimeMs, openRecordedView, viewCardWithDifferentPluginTab }
@@ -23,7 +23,7 @@ async function closeEditorSurface(s, surface) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: normal and hidden-only Editor process footprints are measured`,
-    { ...RECORDING, timeout: 90000 }, async (t) => {
+    { timeout: 90000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s, { performanceTrace: true, log: { frame: "trace" }, reads: [
         "host.trace.view.process-request",

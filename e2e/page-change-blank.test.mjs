@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
@@ -59,7 +59,7 @@ async function record(s, action) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: page changes keep the window drawn`, { ...RECORDING, timeout: 120000 }, async (t) => {
+  test(`${app.name}: page changes keep the window drawn`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     // The logo text is to the right of the logo icon in the window head row. If the logo is pushed toward the traffic light buttons, this area is empty.

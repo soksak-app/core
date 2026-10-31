@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { recordMaximiseAndRestore } from "./benchmark/cases/resize.mjs";
 import { judgeFrames } from "./resize-frames.mjs";
 
@@ -31,7 +31,7 @@ function assertSettled(t, { displayed, measured, stages }, label) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: maximising and restoring settle with the layout at the window size`, RECORDING, async (t) => {
+  test(`${app.name}: maximising and restoring settle with the layout at the window size`, async (t) => {
     const s = await open(t, app);
     await recordMaximiseAndRestore(s, (gesture, recorded) => assertSettled(t, recorded, gesture));
   });

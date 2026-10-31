@@ -3,14 +3,14 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { runViewMeasurements } from "@soksak/window-check/view-metrics.mjs";
 import { fresh } from "../fixture.mjs";
 import { collectBrowserViewMeasurements } from "./cases/browser.mjs";
 import { browserViewDescriptor } from "./cases/browser.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: browser view process and frame measurements meet the declared contract`, { ...RECORDING, timeout: 180000 }, async (t) => {
+  test(`${app.name}: browser view process and frame measurements meet the declared contract`, { timeout: 180000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { performanceTrace: true, log: { frame: "trace" }, reads: [
       "host.trace.view.process-request",

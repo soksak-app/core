@@ -1,12 +1,12 @@
 // Checks native view/main focus, text retention, picker Escape without activation.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, keepCommonSettings, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: an inactive view retains input across main focus and handles picker Escape`, { ...RECORDING, timeout: 60000 }, async (t) => {
+  test(`${app.name}: an inactive view retains input across main focus and handles picker Escape`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { log: { lifecycle: "info", input: "info" }, reads: [
       "native.record.info", "native.input.key_down", "native.window.first_responder",

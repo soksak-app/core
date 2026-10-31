@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { readEventLines } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
@@ -41,7 +41,7 @@ async function stopRecording(s, recording) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a view restores state, stops after four failures and reopens after unload`, { ...RECORDING, timeout: 120000 }, async (t) => {
+  test(`${app.name}: a view restores state, stops after four failures and reopens after unload`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 } });
     const server = createServer((_request, response) => {

@@ -5,14 +5,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frames } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals } from "../terminal-screen.mjs";
 import { bringFront, click, requireTrusted, screenCenter } from "./hid.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a real terminal press never moves focus to the browser address field`, { ...RECORDING, timeout: 120000 }, async (t) => {
+  test(`${app.name}: a real terminal press never moves focus to the browser address field`, { timeout: 120000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
     await fresh(s);

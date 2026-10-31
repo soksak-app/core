@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
@@ -27,7 +27,7 @@ function borders(frame, grid, cards) {
     }
 }
 for (const app of Object.values(APPS))
-  test(`${app.name}: fixed sidebars apply plugin overrides without extra columns`, { ...RECORDING, timeout: 90000 }, async (t) => {
+  test(`${app.name}: fixed sidebars apply plugin overrides without extra columns`, { timeout: 90000 }, async (t) => {
     console.info(`START ${app.name}: fixed sidebar overrides`);
     const s = await open(t, app);
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);

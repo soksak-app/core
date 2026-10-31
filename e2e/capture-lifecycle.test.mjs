@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { frames } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
@@ -19,7 +19,7 @@ function snapshot(directory, prefix = "") {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: consecutive captures preserve finalized recordings`, { ...RECORDING, timeout: 120000 }, async (t) => {
+  test(`${app.name}: consecutive captures preserve finalized recordings`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { log: { lifecycle: "debug" }, reads: ["native.capture.lifecycle"] });
     const original = (await s.get("core.settings")).values.textSize;

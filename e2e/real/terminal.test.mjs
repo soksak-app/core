@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh, recordCatalog } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { cellBackgrounds, ensureTerminals, isColor, readScreenUntil, selectionBackground } from "../terminal-screen.mjs";
@@ -108,7 +108,7 @@ const PASTE_LIMIT = 500;
 const same = (a, b) => a.every((value, index) => Math.abs(value - b[index]) <= 8);
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a real click clears a terminal selection`, { ...RECORDING, timeout: 90000 }, async (t) => {
+  test(`${app.name}: a real click clears a terminal selection`, { timeout: 90000 }, async (t) => {
     const { s, surface, session, origin, row } = await prepare(t, app, "SELECTME");
     const blank = 10;
     const background = await cellPixel(s, surface, session, blank, row);
@@ -286,7 +286,7 @@ async function selectedCharacters(s, surface, row) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a real drag, Command+C, and Command+V paste exactly the characters shown as selected`, { ...RECORDING, timeout: 180000 }, async (t) => {
+  test(`${app.name}: a real drag, Command+C, and Command+V paste exactly the characters shown as selected`, { timeout: 180000 }, async (t) => {
     const line = "0123456789ABCDEFGHIJ";
     const { s, surface, session, origin, row } = await prepare(t, app, line);
     const view = await s.rect("terminal.view", undefined, surface);
@@ -336,7 +336,7 @@ async function screenPixel(s, point) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a terminal with history shows a scrollbar whose thumb moves the viewport when dragged`, { ...RECORDING, timeout: 120000 }, async (t) => {
+  test(`${app.name}: a terminal with history shows a scrollbar whose thumb moves the viewport when dragged`, { timeout: 120000 }, async (t) => {
     const { s, surface, session, origin } = await prepare(t, app, "BARSTART");
     await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 80 ]; do printf 'ROW%02d\\n' $i; i=$((i+1)); done\r" }, surface);
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line === "ROW79"), "the rows did not render");
@@ -371,7 +371,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: text stays drawn in every frame while a real wheel scrolls`, { ...RECORDING, timeout: 120000 }, async (t) => {
+  test(`${app.name}: text stays drawn in every frame while a real wheel scrolls`, { timeout: 120000 }, async (t) => {
     const { s, surface, session, origin } = await prepare(t, app, "FLICKER");
     await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 200 ]; do printf 'LINE%03d text text text text\\n' $i; i=$((i+1)); done\r" }, surface);
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith("LINE199")), "the lines did not render");
@@ -419,7 +419,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: scrollbar settings change the drawn track width, thumb color, and shape`, { ...RECORDING, timeout: 120000 }, async (t) => {
+  test(`${app.name}: scrollbar settings change the drawn track width, thumb color, and shape`, { timeout: 120000 }, async (t) => {
     const { s, surface } = await prepare(t, app, "BARSETTINGS");
     await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 60 ]; do printf 'ROW%02d\\n' $i; i=$((i+1)); done\r" }, surface);
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line === "ROW59"), "the rows did not render");
@@ -504,7 +504,7 @@ function topMark(frame, region, session) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a real wheel over a long history is shown without lag, stalls, or reversal`, { ...RECORDING, timeout: 240000 }, async (t) => {
+  test(`${app.name}: a real wheel over a long history is shown without lag, stalls, or reversal`, { timeout: 240000 }, async (t) => {
     const { s, surface, session, origin } = await prepare(t, app, "WHEELSTART", { fullscreen: true });
     assert.ok(session.cols > MARKS, `the terminal has ${session.cols} columns; the check needs more than ${MARKS}`);
     await s.run("terminal.input", {
@@ -983,7 +983,7 @@ for (const app of Object.values(APPS)) {
       "the selected tab's card did not take focus");
   });
 
-  test(`${app.name}: a real Finder drag of a file and of an image pastes their quoted paths without executing`, { ...RECORDING, timeout: 90000 }, async (t) => {
+  test(`${app.name}: a real Finder drag of a file and of an image pastes their quoted paths without executing`, { timeout: 90000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
     await fresh(s);

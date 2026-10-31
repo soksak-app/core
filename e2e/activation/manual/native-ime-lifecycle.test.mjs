@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../../fixture.mjs";
 import { compareAppKitReference } from "../ime-reference-steps.mjs";
@@ -163,7 +163,7 @@ for (const app of Object.values(APPS)) {
   for (let cycle = 1; cycle <= 10; cycle++) {
     const cycleLabel = String(cycle).padStart(2, "0");
     test(`${app.name}: F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture`,
-      { ...RECORDING, timeout: 120000 }, async (t) => {
+      { timeout: 120000 }, async (t) => {
         const s = await open(t, app);
         await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
         const projectRoot = mkdtempSync(join(tmpdir(), "soksak-ime-lifecycle-"));

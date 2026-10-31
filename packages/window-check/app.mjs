@@ -328,55 +328,6 @@ async function settleStallSamples(t, session, failures) {
   }
 }
 
-/** The reason of a check that records the screen, which a run without a display skips. */
-const NO_DISPLAY = "the check records the screen, which needs a display that presents frames; the local window checks run it";
-
-/**
- * Whether the run has a display that presents frames: SOKSAK_CHECK_DISPLAY is unset on a computer with a display, and
- * `absent` on a runner whose display presents no frames (docs/operations/examples.md#continuous-integration). Another value
- * is an error.
- */
-export function displayPresents(env) {
-  if (env.SOKSAK_CHECK_DISPLAY === undefined) return true;
-  if (env.SOKSAK_CHECK_DISPLAY === "absent") return false;
-  throw new Error(`SOKSAK_CHECK_DISPLAY is ${JSON.stringify(env.SOKSAK_CHECK_DISPLAY)}; it is unset or absent`);
-}
-
-/**
- * The node:test options of a check that records the screen: a run without a display that presents frames skips it with
- * its reason before it starts. A check spreads them into its options, `test(name, { ...RECORDING, timeout }, fn)`.
- */
-export function recordingOptions(env) {
-  return displayPresents(env) ? {} : { skip: NO_DISPLAY };
-}
-
-/** The recording options of this run. */
-export const RECORDING = Object.freeze(recordingOptions(process.env));
-
-/** The reason of a check that needs a system authorization, which a run without a person skips. */
-const NO_PERSON = "the check needs a system authorization that a person answers; the local window checks run it";
-
-/**
- * Whether a person answers the system prompts of this run: SOKSAK_CHECK_PERSON is unset on a computer where a person is
- * present, and `absent` on a runner where no person answers (docs/operations/examples.md#continuous-integration). Another
- * value is an error.
- */
-export function personAnswers(env) {
-  if (env.SOKSAK_CHECK_PERSON === undefined) return true;
-  if (env.SOKSAK_CHECK_PERSON === "absent") return false;
-  throw new Error(`SOKSAK_CHECK_PERSON is ${JSON.stringify(env.SOKSAK_CHECK_PERSON)}; it is unset or absent`);
-}
-
-/**
- * The node:test options of a check that needs a system authorization a person answers: a run without a person skips it
- * with its reason before it starts. A check spreads them into its options, `test(name, { ...PERSON, timeout }, fn)`.
- */
-export function personOptions(env) {
-  return personAnswers(env) ? {} : { skip: NO_PERSON };
-}
-
-/** The person options of this run. */
-export const PERSON = Object.freeze(personOptions(process.env));
 
 /** The connection to one application. A request targets one window. */
 export class Session {
@@ -493,13 +444,6 @@ export class Session {
 
   request(method, params = {}, { timeout = REQUEST } = {}) {
     const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
-    // A check that records declares RECORDING, which skips it before it starts in a run without a display, so a recording
-    // that reaches a run without a display is of a check that lacks the declaration.
-    if ((method === "diagnostics.capture.start" || (method === "diagnostics.drag" && params.capture === true)) &&
-      !displayPresents(process.env)) {
-      return Promise.reject(new Error(
-        `${what}: the check records the screen without a display that presents frames and does not declare it with RECORDING of @soksak/window-check`));
-    }
     this.step(`${method} ${params.name ?? ""}`.trimEnd());
     // When the host does not answer, the check records at that moment the threads of this host and of its page process
     // in the logs of the configuration folder (F69).

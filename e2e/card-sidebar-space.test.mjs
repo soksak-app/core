@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { requireContentWidth } from "./card-panel-checks.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
@@ -72,7 +72,7 @@ function recorded(frame, rect) {
 for (const app of Object.values(APPS))
   test(
     `${app.name}: card sidebar space conditions preserve manual choices through size and fullscreen changes`,
-    { ...RECORDING, timeout: 120000 },
+    { timeout: 120000 },
     async (t) => {
       console.info(`START ${app.name}: sidebar space acceptance`);
       const s = await open(t, app);

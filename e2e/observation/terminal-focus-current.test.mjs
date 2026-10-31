@@ -1,11 +1,11 @@
 // Observes terminal click delivery without replacing the current tabs or activating the application.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a current terminal view receives the click and native focus`, { ...RECORDING, timeout: 30000 }, async (t) => {
+  test(`${app.name}: a current terminal view receives the click and native focus`, { timeout: 30000 }, async (t) => {
     const started = performance.now();
     t.diagnostic(`running ${app.name}: current terminal focus`);
     const s = await open(t, app);

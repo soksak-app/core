@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, drag, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { terminalMarks } from "./outside.mjs";
@@ -33,7 +33,7 @@ const MOVED = 100;
 
 for (const app of Object.values(APPS)) {
   for (const [which, plan] of Object.entries(PLANS)) {
-    test(`${app.name}: shaking the ${which} exposes no unrendered area`, RECORDING, async (t) => {
+    test(`${app.name}: shaking the ${which} exposes no unrendered area`, async (t) => {
       const s = await open(t, app);
       await fresh(s);
       const marks = await terminalMarks(s);

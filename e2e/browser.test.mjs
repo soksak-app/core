@@ -14,7 +14,7 @@ const MENU_TITLES = {
 const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language] ?? MENU_TITLES.en;
 
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh, reading, terminalCardSidebar } from "./fixture.mjs";
 import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
@@ -302,7 +302,7 @@ for (const app of Object.values(APPS)) {
       "a document state change replaced the text being typed");
   });
 
-  test(`${app.name}: the browser history buttons draw the core icons at the card header button size`, RECORDING, async (t) => {
+  test(`${app.name}: the browser history buttons draw the core icons at the card header button size`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [browser] = await browsers(s);
@@ -488,7 +488,7 @@ for (const app of Object.values(APPS)) {
     }, "focus did not move exclusively to the second browser document");
   });
 
-  test(`${app.name}: browser documents follow host theme pixels for existing, new, and reloaded documents`, RECORDING, async (t) => {
+  test(`${app.name}: browser documents follow host theme pixels for existing, new, and reloaded documents`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const base = await serve(s);
@@ -543,7 +543,7 @@ for (const app of Object.values(APPS)) {
       `reloaded document did not retain the dark host theme: ${JSON.stringify(restoredPixel)}`);
   });
 
-  test(`${app.name}: the address bar paints the card colour in light and dark modes`, RECORDING, async (t) => {
+  test(`${app.name}: the address bar paints the card colour in light and dark modes`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [browser] = await browsers(s);
@@ -566,7 +566,7 @@ for (const app of Object.values(APPS)) {
     await sample("dark");
   });
 
-  test(`${app.name}: a site's appearance remains independent of the host theme`, RECORDING, async (t) => {
+  test(`${app.name}: a site's appearance remains independent of the host theme`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [browser] = await browsers(s);
@@ -663,7 +663,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the browser document zoom follows the pressed card's text size`, RECORDING, async (t) => {
+  test(`${app.name}: the browser document zoom follows the pressed card's text size`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const base = await serve(s);

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, failure, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, failure, open } from "@soksak/window-check/app.mjs";
 import { fresh, terminalReady } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
@@ -103,7 +103,7 @@ function assertNoWhiteTerminalBleed(frameFiles, regions, message) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: library windows create and open projects in place`, RECORDING, async (t) => {
+  test(`${app.name}: library windows create and open projects in place`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const verification = await s.collect("core.verify");

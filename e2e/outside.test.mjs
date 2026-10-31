@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";
 
-import { APPS, drag, keepCommonSettings, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, drag, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh, reading } from "./fixture.mjs";
 import { currentEventOffsets, readEvents, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { supplierDrawDurations } from "./supplier-draw.mjs";
@@ -104,7 +104,7 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: native content, cards, and the sidebar rail stay aligned`, { ...RECORDING, timeout: 60000 }, async (t) => {
+  test(`${app.name}: native content, cards, and the sidebar rail stay aligned`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     const terminal = await fresh(s, { log: { frame: "debug", io: "info" }, reads: ["sidecar.vt.frame", "sidecar.vt.request"] });
     // The right override of the terminal ties the fixed sidebar and the rail to the terminal card.
@@ -134,7 +134,7 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`pointer lag: worst ${lag.lag.toFixed(1)}ms, p90 ${lag.p90.toFixed(1)}ms, median ${lag.median.toFixed(1)}ms; transactions ${lag.stages}`);
   });
 
-  test(`${app.name}: terminal divider drag does not leave a white surface frame`, { ...RECORDING, timeout: 60000 }, async (t) => {
+  test(`${app.name}: terminal divider drag does not leave a white surface frame`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     // Drags the boundary between the left fixed sidebar and the terminal card.
@@ -162,7 +162,7 @@ async function assertDocumentFillsFrame(s, surface, label) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the terminal document fills its native frame before and after a divider drag`, { ...RECORDING, timeout: 60000 }, async (t) => {
+  test(`${app.name}: the terminal document fills its native frame before and after a divider drag`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const surface = (await s.get("core.grid")).cards.find((card) => card.id === "terminal").active;

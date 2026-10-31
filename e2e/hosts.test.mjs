@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, drag, open, RECORDING, requiresBoth } from "@soksak/window-check/app.mjs";
+import { APPS, drag, open, requiresBoth } from "@soksak/window-check/app.mjs";
 import { fresh, recordCatalog } from "./fixture.mjs";
 import { textDifference } from "@soksak/window-check/text-difference.mjs";
 
@@ -87,7 +87,7 @@ async function both(t) {
   return sessions;
 }
 
-if (requiresBoth(process.env)) test("both hosts answer the same page the same way", RECORDING, async (t) => {
+if (requiresBoth(process.env)) test("both hosts answer the same page the same way", async (t) => {
   const sessions = await both(t);
   const dragged = {};
   const results = {};

@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
@@ -32,7 +32,7 @@ function differing(a, b, tolerance) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a new window shows its complete first screen from its first frame`, { ...RECORDING, timeout: 120000 }, async (t) => {
+  test(`${app.name}: a new window shows its complete first screen from its first frame`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const { displayed } = await s.presented();

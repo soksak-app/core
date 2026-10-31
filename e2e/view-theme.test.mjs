@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a newly created view paints the card theme throughout its first presentation`, { ...RECORDING, timeout: 60000 }, async (t) => {
+  test(`${app.name}: a newly created view paints the card theme throughout its first presentation`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     const terminal = await fresh(s);
     const theme = (await s.get("core.themes")).find(item => item.name === "midnight");

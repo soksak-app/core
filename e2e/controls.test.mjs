@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { rmSync } from "node:fs";
 
-import { APPS, drag, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
@@ -45,7 +45,7 @@ for (const app of Object.values(APPS)) {
     }
   });
 
-  test(`${app.name}: the soksak logo letters are light in dark mode and dark in light mode`, RECORDING, async (t) => {
+  test(`${app.name}: the soksak logo letters are light in dark mode and dark in light mode`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "mode" }));
@@ -76,7 +76,7 @@ for (const app of Object.values(APPS)) {
     }
   });
 
-  test(`${app.name}: stopping a window recording leaves the native buttons centred`, RECORDING, async (t) => {
+  test(`${app.name}: stopping a window recording leaves the native buttons centred`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     await drag(t, s, PLAN, { capture: true });

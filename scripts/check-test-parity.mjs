@@ -8107,42 +8107,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F292-26-3",
-    implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "export const PERSON" },
-    ],
-    tests: [
-      { file: "packages/window-check/test/display.test.mjs", id: "a check that needs a system authorization answered by a person is skipped when no person answers" },
-      { file: "packages/window-check/test/display.test.mjs", id: "the person options of this run are frozen and spread into a check's options" },
-    ],
-    expected: "A window check that needs a system authorization answered by a person declares PERSON and is skipped before it starts in a run where no person answers; the window-check workflow declares that no person answers.",
-    levels: ["unit"],
-  },
-  {
-    id: "F290",
-    implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "export const RECORDING" },
-      { file: "packages/window-check/app.mjs", symbol: "does not declare it with RECORDING of @soksak/window-check" },
-    ],
-    tests: [
-      { file: "packages/window-check/test/display.test.mjs", id: "a check that records the screen is skipped before it starts when no display presents frames" },
-      { file: "packages/window-check/test/display.test.mjs", id: "a recording of a check that does not declare it fails without a display and sends no request" },
-    ],
-    expected: "A window check that records the screen declares RECORDING and is skipped before it starts without a display that presents frames; an undeclared recording fails with an error that names the declaration.",
-    levels: ["unit"],
-  },
-  {
-    id: "F286",
-    implementation: [
-      { file: "packages/window-check/app.mjs", symbol: "export function displayPresents(env)" },
-    ],
-    tests: [
-      { file: "packages/window-check/test/display.test.mjs", id: "a run with a display sends a recording" },
-    ],
-    expected: "The window checks of CI run on a hosted runner with a virtual display and skip the checks that record the screen, which run in the local window checks.",
-    levels: ["unit"],
-  },
-  {
     id: "F284",
     implementation: [{ file: "e2e/fixtures/extension-probe/provider/ui/page.html", symbol: "<title>Probe provider</title>" }],
     tests: [{ file: "e2e/test/view-fixture-pages.test.mjs", id: "each view page of the fixture plugins starts with a doctype and holds no import map" }],
@@ -8228,6 +8192,16 @@ const FEATURE_LINKS = [
     implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2]" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "no workflow runs an end-to-end check" }],
     expected: "No workflow runs an end-to-end check, and the release publishes after the checks, the gate and the two host builds succeed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F298-4",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "request(method, params = {}, { timeout = REQUEST } = {})" }],
+    tests: [
+      { file: "packages/window-check/test/display.test.mjs", id: "the harness exports no options that skip a check in a run without a display or a person" },
+      { file: "packages/window-check/test/display.test.mjs", id: "a recording request is sent whatever the environment of the run holds" },
+    ],
+    expected: "The harness has no path for a run without a display or a person, and it sends every recording request.",
     levels: ["unit"],
   },
   {
@@ -10029,8 +10003,10 @@ const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F
 // frontmost state is not a criterion of a check result.
 // F239-68, F278, F278-1, F280, F283-1 and F283-2 wrote the candidate registry variable, the kept output files, the exit status
 // files and the crash reports of the window-check workflow, which F298-2 removes: no workflow runs an end-to-end check.
+// F286, F290 and F292-26-3 wrote the options that skip a window check in a run without a display or a person, which F298-4
+// removes: window checks run only on a computer with a display and a person.
 const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68",
-  "F278", "F278-1", "F280", "F283-1", "F283-2"]);
+  "F278", "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { readEventLines, currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
 import { rmSync } from "node:fs";
@@ -264,7 +264,7 @@ const rects = async (s, name) => {
 };
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a sidebar starts with its sections and lines up its header and status rules with the neighbouring cards`, RECORDING, async (t) => {
+  test(`${app.name}: a sidebar starts with its sections and lines up its header and status rules with the neighbouring cards`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     // The right sidebar is shown as the right override of the terminal, which is the focused card.

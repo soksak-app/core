@@ -10,7 +10,7 @@ import { basename, join } from "node:path";
 import test from "node:test";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
@@ -128,7 +128,7 @@ async function cursorCellCoverage(s, surface, offset = 0, preedit = null) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a Korean syllable typed right after an input-source switch reaches the PTY once`,
-    { ...RECORDING, timeout: 60000 }, async (t) => {
+    { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s);
       const [terminal] = await ensureTerminals(s, 1);
@@ -276,7 +276,7 @@ for (const app of Object.values(APPS)) {
       t.diagnostic(`${app.name}: PASS ddd한글 after an input-source switch`);
     });
 
-  test(`${app.name}: the cursor follows the selected end of Korean preedit`, { ...RECORDING, timeout: 60000 }, async (t) => {
+  test(`${app.name}: the cursor follows the selected end of Korean preedit`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
@@ -1064,7 +1064,7 @@ for (const app of Object.values(APPS)) {
   };
 
   test(`${app.name}: eight Korean vowels and one Backspace retain an exact input trace`,
-    { ...RECORDING, timeout: 60000 }, async (t) => runRepeatedVowelScenario(t, "check"));
+    { timeout: 60000 }, async (t) => runRepeatedVowelScenario(t, "check"));
   test(`${app.name}: zsh ZLE redraw retains the eight-vowel Backspace and Space input trace`,
-    { ...RECORDING, timeout: 60000 }, async (t) => runRepeatedVowelScenario(t, "zsh"));
+    { timeout: 60000 }, async (t) => runRepeatedVowelScenario(t, "zsh"));
 }

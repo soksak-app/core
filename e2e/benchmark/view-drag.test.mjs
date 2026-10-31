@@ -3,13 +3,13 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { collectTerminalDrag } from "./cases/terminal.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: terminal view drag meets performance targets with performance and renderer traces disabled`,
-    { ...RECORDING, timeout: 60000 }, async (t) => {
+    { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
       const terminal = await fresh(s, { performanceTrace: false });
       const result = await collectTerminalDrag(t, s, terminal, app.configDir);

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, coveredBy, open, RECORDING } from "@soksak/window-check/app.mjs";
+import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
@@ -74,7 +74,7 @@ function judge(t, label, { poses, stop, measured }, refreshRate) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: every recorded frame keeps the window buttons centred in the first row while the frame factor steps from 1 to 3 and back`,
-    { ...RECORDING, timeout: 120000 }, async (t) => {
+    { timeout: 120000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s);
       s.cleanup(() => setFrame(s, 1));
@@ -99,7 +99,7 @@ for (const app of Object.values(APPS)) {
     });
 
   test(`${app.name}: every recorded frame of a reload after another window changed the frame factor keeps the window buttons centred`,
-    { ...RECORDING, timeout: 120000 }, async (t) => {
+    { timeout: 120000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s);
       s.cleanup(() => setFrame(s, 1));
