@@ -109,6 +109,13 @@ test('the push check runs only the commit message check, and ci runs the structu
   assert.match(read('.githooks/pre-push'), /make -C "\$\(git rev-parse --show-toplevel\)" push-check/);
 });
 
+test('the Tauri host job builds its tests with line tables as debug information, set on the job so that the Rust cache key holds it', { timeout: 1000 }, () => {
+  const ci = read('.github/workflows/ci.yml');
+  const job = /^  macos-tauriv2:\n([\s\S]*?)(?=^  [a-z][a-z0-9-]+:\s*$)/m.exec(ci)?.[1] ?? '';
+  // The job env precedes the steps; the cache action reads the CARGO variables of its environment for its key.
+  assert.match(job, /^ {4}env:\n {6}CARGO_PROFILE_DEV_DEBUG: line-tables-only\n {4}steps:/m);
+});
+
 test('ci keeps language host checks independent and gates release on every required job', () => {
   const ci = read('.github/workflows/ci.yml');
   const jobsText = /^jobs:\n([\s\S]*)$/m.exec(ci)?.[1] ?? '';

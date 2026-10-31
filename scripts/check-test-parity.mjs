@@ -8355,6 +8355,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F325-3",
+    implementation: [{ file: ".github/workflows/ci.yml", symbol: "CARGO_PROFILE_DEV_DEBUG: line-tables-only" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the Tauri host job builds its tests with line tables as debug information, set on the job so that the Rust cache key holds it" }],
+    expected: "The Tauri host job builds its tests with line tables as debug information, and the Rust cache key holds the setting.",
+    levels: ["unit"],
+  },
+  {
     id: "F328",
     implementation: [
       { file: "packages/workbench/plugin-operations.js", symbol: "const selected = entry?.versions.filter((item) => satisfies(item.engines.soksak, state.core))" },

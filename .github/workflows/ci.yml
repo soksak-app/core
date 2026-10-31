@@ -78,6 +78,11 @@ jobs:
 
   macos-tauriv2:
     runs-on: macos-15
+    # The five test builds compile and link 251 test executables and take most of the job; line tables reduce the debug
+    # information that each build writes and links, and keep the file and line of a panic and a backtrace. The variable is
+    # set on the job so that the Rust cache key holds it.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
