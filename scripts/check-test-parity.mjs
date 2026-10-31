@@ -8295,6 +8295,32 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F300",
+    implementation: [
+      { file: "packages/host/wailsv3/src/application_log.go", symbol: "func StartStandardError(" },
+      { file: "native/darwin/src/document_view.m", symbol: "@property(retain) NSView *webSurface;" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" },
+      { file: "native/darwin/tests/document_surface_lifetime_test.m", id: "a surface that closes before its document stays alive while the document observes it" },
+    ],
+    expected: "A fatal error of the Wails host writes the crash file and the system crash report, and a document region keeps its surface until it closes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F301",
+    implementation: [
+      { file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_closed_surface(" },
+      { file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/src/surface_close_test.rs", id: "a_surface_that_closes_after_its_window_closed_reports_no_failure_and_ends_its_view_source" },
+      { file: "packages/host/tauriv2/src/presentation_end_test.rs", id: "a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure" },
+    ],
+    expected: "The close of a surface and a deferred presentation end of a window that closed report no failure.",
+    levels: ["unit"],
+  },
+  {
     id: "F301-1",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_closed_surface(" }],
     tests: [
