@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F336: 작업공간 version은 release 후보 `0.0.25`이며 게시된 `v0.0.24`와 구별된다.
 - F332-4-8: plugin.json의 `state` 거부 오류는 `state is removed; a plugin declares its project data with data`이다.
 - F332-4-7: 두 host는 `hostReadOperations`가 있는 `sidecar.json`을 `<path of sidecar.json>: hostReadOperations is removed`로 거부하며, installed document는 사이드카 의존마다 `message`만 담는다.
 - F332-4-6: host는 declared UI snapshot을 더 이상 전달하지 않는다. event가 `declared-ui.snapshot`인 view message는 모르는 view event로 거부되고, window event `declared-ui-snapshot`과 계약 case `view.declared-ui.snapshot`은 지워진다.
