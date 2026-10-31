@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-74: `docs/spec/persistent-services.md` states that an attachment is stale only when another attachment took its surface; a surface whose session an owner close or a retain ended handles its next message as a new surface. The correction of the service is vt S109 and reaches users with the next vt release.
 - F292-73: The input record check compares the host request of a sidecar send with the start of the page call, its time less `micros`, because the page writes `page.call` when the call ends. Validation: pending the window checks of the next release run.
 - F292-9-5: The host comparison check after a resize compares the planes of the two hosts with the configuration directory of each host replaced by one name, because the project root of the start values lies in that directory. Validation: pending the window checks of the next release run.
 - F292-70-2: The presentation wait of both hosts ends a joined view that neither presents nor ends at the presentation limit of 10 seconds with the reason `timeout`, abandons its native join, writes `error: view presentation: surface <surface> did not present within 10s`, and lets that view generation join no later wait. A visible view whose page process stopped before it presented held the commit of its window, and every later layout of the page waited for it, because no event reports such a stop. The limit runs as a delayed main queue step (`sp_ui_enqueue_after`). Validation: the native UI queue test, two Go host tests and two Rust host tests failed before the change and pass after.

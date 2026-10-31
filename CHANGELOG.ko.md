@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-74: `docs/spec/persistent-services.md`는 다른 연결이 표면을 가져갔을 때만 연결이 오래된 것이라고 밝힌다. owner close나 retain이 세션을 끝낸 표면은 다음 메시지를 새 표면으로 처리한다. 서비스의 수정은 vt S109이며 다음 vt release로 사용자에게 간다.
 - F292-73: 입력 기록 검사는 sidecar send의 host 요청을 page call의 시작, 곧 그 시각에서 `micros`를 뺀 값과 비교한다. page는 call이 끝날 때 `page.call`을 쓰기 때문이다. 검증: 다음 release run의 window check를 기다린다.
 - F292-9-5: resize 뒤의 host 비교 검사는 각 host의 configuration directory를 한 이름으로 바꾼 뒤 두 host의 plane을 비교한다. start values의 project root가 그 directory 안에 있기 때문이다. 검증: 다음 release run의 window check를 기다린다.
 - F292-70-2: 두 host의 presentation wait는 참여한 view가 10초의 presentation limit까지 표시하지도 끝나지도 않으면 reason `timeout`으로 wait를 끝내고, native join을 중단하며, `error: view presentation: surface <surface> did not present within 10s`를 쓰고, 그 view generation이 이후 wait에 참여하지 않게 한다. 표시하기 전에 page 프로세스가 멈춘 보이는 view가 창의 commit을 잡았고, 그런 멈춤을 알리는 event가 없어 page의 이후 모든 배치가 그것을 기다렸다. limit은 지연된 main queue 단계(`sp_ui_enqueue_after`)로 실행한다. 검증: native UI queue 시험, Go host 시험 두 개, Rust host 시험 두 개가 변경 전에 실패하고 변경 뒤 통과한다.
