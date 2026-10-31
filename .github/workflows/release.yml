@@ -186,9 +186,17 @@ jobs:
         with:
           name: release-tauriv2
           path: dist
+      - uses: ./.github/actions/setup-node
+        with:
+          root: .
+      # The release page resolves a relative link against the root of the tag, so the body names each linked file at the tag.
+      - name: Write the release notes
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: node scripts/release-notes.mjs docs/operations/install.md "$GITHUB_REPOSITORY" "v$VERSION" > "$RUNNER_TEMP/release-notes.md"
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           tag_name: v${{ needs.gate.outputs.version }}
           target_commitish: ${{ github.sha }}
           files: dist/*
-          body_path: docs/operations/install.md
+          body_path: ${{ runner.temp }}/release-notes.md

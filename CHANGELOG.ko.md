@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F327: release 본문이 `docs/operations/install.md`의 각 상대 link를 release tag의 그 file로 풀므로 release 페이지의 link가 그 문서를 연다.
 - F326: 작업공간 version은 release candidate `0.0.24`이고, 게시된 `v0.0.23`과 구별된다. `v0.0.23`은 이전 형태의 `projects.json`이나 `settings.json`으로 시작하지 않았고 registry에 올리지 않았다.
 - F321-8: 설정 폴더의 거부된 `projects.json`이나 `settings.json`이 더 이상 page 시작을 멈추지 않는다. workspace snapshot이 그것을 `projectsError`나 `settingsError`로 보고하고, page는 오류를 보이며 시작하고, 거부된 file에 쓰면 file을 바꾸지 않고 실패한다.
 - F325-1: `equivalence` job은 host job이 실행한 두 host suite를 다시 실행하지 않는다. 두 host의 정적 비교는 유지하며, CI run이 약 11분 짧아진다.

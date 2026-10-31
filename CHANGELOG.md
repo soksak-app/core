@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F327: The release body resolves each relative link of `docs/operations/install.md` to its file at the release tag, so the links of the release page open their documents.
 - F326: The workspace version is release candidate `0.0.24`, distinct from published `v0.0.23`, which did not start with a `projects.json` or `settings.json` of an earlier form and was not listed in the registry.
 - F321-8: A refused `projects.json` or `settings.json` of the configuration directory no longer stops the page start: the workspace snapshot reports it as `projectsError` or `settingsError`, the page shows the error and starts, and a write of the refused file fails without changing it.
 - F325-1: The `equivalence` job no longer runs both host suites again after the host jobs run them; it keeps the static comparison of the two hosts, and a CI run takes about 11 minutes less.

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
+import { absolute, markdownLinks } from "./markdown-links.mjs";
 import { checkChangelogTranslations, checkChecklistTranslations, checkCompletedItems, checkSpecificationIds, retiredChecklistItems } from "./checklist.mjs";
 
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
@@ -31,9 +32,9 @@ for (const file of files) {
       errors.push(`${file}:${index + 1}: table row separated from its table by a blank line`);
     }
   });
-  for (const match of text.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
-    const target = match[1].replace(/^<|>$/g, "");
-    if (/^[a-z][a-z\d+.-]*:/i.test(target)) continue;
+  for (const link of markdownLinks(text)) {
+    const target = link.target.replace(/^<|>$/g, "");
+    if (absolute(target)) continue;
     const [path, fragment] = target.split("#");
     const full = path ? resolve(dirname(file), decodeURIComponent(path)) : resolve(file);
     if (!existsSync(full)) errors.push(`${file}: missing link target ${target}`);

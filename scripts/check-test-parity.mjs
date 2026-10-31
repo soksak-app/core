@@ -77,6 +77,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   lane("candidate registry proof check", "js-ts", ["scripts/check-candidate-registry.mjs"], ["scripts/test/candidate-registry.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
+  lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
   lane("soksak utility scripts", "js-ts", [
     "packages/soksak/scripts/bounded.mjs",
@@ -8351,6 +8352,20 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/plugin-operations.test.mjs", id: "an installed plugin that the window refused has the state refused and does not wait for a page reload" },
     ],
     expected: "An installed plugin that the window refused has the state refused, which does not make the page wait for a reload.",
+    levels: ["unit"],
+  },
+  {
+    id: "F327",
+    implementation: [
+      { file: "scripts/release-notes.mjs", symbol: "export function releaseNotes(" },
+      { file: "scripts/markdown-links.mjs", symbol: "export function markdownLinks(" },
+      { file: ".github/workflows/release.yml", symbol: "run: node scripts/release-notes.mjs docs/operations/install.md" },
+    ],
+    tests: [
+      { file: "scripts/test/release-notes.test.mjs", id: "each relative link of the release body names its file at the release tag" },
+      { file: "scripts/test/release-notes.test.mjs", id: "the publish job writes the release body with the release notes script" },
+    ],
+    expected: "The release body names each relative link of docs/operations/install.md as its file at the release tag.",
     levels: ["unit"],
   },
   {
