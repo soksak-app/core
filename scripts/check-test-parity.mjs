@@ -8277,6 +8277,19 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F321-7",
+    implementation: [
+      { file: "packages/host/wailsv3/src/installed.go", symbol: "func InstalledModule(" },
+      { file: "packages/host/tauriv2/src/installed.rs", symbol: "let Ok((plugins, _)) = enabled_plugins(config_dir) else {" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/installed_test.go", id: "TestAnUnreadableInstallationServesTheFrontendModules" },
+      { file: "packages/host/tauriv2/tests/installed_test.rs", id: "an_unreadable_installation_serves_the_frontend_modules" },
+    ],
+    expected: "With an installation that cannot be read, both hosts serve the paths under /modules/ from the bundled frontend, so the core modules load.",
+    levels: ["native"],
+  },
+  {
     id: "F321-6",
     implementation: [
       { file: "packages/workbench/plugin-operations.js", symbol: 'else if (!unit && record.enabled && refused.has(id)) status = "refused";' },

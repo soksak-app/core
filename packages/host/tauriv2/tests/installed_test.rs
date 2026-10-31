@@ -316,6 +316,26 @@ fn installed_assets_serve_the_files_of_enabled_packages() {
     );
 }
 
+// contract: installed.modules.unreadable-installation-serves-frontend
+#[test]
+fn an_unreadable_installation_serves_the_frontend_modules() {
+    let config = folder::Folder::new();
+    write_installed(
+        config.path(),
+        &[("plugins/installed.json", r#"{"format": 2, "plugins": {}}"#)],
+    );
+    for path in [
+        "/modules/soksak/dist/index.js",
+        "/modules/@soksak/plugin-api/index.js",
+    ] {
+        assert_eq!(
+            installed::installed_module(config.path(), path),
+            Ok(Module::Frontend),
+            "{path} with an unreadable installation"
+        );
+    }
+}
+
 /// A configuration directory where the enabled plugin alpha declares the shared modules of the point language and the
 /// disabled plugin off declares a point of the same name.
 fn shared_fixture() -> folder::Folder {

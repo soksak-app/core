@@ -190,7 +190,9 @@ func InstalledModule(configDir, urlPath string) (file string, installed, found b
 	name := strings.Join(parts[:count], "/")
 	plugins, _, err := enabledPlugins(configDir)
 	if err != nil {
-		return "", false, false, err
+		// default: an installation that cannot be read has no installed plugin, so the bundled frontend serves the path and the core
+		// modules load; /installed-plugins.json carries the error and the start records it (docs/spec/installation.md#serving-installed-plugins).
+		return "", false, false, nil
 	}
 	index := slices.IndexFunc(plugins, func(plugin installedPlugin) bool { return plugin.pkg == name })
 	if index < 0 {

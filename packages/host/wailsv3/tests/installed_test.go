@@ -190,6 +190,21 @@ func TestInstalledAssetsServeTheFilesOfEnabledPackages(t *testing.T) {
 	}
 }
 
+// contract: installed.modules.unreadable-installation-serves-frontend
+func TestAnUnreadableInstallationServesTheFrontendModules(t *testing.T) {
+	config := t.TempDir()
+	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 2, "plugins": {}}`})
+	frontend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "frontend "+r.URL.Path) })
+	handler := host.InstalledAssets(config)(frontend)
+	for _, path := range []string{"/modules/soksak/dist/index.js", "/modules/@soksak/plugin-api/index.js"} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != 200 || recorder.Body.String() != "frontend "+path {
+			t.Fatalf("%s with an unreadable installation: %d %q", path, recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
 // sharedFixture is a configuration directory where the enabled plugin alpha declares the shared modules of the point
 // language and the disabled plugin off declares a point of the same name.
 func sharedFixture(t *testing.T) string {

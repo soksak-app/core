@@ -253,7 +253,12 @@ pub fn installed_module(config_dir: &Path, url_path: &str) -> Result<Module, Str
         return Ok(Module::Frontend);
     }
     let name = parts[..count].join("/");
-    let (plugins, _) = enabled_plugins(config_dir)?;
+    // default: an installation that cannot be read has no installed plugin, so the bundled frontend serves the path and the
+    // core modules load; /installed-plugins.json carries the error and the start records it
+    // (docs/spec/installation.md#serving-installed-plugins).
+    let Ok((plugins, _)) = enabled_plugins(config_dir) else {
+        return Ok(Module::Frontend);
+    };
     let Some(plugin) = plugins.iter().find(|plugin| plugin.package == name) else {
         return Ok(Module::Frontend);
     };

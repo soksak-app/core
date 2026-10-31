@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F321-7: `plugins/installed.json`을 읽을 수 없으면 두 host가 500으로 답하지 않고 `/modules/` 아래 경로를 bundled frontend에서 제공하므로, core module이 불러와지고 page가 설치 오류와 함께 시작한다.
 - F321-6: 창이 거부한 설치 plugin은 `reload` 대신 `refused`(불러오지 못함) 상태를 가지므로, 그런 plugin이 설치되어 있어도 page가 시작할 때마다 다시 불러오지 않는다. 그 plugin의 tab placeholder가 그 상태를 밝힌다.
 - F323: 작업공간 version은 release candidate `0.0.22`이고, 게시된 `v0.0.21`과 구별된다. `v0.0.21`은 이전 형식의 설치 component로 시작하지 않아 registry에서 내려졌다. version checker는 두 identity를 밝히고, 작업공간 Cargo.lock 항목 셋은 candidate를 쓴다.
 - F322-1: `exposure.list`가 `owner` `host`를 받고, 두 host는 main page 없이 host entry로 답한다. `sok command`는 `host.` command를 그 목록으로 검사하므로, page가 시작하지 않은 동안에도 `sok command host.quit`이 application을 끝낸다.
