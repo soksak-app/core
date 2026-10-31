@@ -1,14 +1,15 @@
 #import "temporary_folder.h"
 #include <errno.h>
 #include <fts.h>
+#include <removefile.h>
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-// Writes each entry that remains under a folder whose removal failed, with its permission bits and its file flags, so the
-// failure names what refused the removal. An entry that cannot be read is written with its error.
+// Writes each entry that remains under a folder whose removal failed, with its permission bits, its file flags and its owner,
+// so the failure names what refused the removal. An entry that cannot be read is written with its error.
 static void writeRemainingEntries(const char *folder) {
     char *roots[] = { (char *)folder, NULL };
     // FTS_PHYSICAL lists a symbolic link itself, and each path starts with the folder path as the process created it.
@@ -28,8 +29,8 @@ static void writeRemainingEntries(const char *folder) {
             if (entry->fts_info != FTS_DNR) continue;
         }
         char *flags = fflagstostr(entry->fts_statp->st_flags);
-        fprintf(stderr, "  remains: %s mode %04o flags %s\n", entry->fts_path, entry->fts_statp->st_mode & 07777,
-            flags && flags[0] ? flags : "none");
+        fprintf(stderr, "  remains: %s mode %04o flags %s uid %u\n", entry->fts_path, entry->fts_statp->st_mode & 07777,
+            flags && flags[0] ? flags : "none", entry->fts_statp->st_uid);
         free(flags);
     }
     if (errno != 0) fprintf(stderr, "  remains: the walk of %s ended: %s\n", folder, strerror(errno));
@@ -40,14 +41,30 @@ static void writeRemainingEntries(const char *folder) {
 static char *folders[64];
 static int folderCount;
 
+// Writes each path whose removal failed with the error number of its system call. removefile reports the entry itself,
+// where the error of NSFileManager names only the folder that was asked to be removed.
+static int writeRefusedEntry(removefile_state_t state, const char *path, void *context) {
+    (void)context;
+    int error = 0;
+    if (removefile_state_get(state, REMOVEFILE_STATE_ERRNO, &error) != 0) error = errno;
+    fprintf(stderr, "  refused: %s errno %d (%s)\n", path, error, strerror(error));
+    return REMOVEFILE_PROCEED;
+}
+
 static void removeFolders(void) {
     BOOL failed = NO;
     for (int i = 0; i < folderCount; i++) {
-        NSString *path = [NSString stringWithUTF8String:folders[i]];
-        if (![NSFileManager.defaultManager fileExistsAtPath:path]) continue;
-        NSError *error = nil;
-        if (![NSFileManager.defaultManager removeItemAtPath:path error:&error]) {
-            fprintf(stderr, "FAIL: the temporary folder %s is not removed: %s\n", folders[i], error.localizedDescription.UTF8String);
+        struct stat info;
+        if (lstat(folders[i], &info) != 0 && errno == ENOENT) continue;
+        removefile_state_t state = removefile_state_alloc();
+        removefile_state_set(state, REMOVEFILE_STATE_ERROR_CALLBACK, writeRefusedEntry);
+        int result = removefile(folders[i], state, REMOVEFILE_RECURSIVE);
+        int error = errno;
+        removefile_state_free(state);
+        if (result != 0 || access(folders[i], F_OK) == 0) {
+            // removefile returns 0 when its error callback lets it proceed past an entry, so the folder that still exists is the failure.
+            fprintf(stderr, "FAIL: the temporary folder %s is not removed: %s\n", folders[i],
+                result != 0 ? strerror(error) : "entries remain");
             writeRemainingEntries(folders[i]);
             failed = YES;
         }

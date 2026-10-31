@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F317-2: 임시 폴더를 지우지 못한 native test는 `removefile(3)`의 오류 callback으로 삭제를 거부한 각 경로를 오류 번호와 함께 밝히고, 남은 각 항목을 소유자와 함께 밝힌다.
 - F334: 프로세스 전체 기록을 읽는 Tauri host test는 자기 surface의 기록만 읽고, host event log를 바꾸는 test는 하나씩 돈다. 그래서 같은 기록을 병렬로 쓰는 test가 이 test들을 실패시키지 않는다.
 - F331: `surface.opens`는 더 이상 `"*"`를 받지 않는다. 각 plugin은 자기가 여는 확장자를 선언하고, `core.file.open`은 그 확장자를 선언한 불러온 plugin이 없는 파일을 `"*"`를 선언한 plugin에서 여는 대신 `no plugin opens <path>`로 실패한다.
 - F330: view 시작 값은 plugin의 진단 선언 또는 `null`인 `diagnostics`를 담고, 두 host는 이 값을 요구하며 `window.sokSurface`에 주입한다. 그래서 view page는 release에 없는 `diagnostics.json`을 요청하지 않고 진단 선언을 읽는다.

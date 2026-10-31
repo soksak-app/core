@@ -52,8 +52,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         task.terminationStatus]);
     check([message containsString:[NSString stringWithFormat:@"FAIL: the temporary folder %@ is not removed", folder]],
         [NSString stringWithFormat:@"the message names the folder: %@", message]);
-    check([message containsString:[NSString stringWithFormat:@"remains: %@ mode 0444 flags uchg", file]],
-        [NSString stringWithFormat:@"the message names the entry that remains with its mode and flags: %@", message]);
+    check([message containsString:[NSString stringWithFormat:@"remains: %@ mode 0444 flags uchg uid %u", file, getuid()]],
+        [NSString stringWithFormat:@"the message names the entry that remains with its mode, flags and owner: %@", message]);
+    // removefile reports the path with its symbolic links resolved: the temporary folder of macOS is under /private/var.
+    char resolved[PATH_MAX];
+    NSString *refusedFile = realpath(folder.fileSystemRepresentation, resolved)
+        ? [[NSString stringWithUTF8String:resolved] stringByAppendingPathComponent:@"held"] : file;
+    check([message containsString:[NSString stringWithFormat:@"refused: %@ errno %d (%s)", refusedFile, EPERM, strerror(EPERM)]],
+        [NSString stringWithFormat:@"the message names the path that refused the removal with its error number: %@", message]);
 
     // The folder of the child is removed here, so the check leaves nothing behind whatever its result.
     if (folder.length > 0) {

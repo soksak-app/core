@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F317-2: A native test that cannot remove its temporary folder names each path that refused the removal with its error number, from the error callback of `removefile(3)`, and each remaining entry with its owner.
 - F334: The Tauri host tests that read process-wide records read only the records of a surface of their own, and the tests that replace the host event log run one at a time, so a test that writes the same records in parallel no longer fails them.
 - F331: `surface.opens` no longer accepts `"*"`; each plugin declares the extensions that it opens, and `core.file.open` fails with `no plugin opens <path>` for a file whose extension no loaded plugin declares, instead of opening it in the plugin that declared `"*"`.
 - F330: The view start values carry `diagnostics`, the diagnostic declaration of the plugin or `null`, which both hosts require and inject in `window.sokSurface`, so a view page reads its diagnostic declaration without requesting `diagnostics.json`, which a release holds no file of.
