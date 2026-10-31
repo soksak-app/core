@@ -1,5 +1,5 @@
 name: ci
-# build-machine: skip smoke reason=window checks run in window-checks.yml, which release.yml calls (docs/operations/examples.md#continuous-integration)
+# build-machine: skip smoke reason=the end-to-end checks need a display and run only locally through make (docs/operations/examples.md#test-kinds)
 
 # release.yml calls this workflow on each push to main, so a push runs the checks once.
 on:
@@ -21,7 +21,7 @@ jobs:
           root: core
       - name: Fetch locked Node dependencies
         run: pnpm -C core install --frozen-lockfile
-      - name: Core package and E2E tests
+      - name: Core package tests
         env:
           npm_config_offline: 'true'
         run: node core/scripts/node-tests.mjs --exclude scripts/ --exclude native/

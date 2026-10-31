@@ -1986,7 +1986,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
-      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow names the window checks, the audit step and the artifact of a failed job" },
     ],
     expected: "The native Darwin job remains a required isolated CI job. Its workflow records runner output under runner.temp and configures a failure-only artifact containing that output and the resolved user DiagnosticReports directory; the existing workflow checks cover required-job ownership and failure-artifact configuration patterns.",
     levels: ["unit"],
@@ -4016,20 +4015,6 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/test-marks.test.mjs", id: "expectError and expectEvent append their declaration to marks.jsonl while a run is kept, and only then" },
     ],
     expected: "The audit of a run writes the verdict of each test by the range of its log, and a test that omits a declared event fails with the missing name.",
-    levels: ["unit"],
-  },
-  {
-    id: "F160.29.1",
-    implementation: [
-      { file: ".github/workflows/window-checks.yml", symbol: "node scripts/audit-run.mjs" },
-      { file: ".github/workflows/window-checks.yml", symbol: "pnpm verify:windows --when-idle 45" },
-    ],
-    tests: [
-      { file: "scripts/test/workflows.test.mjs", id: "every runner label of a workflow is a hosted label" },
-      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow runs on a hosted runner with a virtual display and skips the checks that record the screen" },
-      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow names the window checks, the audit step and the artifact of a failed job" },
-    ],
-    expected: "The window-check workflow runs on the labels that the operations document declares, runs the window checks, audits the run folder also after a failed check, and keeps the run folder of a failed job.",
     levels: ["unit"],
   },
   {
@@ -7896,13 +7881,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-68",
-    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "SOKSAK_CANDIDATE_REGISTRY" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check workflow sets every variable that a window check of the run requires" }],
-    expected: "The window-check workflow supplies the candidate registry input required by its runner.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-69",
     implementation: [{ file: "native/darwin/src/observe.m", symbol: "sp_observe_timer(" }],
     tests: [{ file: "native/darwin/tests/input_reference_test.m", id: "the wait timer registration and delivery are recorded" }],
@@ -8021,11 +7999,9 @@ const FEATURE_LINKS = [
     id: "F283-3",
     implementation: [
       { file: "scripts/crash-fault.mjs", symbol: "export function crashFault(text, file)" },
-      { file: ".github/workflows/window-checks.yml", symbol: "fault=\"$(node core/scripts/crash-fault.mjs \"$report\")\"" },
     ],
     tests: [
       { file: "scripts/test/crash-fault.test.mjs", id: "a breakpoint that a signal handler raised again is named by the instruction address of its exception" },
-      { file: "scripts/test/workflows.test.mjs", id: "the window-check jobs resolve the fault of each crash report of an application on the runner" },
     ],
     expected: "The window-check job names the fault of each crash report and resolves its address with atos on the runner.",
     levels: ["unit"],
@@ -8134,12 +8110,10 @@ const FEATURE_LINKS = [
     id: "F292-26-3",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export const PERSON" },
-      { file: ".github/workflows/window-checks.yml", symbol: "SOKSAK_CHECK_PERSON: absent" },
     ],
     tests: [
       { file: "packages/window-check/test/display.test.mjs", id: "a check that needs a system authorization answered by a person is skipped when no person answers" },
       { file: "packages/window-check/test/display.test.mjs", id: "the person options of this run are frozen and spread into a check's options" },
-      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow runs on a hosted runner with a virtual display and skips the checks that record the screen" },
     ],
     expected: "A window check that needs a system authorization answered by a person declares PERSON and is skipped before it starts in a run where no person answers; the window-check workflow declares that no person answers.",
     levels: ["unit"],
@@ -8161,11 +8135,9 @@ const FEATURE_LINKS = [
     id: "F286",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export function displayPresents(env)" },
-      { file: ".github/workflows/window-checks.yml", symbol: "SOKSAK_CHECK_DISPLAY: absent" },
     ],
     tests: [
       { file: "packages/window-check/test/display.test.mjs", id: "a run with a display sends a recording" },
-      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow runs on a hosted runner with a virtual display and skips the checks that record the screen" },
     ],
     expected: "The window checks of CI run on a hosted runner with a virtual display and skip the checks that record the screen, which run in the local window checks.",
     levels: ["unit"],
@@ -8198,20 +8170,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F283-2",
-    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "> \"$RUNNER_TEMP/$app.status\"" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check jobs record how each application ended and keep every crash report of the applications" }],
-    expected: "The window-check jobs record the exit status of each application and keep every crash report of the applications.",
-    levels: ["unit"],
-  },
-  {
-    id: "F283-1",
-    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "JetsamEvent-*.ips" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check jobs wait for the applications to end and keep the crash report of an application that crashed" }],
-    expected: "The window-check jobs keep the memory pressure reports and the kernel memorystatus records with the crash reports.",
-    levels: ["unit"],
-  },
-  {
     id: "F282",
     implementation: [
       { file: "packages/host/wailsv3/src/exposure.go", symbol: "func windowResponder(" },
@@ -8222,13 +8180,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/exposure_status_test.rs", id: "the_first_responder_in_the_view_of_a_view_surface_is_owner_surface" },
     ],
     expected: "Both hosts report a first responder in the view of a view surface as the owner surface with no document.",
-    levels: ["unit"],
-  },
-  {
-    id: "F280",
-    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "- name: Keep the crash reports" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check jobs wait for the applications to end and keep the crash report of an application that crashed" }],
-    expected: "The window-check jobs wait for the stopped applications to end and keep the system crash report of each host that wrote a fatal record.",
     levels: ["unit"],
   },
   {
@@ -8259,20 +8210,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F278-1",
-    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "${{ steps.run.outputs.path }}" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a window-check job without a run folder uploads no part of the checkout" }],
-    expected: "A window-check job that has no run folder uploads the logs and output files and no part of the checkout.",
-    levels: ["unit"],
-  },
-  {
-    id: "F278",
-    implementation: [{ file: ".github/workflows/window-checks.yml", symbol: "${{ runner.temp }}/wailsv3.out" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the window-check jobs keep the output file of each application with the event logs" }],
-    expected: "The window-check jobs keep the output file of each application with the event logs.",
-    levels: ["unit"],
-  },
-  {
     id: "F277-1",
     implementation: [{ file: "native/darwin/process-identity/src/process_identity.m", symbol: "LaunchServices display name readback found %s, expected" }],
     tests: [{ file: "native/darwin/process-identity/tests/process_identity_test.m", id: "a mismatched display-name readback fails and names the value it found" }],
@@ -8281,9 +8218,16 @@ const FEATURE_LINKS = [
   },
   {
     id: "F276",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, window-checks, release-wailsv3, release-tauriv2]" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks, the gate and the window checks succeed" }],
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2]" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
     expected: "The release of core has no condition on the registry state; the registry checks the plugin versions of each core version that it lists.",
+    levels: ["unit"],
+  },
+  {
+    id: "F298-2",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2]" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "no workflow runs an end-to-end check" }],
+    expected: "No workflow runs an end-to-end check, and the release publishes after the checks, the gate and the two host builds succeed.",
     levels: ["unit"],
   },
   {
@@ -8296,8 +8240,8 @@ const FEATURE_LINKS = [
   {
     id: "F275-1",
     implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function installFolders(" }],
-    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "the installation stage runs make install once in every declared repository before the window checks build" }],
-    expected: "The window-check jobs run make install once in every declared plugin and sidecar repository before they build.",
+    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "the installation stage runs make install once in every declared repository" }],
+    expected: "The installation stage runs make install once in every declared plugin and sidecar repository.",
     levels: ["unit"],
   },
   {
@@ -8331,7 +8275,7 @@ const FEATURE_LINKS = [
   {
     id: "F272",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "needs.gate.outputs.release == 'true'" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks, the gate and the window checks succeed" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
     expected: "A push to main runs the checks once and releases the declared version only when the gate finds no tag and every job succeeds.",
     levels: ["unit"],
   },
@@ -8357,7 +8301,7 @@ const FEATURE_LINKS = [
   {
     id: "F272-3",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "release-gate.js packages/plugin-api/package.json docs/features.md" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks, the gate and the window checks succeed" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
     expected: "A push to main runs the checks once, and the release jobs and the tag follow only a gate that releases.",
     levels: ["unit"],
   },
@@ -10083,7 +10027,10 @@ const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F
 // F55, F239-47-24 and F239-182 wrote the frontmost baseline of a window-check session (the refusal of a tested host as the
 // baseline, the shared baseline identity and the report of a refused baseline activation), which F292-39 removes:
 // frontmost state is not a criterion of a check result.
-const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182"]);
+// F239-68, F278, F278-1, F280, F283-1 and F283-2 wrote the candidate registry variable, the kept output files, the exit status
+// files and the crash reports of the window-check workflow, which F298-2 removes: no workflow runs an end-to-end check.
+const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68",
+  "F278", "F278-1", "F280", "F283-1", "F283-2"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

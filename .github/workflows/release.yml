@@ -1,5 +1,5 @@
 name: release
-# build-machine: skip smoke reason=the window checks of a release run in window-checks.yml on a hosted runner with a virtual display (docs/operations/examples.md#release)
+# build-machine: skip smoke reason=the end-to-end checks need a display and run only locally through make (docs/operations/examples.md#test-kinds)
 
 # A push to main runs the checks, and the repository releases itself when they succeed and `soksak-release-gate` finds no tag
 # of the declared version; open checklist items are carried into the next version (docs/operations/examples.md#release). The
@@ -34,11 +34,6 @@ jobs:
       - name: Decide the release
         id: gate
         run: node packages/plugin-api/release-gate.js packages/plugin-api/package.json docs/features.md
-
-  window-checks:
-    needs: gate
-    if: needs.gate.outputs.release == 'true'
-    uses: ./.github/workflows/window-checks.yml
 
   release-wailsv3:
     needs: gate
@@ -149,7 +144,7 @@ jobs:
 
   publish:
     runs-on: ubuntu-26.04-arm
-    needs: [checks, gate, window-checks, release-wailsv3, release-tauriv2]
+    needs: [checks, gate, release-wailsv3, release-tauriv2]
     if: always() && needs.gate.outputs.release == 'true'
     permissions:
       contents: write
@@ -158,13 +153,11 @@ jobs:
         env:
           CHECKS_RESULT: ${{ needs.checks.result }}
           GATE_RESULT: ${{ needs.gate.result }}
-          WINDOW_RESULT: ${{ needs.window-checks.result }}
           WAILS_RESULT: ${{ needs.release-wailsv3.result }}
           TAURI_RESULT: ${{ needs.release-tauriv2.result }}
         run: |
           test "$CHECKS_RESULT" = success
           test "$GATE_RESULT" = success
-          test "$WINDOW_RESULT" = success
           test "$WAILS_RESULT" = success
           test "$TAURI_RESULT" = success
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262

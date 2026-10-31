@@ -54,7 +54,7 @@ test("the workflows check out every repository that the workspace registry decla
   const declaration = JSON.parse(readFileSync(new URL("../workspace-registry.json", import.meta.url), "utf8"));
   const folders = [...declaration.plugins, ...declaration.sidecars.map((sidecar) => sidecar.repository)]
     .map((folder) => folder.replace(/^\.\.\//, ""));
-  for (const workflow of ["ci.yml", "window-checks.yml"]) {
+  for (const workflow of ["ci.yml"]) {
     const text = readFileSync(new URL(`../../.github/workflows/${workflow}`, import.meta.url), "utf8");
     const paths = new Set([...text.matchAll(/^\s+path: (\S+)$/gm)].map((match) => match[1]));
     const missing = folders.filter((folder) => !paths.has(folder));
@@ -99,16 +99,11 @@ test("a plugin is packed by the make pack target of its repository with the sok 
   assert.throws(() => packPlugin("/opt/sok", repository, out, false), /make pack of .* wrote 0 new files into .*; expected 1/);
 });
 
-test("the installation stage runs make install once in every declared repository before the window checks build", { timeout: 1000 }, () => {
+test("the installation stage runs make install once in every declared repository", { timeout: 1000 }, () => {
   const declaration = { plugins: ["../plugins/a", "../plugins/b"],
     sidecars: [{ repository: "../sidecars/s", folder: "one" }, { repository: "../sidecars/s", folder: "two" }], packs: [] };
   assert.deepEqual(installFolders(declaration, (relative) => `/work/${relative.slice(3)}`),
     ["/work/plugins/a", "/work/plugins/b", "/work/sidecars/s"]);
-  for (const workflow of ["window-checks.yml"]) {
-    const text = readFileSync(new URL(`../../.github/workflows/${workflow}`, import.meta.url), "utf8");
-    const install = text.indexOf("make registry-install");
-    assert.ok(install > 0 && install < text.indexOf("make prepare"), `${workflow} runs make registry-install before make prepare`);
-  }
 });
 
 test("a relative output folder and sok executable of a pack resolve from the working directory, not from the plugin repository", { timeout: 30000 }, (t) => {

@@ -1,6 +1,5 @@
 // Checks the workflows of .github/workflows against docs/operations/examples.md#continuous-integration: every runner label is
-// a hosted label of the repository or a label that the document declares, and the window-check workflow runs the checks, then
-// the audit of the run folder, and keeps the run folder of a failed job.
+// a hosted label of the repository, and no workflow runs an end-to-end check (docs/operations/examples.md#test-kinds).
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -11,8 +10,6 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const WORKFLOWS = join(ROOT, '.github', 'workflows');
 const HOSTED = ['macos-15', 'ubuntu-26.04-arm'];
-// scripts/test-runner.mjs supplies these values to each test process and its owner test checks that contract.
-const RUNNER_ENVIRONMENT = new Set(['SOKSAK_RUN_ID', 'SOKSAK_RUN_FOLDER']);
 
 const read = (path) => readFileSync(join(ROOT, path), 'utf8');
 
@@ -50,41 +47,6 @@ test('CI and release workflows pin each external action to an immutable revision
   }
 });
 
-test('the window-check workflow runs on a hosted runner with a virtual display and skips the checks that record the screen', () => {
-  const text = read('.github/workflows/window-checks.yml');
-  assert.deepEqual(runnerLabels(text), [['macos-15']]);
-  assert.match(text, /^\s+SOKSAK_CHECK_DISPLAY: absent$/m, 'the job does not declare that its display presents no frames');
-  assert.match(text, /^\s+SOKSAK_CHECK_PERSON: absent$/m, 'the job does not declare that no person answers its system prompts');
-  const list = steps(text);
-  const at = (name) => list.findIndex((step) => step.name === name);
-  assert.ok(at('Start the virtual display') >= 0 && at('Start the virtual display') < at('Start both applications'),
-    'the virtual display does not start before the applications');
-  assert.doesNotMatch(text, /test-presentation/, 'the job runs the native presentation tests, which need presented frames');
-});
-
-test('the window-check workflow names the window checks, the audit step and the artifact of a failed job', () => {
-  const text = read('.github/workflows/window-checks.yml');
-  const list = steps(text);
-  const index = (name) => {
-    const found = list.findIndex((step) => step.name === name);
-    assert.notEqual(found, -1, `the workflow has no step named ${name}`);
-    return found;
-  };
-  const checks = list[index('Window checks')];
-  assert.match(checks.text, /run: pnpm verify:windows --when-idle 45$/m);
-  const audit = list[index('Audit of the logs')];
-  assert.match(audit.text, /run: node scripts\/audit-run\.mjs "\$\{\{ steps\.run\.outputs\.folder \}\}"$/m);
-  assert.match(audit.text, /if: always\(\)/, 'the audit also runs when a check failed');
-  assert.ok(index('Audit of the logs') > index('Window checks'), 'the audit follows the checks');
-  const locate = list[index('Locate the run folder')];
-  assert.match(locate.text, /target\/test-runs\//, 'the audited folder is a run folder of target/test-runs');
-  const keep = list[index('Keep the run folder')];
-  assert.match(keep.text, /if: failure\(\)/);
-  assert.match(keep.text, /uses: actions\/upload-artifact@v4/);
-  assert.match(keep.text, /\$\{\{ steps\.run\.outputs\.path \}\}/, 'the artifact holds the run folder');
-  assert.ok(index('Keep the run folder') > index('Audit of the logs'), 'the artifact is taken after the audit');
-});
-
 test('release builds and packages each host after the reusable CI checks succeed', () => {
   const text = read('.github/workflows/release.yml');
   assert.match(text, /checks:\n\s+uses: \.\/\.github\/workflows\/ci\.yml/, 'release checks reuse the independent CI jobs');
@@ -110,9 +72,9 @@ test('release builds and packages each host after the reusable CI checks succeed
     assert.match(list[build].text, /OFFLINE: '1'/);
   }
   const publish = job('publish');
-  assert.match(publish, /needs: \[checks, gate, window-checks, release-wailsv3, release-tauriv2\]/);
+  assert.match(publish, /needs: \[checks, gate, release-wailsv3, release-tauriv2\]/);
   assert.match(publish, /if: always\(\) && needs\.gate\.outputs\.release == 'true'/);
-  for (const [name, env] of [['checks', 'CHECKS_RESULT'], ['gate', 'GATE_RESULT'], ['window-checks', 'WINDOW_RESULT'], ['release-wailsv3', 'WAILS_RESULT'],
+  for (const [name, env] of [['checks', 'CHECKS_RESULT'], ['gate', 'GATE_RESULT'], ['release-wailsv3', 'WAILS_RESULT'],
     ['release-tauriv2', 'TAURI_RESULT']]) {
     assert.match(publish, new RegExp(`${env}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`));
     assert.match(publish, new RegExp(`test \\"\\$${env}\\" = success`), `${name}: publication is not gated on success`);
@@ -235,19 +197,6 @@ test('CI JavaScript scopes cover every discovered test file exactly once', { tim
   assert.equal(new Set(assigned).size, tests.length, 'a Node test file is assigned to both CI scopes');
 });
 
-test('the window-check workflow sets every variable that a window check of the run requires', { timeout: 1000 }, () => {
-  const text = read('.github/workflows/window-checks.yml');
-  const required = new Set();
-  for (const file of readdirSync(join(ROOT, 'e2e')).filter((name) => name.endsWith('.test.mjs'))) {
-    const source = read(`e2e/${file}`);
-    for (const match of source.matchAll(/assert\.ok\(process\.env\.(\w+)|const \w+ = process\.env\.(\w+);\s*\n\s*assert\.ok\(\w+,/g)) required.add(match[1] ?? match[2]);
-  }
-  const missing = [...required].filter((name) => !RUNNER_ENVIRONMENT.has(name) && !new RegExp(`\\b${name}=`).test(text));
-  assert.deepEqual(missing, [], `window-checks.yml does not set ${missing.join(', ')}`);
-  assert.match(text, /SOKSAK_CANDIDATE_REGISTRY=file:\/\/\$GITHUB_WORKSPACE\/core\/target\/registry\/index\.json/,
-    'the window-check workflow does not pass the candidate registry built by make install-plugins');
-});
-
 test('the native-darwin job records the display session before the native tests', () => {
   const text = read('.github/workflows/ci.yml');
   const job = text.split(/^ {2}(?=[a-z-]+:$)/m).find((part) => part.startsWith('native-darwin:'));
@@ -293,13 +242,12 @@ test('the native tests that need display presentation run in no workflow and the
   }
 });
 
-test('a push to main releases the declared version after the checks, the gate and the window checks succeed', () => {
+test('a push to main releases the declared version after the checks and the gate succeed', () => {
   const release = read('.github/workflows/release.yml');
   assert.match(release, /^on:\n {2}push:\n {4}branches: \[main\]\n/m, 'release.yml starts on a push to main');
   assert.doesNotMatch(release, /tags: \['v\*'\]/, 'release.yml does not start on a tag push');
   assert.match(release, /^concurrency:\n {2}group: release\n {2}cancel-in-progress: false$/m);
   assert.match(release, /run: node packages\/plugin-api\/release-gate\.js packages\/plugin-api\/package\.json docs\/features\.md/);
-  assert.match(release, /window-checks:\n {4}needs: gate\n {4}if: needs\.gate\.outputs\.release == 'true'\n {4}uses: \.\/\.github\/workflows\/window-checks\.yml/);
   for (const job of ['release-wailsv3', 'release-tauriv2']) {
     assert.match(release, new RegExp(`  ${job}:\\n {4}needs: gate\\n {4}if: needs\\.gate\\.outputs\\.release == 'true'\\n`), `${job} runs only on a release`);
   }
@@ -311,59 +259,18 @@ test('a push to main releases the declared version after the checks, the gate an
   assert.match(release, /target_commitish: \$\{\{ github\.sha \}\}/);
   const ci = read('.github/workflows/ci.yml');
   assert.match(ci, /^on:\n {2}workflow_call:\n {2}pull_request:\n/m, 'ci.yml runs for a pull request and for release.yml only');
-  const windows = read('.github/workflows/window-checks.yml');
-  assert.match(windows, /^on:\n {2}workflow_call:\n {2}workflow_dispatch:\n/m, 'window-checks.yml runs for release.yml and on request');
 });
 
-test('the window-check jobs keep the output file of each application with the event logs', () => {
-  for (const workflow of ['.github/workflows/window-checks.yml']) {
-    const text = read(workflow);
-    for (const app of ['wailsv3', 'tauriv2']) {
-      assert.match(text, new RegExp(`\\$\\{\\{ runner\\.temp \\}\\}/${app}\\.out`), `${workflow} keeps no ${app}.out`);
-    }
-  }
-});
 
-test('a window-check job without a run folder uploads no part of the checkout', () => {
-  for (const workflow of ['.github/workflows/window-checks.yml']) {
-    const text = read(workflow);
-    assert.doesNotMatch(text, /core\/\$\{\{ steps\.run\.outputs\.folder \}\}/, `${workflow} uploads core/ when no run folder exists`);
-    assert.match(text, /if \[ -n "\$folder" \]; then[^\n]*path=core\//, `${workflow} names the run folder path only when it exists`);
-    assert.match(text, /^\s+\$\{\{ steps\.run\.outputs\.path \}\}$/m, `${workflow} uploads no run folder path`);
+// An end-to-end check needs a running application, a display that presents frames or a person, which a hosted runner does not
+// provide, so it runs only locally through make (docs/operations/examples.md#test-kinds).
+test('no workflow runs an end-to-end check', { timeout: 1000 }, () => {
+  const files = readdirSync(WORKFLOWS).filter((name) => name.endsWith('.yml'));
+  assert.ok(files.length > 0, 'no workflow file');
+  const endToEnd = /verify:windows|verify:activation|verify:person|run verify\b|test-presentation\b|test-activation\b|virtual_display|install-plugins|e2e-registry-tls|make (?:-C core )?e2e\b/;
+  for (const file of files) {
+    const found = endToEnd.exec(readFileSync(join(WORKFLOWS, file), 'utf8'));
+    assert.equal(found, null, `${file} runs the end-to-end check ${found?.[0]}`);
   }
-});
-
-test('the window-check jobs record how each application ended and keep every crash report of the applications', { timeout: 1000 }, () => {
-  for (const workflow of ['.github/workflows/window-checks.yml']) {
-    const text = read(workflow);
-    // A host that ends without a record of its own (no log.closed, no fatal record) is named by its exit status, which only the
-    // parent shell of the application receives.
-    assert.match(text, /wait "\$!"; echo "\$\? \$\(date -u [^\n]*\)" > "\$RUNNER_TEMP\/\$app\.status"/, `${workflow} does not record the exit status of each application`);
-    assert.match(text, /^\s+\$\{\{ runner\.temp \}\}\/\*\.status$/m, `${workflow} uploads no exit status`);
-    // The system writes a crash report also for a crash that the fatal record of the host did not reach.
-    assert.match(text, /find "\$reports" -maxdepth 1 -name "soksak-\$app-\*\.ips" -exec cp \{\} "\$RUNNER_TEMP\/crash-reports\/" \\;/, `${workflow} keeps the crash reports only of a host that wrote a fatal record`);
-  }
-});
-
-test('the window-check jobs resolve the fault of each crash report of an application on the runner', { timeout: 1000 }, () => {
-  for (const workflow of ['.github/workflows/window-checks.yml']) {
-    const text = read(workflow);
-    // The library that holds the fault address is the build of the runner, so only the runner resolves it.
-    assert.match(text, /fault="\$\(node core\/scripts\/crash-fault\.mjs "\$report"\)"/, `${workflow} does not name the fault of each crash report`);
-    assert.match(text, /atos -o "\$\(jq -r \.path <<<"\$fault"\)" -arch "\$\(jq -r \.arch <<<"\$fault"\)" -l "\$\(jq -r \.load <<<"\$fault"\)" "\$\(jq -r \.address <<<"\$fault"\)" > "\$report\.fault\.txt"/,
-      `${workflow} does not resolve the fault address with atos`);
-  }
-});
-
-test('the window-check jobs wait for the applications to end and keep the crash report of an application that crashed', () => {
-  for (const workflow of ['.github/workflows/window-checks.yml']) {
-    const text = read(workflow);
-    assert.match(text, /while kill -0 "\$pid"/, `${workflow} does not wait for the stopped applications to end`);
-    assert.match(text, /- name: Keep the crash reports\n\s+if: always\(\)/, `${workflow} has no crash report step`);
-    assert.match(text, /error native fatal: [^\n]*host-\*\.stderr/, `${workflow} does not read the fatal record of each host`);
-    assert.match(text, /Library\/Logs\/DiagnosticReports/, `${workflow} does not read the crash reports of the system`);
-    assert.match(text, /^\s+\$\{\{ runner\.temp \}\}\/crash-reports$/m, `${workflow} uploads no crash reports`);
-    assert.match(text, /JetsamEvent-\*\.ips/, `${workflow} does not keep the memory pressure reports`);
-    assert.match(text, /log show [^\n]*memorystatus/, `${workflow} does not keep the kernel records of ended processes`);
-  }
+  assert.equal(existsSync(join(WORKFLOWS, 'window-checks.yml')), false, 'the window-check workflow exists');
 });
