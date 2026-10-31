@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F314: The plugin specification states that plugin and sidecar repositories depend on the packed release files of a core release and release from `main` through `soksak-release-gate` with the `sok` of `CORE_RELEASE`.
 - F313: The crash report watch of the Tauri host tests accepts only `<application>-*.ips`, so it no longer removes the hidden file that the system renames to the saved report.
 - F312: The Tauri host tests of F301-1, F303 and F305-2 declare their `tauriv2 only` contract cases.
 - F311: The crash file test of the Wails host closes the channel of its child only after the nil map assignment, so the child no longer ends with the status 0 before its crash.
