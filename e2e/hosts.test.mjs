@@ -12,11 +12,13 @@ const PLAN = { axis: "x", line: 2, dx: -120, dy: 0, ms: 48, times: 2 };
 
 const LINE = /^info page page: host (\w+) (\{.*\}|\[.*\]|null) -> (.*)$/;
 
-/** Arranges the transcript lines into a list of requests and replies per call name. The id that differs per window is replaced by the order name. */
+/** Arranges the transcript lines into a list of requests and replies per call name. The id that differs per window is replaced by the order name,
+ * and the configuration directory of each host, which holds the project root of the start values, by one name. */
 function transcript(lines) {
   const names = new Map();
   const same = (text) =>
-    text.replace(/"ticket":\d+,/g, "").replace(/(prj|spc|tab)-[a-z0-9]+/g, (id, kind) => {
+    Object.values(APPS).reduce((result, app) => result.replaceAll(app.configDir, "<config-dir>"), text)
+      .replace(/"ticket":\d+,/g, "").replace(/(prj|spc|tab)-[a-z0-9]+/g, (id, kind) => {
       if (!names.has(id)) names.set(id, `${kind}-${names.size}`);
       return names.get(id);
     });

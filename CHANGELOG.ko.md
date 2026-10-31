@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-9-5: resize 뒤의 host 비교 검사는 각 host의 configuration directory를 한 이름으로 바꾼 뒤 두 host의 plane을 비교한다. start values의 project root가 그 directory 안에 있기 때문이다. 검증: 다음 release run의 window check를 기다린다.
 - F292-70-2: 두 host의 presentation wait는 참여한 view가 10초의 presentation limit까지 표시하지도 끝나지도 않으면 reason `timeout`으로 wait를 끝내고, native join을 중단하며, `error: view presentation: surface <surface> did not present within 10s`를 쓰고, 그 view generation이 이후 wait에 참여하지 않게 한다. 표시하기 전에 page 프로세스가 멈춘 보이는 view가 창의 commit을 잡았고, 그런 멈춤을 알리는 event가 없어 page의 이후 모든 배치가 그것을 기다렸다. limit은 지연된 main queue 단계(`sp_ui_enqueue_after`)로 실행한다. 검증: native UI queue 시험, Go host 시험 두 개, Rust host 시험 두 개가 변경 전에 실패하고 변경 뒤 통과한다.
 - F292-70-1: `diagnostics.fixture`가 도는 동안, 그것이 실행하는 project 작업 안의 각 await 단계가 `projects.<operation>.<step>` 이름의 `page.fixture.step`으로 기록되므로, 끝나지 않은 fixture 단계는 그 작업이 기다리는 단계를 밝힌다. 검증: `packages/workbench`의 새 시험 두 개는 단계 실행기가 없을 때 실패했고 그 뒤 통과한다.
 - F292-72: `docs/spec/logging.md`는 모든 gate를 지나는 event를 한 번만 적는다. 제거된 migration 기록 `log.migrated`를 아직 들던 사본은 없어졌고, 남은 문장은 `log.plugins`를 든다.
