@@ -2,7 +2,7 @@
 // configuration root for each run, the report of each step, and the failure on a process that remains after the applications quit.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -142,4 +142,22 @@ test("a passed run removes its configuration root and a failed run keeps it", { 
   finishRoot(failed, ["one: exited with code 1"], write);
   assert.equal(existsSync(failed), true);
   assert.ok(lines.includes(`kept ${failed}: 1 step failed`), lines.join("\n"));
+});
+
+test("a failed run keeps the logs and removes the service folders, so the services of a host that ended without host.quit exit", { timeout: 5000 }, (t) => {
+  const root = workspace(t);
+  const failed = newConfigRoot(root);
+  for (const app of ["soksak-check-wailsv3", "soksak-check-tauriv2"]) {
+    mkdirSync(join(failed, app, "services", "soksak-vt-alacritty"), { recursive: true });
+    writeFileSync(join(failed, app, "services", "soksak-vt-alacritty", "endpoint.json"), "{}");
+    mkdirSync(join(failed, app, "logs"), { recursive: true });
+    writeFileSync(join(failed, app, "logs", "host.jsonl"), "{}\n");
+  }
+  const { lines, write } = recorder();
+  finishRoot(failed, ["window checks: exited with code 1"], write);
+  for (const app of ["soksak-check-wailsv3", "soksak-check-tauriv2"]) {
+    assert.equal(existsSync(join(failed, app, "services")), false, `${app}: the service folders are removed`);
+    assert.equal(existsSync(join(failed, app, "logs", "host.jsonl")), true, `${app}: the logs are kept`);
+  }
+  assert.ok(lines.includes(`removed ${join(failed, "soksak-check-tauriv2", "services")}: the services of the run exit`), lines.join("\n"));
 });

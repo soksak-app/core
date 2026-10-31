@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F306: A failed end-to-end run removes the `services` folder of each application, so the persistent services of a host that ended without `host.quit` exit while the run keeps its logs.
 - F305-2: A presentation wait end that the Tauri host queues after a presentation or the presentation limit reports no error for a window that closed before it ran, because the close of the window abandoned every presentation wait of that window.
 - F300-2: A document region of the macOS native code keeps its surface until the region closes, so the close of a region on a surface that the host closed first no longer messages a released surface and ends the Wails host.
 - F300-4: The host contract defines `log.fatal-error.writes-the-crash-file` for the Wails host, and the test of the crash file declares it.

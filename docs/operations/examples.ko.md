@@ -124,7 +124,7 @@ E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSA
 5. 시작한 각 애플리케이션을 선언된 `host.quit` 명령으로 끝내고 종료를 최대 60초 기다린다. 다른 상태로 끝난 애플리케이션은 그 step을 실패시키고, 실행 시작 이후 그 애플리케이션이 남긴 시스템 crash report를 fault와 함께 출력한다(`scripts/crash-fault.mjs`).
 6. command가 root나 애플리케이션 bundle을 가리키는 프로세스가 남아 있으면 실패한다.
 
-각 step은 `running`을 출력하고, 이어서 경과 시간과 함께 `passed` 또는 `failed`를 출력한다. 준비가 실패하면 검사를 건너뛰고 끝의 step을 실행한다. 검사가 실패해도 다른 검사는 건너뛰지 않는다. 통과한 실행은 root를 지우고, 실패한 실행은 애플리케이션 log와 함께 root를 남기고 그 경로를 출력한다. 그래서 모든 실행은 새 root에서 시작하고, 같은 source를 두 번 실행해도 결과가 같다. `make e2e WHEN_IDLE=<seconds>`는 사람이 그 시간 동안 입력하지 않은 뒤에만 각 창 검사 파일을 시작한다.
+각 step은 `running`을 출력하고, 이어서 경과 시간과 함께 `passed` 또는 `failed`를 출력한다. 준비가 실패하면 검사를 건너뛰고 끝의 step을 실행한다. 검사가 실패해도 다른 검사는 건너뛰지 않는다. 통과한 실행은 root를 지우고, 실패한 실행은 애플리케이션 log와 함께 root를 남기고 그 경로를 출력한다. 실패한 실행은 각 애플리케이션의 `services` 폴더를 지워서, `host.quit` 없이 끝난 host의 persistent service가 끝나게 한다([persistent service](../spec/persistent-services.ko.md)). 그래서 모든 실행은 새 root에서 시작하고, 같은 source를 두 번 실행해도 결과가 같다. `make e2e WHEN_IDLE=<seconds>`는 사람이 그 시간 동안 입력하지 않은 뒤에만 각 창 검사 파일을 시작한다.
 
 `make e2e-registry-tls`는 root에 검사 소유 인증 기관과 `127.0.0.1`의 server 인증서를 만든다. `e2e/registry.test.mjs`는 그것으로 workspace registry를 https로 제공하고, 진단 `--registry-ca`는 애플리케이션이 그 인증 기관을 신뢰하게 한다([애플리케이션 인자](../spec/hosts.ko.md#애플리케이션-인자)).
 

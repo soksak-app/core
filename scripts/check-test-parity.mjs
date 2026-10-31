@@ -8223,6 +8223,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F306",
+    implementation: [{ file: "scripts/e2e-run.mjs", symbol: "export function finishRoot" }],
+    tests: [{ file: "scripts/test/e2e-run.test.mjs", id: "a failed run keeps the logs and removes the service folders, so the services of a host that ended without host.quit exit" }],
+    expected: "A failed end-to-end run keeps its logs and removes the service folder of each application, so the services of the run exit.",
+    levels: ["unit"],
+  },
+  {
     id: "F305",
     implementation: [
       { file: "packages/host/tauriv2/src/event_record.rs", symbol: "fn record_site(" },

@@ -202,11 +202,21 @@ export async function runPlan(steps, { write, children = new Map() }) {
   return failures;
 }
 
-/** Removes the configuration root of a passed run and keeps that of a failed run with its logs. */
+/**
+ * Removes the configuration root of a passed run and keeps that of a failed run with its logs. A failed run removes the service folder
+ * of each application, which holds only the endpoint and the lock of its persistent services, because a service exits when its folder
+ * is removed (docs/spec/persistent-services.md) and a host that ended without host.quit did not shut its services down.
+ */
 export function finishRoot(configRoot, failures, write) {
   if (failures.length === 0) {
     rmSync(configRoot, { recursive: true });
     return;
+  }
+  for (const app of APPS) {
+    const services = join(configDir(configRoot, app), 'services');
+    if (!existsSync(services)) continue;
+    rmSync(services, { recursive: true });
+    write(`removed ${services}: the services of the run exit`);
   }
   write(`kept ${configRoot}: ${failures.length} step${failures.length === 1 ? '' : 's'} failed`);
 }

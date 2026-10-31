@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F306: 실패한 end-to-end run은 각 애플리케이션의 `services` 폴더를 지운다. 그래서 run이 logs를 남기는 동안에도 `host.quit` 없이 끝난 host의 persistent service가 끝난다.
 - F305-2: Tauri host가 presentation이나 presentation 한도 뒤에 넣는 presentation 대기 종료는 실행 전에 닫힌 창에 오류를 쓰지 않는다. 창의 close가 그 창의 모든 presentation 대기를 이미 끝냈기 때문이다.
 - F300-2: macOS native code의 문서 영역은 닫힐 때까지 자신의 surface를 유지한다. 그래서 host가 먼저 닫은 surface 위의 영역을 닫아도 해제된 surface에 message를 보내지 않고, Wails host가 끝나지 않는다.
 - F300-4: host contract가 Wails host의 `log.fatal-error.writes-the-crash-file`을 정의하고, crash file 테스트가 그것을 선언한다.
