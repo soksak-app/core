@@ -122,11 +122,16 @@ for (const app of Object.values(APPS)) {
     assert.ok(anchor, `${app.name}: ${main} holds no page.log.clock of the page ${hops.pageCall.page} before page.call`);
     const { trip_us: tripUs, resolution_us: resolutionUs } = anchor.fields;
     const halfTripUs = tripUs / 2 + resolutionUs;
-    const onPageClock = new Set(["page.call", "pageRegion", "pageSend"]);
-    const bound = (left, right) => (onPageClock.has(left) !== onPageClock.has(right) ? halfTripUs : 0);
-    // The delay between the layers is measured on the monotonic clock, which the layers of one boot share.
+    const onPageClock = new Set(["page.call start", "page.call", "pageRegion", "pageSend"]);
+    // page.call is written when the call ends, and its micros is measured on the page clock, so its start, the end less micros,
+    // carries one more resolution of the page clock than the end.
+    const bound = (left, right) => (onPageClock.has(left) === onPageClock.has(right) ? 0
+      : [left, right].includes("page.call start") ? halfTripUs + resolutionUs : halfTripUs);
+    const callStart = { ...hops.pageCall, mono_ns: hops.pageCall.mono_ns - hops.pageCall.fields.micros * 1000 };
+    // The delay between the layers is measured on the monotonic clock, which the layers of one boot share. The host receives the
+    // send between the start and the end of the call of the page.
     const clock = [["native.input.key_down", found.nativeKeyDown.event], ["native.input.report", hops.nativeReport], ["host.input.relay", hops.hostRelay],
-      ["page.call", hops.pageCall], ["host.sidecar.request", hops.hostRequest]];
+      ["page.call start", callStart], ["host.sidecar.request", hops.hostRequest], ["page.call", hops.pageCall]];
     for (let index = 1; index < clock.length; index++) {
       const [, earlier] = clock[index - 1];
       const [name, later] = clock[index];
