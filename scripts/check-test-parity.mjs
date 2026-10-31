@@ -8531,6 +8531,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F316",
+    implementation: [{ file: ".github/workflows/repeat.yml", symbol: "workflow_dispatch:" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "repeat.yml starts on a dispatch and runs only the tracked repeat targets" }],
+    expected: "A dispatch runs one tracked repeat target on the hosted macOS runner with the dispatched test and count.",
+    levels: ["unit"],
+  },
+  {
     id: "F317-2",
     implementation: [{ file: "native/darwin/tests/support/temporary_folder.m", symbol: "static int writeRefusedEntry(removefile_state_t state, const char *path, void *context)" }],
     tests: [{ file: "native/darwin/tests/temporary_folder_test.m", id: "the message names the path that refused the removal with its error number" }],
