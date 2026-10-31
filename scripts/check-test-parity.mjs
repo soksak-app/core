@@ -8354,10 +8354,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F326",
+    implementation: [
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.24"' },
+      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "0.0.23"' },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "the development contract has a distinct identity from the latest published release" },
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
+    ],
+    expected: "The development release candidate is 0.0.24, distinct from latest published 0.0.23, and every declared workspace version and lock entry is 0.0.24.",
+    levels: ["unit"],
+  },
+  {
     id: "F324",
     implementation: [
-      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.23"' },
-      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "0.0.22"' },
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "' },
+      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "' },
     ],
     tests: [
       { file: "scripts/test/versions.test.mjs", id: "the development contract has a distinct identity from the latest published release" },
