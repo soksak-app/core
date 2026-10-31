@@ -144,7 +144,7 @@ Host는 시작할 때 켜진 설치 plugin의 `plugin.json` `dependencies`가 �
 
 | Host 호출 또는 event | 의미 |
 | --- | --- |
-| `pluginsState()` | `{ registry, index, installed, firstRun, starter }`를 돌려준다. 기존 필드는 의미를 유지한다. `starter`는 starter job이 없으면 `null`, 있으면 현재 `{ format: 1, state, pack, registry, plugins }` job이다. 상태 파일을 읽지 못하면 경로와 오류를 포함해 호출을 거부한다 |
+| `pluginsState()` | `{ core, registry, index, installed, firstRun, starter }`를 돌려준다. `core`는 실행 중인 core의 version이며 설치는 이것으로 plugin version을 고른다. 기존 필드는 의미를 유지한다. `starter`는 starter job이 없으면 `null`, 있으면 현재 `{ format: 1, state, pack, registry, plugins }` job이다. 상태 파일을 읽지 못하면 경로와 오류를 포함해 호출을 거부한다 |
 | `pluginsStarter({ state, pack, registry, plugins })` | `installed.json`이 없을 때만 `state: "pending"`인 starter job을 만들거나, 모든 plugin 설치 후 정확히 일치하는 pending job을 `complete`로 바꾼다. 요청한 registry URL은 설정된 registry와 같아야 한다. 기존 job은 같은 pack, registry, 순서가 같은 plugin 목록만 허용하며 다른 전이는 두 상태 파일을 바꾸지 않고 거부한다. 같은 pending 또는 complete 요청은 반복해도 결과가 같고, complete job을 pending으로 되돌릴 수 없다. Complete는 나열된 plugin이 모두 `installed.json`에 있어야 하며 enabled 여부는 요구하지 않는다. Host는 다른 plugin 작업과 이 호출을 직렬화하고 파일을 원자적으로 교체한다. 쓰기가 실패하면 caller는 job 시작이나 완료를 진행하지 않는다 |
 | `pluginsRun({ action, plugin })` | Plugin id에 대해 `install`, `update`, `remove`, `enable`, `disable`을 애플리케이션의 core version과 platform으로 실행하고, 같은 `sok plugin` 명령의 출력을 돌려준다. 다른 `action`이나 비어 있지 않은 문자열이 아닌 plugin id는 아무것도 바꾸지 않고 호출을 거부한다. 실패한 작업은 같은 명령의 message로 호출을 거부하고, `installed.json`은 그 명령이 정한 대로 남는다 |
 | `pluginsUseRegistry({ index })` | `sok registry use <index>`처럼 registry index를 정하고 그 출력 `{ index }`를 돌려준다. 비어 있지 않은 문자열이 아닌 `index`는 `index must be a non-empty string`으로 거부한다 |
@@ -184,9 +184,9 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 | `refused` | 불러오지 못함 | `installed.json`이 plugin을 켠 상태로 나열하고, 창이 그 entry나 manifest를 거부했다([설치된 plugin 제공](#설치된-plugin-제공)). 다시 불러와도 불러오지 않으므로 이 상태는 page가 다시 불러오기를 기다리게 하지 않는다 |
 
 - 불러온 manifest의 설명, 없으면 registry 항목의 설명([plugins](plugins.ko.md)와 [registry index](#registry-index)가 설명을 요구한다). `installed.json`만 나열한 plugin은 설명이 없고 id를 이름으로 보여 준다.
-- 설치된 버전 <version>과 최신 버전 <version>(registry index가 나열한 철회되지 않은 가장 새 버전)을 있을 때 보여 주는 버전 줄.
-- 사이드카 줄: 사이드카 뒤에 plugin이 이름을 댄 사이드카를 이름 순서로 보여 준다. 각 사이드카는 `installed.json` `sidecars`의 설치된 버전을, 없으면 plugin이 선언한 범위를 보여 준다. 사이드카와 범위는 설치된 plugin이면 `installed.json` 항목에서, 아니면 가장 새 registry 버전에서, 아니면 불러온 manifest의 `dependencies`에서 온다. 사이드카가 없는 plugin은 사이드카 없음을 보여 준다.
-- 동작: 각각 자기 명령에 연결된 버튼이다. 설치 `core.plugins.install`은 registry가 철회되지 않은 version의 plugin을 나열하고 설치되지 않았을 때, 업데이트 `core.plugins.update`는 설치되었고 registry가 설치된 것보다 새 version을 나열할 때, 적용 `core.plugins.apply`는 상태가 `reload`일 때, 사용 `core.plugins.enable` 또는 사용 안 함 `core.plugins.disable`은 설치되었을 때 `enabled` 값에 따라, 제거 `core.plugins.remove`는 설치되었을 때 보인다. 작업이 실행되는 동안 모든 카드의 모든 동작은 비활성이고 그 plugin의 카드는 "<plugin> <action> 진행 중"을 보여 준다. 작업이 실패하면 카드는 그 오류를 보여 준다.
+- 설치된 버전 <version>과 최신 버전 <version>(설치가 실행 중인 core에 고르는 버전, [version 선택](#version-선택))을 있을 때 보여 주고, plugin이 `incompatible`이면 core <version>에 맞는 버전 없음을 보여 주는 버전 줄.
+- 사이드카 줄: 사이드카 뒤에 plugin이 이름을 댄 사이드카를 이름 순서로 보여 준다. 각 사이드카는 `installed.json` `sidecars`의 설치된 버전을, 없으면 plugin이 선언한 범위를 보여 준다. 사이드카와 범위는 설치된 plugin이면 `installed.json` 항목에서, 아니면 설치가 실행 중인 core에 고르는 registry 버전에서, 아니면 불러온 manifest의 `dependencies`에서 온다. 사이드카가 없는 plugin은 사이드카 없음을 보여 준다. 설치되지도 불러오지도 않은 `incompatible` plugin은 이 출처가 모두 없으므로 사이드카 줄을 보이지 않는다.
+- 동작: 각각 자기 명령에 연결된 버튼이다. 설치 `core.plugins.install`은 plugin에 `latest` version이 있고 설치되지 않았을 때, 업데이트 `core.plugins.update`는 설치되었고 그 `latest` version이 설치된 것보다 새로울 때, 적용 `core.plugins.apply`는 상태가 `reload`일 때, 사용 `core.plugins.enable` 또는 사용 안 함 `core.plugins.disable`은 설치되었을 때 `enabled` 값에 따라, 제거 `core.plugins.remove`는 설치되었을 때 보인다. 작업이 실행되는 동안 모든 카드의 모든 동작은 비활성이고 그 plugin의 카드는 "<plugin> <action> 진행 중"을 보여 준다. 작업이 실패하면 카드는 그 오류를 보여 준다.
 
 페이지는 보일 때, `plugins-changed` event를 받을 때, `sidecars-changed` event를 받을 때마다 `pluginsState`로 plugin 상태를, `sidecarsOutdated`로 오래된 sidecar를 읽는다. `core.plugins`는 오래된 sidecar를 `outdated`로 보고하고, plugin 화면은 각각을 카드 위에 `<running> → <installed>`와 `core.plugins.replace {sidecar}`에 묶인 동작 터미널 <sessions>개를 끝내고 적용과 함께 보인다. Registry index를 읽지 못하면 카드 위에 "레지스트리를 읽지 못했습니다: <message>"를 보여 주고, 페이지는 불러온 plugin과 설치된 plugin을 유지한다. 잘못된 `installed.json`처럼 plugin 상태를 읽지 못하면 "플러그인 상태를 읽지 못했습니다: <message>"를 보여 주고 카드는 없다. Browser 애플리케이션처럼 host가 없으면 페이지에는 불러온 plugin만 모두 `loaded`로 있고 동작은 없다.
 
@@ -198,12 +198,13 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 
 | 필드 | 값 |
 |---|---|
+| `core` | `pluginsState`가 보고하는 실행 중인 core의 version. 상태를 읽기 전, 읽지 못했을 때, host가 없을 때는 `null` |
 | `registry` | Registry index URL 또는 `null` |
 | `error` | Registry index 오류 또는 plugin 상태 오류, 또는 `null` |
-| `plugins` | 카드마다 id 순서로 `{id, name, description, state, composition, installed, latest, sidecars}`. `composition`은 이 창에 로드한 manifest의 surface composition kind이며 surface 선언을 로드하지 않았으면 `null`이다. 열린 tab의 유무와 무관하다. `installed`는 `{version, enabled}` 또는 `null`, `latest`는 registry index가 나열한 철회되지 않은 가장 새 버전 또는 `null`, `sidecars`는 이름 순서의 `{name, range, version}` 목록이며 모르는 `range`와 `version`은 `null`이다 |
+| `plugins` | 카드마다 id 순서로 `{id, name, description, state, composition, installed, latest, incompatible, sidecars}`. `composition`은 이 창에 로드한 manifest의 surface composition kind이며 surface 선언을 로드하지 않았으면 `null`이다. 열린 tab의 유무와 무관하다. `installed`는 `{version, enabled}` 또는 `null`, `latest`는 registry index가 나열하고 철회되지 않았으며 `engines.soksak`이 실행 중인 core를 포함하는 가장 새 버전 또는 `null`, `incompatible`은 registry index가 철회되지 않은 plugin version을 나열하지만 어느 것도 실행 중인 core를 포함하지 않으면 `true`, `sidecars`는 이름 순서의 `{name, range, version}` 목록이거나, 설치되지도 불러오지도 않은 `incompatible` plugin이면 `null`이며, 모르는 `range`와 `version`은 `null`이다 |
 | `operation` | 첫 작업 전에는 `null`, 그 뒤에는 마지막 작업의 `{action, plugin, state, error}`. `state`는 `running`, `done`, `failed`이고, `error`는 실패한 작업의 message 또는 `null`이다 |
 | `reload` | 상태가 `reload`인 plugin이 있으면 `true`. 상태가 `refused`인 plugin은 이 값을 바꾸지 않는다 |
-| `updates` | registry index가 더 새 철회되지 않은 version을 나열하는 설치 plugin을 id 순으로: `{id, installed, latest}` |
+| `updates` | `latest` version이 설치된 것보다 새로운 설치 plugin을 id 순으로: `{id, installed, latest}` |
 
 완료 기준:
 

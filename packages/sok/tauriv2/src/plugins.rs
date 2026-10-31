@@ -132,6 +132,8 @@ fn read_registry_url(config_dir: &Path) -> Result<Option<String>, String> {
 /// (docs/spec/installation.md#plugin-operations-in-the-application). The structure is written as it is, so the key order is the declaration order.
 #[derive(serde::Serialize)]
 pub struct PluginsState {
+    /// The version of the running core, with which installation selects plugin versions.
+    pub core: String,
     pub registry: Option<String>,
     pub index: IndexState,
     pub installed: InstalledState,
@@ -171,7 +173,7 @@ pub enum IndexState {
 
 /// Reads the registry address, the checked index and the installation state. When the index cannot be read, the error is placed in the index
 /// field, and when the installation state cannot be read, the function fails.
-pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
+pub fn read_plugins_state(config_dir: &Path, core: &str) -> Result<PluginsState, String> {
     let installed = read_installed(config_dir)?;
     let starter = read_starter_job(config_dir)?;
     let first_run = !config_dir
@@ -190,6 +192,7 @@ pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
         }
     };
     Ok(PluginsState {
+        core: core.to_string(),
         registry,
         index,
         installed,

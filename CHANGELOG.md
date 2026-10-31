@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F328: The latest version of a plugin card and the update list is the version that installation selects for the running core, and a plugin without such a version shows core <version>에 맞는 버전 없음; `pluginsState` reports the running core as `core`.
 - F329: The registry check fails on an unrevoked plugin version whose range contains a core newer than the newest listed core.
 - F327: The release body resolves each relative link of `docs/operations/install.md` to its file at the release tag, so the links of the release page open their documents.
 - F326: The workspace version is release candidate `0.0.24`, distinct from published `v0.0.23`, which did not start with a `projects.json` or `settings.json` of an earlier form and was not listed in the registry.

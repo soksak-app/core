@@ -223,9 +223,10 @@ export function createLibrary(root, rendered = () => {}) {
     const versions = [
       row.installed ? `설치된 버전 ${row.installed.version}` : null,
       row.latest ? `최신 버전 ${row.latest}` : null,
+      row.incompatible ? `core ${status.core}에 맞는 버전 없음` : null,
     ].filter(Boolean).join(' · ');
     if (versions) card.append(element('p', 'library-plugin__versions', versions));
-    card.append(element('p', 'library-plugin__sidecars', sidecarLine(row.sidecars)));
+    if (row.sidecars) card.append(element('p', 'library-plugin__sidecars', sidecarLine(row.sidecars)));
     for (const entry of contributionsState().filter((item) => item.plugin === row.id)) {
       const where = `library plugin ${row.id} contribution ${entry.point} ${entry.index + 1}`;
       const line = element('p', 'library-plugin__contribution', `${entry.point} 기여 ${entry.index + 1}: ${CONTRIBUTION_STATES[entry.state]}`);

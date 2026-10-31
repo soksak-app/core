@@ -74,7 +74,7 @@ impl Plugins {
 
     /// Returns the registry address, the checked index and the installation state.
     pub fn state(&self) -> Result<PluginsState, String> {
-        plugins::read_plugins_state(&self.config_dir)
+        plugins::read_plugins_state(&self.config_dir, &self.core)
     }
 
     /// Sets the registry index like sok registry use <index> and returns its output.

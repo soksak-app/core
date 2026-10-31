@@ -4,19 +4,22 @@
 
 import { beginOperation } from "./operations.js";
 import { errorText } from "./error-text.js";
-import { compareVersions } from "./version-range.js";
+import { compareVersions, satisfies } from "./version-range.js";
 
 export const PLUGIN_ACTIONS = ["install", "update", "remove", "enable", "disable"];
 
 /**
  * Builds the sidecars that a plugin names as {name, range, version} in name order. For an installed plugin it uses the range of the installed.json
- * entry and the installed sidecar version; otherwise the range of the newest registry version; otherwise the dependencies of the loaded manifest.
+ * entry and the installed sidecar version; otherwise the range of the version that installation selects for the running core; otherwise the
+ * dependencies of the loaded manifest. A plugin without any of them, an incompatible plugin that is neither installed nor loaded, has no
+ * sidecars to name: the result is null.
  */
-function sidecarsOf(record, entry, unit, state) {
+function sidecarsOf(record, selected, unit, state) {
   let ranges;
   if (record) ranges = Object.entries(record.sidecars);
-  else if (entry?.versions.length) ranges = Object.entries(entry.versions.toSorted((a, b) => compareVersions(a.version, b.version)).at(-1).sidecars);
-  else ranges = Object.entries(unit.dependencies);
+  else if (selected) ranges = Object.entries(selected.sidecars);
+  else if (unit) ranges = Object.entries(unit.dependencies);
+  else return null;
   return ranges.sort(([a], [b]) => a.localeCompare(b)).map(([name, range]) => ({
     name, range,
     // default: a sidecar without host state or not installed has an unknown version (null).
@@ -38,7 +41,7 @@ export function pluginRows(loaded, state, refused) {
   const byId = new Map(loaded.map((unit) => [unit.id, unit]));
   if (!state) {
     return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id)).map((unit) => ({
-      id: unit.id, name: unit.name, description: unit.description, state: "loaded", installed: null, latest: null,
+      id: unit.id, name: unit.name, description: unit.description, state: "loaded", installed: null, latest: null, incompatible: false,
       // default: a loaded plugin without a composition declaration has no composition (null).
       composition: unit.composition ?? null,
       sidecars: sidecarsOf(null, null, unit, null),
@@ -65,7 +68,11 @@ export function pluginRows(loaded, state, refused) {
     // A refused plugin is not loaded by a reload either, so it does not wait for one.
     else if (!unit && record.enabled && refused.has(id)) status = "refused";
     else status = "reload";
-    const latest = entry?.versions.length ? entry.versions.map((v) => v.version).sort(compareVersions).at(-1) : null;
+    // The latest version is the one that installation selects: the newest whose range contains the running core
+    // (docs/spec/installation.md#version-selection).
+    const selected = entry?.versions.filter((item) => satisfies(item.engines.soksak, state.core))
+      .toSorted((a, b) => compareVersions(a.version, b.version)).at(-1);
+    const latest = selected ? selected.version : null;
     // default: name and description are decided in the order of the loaded manifest, the registry entry, and the plugin id (docs/spec/installation.md).
     const about = unit ?? entry ?? { name: id, description: "" };
     return {
@@ -73,8 +80,9 @@ export function pluginRows(loaded, state, refused) {
       // default: an unloaded plugin or a loaded plugin without a composition declaration exposes null.
       composition: unit?.composition ?? null,
       installed: record ? { version: record.version, enabled: record.enabled } : null, latest,
+      incompatible: Boolean(entry?.versions.length) && !selected,
       // A plugin that exists only in installed.json also has sidecars in that entry.
-      sidecars: sidecarsOf(record, entry, unit, state),
+      sidecars: sidecarsOf(record, selected, unit, state),
     };
   });
 }
@@ -165,6 +173,8 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
   function status() {
     const rows = host && !state ? [] : pluginRows(loaded(), state, refused());
     return {
+      // default: before the state is read, if it could not be read, or without a host, the running core is unknown (null).
+      core: state?.core ?? null,
       // default: before the state is read or if it could not be read, there is no registry address (null).
       registry: state?.registry ?? null,
       // default: if there is no read failure, error is null (core.plugins).

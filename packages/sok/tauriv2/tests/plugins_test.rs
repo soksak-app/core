@@ -391,7 +391,9 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
 
 /// Converts the result of read_plugins_state to a JSON text.
 fn state_json(config: &Folder) -> String {
-    let state = soksak_sok::plugins::read_plugins_state(config.path()).expect("plugins state");
+    let state =
+        soksak_sok::plugins::read_plugins_state(config.path(), soksak_sok::version::CORE_VERSION)
+            .expect("plugins state");
     serde_json::to_string(&state).expect("state JSON")
 }
 
@@ -401,7 +403,8 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let config = Folder::new("plugins");
     assert_eq!(
         state_json(&config),
-        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}"#
+        format!(r#"{{"core":"{}","#, soksak_sok::version::CORE_VERSION)
+            + r#""registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}"#
     );
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[
@@ -427,9 +430,10 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     assert!(error.contains(&registry.index()), "{error}");
     assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.2.0");
     std::fs::write(config.path().join("plugins/installed.json"), "{").unwrap();
-    let error = soksak_sok::plugins::read_plugins_state(config.path())
-        .err()
-        .expect("invalid installed.json fails");
+    let error =
+        soksak_sok::plugins::read_plugins_state(config.path(), soksak_sok::version::CORE_VERSION)
+            .err()
+            .expect("invalid installed.json fails");
     assert!(
         error.contains("installed.json is not valid JSON"),
         "{error}"
@@ -449,7 +453,8 @@ fn plugins_state_reads_and_rejects_invalid_starter_job() {
     .unwrap();
     assert_eq!(
         state_json(&config),
-        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}"#
+        format!(r#"{{"core":"{}","#, soksak_sok::version::CORE_VERSION)
+            + r#""registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}"#
     );
     for invalid in [
         r#"{"format":2,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha"]}"#,
@@ -458,9 +463,12 @@ fn plugins_state_reads_and_rejects_invalid_starter_job() {
         r#"{"format":1,"state":"pending","pack":"starter","registry":"sok://registry","plugins":["alpha"]}"#,
     ] {
         std::fs::write(&path, invalid).unwrap();
-        let error = soksak_sok::plugins::read_plugins_state(config.path())
-            .err()
-            .expect("invalid starter job fails");
+        let error = soksak_sok::plugins::read_plugins_state(
+            config.path(),
+            soksak_sok::version::CORE_VERSION,
+        )
+        .err()
+        .expect("invalid starter job fails");
         assert!(error.contains(&path.display().to_string()), "{error}");
     }
 }
@@ -510,7 +518,8 @@ fn starter_job_transitions_are_durable_and_bound_to_the_snapshot() {
     )
     .expect("install starter plugin");
     let resumed_state =
-        soksak_sok::plugins::read_plugins_state(config.path()).expect("restart state");
+        soksak_sok::plugins::read_plugins_state(config.path(), soksak_sok::version::CORE_VERSION)
+            .expect("restart state");
     assert!(!resumed_state.first_run);
     assert_eq!(resumed_state.starter.expect("pending job").state, "pending");
     let other = plugin_versions_for(soksak_sok::version::CORE_VERSION, &["0.2.0"]);
@@ -625,9 +634,10 @@ fn file_errors_name_the_path_and_the_reason() {
     std::fs::create_dir_all(installed.parent().unwrap()).unwrap();
     std::fs::write(&installed, "{}").unwrap();
     std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o0)).unwrap();
-    let error = soksak_sok::plugins::read_plugins_state(config.path())
-        .err()
-        .expect("an unreadable installed state is an error");
+    let error =
+        soksak_sok::plugins::read_plugins_state(config.path(), soksak_sok::version::CORE_VERSION)
+            .err()
+            .expect("an unreadable installed state is an error");
     std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o644)).unwrap();
     assert_eq!(error, format!("{}: permission denied", installed.display()));
 }

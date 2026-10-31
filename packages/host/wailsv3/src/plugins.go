@@ -63,7 +63,7 @@ func NewPlugins(configDir string, apply func() error, changed func(PluginsChange
 
 // State returns the registry address, the index that was checked, and the install state.
 func (p *Plugins) State() (*sok.PluginsState, error) {
-	return sok.ReadPluginsState(p.configDir)
+	return sok.ReadPluginsState(p.configDir, p.core)
 }
 
 // Run runs an operation such as sok plugin <action> <plugin> and returns its output.

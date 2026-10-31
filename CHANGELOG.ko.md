@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F328: plugin 카드와 업데이트 목록의 최신 버전은 설치가 실행 중인 core에 고르는 version이고, 그런 version이 없는 plugin은 core <version>에 맞는 버전 없음을 보인다. `pluginsState`가 실행 중인 core를 `core`로 보고한다.
 - F329: registry 검사가 범위가 가장 새 listed core보다 새 core를 포함하는 철회되지 않은 plugin version에서 실패한다.
 - F327: release 본문이 `docs/operations/install.md`의 각 상대 link를 release tag의 그 file로 풀므로 release 페이지의 link가 그 문서를 연다.
 - F326: 작업공간 version은 release candidate `0.0.24`이고, 게시된 `v0.0.23`과 구별된다. `v0.0.23`은 이전 형태의 `projects.json`이나 `settings.json`으로 시작하지 않았고 registry에 올리지 않았다.

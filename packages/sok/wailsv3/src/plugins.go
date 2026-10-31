@@ -157,6 +157,8 @@ func readRegistryURL(configDir string) (url string, exists bool, err error) {
 // PluginsState is the registry and the installation state that the application uses for its plugin list.
 // (docs/spec/installation.md#plugin-operations-in-the-application).
 type PluginsState struct {
+	// Core is the version of the running core, with which installation selects plugin versions.
+	Core      string          `json:"core"`
 	Registry  *string         `json:"registry"`
 	Index     any             `json:"index"`
 	Installed *InstalledState `json:"installed"`
@@ -184,7 +186,7 @@ type StarterJobRequest struct {
 
 // ReadPluginsState reads the registry address, the checked index and the installation state. When the index cannot be
 // read, it holds that error in the index field, and when the installation state cannot be read, it fails.
-func ReadPluginsState(configDir string) (*PluginsState, error) {
+func ReadPluginsState(configDir, core string) (*PluginsState, error) {
 	installed, err := ReadInstalled(configDir)
 	if err != nil {
 		return nil, err
@@ -198,7 +200,7 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return nil, fileError(path, statErr)
 	}
-	state := &PluginsState{Installed: installed, FirstRun: statErr != nil, Starter: starter}
+	state := &PluginsState{Core: core, Installed: installed, FirstRun: statErr != nil, Starter: starter}
 	url, exists, err := readRegistryURL(configDir)
 	switch {
 	case err != nil:

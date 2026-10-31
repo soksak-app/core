@@ -113,7 +113,10 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let (plugins, _) = new_plugins(config.path());
     assert_eq!(
         state_text(&plugins),
-        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}"#
+        format!(
+            r#"{{"core":"{}","registry":null,"index":null,"installed":{{"format":3,"plugins":{{}},"sidecars":{{}}}},"firstRun":true,"starter":null}}"#,
+            soksak_sok::version::CORE_VERSION
+        )
     );
     let registry = plugin_registry();
     soksak_sok::plugins::use_registry(

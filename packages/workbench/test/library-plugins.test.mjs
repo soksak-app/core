@@ -22,7 +22,7 @@ test("the plugin page of the library lists each plugin with its description, ver
   let refreshed = 0;
   const listeners = [];
   const status = {
-    registry: "file:///registry/index.json", error: null, reload: false,
+    core: "0.0.24", registry: "file:///registry/index.json", error: null, reload: false,
     // A persistent service that runs another version than the installed one, with the sessions that its replacement ends.
     outdated: [{ sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2 }],
     // The plugins that the registry lists in a newer version.
@@ -33,9 +33,12 @@ test("the plugin page of the library lists each plugin with its description, ver
         sidecars: [{ name: "@x/db", range: "^1.0.0", version: null }] },
       { id: "term", name: "터미널", description: "명령을 실행하는 표면.", state: "loaded", installed: { version: "0.1.0", enabled: true },
         latest: "0.2.0", sidecars: [{ name: "@scope/sidecar-probe", range: "^0.1.0", version: "0.1.2" }] },
-      // The window kept its page when the plugin changed, so the card offers to apply the change.
+      // The window kept its page when the plugin changed, so the card offers to apply the change. The registry lists no
+      // version of it whose range contains the running core.
       { id: "kept", name: "kept", description: "", state: "reload", installed: { version: "2.0.0", enabled: true },
-        latest: null, sidecars: [] },
+        latest: null, incompatible: true, sidecars: [] },
+      // The registry lists versions of it, none for the running core, and it is neither installed nor loaded.
+      { id: "lone", name: "lone", description: "", state: "available", installed: null, latest: null, incompatible: true, sidecars: null },
       // The registry lists the installed version as its newest, so the card offers no update.
       { id: "plain", name: "plain", description: "", state: "disabled", installed: { version: "1.0.0", enabled: false },
         latest: "1.0.0", sidecars: [] },
@@ -79,7 +82,7 @@ test("the plugin page of the library lists each plugin with its description, ver
     assert.deepEqual(updateRows.map((row) => row.textContent), ["term: 0.1.0 → 0.2.0"]);
     const updateAll = root.querySelector('[data-expose="core.library.plugins.update-all"]');
     assert.deepEqual([updateAll.textContent, updateAll.dataset.command], ["모두 업데이트", "core.plugins.update-all"]);
-    assert.deepEqual(library.state().plugins.shown, ["db", "term", "kept", "plain"]);
+    assert.deepEqual(library.state().plugins.shown, ["db", "term", "kept", "lone", "plain"]);
     assert.deepEqual(library.state().plugins.actions.map(({ plugin, action, disabled }) => `${plugin} ${action} ${disabled}`), [
       "db install true", "term update true", "term disable true", "term remove true", "kept apply true", "kept disable true", "kept remove true",
       "plain enable true", "plain remove true",
@@ -110,6 +113,9 @@ test("the plugin page of the library lists each plugin with its description, ver
     ]);
     assert.deepEqual(actions("plain").map(([label]) => label), ["사용", "제거"]);
     assert.equal(text("kept", "state"), "창을 다시 불러오면 적용");
+    assert.equal(text("kept", "versions"), "설치된 버전 2.0.0 · core 0.0.24에 맞는 버전 없음");
+    assert.equal(text("lone", "versions"), "core 0.0.24에 맞는 버전 없음");
+    assert.equal(text("lone", "sidecars"), null, "a card without a selected version names no sidecars");
     assert.deepEqual(actions("kept")[0], ["적용", "core.plugins.apply", JSON.stringify({}), true]);
 
     status.operation = { action: "install", plugin: "db", state: "done", error: null };

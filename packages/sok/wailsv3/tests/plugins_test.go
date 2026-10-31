@@ -283,7 +283,7 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 // stateJSON turns the result of ReadPluginsState into a JSON text.
 func stateJSON(t *testing.T, config string) string {
 	t.Helper()
-	state, err := sok.ReadPluginsState(config)
+	state, err := sok.ReadPluginsState(config, sok.CoreVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func stateJSON(t *testing.T, config string) string {
 // contract: cli.plugin.state-reads-registry-and-installed
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
-	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}` {
+	if text := stateJSON(t, config); text != `{"core":"`+sok.CoreVersion+`","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}` {
 		t.Fatalf("state without a registry = %s", text)
 	}
 	index := pluginVersions(t, "0.2.0")
@@ -305,7 +305,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
 		t.Fatal(err)
 	}
-	state, err := sok.ReadPluginsState(config)
+	state, err := sok.ReadPluginsState(config, sok.CoreVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +331,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(config, "plugins/installed.json"), []byte("{"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sok.ReadPluginsState(config); err == nil || !strings.Contains(err.Error(), "installed.json is not valid JSON") {
+	if _, err := sok.ReadPluginsState(config, sok.CoreVersion); err == nil || !strings.Contains(err.Error(), "installed.json is not valid JSON") {
 		t.Fatalf("state with an invalid installed.json: %v", err)
 	}
 }
@@ -347,7 +347,7 @@ func TestPluginsStateReadsAndRejectsInvalidStarterJob(t *testing.T) {
 	if err := os.WriteFile(path, []byte(job), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	want := `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}`
+	want := `{"core":"` + sok.CoreVersion + `","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}`
 	if got := stateJSON(t, config); got != want {
 		t.Fatalf("state with a pending starter job = %s, want %s", got, want)
 	}
@@ -360,7 +360,7 @@ func TestPluginsStateReadsAndRejectsInvalidStarterJob(t *testing.T) {
 		if err := os.WriteFile(path, []byte(invalid), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := sok.ReadPluginsState(config); err == nil || !strings.Contains(err.Error(), filepath.Join(config, "plugins/starter.json")) {
+		if _, err := sok.ReadPluginsState(config, sok.CoreVersion); err == nil || !strings.Contains(err.Error(), filepath.Join(config, "plugins/starter.json")) {
 			t.Fatalf("state with invalid starter job %s: %v", invalid, err)
 		}
 	}
@@ -376,7 +376,7 @@ func TestStarterJobTransitionsAreDurableAndBoundToTheSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state, err := sok.ReadPluginsState(config)
+	state, err := sok.ReadPluginsState(config, sok.CoreVersion)
 	if err != nil || job.State != "pending" || state.Starter == nil || state.Starter.State != "pending" || state.Starter.Pack != "starter" || state.Starter.Registry != "file://"+index || !reflect.DeepEqual(state.Starter.Plugins, []string{"probe"}) {
 		t.Fatalf("pending starter job = %#v, state %#v, error %v", job, state, err)
 	}
@@ -393,7 +393,7 @@ func TestStarterJobTransitionsAreDurableAndBoundToTheSnapshot(t *testing.T) {
 	if _, err := sok.RunPluginAction(config, "install", "probe", sok.CoreVersion, mustPlatform(t)); err != nil {
 		t.Fatal(err)
 	}
-	state, err = sok.ReadPluginsState(config)
+	state, err = sok.ReadPluginsState(config, sok.CoreVersion)
 	if err != nil || state.FirstRun || state.Starter == nil || state.Starter.State != "pending" {
 		t.Fatalf("pending job after an earlier successful install = %#v, %v", state, err)
 	}
@@ -416,7 +416,7 @@ func TestStarterJobTransitionsAreDurableAndBoundToTheSnapshot(t *testing.T) {
 	if _, err := sok.WriteStarterJob(config, sok.StarterJobRequest{State: "complete", Pack: request.Pack, Registry: request.Registry, Plugins: request.Plugins}); err != nil {
 		t.Fatalf("completion rejected a present but disabled plugin: %v", err)
 	}
-	if state, err := sok.ReadPluginsState(config); err != nil || state.Starter == nil || state.Starter.State != "complete" {
+	if state, err := sok.ReadPluginsState(config, sok.CoreVersion); err != nil || state.Starter == nil || state.Starter.State != "complete" {
 		t.Fatalf("completed job after read: %#v, %v", state, err)
 	}
 	if _, err := sok.WriteStarterJob(config, request); err == nil {
@@ -489,7 +489,7 @@ func TestFileErrorsNameThePathAndTheReason(t *testing.T) {
 	if err := os.WriteFile(installed, []byte("{}"), 0o000); err != nil {
 		t.Fatal(err)
 	}
-	_, err := sok.ReadPluginsState(config)
+	_, err := sok.ReadPluginsState(config, sok.CoreVersion)
 	if chmodErr := os.Chmod(installed, 0o644); chmodErr != nil {
 		t.Fatal(chmodErr)
 	}

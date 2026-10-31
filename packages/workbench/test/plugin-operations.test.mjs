@@ -9,9 +9,10 @@ const loaded = [
   { id: "gone", name: "지운 것", description: "지운 플러그인.", version: "1.0.0", dependencies: {} },
 ];
 
-const entry = (id, name, versions) => ({ id, package: `plugin-${id}`, name, description: `${name} 설명.`, versions: versions.map((version) => ({ version, sidecars: {} })) });
+const entry = (id, name, versions) => ({ id, package: `plugin-${id}`, name, description: `${name} 설명.`, versions: versions.map((version) => ({ version, engines: { soksak: "*" }, sidecars: {} })) });
 
 const state = {
+  core: "0.0.24",
   registry: "file:///registry/index.json",
   index: { plugins: [entry("term", "Terminal", ["0.1.0", "0.10.0", "0.9.0"]), entry("db", "DB", ["2.0.0"]), entry("off", "Off", ["1.0.0"])],
     revoked: { plugins: [], sidecars: [], core: [] } },
@@ -48,13 +49,35 @@ test("plugin rows report loaded surface compositions before any tab is open", { 
 
 test("plugin rows join loaded, installed and registry plugins by id with their states", () => {
   assert.deepEqual(pluginRows(loaded, state, new Set()), [
-    { id: "db", name: "DB", description: "DB 설명.", state: "available", composition: null, installed: null, latest: "2.0.0", sidecars: [] },
-    { id: "fresh", name: "fresh", description: "", state: "reload", composition: null, installed: { version: "0.1.0", enabled: true }, latest: null, sidecars: [] },
-    { id: "gone", name: "지운 것", description: "지운 플러그인.", state: "reload", composition: null, installed: null, latest: null, sidecars: [] },
-    { id: "notes", name: "노트", description: "노트 목록.", state: "reload", composition: null, installed: { version: "1.1.0", enabled: true }, latest: null, sidecars: [] },
-    { id: "off", name: "Off", description: "Off 설명.", state: "disabled", composition: null, installed: { version: "1.0.0", enabled: false }, latest: "1.0.0", sidecars: [] },
-    { id: "term", name: "터미널", description: "터미널 표면.", state: "loaded", composition: null, installed: { version: "0.1.0", enabled: true }, latest: "0.10.0", sidecars: [] },
+    { id: "db", name: "DB", description: "DB 설명.", state: "available", composition: null, installed: null, latest: "2.0.0", incompatible: false, sidecars: [] },
+    { id: "fresh", name: "fresh", description: "", state: "reload", composition: null, installed: { version: "0.1.0", enabled: true }, latest: null, incompatible: false, sidecars: [] },
+    { id: "gone", name: "지운 것", description: "지운 플러그인.", state: "reload", composition: null, installed: null, latest: null, incompatible: false, sidecars: [] },
+    { id: "notes", name: "노트", description: "노트 목록.", state: "reload", composition: null, installed: { version: "1.1.0", enabled: true }, latest: null, incompatible: false, sidecars: [] },
+    { id: "off", name: "Off", description: "Off 설명.", state: "disabled", composition: null, installed: { version: "1.0.0", enabled: false }, latest: "1.0.0", incompatible: false, sidecars: [] },
+    { id: "term", name: "터미널", description: "터미널 표면.", state: "loaded", composition: null, installed: { version: "0.1.0", enabled: true }, latest: "0.10.0", incompatible: false, sidecars: [] },
   ]);
+});
+
+test("the latest version of a row is the newest version whose range contains the running core, and a plugin without one is incompatible", { timeout: 5000 }, () => {
+  const ranged = (id, versions) => ({ id, package: `plugin-${id}`, name: id, description: `${id} 설명.`,
+    versions: versions.map(([version, range, sidecars = {}]) => ({ version, engines: { soksak: range }, sidecars })) });
+  const running = {
+    core: "0.0.24",
+    registry: "file:///registry/index.json",
+    index: { plugins: [
+      ranged("pad", [["0.0.4", ">=0.0.18", { "@x/old": "^0.0.1" }], ["0.0.7", "^0.0.21", { "@x/old": "^0.0.2" }], ["0.0.9", "^0.0.24", { "@x/new": "^0.0.8" }]]),
+      ranged("sheet", [["0.0.5", "^0.0.21"], ["0.0.6", "^0.0.23"]]),
+    ], revoked: { plugins: [{ id: "pad", version: "0.0.4", reason: "r" }], sidecars: [], core: [] } },
+    installed: { format: 3, plugins: { pad: { version: "0.0.3", enabled: true, sidecars: {} } }, sidecars: {} },
+  };
+  const rows = pluginRows([], running, new Set());
+  assert.deepEqual(rows.map((row) => [row.id, row.latest, row.incompatible]), [["pad", "0.0.9", false], ["sheet", null, true]]);
+  // An available plugin names the sidecars of the version that installation selects for the running core.
+  const later = { ...running, index: { ...running.index, plugins: [ranged("pad", [["0.0.7", "^0.0.21", { "@x/old": "^0.0.2" }], ["0.0.9", "^0.0.24", { "@x/new": "^0.0.8" }], ["0.0.10", "^0.0.25", { "@x/next": "^0.0.9" }]])] },
+    installed: { format: 3, plugins: {}, sidecars: {} } };
+  assert.deepEqual(pluginRows([], later, new Set())[0].sidecars, [{ name: "@x/new", range: "^0.0.8", version: null }]);
+  // An incompatible plugin that is neither installed nor loaded has no version to name sidecars from.
+  assert.equal(rows.find((row) => row.id === "sheet").sidecars, null);
 });
 
 test("a plugin whose every registry version is revoked is not offered, and an installed one keeps its row without an update", () => {
@@ -87,13 +110,14 @@ test("a loaded plugin that was disabled after the window loaded waits for a page
   assert.equal(pluginRows([loaded[0]], disabled, new Set()).find((row) => row.id === "term").state, "reload");
 });
 
-test("a row names its sidecars from the installed entry, else the newest registry version, else the manifest", () => {
+test("a row names its sidecars from the installed entry, else the registry version that installation selects, else the manifest", () => {
   const probe = "@scope/sidecar-probe";
   const withSidecars = {
+    core: "0.0.24",
     registry: "file:///registry/index.json",
     index: { plugins: [{ id: "db", package: "plugin-db", name: "DB", description: "DB 설명.", versions: [
-      { version: "1.0.0", sidecars: { "@x/old": "1.0.0" } },
-      { version: "2.0.0", sidecars: { "@x/db": "^1.0.0", "@a/b": "1.0.0" } },
+      { version: "1.0.0", engines: { soksak: "*" }, sidecars: { "@x/old": "1.0.0" } },
+      { version: "2.0.0", engines: { soksak: "*" }, sidecars: { "@x/db": "^1.0.0", "@a/b": "1.0.0" } },
     ] }], revoked: { plugins: [], sidecars: [], core: [] } },
     installed: {
       format: 2,
