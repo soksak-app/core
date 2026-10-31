@@ -8,13 +8,20 @@ mod folder;
 mod records;
 use std::fs;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use serde_json::{Value, json};
 use soksak_host_tauriv2::event_log::{Level, Options};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 use soksak_host_tauriv2::installed::apply_plugin_event_classes;
+
+/// The host event log is process-wide, and two tests of this file replace it, so those tests run one at a time.
+static SERIAL: Mutex<()> = Mutex::new(());
+
+fn serial() -> MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(|poison| poison.into_inner())
+}
 
 fn write_plugin(config: &Path, id: &str, catalog: &str) -> String {
     let folder = config.join("plugins").join(id).join("1.0.0");
@@ -32,6 +39,7 @@ fn write_plugin(config: &Path, id: &str, catalog: &str) -> String {
 #[test]
 fn the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_catalog_it_cannot_use()
 {
+    let _serial = serial();
     let directory = folder::Folder::new();
     let log = Arc::new(
         records::start_every_level(Options {
@@ -143,6 +151,7 @@ fn the_host_keeps_the_classes_of_a_plugin_that_a_change_removed() {
 // contract: log.plugin-catalog.records-the-held-catalogs
 #[test]
 fn the_writer_records_the_plugin_catalogs_it_holds_at_each_apply() {
+    let _serial = serial();
     let directory = folder::Folder::new();
     let log = Arc::new(
         records::start_every_level(Options {

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{PresentationWait, ViewPlacement, presentation_abandoned_payload};
-use crate::event_record::buffered_fields;
+use crate::event_record::buffered_fields_of;
 
 const SURFACE: &str = "presentation-probe-surface";
 const GENERATION: u64 = 7;
@@ -20,10 +20,7 @@ fn placement(frame: [f64; 4], visible: bool) -> ViewPlacement {
 
 /// The fields of each buffered abandoned-presentation record of the surface.
 fn abandoned_of_surface() -> Vec<serde_json::Value> {
-    buffered_fields("host.trace.view.presentation-abandoned")
-        .into_iter()
-        .filter(|fields| fields["surface"] == SURFACE)
-        .collect()
+    buffered_fields_of("host.trace.view.presentation-abandoned", SURFACE)
 }
 
 // contract: view.presentation-wait.ends
@@ -90,15 +87,12 @@ fn each_end_without_presentation_writes_the_abandoned_event() {
 fn a_presentation_ends_the_exact_wait_without_an_abandoned_event() {
     let wait = PresentationWait::default();
     wait.begin(SURFACE, GENERATION, TICKET);
-    let before = buffered_fields("host.trace.view.presentation-abandoned").len();
+    let before = abandoned_of_surface().len();
     assert_eq!(
         wait.end(SURFACE, GENERATION, TICKET, "presented"),
         Ok(false)
     );
-    assert_eq!(
-        buffered_fields("host.trace.view.presentation-abandoned").len(),
-        before
-    );
+    assert_eq!(abandoned_of_surface().len(), before);
     // Cancellation aborts its layout transaction (abandon_ticket), so it is not a reason that ends a wait.
     assert!(wait.end(SURFACE, GENERATION, TICKET, "cancelled").is_err());
 }
@@ -244,10 +238,8 @@ fn a_hide_after_a_presented_callback_ends_no_wait() {
         }),
     ));
     wait.mark_presented(ABANDON_SURFACE, GENERATION, TICKET);
-    let abandoned_before = buffered_fields("host.trace.view.presentation-abandoned")
-        .into_iter()
-        .filter(|fields| fields["surface"] == ABANDON_SURFACE)
-        .count();
+    let abandoned_before =
+        buffered_fields_of("host.trace.view.presentation-abandoned", ABANDON_SURFACE).len();
     assert_eq!(
         wait.end(ABANDON_SURFACE, GENERATION, TICKET, "hidden"),
         Ok(false)
@@ -258,10 +250,8 @@ fn a_hide_after_a_presented_callback_ends_no_wait() {
         wait.end(ABANDON_SURFACE, GENERATION, TICKET, "presented"),
         Ok(false)
     );
-    let abandoned_after = buffered_fields("host.trace.view.presentation-abandoned")
-        .into_iter()
-        .filter(|fields| fields["surface"] == ABANDON_SURFACE)
-        .count();
+    let abandoned_after =
+        buffered_fields_of("host.trace.view.presentation-abandoned", ABANDON_SURFACE).len();
     assert_eq!(abandoned_after, abandoned_before);
 }
 

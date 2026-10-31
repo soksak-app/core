@@ -2,7 +2,7 @@ use super::{
     ViewChannels, ViewIngress, accept_view_message, register_view_source,
     retire_view_before_replacement,
 };
-use crate::event_record::buffered_fields;
+use crate::event_record::{buffered_fields, buffered_fields_of};
 use crate::windows::{DeclaredSourceEvent, WindowData};
 use std::sync::{Arc, Mutex, PoisonError};
 use tauri::ipc::{Channel, InvokeResponseBody};
@@ -196,15 +196,21 @@ fn a_current_view_callback_enters_dispatch() {
 #[test]
 fn a_runtime_log_call_is_not_forwarded_to_the_workbench() {
     let channels = ViewChannels::default();
-    channels.register_origin("surface", "probe", 1);
+    channels.register_origin("runtime-log-surface", "probe", 1);
     channels.dispatch(
-        "surface",
+        "runtime-log-surface",
         r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1791948729050}}"#,
     ).expect("the view page is ready");
-    let before = buffered_fields("host.view.call").len();
+    let before = buffered_fields_of("host.view.call", "runtime-log-surface").len();
+    // A call record of another surface between the two reads stands for a test that runs in parallel.
+    crate::event_record::emit_host(
+        crate::event_log::Level::Debug,
+        "host.view.call",
+        serde_json::json!({"plugin": "probe", "surface": "other-surface", "id": 1, "command": "probe.read"}),
+    );
 
     let result = channels.dispatch(
-        "surface",
+        "runtime-log-surface",
         r#"{"message":{"sok":1,"id":17,"command":"runtime.log","params":{"action":"clock"}}}"#,
     );
 
@@ -213,7 +219,7 @@ fn a_runtime_log_call_is_not_forwarded_to_the_workbench() {
         "runtime.log must use the direct writer path, not the workbench relay: {result:?}"
     );
     assert_eq!(
-        buffered_fields("host.view.call").len(),
+        buffered_fields_of("host.view.call", "runtime-log-surface").len(),
         before,
         "runtime.log must not emit a synthetic host.view.call"
     );
@@ -227,7 +233,7 @@ fn a_runtime_log_call_is_not_forwarded_to_the_workbench() {
             "log events carry their own cids",
         ),
     ] {
-        let call = match channels.dispatch("surface", message) {
+        let call = match channels.dispatch("runtime-log-surface", message) {
             Ok(super::ViewDispatch::Log(call)) => call,
             other => panic!("invalid runtime.log envelope lost its reply identity: {other:?}"),
         };

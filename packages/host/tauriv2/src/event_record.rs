@@ -215,6 +215,16 @@ pub(crate) fn buffered_fields(name: &str) -> Vec<serde_json::Value> {
         .collect()
 }
 
+/// The fields of each record of event name of surface that the start buffer holds, in the order of the buffer. The buffer holds
+/// the records of every test of the binary, which run in parallel, so a test reads only the records of a surface of its own.
+#[cfg(test)]
+pub(crate) fn buffered_fields_of(name: &str, surface: &str) -> Vec<serde_json::Value> {
+    buffered_fields(name)
+        .into_iter()
+        .filter(|fields| fields["surface"] == surface)
+        .collect()
+}
+
 /// Stores an observation of the trace of the host as the event `host.<kind>.<event>`, where kind is `trace` for the layer
 /// `host` and `sampler` for the layer `sampler`. The fields hold the name of the event in `event`, which the name of the
 /// stored event replaces.
