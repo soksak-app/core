@@ -267,14 +267,15 @@ test('no workflow checks out another repository of the workspace', { timeout: 10
   }
 });
 
-test('the release publishes sok and the packed releases that plugins and sidecars build with', { timeout: 1000 }, () => {
+test('the release publishes the packed releases that plugins and sidecars build with and sok only inside the bundles', { timeout: 1000 }, () => {
   const text = read('.github/workflows/release.yml');
   const start = text.indexOf('  release-wailsv3:');
   const job = text.slice(start, text.indexOf('\n  release-tauriv2:'));
   const list = steps(job);
   const pack = list.find((step) => step.name === 'Package the releases that plugins and sidecars build with');
-  assert.ok(pack, 'release-wailsv3 has no step that packages sok and the packed releases');
-  assert.match(pack.text, /cp target\/release\/wailsv3\/soksak\.app\/Contents\/MacOS\/sok "dist\/sok-\$version-darwin-arm64"/);
+  assert.ok(pack, 'release-wailsv3 has no step that packages the packed releases');
+  // Each application zip holds the sok of its host, so the release publishes no second copy of sok.
+  assert.doesNotMatch(text, /dist\/sok-/, 'the release publishes sok outside the application bundles');
   assert.match(pack.text, /make -C native\/darwin\/process-identity\n/);
   for (const folder of ['packages/plugin-api', 'native/darwin/process-identity']) {
     assert.match(pack.text, new RegExp(`pnpm -C ${folder} pack --pack-destination "\\$PWD/dist"`), `${folder} is not packed into dist`);

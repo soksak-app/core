@@ -215,7 +215,7 @@ Core는 스스로 release하며, 저장소는 설치 기록(`plugin.json`, `inst
 
 Gate가 release하면 같은 run이 두 host를 build하고 package하며, registry manifest를 검사한다. `publish` job은 이 job이 모두 성공하고, run의 commit이 여전히 `main`의 head이며, tag가 여전히 없을 때만 실행된다. 이 job은 그 commit에 tag `v<version>`을 release와 함께 만든다. Workflow는 한 번에 하나의 run만 실행하므로(`concurrency: release`) 두 push가 한 version을 두 번 publish하지 않는다. Workflow token으로 push한 tag는 다른 workflow를 시작하지 않으므로 release job은 tag push가 아니라 같은 run에서 실행된다.
 
-Release는 plugin과 sidecar 저장소가 build에 쓰는 것을 담으므로, 그 workflow는 core의 source를 checkout하지 않는다. Wails release bundle의 `sok`인 `sok-<version>-darwin-arm64`, 그리고 `pnpm pack`이 `packages/plugin-api`와 `native/darwin/process-identity`에서 만든 packed release `soksak-plugin-api-<version>.tgz`, `soksak-native-process-identity-darwin-<version>.tgz`이다. process identity package의 tarball은 release job이 build한 static library를 담는다.
+Release는 plugin과 sidecar 저장소가 build에 쓰는 것을 담으므로, 그 workflow는 core의 source를 checkout하지 않는다. application zip `soksak-<version>-darwin-arm64-<host>.zip`마다 들어 있는 `sok`(`soksak.app/Contents/MacOS/sok`, release는 이를 따로 게시하지 않는다), 그리고 `pnpm pack`이 `packages/plugin-api`와 `native/darwin/process-identity`에서 만든 packed release `soksak-plugin-api-<version>.tgz`, `soksak-native-process-identity-darwin-<version>.tgz`이다. process identity package의 tarball은 release job이 build한 static library를 담는다.
 
 ## page 메모리
 

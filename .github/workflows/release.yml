@@ -82,12 +82,11 @@ jobs:
           version="${{ needs.gate.outputs.version }}"
           mkdir -p dist
           ditto -c -k --keepParent target/release/wailsv3/soksak.app "dist/soksak-$version-darwin-arm64-wailsv3.zip"
-      # The plugins and sidecars build with the sok of this release and pin the packed releases of @soksak/plugin-api and
-      # @soksak/native-process-identity-darwin, so their workflows check out no source of core.
+      # The plugins and sidecars build with the sok inside an application zip of this release and pin the packed releases of
+      # @soksak/plugin-api and @soksak/native-process-identity-darwin, so their workflows check out no source of core.
       - name: Package the releases that plugins and sidecars build with
         run: |
           version="${{ needs.gate.outputs.version }}"
-          cp target/release/wailsv3/soksak.app/Contents/MacOS/sok "dist/sok-$version-darwin-arm64"
           make -C native/darwin/process-identity
           pnpm -C packages/plugin-api pack --pack-destination "$PWD/dist"
           pnpm -C native/darwin/process-identity pack --pack-destination "$PWD/dist"

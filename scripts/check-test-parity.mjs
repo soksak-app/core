@@ -8230,6 +8230,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F320",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "pnpm -C packages/plugin-api pack --pack-destination" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release publishes the packed releases that plugins and sidecars build with and sok only inside the bundles" }],
+    expected: "The core release publishes sok only inside its application zips.",
+    levels: ["unit"],
+  },
+  {
     id: "F317-1",
     implementation: [{ file: "native/darwin/tests/support/temporary_folder.m", symbol: "static void writeRemainingEntries(const char *folder)" }],
     tests: [{ file: "native/darwin/tests/temporary_folder_test.m", id: "the message names the entry that remains with its mode and flags" }],
@@ -8408,7 +8415,7 @@ const FEATURE_LINKS = [
   {
     id: "F298-7",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "name: Package the releases that plugins and sidecars build with" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release publishes sok and the packed releases that plugins and sidecars build with" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release publishes the packed releases that plugins and sidecars build with and sok only inside the bundles" }],
     expected: "The core release holds sok and the packed releases of @soksak/plugin-api and @soksak/native-process-identity-darwin.",
     levels: ["unit"],
   },

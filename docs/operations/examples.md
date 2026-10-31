@@ -215,7 +215,7 @@ Core releases itself, and its release waits for no release of a plugin or sideca
 
 When the gate releases, the run builds and packages both hosts and checks the registry manifests. The `publish` job runs only when every one of these jobs succeeded, the commit of the run is still the head of `main` and the tag is still absent; it creates the tag `v<version>` on that commit together with the release. The workflow runs one run at a time (`concurrency: release`), so two pushes never publish one version twice. A tag pushed with the workflow token starts no other workflow, so the release jobs run in the same run instead of on a tag push.
 
-The release holds what the plugin and sidecar repositories build with, so their workflows check out no source of core: `sok-<version>-darwin-arm64`, the `sok` of the Wails release bundle, and the packed releases `soksak-plugin-api-<version>.tgz` and `soksak-native-process-identity-darwin-<version>.tgz`, which `pnpm pack` makes from `packages/plugin-api` and `native/darwin/process-identity`. The tarball of the process identity package holds the static library that the release job builds.
+The release holds what the plugin and sidecar repositories build with, so their workflows check out no source of core: the `sok` inside each application zip `soksak-<version>-darwin-arm64-<host>.zip` (`soksak.app/Contents/MacOS/sok`), which the release publishes nowhere else, and the packed releases `soksak-plugin-api-<version>.tgz` and `soksak-native-process-identity-darwin-<version>.tgz`, which `pnpm pack` makes from `packages/plugin-api` and `native/darwin/process-identity`. The tarball of the process identity package holds the static library that the release job builds.
 
 ## Page memory
 
