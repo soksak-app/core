@@ -46,31 +46,15 @@ typedef void (*sp_view_message)(void *context, const char *json);
 void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, const char *channel,
     sp_document_changed changed, void *context);
 
-// The cause of the last creation of a document region or plugin host web view that returned NULL on the main thread, as a UTF-8
+// The cause of the last creation of a document region or view web view that returned NULL on the main thread, as a UTF-8
 // string that names the failed step and the native error text. It is "" when the last creation did not fail, and the next
 // creation clears it.
 const char *sp_document_last_error(void);
 
-// Makes the next creation of a document region or a plugin host web view fail with cause, as a failed creation of the native
+// Makes the next creation of a document region or view web view fail with cause, as a failed creation of the native
 // layer does, so that the host unit tests of the creation error text run without a failing data store. Only the owning tests
 // call it.
 void sp_document_fail_creation_for_test(const char *cause);
-
-// Creates the plugin host web view of plugin hidden in the window itself (docs/spec/plugin-host.md). directory is the
-// absolute path where the persistent data store keeps site data, and it is created if missing; documents with the same
-// directory use the same store. folder and plugin name the installed folder and the id of the plugin whose host the web
-// view runs, so soksak://<plugin>/<path> serves <path> from that folder and the configuration carries the view
-// configuration: the view channel script channel runs at document start in the page world, the sok-view handler is
-// registered, and the configuration may request soksak://core/<path> from the core root resolver
-// (sp_core_root_set_resolver). changed receives the state JSON of the web view. The web view holds a zero frame, is
-// hidden, draws nothing, takes no hit testing, receives no input, and never becomes the first responder. Returns NULL
-// if the webview cannot be created.
-void *sp_plugin_host_create(void *window, const char *directory, const char *folder, const char *plugin,
-    const char *channel, sp_document_changed changed, void *context);
-
-// Whether view is a plugin host web view that sp_plugin_host_create created. The window facts count these web views apart
-// from the app DOM and the view web views (docs/spec/native-surfaces.md). Called on the main thread.
-bool sp_webview_is_plugin_host(void *view);
 
 // Called when the WebContent process of a view ends, before the host closes the view (docs/spec/plugin-processes.md, rule 5). It
 // is not called for a closed view. Called on the main thread.
@@ -225,7 +209,7 @@ char *sp_document_interaction_state(void *document);
 // the state is not base64, or the web view refused it.
 const char *sp_document_restore(void *document, const char *state);
 
-// Removes and releases the webview, of a document region or of a plugin host. changed is not called afterward.
+// Removes and releases the webview, of a document region or of a view surface. changed is not called afterward.
 void sp_document_close(void *document);
 
 // Takes the bytes that the binary store of the region keeps under id (docs/spec/native-surfaces.md#document-regions) and

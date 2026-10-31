@@ -83,11 +83,11 @@ func registeredViewRecordSurfaces(t *testing.T) *Surfaces {
 		views:         map[string]*nativeWebview{},
 		events:        func(string, any) {},
 	}
-	generation, err := s.sourceOriginState().create("probe-surface", true)
+	generation, err := s.sourceOriginState().create("probe-surface")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current, ok := s.sourceOriginState().current("probe-surface", true); !ok || current != generation {
+	if current, ok := s.sourceOriginState().current("probe-surface"); !ok || current != generation {
 		t.Fatalf("registered view origin is not current: generation %d, current %d, present %t", generation, current, ok)
 	}
 	handle := unsafe.Pointer(new(int))

@@ -257,8 +257,7 @@ func (c *Sidecars) countFailure(name string) bool {
 }
 
 // count counts a failure at now among the failures within restartWindow, which the record keeps. It reports true when
-// this failure is the restartLimit-th counted one, which stops the restarts. The plugin hosts count their failures with
-// the same record (docs/spec/plugin-host.md#restarts).
+// this failure is the restartLimit-th counted one, which stops the restarts.
 func (r *restartRecord) count(now time.Time) bool {
 	kept := r.failures[:0]
 	for _, at := range r.failures {
@@ -312,7 +311,7 @@ func (c *Sidecars) SurfaceOpened(plugin, surface string) {
 }
 
 // PluginEnabled is called when the person enables plugin. It clears the restart limit of each stopped sidecar that the plugin
-// lists in dependencies, in the same step as the plugin host stop of the plugin (docs/spec/sidecars.md#failure). It is called
+// lists in dependencies (docs/spec/sidecars.md#failure). It is called
 // holding no lock; it takes c.mu.
 func (c *Sidecars) PluginEnabled(plugin string) {
 	c.clearDependencyStops(plugin, "plugin", plugin)
@@ -607,25 +606,16 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 // SendWithCids sends a page request that continues the inputs named by cids; the request line carries them as the field
 // `cids`, and no field when cids is empty.
 func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
-	return c.send(owner, name, surface, "", body, cids)
+	return c.send(owner, name, surface, body, cids)
 }
 
-// SendPluginWithCids sends a request of a plugin host for the session surface, whose project root is root (docs/plans/plugin-host-routes.md
-// rule 3). The root applies to the first send of the session, as the window root does for a surface.
-func (c *Sidecars) SendPluginWithCids(owner SidecarOwner, name, surface, root string, body json.RawMessage, cids []string) error {
-	return c.send(owner, name, surface, root, body, cids)
-}
-
-// send is the send of SendWithCids. project is the root of a plugin session, or empty for the root of the window.
-func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body json.RawMessage, cids []string) error {
+// send is the send of SendWithCids.
+func (c *Sidecars) send(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
 	c.mu.Lock()
 	root, known := c.roots[surface]
 	c.mu.Unlock()
 	if !known {
 		root = owner.ProjectRoot()
-		if project != "" {
-			root = project
-		}
 	}
 	// The JSON serialization is done outside the mutex.
 	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Cids: cids, Body: body})
@@ -1285,13 +1275,11 @@ type RetainedSurface struct {
 }
 
 // retainLayoutOwners removes layout owners omitted from an authoritative snapshot.
-// The caller holds c.mu; plugin and state sessions keep their explicit lifecycle.
+// The caller holds c.mu.
 func (c *Sidecars) retainLayoutOwners(listed map[string]bool) bool {
 	before := c.statusLocked()
 	for surface := range c.roots {
-		_, pluginSession := parsePluginSession(surface)
-		_, stateSession := parseStateSession(surface)
-		if listed[surface] || pluginSession || stateSession {
+		if listed[surface] {
 			continue
 		}
 		delete(c.roots, surface)
@@ -1323,7 +1311,7 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 		listed[item.Surface] = true
 	}
 	// The supplied list is the complete set of layout surface sessions. Retire stale owners before building each service's keep list;
-	// plugin-host and state sessions use their own explicit close paths and are not project layout surfaces.
+	//
 	c.mu.Lock()
 	changed := c.retainLayoutOwners(listed)
 	c.mu.Unlock()
@@ -1382,7 +1370,7 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 			c.mu.Unlock()
 			return total, fmt.Errorf("sidecar %s is not running", name)
 		}
-		// The keep list is built here, after the service started, so a plugin session first sent during the start is kept (F229-7).
+		// The keep list is built here, after the service started, so a session first sent during the start is kept (F229-7).
 		// Starts from a non-nil slice so that an empty list is also sent as a JSON array.
 		keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
 		for surface, root := range c.roots {

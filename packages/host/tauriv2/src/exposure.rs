@@ -115,7 +115,6 @@ fn host_declarations() -> Value {
                 "controls": {"type": "array", "items": rect},
                 "webviews": {"type": "array", "items": {"type": "object", "properties": {
                     "frame": rect, "main": {"type": "boolean"}, "document": {"type": "boolean"},
-                    "pluginHost": {"type": "boolean"},
                     "visible": {"type": "boolean"}, "focused": {"type": "boolean"}, "order": {"type": "integer"}}}},
                 "surfaces": {"type": "array", "items": {"type": "object", "properties": {
                     "id": {"type": "string"}, "frame": rect,
@@ -1480,6 +1479,10 @@ pub(crate) fn window_unwatched(app: &AppHandle, window: &str) {
 }
 
 #[cfg(test)]
+#[path = "exposure_webviews_test.rs"]
+mod webviews_test;
+
+#[cfg(test)]
 #[path = "exposure_status_test.rs"]
 mod status_test;
 
@@ -1606,7 +1609,6 @@ pub(crate) fn window_processes(
     window: &Window,
 ) -> Result<crate::performance::WindowProcesses, String> {
     let data = window_data(window)?;
-    let plugin_hosts = data.plugin_hosts.snapshot();
     let documents = data.documents.names();
     let platform = platform::current()?;
     let facts = with_native_owner(window, move |handle| platform.window_facts(handle)).map_err(
@@ -1635,48 +1637,10 @@ pub(crate) fn window_processes(
             });
         }
     }
-    let plugin_host_processes = plugin_host_processes_for_facts(webviews, &plugin_hosts)?;
     Ok(crate::performance::WindowProcesses {
         page: page as u32,
         documents: document_processes,
-        plugin_hosts: plugin_host_processes,
     })
-}
-
-fn plugin_host_processes_for_facts(
-    webviews: &[Value],
-    registered: &[(String, platform::Handle)],
-) -> Result<Vec<crate::performance::PluginHostProcess>, String> {
-    let mut processes = Vec::with_capacity(registered.len());
-    let mut seen = std::collections::HashSet::with_capacity(registered.len());
-    for view in webviews {
-        let handle = view["view"].as_u64().ok_or("a webview fact has no view")? as platform::Handle;
-        let Some((plugin, _)) = registered
-            .iter()
-            .find(|(_, candidate)| *candidate == handle)
-        else {
-            continue;
-        };
-        if !seen.insert(handle) {
-            return Err(format!(
-                "plugin host {plugin} appears more than once in window facts"
-            ));
-        }
-        let process = view["process"]
-            .as_u64()
-            .ok_or_else(|| format!("plugin host {plugin} has no process in window facts"))?;
-        processes.push(crate::performance::PluginHostProcess {
-            plugin: plugin.clone(),
-            process: process as u32,
-        });
-    }
-    for (plugin, handle) in registered {
-        if !seen.contains(handle) {
-            return Err(format!("plugin host {plugin} is absent from window facts"));
-        }
-    }
-    processes.sort_by(|left, right| left.plugin.cmp(&right.plugin));
-    Ok(processes)
 }
 
 /// Calculates the host.window value of a window. It is called from a thread that is not the main thread.
@@ -1728,17 +1692,13 @@ fn responder_of(
 }
 
 /// Returns the web view counts of host.window from the native window facts.
-fn window_webview_counts(facts: &Value) -> Result<(u64, u64, u64), Failure> {
+fn window_webview_counts(facts: &Value) -> Result<(u64, u64), Failure> {
     let count = |name: &str| {
         facts[name]
             .as_u64()
             .ok_or_else(|| internal(format!("window facts missing {name}")))
     };
-    Ok((
-        count("appDomWebviews")?,
-        count("documentWebviews")?,
-        count("pluginHostWebviews")?,
-    ))
+    Ok((count("appDomWebviews")?, count("documentWebviews")?))
 }
 
 /// Returns the order of an open modal in host.window from the number of native surfaces and the number of web views.
@@ -1789,7 +1749,6 @@ fn window_webview_row(order: usize, view: &Value) -> Result<Value, Failure> {
         json!({"x": view["x"], "y": view["y"], "width": view["width"], "height": view["height"]});
     Ok(
         json!({"frame": rect, "main": flag("main")?, "document": flag("document")?,
-        "pluginHost": flag("pluginHost")?,
         "visible": !flag("hidden")?, "focused": flag("focused")?, "order": order}),
     )
 }
@@ -1839,8 +1798,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let webviews = facts["webviews"]
         .as_array()
         .ok_or_else(|| internal("window facts missing webviews"))?;
-    let (app_dom_webviews, document_webviews, plugin_host_webviews) =
-        window_webview_counts(&facts)?;
+    let (app_dom_webviews, document_webviews) = window_webview_counts(&facts)?;
     let overlay = &context.overlay;
     let mut surfaces = Vec::new();
     let mut attached = Vec::new();
@@ -1935,7 +1893,6 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         "quitting": window.state::<crate::windows::Windows>().quit.active(),
         "appDomWebviews": app_dom_webviews,
         "documentWebviews": document_webviews,
-        "pluginHostWebviews": plugin_host_webviews,
         "controls": facts["controls"],
         "webviews": webview_frames,
         "surfaces": surfaces,
@@ -2571,10 +2528,3 @@ mod reply_tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "exposure_performance_test.rs"]
-mod exposure_performance_test;
-#[cfg(test)]
-#[path = "exposure_webviews_test.rs"]
-mod exposure_webviews_test;

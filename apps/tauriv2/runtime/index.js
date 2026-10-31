@@ -50,11 +50,6 @@ const COMMAND = {
   viewEvent: "view_event",
   viewReply: "view_reply",
   declaredSourceOrigins: "declared_source_origins",
-  pluginHostReply: "plugin_host_reply",
-  pluginHostRequest: "plugin_host_request",
-  pluginHostEvent: "plugin_host_event",
-  pluginHostSidecarSend: "plugin_host_sidecar_send",
-  pluginHostSidecarClose: "plugin_host_sidecar_close",
   documentDetach: "document_detach",
   documentSubscribe: "document_subscribe",
   documentUnsubscribe: "document_unsubscribe",
@@ -132,11 +127,6 @@ const ARG = {
   viewRequest: (request) => ({ request }),
   viewEvent: (request) => ({ request }),
   viewReply: (request) => ({ request }),
-  pluginHostReply: (request) => ({ request }),
-  pluginHostRequest: (request) => ({ request }),
-  pluginHostEvent: (request) => ({ request }),
-  pluginHostSidecarSend: (request) => ({ request }),
-  pluginHostSidecarClose: ({ plugin }) => ({ plugin }),
   documentDetach: (request) => ({ request }),
   documentSubscribe: (request) => ({ request }),
   documentUnsubscribe: (request) => ({ request }),
@@ -181,7 +171,6 @@ export const host = (() => {
   const invoke = hostInvoke();
   const orderedWindowEvents = new Set([
     "declared-ui-source-registered", "declared-ui-source-ended", "declared-ui-snapshot",
-    "plugin-host-call", "plugin-host-reply", "plugin-host-ended",
     "view-call", "view-reply", "view-process-ended", "view-stopped", "view-responsiveness",
   ]);
   const orderedSubscribers = new Map();

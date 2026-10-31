@@ -77,7 +77,7 @@ func PluginFolder(configDir, plugin string) (string, error) {
 	return plugins[index].dir, nil
 }
 
-// sidecarFacts are the facts of a sidecar dependency that the installed document carries: the operations that a plugin host may call and
+// sidecarFacts are the facts of a sidecar dependency that the installed document carries: the operations that the host may call and
 // the message form (docs/spec/sidecars.md#messages). Each field is copied from sidecar.json as it is, and the page validates it. A field that
 // sidecar.json lacks is omitted.
 type sidecarFacts struct {

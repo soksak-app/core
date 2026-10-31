@@ -64,9 +64,6 @@ static void documentQuery(void *document, uintptr_t context) {
 static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *channel, uintptr_t context) {
     return ON_MAIN(void *, sp_document_create(surface, store, package, plugin, channel, documentChangedBridge, (void *)context));
 }
-static void *pluginHostCreate(void *window, const char *store, const char *package, const char *plugin, const char *channel, uintptr_t context) {
-    return ON_MAIN(void *, sp_plugin_host_create(window, store, package, plugin, channel, documentChangedBridge, (void *)context));
-}
 static void documentSetMessage(void *document, uintptr_t context) {
     wailsRunOnMain(^{ sp_document_set_message(document, documentMessageBridge, (void *)context); });
 }
@@ -263,7 +260,7 @@ func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, 
 	return document, nil
 }
 
-// failNextCreation makes the next creation of a document region or plugin host web view fail with cause in the native layer. The
+// failNextCreation makes the next creation of a document region or view web view fail with cause in the native layer. The
 // owning unit tests call it.
 func failNextCreation(cause string) {
 	text := C.CString(cause)
@@ -277,27 +274,6 @@ func creationError(message, cause string) error {
 		return errors.New(message)
 	}
 	return fmt.Errorf("%s: %s", message, cause)
-}
-
-// CreatePluginHost creates the plugin host web view of a plugin hidden in the window itself with the view configuration
-// (docs/spec/plugin-host.md). The state receiver is kept until CloseDocument, as the receiver of a document region is.
-func (implementation) CreatePluginHost(window unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error) {
-	name := C.CString(directory)
-	defer C.free(unsafe.Pointer(name))
-	folderText := C.CString(folder)
-	defer C.free(unsafe.Pointer(folderText))
-	id := C.CString(plugin)
-	defer C.free(unsafe.Pointer(id))
-	channelText := C.CString(channel)
-	defer C.free(unsafe.Pointer(channelText))
-	receiver := cgo.NewHandle(changed)
-	document := C.pluginHostCreate(window, name, folderText, id, channelText, C.uintptr_t(receiver))
-	if document == nil {
-		receiver.Delete()
-		return nil, creationError("cannot create a plugin host web view in this window", C.GoString(C.main_sp_document_last_error()))
-	}
-	documents[document] = receiver
-	return document, nil
 }
 
 func (implementation) LoadDocument(document unsafe.Pointer, url string) bool {

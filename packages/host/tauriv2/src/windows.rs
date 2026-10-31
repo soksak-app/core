@@ -14,7 +14,6 @@ use tauri::{
 };
 
 use crate::application_log::{log_error, log_failure};
-use crate::documents::DOCUMENT_DATA;
 use crate::modals::Overlay;
 use crate::platform::{self, Handle};
 use crate::projects::project_folder;
@@ -54,10 +53,6 @@ pub(crate) struct WindowData {
     pub streams: crate::documents::Streams,
     /// The image regions of surface pages.
     pub images: crate::images::Images,
-    /// The plugin host webviews of the window, by plugin id (docs/spec/plugin-host.md).
-    pub plugin_hosts: crate::plugin_host::PluginHosts,
-    /// The channels of the plugin host pages of the window, by plugin id (docs/spec/plugin-host.md#channel).
-    pub plugin_host_channels: crate::plugin_host_channel::PluginHostChannels,
     /// The current declared-source incarnations and the greatest generation issued in this window.
     pub declared_source_origins: DeclaredSourceOrigins,
     /// The ordered source events of the current main-page document.
@@ -67,11 +62,11 @@ pub(crate) struct WindowData {
     pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
     /// The plugin of each surface that declared its composition; its document regions serve that plugin's package.
     pub surface_plugins: Mutex<HashMap<String, String>>,
-    /// The folder root of each project that the window holds, by project id (docs/plans/plugin-host-routes.md rule 3).
+    /// The folder root of each project that the window holds, by project id.
     pub projects: Mutex<HashMap<String, String>>,
     /// Project ownership reservations that the page has not committed through `project_shown`.
     pub staged_projects: Mutex<HashSet<String>>,
-    /// The project that the window shows, empty when it shows none (docs/plans/plugin-host-routes.md F229-1). A release of the
+    /// The project that the window shows, empty when it shows none. A release of the
     /// shown project clears it, and the root, at once.
     pub shown: Mutex<String>,
     /// The complete composition revision applied last for each surface.
@@ -124,9 +119,6 @@ fn is_declared_source_event(name: &str) -> bool {
         "declared-ui-source-registered"
             | "declared-ui-source-ended"
             | "declared-ui-snapshot"
-            | "plugin-host-call"
-            | "plugin-host-reply"
-            | "plugin-host-ended"
             | "view-call"
             | "view-reply"
             | "view-process-ended"
@@ -506,29 +498,12 @@ pub(crate) fn notify_sidecars(app: &AppHandle) {
 
 /// Sends plugins-changed to all windows.
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
-    app.state::<crate::plugin_host::PluginHostStates>()
-        .plugin_changed(&change.action, &change.plugin);
-    // The enable of a plugin clears its plugin host stop and the sidecar stops of its manifest in one step, as a surface open does.
+    // The enable of a plugin clears the sidecar stops of its manifest in one step, as a surface open does.
     if change.action == "enable" {
         app.state::<crate::sidecars::WindowSidecars>()
             .plugin_enabled(&change.plugin);
-        crate::plugin_host_channel::plugin_enabled(app, &change.plugin);
     }
     for window in app.windows().values() {
-        if change.action == "remove" || change.action == "disable" {
-            // The host webview of the plugin ends with its removal or disable (docs/spec/plugin-host.md#lifetime).
-            log_failure(
-                "plugin host",
-                crate::exposure::on_main(window, {
-                    let window = window.clone();
-                    let plugin = change.plugin.clone();
-                    move || {
-                        dispose_plugin_host(&window, &plugin);
-                        Ok(())
-                    }
-                }),
-            );
-        }
         if let Err(error) = emit_window(window, "plugins-changed", change.clone()) {
             log_error("plugins-changed", error);
         }
@@ -811,7 +786,6 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             host.state::<Windows>().removals.abandon(host.label());
             crate::exposure::window_closed(&host);
             let natives = context.clone();
-            let closing_host = host.clone();
             // The records of the window are removed below, before the main-thread step runs, so the step takes them now.
             let closing = window_data(&host);
             log_failure(
@@ -825,10 +799,6 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                     }
                     log_failure("surface layout cancel", platform.cancel_layout(owner));
                     platform.end_responder_observation(responder_observation);
-                    match closing {
-                        Ok(data) => dispose_plugin_hosts_of(&closing_host, &data, false),
-                        Err(error) => log_error("plugin host", error),
-                    }
                     // A logical surface holds the main webview, so if it is not closed, the main webview and its web
                     // content process remain.
                     let surfaces = std::mem::take(
@@ -1232,7 +1202,6 @@ fn commit_project_shown(
     data: &WindowData,
     project: Option<&ShownProject>,
     set_title: impl FnOnce(&str) -> Result<(), String>,
-    publish: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     let title = if let Some(project) = project {
         let root = data
@@ -1279,7 +1248,7 @@ fn commit_project_shown(
             .unwrap_or_else(PoisonError::into_inner)
             .clear();
     }
-    publish()
+    Ok(())
 }
 
 fn project_shown_on_main(window: &Window, request: ProjectShown) -> Result<(), String> {
@@ -1313,12 +1282,9 @@ fn project_shown_on_main(window: &Window, request: ProjectShown) -> Result<(), S
         }
     }
     let data = window_data(window)?;
-    commit_project_shown(
-        &data,
-        request.project.as_ref(),
-        |title| window.set_title(title).map_err(|error| error.to_string()),
-        || crate::plugin_host_channel::post_project_to_plugin_hosts(window),
-    )?;
+    commit_project_shown(&data, request.project.as_ref(), |title| {
+        window.set_title(title).map_err(|error| error.to_string())
+    })?;
     crate::exposure::windows_changed(window.app_handle());
     Ok(())
 }
@@ -1337,12 +1303,10 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
     if let Some(label) = released {
         // When the window is already closed, there is no state to clear.
         if let Some(owner) = window.app_handle().get_window(&label) {
-            // The plugin sessions of the project end with it, when the holding window owns them (docs/plans/plugin-host-routes.md
-            // rule 7).
             let data = window_data(&owner)?;
             release_project_reservation(&data, &id);
             // A release of the shown project clears the shown root at once, even when another project is still held: the window
-            // shows no project until the page shows one explicitly (docs/plans/plugin-host-routes.md F229-1).
+            // shows no project until the page shows one explicitly.
             let shown_released = clear_released_shown(
                 &mut data
                     .shown
@@ -1352,14 +1316,6 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
                     .unwrap_or_else(PoisonError::into_inner),
                 &id,
             );
-            if shown_released {
-                crate::plugin_host_channel::post_project_to_plugin_hosts(&owner)?;
-            }
-            crate::plugin_host_sidecar::close_project_plugin_sessions(
-                &window.state::<crate::sidecars::WindowSidecars>(),
-                &owner,
-                &id,
-            )?;
             if empty || shown_released {
                 window_data(&owner)?
                     .root
@@ -1377,8 +1333,8 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
     Ok(())
 }
 
-/// Clears the shown project of a window when it is the released project id, and reports whether it cleared it
-/// (docs/plans/plugin-host-routes.md F229-1). A shown project that is still held is kept.
+/// Clears the shown project of a window when it is the released project id, and reports whether it cleared it.
+/// A shown project that is still held is kept.
 pub(crate) fn clear_released_shown(shown: &mut String, id: &str) -> bool {
     let released = *shown == id;
     if released {
@@ -1479,206 +1435,11 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
         }
         crate::exposure::page_reloaded(window);
         reload_surface_documents(window)?;
-        dispose_plugin_hosts(window);
-        // The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md
-        // rule 7).
-        crate::plugin_host_sidecar::close_window_plugin_sessions(
-            &window.state::<crate::sidecars::WindowSidecars>(),
-            window,
-        )?;
         data.overlay.discard()?;
         Ok(())
     })();
     data.declared_source_events.retire();
     cleanup
-}
-
-/// Creates the plugin host webview of every loaded plugin whose manifest declares host and that the window has none of.
-/// A failure of one creation is written to the application log. It runs on the main thread
-/// (docs/spec/plugin-host.md#lifetime).
-pub(crate) fn load_plugin_hosts(window: &Window) {
-    let result = load_plugin_hosts_on_main(window);
-    log_failure("plugin host", result);
-}
-
-fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
-    let data = window_data(window)?;
-    let config = crate::config_directory(window.app_handle()).map_err(|e| e.to_string())?;
-    let plugins = crate::plugin_host::host_plugins(&config)?;
-    let wanted = data.plugin_hosts.missing(
-        &plugins,
-        &window.state::<crate::plugin_host::PluginHostRestarts>(),
-    );
-    if wanted.is_empty() {
-        return Ok(());
-    }
-    let platform = platform::current()?;
-    let owner = native_owner(window)?;
-    let directory = config.join(DOCUMENT_DATA);
-    let directory = directory
-        .to_str()
-        .ok_or("document data directory is not UTF-8")?
-        .to_string();
-    let theme = crate::theme::get(window)?;
-    let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
-    let theme = crate::documents::theme_script(&theme);
-    // The project that the window shows when the plugin host is created; a later change is posted as the event project.
-    let project = crate::plugin_host_channel::shown_project(window)?;
-    let channel = crate::documents::view_channel()?;
-    for plugin in wanted {
-        let folder = crate::installed::plugin_folder(&config, &plugin.id)?;
-        let folder = folder
-            .to_str()
-            .ok_or("plugin folder is not UTF-8")?
-            .to_string();
-        let host_plugin = plugin.id.clone();
-        let theme = theme.clone();
-        let start_script = crate::plugin_host::host_start_script(project.as_ref(), &plugin.exposes);
-        let host_window = window.clone();
-        let handle = crate::source_origins::with_plugin_host_generation(
-            &data.declared_source_origins,
-            &plugin.id,
-            |generation| {
-                let instance =
-                    data.plugin_host_channels
-                        .register(&plugin.id, plugin.state, generation);
-                if let Err(error) = emit_declared_source_event(
-                    window,
-                    "declared-ui-source-registered",
-                    declared_source_origin_event(&plugin.id, None, generation),
-                ) {
-                    data.plugin_host_channels.unregister(&plugin.id);
-                    data.declared_source_origins
-                        .end_plugin_host(&plugin.id, generation);
-                    return Err(error);
-                }
-                let view = crate::plugin_host::HostView {
-                    directory: &directory,
-                    folder: &folder,
-                    plugin: &plugin.id,
-                    page: &plugin.page,
-                };
-                let created = crate::plugin_host::create_host(
-                    channel,
-                    view,
-                    |channel, view| {
-                        let (state_window, state_plugin) =
-                            (host_window.clone(), host_plugin.clone());
-                        let handle = platform.create_plugin_host(
-                            owner,
-                            view.directory,
-                            view.folder,
-                            view.plugin,
-                            channel,
-                            Box::new(move |state: String| {
-                                // A navigation of the page clears its ready document (docs/spec/plugin-host.md#channel).
-                                crate::plugin_host_channel::state(
-                                    &state_window,
-                                    &state_plugin,
-                                    &state,
-                                );
-                            }),
-                        )?;
-                        let (message_window, message_plugin, message_instance) =
-                            (host_window.clone(), host_plugin.clone(), instance.clone());
-                        platform.set_view_message(
-                            handle,
-                            Box::new(move |value: String| {
-                                crate::plugin_host_channel::message(
-                                    &message_window,
-                                    &message_plugin,
-                                    handle,
-                                    &message_instance,
-                                    &value,
-                                );
-                            }),
-                        )?;
-                        let (ended_window, ended_plugin) =
-                            (host_window.clone(), host_plugin.clone());
-                        platform.set_view_ended(
-                            handle,
-                            Box::new(move || {
-                                crate::plugin_host_channel::ended(
-                                    &ended_window,
-                                    &ended_plugin,
-                                    handle,
-                                );
-                            }),
-                        )?;
-                        platform.add_document_script(handle, &theme)?;
-                        platform.add_document_script(handle, &start_script)?;
-                        Ok(handle)
-                    },
-                    |handle, address| platform.load_document(handle, address),
-                    |handle| platform.close_document(handle),
-                );
-                created.inspect_err(|_| {
-                    data.plugin_host_channels.unregister(&plugin.id);
-                    data.declared_source_origins
-                        .end_plugin_host(&plugin.id, generation);
-                    if let Err(error) = emit_declared_source_event(
-                        &host_window,
-                        "declared-ui-source-ended",
-                        declared_source_origin_event(&plugin.id, None, generation),
-                    ) {
-                        log_error("plugin host", error);
-                    }
-                })
-            },
-        )?;
-        data.plugin_hosts.insert(&plugin.id, handle);
-        crate::event_record::emit_host(
-            crate::event_log::Level::Debug,
-            "host.trace.plugin-host.process-request",
-            serde_json::json!({"plugin": plugin.id, "window": window.label()}),
-        );
-    }
-    Ok(())
-}
-
-/// Closes the plugin host webview of plugin and sends plugin-host-ended to the main page, which removes the
-/// registrations of the host (docs/spec/plugin-host.md#channel). A failure is written to the application log. It runs
-/// on the main thread.
-pub(crate) fn dispose_plugin_host(window: &Window, plugin: &str) {
-    crate::plugin_host_channel::end(window, plugin, None);
-}
-
-/// Closes every plugin host webview of the window. A failure is written to the application log. It runs on the main
-/// thread.
-pub(crate) fn dispose_plugin_hosts(window: &Window) {
-    let data = match window_data(window) {
-        Ok(data) => data,
-        Err(error) => return log_error("plugin host", error),
-    };
-    dispose_plugin_hosts_of(window, &data, true);
-}
-
-/// Closes every plugin host webview of the window whose records are data.
-fn dispose_plugin_hosts_of(window: &Window, data: &WindowData, notify_page: bool) {
-    let handles = data.plugin_hosts.take_all();
-    // The main page is replaced or ends with the window, so its registrations of the hosts end with it.
-    data.plugin_host_channels.unregister_all();
-    for (plugin, generation) in data.declared_source_origins.take_all_plugin_hosts() {
-        if notify_page
-            && let Err(error) = emit_declared_source_event(
-                window,
-                "declared-ui-source-ended",
-                declared_source_origin_event(&plugin, None, generation),
-            )
-        {
-            log_error("plugin host", error);
-        }
-    }
-    if handles.is_empty() {
-        return;
-    }
-    let platform = match platform::current() {
-        Ok(platform) => platform,
-        Err(error) => return log_error("plugin host", error),
-    };
-    for handle in handles {
-        log_failure("plugin host", platform.close_document(handle));
-    }
 }
 
 /// Sends the first responder to the page when it changed since the last send. A page that has not reported ready receives
@@ -1744,7 +1505,6 @@ pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
         }
     }
     crate::exposure::rewatch(window);
-    load_plugin_hosts(window);
     crate::deep_link::ready(window.app_handle());
     emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
 }

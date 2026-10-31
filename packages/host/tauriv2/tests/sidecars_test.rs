@@ -2362,7 +2362,7 @@ fn counts_only_failures_within_the_window() {
     );
 }
 
-// contract: sidecars.restart.surface-open-resets-the-record, plugin-host.restart.stop-clear-joint
+// contract: sidecars.restart.surface-open-resets-the-record
 #[test]
 fn surface_open_clears_the_restart_limit() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
@@ -2412,7 +2412,7 @@ fn surface_open_clears_the_restart_limit() {
     assert_eq!(reset["fields"]["surface"], "s2", "restart-reset {reset}");
 }
 
-// contract: plugin-host.restart.enable-clears-stops
+// contract: sidecars.restart.enable-clears-stops
 #[test]
 fn enable_clears_the_restart_limit_of_its_sidecars() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());

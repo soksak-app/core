@@ -20,8 +20,22 @@ fn project_shown_decoder_fixture(
         data.inner().as_ref(),
         request.0.project.as_ref(),
         |_| Ok(()),
-        || Ok(()),
     )
+}
+
+/// Reads the committed project of the window: the shown id and its root, or none when the window shows no project.
+fn committed_project(data: &WindowData) -> Result<Option<crate::surfaces::SurfaceProject>, String> {
+    let id = data.shown.lock().unwrap().clone();
+    if id.is_empty() {
+        return Ok(None);
+    }
+    let root = data.root.lock().unwrap().clone();
+    if root.is_empty() {
+        return Err(format!(
+            "window shows project {id} without a committed root"
+        ));
+    }
+    Ok(Some(crate::surfaces::SurfaceProject { id, root }))
 }
 
 // contract: host-calls.decode.messages
@@ -167,7 +181,6 @@ fn a_pending_owner_stays_staged_across_open_until_project_shown_commits_it() {
         "/projects/next",
         false
     ));
-    let posted = AtomicBool::new(false);
     let title = Mutex::new(String::new());
 
     commit_project_shown(
@@ -181,23 +194,18 @@ fn a_pending_owner_stays_staged_across_open_until_project_shown_commits_it() {
             *title.lock().unwrap() = value.into();
             Ok(())
         },
-        || {
-            assert_eq!(*data.shown.lock().unwrap(), "project-next");
-            assert_eq!(*data.root.lock().unwrap(), "/projects/next");
-            assert!(
-                !data
-                    .staged_projects
-                    .lock()
-                    .unwrap()
-                    .contains("project-next")
-            );
-            posted.store(true, Ordering::SeqCst);
-            Ok(())
-        },
     )
     .unwrap();
 
-    assert!(posted.load(Ordering::SeqCst));
+    assert_eq!(*data.shown.lock().unwrap(), "project-next");
+    assert_eq!(*data.root.lock().unwrap(), "/projects/next");
+    assert!(
+        !data
+            .staged_projects
+            .lock()
+            .unwrap()
+            .contains("project-next")
+    );
     assert_eq!(*title.lock().unwrap(), "Next / Tauri v2");
     assert!(!register_project_open(
         &data,
@@ -226,14 +234,13 @@ fn an_unready_host_catches_up_old_project_until_the_page_commits_the_new_project
         true
     ));
     assert_eq!(
-        crate::plugin_host_channel::shown_project_from_data(&data).unwrap(),
+        committed_project(&data).unwrap(),
         Some(crate::surfaces::SurfaceProject {
             id: "project-old".into(),
             root: "/projects/old".into(),
         })
     );
 
-    let posted = Mutex::new(None);
     commit_project_shown(
         &data,
         Some(&ShownProject {
@@ -242,16 +249,11 @@ fn an_unready_host_catches_up_old_project_until_the_page_commits_the_new_project
             title: "Next".into(),
         }),
         |_| Ok(()),
-        || {
-            *posted.lock().unwrap() =
-                crate::plugin_host_channel::shown_project_from_data(&data).unwrap();
-            Ok(())
-        },
     )
     .unwrap();
 
     assert_eq!(
-        *posted.lock().unwrap(),
+        committed_project(&data).unwrap(),
         Some(crate::surfaces::SurfaceProject {
             id: "project-next".into(),
             root: "/projects/next".into(),
@@ -274,14 +276,13 @@ fn reopening_the_shown_id_keeps_its_committed_root_for_ready_catch_up() {
 
     assert!(!staged);
     assert_eq!(
-        crate::plugin_host_channel::shown_project_from_data(&data).unwrap(),
+        committed_project(&data).unwrap(),
         Some(crate::surfaces::SurfaceProject {
             id: "project-current".into(),
             root: "/projects/old".into(),
         })
     );
 
-    let published = Mutex::new(None);
     commit_project_shown(
         &data,
         Some(&ShownProject {
@@ -290,15 +291,10 @@ fn reopening_the_shown_id_keeps_its_committed_root_for_ready_catch_up() {
             title: "Current".into(),
         }),
         |_| Ok(()),
-        || {
-            *published.lock().unwrap() =
-                crate::plugin_host_channel::shown_project_from_data(&data).unwrap();
-            Ok(())
-        },
     )
     .unwrap();
     assert_eq!(
-        *published.lock().unwrap(),
+        committed_project(&data).unwrap(),
         Some(crate::surfaces::SurfaceProject {
             id: "project-current".into(),
             root: "/projects/new".into(),
@@ -321,7 +317,6 @@ fn a_root_mismatch_does_not_mutate_committed_or_staged_project_state() {
         .unwrap()
         .insert("project-next".into());
     let titled = AtomicBool::new(false);
-    let posted = AtomicBool::new(false);
 
     let error = commit_project_shown(
         &data,
@@ -332,10 +327,6 @@ fn a_root_mismatch_does_not_mutate_committed_or_staged_project_state() {
         }),
         |_| {
             titled.store(true, Ordering::SeqCst);
-            Ok(())
-        },
-        || {
-            posted.store(true, Ordering::SeqCst);
             Ok(())
         },
     )
@@ -351,7 +342,6 @@ fn a_root_mismatch_does_not_mutate_committed_or_staged_project_state() {
             .contains("project-next")
     );
     assert!(!titled.load(Ordering::SeqCst));
-    assert!(!posted.load(Ordering::SeqCst));
 }
 
 // contract: project.shown-commits-after-page-ready
@@ -364,26 +354,16 @@ fn showing_no_project_clears_committed_state_and_preserves_other_staged_owners()
         .lock()
         .unwrap()
         .insert("project-next".into());
-    let published = AtomicBool::new(false);
     let title = Mutex::new(String::new());
 
-    commit_project_shown(
-        &data,
-        None,
-        |value| {
-            *title.lock().unwrap() = value.into();
-            Ok(())
-        },
-        || {
-            assert!(data.shown.lock().unwrap().is_empty());
-            assert!(data.root.lock().unwrap().is_empty());
-            published.store(true, Ordering::SeqCst);
-            Ok(())
-        },
-    )
+    commit_project_shown(&data, None, |value| {
+        *title.lock().unwrap() = value.into();
+        Ok(())
+    })
     .unwrap();
 
-    assert!(published.load(Ordering::SeqCst));
+    assert!(data.shown.lock().unwrap().is_empty());
+    assert!(data.root.lock().unwrap().is_empty());
     assert_eq!(*title.lock().unwrap(), WINDOW_TITLE);
     assert!(
         data.staged_projects

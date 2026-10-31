@@ -407,7 +407,6 @@ fn sidecar_send(
     let Argument(surface) = surface;
     let Argument(body) = body;
     let Argument(cids) = cids;
-    crate::plugin_host_sidecar::refuse_surface_send(&surface)?;
     crate::windows::window_data(&window)?
         .images
         .pending_detach_error(&surface)?;
@@ -623,47 +622,6 @@ async fn view_reply(webview: Webview, request: Argument<documents::ViewReply>) -
     .await
 }
 
-/// Receives the reply of the main page to a call request of a plugin host (docs/spec/plugin-host.md#channel).
-#[tauri::command]
-async fn plugin_host_reply(
-    webview: Webview,
-    request: Argument<crate::plugin_host_channel::PluginHostReply>,
-) -> Result<(), String> {
-    let Argument(request) = request;
-    blocking(move || {
-        crate::plugin_host_channel::plugin_host_reply(&webview, request)
-    })
-    .await
-}
-
-/// Posts a request of the main page to a plugin host, such as the pull of a declared status
-/// (docs/spec/plugin-host.md#declared-ui-snapshots).
-#[tauri::command]
-async fn plugin_host_request(
-    webview: Webview,
-    request: Argument<crate::plugin_host_channel::PluginHostRequest>,
-) -> Result<serde_json::Value, String> {
-    let Argument(request) = request;
-    blocking(move || {
-        crate::plugin_host_channel::plugin_host_request(&webview, request)
-    })
-    .await
-}
-
-/// Posts an event of the main page to a plugin host, such as the acknowledgement of a declared UI snapshot
-/// (docs/spec/plugin-host.md#declared-ui-snapshots).
-#[tauri::command]
-async fn plugin_host_event(
-    webview: Webview,
-    request: Argument<crate::plugin_host_channel::PluginHostEvent>,
-) -> Result<bool, String> {
-    let Argument(request) = request;
-    blocking(move || {
-        crate::plugin_host_channel::plugin_host_event(&webview, request)
-    })
-    .await
-}
-
 /// Returns the current declared-source incarnations and generation floor of the calling window.
 #[tauri::command]
 async fn declared_source_origins(
@@ -688,30 +646,6 @@ async fn declared_source_event_stream(
 ) -> Result<(), String> {
     blocking(move || {
         windows::register_declared_source_event_stream(&webview, on_message)
-    })
-    .await
-}
-
-/// Sends a sidecar request of the host of a plugin from the main page (docs/plans/plugin-host-routes.md rule 2).
-#[tauri::command]
-async fn plugin_host_sidecar_send(
-    webview: Webview,
-    request: Argument<crate::plugin_host_sidecar::PluginHostSidecarSend>,
-) -> Result<(), String> {
-    let Argument(request) = request;
-    blocking(move || {
-        crate::plugin_host_sidecar::plugin_host_sidecar_send(&webview, request)
-    })
-    .await
-}
-
-/// Closes the plugin sessions of a plugin host that the calling page owns, when the host ends (docs/plans/plugin-host-routes.md
-/// rule 7).
-#[tauri::command]
-async fn plugin_host_sidecar_close(webview: Webview, plugin: Argument<String>) -> Result<(), String> {
-    let Argument(plugin) = plugin;
-    blocking(move || {
-        crate::plugin_host_sidecar::plugin_host_sidecar_close(&webview, &plugin)
     })
     .await
 }

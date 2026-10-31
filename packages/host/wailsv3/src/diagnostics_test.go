@@ -530,7 +530,7 @@ func TestCaptureStopDrainsPendingStartWithoutCreditingItsUnconfirmedCount(t *tes
 // contract: diagnostics.capture-document-identity.start-validates-current-root-generation
 func TestCaptureDocumentIdentityStartResolvesCurrentRootHandle(t *testing.T) {
 	s := &Surfaces{documents: NewDocuments(), sourceOrigins: newSourceOrigins()}
-	generation, err := s.sourceOriginState().create("surface-a", true)
+	generation, err := s.sourceOriginState().create("surface-a")
 	if err != nil {
 		t.Fatal(err)
 	}

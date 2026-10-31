@@ -540,6 +540,17 @@ func (p *channelPlatform) PostDocument(document unsafe.Pointer, value string) bo
 	return !p.rejectPost
 }
 
+// hostEvent is one window event that the host sent to the main page in a test.
+type hostEvent struct {
+	name string
+	data any
+}
+
+// hostMessage returns the envelope of the sok-view handler of a host page around the message value.
+func hostMessage(value string) string {
+	return `{"message": ` + value + `}`
+}
+
 // contract: view.source-registration-precedes-provider-messages
 func TestViewSourceRegistrationPrecedesFirstSnapshotAndStatusRegistration(t *testing.T) {
 	fake := &channelPlatform{

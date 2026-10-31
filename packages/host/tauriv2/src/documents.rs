@@ -665,14 +665,6 @@ pub fn set_view_channel(text: &str) -> Result<(), String> {
         .map_err(|_| "the view channel script is already set".to_string())
 }
 
-/// The text of the view channel script. It is an error when the application has not set it.
-pub(crate) fn view_channel() -> Result<&'static str, String> {
-    VIEW_CHANNEL
-        .get()
-        .map(String::as_str)
-        .ok_or_else(|| "the view channel script is not loaded".to_string())
-}
-
 /// The view channel of one view surface: the plugin, the ready document, which is the page identity of the view, and the
 /// performance.timeOrigin that the ready document states. An empty document and a zero time origin mean that no ready document
 /// is recorded (docs/spec/plugin-processes.md, rule 4).
@@ -1492,7 +1484,6 @@ impl ViewChannels {
 /// region, and the view closes with the other documents of its surface.
 pub(crate) const VIEW_NAME: &str = "";
 /// The event name of a declared UI snapshot of a view (docs/spec/plugin-processes.md, messages and events).
-/// The event name of a declared UI snapshot message that a view sends (docs/spec/plugin-host.md#declared-ui-snapshots).
 pub const DECLARED_SNAPSHOT_MESSAGE: &str = "declared-ui.snapshot";
 /// The window event that relays a declared UI snapshot to the main page. Tauri accepts only alphanumeric characters, '-', '/', ':' and
 /// '_' in an event name, so the relay name is not the message name; the main page listens to this name.
@@ -2271,7 +2262,7 @@ fn post_for_view_generation(
     let task_window = window.clone();
     on_main(&window, move || {
         let data = window_data(&task_window)?;
-        crate::plugin_host_channel::post_if_generation_current(
+        crate::source_origins::post_if_generation_current(
             generation,
             data.declared_source_origins.current_view(&surface),
             || data.documents.views().generation(&surface) == Some(generation),
@@ -3323,6 +3314,10 @@ pub fn take_document_binary_of(
     let handle = documents.get(&(surface.to_string(), name.to_string()))?;
     take(handle, id)
 }
+
+#[cfg(test)]
+#[path = "document_post_test.rs"]
+mod post_tests;
 
 #[cfg(test)]
 #[path = "document_binary_take_test.rs"]
