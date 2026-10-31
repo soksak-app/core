@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F335: native check `document_processes_test`는 10초 한도로 title을 poll하는 대신, navigation이 끝나거나 실패할 때 region이 보고하는 state로 각 region의 load를 기다린다. load되지 않은 region은 process identifier, loading 상태, title, 주소와 navigation 오류를 밝히며 check를 실패시킨다.
 - F317-2: 임시 폴더를 지우지 못한 native test는 `removefile(3)`의 오류 callback으로 삭제를 거부한 각 경로를 오류 번호와 함께 밝히고, 남은 각 항목을 소유자와 함께 밝힌다.
 - F334: 프로세스 전체 기록을 읽는 Tauri host test는 자기 surface의 기록만 읽고, host event log를 바꾸는 test는 하나씩 돈다. 그래서 같은 기록을 병렬로 쓰는 test가 이 test들을 실패시키지 않는다.
 - F331: `surface.opens`는 더 이상 `"*"`를 받지 않는다. 각 plugin은 자기가 여는 확장자를 선언하고, `core.file.open`은 그 확장자를 선언한 불러온 plugin이 없는 파일을 `"*"`를 선언한 plugin에서 여는 대신 `no plugin opens <path>`로 실패한다.
