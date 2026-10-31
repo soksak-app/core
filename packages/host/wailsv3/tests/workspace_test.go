@@ -496,6 +496,39 @@ func TestTabSessionPutRewritesOnlyItsOwnFile(t *testing.T) {
 	}
 }
 
+// A section surface id names its session file by the RFC 3986 percent-encoding of the id; the listing returns the id again.
+// contract: workspace.tab-session.section-surface-file
+func TestTabSessionNamesASectionSurfaceFile(t *testing.T) {
+	config := t.TempDir()
+	store := host.NewWorkspace(config)
+	regions := host.Record{"page": map[string]any{"session": "AAAA"}}
+	for _, c := range []struct{ tab, file string }{
+		{"tab-a", "tab-a.json"},
+		{"left/files.tree", "left%2Ffiles.tree.json"},
+		{"c3:right/browser.dom", "c3%3Aright%2Fbrowser.dom.json"},
+	} {
+		if _, err := store.Apply(host.WorkspaceRequest{Kind: "tabSessionPut", Tab: c.tab, Regions: regions}); err != nil {
+			t.Fatalf("put of %s: %v", c.tab, err)
+		}
+		if _, err := os.Stat(filepath.Join(config, "tab-sessions", c.file)); err != nil {
+			t.Fatalf("session file of %s: %v", c.tab, err)
+		}
+		document, err := store.Apply(host.WorkspaceRequest{Kind: "tabSession", Tab: c.tab})
+		if err != nil || document.(host.Record)["regions"] == nil {
+			t.Fatalf("read of %s returned %v (%v)", c.tab, document, err)
+		}
+	}
+	listed, err := store.Apply(host.WorkspaceRequest{Kind: "tabSessions"})
+	if err != nil || !slices.Equal(listed.([]string), []string{"c3:right/browser.dom", "left/files.tree", "tab-a"}) {
+		t.Fatalf("the listing is %v (%v)", listed, err)
+	}
+	for _, tab := range []string{"left/Files.tree", "files.tree", "left/files.tree/x", "c3:middle/files.tree"} {
+		if _, err := store.Apply(host.WorkspaceRequest{Kind: "tabSession", Tab: tab}); err == nil || err.Error() != "invalid tab session tab: "+tab {
+			t.Fatalf("a read of %q returned %v, want the invalid tab error", tab, err)
+		}
+	}
+}
+
 // contract: workspace.tab-session.rejects-other-format, workspace.tab-session.rejects-invalid-request
 func TestTabSessionRejectsOtherFormatAndInvalidRequests(t *testing.T) {
 	config := t.TempDir()

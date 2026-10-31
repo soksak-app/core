@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F332-3: 두 host는 view 시작 값 `section`을 검사하고 주입한다(`surface "<id>": view start section is missing`과 `surface "<id>": view start section is not {id, sidebar, card}`). section surface id의 tab session 파일 이름은 그 id의 RFC 3986 percent 인코딩이며, tab id가 session에서 받아들여지는 자리에서 section surface id도 받아들여서 공유 계약 case가 각각을 다룬다.
 - F331: `surface.opens`는 더 이상 `"*"`를 받지 않는다. 각 plugin은 자기가 여는 확장자를 선언하고, `core.file.open`은 그 확장자를 선언한 불러온 plugin이 없는 파일을 `"*"`를 선언한 plugin에서 여는 대신 `no plugin opens <path>`로 실패한다.
 - F330: view 시작 값은 plugin의 진단 선언 또는 `null`인 `diagnostics`를 담고, 두 host는 이 값을 요구하며 `window.sokSurface`에 주입한다. 그래서 view page는 release에 없는 `diagnostics.json`을 요청하지 않고 진단 선언을 읽는다.
 - F328: plugin 카드와 업데이트 목록의 최신 버전은 설치가 실행 중인 core에 고르는 version이고, 그런 version이 없는 plugin은 core <version>에 맞는 버전 없음을 보인다. `pluginsState`가 실행 중인 core를 `core`로 보고한다.

@@ -69,6 +69,8 @@ type ViewStart struct {
 	// Diagnostics is the diagnostic declaration of the plugin or JSON null, kept raw so that a missing value is refused
 	// (validateViewStart).
 	Diagnostics json.RawMessage `json:"diagnostics,omitempty"`
+	// Section is the section of the view or JSON null, kept raw so that a missing section is refused (validateViewStart).
+	Section json.RawMessage `json:"section,omitempty"`
 }
 
 // validateViewStart checks the start values of the view of the surface (docs/spec/native-surfaces.md#view-surfaces).
@@ -91,7 +93,44 @@ func validateViewStart(surface string, start *ViewStart) error {
 	if _, err := viewOriginDirectory(surface, start.Origin); err != nil {
 		return err
 	}
-	return checkViewDiagnostics(surface, start.Diagnostics)
+	if err := checkViewDiagnostics(surface, start.Diagnostics); err != nil {
+		return err
+	}
+	return checkViewSection(surface, start.Section)
+}
+
+// checkViewSection checks the section of the start values of the view of surface: it is required, and it is null or an object
+// with exactly a non-empty id, a non-empty sidebar and a card that is a non-empty text or null
+// (docs/spec/native-surfaces.md#view-surfaces).
+func checkViewSection(surface string, section json.RawMessage) error {
+	if section == nil {
+		return fmt.Errorf("surface %q: view start section is missing", surface)
+	}
+	if strings.TrimSpace(string(section)) == "null" {
+		return nil
+	}
+	malformed := fmt.Errorf("surface %q: view start section is not {id, sidebar, card}", surface)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(section, &fields); err != nil || len(fields) != 3 {
+		return malformed
+	}
+	for _, key := range []string{"id", "sidebar", "card"} {
+		if _, ok := fields[key]; !ok {
+			return malformed
+		}
+	}
+	var value struct {
+		ID      *string `json:"id"`
+		Sidebar *string `json:"sidebar"`
+		Card    *string `json:"card"`
+	}
+	if err := json.Unmarshal(section, &value); err != nil {
+		return malformed
+	}
+	if value.ID == nil || *value.ID == "" || value.Sidebar == nil || *value.Sidebar == "" || (value.Card != nil && *value.Card == "") {
+		return malformed
+	}
+	return nil
 }
 
 // checkViewDiagnostics checks the diagnostic declaration of the start values of the view of surface: it is required, and it is an
@@ -292,6 +331,7 @@ type syncViewStartWire struct {
 	Project      *SurfaceProject `json:"project,omitempty"`
 	Declarations json.RawMessage `json:"declarations"`
 	Diagnostics  json.RawMessage `json:"diagnostics,omitempty"`
+	Section      json.RawMessage `json:"section,omitempty"`
 }
 
 // decodeSyncRequest resolves the request-local declaration table before any surface state is read or changed.
@@ -336,7 +376,7 @@ func decodeSyncRequest(raw json.RawMessage) (SyncRequest, error) {
 			used[index] = true
 			surface.Start = &ViewStart{
 				Params: item.Start.Params, Origin: item.Start.Origin, Project: item.Start.Project,
-				Declarations: declarations[index], Diagnostics: item.Start.Diagnostics,
+				Declarations: declarations[index], Diagnostics: item.Start.Diagnostics, Section: item.Start.Section,
 			}
 		} else if item.Start != nil {
 			return SyncRequest{}, fmt.Errorf("surface %q: non-view composition cannot carry start values", item.ID)

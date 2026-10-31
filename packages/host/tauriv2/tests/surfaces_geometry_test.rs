@@ -39,6 +39,7 @@ fn sync_request_resolves_request_local_view_declaration_indices() {
                 "project": {"id": "prj-one", "root": "/work/one"},
                 "declarations": index,
                 "diagnostics": null,
+                "section": null,
             },
         })
     };
@@ -79,7 +80,7 @@ fn sync_request_resolves_request_local_view_declaration_indices() {
     );
 
     let negative_zero: Result<SyncRequest, _> = serde_json::from_str(
-        r#"{"settled":true,"titlebar":40,"declarations":[{"commands":[]}],"surfaces":[{"id":"tab-zero","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"page","composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":-0,"diagnostics":null}}]}"#,
+        r#"{"settled":true,"titlebar":40,"declarations":[{"commands":[]}],"surfaces":[{"id":"tab-zero","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"page","composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":-0,"diagnostics":null,"section":null}}]}"#,
     );
     assert!(
         negative_zero.is_err(),
@@ -149,7 +150,7 @@ fn surface(id: &str, w: f64) -> serde_json::Value {
     serde_json::json!({
         "id": id, "module": "surface.js", "x": 0.0, "y": 0.0, "w": w, "h": 10.0,
         "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "view", "page": "ui/page.html", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
-        "start": {"origin": {"directory": null}, "declarations": 0, "diagnostics": null},
+        "start": {"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null},
     })
 }
 
@@ -411,7 +412,65 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0,
         "declarations": [{"commands": []}],
-        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null})))],
+        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null})))],
     }));
     assert!(check_sync_request(&request, &held, &plugins).is_ok());
+}
+
+// A view surface whose start values carry no section, or a section that is neither null nor {id, sidebar, card} of the form, is
+// refused with its reason. The section is checked after the origin and the diagnostic declaration.
+// contract: view.start-values.refuses-a-missing-section
+// contract: view.start-values.refuses-a-section-of-another-form
+#[test]
+fn sync_request_check_refuses_a_view_section_of_another_form() {
+    let held = HashMap::from([(
+        "tab-1".to_string(),
+        serde_json::from_value(serde_json::json!({"kind": "view", "page": "ui/page.html"}))
+            .expect("the composition fixture is valid"),
+    )]);
+    let plugins = HashMap::from([("tab-1".to_string(), "page".to_string())]);
+    let check = |section: Option<serde_json::Value>| {
+        let mut start = serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null});
+        if let Some(section) = section {
+            start["section"] = section;
+        }
+        let request = sync_request(serde_json::json!({
+            "settled": true, "titlebar": 40.0, "declarations": [{"commands": []}],
+            "surfaces": [{
+                "id": "tab-1", "module": null, "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
+                "visible": true, "dim": false, "plugin": "page",
+                "composition": {"kind": "view", "page": "ui/page.html"}, "start": start,
+            }],
+        }));
+        check_sync_request(&request, &held, &plugins)
+    };
+    assert_eq!(
+        check(None).unwrap_err(),
+        r#"surface "tab-1": view start section is missing"#
+    );
+    for section in [
+        serde_json::json!([]),
+        serde_json::json!("left/files.tree"),
+        serde_json::json!({"id": "files.tree", "sidebar": "left"}),
+        serde_json::json!({"id": "", "sidebar": "left", "card": null}),
+        serde_json::json!({"id": "files.tree", "sidebar": "", "card": null}),
+        serde_json::json!({"id": "files.tree", "sidebar": "c3:right", "card": ""}),
+        serde_json::json!({"id": "files.tree", "sidebar": "left", "card": null, "name": "Files"}),
+    ] {
+        assert_eq!(
+            check(Some(section.clone())).unwrap_err(),
+            r#"surface "tab-1": view start section is not {id, sidebar, card}"#,
+            "the section {section} is refused"
+        );
+    }
+    for section in [
+        serde_json::json!(null),
+        serde_json::json!({"id": "files.tree", "sidebar": "left", "card": null}),
+        serde_json::json!({"id": "browser.dom", "sidebar": "c3:right", "card": "c3"}),
+    ] {
+        assert!(
+            check(Some(section.clone())).is_ok(),
+            "the section {section} is accepted"
+        );
+    }
 }

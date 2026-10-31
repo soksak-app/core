@@ -8,6 +8,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use tauri::{AppHandle, Manager};
@@ -264,7 +265,7 @@ fn check_tab_state_entry(tab: &str, entry: &Map<String, Value>) -> Result<(), St
     Ok(())
 }
 
-/// The format of tab-sessions/<tab>.json, the session history of the document regions of one tab
+/// The format of tab-sessions/<name>.json, the session history of the document regions of one tab or section surface
 /// (docs/spec/projects.md#persistence).
 const TAB_SESSION_FORMAT: u64 = 1;
 
@@ -276,15 +277,64 @@ fn valid_tab(tab: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
 }
 
-/// The session file of tab in directory, or an error for a tab that is not an identifier.
+/// Whether text is a plugin or section name: a lowercase letter, then lowercase letters, digits and hyphens.
+fn valid_identifier(text: &str) -> bool {
+    let mut chars = text.chars();
+    matches!(chars.next(), Some('a'..='z'))
+        && chars.all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-'))
+}
+
+/// Whether id is a section surface id `<sidebar>/<section>` (docs/spec/plugins.md#sections): the sidebar is left, right, or
+/// `<card>:<side>` with a card id of the tab form, and the section is `<plugin>.<name>`.
+fn valid_section_surface(id: &str) -> bool {
+    let Some((sidebar, section)) = id.split_once('/') else {
+        return false;
+    };
+    let sidebar_ok = match sidebar.split_once(':') {
+        None => matches!(sidebar, "left" | "right"),
+        Some((card, side)) => {
+            valid_tab(card) && matches!(side, "top" | "bottom" | "left" | "right")
+        }
+    };
+    let section_ok = section
+        .split_once('.')
+        .is_some_and(|(plugin, name)| valid_identifier(plugin) && valid_identifier(name));
+    sidebar_ok && section_ok
+}
+
+/// Whether tab is a session id: a tab id or a section surface id.
+fn valid_tab_session(tab: &str) -> bool {
+    valid_tab(tab) || valid_section_surface(tab)
+}
+
+/// The file name of the session of tab: its RFC 3986 percent-encoding, which keeps the unreserved characters (letters, digits,
+/// `-`, `.`, `_` and `~`).
+fn tab_session_name(tab: &str) -> String {
+    const SESSION_NAME: &AsciiSet = &NON_ALPHANUMERIC
+        .remove(b'-')
+        .remove(b'.')
+        .remove(b'_')
+        .remove(b'~');
+    utf8_percent_encode(tab, SESSION_NAME).to_string()
+}
+
+/// The session id whose file name is name (without .json), or None when name is not the session name of a session id.
+fn tab_session_id(name: &str) -> Option<String> {
+    let tab = percent_decode_str(name).decode_utf8().ok()?.into_owned();
+    (valid_tab_session(&tab) && tab_session_name(&tab) == name).then_some(tab)
+}
+
+/// The session file of tab in directory, or an error for a tab that is neither a tab id nor a section surface id.
 fn tab_session_path(directory: &Path, tab: &str) -> Result<PathBuf, String> {
     if tab.is_empty() {
         return Err("tab session requires a tab".into());
     }
-    if !valid_tab(tab) {
+    if !valid_tab_session(tab) {
         return Err(format!("invalid tab session tab: {tab}"));
     }
-    Ok(directory.join("tab-sessions").join(format!("{tab}.json")))
+    Ok(directory
+        .join("tab-sessions")
+        .join(format!("{}.json", tab_session_name(tab))))
 }
 
 /// Returns the document of the session file of tab, or null when the file does not exist; a document of another
@@ -296,7 +346,7 @@ fn read_tab_session(directory: &Path, tab: &str) -> Result<Value, String> {
     }
     let Some(document) = read_stored(
         &path,
-        &format!("tab-sessions/{tab}.json"),
+        &format!("tab-sessions/{}.json", tab_session_name(tab)),
         TAB_SESSION_FORMAT,
     )?
     else {
@@ -354,7 +404,8 @@ fn put_tab_session(
     Ok(size.into())
 }
 
-/// Returns the tabs that have a session file, in name order; an absent directory has none.
+/// Returns the session ids that have a session file, in name order; an absent directory has none. A file whose name is not the
+/// session name of its id is not a session file and is not listed.
 fn list_tab_sessions(directory: &Path) -> Result<Value, String> {
     let folder = directory.join("tab-sessions");
     let entries = match fs::read_dir(&folder) {
@@ -370,11 +421,13 @@ fn list_tab_sessions(directory: &Path) -> Result<Value, String> {
             .map_err(|e| format!("{}: {e}", folder.display()))?
             .is_file();
         let name = entry.file_name();
-        if let Some(tab) = name.to_str().and_then(|name| name.strip_suffix(".json"))
+        if let Some(tab) = name
+            .to_str()
+            .and_then(|name| name.strip_suffix(".json"))
+            .and_then(tab_session_id)
             && is_file
-            && valid_tab(tab)
         {
-            tabs.push(tab.to_string());
+            tabs.push(tab);
         }
     }
     tabs.sort();

@@ -15,11 +15,12 @@ fn the_start_values_script_freezes_the_start_values_for_the_first_page_script() 
         "project": {"id": "prj-one", "root": "/work/one"},
         "declarations": {"commands": []},
         "diagnostics": {"module": "ui/probe-diagnostics.js", "exposes": {}},
+        "section": {"card": "c3", "id": "files.tree", "sidebar": "c3:right"},
     }))
     .expect("the start values have their form");
     assert_eq!(
         surface_start_script("probe-surface", &start).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"})});"##,
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"}),"section":Object.freeze({"card":"c3","id":"files.tree","sidebar":"c3:right"})});"##,
         "the script sets the frozen start values"
     );
 }
@@ -28,16 +29,61 @@ fn the_start_values_script_freezes_the_start_values_for_the_first_page_script() 
 // contract: view.start-values.first-script
 #[test]
 fn the_start_values_script_carries_absent_values_as_null() {
-    let start = ViewStart {
-        origin: Some(json!({"directory": null})),
-        diagnostics: Some(serde_json::Value::Null),
-        ..Default::default()
-    };
+    let start: ViewStart = serde_json::from_value(json!({
+        "origin": {"directory": null},
+        "diagnostics": null,
+        "section": null,
+    }))
+    .expect("the start values have their form");
     assert_eq!(
         surface_start_script("probe-surface", &start).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null});"##,
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null});"##,
         "the script carries the absent values as null"
     );
+}
+
+// A start value script whose section is absent is refused, after the origin and the diagnostic declaration.
+// contract: view.start-values.refuses-a-missing-section
+#[test]
+fn the_start_values_script_refuses_a_missing_section() {
+    let start: ViewStart = serde_json::from_value(json!({
+        "origin": {"directory": null},
+        "diagnostics": null,
+    }))
+    .expect("the start values have their form");
+    assert_eq!(
+        surface_start_script("probe-surface", &start),
+        Err(r#"surface "probe-surface": view start section is missing"#.to_string()),
+        "the script names the missing section"
+    );
+}
+
+// A start value script whose section is neither null nor an object with exactly a non-empty id, a non-empty sidebar and a card
+// that is a non-empty text or null is refused with its reason.
+// contract: view.start-values.refuses-a-section-of-another-form
+#[test]
+fn the_start_values_script_refuses_a_section_of_another_form() {
+    let text = r#"surface "probe-surface": view start section is not {id, sidebar, card}"#;
+    for section in [
+        json!([]),
+        json!("left/files.tree"),
+        json!({"id": "files.tree", "sidebar": "left"}),
+        json!({"id": "", "sidebar": "left", "card": null}),
+        json!({"id": "files.tree", "sidebar": "left", "card": ""}),
+        json!({"id": "files.tree", "sidebar": "left", "card": null, "name": "Files"}),
+    ] {
+        let start: ViewStart = serde_json::from_value(json!({
+            "origin": {"directory": null},
+            "diagnostics": null,
+            "section": section,
+        }))
+        .expect("the start values have their form");
+        assert_eq!(
+            surface_start_script("probe-surface", &start),
+            Err(text.to_string()),
+            "the section {section} is refused"
+        );
+    }
 }
 
 // A start value script without an origin is refused; the host never builds one with a null directory in its place.

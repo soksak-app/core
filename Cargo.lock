@@ -3372,6 +3372,7 @@ dependencies = [
  "mach2",
  "notify",
  "objc2",
+ "percent-encoding",
  "pkg-config",
  "serde",
  "serde_json",

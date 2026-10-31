@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -331,19 +333,37 @@ func checkTabStateEntry(tab string, entry Record) error {
 	return nil
 }
 
-// tabSessionFormat is the format of tab-sessions/<tab>.json, the session history of the document regions of one tab
-// (docs/spec/projects.md#persistence).
+// tabSessionFormat is the format of tab-sessions/<name>.json, the session history of the document regions of one tab or
+// section surface (docs/spec/projects.md#persistence).
 const tabSessionFormat = 1
 
-// tabSessionPath returns the session file of tab in directory, or an error for a tab that is not an identifier.
+// sectionSurfaceID is the form of a section surface id <sidebar>/<section> (docs/spec/plugins.md#sections): the sidebar is
+// left, right, or <card>:<side> with a card id of the tab form, and the section is <plugin>.<name>, each an identifier that
+// starts with a lowercase letter.
+var sectionSurfaceID = regexp.MustCompile(`^(?:left|right|[a-z0-9-]+:(?:top|bottom|left|right))/[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$`)
+
+// validTabSession reports whether tab is a session id: a tab id or a section surface id.
+func validTabSession(tab string) bool {
+	return validProjectID(tab) || sectionSurfaceID.MatchString(tab)
+}
+
+// tabSessionName returns the file name of the session of tab: the RFC 3986 percent-encoding of the id, which keeps the
+// unreserved characters. url.QueryEscape encodes every other byte. It encodes a space as "+", which no session id holds,
+// because validTabSession refuses a space. The standard library has no RFC 3986 encoder: url.PathEscape keeps ":".
+func tabSessionName(tab string) string {
+	return url.QueryEscape(tab)
+}
+
+// tabSessionPath returns the session file of tab in directory, or an error for a tab that is neither a tab id nor a section
+// surface id.
 func tabSessionPath(directory, tab string) (string, error) {
 	if tab == "" {
 		return "", errors.New("tab session requires a tab")
 	}
-	if !validProjectID(tab) {
+	if !validTabSession(tab) {
 		return "", fmt.Errorf("invalid tab session tab: %s", tab)
 	}
-	return filepath.Join(directory, "tab-sessions", tab+".json"), nil
+	return filepath.Join(directory, "tab-sessions", tabSessionName(tab)+".json"), nil
 }
 
 // readTabSession returns the document of the session file of tab, or nil when the file does not exist; a document of
@@ -353,7 +373,7 @@ func readTabSession(directory, tab string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	document, err := readStored(path, "tab-sessions/"+tab+".json", tabSessionFormat)
+	document, err := readStored(path, "tab-sessions/"+tabSessionName(tab)+".json", tabSessionFormat)
 	if err != nil || document == nil {
 		return nil, err
 	}
@@ -401,7 +421,8 @@ func putTabSession(directory, tab string, regions Record) (any, error) {
 	return int(info.Size()), nil
 }
 
-// listTabSessions returns the tabs that have a session file, in name order; an absent directory has none.
+// listTabSessions returns the session ids that have a session file, in name order; an absent directory has none. A file whose
+// name is not the session name of its id is not a session file and is not listed.
 func listTabSessions(directory string) (any, error) {
 	files, err := os.ReadDir(filepath.Join(directory, "tab-sessions"))
 	if os.IsNotExist(err) {
@@ -412,11 +433,15 @@ func listTabSessions(directory string) (any, error) {
 	}
 	tabs := []string{}
 	for _, file := range files {
-		tab, ok := strings.CutSuffix(file.Name(), ".json")
-		if ok && !file.IsDir() && validProjectID(tab) {
+		name, ok := strings.CutSuffix(file.Name(), ".json")
+		if !ok || file.IsDir() {
+			continue
+		}
+		if tab, err := url.QueryUnescape(name); err == nil && validTabSession(tab) && tabSessionName(tab) == name {
 			tabs = append(tabs, tab)
 		}
 	}
+	sort.Strings(tabs)
 	return tabs, nil
 }
 
