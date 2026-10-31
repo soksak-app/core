@@ -346,21 +346,14 @@ NATIVE_TESTS = observe_test \
   clipboard_test \
   link_test \
   diagnostic_reports_test \
-  capture_test \
-  capture_checker_test \
-  capture_file_checker_test \
-  capture_directory_checker_test \
-  capture_lifecycle_test \
-  capture_cycles_test \
+  capture_boundary_test \
   capture_stop_late_test \
   capture_stop_intake_test \
-  capture_callback_test \
   capture_cleanup_test \
   capture_preparation_test \
   capture_pressure_test \
   capture_storage_test \
   capture_metadata_test \
-  image_region_capture_presentation_test \
   image_capture_match_test \
   capture_frame_identity_test \
   capture_frame_identity_capture_test \
@@ -378,7 +371,15 @@ NATIVE_E2E_TESTS = window_titlebar_layout_test \
   window_titlebar_reload_test \
   surface_layout_test \
   capture_presentation_test \
-  capture_resize_test
+  capture_resize_test \
+  capture_test \
+  capture_checker_test \
+  capture_file_checker_test \
+  capture_directory_checker_test \
+  capture_lifecycle_test \
+  capture_cycles_test \
+  capture_callback_test \
+  image_region_capture_presentation_test
 
 comma := ,
 executables = $(foreach entry,$(1),$(firstword $(subst $(comma), ,$(entry))))

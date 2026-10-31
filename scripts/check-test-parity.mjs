@@ -3160,7 +3160,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-test-parity.mjs", symbol: "auditNativeFailurePropagation" },
     ],
     tests: [
-      { file: "native/darwin/tests/capture_test.m", id: "open failure is observable to the caller" },
+      { file: "native/darwin/tests/support/capture_boundary.m", id: "open failure is observable to the caller" },
       { file: "scripts/test/test-parity.test.mjs", id: "Darwin native failure audit rejects log-only capture boundaries" },
     ],
     expected: "Darwin capture open, start, wait, and stop failures cross the native boundary as explicit errors; invalid directory input and frame-write failures are not silently discarded.",
@@ -7628,7 +7628,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "frame_identity = match params.get(\"frameIdentity\")" },
     ],
     tests: [
-      { file: "native/darwin/tests/capture_test.m", id: "identity capture without a prepared target is rejected" },
+      { file: "native/darwin/tests/support/capture_boundary.m", id: "identity capture without a prepared target is rejected" },
       { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestCaptureStartOptionsParseFrameIdentity" },
       { file: "packages/host/tauriv2/tests/recording_test.rs", id: "recording_start_forwards_frame_identity" },
     ],
@@ -8228,6 +8228,16 @@ const FEATURE_LINKS = [
     ],
     expected: "The name of a make target decides the kind of its checks: test runs unit tests only and a target whose name starts with e2e runs end-to-end checks.",
     levels: ["unit"],
+  },
+  {
+    id: "F315",
+    implementation: [{ file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS = " }],
+    tests: [
+      { file: "scripts/test/test-kinds.test.mjs", id: "a native unit test records no window of the screen" },
+      { file: "native/darwin/tests/support/capture_boundary.m", id: "starting without a capture target is rejected" },
+    ],
+    expected: "Every native test that records a real window runs in NATIVE_E2E_TESTS, and the capture boundary cases run in NATIVE_TESTS through capture_boundary_test.",
+    levels: ["unit", "native"],
   },
   {
     id: "F313",

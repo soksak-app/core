@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F315: The native tests that record a real window run in `make -C native/darwin e2e`, and `capture_boundary_test` runs the capture boundary cases in the unit tests, because the hosted display presents frames up to 1 s apart.
 - F292-34: The plugin and sidecar releases that carry the corrections of the F292 window checks are published after core v0.0.21 and listed in the registry.
 - F314: The plugin specification states that plugin and sidecar repositories depend on the packed release files of a core release and release from `main` through `soksak-release-gate` with the `sok` of `CORE_RELEASE`.
 - F313: The crash report watch of the Tauri host tests accepts only `<application>-*.ips`, so it no longer removes the hidden file that the system renames to the saved report.

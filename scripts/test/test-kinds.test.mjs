@@ -29,6 +29,33 @@ test("native unit targets run no end-to-end case and native end-to-end targets c
   assert.deepEqual(misnamed, [], "a native target runs an end-to-end case without the e2e prefix");
 });
 
+/** The entries of a make variable that lists native tests: the executable of each `name` or `name,mode` entry. */
+function listedTests(makefile, variable) {
+  const body = new RegExp(`^${variable} = ((?:[^\\n]*\\\\\\n)*[^\\n]*)$`, "m").exec(makefile)?.[1];
+  assert.ok(body, `native/darwin/Makefile has no ${variable}`);
+  return body.split(/\s+/).filter((entry) => entry && entry !== "\\").map((entry) => entry.split(",")[0]);
+}
+
+/** The source of a native test with the local test sources that it imports; a bundle entry names its executable last. */
+function testSource(entry) {
+  const path = `native/darwin/tests/${entry.split("/").at(-1)}.m`;
+  const source = read(path);
+  return [...source.matchAll(/^#import "([a-z0-9_]+\.m)"$/gm)].reduce((text, match) => text + read(`native/darwin/tests/${match[1]}`), source);
+}
+
+// A recording that starts on a real window waits for frames that the display presents, so it is an end-to-end case; an invalid
+// window number is negative, an open alone prepares the target, a still capture takes one image, and a controlled sample needs
+// no display.
+const recordsAWindow = (source) => /sp_capture_open\(\s*[^-\s]/.test(source) && /sp_capture_start\(/.test(source);
+
+test("a native unit test records no window of the screen", { timeout: 1000 }, () => {
+  const makefile = read("native/darwin/Makefile");
+  const recording = listedTests(makefile, "NATIVE_TESTS").filter((name) => recordsAWindow(testSource(name)));
+  assert.deepEqual(recording, [], "these tests of NATIVE_TESTS record a window and need a display that presents frames");
+  const end = listedTests(makefile, "NATIVE_E2E_TESTS");
+  assert.ok(end.includes("capture_resize_test"), `NATIVE_E2E_TESTS is read as ${end.join(", ")}`);
+});
+
 test("the root make targets are the only entry points of the window checks", { timeout: 1000 }, () => {
   const root = rules(read("Makefile"));
   for (const target of ["e2e", "e2e-activation", "e2e-real", "e2e-person"]) assert.ok(root.some((rule) => rule.target === target), `the Makefile has no target ${target}`);
