@@ -60,6 +60,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
     } } }),
     pluginUnits: () => [{ id: pluginId, name: "Fixture", version: "0.0.1", description: "Fixture surface.", surface: true, sections: [] }],
+    refusedPlugins: () => new Set(),
     pluginDiagnostics: async () => null,
   } });
   registerPlugin({

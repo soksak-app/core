@@ -50,6 +50,7 @@ test("a draw keeps the pressed card header fold control in the document", { time
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
     } } }),
     pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
+    refusedPlugins: () => new Set(),
   } });
   // One set without sections. It is attached to the top and left sides of the card.
   const actualSettings = await import("../settings.js");

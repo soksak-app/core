@@ -35,6 +35,7 @@ test("a new tab avoids the ids of held surfaces, stored tabs and tabs issued bef
         { plugin: owner, title: "first" }, { plugin: owner, title: "second" }] }],
     } } }),
     pluginUnits: () => [{ id: owner, name: "Ids", description: "검사용 표면.", surface: true, sections: [] }],
+    refusedPlugins: () => new Set(),
   } });
   registerPlugin({ id: owner, name: "Ids", mark: "i", svg: "<path/>", ink: null, drop: null, surface: () => null });
 

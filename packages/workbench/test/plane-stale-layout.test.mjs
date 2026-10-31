@@ -50,6 +50,7 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
     } } }),
     pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
+    refusedPlugins: () => new Set(),
   } });
   registerPlugin({
     id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,

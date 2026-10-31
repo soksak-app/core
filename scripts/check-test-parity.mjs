@@ -8277,6 +8277,20 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F321-6-1",
+    implementation: [
+      { file: "packages/workbench/installed-plugins.js", symbol: "refused: refusedPlugins" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-tab-ids.test.mjs", id: "a new tab avoids the ids of held surfaces, stored tabs and tabs issued before it" },
+      { file: "packages/workbench/test/plane-side-toggles.test.mjs", id: "a draw keeps the pressed card header fold control in the document" },
+      { file: "packages/workbench/test/plane-stale-layout.test.mjs", id: "a held layout draw survives the close of a card it contains" },
+      { file: "packages/workbench/test/view-start-handoff.test.mjs", id: "core.file.open parameters reach the host placement request" },
+    ],
+    expected: "Every environment.js module mock that a page module imports through installed-plugins.js exports refusedPlugins, so the workbench tests load their modules.",
+    levels: ["unit"],
+  },
+  {
     id: "F321-7",
     implementation: [
       { file: "packages/host/wailsv3/src/installed.go", symbol: "func InstalledModule(" },
