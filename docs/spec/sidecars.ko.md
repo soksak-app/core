@@ -60,7 +60,7 @@ Persistent layout reconciliation은 `retain`으로 누락된 session을 닫고 `
 
 Host는 state mutation을 직렬화하는 동안 각 immutable `host.sidecars` 값을 enqueue한다. 따라서 빠른 answer가 pending-close 전이를 없애거나 notification 순서를 뒤집을 수 없다. Status read는 하나의 state 및 declaration snapshot에서 closing과 outdated service를 관측한다. Notification consumer는 전달받은 값만 enqueue하며 sidecar state를 읽거나 window registry를 잠그지 않는다. Window UI invalidation은 sidecar state lock 밖에서 실행한다. Lock 안에서 값을 만들고 나중에 발행하는 방식은 mutation 순서를 보존하지 못하며 지연된 UI task에서 state를 다시 읽는 방식은 일시적인 값을 보존하지 못한다. Declaration 교체와 그 version-change 발행은 같은 state lock으로 직렬화한다. 거절된 declaration은 값을 바꾸지 않으며 표시되는 status가 같은 declaration은 변경을 보내지 않는다. Stale connection 종료는 현재 connection을 제거하거나 알릴 수 없다. Version-only 변경과 현재 connection 종료의 outdated 제거는 pending close와 독립적으로 발행한다. Stop은 running 항목을 제거한 뒤 발행한다. Authoritative retain은 누락된 일반 owner를 제거한 뒤 변경된 owned-session count를 발행하며 plugin 및 state session은 명시적인 lifecycle을 유지한다. Owner가 제거된 surface ID를 재사용하면 process가 그 ID를 기억하더라도 복원된 count를 발행한다. 표시되는 status 변경이 없는 반복 operation은 발행하지 않는다.
 
-사이드카는 `sidecar.json`에 메시지 형식을 `message: {form, operationField}`로 선언한다. `form`은 `json-object`이고, `operationField`는 요청 본문에서 작업을 고르는 문자열 필드 이름이다. `hostReadOperations`가 있는 `sidecar.json`은 `<sidecar.json 경로>: hostReadOperations is removed`로 거절되며, installed document는 사이드카 의존마다 `message`만 담는다. `@soksak/plugin-api`는 이 선언을 `validateSidecar`로 검사한다.
+사이드카는 `sidecar.json`에 메시지 형식을 `message: {form, operationField}`로 선언한다. `form`은 `json-object`이고, `operationField`는 요청 본문에서 작업을 고르는 문자열 필드 이름이다. `hostReadOperations`가 있는 `sidecar.json`은 `<path of sidecar.json>: hostReadOperations is removed`로 거절되며, installed document는 사이드카 의존마다 `message`만 담는다. `@soksak/plugin-api`는 이 선언을 `validateSidecar`로 검사한다.
 
 ## 실패
 

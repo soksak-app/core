@@ -344,7 +344,7 @@ func ValidateManifest(value any) error {
 		return fmt.Errorf("plugin.json: expected an object")
 	}
 	if _, ok := manifest["state"]; ok {
-		return fmt.Errorf("plugin %s: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)", jsFieldText(manifest, "id"))
+		return fmt.Errorf("plugin %s: state is removed; a plugin declares its project data with data (docs/spec/plugins.md#project-data)", jsFieldText(manifest, "id"))
 	}
 	// The plugin host members are removed: a section is a view of the plugin (docs/spec/plugins.md#sections).
 	for _, member := range []string{"host", "hostOperations"} {

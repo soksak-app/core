@@ -498,7 +498,7 @@ fn plugin_pack_refuses_removed_manifest_fields() {
         ),
         (
             r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}"#,
-            "plugin probe: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)",
+            "plugin probe: state is removed; a plugin declares its project data with data (docs/spec/plugins.md#project-data)",
         ),
     ] {
         let dir = plugin_tree();

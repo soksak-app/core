@@ -304,7 +304,7 @@ func TestPluginPackAddsDiagnosticDeclarationsOnlyWithTheFlag(t *testing.T) {
 func TestPluginPackRefusesRemovedManifestFields(t *testing.T) {
 	for _, c := range []struct{ manifest, want string }{
 		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}`, "plugin probe: section probe.list module is removed; a section takes composition and height"},
-		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}`, "plugin probe: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)"},
+		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}`, "plugin probe: state is removed; a plugin declares its project data with data (docs/spec/plugins.md#project-data)"},
 	} {
 		dir := pluginTree(t)
 		writeTree(t, dir, map[string]string{"plugin.json": c.manifest})

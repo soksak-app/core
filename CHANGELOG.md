@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F332-4-8: The refusal of `state` in plugin.json reads `state is removed; a plugin declares its project data with data`.
 - F332-4-7: A `sidecar.json` with `hostReadOperations` is refused by both hosts with `<path of sidecar.json>: hostReadOperations is removed`, and the installed document carries only the `message` of each sidecar dependency.
 - F332-4-6: The hosts no longer relay a declared UI snapshot; a view message with the event `declared-ui.snapshot` is refused as an unknown view event, and the window event `declared-ui-snapshot` and the contract case `view.declared-ui.snapshot` are removed.
 - F332-4-5: The source events, the origin query and the ordered source stream of the hosts are named view source (`view-source-registered`, `view-source-ended`, `viewSourceOrigins`, `view_source_event_stream`), and their contract cases are `view-source-stream.*`.

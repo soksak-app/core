@@ -18,7 +18,7 @@ test("a section view may declare project data, sidecars, and exposes", () => {
 
 test("the state module is refused with the plugin and the field", () => {
   assert.throws(() => validateManifest({ ...base(), state: { module: "ui/state.js" } }),
-    { message: "plugin probe: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)" });
+    { message: "plugin probe: state is removed; a plugin declares its project data with data (docs/spec/plugins.md#project-data)" });
 });
 
 test("data and sidecars are rejected when their requirements are missing", () => {

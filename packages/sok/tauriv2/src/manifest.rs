@@ -1369,7 +1369,7 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         .ok_or_else(|| "plugin.json: expected an object".to_string())?;
     if manifest.contains_key("state") {
         return Err(format!(
-            "plugin {}: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)",
+            "plugin {}: state is removed; a plugin declares its project data with data (docs/spec/plugins.md#project-data)",
             js_field_text(manifest, "id")
         ));
     }

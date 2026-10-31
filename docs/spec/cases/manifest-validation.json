@@ -41,7 +41,7 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)",
+      "error": "plugin probe: state is removed; a plugin declares its project data with data (docs/spec/plugins.md#project-data)",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"

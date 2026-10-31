@@ -586,7 +586,7 @@ test("the status, module and fill members of a section are refused as removed", 
 test("a state module is refused with the plugin and the field", () => {
   assert.throws(
     () => validateManifest({ ...viewSide, state: { module: "state/side.js" } }),
-    { message: "plugin side: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)" },
+    { message: "plugin side: state is removed; a plugin declares its project data with data (docs/spec/plugins.md#project-data)" },
   );
 });
 

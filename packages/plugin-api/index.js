@@ -611,9 +611,9 @@ export function validateReleaseFiles(pkg) {
 
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
-  // The state module is removed: its project data moves to the plugin host (docs/spec/plugins.md#project-data).
+  // The state module is removed: a plugin declares its project data with data (docs/spec/plugins.md#project-data).
   if (isObject(manifest) && manifest.state !== undefined) {
-    throw new Error(`plugin ${manifest.id}: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)`);
+    throw new Error(`plugin ${manifest.id}: state is removed; a plugin declares its project data with data (docs/spec/plugins.md#project-data)`);
   }
   // The plugin host members are removed: a section is a view of the plugin (docs/spec/plugins.md#sections).
   for (const member of ["host", "hostOperations"]) {
