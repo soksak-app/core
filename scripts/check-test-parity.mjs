@@ -59,6 +59,7 @@ lane("event log audit", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/ch
 lane("event class tables", "js-ts", ["scripts/generate-event-classes.mjs"], ["scripts/test/event-classes.test.mjs"]),
 lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-run.test.mjs"]),
 lane("crash report fault", "js-ts", ["scripts/crash-fault.mjs"], ["scripts/test/crash-fault.test.mjs"]),
+lane("end-to-end run", "js-ts", ["scripts/e2e-run.mjs"], ["scripts/test/e2e-run.test.mjs"]),
 lane("log command audit", "js-ts", ["scripts/audit-log.mjs"], ["scripts/test/audit-log.test.mjs"]),
 lane("temporary folder audit", "js-ts", ["scripts/temp-audit.mjs"], ["scripts/test/temp-audit.test.mjs"]),
 lane("census", "declaration", ["scripts/census.json"], ["scripts/test/census.test.mjs"], { testLanguage: "js-ts" }),
@@ -8208,7 +8209,7 @@ const FEATURE_LINKS = [
     id: "F298-5",
     implementation: [
       { file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS = " },
-      { file: "Makefile", symbol: "e2e: docs-check e2e-check exposure-check" },
+      { file: "Makefile", symbol: "e2e: docs-check e2e-check exposure-check $(E2E_BUILD)" },
       { file: "e2e/package.json", symbol: "\"test\": \"node --test test/\"" },
     ],
     tests: [
@@ -8219,6 +8220,27 @@ const FEATURE_LINKS = [
       { file: "scripts/test/e2e-host-parity.test.mjs", id: "a window-check file that does not run both adapters is an error whatever its name" },
     ],
     expected: "The name of a make target decides the kind of its checks: test runs unit tests only and a target whose name starts with e2e runs end-to-end checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F298-6",
+    implementation: [
+      { file: "scripts/e2e-run.mjs", symbol: "export function e2ePlan" },
+      { file: "scripts/e2e-run.mjs", symbol: "export async function runPlan" },
+      { file: "Makefile", symbol: "@node scripts/e2e-run.mjs --script verify --native e2e" },
+    ],
+    tests: [
+      { file: "scripts/test/e2e-run.test.mjs", id: "each run gets a new empty configuration root under target/e2e" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "the plan prepares, starts both applications, checks and quits them in this order" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "a failed preparation skips the checks, runs the cleanup and names the failed step" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "a failed check does not skip the next check" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "a start step ends when the application writes endpoint.json and fails when the application exits first" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "a quit step requests host.quit and ends when the application exits" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "a quit step without a started application is skipped" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "a process whose command names the configuration root or an application bundle remains" },
+      { file: "scripts/test/e2e-run.test.mjs", id: "a passed run removes its configuration root and a failed run keeps it" },
+    ],
+    expected: "make e2e runs the end-to-end checks in a new configuration root for each run: it starts both applications, runs the checks, quits the applications with host.quit and fails on a remaining process.",
     levels: ["unit"],
   },
   {

@@ -32,7 +32,8 @@ test("native unit targets run no end-to-end case and native end-to-end targets c
 test("the root make targets are the only entry points of the window checks", { timeout: 1000 }, () => {
   const root = rules(read("Makefile"));
   for (const target of ["e2e", "e2e-activation", "e2e-real", "e2e-person"]) assert.ok(root.some((rule) => rule.target === target), `the Makefile has no target ${target}`);
-  const misnamed = root.filter((rule) => /run verify|--script verify|make -C native\/darwin e2e/.test(rule.recipe) && !rule.target.startsWith("e2e"))
+  assert.match(root.find((rule) => rule.target === "e2e").recipe, /node scripts\/e2e-run\.mjs/, "make e2e does not run scripts/e2e-run.mjs");
+  const misnamed = root.filter((rule) => /run verify|--script verify|make -C native\/darwin e2e|e2e-run\.mjs/.test(rule.recipe) && !rule.target.startsWith("e2e"))
     .map((rule) => rule.target);
   assert.deepEqual(misnamed, [], "a root target runs end-to-end checks without the e2e prefix");
   const scripts = Object.keys(JSON.parse(read("package.json")).scripts ?? {}).filter((name) => name.startsWith("verify"));
