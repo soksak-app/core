@@ -1,12 +1,15 @@
 //! The view join of the presentation wait (docs/spec/plugin-processes.md, rule 6).
 
 use super::{PresentationWait, ViewPlacement, trace_presentation_join};
-use crate::event_record::buffered_fields;
+use crate::event_record::buffered_fields_of;
 use std::sync::Arc;
 
-const SURFACE: &str = "probe-surface";
+/// The surface of the records of this file, which no other test of the binary uses.
+const SURFACE: &str = "view-join-surface";
 const GENERATION: u64 = 4;
 const JOIN_TICKET: u64 = 11;
+/// The surface of the records that another test of the binary writes in parallel; a test reads only the records of its own surface.
+const OTHER_SURFACE: &str = "other-surface";
 
 fn placement(x: f64) -> ViewPlacement {
     ViewPlacement {
@@ -35,10 +38,19 @@ fn presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end()
     crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
     let _trace_guard = PerformanceTraceGuard;
     let wait = PresentationWait::default();
-    let before = buffered_fields(TRACE).len();
+    let before = buffered_fields_of(TRACE, SURFACE).len();
+    // A record of another surface between the two reads stands for a test that runs in parallel.
+    trace_presentation_join(
+        "result",
+        OTHER_SURFACE,
+        GENERATION,
+        JOIN_TICKET,
+        Some(true),
+        None,
+    );
     assert!(wait.begin(SURFACE, GENERATION, JOIN_TICKET));
     assert_eq!(
-        buffered_fields(TRACE)[before..],
+        buffered_fields_of(TRACE, SURFACE)[before..],
         [serde_json::json!({
             "phase": "requested",
             "surface": SURFACE,
@@ -52,7 +64,7 @@ fn presentation_join_trace_records_exact_wait_identity_and_nonpresentation_end()
         Ok(true)
     );
     assert_eq!(
-        buffered_fields(TRACE)[before + 1..],
+        buffered_fields_of(TRACE, SURFACE)[before + 1..],
         [serde_json::json!({
             "phase": "abandoned",
             "surface": SURFACE,
@@ -73,10 +85,19 @@ fn held_and_late_native_callbacks_keep_their_exact_join_identity() {
     crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
     let _trace_guard = PerformanceTraceGuard;
     let wait = Arc::new(PresentationWait::default());
-    let before = buffered_fields(TRACE).len();
+    let before = buffered_fields_of(TRACE, SURFACE).len();
     let mut callbacks: Vec<Box<dyn FnOnce()>> = Vec::new();
 
     assert!(wait.begin(SURFACE, GENERATION, JOIN_TICKET));
+    // A record of another surface between the two reads stands for a test that runs in parallel.
+    trace_presentation_join(
+        "result",
+        OTHER_SURFACE,
+        GENERATION,
+        JOIN_TICKET,
+        Some(true),
+        None,
+    );
     trace_presentation_join("result", SURFACE, GENERATION, JOIN_TICKET, Some(true), None);
     let callback_wait = Arc::clone(&wait);
     callbacks.push(Box::new(move || {
@@ -87,7 +108,7 @@ fn held_and_late_native_callbacks_keep_their_exact_join_identity() {
         );
     }));
     assert_eq!(
-        buffered_fields(TRACE).len(),
+        buffered_fields_of(TRACE, SURFACE).len(),
         before + 2,
         "a held callback must not be recorded early"
     );
@@ -110,7 +131,7 @@ fn held_and_late_native_callbacks_keep_their_exact_join_identity() {
     }));
     callbacks.remove(0)();
 
-    let records = buffered_fields(TRACE);
+    let records = buffered_fields_of(TRACE, SURFACE);
     let got = &records[before..];
     let phases: Vec<_> = got
         .iter()
@@ -152,7 +173,7 @@ fn synchronous_native_callback_precedes_the_join_result() {
     crate::performance::command(serde_json::json!({"action": "on"})).unwrap();
     let _trace_guard = PerformanceTraceGuard;
     let wait = PresentationWait::default();
-    let before = buffered_fields(TRACE).len();
+    let before = buffered_fields_of(TRACE, SURFACE).len();
     assert!(wait.begin(SURFACE, GENERATION, JOIN_TICKET));
     trace_presentation_join("presented", SURFACE, GENERATION, JOIN_TICKET, None, None);
     assert_eq!(
@@ -161,7 +182,7 @@ fn synchronous_native_callback_precedes_the_join_result() {
     );
     trace_presentation_join("result", SURFACE, GENERATION, JOIN_TICKET, Some(true), None);
 
-    let records = buffered_fields(TRACE);
+    let records = buffered_fields_of(TRACE, SURFACE);
     let phases: Vec<_> = records[before..]
         .iter()
         .map(|fields| fields["phase"].as_str().unwrap())

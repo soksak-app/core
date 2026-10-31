@@ -40,16 +40,53 @@ static long physicalFootprint(pid_t pid) {
 
 static NSString *const kPage = @"<!doctype html><title>Region</title><body>region</body>";
 
-// An HTTP server on the loopback address that answers every request with the page and closes each connection.
+// The text of a network error for the records of the test server, or none.
+static NSString *networkError(nw_error_t error) {
+    if (!error) return @"none";
+    CFErrorRef cf = nw_error_copy_cf_error(error);
+    NSString *text = [NSString stringWithFormat:@"%@", (__bridge NSError *)cf];
+    CFRelease(cf);
+    return text;
+}
+
+// The number of connections that the test servers accepted, which names each connection in the records.
+static int connectionCount;
+
+// An HTTP server on the loopback address that answers every request with the page and closes each connection. Each
+// connection writes a record when it is accepted, when its request arrives and when its answer is sent, so a region that
+// does not load shows whether its request reached the server.
 static nw_listener_t serve(void) {
     nw_parameters_t parameters = nw_parameters_create_secure_tcp(NW_PARAMETERS_DISABLE_PROTOCOL, NW_PARAMETERS_DEFAULT_CONFIGURATION);
     nw_parameters_set_local_endpoint(parameters, nw_endpoint_create_host("127.0.0.1", "0"));
     nw_listener_t listener = nw_listener_create(parameters);
     nw_listener_set_queue(listener, dispatch_get_main_queue());
     nw_listener_set_new_connection_handler(listener, ^(nw_connection_t connection) {
+        int number = ++connectionCount;
+        nw_endpoint_t remote = nw_connection_copy_endpoint(connection);
+        printf("server connection %d accepted from %s\n", number, nw_endpoint_get_hostname(remote));
+        nw_release(remote);
+        fflush(stdout);
         nw_connection_set_queue(connection, dispatch_get_main_queue());
         nw_connection_start(connection);
         nw_connection_receive(connection, 1, 65536, ^(dispatch_data_t content, nw_content_context_t context, bool complete, nw_error_t error) {
+            size_t received = content ? dispatch_data_get_size(content) : 0;
+            printf("server connection %d received %zu bytes, complete %d, error %s\n", number, received, complete, networkError(error).UTF8String);
+            fflush(stdout);
+            if (error || received == 0) {
+                // A connection that ends without a request is closed without an answer; WebKit opens such connections ahead of
+                // a request and ends one that it does not use with a close or a reset, which the server cannot prevent. Any
+                // other receive error is a failure of the server.
+                BOOL resetByClient = error && received == 0 && nw_error_get_error_domain(error) == nw_error_domain_posix
+                    && nw_error_get_error_code(error) == ECONNRESET;
+                if (resetByClient) {
+                    printf("server connection %d was reset by the client before a request\n", number);
+                    fflush(stdout);
+                } else if (error) {
+                    check(NO, [NSString stringWithFormat:@"server connection %d receives its request: %@", number, networkError(error)]);
+                }
+                nw_connection_cancel(connection);
+                return;
+            }
             NSData *bytes = [kPage dataUsingEncoding:NSUTF8StringEncoding];
             NSString *head = [NSString stringWithFormat:@"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
                 "Content-Length: %lu\r\nConnection: close\r\n\r\n", (unsigned long)bytes.length];
@@ -57,6 +94,9 @@ static nw_listener_t serve(void) {
             [response appendData:bytes];
             dispatch_data_t out = dispatch_data_create(response.bytes, response.length, dispatch_get_main_queue(), DISPATCH_DATA_DESTRUCTOR_DEFAULT);
             nw_connection_send(connection, out, NW_CONNECTION_FINAL_MESSAGE_CONTEXT, true, ^(nw_error_t sent) {
+                printf("server connection %d sent its answer, error %s\n", number, networkError(sent).UTF8String);
+                fflush(stdout);
+                if (sent) check(NO, [NSString stringWithFormat:@"server connection %d sends its answer: %@", number, networkError(sent)]);
                 nw_connection_cancel(connection);
             });
         });
@@ -70,14 +110,57 @@ static nw_listener_t serve(void) {
     return listener;
 }
 
-static void changed(void *context, const char *text) {}
-
 typedef struct {
     NSString *address;
     void *document;
     pid_t process;
     long footprint;
+    // The last state that the region reported through its changed callback.
+    NSDictionary *state;
 } Region;
+
+// Keeps the state that the region reports. The context is the Region that receives the state.
+static void changed(void *context, const char *text) {
+    Region *region = (Region *)context;
+    NSData *data = [NSData dataWithBytes:text length:strlen(text)];
+    NSDictionary *state = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if (![state isKindOfClass:NSDictionary.class]) {
+        check(NO, [NSString stringWithFormat:@"the state of region %@ is a JSON object: %s", region->address, text]);
+        return;
+    }
+    // The WebContent process of each state names whether a region that does not load has a process and whether it is a
+    // process of an earlier scenario (F335-2).
+    pid_t process = region->document ? ((WKWebView *)region->document)._webProcessIdentifier : 0;
+    printf("region %s process %d state event: %s\n", region->address.UTF8String, process, text);
+    fflush(stdout);
+    [region->state release];
+    region->state = [state retain];
+}
+
+// Whether every region with a document has reported the end of its load. A region ends its load when a navigation fails
+// (the state carries the error) or when the page is not loading and has its title. The state events also report the
+// changes of the loading and title properties, and a page that is not loading can report an empty title before its title
+// is set, so the title is part of the end.
+static BOOL regionsLoadEnded(const Region *regions, int count) {
+    for (int i = 0; i < count; i++) {
+        if (!regions[i].document) continue;
+        NSDictionary *state = regions[i].state;
+        if (!state) return NO;
+        id error = state[@"error"];
+        if (error && error != NSNull.null) continue;
+        if ([state[@"loading"] boolValue] || ![state[@"title"] isEqual:@"Region"]) return NO;
+    }
+    return YES;
+}
+
+// The state of the region that a failure names: its WebContent process, loading state, title, address and the error of
+// its last navigation, which is none when the navigation did not fail.
+static NSString *regionState(WKWebView *view, NSDictionary *state) {
+    id error = state[@"error"];
+    return [NSString stringWithFormat:@"_webProcessIdentifier %d, loading %@, title \"%@\", URL \"%@\", navigation error \"%@\"",
+        view._webProcessIdentifier, view.loading ? @"YES" : @"NO", view.title ?: @"", view.URL.absoluteString ?: @"",
+        (!error || error == NSNull.null) ? @"none" : error];
+}
 
 // Runs one scenario: four regions in one window, loaded with the addresses, then their processes and footprints.
 static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString *store) {
@@ -99,7 +182,8 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
     Region regions[4];
     for (int i = 0; i < 4; i++) {
         regions[i].address = addresses[i];
-        regions[i].document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, changed, NULL);
+        regions[i].state = nil;
+        regions[i].document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, changed, &regions[i]);
         regions[i].process = 0;
         regions[i].footprint = -1;
         check(regions[i].document != NULL, [NSString stringWithFormat:@"region %d is created", i + 1]);
@@ -111,11 +195,23 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
             [NSString stringWithFormat:@"region %d accepts its address %@", i + 1, regions[i].address]);
     }
 
+    // Each region reports its state through changed when a navigation finishes or fails (document_view.m, webView:
+    // didFinishNavigation: and fail:) and when its loading or title changes. The wait is bounded by the per-test limit of
+    // the runner.
+    while (!regionsLoadEnded(regions, 4)) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    }
     for (int i = 0; i < 4; i++) {
         WKWebView *view = (WKWebView *)regions[i].document;
         if (!view) continue;
-        BOOL loaded = pumpUntil(10, ^BOOL { return view._webProcessIdentifier != 0 && !view.loading && [view.title isEqual:@"Region"]; });
-        check(loaded, [NSString stringWithFormat:@"region %d loads its page within 10 seconds", i + 1]);
+        id error = regions[i].state[@"error"];
+        if (error && error != NSNull.null) {
+            check(NO, [NSString stringWithFormat:@"region %d navigation fails: %@; state: %@", i + 1, error, regionState(view, regions[i].state)]);
+            continue;
+        }
+        BOOL loaded = ![regions[i].state[@"loading"] boolValue] && [regions[i].state[@"title"] isEqual:@"Region"];
+        check(loaded, loaded ? [NSString stringWithFormat:@"region %d loads its page", i + 1]
+            : [NSString stringWithFormat:@"region %d loads its page with the title Region; state: %@", i + 1, regionState(view, regions[i].state)]);
     }
     // The state of the last loads settles before the processes are read.
     pumpUntil(0.5, ^BOOL { return NO; });
@@ -154,6 +250,8 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
     // them.
     for (int i = 0; i < 4; i++) {
         if (regions[i].document) sp_document_close(regions[i].document);
+        [regions[i].state release];
+        regions[i].state = nil;
     }
     sp_surface_close(surface);
     [window close];
