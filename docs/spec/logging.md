@@ -330,7 +330,7 @@ These entrances record without a call site writing the record:
 - the start of a document of the main page: the first module the page loads emits the event `page.start` with the fields `time_origin` (the origin of the clock of the document, `performance.timeOrigin`) and `url`, so a reload, which starts a new document with a new clock, is a marked boundary in the timeline;
 - the display of an error that a person sees, which emits the `error` event.
 
-Sources that no entrance covers, such as the end of a task, are listed by a lint of the sources for events without a declaration or a reason comment. The lint is not proof. Coverage is judged at run time: a window check drives each declared source through declared commands and native input and requires its declared events.
+Sources that no entrance covers, such as the end of a task, are listed by a lint of the sources for events without a declaration or a reason comment. The lint is not proof. Coverage is judged at run time: a window check drives each view source through declared commands and native input and requires its declared events.
 
 ### Operation chains
 

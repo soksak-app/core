@@ -569,7 +569,7 @@ func TestViewSourceRegistrationPrecedesFirstSnapshotAndStatusRegistration(t *tes
 	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
 		t.Fatal(err)
 	}
-	if len(events) < 3 || events[0].name != "declared-ui-source-registered" || events[1].name != "declared-ui-snapshot" || events[2].name != "view-call" {
+	if len(events) < 3 || events[0].name != "view-source-registered" || events[1].name != "declared-ui-snapshot" || events[2].name != "view-call" {
 		t.Fatalf("source lifecycle and first provider messages were ordered %v, want registration, snapshot, then status registration call", events)
 	}
 	generation := events[0].data.(map[string]any)["generation"]

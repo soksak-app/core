@@ -382,7 +382,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		}
 	}
 	if err == nil {
-		s.windowEvent("declared-ui-source-registered", map[string]any{"plugin": plugin, "surface": surfaceID, "generation": generation})
+		s.windowEvent("view-source-registered", map[string]any{"plugin": plugin, "surface": surfaceID, "generation": generation})
 		registeredEvent = true
 		err = system.SetViewMessage(handle, func(value string) {
 			s.viewReceived(surfaceID, handle, plugin, generation, value)
@@ -415,7 +415,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	if err != nil {
 		s.documents.Remove(key)
 		if s.sourceOriginState().retire(surfaceID, generation) && registeredEvent {
-			s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": plugin, "surface": surfaceID, "generation": generation})
+			s.windowEvent("view-source-ended", map[string]any{"plugin": plugin, "surface": surfaceID, "generation": generation})
 		}
 		if handle != nil {
 			system.CloseDocument(handle)
@@ -830,7 +830,7 @@ func (s *Surfaces) closeSurfaceDocuments(surface string) {
 	// The view of the surface closes with its documents (docs/spec/logging.md#principles).
 	s.viewRecords().recordEnd(surface)
 	if channel, ok := s.documents.view(surface); ok && s.sourceOriginState().retire(surface, channel.generation) {
-		s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": channel.generation})
+		s.windowEvent("view-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": channel.generation})
 	}
 	// The regions close with their documents, so their stream effects are not applied.
 	s.streams.RemoveSurface(surface)
@@ -1571,7 +1571,7 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation 
 	// The view ends here, whether its process ended or its queue overflowed (docs/spec/logging.md#principles).
 	s.viewRecords().recordEnd(surface)
 	if s.sourceOriginState().retire(surface, generation) {
-		s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": generation})
+		s.windowEvent("view-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": generation})
 	}
 	// The open calls are taken before the view is removed, because the removal drops the channel of the view.
 	openCalls := s.documents.endViewCalls(surface)

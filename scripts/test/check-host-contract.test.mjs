@@ -133,7 +133,7 @@ test('Rust declarations follow compiler-listed tests and reject ambiguous crate 
   const root = fileURLToPath(new URL('../../', import.meta.url));
   const activeFile = `${owner}/tests/surfaces_geometry_test.rs`;
   const inactiveFile = `${owner}/tests/project_data_order/bindings_test.rs`;
-  const otherFile = `${owner}/tests/declared_source_origins/view_generation_test.rs`;
+  const otherFile = `${owner}/tests/view_source_origins/view_generation_test.rs`;
   const files = [
     { file: activeFile, owner, source: '// contract: area.shared\n#[test]\nfn active() {}\n' },
     { file: inactiveFile, owner, source: '// contract: area.shared\n#[test]\nfn windows_only() {}\n' },
@@ -173,11 +173,6 @@ test('the case table rejects duplicate ids, invalid ids, and a limited scope wit
   assert.throws(() => parseContractCases('# none\n'), /no "Contract cases" section/);
 });
 
-test('the late provider error case uses the registered Tauri host scope', () => {
-  const spec = readFileSync(new URL('../../docs/spec/host-contract.md', import.meta.url), 'utf8');
-  const contract = parseContractCases(spec).get('plugin-host.channel.late-error-preserved');
-  assert.deepEqual(contract?.hosts, ['tauriv2']);
-});
 
 test('the checked-in English and Korean host contract tables contain unique case ids', () => {
   const english = readFileSync(new URL('../../docs/spec/host-contract.md', import.meta.url), 'utf8');

@@ -18,7 +18,7 @@ func TestSourceOriginsDoesNotIssueAnUnsafeGeneration(t *testing.T) {
 }
 
 // contract: source-origin.atomic-snapshot-keeps-floor-and-only-current-sources
-func TestDeclaredSourceOriginsReturnsCurrentWindowSnapshot(t *testing.T) {
+func TestViewSourceOriginsReturnsCurrentWindowSnapshot(t *testing.T) {
 	host, surfaces, _, ctx := projectOpenFixture(t)
 	oldGeneration, err := surfaces.sourceOriginState().create("tab-one")
 	if err != nil {
@@ -32,9 +32,9 @@ func TestDeclaredSourceOriginsReturnsCurrentWindowSnapshot(t *testing.T) {
 		t.Fatal("retiring a replaced view generation removed the current source")
 	}
 
-	snapshot, err := host.DeclaredSourceOrigins(ctx)
+	snapshot, err := host.ViewSourceOrigins(ctx)
 	if err != nil {
-		t.Fatalf("read declared-source origins through the host binding: %v", err)
+		t.Fatalf("read view-source origins through the host binding: %v", err)
 	}
 	if snapshot.Floor != currentGeneration || snapshot.Views["tab-one"] != currentGeneration || len(snapshot.Views) != 1 {
 		t.Fatalf("active source snapshot %+v, want floor %d and view generation %d", snapshot, currentGeneration, currentGeneration)
@@ -43,9 +43,9 @@ func TestDeclaredSourceOriginsReturnsCurrentWindowSnapshot(t *testing.T) {
 	if !surfaces.sourceOriginState().retire("tab-one", currentGeneration) {
 		t.Fatal("retiring the current source generation failed")
 	}
-	snapshot, err = host.DeclaredSourceOrigins(ctx)
+	snapshot, err = host.ViewSourceOrigins(ctx)
 	if err != nil {
-		t.Fatalf("read declared-source origins after retirement: %v", err)
+		t.Fatalf("read view-source origins after retirement: %v", err)
 	}
 	if snapshot.Floor != currentGeneration || len(snapshot.Views) != 0 {
 		t.Fatalf("retired source snapshot %+v, want retained floor %d and no active sources", snapshot, currentGeneration)

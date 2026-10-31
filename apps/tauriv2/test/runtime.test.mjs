@@ -39,7 +39,7 @@ test("ordered main events register before subscribers proceed and dispatch throu
       Channel,
       invoke: (command, args) => {
         calls.push([command, args]);
-        if (command === "declared_source_event_stream") {
+        if (command === "view_source_event_stream") {
           return new Promise((resolve) => { finishRegistration = resolve; });
         }
         return Promise.resolve(null);
@@ -53,7 +53,7 @@ test("ordered main events register before subscribers proceed and dispatch throu
     const { host } = await import("../runtime/index.js?test=ordered-main-events");
     const delivered = [];
     const eventNames = [
-      "declared-ui-source-registered", "declared-ui-source-ended", "declared-ui-snapshot",
+      "view-source-registered", "view-source-ended", "declared-ui-snapshot",
       "view-call", "view-reply", "view-process-ended", "view-stopped", "view-responsiveness",
     ];
     let queryStarted = false;
@@ -68,7 +68,7 @@ test("ordered main events register before subscribers proceed and dispatch throu
       "all source, snapshot, call, reply, and end events share Channel order and preserve payloads");
     finishRegistration(null);
     await query;
-    assert.deepEqual(calls, [["declared_source_event_stream", { onMessage: channels[0] }]]);
+    assert.deepEqual(calls, [["view_source_event_stream", { onMessage: channels[0] }]]);
     assert.deepEqual(listeners, [], "ordered events do not use the unordered event/eval path");
 
     const nonOrdered = host.on("workspace-changed", () => {});
@@ -91,7 +91,7 @@ test("ordered listener registration failure rejects instead of falling back to u
       Channel,
       invoke: async (command, args) => {
         calls.push([command, args]);
-        if (command === "declared_source_event_stream") throw "channel registration failed";
+        if (command === "view_source_event_stream") throw "channel registration failed";
         return null;
       },
     },
@@ -101,9 +101,9 @@ test("ordered listener registration failure rejects instead of falling back to u
   globalThis.location = { search: "" };
   try {
     const { host } = await import("../runtime/index.js?test=ordered-registration-failure");
-    await assert.rejects(host.on("declared-ui-source-registered", () => {}),
+    await assert.rejects(host.on("view-source-registered", () => {}),
       (error) => error instanceof Error && error.message === "channel registration failed");
-    assert.equal(calls[0]?.[0], "declared_source_event_stream");
+    assert.equal(calls[0]?.[0], "view_source_event_stream");
     assert.deepEqual(listeners, [], "registration failure does not fall back to unordered events");
   } finally {
     delete globalThis.window;
@@ -236,18 +236,18 @@ test("a reloaded main page registers a fresh ordered channel", async () => {
   globalThis.location = { search: "" };
   try {
     const first = await import("../runtime/index.js?test=ordered-channel-reload-first");
-    await first.host.on("declared-ui-source-registered", (event) => received.push(["old", event]));
+    await first.host.on("view-source-registered", (event) => received.push(["old", event]));
     for (const listener of pageListeners.get("pagehide") ?? []) listener();
-    channels[0].onmessage({ name: "declared-ui-source-registered", value: { plugin: "stale", generation: 1 } });
+    channels[0].onmessage({ name: "view-source-registered", value: { plugin: "stale", generation: 1 } });
     assert.deepEqual(received, [], "pagehide releases the old page's local event subscription");
     globalThis.window = makeWindow();
     const second = await import("../runtime/index.js?test=ordered-channel-reload-second");
-    await second.host.on("declared-ui-source-registered", (event) => received.push(["new", event]));
-    channels[1].onmessage({ name: "declared-ui-source-registered", value: { plugin: "current", generation: 2 } });
+    await second.host.on("view-source-registered", (event) => received.push(["new", event]));
+    channels[1].onmessage({ name: "view-source-registered", value: { plugin: "current", generation: 2 } });
     assert.equal(channels.length, 2);
     assert.notEqual(channels[0], channels[1], "a new page instance registers its own Channel");
     assert.deepEqual(received, [["new", { plugin: "current", generation: 2 }]]);
-    assert.deepEqual(calls.map(([command]) => command), ["declared_source_event_stream", "declared_source_event_stream"]);
+    assert.deepEqual(calls.map(([command]) => command), ["view_source_event_stream", "view_source_event_stream"]);
   } finally {
     delete globalThis.window;
     delete globalThis.location;

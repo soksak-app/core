@@ -19,7 +19,7 @@ use crate::platform::{self, Handle};
 use crate::projects::project_folder;
 use crate::shapes::Shapes;
 use crate::sidecars::WindowSidecars;
-use crate::source_origins::{DeclaredSourceOrigins, declared_source_origin_event};
+use crate::source_origins::{ViewSourceOrigins, view_source_origin_event};
 use crate::surfaces::{Rect, Running, SurfaceComposition, Views, Watching};
 use crate::theme::CurrentTheme;
 
@@ -53,10 +53,10 @@ pub(crate) struct WindowData {
     pub streams: crate::documents::Streams,
     /// The image regions of surface pages.
     pub images: crate::images::Images,
-    /// The current declared-source incarnations and the greatest generation issued in this window.
-    pub declared_source_origins: DeclaredSourceOrigins,
+    /// The current view-source incarnations and the greatest generation issued in this window.
+    pub view_source_origins: ViewSourceOrigins,
     /// The ordered source events of the current main-page document.
-    pub declared_source_events: DeclaredSourceEventStream,
+    pub view_source_events: ViewSourceEventStream,
     /// The surface composition that the main page declared and that the host uses to check the authority of region
     /// calls.
     pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
@@ -74,21 +74,21 @@ pub(crate) struct WindowData {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub(crate) struct DeclaredSourceEvent {
+pub(crate) struct ViewSourceEvent {
     pub name: String,
     pub value: Value,
 }
 
 #[derive(Default)]
-pub(crate) struct DeclaredSourceEventStream(Mutex<Option<Channel<DeclaredSourceEvent>>>);
+pub(crate) struct ViewSourceEventStream(Mutex<Option<Channel<ViewSourceEvent>>>);
 
-impl DeclaredSourceEventStream {
-    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Channel<DeclaredSourceEvent>>> {
+impl ViewSourceEventStream {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Channel<ViewSourceEvent>>> {
         // default: the lock holds only the replaceable event sender; the panic hook records the panic.
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    pub(crate) fn install(&self, channel: Channel<DeclaredSourceEvent>) {
+    pub(crate) fn install(&self, channel: Channel<ViewSourceEvent>) {
         self.lock().replace(channel);
     }
 
@@ -97,27 +97,27 @@ impl DeclaredSourceEventStream {
     }
 
     pub(crate) fn send(&self, name: &str, value: Value) -> Result<(), String> {
-        if !is_declared_source_event(name) {
-            return Err(format!("{name} is not a declared source event"));
+        if !is_view_source_event(name) {
+            return Err(format!("{name} is not a view source event"));
         }
         let channels = self.lock();
         let channel = channels
             .as_ref()
-            .ok_or_else(|| "declared source event channel is not registered".to_string())?;
+            .ok_or_else(|| "view source event channel is not registered".to_string())?;
         channel
-            .send(DeclaredSourceEvent {
+            .send(ViewSourceEvent {
                 name: name.to_string(),
                 value,
             })
-            .map_err(|error| format!("declared source event {name}: {error}"))
+            .map_err(|error| format!("view source event {name}: {error}"))
     }
 }
 
-fn is_declared_source_event(name: &str) -> bool {
+fn is_view_source_event(name: &str) -> bool {
     matches!(
         name,
-        "declared-ui-source-registered"
-            | "declared-ui-source-ended"
+        "view-source-registered"
+            | "view-source-ended"
             | "declared-ui-snapshot"
             | "view-call"
             | "view-reply"
@@ -127,35 +127,35 @@ fn is_declared_source_event(name: &str) -> bool {
     )
 }
 
-pub(crate) fn emit_declared_source_event(
+pub(crate) fn emit_view_source_event(
     window: &Window,
     name: &str,
     value: Value,
 ) -> Result<(), String> {
     window_data(window)?
-        .declared_source_events
+        .view_source_events
         .send(name, value)
 }
 
-pub(crate) fn register_declared_source_event_stream(
+pub(crate) fn register_view_source_event_stream(
     webview: &Webview,
-    channel: Channel<DeclaredSourceEvent>,
+    channel: Channel<ViewSourceEvent>,
 ) -> Result<(), String> {
     let window = webview.window();
     crate::exposure::authorize_main_caller(
         webview.label(),
         window.label(),
-        "declared source event stream",
+        "view source event stream",
     )?;
     window_data(&window)?
-        .declared_source_events
+        .view_source_events
         .install(channel);
     Ok(())
 }
 
 #[cfg(test)]
-#[path = "../tests/declared_source_stream/stream_test.rs"]
-mod declared_source_stream_test;
+#[path = "../tests/view_source_stream/stream_test.rs"]
+mod view_source_stream_test;
 
 /// A reload of the app DOM replaces all plugin documents but does not end the sessions: the modules of the new page reach
 /// the same session owners (docs/spec/surface-composition.md). The reload sends the sidecars only the detach of each
@@ -217,13 +217,13 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         platform.set_surface_hidden_handle(handle, true)?;
         crate::exposure::surface_closed(&window, &surface);
         let view_plugin = data.documents.views().plugin(&surface);
-        let view_generation = data.declared_source_origins.current_view(&surface);
+        let view_generation = data.view_source_origins.current_view(&surface);
         if let (Some(plugin), Some(generation)) = (view_plugin, view_generation)
-            && data.declared_source_origins.end_view(&surface, generation)
-            && let Err(error) = emit_declared_source_event(
+            && data.view_source_origins.end_view(&surface, generation)
+            && let Err(error) = emit_view_source_event(
                 &window,
-                "declared-ui-source-ended",
-                declared_source_origin_event(&plugin, Some(&surface), generation),
+                "view-source-ended",
+                view_source_origin_event(&plugin, Some(&surface), generation),
             )
         {
             log_error("view channel", error);
@@ -1438,7 +1438,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
         data.overlay.discard()?;
         Ok(())
     })();
-    data.declared_source_events.retire();
+    data.view_source_events.retire();
     cleanup
 }
 

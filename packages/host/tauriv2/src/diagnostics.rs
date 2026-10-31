@@ -374,7 +374,7 @@ fn capture_document_identity_start(
     let scheduled = on_main(&scheduled_window, move || {
         let data = crate::windows::window_data(&operation_window)?;
         if data
-            .declared_source_origins
+            .view_source_origins
             .current_view(&operation_request.surface)
             != Some(operation_request.generation)
         {
@@ -385,7 +385,7 @@ fn capture_document_identity_start(
         }
         let document = resolve_document_frame_identity_root(
             &data.documents,
-            data.declared_source_origins
+            data.view_source_origins
                 .current_view(&operation_request.surface),
             &operation_request,
         )?;

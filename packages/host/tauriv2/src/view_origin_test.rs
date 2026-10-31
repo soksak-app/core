@@ -3,7 +3,7 @@ use super::{
     retire_view_before_replacement,
 };
 use crate::event_record::buffered_fields;
-use crate::windows::{DeclaredSourceEvent, WindowData};
+use crate::windows::{ViewSourceEvent, WindowData};
 use std::sync::{Arc, Mutex, PoisonError};
 use tauri::ipc::{Channel, InvokeResponseBody};
 
@@ -527,15 +527,15 @@ fn a_retired_malformed_envelope_keeps_its_channel_error() {
 #[test]
 fn a_view_process_end_retires_its_origin_before_replacement_registration() {
     let data = WindowData::default();
-    let received = Arc::new(Mutex::new(Vec::<DeclaredSourceEvent>::new()));
+    let received = Arc::new(Mutex::new(Vec::<ViewSourceEvent>::new()));
     let destination = received.clone();
-    data.declared_source_events
+    data.view_source_events
         .install(Channel::new(move |body| {
             let InvokeResponseBody::Json(value) = body else {
-                panic!("declared source event uses a raw channel payload");
+                panic!("view source event uses a raw channel payload");
             };
             let event = serde_json::from_str(&value)
-                .expect("the channel payload is a declared source event");
+                .expect("the channel payload is a view source event");
             destination
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -544,7 +544,7 @@ fn a_view_process_end_retires_its_origin_before_replacement_registration() {
         }));
 
     let old_generation = data
-        .declared_source_origins
+        .view_source_origins
         .issue_view("probe-surface")
         .unwrap();
     let old_origin =
@@ -564,8 +564,8 @@ fn a_view_process_end_retires_its_origin_before_replacement_registration() {
                 .clone();
             assert_eq!(
                 events,
-                vec![DeclaredSourceEvent {
-                    name: "declared-ui-source-ended".into(),
+                vec![ViewSourceEvent {
+                    name: "view-source-ended".into(),
                     value: serde_json::json!({
                         "plugin": "probe",
                         "surface": "probe-surface",
@@ -576,14 +576,14 @@ fn a_view_process_end_retires_its_origin_before_replacement_registration() {
         },
         || {
             assert_eq!(
-                data.declared_source_origins.current_view("probe-surface"),
+                data.view_source_origins.current_view("probe-surface"),
                 None
             );
             assert_eq!(data.documents.views().generation("probe-surface"), None);
             let replacement = register_view_source(
-                &data.declared_source_origins,
+                &data.view_source_origins,
                 data.documents.views(),
-                &data.declared_source_events,
+                &data.view_source_events,
                 "probe-surface",
                 "probe",
             )
@@ -600,23 +600,23 @@ fn a_view_process_end_retires_its_origin_before_replacement_registration() {
     assert_eq!(
         events,
         vec![
-            DeclaredSourceEvent {
-                name: "declared-ui-source-ended".into(),
+            ViewSourceEvent {
+                name: "view-source-ended".into(),
                 value: serde_json::json!({
                     "plugin": "probe",
                     "surface": "probe-surface",
                     "generation": old_generation
                 }),
             },
-            DeclaredSourceEvent {
+            ViewSourceEvent {
                 name: "view-process-ended".into(),
                 value: serde_json::json!({
                     "surface": "probe-surface",
                     "generation": old_generation
                 }),
             },
-            DeclaredSourceEvent {
-                name: "declared-ui-source-registered".into(),
+            ViewSourceEvent {
+                name: "view-source-registered".into(),
                 value: serde_json::json!({
                     "plugin": "probe",
                     "surface": "probe-surface",
@@ -627,7 +627,7 @@ fn a_view_process_end_retires_its_origin_before_replacement_registration() {
     );
     assert!(replacement_generation > old_generation);
     assert_eq!(
-        data.declared_source_origins.current_view("probe-surface"),
+        data.view_source_origins.current_view("probe-surface"),
         Some(replacement_generation)
     );
     assert_eq!(

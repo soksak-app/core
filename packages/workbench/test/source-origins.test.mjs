@@ -71,7 +71,7 @@ test("the ingress applies the lifecycle events that arrive before the host seed,
   globalThis.ErrorEvent = class { constructor(type, init) { this.message = init.message; } };
   mock.module("@soksak/runtime", { namedExports: { host: {
     call: (name) => {
-      assert.equal(name, "declaredSourceOrigins");
+      assert.equal(name, "viewSourceOrigins");
       return answer;
     },
     on: (name, listener) => {
@@ -82,12 +82,12 @@ test("the ingress applies the lifecycle events that arrive before the host seed,
   const origins = await import("../source-origins.js?ingress");
   t.after(() => { delete globalThis.dispatchEvent; delete globalThis.ErrorEvent; });
   const started = origins.startSourceOriginIngress();
-  listeners.get("declared-ui-source-registered")({ plugin: "probe", surface: "probe-view", generation: 5 });
+  listeners.get("view-source-registered")({ plugin: "probe", surface: "probe-view", generation: 5 });
   answer = Promise.resolve({ floor: 4, views: {} });
   await started;
   assert.equal(origins.sourceOrigin("probe", "probe-view"), 5, "the event received before the seed was not applied");
-  listeners.get("declared-ui-source-ended")({ plugin: "probe", surface: "probe-view", generation: 5 });
+  listeners.get("view-source-ended")({ plugin: "probe", surface: "probe-view", generation: 5 });
   assert.equal(origins.sourceOrigin("probe", "probe-view"), undefined, "a later end event was not applied");
-  listeners.get("declared-ui-source-registered")({ plugin: "probe", generation: 6 });
+  listeners.get("view-source-registered")({ plugin: "probe", generation: 6 });
   assert.deepEqual(dispatched, ["source origin ingress: view source lifecycle event of probe requires a surface"]);
 });

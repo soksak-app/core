@@ -193,16 +193,16 @@ test("host structure audit permits only Tauri channel adapter tests in H15", { t
   const tracked = [
     "packages/host/wailsv3/src/host.go",
     "packages/host/tauriv2/src/host.rs",
-    "packages/host/tauriv2/tests/declared_source_stream/bindings_test.rs",
-    "packages/host/tauriv2/tests/declared_source_stream/stream_test.rs",
+    "packages/host/tauriv2/tests/view_source_stream/bindings_test.rs",
+    "packages/host/tauriv2/tests/view_source_stream/stream_test.rs",
   ];
   const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H15"] }];
   assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
   assert.deepEqual(auditHostPairs([
     ...tracked,
-    "packages/host/tauriv2/tests/declared_source_stream/unlisted_test.rs",
+    "packages/host/tauriv2/tests/view_source_stream/unlisted_test.rs",
   ], pairs, hostsSpec), [
-    "packages/host/tauriv2/tests/declared_source_stream/unlisted_test: no counterpart in packages/host/wailsv3",
+    "packages/host/tauriv2/tests/view_source_stream/unlisted_test: no counterpart in packages/host/wailsv3",
   ]);
 });
 
@@ -231,15 +231,15 @@ test("host structure audit permits only the Rust view-generation child module in
   const tracked = [
     "packages/host/wailsv3/src/host.go",
     "packages/host/tauriv2/src/host.rs",
-    "packages/host/tauriv2/tests/declared_source_origins/view_generation_test.rs",
+    "packages/host/tauriv2/tests/view_source_origins/view_generation_test.rs",
   ];
   const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H17"] }];
   assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
   assert.deepEqual(auditHostPairs([
     ...tracked,
-    "packages/host/tauriv2/tests/declared_source_origins/unlisted_test.rs",
+    "packages/host/tauriv2/tests/view_source_origins/unlisted_test.rs",
   ], pairs, hostsSpec), [
-    "packages/host/tauriv2/tests/declared_source_origins/unlisted_test: no counterpart in packages/host/wailsv3",
+    "packages/host/tauriv2/tests/view_source_origins/unlisted_test: no counterpart in packages/host/wailsv3",
   ]);
 });
 
@@ -279,13 +279,13 @@ fn run(
 test("command argument audit accepts a framework channel argument", { timeout: 1000 }, () => {
   const source = `
 #[tauri::command(async)]
-fn listen(on_message: tauri::ipc::Channel<Vec<DeclaredSourceEvent>>) -> Result<(), String> {}
+fn listen(on_message: tauri::ipc::Channel<Vec<ViewSourceEvent>>) -> Result<(), String> {}
 
 #[tauri::command(async)]
-fn reject(channel: other::ipc::Channel<Vec<DeclaredSourceEvent>>) -> Result<(), String> {}
+fn reject(channel: other::ipc::Channel<Vec<ViewSourceEvent>>) -> Result<(), String> {}
 `;
   assert.deepEqual(findUndecodedCommandArguments(source, "bindings.rs"), [
-    "bindings.rs: command reject argument channel is other::ipc::Channel<Vec<DeclaredSourceEvent>>, not Argument<T>",
+    "bindings.rs: command reject argument channel is other::ipc::Channel<Vec<ViewSourceEvent>>, not Argument<T>",
   ]);
 });
 

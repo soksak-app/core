@@ -87,7 +87,7 @@ const METHOD = {
   documentInteractionState: "DocumentInteractionState",
   documentPost: "DocumentPost",
   viewEvent: "ViewEvent", viewReply: "ViewReply", viewRequest: "ViewRequest",
-  declaredSourceOrigins: "DeclaredSourceOrigins",
+  viewSourceOrigins: "ViewSourceOrigins",
   documentDetach: "DocumentDetach",
   documentSubscribe: "DocumentSubscribe",
   documentUnsubscribe: "DocumentUnsubscribe",

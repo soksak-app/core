@@ -793,14 +793,14 @@ function censusConfig(root, configFile) {
 }
 
 /** The tracked sources of the repository that its census declaration does not exclude; an excluded file (a vendored bundle) is not read. */
-function declaredSources(root, config) {
+function viewSources(root, config) {
   return new Map([...trackedSources(root)].filter(([path]) => !(config.exclude && config.exclude.test(path))));
 }
 
 /** The result of the census of the repository at `root`: the findings, the pending rules, the marker errors and the number of sources. */
 export function census(root, configFile) {
   const config = censusConfig(root, configFile);
-  const sources = declaredSources(root, config);
+  const sources = viewSources(root, config);
   const findings = censusFindings(sources, config);
   const markers = [...sources].flatMap(([path, text]) => markerErrors(path, text));
   return { findings, pending: config.pending, markers, sources: sources.size };
@@ -813,7 +813,7 @@ export function census(root, configFile) {
 export function catalogReport(root, catalogPath, configFile) {
   const catalog = JSON.parse(readFileSync(join(root, catalogPath), 'utf8'));
   const config = censusConfig(root, configFile);
-  const sources = declaredSources(root, config);
+  const sources = viewSources(root, config);
   const findings = [...catalogFindings(catalog, catalogPath), ...emitFindings(catalog, sources, catalogPath, config)];
   const sites = Object.entries(siteCounts(sources, config.emitters)).map(([language, { literal, built }]) => `${language} ${literal} literal ${built} built`).join(', ');
   return { findings, declared: Object.keys(catalog.events).length, sites };

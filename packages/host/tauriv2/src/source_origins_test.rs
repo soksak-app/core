@@ -1,9 +1,9 @@
-use super::{DeclaredSourceOrigins, post_if_generation_current};
+use super::{ViewSourceOrigins, post_if_generation_current};
 
 // contract: source-origin.atomic-snapshot-keeps-floor-and-only-current-sources
 #[test]
 fn the_atomic_origin_snapshot_keeps_the_floor_and_only_current_views() {
-    let origins = DeclaredSourceOrigins::default();
+    let origins = ViewSourceOrigins::default();
     let old = origins
         .issue_view("surface")
         .expect("first origin is issued");
@@ -32,14 +32,14 @@ fn the_atomic_origin_snapshot_keeps_the_floor_and_only_current_views() {
 // contract: source-origin.generation.javascript-safe-integer-limit
 #[test]
 fn issuing_a_generation_past_the_javascript_safe_integer_limit_changes_no_state() {
-    let origins = DeclaredSourceOrigins::default();
+    let origins = ViewSourceOrigins::default();
     origins.lock().floor = 9_007_199_254_740_991;
 
     let result = origins.issue_view("surface");
 
     assert_eq!(
         result,
-        Err("declared source generation exceeds the JavaScript safe integer limit".into())
+        Err("view source generation exceeds the JavaScript safe integer limit".into())
     );
     let snapshot = origins.snapshot();
     assert_eq!(snapshot.floor, 9_007_199_254_740_991);

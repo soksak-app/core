@@ -49,7 +49,7 @@ const COMMAND = {
   viewRequest: "view_request",
   viewEvent: "view_event",
   viewReply: "view_reply",
-  declaredSourceOrigins: "declared_source_origins",
+  viewSourceOrigins: "view_source_origins",
   documentDetach: "document_detach",
   documentSubscribe: "document_subscribe",
   documentUnsubscribe: "document_unsubscribe",
@@ -85,7 +85,7 @@ const ARG = {
   projectFolder: (root) => ({ root }), projectOpen: (request) => ({ request }), projectShown: (request) => ({ request }), projectRelease: (id) => ({ id }),
   projectRemoveAsk: (id) => ({ id }), projectRemoveAnswer: (answer) => ({ answer }),
   windowState: () => ({}), windowReady: () => ({}), windowClose: () => ({}), windowCloseKept: () => ({}), appUpdateState: () => ({}), appUpdateStage: (request) => ({ request }), appUpdateApply: (request) => ({ request }),
-  declaredSourceOrigins: () => ({}),
+  viewSourceOrigins: () => ({}),
   syncSurfaces: (v) => ({ request: v }),
   presentSurfaces: (v) => ({ request: v }),
   waitPresented: () => ({}),
@@ -170,7 +170,7 @@ function hostInvoke() {
 export const host = (() => {
   const invoke = hostInvoke();
   const orderedWindowEvents = new Set([
-    "declared-ui-source-registered", "declared-ui-source-ended", "declared-ui-snapshot",
+    "view-source-registered", "view-source-ended", "declared-ui-snapshot",
     "view-call", "view-reply", "view-process-ended", "view-stopped", "view-responsiveness",
   ]);
   const orderedSubscribers = new Map();
@@ -209,7 +209,7 @@ export const host = (() => {
       if (orderedStreamReady === null) {
         const channel = new window.__TAURI__.core.Channel();
         channel.onmessage = dispatchOrderedEvent;
-        orderedStreamReady = invoke("declared_source_event_stream", { onMessage: channel });
+        orderedStreamReady = invoke("view_source_event_stream", { onMessage: channel });
       }
       return orderedStreamReady;
     });

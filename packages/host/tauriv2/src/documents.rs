@@ -25,14 +25,14 @@ use crate::platform::{self, Handle, Platform};
 use crate::presentation_wait::{
     PresentationWait, ViewPlacement, presentation_abandoned_payload, trace_presentation_join,
 };
-use crate::source_origins::DeclaredSourceOrigins;
+use crate::source_origins::ViewSourceOrigins;
 use crate::surfaces::{Placement, require_region, surface_handle};
 use crate::surfaces::{ViewStart, view_origin_directory};
 use crate::view_lifecycle::{
     ViewLifecycle, is_queue_full, view_process_ended_event, view_stop_reason, view_stopped_event,
 };
 use crate::windows::{
-    DeclaredSourceEventStream, WindowData, emit_window, window_data, window_data_if_registered,
+    ViewSourceEventStream, WindowData, emit_window, window_data, window_data_if_registered,
     with_native_owner,
 };
 
@@ -1512,17 +1512,17 @@ pub fn create_view(
 }
 
 fn register_view_source(
-    origins: &DeclaredSourceOrigins,
+    origins: &ViewSourceOrigins,
     views: &ViewChannels,
-    events: &DeclaredSourceEventStream,
+    events: &ViewSourceEventStream,
     surface: &str,
     plugin: &str,
 ) -> Result<ViewOrigin, String> {
     let generation = origins.issue_view(surface)?;
     let origin = views.register_origin(surface, plugin, generation);
     if let Err(error) = events.send(
-        "declared-ui-source-registered",
-        crate::source_origins::declared_source_origin_event(plugin, Some(surface), generation),
+        "view-source-registered",
+        crate::source_origins::view_source_origin_event(plugin, Some(surface), generation),
     ) {
         views.forget_if_current(surface, &origin);
         origins.end_view(surface, generation);
@@ -1541,11 +1541,11 @@ fn retire_view_before_replacement(
 ) {
     data.documents.views().forget_if_current(surface, origin);
     if data
-        .declared_source_origins
+        .view_source_origins
         .end_view(surface, origin.generation)
-        && let Err(error) = data.declared_source_events.send(
-            "declared-ui-source-ended",
-            crate::source_origins::declared_source_origin_event(
+        && let Err(error) = data.view_source_events.send(
+            "view-source-ended",
+            crate::source_origins::view_source_origin_event(
                 plugin,
                 Some(surface),
                 origin.generation,
@@ -1558,7 +1558,7 @@ fn retire_view_before_replacement(
     let mut ended = view_process_ended_event(surface);
     ended["generation"] = json!(origin.generation);
     if let Err(error) = data
-        .declared_source_events
+        .view_source_events
         .send("view-process-ended", ended)
     {
         log_error("view channel", error);
@@ -1603,9 +1603,9 @@ pub(crate) fn sync_view(
         Err(_) => {
             data.documents.reserve(&key)?;
             let origin = register_view_source(
-                &data.declared_source_origins,
+                &data.view_source_origins,
                 data.documents.views(),
-                &data.declared_source_events,
+                &data.view_source_events,
                 surface,
                 plugin,
             )?;
@@ -1625,7 +1625,7 @@ pub(crate) fn sync_view(
                 Ok(handle) => {
                     if !data.documents.set(&key, handle) {
                         data.documents.views().forget_if_current(surface, &origin);
-                        data.declared_source_origins.end_view(surface, generation);
+                        data.view_source_origins.end_view(surface, generation);
                         emit_source_ended(window, plugin, surface, generation);
                         platform.close_document(handle)?;
                         return Err(format!(
@@ -1637,7 +1637,7 @@ pub(crate) fn sync_view(
                 Err(error) => {
                     data.documents.remove(&key)?;
                     data.documents.views().forget_if_current(surface, &origin);
-                    data.declared_source_origins.end_view(surface, generation);
+                    data.view_source_origins.end_view(surface, generation);
                     emit_source_ended(window, plugin, surface, generation);
                     return Err(error);
                 }
@@ -1786,7 +1786,7 @@ fn attach_view(
                         notice_origin.generation,
                         responsive,
                     );
-                    if let Err(error) = crate::windows::emit_declared_source_event(
+                    if let Err(error) = crate::windows::emit_view_source_event(
                         &notice_window,
                         "view-responsiveness",
                         payload,
@@ -1852,7 +1852,7 @@ fn view_message(
         Ok(ViewDispatch::Reply(payload)) => {
             let payload = tag_view_generation(payload, origin.generation);
             if let Err(error) =
-                crate::windows::emit_declared_source_event(window, "view-reply", payload)
+                crate::windows::emit_view_source_event(window, "view-reply", payload)
             {
                 log_error("view channel", error);
             }
@@ -1865,7 +1865,7 @@ fn view_message(
         Ok(ViewDispatch::Call(payload)) => {
             let payload = tag_view_generation(payload, origin.generation);
             if let Err(error) =
-                crate::windows::emit_declared_source_event(window, "view-call", payload)
+                crate::windows::emit_view_source_event(window, "view-call", payload)
             {
                 log_error("view channel", error);
             }
@@ -1873,7 +1873,7 @@ fn view_message(
         }
         Ok(ViewDispatch::Snapshot(payload)) => {
             let payload = tag_view_generation(payload, origin.generation);
-            if let Err(error) = crate::windows::emit_declared_source_event(
+            if let Err(error) = crate::windows::emit_view_source_event(
                 window,
                 DECLARED_SNAPSHOT_WINDOW_EVENT,
                 payload,
@@ -1958,7 +1958,7 @@ fn view_log_message(
     let reply_call = call.clone();
     let posted = on_main(window, move || {
         let current = window_data(&reply_window)?;
-        if current.declared_source_origins.current_view(&reply_surface)
+        if current.view_source_origins.current_view(&reply_surface)
             != Some(reply_origin.generation)
             || !current
                 .documents
@@ -2082,7 +2082,7 @@ fn view_failed(
                         ),
                     );
                 };
-                if let Err(error) = crate::windows::emit_declared_source_event(
+                if let Err(error) = crate::windows::emit_view_source_event(
                     window,
                     "view-stopped",
                     view_stopped_event(surface, &spec.plugin),
@@ -2116,10 +2116,10 @@ fn view_failed(
 }
 
 fn emit_source_ended(window: &Window, plugin: &str, surface: &str, generation: u64) {
-    if let Err(error) = crate::windows::emit_declared_source_event(
+    if let Err(error) = crate::windows::emit_view_source_event(
         window,
-        "declared-ui-source-ended",
-        crate::source_origins::declared_source_origin_event(plugin, Some(surface), generation),
+        "view-source-ended",
+        crate::source_origins::view_source_origin_event(plugin, Some(surface), generation),
     ) {
         log_error("view channel", error);
     }
@@ -2264,7 +2264,7 @@ fn post_for_view_generation(
         let data = window_data(&task_window)?;
         crate::source_origins::post_if_generation_current(
             generation,
-            data.declared_source_origins.current_view(&surface),
+            data.view_source_origins.current_view(&surface),
             || data.documents.views().generation(&surface) == Some(generation),
             || {
                 data.documents.views().check_post(&surface)?;
@@ -2693,12 +2693,12 @@ pub(crate) fn end_closed_surface(
         Err(error) => close.errors.push(error.to_string()),
     }
     data.documents.presentation().forget_surface(surface);
-    if let Some(generation) = data.declared_source_origins.current_view(surface)
+    if let Some(generation) = data.view_source_origins.current_view(surface)
         && let Some(plugin) = data
             .documents
             .views()
             .forget_generation(surface, generation)
-        && data.declared_source_origins.end_view(surface, generation)
+        && data.view_source_origins.end_view(surface, generation)
     {
         close.ended = Some((plugin, generation));
     }
@@ -3075,7 +3075,7 @@ pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
     if request.generation == 0 {
         return Err("view request has no source generation".to_string());
     }
-    crate::source_origins::validate_declared_source_generation_limit(
+    crate::source_origins::validate_view_source_generation_limit(
         request.generation,
         "view request",
     )?;
@@ -3138,7 +3138,7 @@ pub fn view_event_message(event: &ViewEventRequest) -> Result<Value, String> {
     if event.generation == 0 {
         return Err("view event has no source generation".to_string());
     }
-    crate::source_origins::validate_declared_source_generation_limit(
+    crate::source_origins::validate_view_source_generation_limit(
         event.generation,
         "view event",
     )?;
@@ -3159,7 +3159,7 @@ pub fn view_reply_message(reply: &ViewReply) -> Result<Value, String> {
     if reply.generation == 0 {
         return Err("view reply has no source generation".to_string());
     }
-    crate::source_origins::validate_declared_source_generation_limit(
+    crate::source_origins::validate_view_source_generation_limit(
         reply.generation,
         "view reply",
     )?;
@@ -3571,5 +3571,5 @@ pub(crate) fn abandon_all_layout_presentation_waits(window: &Window) -> Result<(
 mod view_origin_tests;
 
 #[cfg(test)]
-#[path = "../tests/declared_source_origins/view_generation_test.rs"]
+#[path = "../tests/view_source_origins/view_generation_test.rs"]
 mod view_generation_tests;

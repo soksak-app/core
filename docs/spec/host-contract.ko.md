@@ -289,7 +289,7 @@ fn invalid_json_closes_connection() {
 | `view.source-generation` | View request, reply, event 직렬화는 JavaScript safe integer 한도를 넘는 generation을 거부한다. 이전 generation의 request와 event는 게시 없이 취소하고, 이전 acknowledgement는 게시하지 않으며 이전 pull은 취소한다. 최대 safe generation은 허용된다. | both |
 | `view.source-registration-precedes-provider-messages` | View source-registration event는 첫 declared UI snapshot과 status-watch 등록보다 먼저 전달되며, 세 메시지는 같은 source generation을 가진다. | both |
 | `source-origin.generation.javascript-safe-integer-limit` | Source-origin allocator는 JavaScript safe integer 한도를 넘는 generation 발급을 거부하며 floor나 등록된 source 상태를 바꾸지 않는다. | both |
-| `source-origin.atomic-snapshot-keeps-floor-and-only-current-sources` | declared source-origin snapshot은 현재 source identity만 포함하며 source를 retire하거나 교체한 뒤에도 generation floor를 유지한다. | both |
+| `source-origin.atomic-snapshot-keeps-floor-and-only-current-sources` | view source-origin snapshot은 현재 source identity만 포함하며 source를 retire하거나 교체한 뒤에도 generation floor를 유지한다. | both |
 | `view.process-end-precedes-replacement-registration` | 실패한 view의 process-ended event는 대체 view가 source-registration event를 보내기 전에 전달된다. | both |
 | `view.call.forward` | 멤버 `cids`(식별자 목록)를 가진 call 요청은 event에 멤버 `cids`를 싣는다. 한 줄에 담을 수 없는 목록은 애플리케이션 로그에 쓰고 어떤 page에도 전달하지 않는다.  view가 `sok-view`로 보낸 call 요청 `{sok: 1, id, command, params}`은 view의 surface와 plugin을 담은 `view-call {surface, plugin, id, command, params}` event가 된다. `id`가 정수가 아니거나 `command`가 비어 있는 요청은 application log에 쓰고 어떤 page에도 전달하지 않는다. | both |
 | `view.call.cancel` | view가 `sok-view`로 보낸 cancel `{sok: 1, id, cancel: true}`은 view의 surface와 plugin을 담은 `view-call {surface, plugin, id, cancel: true}` event가 된다. `id`가 정수가 아니거나, `cancel`이 `true`가 아니거나, `command`를 담은 cancel은 application log에 쓰고 어떤 page에도 전달하지 않는다. | both |
@@ -1058,12 +1058,12 @@ fn invalid_json_closes_connection() {
 | `startup.failure.exits-with-its-message` | setup 단계의 실패는 그 메시지를 쓰고, 실패를 event loop에 돌려주지 않고 상태 1로 프로세스를 끝낸다. 돌려주면 프로세스가 abort된다. | both |
 | `startup.ends-no-process` | 호스트의 시작은 어떤 프로세스도 끝내지 않는다: 이전 실행의 기록 파일이 나열한 다른 애플리케이션의 WebKit 프로세스는 설정 디렉터리를 준비한 뒤에도 살아 있다. | both |
 | `plugins.starter.rejects-invalid-request` | 등록된 plugins starter command는 `state` 형식이 잘못된 요청을 command argument 오류로 거부한다. | both |
-| `plugin-host.declared-source-stream.channel-registers-and-retires` | Tauri main-page command는 현재 declared-source event channel을 등록하고 교체 또는 page reload 시 이전 channel을 retire한다. | tauriv2 only: host는 Tauri가 주입하는 `Channel` lifecycle API를 사용한다 |
-| `plugin-host.declared-source-stream.command-is-registered` | Ordered declared-source event channel을 등록하는 main-page command는 webview에 노출된다. | tauriv2 only: Tauri는 주입된 `Channel`을 전달하는 command를 등록한다 |
-| `plugin-host.declared-source-stream.requires-current-channel` | channel 등록 전이나 page 교체 중에 보낸 declared-source event는 명시적 오류로 실패한다. | tauriv2 only: host는 Tauri가 주입하는 `Channel` lifecycle API를 사용한다 |
-| `plugin-host.declared-source-stream.follows-channel-call-order` | declared-source event는 source handler가 호출한 순서대로 현재 Tauri channel에 전송된다. | tauriv2 only: host는 Tauri가 주입하는 `Channel` transport를 사용한다 |
-| `plugin-host.declared-source-stream.send-failure-is-returned` | Tauri channel로 declared-source event를 보내지 못하면 source handler에 오류를 반환한다. | tauriv2 only: Tauri `Channel` send operation은 결과를 반환한다 |
-| `plugin-host.declared-source-stream.rejects-unlisted-events` | declared-source channel은 allowlist 밖의 event 이름을 거부한다. | tauriv2 only: host가 Tauri channel allowlist를 소유한다 |
+| `view-source-stream.channel-registers-and-retires` | Tauri main-page command는 현재 view-source event channel을 등록하고 교체 또는 page reload 시 이전 channel을 retire한다. | tauriv2 only: host는 Tauri가 주입하는 `Channel` lifecycle API를 사용한다 |
+| `view-source-stream.command-is-registered` | Ordered view-source event channel을 등록하는 main-page command는 webview에 노출된다. | tauriv2 only: Tauri는 주입된 `Channel`을 전달하는 command를 등록한다 |
+| `view-source-stream.requires-current-channel` | channel 등록 전이나 page 교체 중에 보낸 view-source event는 명시적 오류로 실패한다. | tauriv2 only: host는 Tauri가 주입하는 `Channel` lifecycle API를 사용한다 |
+| `view-source-stream.follows-channel-call-order` | view-source event는 source handler가 호출한 순서대로 현재 Tauri channel에 전송된다. | tauriv2 only: host는 Tauri가 주입하는 `Channel` transport를 사용한다 |
+| `view-source-stream.send-failure-is-returned` | Tauri channel로 view-source event를 보내지 못하면 source handler에 오류를 반환한다. | tauriv2 only: Tauri `Channel` send operation은 결과를 반환한다 |
+| `view-source-stream.rejects-unlisted-events` | view-source channel은 allowlist 밖의 event 이름을 거부한다. | tauriv2 only: host가 Tauri channel allowlist를 소유한다 |
 | `view.placement.geometry-failure-is-reported` | Tauri native geometry operation이 반환한 placement 실패를 호출자에게 전달한다. | tauriv2 only: Tauri platform geometry method는 결과를 반환한다 |
 | `tauriv2.surface-close.closed-window-reports-no-failure` | window가 닫힌 뒤 실행되는 surface close는 close가 가져간 window record에서 view source를 끝내고, 알림을 보내지 않으며, 실패를 보고하지 않는다. | tauriv2 only: Tauri close는 가져간 record로 main thread에서 queue되어 실행되고, 그곳에서 window가 열려 있는지 판단한다. Wails close는 자기 window의 state에서 실행된다(docs/spec/hosts.md H21) |
 | `tauriv2.surface-close.open-window-ends-view-source-for-page` | 열린 window의 surface close는 view source를 끝내고, page가 끝났다고 알게 되는 plugin과 generation을 준다. | tauriv2 only: Tauri close는 가져간 record로 main thread에서 queue되어 실행되고, 그곳에서 window가 열려 있는지 판단한다. Wails close는 자기 window의 state에서 실행된다(docs/spec/hosts.md H21) |

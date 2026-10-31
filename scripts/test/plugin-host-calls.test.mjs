@@ -1,6 +1,6 @@
 // Checks the plugin-facing host call allowlist of the workbench (packages/workbench/view-calls.js): no name of it is a region call
-// or a view bridge call. The host side of the allowlist is the host contract case plugin-host.call.refuses-unlisted-commands
-// (docs/spec/host-contract.md), which the Go and Rust host tests run; this test reads no source of another package.
+// or a view bridge call. The page refuses every other name in pluginNativeGate before it reaches the host
+// (packages/workbench/test/plugin-native-allowlist.test.mjs); this test reads no source of another package.
 import assert from "node:assert/strict";
 import test from "node:test";
 

@@ -474,7 +474,7 @@ func TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement(t *testing
 			} else {
 				t.Fatalf("view-process-ended payload %T, want object", event.data)
 			}
-		case "declared-ui-source-registered":
+		case "view-source-registered":
 			if payload, ok := event.data.(map[string]any); ok && payload["surface"] == "probe-surface" {
 				generation, valid := payload["generation"].(uint64)
 				if !valid {

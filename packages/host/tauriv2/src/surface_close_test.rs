@@ -9,7 +9,7 @@ use crate::windows::WindowData;
 /// Window records with a current view source of surface by plugin, and its generation.
 fn records_with_view(surface: &str, plugin: &str) -> (Arc<WindowData>, u64) {
     let data = Arc::new(WindowData::default());
-    let generation = data.declared_source_origins.issue_view(surface).unwrap();
+    let generation = data.view_source_origins.issue_view(surface).unwrap();
     data.documents
         .views()
         .register_origin(surface, plugin, generation);
@@ -27,7 +27,7 @@ fn a_surface_that_closes_after_its_window_closed_reports_no_failure_and_ends_its
         "a window that closed has no page to tell, so the close reports no failure and sends no notice"
     );
     assert_eq!(
-        data.declared_source_origins.current_view("tab-a"),
+        data.view_source_origins.current_view("tab-a"),
         None,
         "the view source of generation {generation} ends in the records that the close took"
     );

@@ -266,8 +266,8 @@ func (h *Host) ViewEvent(ctx context.Context, reqJSON json.RawMessage) (bool, er
 	return s.pushViewEvent(req)
 }
 
-// DeclaredSourceOrigins returns the current source generations and issued generation floor of the window.
-func (h *Host) DeclaredSourceOrigins(ctx context.Context) (sourceOriginSnapshot, error) {
+// ViewSourceOrigins returns the current source generations and issued generation floor of the window.
+func (h *Host) ViewSourceOrigins(ctx context.Context) (sourceOriginSnapshot, error) {
 	s, err := h.surface(ctx)
 	if err != nil {
 		return sourceOriginSnapshot{}, err

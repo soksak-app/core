@@ -622,17 +622,17 @@ async fn view_reply(webview: Webview, request: Argument<documents::ViewReply>) -
     .await
 }
 
-/// Returns the current declared-source incarnations and generation floor of the calling window.
+/// Returns the current view-source incarnations and generation floor of the calling window.
 #[tauri::command]
-async fn declared_source_origins(
+async fn view_source_origins(
     webview: Webview,
-) -> Result<crate::source_origins::DeclaredSourceOriginsSnapshot, String> {
+) -> Result<crate::source_origins::ViewSourceOriginsSnapshot, String> {
     blocking(move || {
         let window = webview.window();
-        crate::exposure::authorize_main_caller(webview.label(), window.label(), "declared source origins")?;
+        crate::exposure::authorize_main_caller(webview.label(), window.label(), "view source origins")?;
         let task_window = window.clone();
         crate::exposure::on_main(&window, move || {
-            Ok(crate::windows::window_data(&task_window)?.declared_source_origins.snapshot())
+            Ok(crate::windows::window_data(&task_window)?.view_source_origins.snapshot())
         })
     })
     .await
@@ -640,12 +640,12 @@ async fn declared_source_origins(
 
 /// Registers the ordered main-page channel for source lifecycle and message events.
 #[tauri::command]
-async fn declared_source_event_stream(
+async fn view_source_event_stream(
     webview: Webview,
-    on_message: tauri::ipc::Channel<windows::DeclaredSourceEvent>,
+    on_message: tauri::ipc::Channel<windows::ViewSourceEvent>,
 ) -> Result<(), String> {
     blocking(move || {
-        windows::register_declared_source_event_stream(&webview, on_message)
+        windows::register_view_source_event_stream(&webview, on_message)
     })
     .await
 }
@@ -1082,8 +1082,8 @@ async fn clipboard_persist_png(
 }
 
 #[cfg(test)]
-#[path = "../tests/declared_source_stream/bindings_test.rs"]
-mod declared_source_stream_tests;
+#[path = "../tests/view_source_stream/bindings_test.rs"]
+mod view_source_stream_tests;
 
 #[cfg(test)]
 #[path = "../tests/project_data_order/bindings_test.rs"]

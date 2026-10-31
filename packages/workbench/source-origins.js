@@ -2,8 +2,8 @@
 // window-wide generation, which the host assigns and reports. The workbench accepts a view command, a view event, or a source
 // lifecycle event only for the current generation of its surface.
 //
-// The host reports the lifecycle with the events declared-ui-source-registered and declared-ui-source-ended and answers the query
-// declaredSourceOrigins with the current generations. These are the names the host sends today; the registration of a view source is
+// The host reports the lifecycle with the events view-source-registered and view-source-ended and answers the query
+// viewSourceOrigins with the current generations. These are the names the host sends today; the registration of a view source is
 // the same record under those names.
 import { host as bridge } from "@soksak/runtime";
 
@@ -111,7 +111,7 @@ function receiveLifecycle(event, ended) {
 
 function consumeBuffered({ name, value }) {
   try {
-    receiveLifecycle(value, name === "declared-ui-source-ended");
+    receiveLifecycle(value, name === "view-source-ended");
   } catch (error) {
     report(error);
   }
@@ -125,7 +125,7 @@ export function prepareSourceOriginIngress() {
     return listenerReady;
   }
   try {
-    const names = ["declared-ui-source-registered", "declared-ui-source-ended"];
+    const names = ["view-source-registered", "view-source-ended"];
     listenerReady = Promise.allSettled(names.map((name) => Promise.resolve(bridge.on(name, (event) => {
       if (originSnapshotReady) consumeBuffered({ name, value: event });
       else bufferedEvents.push({ name, value: event });
@@ -158,7 +158,7 @@ export function startSourceOriginIngress() {
     return ingressReady;
   }
   ingressReady = prepareSourceOriginIngress().then((unsubscribe) => {
-    return bridge.call("declaredSourceOrigins").then((snapshot) => {
+    return bridge.call("viewSourceOrigins").then((snapshot) => {
       seedSourceOrigins(snapshot);
       originSnapshotReady = true;
       const queued = bufferedEvents;

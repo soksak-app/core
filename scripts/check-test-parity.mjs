@@ -4782,8 +4782,8 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/host/wailsv3/src/source_origins.go", symbol: "func (o *sourceOrigins) create(" },
       { file: "packages/host/wailsv3/src/source_origins.go", symbol: "func (o *sourceOrigins) snapshot()" },
-      { file: "packages/host/tauriv2/src/source_origins.rs", symbol: "pub(crate) struct DeclaredSourceOrigins" },
-      { file: "packages/host/tauriv2/src/source_origins.rs", symbol: "pub(crate) fn validate_declared_source_generation_limit(" },
+      { file: "packages/host/tauriv2/src/source_origins.rs", symbol: "pub(crate) struct ViewSourceOrigins" },
+      { file: "packages/host/tauriv2/src/source_origins.rs", symbol: "pub(crate) fn validate_view_source_generation_limit(" },
     ],
     tests: [
       { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestSourceOriginsDoesNotIssueAnUnsafeGeneration" },
@@ -10067,7 +10067,7 @@ const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F
 // F286, F290 and F292-26-3 wrote the options that skip a window check in a run without a display or a person, which F298-4
 // removes: window checks run only on a computer with a display and a person.
 // F226, F239-39, F239-41, F239-41-1, F239-42, F239-42-1, F239-42-2, F239-241, F248-7 and F248-8 wrote the declared section, the
-// declared source, the snapshot channel, the failed pull of a declared section and the plugin-host log of the workbench and the view
+// view source, the snapshot channel, the failed pull of a declared section and the plugin-host log of the workbench and the view
 // bridge, which F332-2 and F332-4-1 remove: the declared UI and the plugin host are removed, and a sidebar section is a view of its
 // plugin.
 // F212.12-1-15-5, F212.9-3-1, F212.9a-1, F239-107-1, F239-220, F239-40, F239-43, F249 and F292-7 wrote the plugin host: the host disposal of a

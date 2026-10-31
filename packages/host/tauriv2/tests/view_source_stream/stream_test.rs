@@ -1,15 +1,15 @@
-use super::{DeclaredSourceEvent, DeclaredSourceEventStream};
+use super::{ViewSourceEvent, ViewSourceEventStream};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use tauri::ipc::{Channel, InvokeResponseBody};
 
-fn test_channel(target: Arc<Mutex<Vec<DeclaredSourceEvent>>>) -> Channel<DeclaredSourceEvent> {
+fn test_channel(target: Arc<Mutex<Vec<ViewSourceEvent>>>) -> Channel<ViewSourceEvent> {
     Channel::new(move |body| {
         let InvokeResponseBody::Json(value) = body else {
-            panic!("declared source event uses a raw channel payload");
+            panic!("view source event uses a raw channel payload");
         };
         let event =
-            serde_json::from_str(&value).expect("the channel payload is a declared source event");
+            serde_json::from_str(&value).expect("the channel payload is a view source event");
         target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -18,16 +18,16 @@ fn test_channel(target: Arc<Mutex<Vec<DeclaredSourceEvent>>>) -> Channel<Declare
     })
 }
 
-// contract: plugin-host.declared-source-stream.follows-channel-call-order
+// contract: view-source-stream.follows-channel-call-order
 #[test]
 fn source_events_are_sent_to_the_current_channel_in_call_order() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let stream = DeclaredSourceEventStream::default();
+    let stream = ViewSourceEventStream::default();
     stream.install(test_channel(events.clone()));
 
     stream
         .send(
-            "declared-ui-source-registered",
+            "view-source-registered",
             json!({"plugin":"probe","generation":4}),
         )
         .expect("source registration is sent");
@@ -46,15 +46,15 @@ fn source_events_are_sent_to_the_current_channel_in_call_order() {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner),
         vec![
-            DeclaredSourceEvent {
-                name: "declared-ui-source-registered".into(),
+            ViewSourceEvent {
+                name: "view-source-registered".into(),
                 value: json!({"plugin":"probe","generation":4}),
             },
-            DeclaredSourceEvent {
+            ViewSourceEvent {
                 name: "declared-ui-snapshot".into(),
                 value: json!({"plugin":"probe","generation":4,"seq":1}),
             },
-            DeclaredSourceEvent {
+            ViewSourceEvent {
                 name: "view-call".into(),
                 value: json!({"plugin":"probe","generation":4,"id":7}),
             },
@@ -62,18 +62,18 @@ fn source_events_are_sent_to_the_current_channel_in_call_order() {
     );
 }
 
-// contract: plugin-host.declared-source-stream.channel-registers-and-retires
+// contract: view-source-stream.channel-registers-and-retires
 #[test]
 fn a_new_main_page_channel_retires_the_previous_channel() {
     let old_events = Arc::new(Mutex::new(Vec::new()));
     let current_events = Arc::new(Mutex::new(Vec::new()));
-    let stream = DeclaredSourceEventStream::default();
+    let stream = ViewSourceEventStream::default();
     stream.install(test_channel(old_events.clone()));
     stream.install(test_channel(current_events.clone()));
 
     stream
         .send(
-            "declared-ui-source-ended",
+            "view-source-ended",
             json!({"plugin":"probe","generation":4}),
         )
         .expect("the current channel receives source end");
@@ -89,30 +89,30 @@ fn a_new_main_page_channel_retires_the_previous_channel() {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_slice(),
-        &[DeclaredSourceEvent {
-            name: "declared-ui-source-ended".into(),
+        &[ViewSourceEvent {
+            name: "view-source-ended".into(),
             value: json!({"plugin":"probe","generation":4}),
         }]
     );
 }
 
-// contract: plugin-host.declared-source-stream.channel-registers-and-retires
-// contract: plugin-host.declared-source-stream.requires-current-channel
+// contract: view-source-stream.channel-registers-and-retires
+// contract: view-source-stream.requires-current-channel
 #[test]
 fn a_page_reload_retires_the_channel_until_the_replacement_is_installed() {
     let old_events = Arc::new(Mutex::new(Vec::new()));
     let current_events = Arc::new(Mutex::new(Vec::new()));
-    let stream = DeclaredSourceEventStream::default();
+    let stream = ViewSourceEventStream::default();
     stream.install(test_channel(old_events.clone()));
     stream.retire();
 
     assert_eq!(
-        stream.send("declared-ui-source-registered", json!({"generation":5})),
-        Err("declared source event channel is not registered".into())
+        stream.send("view-source-registered", json!({"generation":5})),
+        Err("view source event channel is not registered".into())
     );
     stream.install(test_channel(current_events.clone()));
     stream
-        .send("declared-ui-source-registered", json!({"generation":6}))
+        .send("view-source-registered", json!({"generation":6}))
         .expect("the replacement page receives its source registration");
 
     assert!(
@@ -130,39 +130,39 @@ fn a_page_reload_retires_the_channel_until_the_replacement_is_installed() {
     );
 }
 
-// contract: plugin-host.declared-source-stream.requires-current-channel
+// contract: view-source-stream.requires-current-channel
 #[test]
 fn source_events_before_channel_registration_fail_explicitly() {
-    let stream = DeclaredSourceEventStream::default();
+    let stream = ViewSourceEventStream::default();
 
     assert_eq!(
-        stream.send("declared-ui-source-registered", json!({"generation":1})),
-        Err("declared source event channel is not registered".into())
+        stream.send("view-source-registered", json!({"generation":1})),
+        Err("view source event channel is not registered".into())
     );
 }
 
-// contract: plugin-host.declared-source-stream.send-failure-is-returned
+// contract: view-source-stream.send-failure-is-returned
 #[test]
 fn channel_send_failures_are_returned_to_the_source_handler() {
-    let stream = DeclaredSourceEventStream::default();
+    let stream = ViewSourceEventStream::default();
     let failing =
         Channel::new(|_| Err(tauri::Error::AssetNotFound("injected send failure".into())));
     stream.install(failing);
 
     assert_eq!(
         stream.send("view-call", Value::Null),
-        Err("declared source event view-call: asset not found: injected send failure".into())
+        Err("view source event view-call: asset not found: injected send failure".into())
     );
 }
 
-// contract: plugin-host.declared-source-stream.rejects-unlisted-events
+// contract: view-source-stream.rejects-unlisted-events
 #[test]
 fn events_outside_the_source_allowlist_are_rejected() {
-    let stream = DeclaredSourceEventStream::default();
+    let stream = ViewSourceEventStream::default();
 
     assert_eq!(
         stream.send("workspace-changed", Value::Null),
-        Err("workspace-changed is not a declared source event".into())
+        Err("workspace-changed is not a view source event".into())
     );
 }
 
@@ -170,7 +170,7 @@ fn events_outside_the_source_allowlist_are_rejected() {
 #[test]
 fn view_responsiveness_uses_the_ordered_source_channel() {
     let events = Arc::new(Mutex::new(Vec::new()));
-    let stream = DeclaredSourceEventStream::default();
+    let stream = ViewSourceEventStream::default();
     stream.install(test_channel(events.clone()));
 
     stream
@@ -185,7 +185,7 @@ fn view_responsiveness_uses_the_ordered_source_channel() {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_slice(),
-        &[DeclaredSourceEvent {
+        &[ViewSourceEvent {
             name: "view-responsiveness".into(),
             value: json!({"surface":"probe-surface","plugin":"probe","generation":8,"responsive":false}),
         }]

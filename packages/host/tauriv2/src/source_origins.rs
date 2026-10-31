@@ -5,15 +5,15 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 #[derive(Default)]
-pub(crate) struct DeclaredSourceOrigins(Mutex<DeclaredSourceOriginsState>);
+pub(crate) struct ViewSourceOrigins(Mutex<ViewSourceOriginsState>);
 
-pub(crate) const MAX_DECLARED_SOURCE_GENERATION: u64 = 9_007_199_254_740_991;
+pub(crate) const MAX_VIEW_SOURCE_GENERATION: u64 = 9_007_199_254_740_991;
 
-pub(crate) fn validate_declared_source_generation_limit(
+pub(crate) fn validate_view_source_generation_limit(
     generation: u64,
     subject: &str,
 ) -> Result<(), String> {
-    if generation > MAX_DECLARED_SOURCE_GENERATION {
+    if generation > MAX_VIEW_SOURCE_GENERATION {
         return Err(format!(
             "{subject} source generation exceeds the JavaScript safe integer limit"
         ));
@@ -22,19 +22,19 @@ pub(crate) fn validate_declared_source_generation_limit(
 }
 
 #[derive(Default)]
-struct DeclaredSourceOriginsState {
+struct ViewSourceOriginsState {
     floor: u64,
     views: BTreeMap<String, u64>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DeclaredSourceOriginsSnapshot {
+pub(crate) struct ViewSourceOriginsSnapshot {
     floor: u64,
     views: BTreeMap<String, u64>,
 }
 
-pub(crate) fn declared_source_origin_event(
+pub(crate) fn view_source_origin_event(
     plugin: &str,
     surface: Option<&str>,
     generation: u64,
@@ -60,8 +60,8 @@ pub(crate) fn post_if_generation_current(
     post()
 }
 
-impl DeclaredSourceOrigins {
-    fn lock(&self) -> std::sync::MutexGuard<'_, DeclaredSourceOriginsState> {
+impl ViewSourceOrigins {
+    fn lock(&self) -> std::sync::MutexGuard<'_, ViewSourceOriginsState> {
         // default: an interrupted issuance may leave a gap in the monotonic floor; ended generations also have no map
         // entry, so gaps are valid. The panic hook records the panic.
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
@@ -72,9 +72,9 @@ impl DeclaredSourceOrigins {
         let generation = state
             .floor
             .checked_add(1)
-            .filter(|generation| *generation <= MAX_DECLARED_SOURCE_GENERATION)
+            .filter(|generation| *generation <= MAX_VIEW_SOURCE_GENERATION)
             .ok_or_else(|| {
-                "declared source generation exceeds the JavaScript safe integer limit".to_string()
+                "view source generation exceeds the JavaScript safe integer limit".to_string()
             })?;
         state.floor = generation;
         state.views.insert(surface.to_string(), generation);
@@ -94,9 +94,9 @@ impl DeclaredSourceOrigins {
         self.lock().views.get(surface).copied()
     }
 
-    pub(crate) fn snapshot(&self) -> DeclaredSourceOriginsSnapshot {
+    pub(crate) fn snapshot(&self) -> ViewSourceOriginsSnapshot {
         let state = self.lock();
-        DeclaredSourceOriginsSnapshot {
+        ViewSourceOriginsSnapshot {
             floor: state.floor,
             views: state.views.clone(),
         }
