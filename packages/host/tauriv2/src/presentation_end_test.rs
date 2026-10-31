@@ -6,6 +6,7 @@ use std::sync::Arc;
 use super::end_ticket_waits;
 use crate::windows::WindowData;
 
+// contract: tauriv2.presentation-end.closed-window-ends-nothing
 #[test]
 fn a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure() {
     let closed: Result<Arc<WindowData>, String> = Err("project window is closed".to_string());
@@ -16,6 +17,7 @@ fn a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure() 
     );
 }
 
+// contract: tauriv2.presentation-end.open-window-ends-join
 #[test]
 fn a_deferred_end_in_an_open_window_ends_its_join() {
     let data = Arc::new(WindowData::default());

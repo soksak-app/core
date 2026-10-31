@@ -676,6 +676,7 @@ fn a_status_read_during_surface_close_finds_the_registered_surface() {
     assert!(named.lock().unwrap().contains_key(&7));
 }
 
+// contract: tauriv2.surface-sync.closed-handle-is-not-used
 #[test]
 fn a_sync_step_that_runs_after_the_close_of_its_surface_does_not_use_the_closed_handle() {
     // The sync reads the handle of tab-2 and queues a main-thread step with it; a window close queued before that step closes the

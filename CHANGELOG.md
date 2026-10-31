@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F312: The Tauri host tests of F301-1, F303 and F305-2 declare their `tauriv2 only` contract cases.
 - F311: The crash file test of the Wails host closes the channel of its child only after the nil map assignment, so the child no longer ends with the status 0 before its crash.
 - F298-3-1: `make parity-check` reads no folder of another repository, so it passes in a CI job that checks out only core.
 - F309: A tab session write skips a region whose attachment ended or was replaced while its state was read, so the end of a view no longer logs `document "page" is not attached`.

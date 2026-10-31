@@ -16,6 +16,7 @@ fn records_with_view(surface: &str, plugin: &str) -> (Arc<WindowData>, u64) {
     (data, generation)
 }
 
+// contract: tauriv2.surface-close.closed-window-reports-no-failure
 #[test]
 fn a_surface_that_closes_after_its_window_closed_reports_no_failure_and_ends_its_view_source() {
     let (data, generation) = records_with_view("tab-a", "probe");
@@ -32,6 +33,7 @@ fn a_surface_that_closes_after_its_window_closed_reports_no_failure_and_ends_its
     );
 }
 
+// contract: tauriv2.surface-close.open-window-ends-view-source-for-page
 #[test]
 fn a_surface_that_closes_in_an_open_window_ends_its_view_source_for_the_page() {
     let (data, generation) = records_with_view("tab-a", "probe");

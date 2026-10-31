@@ -8230,6 +8230,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F312",
+    implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" }],
+    tests: [
+      { file: "packages/host/tauriv2/src/presentation_end_test.rs", id: "a_deferred_end_in_an_open_window_ends_its_join" },
+      { file: "packages/host/tauriv2/src/surface_close_test.rs", id: "a_surface_that_closes_in_an_open_window_ends_its_view_source_for_the_page" },
+    ],
+    expected: "Each Tauri host test of the closed-window corrections declares a tauriv2 only contract case.",
+    levels: ["unit"],
+  },
+  {
     id: "F311",
     implementation: [{ file: "packages/host/wailsv3/src/application_log.go", symbol: "func StartStandardError(" }],
     tests: [{ file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" }],
