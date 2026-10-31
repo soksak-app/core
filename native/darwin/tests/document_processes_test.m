@@ -74,8 +74,16 @@ static nw_listener_t serve(void) {
             fflush(stdout);
             if (error || received == 0) {
                 // A connection that ends without a request is closed without an answer; WebKit opens such connections ahead of
-                // a request. A receive error is a failure of the server.
-                if (error) check(NO, [NSString stringWithFormat:@"server connection %d receives its request: %@", number, networkError(error)]);
+                // a request and ends one that it does not use with a close or a reset, which the server cannot prevent. Any
+                // other receive error is a failure of the server.
+                BOOL resetByClient = error && received == 0 && nw_error_get_error_domain(error) == nw_error_domain_posix
+                    && nw_error_get_error_code(error) == ECONNRESET;
+                if (resetByClient) {
+                    printf("server connection %d was reset by the client before a request\n", number);
+                    fflush(stdout);
+                } else if (error) {
+                    check(NO, [NSString stringWithFormat:@"server connection %d receives its request: %@", number, networkError(error)]);
+                }
                 nw_connection_cancel(connection);
                 return;
             }
