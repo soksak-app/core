@@ -11,8 +11,8 @@ const environment = (extra = {}) => ({
 });
 const card = { id: "card", name: "Card", mark: "c", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
   dependencies: { "@scope/sidecar-card": "0.1.0" } };
-const stateful = { id: "probe", name: "Probe", sections: [{ id: "probe.list", name: "목록", status: "probe.list" }],
-  exposes: { status: [{ name: "probe.list", description: "검사용 상태.", schema: { type: "object" } }] }, host: { page: "ui/host.html" },
+const stateful = { id: "probe", name: "Probe", sections: [{ id: "probe.list", name: "목록", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }],
+  exposes: { status: [{ name: "probe.list", description: "검사용 상태.", schema: { type: "object" } }] },
   dependencies: { "@scope/sidecar-probe": ">=0.1.0 <0.3.0" } };
 const plain = { ...stateful };
 delete plain.dependencies;

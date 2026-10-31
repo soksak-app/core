@@ -6,12 +6,12 @@ const manifests = () => [
   { id: "card", name: "Card", description: "Fixture card.", mark: "c", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     exposes: { status: [{ name: "card.info", description: "Fixture status.", schema: { type: "object" } }] },
-    sections: [{ id: "card.info", name: "Info", status: "card.info" }],
+    sections: [{ id: "card.info", name: "Info", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }],
     sidebars: { sets: [{ id: "main", title: "Main", sections: ["card.info", "other.tree"], layout: "list" }],
       card: { top: "main", bottom: "main", left: "main", right: "main" } } },
-  { id: "other", name: "Other", description: "Fixture sections.", host: { page: "ui/host.html" },
+  { id: "other", name: "Other", description: "Fixture sections.",
     exposes: { status: [{ name: "other.tree", description: "Fixture status.", schema: { type: "object" } }] },
-    sections: [{ id: "other.tree", name: "Tree", status: "other.tree" }],
+    sections: [{ id: "other.tree", name: "Tree", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }],
     sidebars: { sets: [{ id: "main", title: "Tree", sections: ["other.tree"], layout: "tabs" }] } },
 ];
 
@@ -62,7 +62,7 @@ test("plugin defaults reject malformed IDs, fields, layouts, and side references
     [(m) => { m.sidebars.sets[0].id = "off"; }, /reserved/],
     [(m) => { m.sidebars.sets.push(structuredClone(m.sidebars.sets[0])); }, /duplicate set/],
     [(m) => { m.sidebars.sets[0].layout = "grid"; }, /list or tabs/],
-    [(m) => { delete m.surface; delete m.mark; delete m.icon; m.host = { page: "ui/host.html" }; }, /card defaults require a surface/],
+    [(m) => { delete m.surface; delete m.mark; delete m.icon; }, /card defaults require a surface/],
   ]) {
     const manifest = manifests()[0];
     edit(manifest);

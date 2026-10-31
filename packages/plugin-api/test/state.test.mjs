@@ -5,14 +5,13 @@ import { checkProjectData, validateManifest } from "../index.js";
 
 const base = () => ({
   id: "probe", name: "Probe", description: "검사용 플러그인.",
-  host: { page: "ui/host.html" },
-  sections: [{ id: "probe.marks", name: "Marks", status: "probe.marks" }],
+  sections: [{ id: "probe.marks", name: "Marks", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }],
   dependencies: { "@scope/sidecar-probe": "~0.4.1" },
   data: { marks: { schema: { type: "array", items: { type: "string" } }, default: [] } },
   exposes: { status: [{ name: "probe.marks", description: "Marks.", schema: { type: "array" } }], commands: [], dom: [] },
 });
 
-test("a plugin host may declare project data, sidecars, and exposes", () => {
+test("a section view may declare project data, sidecars, and exposes", () => {
   const manifest = base();
   assert.equal(validateManifest(manifest), manifest);
 });
@@ -25,8 +24,8 @@ test("the state module is refused with the plugin and the field", () => {
 test("data and sidecars are rejected when their requirements are missing", () => {
   const without = (key) => { const m = base(); delete m[key]; return m; };
   const cases = [
-    [{ ...without("host"), sections: undefined, exposes: undefined }, /data requires a plugin host/],
-    [{ ...without("host"), data: undefined, sections: undefined, exposes: undefined }, /dependencies require a surface, a plugin host or contributes/],
+    [{ ...without("sections"), exposes: undefined }, /data requires a surface or sections/],
+    [{ ...without("sections"), data: undefined, exposes: undefined }, /dependencies require a surface, sections or contributes/],
     [{ ...base(), data: { marks: { schema: { type: "array" }, default: "x" } } }, /data marks default does not match its schema/],
     [{ ...base(), data: { marks: { schema: { type: "array" } } } }, /data marks requires schema and default/],
   ];
@@ -36,7 +35,7 @@ test("data and sidecars are rejected when their requirements are missing", () =>
   }
 });
 
-test("project data is accepted for a plugin host and refused without a host", () => {
+test("project data is accepted for a section view", () => {
   const manifest = base();
   assert.equal(validateManifest(manifest), manifest);
   assert.equal(validateManifest(manifest).data.marks.default.length, 0);

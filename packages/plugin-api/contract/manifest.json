@@ -11,9 +11,6 @@
               "id": "probe",
               "name": "Probe",
               "description": "Sample.",
-              "host": {
-                "page": "ui/host.html"
-              },
               "exposes": {
                 "status": [
                   {
@@ -29,7 +26,11 @@
                 {
                   "id": "probe.list",
                   "name": "List",
-                  "status": "probe.list"
+                  "composition": {
+                    "kind": "view",
+                    "page": "ui/page.html"
+                  },
+                  "height": "fill"
                 }
               ]
             }
@@ -40,9 +41,6 @@
               "id": "probe",
               "name": "Probe",
               "description": "Sample.",
-              "host": {
-                "page": "ui/host.html"
-              },
               "exposes": {
                 "status": [
                   {
@@ -58,7 +56,11 @@
                 {
                   "id": "probe.list",
                   "name": "List",
-                  "status": "probe.list"
+                  "composition": {
+                    "kind": "view",
+                    "page": "ui/page.html"
+                  },
+                  "height": "fill"
                 }
               ]
             }

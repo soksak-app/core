@@ -11,8 +11,8 @@ const card = {
   settings: { "cursor.shape": { type: "enum", label: "커서 모양", default: "block", values: ["block", "beam"] } },
 };
 const side = {
-  id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", status: "side.list" }],
-  exposes: { status: [{ name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] }, host: { page: "ui/host.html" },
+  id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }],
+  exposes: { status: [{ name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] },
 };
 const environment = () => ({
   runtime: "runtime",
@@ -36,7 +36,7 @@ const environment = () => ({
 test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(card), card);
   assert.equal(validateManifest(side), side);
-  assert.equal(validateManifest({ ...side, sections: [{ ...side.sections[0], fill: true }] }).sections[0].fill, true);
+  assert.equal(validateManifest({ ...side, sections: [{ ...side.sections[0], height: 120 }] }).sections[0].height, 120);
   assert.equal(validateManifest({ ...card, preview: { ink: "--surface-fg" } }).preview.ink, "--surface-fg");
   // The range has the same format as sok: `*`, `>=x.y.z` with only a lower bound, and `>=x.y.z <a.b.c` with an upper bound (docs/spec/installation.md).
   for (const range of ["*", ">=0.0.6", ">=0.0.2 <0.1.0", "^1.2.0", "~1.2.0", "1.2.0"]) {
@@ -72,11 +72,11 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, icon: undefined }, /icon is required/],
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
     [{ ...side, sections: [side.sections[0], side.sections[0]] }, /duplicate section/],
-    [{ ...side, sections: [{ id: "side.list", name: "List" }] }, /section side.list requires a status/],
-    [{ ...side, sections: [{ ...side.sections[0], fill: "yes" }] }, /section side.list fill must be a boolean/],
+    [{ ...side, sections: [{ id: "side.list", name: "List" }] }, /section side.list requires composition/],
+    [{ ...side, sections: [{ ...side.sections[0], fill: "yes" }] }, /section side.list fill is removed; a section takes composition and height/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] }, /section side.list module is removed/],
     [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface, sections or contributes/],
-    [{ id: "side", name: "Side", description: "검사용 섹션.", dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a plugin host or contributes/],
+    [{ id: "side", name: "Side", description: "검사용 섹션.", dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, sections or contributes/],
     [{ ...card, dependencies: { Worker: "^1.2.0" } }, /dependencies: Worker is not a sidecar or plugin name/],
     [{ ...card, dependencies: ["@scope/sidecar-worker"] }, /dependencies must map sidecars and plugins to version ranges/],
     [{ ...card, dependencies: { "@scope/sidecar-worker": "**" } }, /dependencies @scope\/sidecar-worker: invalid range \*\*/],
@@ -436,7 +436,7 @@ test("extension points and contributions are rejected for each invalid field", (
     [{ ...contributor, contributes: { "probe.language": [{ ...item, range: "latest" }] } }, /contributes probe.language item 1 range latest is invalid/],
     [{ ...contributor, contributes: { "probe.language": [{ ...item, module: "/tidy.js" }] } }, /contributes probe.language item 1 module must be a JavaScript path inside the package/],
     [{ id: "none", name: "None", description: "아무것도 없다." }, /a plugin requires a surface, sections or contributes/],
-    [{ id: "side", name: "Side", description: "검사용 섹션.", dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a plugin host or contributes/],
+    [{ id: "side", name: "Side", description: "검사용 섹션.", dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, sections or contributes/],
   ]) assert.throws(() => validateManifest(manifest), error, JSON.stringify(manifest).slice(0, 120));
 });
 
@@ -553,37 +553,39 @@ test("a dom composition is refused with the plugin and the manifest field", () =
   );
 });
 
-// A section with status is declared UI (docs/spec/declared-ui.md, sidebar section form).
-const statusSide = {
-  id: "side", name: "Side", description: "검사용 섹션.", host: { page: "ui/host.html" },
-  exposes: { status: [{ name: "side.count", description: "검사용 상태.", schema: { type: "object" } }] },
-  sections: [{ id: "side.count", name: "Count", status: "side.count" }],
+// A section is a view with a composition and a height; its status, module and fill members are removed
+// (docs/spec/plugins.md#sections).
+const viewSide = {
+  id: "side", name: "Side", description: "검사용 섹션.",
+  sections: [{ id: "side.count", name: "Count", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }],
 };
 
-test("a section names exactly one of module and status, and its status is declared by the plugin", () => {
-  let accepted = null;
-  assert.doesNotThrow(() => { accepted = validateManifest(statusSide); }, "a section with a declared status was rejected");
-  assert.equal(accepted.sections[0].status, "side.count");
+test("a section takes a view composition and a height that is fill or a positive integer", () => {
+  for (const height of ["fill", 1, 120]) {
+    assert.doesNotThrow(() => validateManifest({ ...viewSide, sections: [{ ...viewSide.sections[0], height }] }));
+  }
+  const section = (extra) => ({ id: "side.count", name: "Count", composition: { kind: "view", page: "ui/page.html" }, ...extra });
   const rejects = [
-    [{ ...statusSide, sections: [{ id: "side.count", name: "Count", module: "ui/count.js", status: "side.count" }] },
-      /section side.count module is removed/],
-    [{ ...statusSide, sections: [{ id: "side.count", name: "Count" }] }, /section side.count requires a status/],
-    [{ ...statusSide, sections: [{ id: "side.count", name: "Count", status: "side.other" }] },
-      /section side.count status side.other is not a status of plugin side/],
-    [{ ...statusSide, sections: [{ id: "side.a", name: "A", status: "side.count" }, { id: "side.b", name: "B", status: "side.count" }] },
-      /status side.count backs section side.a and section side.b/],
+    [{ ...viewSide, sections: [section({})] }, /section side.count requires height/],
+    [{ ...viewSide, sections: [section({ height: 0 })] }, /section side.count height must be "fill" or a positive integer/],
+    [{ ...viewSide, sections: [section({ height: "half" })] }, /section side.count height must be "fill" or a positive integer/],
+    [{ ...viewSide, sections: [section({ height: 1.5 })] }, /section side.count height must be "fill" or a positive integer/],
+    [{ ...viewSide, sections: [section({ height: 10, composition: { kind: "dom" } })] }, /section side.count composition: kind dom is removed/],
   ];
   for (const [manifest, message] of rejects) assert.throws(() => validateManifest(manifest), message);
 });
 
-// The module section and the state module are removed: the reader refuses each with an error that names the plugin and the field.
-test("a module section and a state module are refused with the plugin and the field", () => {
+test("the status, module and fill members of a section are refused as removed", () => {
+  for (const [field, value] of [["status", "side.count"], ["module", "ui/count.js"], ["fill", true]]) {
+    assert.throws(() => validateManifest({ ...viewSide, sections: [{ ...viewSide.sections[0], [field]: value }] }),
+      { message: `plugin side: section side.count ${field} is removed; a section takes composition and height` });
+  }
+});
+
+// The state module is removed: the reader refuses it with an error that names the plugin and the field.
+test("a state module is refused with the plugin and the field", () => {
   assert.throws(
-    () => validateManifest({ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] }),
-    { message: "plugin side: section side.list module is removed; a section takes status (docs/spec/declared-ui.md)" },
-  );
-  assert.throws(
-    () => validateManifest({ ...statusSide, state: { module: "state/side.js" } }),
+    () => validateManifest({ ...viewSide, state: { module: "state/side.js" } }),
     { message: "plugin side: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)" },
   );
 });

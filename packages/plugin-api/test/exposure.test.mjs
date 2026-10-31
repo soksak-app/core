@@ -68,7 +68,7 @@ test("exposes are rejected for each invalid field", () => {
   assert.throws(() => validateManifest({ id: "probe", name: "Probe", description: "검사용 플러그인.", sections: [{ id: "probe.list", name: "List", module: "ui/list.js" }], exposes: exposes() }),
     /section probe.list module is removed/);
   assert.throws(() => validateManifest({ id: "probe", name: "Probe", description: "검사용 플러그인.", exposes: exposes() }),
-    /exposes require a surface or a plugin host/);
+    /exposes require a surface or sections/);
   assert.throws(() => validateExposureFile({ exposes: exposes() }), /must be core.<name>/);
   assert.throws(() => validateExposureFile({ exposes: {}, extra: 1 }), /unknown field extra/);
 });
@@ -348,7 +348,7 @@ test("diagnostic declarations extend a surface plugin once and are rejected othe
 });
 
 test("accepting the installed plugin document leaves out each refused plugin with its error and keeps the others", () => {
-  const alpha = { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: { id: "alpha", name: "Alpha", description: "검사용.", host: { page: "ui/host.html" }, exposes: { status: [{ name: "alpha.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "alpha.list", name: "List", status: "alpha.list" }] } };
+  const alpha = { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: { id: "alpha", name: "Alpha", description: "검사용.", exposes: { status: [{ name: "alpha.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "alpha.list", name: "List", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }] } };
   const unnamed = { id: "beta", package: "plugin-beta", version: "0.0.1", manifest: { id: "beta", description: "이름이 없는 manifest." } };
   const badPackage = { ...alpha, id: "gamma", package: "Bad", manifest: { ...alpha.manifest, id: "gamma" } };
   const { plugins, errors } = acceptInstalledPlugins({ plugins: [unnamed, alpha, badPackage] });
@@ -367,8 +367,8 @@ test("accepting the installed plugin document leaves out each refused plugin wit
 
 test("the installed plugin document lists plugins with their manifests and diagnostics and reports the host's error", () => {
   const plugins = [
-    { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: { id: "alpha", name: "Alpha", description: "검사용.", host: { page: "ui/host.html" }, exposes: { status: [{ name: "alpha.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "alpha.list", name: "List", status: "alpha.list" }] } },
-    { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest: { id: "probe", name: "Probe", description: "검사용.", host: { page: "ui/host.html" }, exposes: { status: [{ name: "probe.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "probe.list", name: "List", status: "probe.list" }] },
+    { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: { id: "alpha", name: "Alpha", description: "검사용.", exposes: { status: [{ name: "alpha.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "alpha.list", name: "List", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }] } },
+    { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest: { id: "probe", name: "Probe", description: "검사용.", exposes: { status: [{ name: "probe.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "probe.list", name: "List", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }] },
       diagnostics: { module: "ui/d.js", exposes: {} } },
   ];
   assert.equal(validateInstalledPlugins({ plugins }), plugins);
@@ -389,8 +389,8 @@ test("the installed plugin document lists plugins with their manifests and diagn
 
 // The sidecar facts of an installed plugin are the message form and the host read operations of each sidecar dependency (docs/spec/sidecars.md#messages).
 test("the installed plugin document validates the sidecar facts of each sidecar dependency", () => {
-  const manifest = { id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, host: { page: "ui/host.html" },
-    dependencies: { "@fixture/sidecar-probe": "^0.1.0" }, hostOperations: { "@fixture/sidecar-probe": ["list"] } };
+  const manifest = { id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
+    dependencies: { "@fixture/sidecar-probe": "^0.1.0" } };
   const facts = { message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"] };
   const plugin = { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest };
   const withSidecars = (sidecars) => ({ plugins: [{ ...plugin, sidecars }] });

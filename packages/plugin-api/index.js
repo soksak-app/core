@@ -201,56 +201,10 @@ function isRange(range) {
 }
 
 /**
- * The operation names of a list that a plugin host may call on a sidecar: non-empty strings, each once
- * (docs/spec/plugins.md#pluginjson, hostOperations; docs/spec/sidecars.md, hostReadOperations).
+ * The operation names of a list of sidecar facts (hostReadOperations of the installed document): non-empty strings, each once.
  */
 const isOperationList = (value) => Array.isArray(value) && value.length > 0
   && value.every((name) => isText(name)) && new Set(value).size === value.length;
-
-/** Checks the plugin host declaration `host`: a page inside the package and an optional state declaration. */
-function checkHost(where, host) {
-  if (!isObject(host)) throw new Error(`${where}: host must be an object`);
-  only(`${where} host`, host, ["page", "state"]);
-  if (!isText(host.page) || host.page.startsWith("/") || host.page.split("/").includes("..")) {
-    throw new Error(`${where}: host page must be a path inside the package`);
-  }
-  if (host.state !== undefined) {
-    if (!isObject(host.state)) throw new Error(`${where}: host state must be an object`);
-    only(`${where} host state`, host.state, ["format", "maxBytes"]);
-    for (const key of ["format", "maxBytes"]) {
-      if (!Number.isInteger(host.state[key]) || host.state[key] <= 0) throw new Error(`${where}: host state ${key} must be a positive integer`);
-    }
-  }
-}
-
-/**
- * Checks hostOperations: each sidecar dependency maps to the distinct operations its plugin host may call. A declaration
- * needs a plugin host, and each sidecar must be a dependency.
- */
-function checkHostOperationsDeclaration(where, hostOperations, dependencies) {
-  if (!isObject(hostOperations)) throw new Error(`${where}: hostOperations must map sidecars to operations`);
-  for (const [name, operations] of sortedEntries(hostOperations)) {
-    if (!Object.hasOwn(dependencies, name)) throw new Error(`${where}: hostOperations ${name} is not a dependency`);
-    if (!isOperationList(operations)) throw new Error(`${where}: hostOperations ${name} must be a list of distinct operation names`);
-  }
-}
-
-/**
- * Checks that each operation a plugin host may call on a sidecar is one the sidecar declares in hostReadOperations, so a
- * host names only read operations. sidecars maps each sidecar name to its validated sidecar.json.
- */
-export function checkHostOperations(manifest, sidecars) {
-  // default: hostOperations is an optional field of plugin.json; without it the plugin host calls no operation of a sidecar.
-  for (const [name, operations] of Object.entries(manifest.hostOperations ?? {})) {
-    const sidecar = sidecars[name];
-    if (sidecar === undefined) throw new Error(`hostOperations ${name}: sidecar.json is missing`);
-    // default: hostReadOperations is an optional field of sidecar.json; without it the sidecar allows no operation to a plugin host.
-    const readOperations = sidecar.hostReadOperations ?? [];
-    for (const operation of operations) {
-      if (!readOperations.includes(operation)) throw new Error(`hostOperations ${name}: operation ${operation} is not in hostReadOperations`);
-    }
-  }
-}
 
 /**
  * Checks the message form of a sidecar, which the body of a plugin host request takes (docs/spec/sidecars.md#messages). where names
@@ -496,6 +450,18 @@ export function settingDeclarations(manifest) {
 const isViewPage = (page) => isText(page) && page.endsWith(".html") &&
   page.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".." && segment !== ".binary");
 
+/**
+ * Checks an unload declaration of a surface or a section: {format, maxBytes} with positive integers
+ * (docs/spec/plugins.md#memory-saver). label names the owner in the messages.
+ */
+function checkUnload(where, label, unload) {
+  if (!isObject(unload) || !Number.isInteger(unload.format) || unload.format < 1 ||
+      !Number.isInteger(unload.maxBytes) || unload.maxBytes < 1) {
+    throw new Error(`${where}: ${label} unload must be {format, maxBytes} with positive integers`);
+  }
+  only(`${where} ${label} unload`, unload, ["format", "maxBytes"]);
+}
+
 /** Validates the surface composition declaration. This declaration is the host's list of region permissions. */
 function checkComposition(where, composition, sidecars) {
   if (!isObject(composition)) throw new Error(`${where}: composition must be an object`);
@@ -636,10 +602,10 @@ function checkContributes(where, id, contributes) {
  *     mark      short mark shown in the `+` menu and in the tab title. Required when surface exists
  *     icon      SVG element with a 16×16 view box. Required when surface exists
  *     surface   card surface. `{ page, composition }` declares the document inside the plugin and the composition permissions
- *     sections  sections that the sidebar can show. The id has the form `<plugin id>.<name>`
+ *     sections  sections that the sidebar can show, each a view with composition and height. The id has the form `<plugin id>.<name>`
  *     preview   colors of the library preview. `ink` is a theme token name (`--rail` and others). surface must exist
- *   dependencies  the version range of each sidecar that the page surface or the plugin host uses and of each plugin that it contributes to
- *     exposes   status, command and dom entries that the surface page registers. A page surface must exist
+ *   dependencies  the version range of each sidecar that a view of the plugin uses and of each plugin that it contributes to
+ *     exposes   status, command and dom entries that the views register. A surface or sections must exist
  */
 // The path segment that the binary store of a document region answers before it looks up a file
 // (docs/spec/native-surfaces.md#document-regions), so a plugin file under it could not be served.
@@ -662,8 +628,12 @@ export function validateManifest(manifest) {
   if (isObject(manifest) && manifest.state !== undefined) {
     throw new Error(`plugin ${manifest.id}: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)`);
   }
+  // The plugin host members are removed: a section is a view of the plugin (docs/spec/plugins.md#sections).
+  for (const member of ["host", "hostOperations"]) {
+    if (manifest[member] !== undefined) throw new Error(`plugin ${manifest.id}: ${member} is removed; a section is a view of the plugin`);
+  }
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "exposes", "settings",
-    "data", "sidebars", "extends", "contributes", "events", "host", "hostOperations"]);
+    "data", "sidebars", "extends", "contributes", "events"]);
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
@@ -677,8 +647,8 @@ export function validateManifest(manifest) {
     throw new Error(`${where}: description must be 1 to ${PLUGIN_DESCRIPTION_MAX} characters`);
   }
   if (manifest.data !== undefined) {
-    // The plugin host serves project data (docs/spec/plugins.md#project-data).
-    if (manifest.host === undefined) throw new Error(`${where}: data requires a plugin host`);
+    // The views of a surface or of a section read and write project data (docs/spec/plugins.md#project-data).
+    if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: data requires a surface or sections`);
     if (!isObject(manifest.data)) throw new Error(`${where}: data must be an object`);
     for (const [key, entry] of sortedEntries(manifest.data)) {
       if (!ID.test(key)) throw new Error(`${where}: invalid data key ${key}`);
@@ -694,19 +664,12 @@ export function validateManifest(manifest) {
     }
   }
   if (manifest.dependencies !== undefined) {
-    // A sidecar dependency serves the surface or the plugin host, and a plugin dependency serves the contributions
+    // A sidecar dependency serves a view of the plugin, and a plugin dependency serves the contributions
     // (docs/spec/plugins.md#pluginjson).
-    if (manifest.surface === undefined && manifest.host === undefined && manifest.contributes === undefined) {
-      throw new Error(`${where}: dependencies require a surface, a plugin host or contributes`);
+    if (manifest.surface === undefined && manifest.sections === undefined && manifest.contributes === undefined) {
+      throw new Error(`${where}: dependencies require a surface, sections or contributes`);
     }
     checkDependencies(where, manifest.dependencies);
-  }
-  if (manifest.host !== undefined) checkHost(where, manifest.host);
-  if (manifest.hostOperations !== undefined) {
-    // A plugin host calls the operations that its manifest declares for each sidecar dependency (docs/spec/plugin-host.md).
-    if (manifest.host === undefined) throw new Error(`${where}: hostOperations requires host`);
-    // default: dependencies is an optional field of plugin.json; without it the plugin has no sidecar that hostOperations may name.
-    checkHostOperationsDeclaration(where, manifest.hostOperations, manifest.dependencies ?? {});
   }
   if (manifest.extends !== undefined) {
     if (manifest.surface === undefined) throw new Error(`${where}: extends requires a surface`);
@@ -786,12 +749,7 @@ export function validateManifest(manifest) {
     if (manifest.background !== undefined) {
       if (surface.unload !== undefined) throw new Error(`${where}: surface unload is forbidden beside background`);
     } else if (surface.unload !== undefined) {
-      const unload = surface.unload;
-      if (!isObject(unload) || !Number.isInteger(unload.format) || unload.format < 1 ||
-          !Number.isInteger(unload.maxBytes) || unload.maxBytes < 1) {
-        throw new Error(`${where}: surface unload must be {format, maxBytes} with positive integers`);
-      }
-      only(`${where} surface unload`, unload, ["format", "maxBytes"]);
+      checkUnload(where, "surface", surface.unload);
     }
     if (!isText(manifest.mark)) throw new Error(`${where}: mark is required with a surface`);
     if (!isText(manifest.icon)) throw new Error(`${where}: icon is required with a surface`);
@@ -799,32 +757,27 @@ export function validateManifest(manifest) {
   if (manifest.sections !== undefined) {
     if (!Array.isArray(manifest.sections)) throw new Error(`${where}: sections must be an array`);
     const seen = new Set();
-    // A status backs at most one section (docs/spec/declared-ui.md, sidebar section form).
-    const backing = new Map();
     for (const section of manifest.sections) {
       if (!isObject(section)) throw new Error(`${where}: section must be an object`);
-      // The module section is removed: a section draws its declared status (docs/spec/declared-ui.md, sidebar section form).
-      if (section.module !== undefined) {
-        throw new Error(`${where}: section ${section.id} module is removed; a section takes status (docs/spec/declared-ui.md)`);
+      // The status, module and fill members are removed: a section is a view with a composition and a height (docs/spec/plugins.md#sections).
+      for (const field of ["fill", "module", "status"]) {
+        if (section[field] !== undefined) throw new Error(`${where}: section ${section.id} ${field} is removed; a section takes composition and height`);
       }
-      only(`${where} section`, section, ["id", "name", "fill", "status"]);
+      only(`${where} section`, section, ["id", "name", "composition", "height", "unload"]);
       if (typeof section.id !== "string" || !section.id.startsWith(`${id}.`) || !ID.test(section.id.slice(id.length + 1))) {
         throw new Error(`${where}: section id ${section.id} must be ${id}.<name>`);
       }
       if (seen.has(section.id)) throw new Error(`${where}: duplicate section ${section.id}`);
       seen.add(section.id);
       if (!isText(section.name)) throw new Error(`${where}: section ${section.id} requires a name`);
-      if (section.status === undefined) throw new Error(`${where}: section ${section.id} requires a status`);
-      const declared = Array.isArray(manifest.exposes?.status) && manifest.exposes.status.some((entry) => entry?.name === section.status);
-      if (!declared) throw new Error(`${where}: section ${section.id} status ${section.status} is not a status of plugin ${id}`);
-      if (backing.has(section.status)) {
-        throw new Error(`${where}: status ${section.status} backs section ${backing.get(section.status)} and section ${section.id}`);
+      if (section.composition === undefined) throw new Error(`${where}: section ${section.id} requires composition`);
+      checkComposition(`${where} section ${section.id}`, section.composition, manifestSidecars(manifest));
+      if (section.height === undefined) throw new Error(`${where}: section ${section.id} requires height`);
+      if (section.height !== "fill" && !(Number.isInteger(section.height) && section.height > 0)) {
+        throw new Error(`${where}: section ${section.id} height must be "fill" or a positive integer`);
       }
-      backing.set(section.status, section.id);
-      // fill is the section that receives the remaining height in the list layout (docs/spec/plugins.md#sections).
-      if (section.fill !== undefined && typeof section.fill !== "boolean") {
-        throw new Error(`${where}: section ${section.id} fill must be a boolean`);
-      }
+      // default: unload is optional; a section without it is never unloaded.
+      if (section.unload !== undefined) checkUnload(where, `section ${section.id}`, section.unload);
     }
   }
   if (manifest.preview !== undefined) {
@@ -837,8 +790,8 @@ export function validateManifest(manifest) {
   }
   if (manifest.exposes !== undefined) {
     // A plugin host registers the declared statuses and commands of its plugin (docs/spec/plugin-host.md#exposure).
-    if (manifest.surface === undefined && manifest.host === undefined) {
-      throw new Error(`${where}: exposes require a surface or a plugin host`);
+    if (manifest.surface === undefined && manifest.sections === undefined) {
+      throw new Error(`${where}: exposes require a surface or sections`);
     }
     validateExposes(id, manifest.exposes);
   }
@@ -882,13 +835,14 @@ function validateEventsPath(where, events) {
 
 export function validateSidecar(sidecar) {
   if (!isObject(sidecar)) throw new Error("sidecar.json: expected an object");
-  only("sidecar.json", sidecar, ["executable", "displayName", "protocol", "helpers", "transport", "events", "replay", "message", "hostReadOperations"]);
+  // The host read operations are removed: a plugin host calls no operation of a sidecar (docs/spec/sidecars.md#messages).
+  if (sidecar.hostReadOperations !== undefined) throw new Error("sidecar.json: hostReadOperations is removed");
+  only("sidecar.json", sidecar, ["executable", "displayName", "protocol", "helpers", "transport", "events", "replay", "message"]);
   if (typeof sidecar.displayName !== "string" || !/^soksak:\/\/sidecar\/[a-z][a-z0-9-]*$/.test(sidecar.displayName)) {
     throw new Error("sidecar.json: displayName must be soksak://sidecar/ followed by one lowercase identifier");
   }
   // The message form that a plugin host's body takes; the host parses the body in this form (docs/spec/sidecars.md#messages).
   if (sidecar.message !== undefined) checkSidecarMessage("sidecar.json", sidecar.message);
-  if (sidecar.hostReadOperations !== undefined) checkHostReadOperations("sidecar.json", sidecar.hostReadOperations);
   validateEventsPath("sidecar.json", sidecar.events);
   const { executable } = sidecar;
   if (!isText(executable) || executable.startsWith("/") || executable.split("/").includes("..")) {
