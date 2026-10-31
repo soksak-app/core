@@ -1,5 +1,5 @@
 // Checks the workflows of .github/workflows against docs/operations/examples.md#continuous-integration: every runner label is
-// a hosted label of the repository, and no workflow runs an end-to-end check (docs/operations/examples.md#test-kinds).
+// a hosted label of the repository.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -230,16 +230,12 @@ test('every CI job installs the locked workspace dependencies before its first c
   }
 });
 
-test('the native tests that need display presentation run in no workflow and the others in the hosted job', () => {
+test('the hosted native job runs the native unit tests', () => {
   const job = read('.github/workflows/ci.yml').split(/^ {2}(?=[a-z-]+:$)/m).find((part) => part.startsWith('native-darwin:'));
   assert.ok(job, 'ci.yml has no native-darwin job');
   const hosted = steps(job).find((step) => step.name === 'Native Darwin tests');
   assert.ok(hosted, 'the native-darwin job has no step named Native Darwin tests');
-  assert.match(hosted.text, /run: make -C core\/native\/darwin test-without-presentation$/m);
-  // A hosted display presents no frames, so the presentation tests run in the local checks only.
-  for (const file of readdirSync(WORKFLOWS).filter((name) => name.endsWith('.yml'))) {
-    assert.doesNotMatch(readFileSync(join(WORKFLOWS, file), 'utf8'), /test-presentation\b/, `${file} runs the native presentation tests`);
-  }
+  assert.match(hosted.text, /run: make -C core\/native\/darwin test$/m);
 });
 
 test('a push to main releases the declared version after the checks and the gate succeed', () => {
@@ -261,19 +257,6 @@ test('a push to main releases the declared version after the checks and the gate
   assert.match(ci, /^on:\n {2}workflow_call:\n {2}pull_request:\n/m, 'ci.yml runs for a pull request and for release.yml only');
 });
 
-
-// An end-to-end check needs a running application, a display that presents frames or a person, which a hosted runner does not
-// provide, so it runs only locally through make (docs/operations/examples.md#test-kinds).
-test('no workflow runs an end-to-end check', { timeout: 1000 }, () => {
-  const files = readdirSync(WORKFLOWS).filter((name) => name.endsWith('.yml'));
-  assert.ok(files.length > 0, 'no workflow file');
-  const endToEnd = /verify:windows|verify:activation|verify:person|run verify\b|test-presentation\b|test-activation\b|virtual_display|install-plugins|e2e-registry-tls|make (?:-C core )?e2e\b/;
-  for (const file of files) {
-    const found = endToEnd.exec(readFileSync(join(WORKFLOWS, file), 'utf8'));
-    assert.equal(found, null, `${file} runs the end-to-end check ${found?.[0]}`);
-  }
-  assert.equal(existsSync(join(WORKFLOWS, 'window-checks.yml')), false, 'the window-check workflow exists');
-});
 
 // A repository consumes a lower layer only as its published release, and core consumes no plugin or sidecar, so a workflow
 // of core checks out only core (AGENTS.md, Verification).

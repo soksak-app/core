@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Finds native tests that no make target runs. A test source `native/darwin/tests/<name>_test.m` is run when a native
-// suite variable (NATIVE_TESTS, or NATIVE_PRESENTATION_TESTS for the tests that need a display) lists it or a recipe
+// suite variable (NATIVE_TESTS, or NATIVE_E2E_TESTS for the tests that need a display) lists it or a recipe
 // line of native/darwin/Makefile names it; a test that neither names is built by no check and passes or fails unseen.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";

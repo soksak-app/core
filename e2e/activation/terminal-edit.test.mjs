@@ -1,7 +1,7 @@
 // Activation-tier window check: checks that the diagnostic keys Command+C and Command+V run the Edit menu like human keys.
 //
 // A diagnostic key goes through the dispatch of NSApplication. The key-equivalent behavior of the menu goes to the key window of the active application, so this check
-// activates the app. A run that the user approved runs it only through pnpm -F @soksak/e2e verify:activation.
+// activates the app. A run that the user approved runs it only through make e2e-activation.
 import assert from "node:assert/strict";
 import test from "node:test";
 

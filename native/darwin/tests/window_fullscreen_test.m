@@ -22,7 +22,7 @@ static BOOL fullscreen(NSWindow *window) {
     return (window.styleMask & NSWindowStyleMaskFullScreen) != 0;
 }
 
-// tests/support/no_activation.m: this check activates the app in make test-activation.
+// tests/support/no_activation.m: this check activates the app in make e2e-activation.
 void sp_test_declare_activation(void);
 
 int main(void) { @autoreleasepool {

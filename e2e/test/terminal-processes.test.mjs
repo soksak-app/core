@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { processRows } from "./terminal-processes.mjs";
+import { processRows } from "../terminal-processes.mjs";
 
 test("process measurement preserves identities, state, and paths with spaces", () => {
   assert.deepEqual(processRows("  7  1 S /my path/service --service-dir /config path\n 9 7 Z /bin/sh\n"), [

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hasOpenFailureRow, nodeByPath, openFailureRow, treeNodes, waitAcceptedTreeSection, waitTreeSnapshot } from "./files-open-failure.mjs";
+import { hasOpenFailureRow, nodeByPath, openFailureRow, treeNodes, waitAcceptedTreeSection, waitTreeSnapshot } from "../files-open-failure.mjs";
 
 test("the Files tree node lookup finds a nested path in its declared snapshot", () => {
   const snapshot = { value: { elements: [{ kind: "tree", key: "files", nodes: [

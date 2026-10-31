@@ -183,11 +183,11 @@ static void pumpEvents(NSString *what, BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
-// tests/support/no_activation.m: this check activates the application in make test-activation.
+// tests/support/no_activation.m: this check activates the application in make e2e-activation.
 void sp_test_declare_activation(void);
 
 int main(int argc, char **argv) { @autoreleasepool {
-    // activation activates the application and checks clicks and keys of the OS event queue. Used only by make test-activation.
+    // activation activates the application and checks clicks and keys of the OS event queue. Used only by make e2e-activation.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
     [NSApplication sharedApplication];

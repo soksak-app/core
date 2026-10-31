@@ -170,14 +170,14 @@ macOS 26.6.2 (arm64) 측정: 40, 45, 54, 63, 72, 90, 108pt 에서, 빈 compact �
 - 활성화: `sp_input_activate`는 `-[NSWindow makeKeyAndOrderFront:]`와 `-[NSApplication activate]`를 호출하고, 키 창 알림과 앱 활성 알림을 모두 확인한 뒤, 다음 메인 큐 차례에 창의 모든 보이는 웹뷰에 `_doAfterActivityStateUpdate:`를 호출한다. 숨겨진 웹뷰는 입력 대상이 아니므로 명시적 활성화를 막지 않는다. 이 콜백은 WebKit이 예약된 활성 상태를 보낸 뒤(`WebPageProxy::dispatchActivityStateChange`) 실행되므로, 이후 마우스 이벤트는 같은 연결에서 그 상태 다음에 웹 프로세스에 도착한다. 시스템은 활성화를 거절할 수 있고, 다른 애플리케이션이나 창이 포커스를 가져갈 수 있다. 함수는 멈춘 단계(`sp_activate_result`)와 최전면 애플리케이션을 보고하며, `tests/input_activate_test.m`이 각 조건을 만들어 검사한다.
 - 스크롤: **비공개 CoreGraphics 사용.** 창 정보를 가진 스크롤 `NSEvent`를 만드는 공개 API가 없다. 코드는 `CGEventCreateScrollWheelEvent2`로 이벤트를 만들고 문서화되지 않은 창 번호 필드(`CGEventField` 51)와 비공개 함수 `CGEventSetWindowLocation`을 설정한 뒤 `+[NSEvent eventWithCGEvent:]`로 변환한다. 변환 결과는 `window`와 `locationInWindow`를 가지며 `-[NSWindow sendEvent:]`가 좌표의 뷰에 전달한다. 변환한 이벤트에 창이 없으면 입력을 거부한다. 필드 51만 설정하면 좌표가 틀리고, `CGEventSetWindowLocation`만 호출하면 창이 없다. `CGEventPostToPid`는 비활성 애플리케이션에 스크롤을 전달하지 못했다.
 
-실패 증상: `tests/input_inject_test.m`이 포인터 이벤트 누락·비신뢰·위치 오류, 휠 이벤트 없음, 요청한 120픽셀과 다른 스크롤 거리, 클릭 후 포커스 상실을 보고한다. OS나 WebKit 업데이트 후 `make -C native/darwin test`와 `make -C native/darwin test-activation`(키보드 포커스를 가져감)을 실행한다. 공개 방법으로 창 정보를 가진 스크롤 이벤트를 만들 수 있게 되면 비공개 스크롤 호출을 교체한다.
+실패 증상: `tests/input_inject_test.m`이 포인터 이벤트 누락·비신뢰·위치 오류, 휠 이벤트 없음, 요청한 120픽셀과 다른 스크롤 거리, 클릭 후 포커스 상실을 보고한다. OS나 WebKit 업데이트 후 `make -C native/darwin test`와 `make -C native/darwin e2e-activation`(키보드 포커스를 가져감)을 실행한다. 공개 방법으로 창 정보를 가진 스크롤 이벤트를 만들 수 있게 되면 비공개 스크롤 호출을 교체한다.
 
 ## 업데이트 검토 절차
 
 1. 변경 전후 앱 리비전, OS·빌드, 설치된 WebKit 버전, SDK·도구 체인, 확정된 프레임워크 리비전을 기록한다. 모든 네이티브 업데이트 후 실패를 진단할 때 이 목록부터 확인한다.
 2. 증상에 해당하는 항목을 확인한다. 변경된 소스의 대상 클래스, 선택자·키, 인자·콜백 타입, 가용성, 스레드와 실제 의미를 비교한다. 앱이 공개 래퍼를 사용해도 프레임워크 호출부를 확인한다. 소스 검토로 조사 범위를 좁히되 실패를 재현한 뒤 원인을 확정한다.
 3. 필요성을 다시 판단한다. 수정 없이 필요한 동작이 정확히 구현되면 해당 수정을 제거한다. 동작 계약을 유지하고 해롭거나 불필요한 코드를 제거한다. 실패를 감추기 위한 호환 분기, 고정 지연, 정밀도 축소, 배경색 변경을 추가하지 않는다.
-4. [빌드·검증 절차](examples.ko.md)에 따라 두 호스트를 다시 빌드하고 재실행한 뒤 관련 검사와 `make examples-verify`를 실행한다. 입력 의존성이 바뀌면 `make -C native/darwin test`와 `make -C native/darwin test-activation`도 실행한다. 실제 제스처와 픽셀을 검증한다. 실행할 수 없는 플랫폼과 생략한 검사는 명시한다.
+4. [빌드·검증 절차](examples.ko.md)에 따라 두 호스트를 다시 빌드하고 재실행한 뒤 관련 검사와 `make e2e`를 실행한다. 입력 의존성이 바뀌면 `make -C native/darwin test`와 `make e2e-activation`도 실행한다. 실제 제스처와 픽셀을 검증한다. 실행할 수 없는 플랫폼과 생략한 검사는 명시한다.
 5. API 추가·교체·제거 또는 호출 조건 변경과 같은 변경에서 이 목록과 한국어 번역을 갱신한다. 동작 변경과 새 검증 결과는 [기능 상태](../features.ko.md)와 [변경 기록](../../CHANGELOG.ko.md)에 기록한다. `make docs-check`를 실행하며 소스 검토로 목록의 정확성도 확인한다.
 
 필요성은 개별 수정에 대해 판단한다. 비공개라는 사실만으로 수정을 부정하지 않으며 테스트 통과만으로 설계를 정당화하지 않는다. 새 항목에는 구체적인 원인, 공개 API의 한계, 정확한 구현 위치와 범위, 실패 징후, 검증 절차가 필요하다.

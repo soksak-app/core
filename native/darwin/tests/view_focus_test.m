@@ -13,7 +13,7 @@
 #import "application_log.h"
 #import "support/records.h"
 
-// Declared by the activation checks of make test-activation (tests/support/no_activation.m).
+// Declared by the activation checks of make e2e-activation (tests/support/no_activation.m).
 void sp_test_declare_activation(void);
 
 static int failures = 0;

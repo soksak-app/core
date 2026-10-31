@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseReplayArgs } from "./ime-capture-replay.mjs";
+import { parseReplayArgs } from "../../activation/ime-capture-replay.mjs";
 
 test("offline IME replay requires explicit artifact and result paths", { timeout: 5000 }, () => {
   assert.throws(() => parseReplayArgs([]), /--artifact-dir is required/);

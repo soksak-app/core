@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import renderFixture from "./fixtures/screen-render.json" with { type: "json" };
-import { visibleInputBeforeCursor, visibleInputFromRows } from "./terminal-ime-document.mjs";
+import renderFixture from "../../activation/fixtures/screen-render.json" with { type: "json" };
+import { visibleInputBeforeCursor, visibleInputFromRows } from "../../activation/terminal-ime-document.mjs";
 import {
   captureFromCallback,
   attachImeFrameIdentities,
@@ -22,7 +22,7 @@ import {
   requireImeRenderer,
   sealTerminalSequenceEndBoundary,
   startImeCapture,
-} from "./ime-visual-capture.mjs";
+} from "../../activation/ime-visual-capture.mjs";
 
 function testWithTimeout(name, body) {
   test(name, { timeout: 2000 }, body);

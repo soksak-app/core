@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getClosedProjectSnapshot } from "./project-close-snapshot.mjs";
+import { getClosedProjectSnapshot } from "../project-close-snapshot.mjs";
 
 test("a closed-project pull waits through a stale accepted snapshot for the exact current source", async () => {
   const source = { id: "plugin:files", surface: null, generation: 8 };

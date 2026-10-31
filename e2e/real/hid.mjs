@@ -1,7 +1,7 @@
 // The input tool of the real-input-tier window checks. The host diagnostics put events directly into a view, so they do not pass through the window server, the NSApp event dispatch,
 // the key window, the first responder or the menu key equivalents. This module sends HID events with CGEventPost and so uses the same
 // path as the user. The terminal that runs the checks needs the Accessibility permission. The module uses the pointer and the keyboard of the user, so
-// run it only in a run that the user approved, with pnpm -F @soksak/e2e verify:real.
+// run it only in a run that the user approved, with make e2e-real.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";

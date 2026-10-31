@@ -38,7 +38,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/rust-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs", "scripts/test/e2e-registry-tls.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
-  lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs"], { testLanguage: "js-ts" }),
+  lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library build and pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs", "scripts/test/native-offline.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
@@ -249,11 +249,11 @@ const FEATURE_LINKS = [
   {
     id: "F239-303-8",
     implementation: [
-      { file: "native/darwin/Makefile", symbol: "NATIVE_PRESENTATION_TESTS" },
-      { file: ".github/workflows/ci.yml", symbol: "test-without-presentation" },
+      { file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS" },
+      { file: ".github/workflows/ci.yml", symbol: "run: make -C core/native/darwin test" },
     ],
     tests: [
-      { file: "scripts/test/workflows.test.mjs", id: "the native tests that need display presentation run in no workflow and the others in the hosted job" },
+      { file: "scripts/test/workflows.test.mjs", id: "the hosted native job runs the native unit tests" },
     ],
     expected: "The native tests that need display presentation run in the local checks only and the others in the hosted job.",
     levels: ["unit"],
@@ -1109,8 +1109,8 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/input_reference_test.m", id: "wait-document completes at the expected document while marked text remains" },
       { file: "native/darwin/tests/input_reference_test.m", id: "the ready AppKit reference composes ㅎ" },
-      { file: "e2e/activation/ime-reference-steps.test.mjs", id: "reference keys wait for selected-source readiness on the newly focused client" },
-      { file: "e2e/activation/ime-reference-steps.test.mjs", id: "reference steps await a delayed document update while marked text remains" },
+      { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "reference keys wait for selected-source readiness on the newly focused client" },
+      { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "reference steps await a delayed document update while marked text remains" },
       { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceValidatesDocument" },
       { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentAcceptsExpectedDocument" },
       { file: "packages/host/wailsv3/src/diagnostics_input_reference_test.go", id: "TestInputReferenceWaitDocumentRequiresAString" },
@@ -1447,7 +1447,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       {
-        file: "e2e/activation/terminal-ime-document.test.mjs",
+        file: "e2e/test/activation/terminal-ime-document.test.mjs",
         id: "post-reference baseline accepts an unchanged prompt with fresh focus evidence"
       }
     ],
@@ -1485,7 +1485,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       {
-        file: "e2e/activation/ime-visual-capture.test.mjs",
+        file: "e2e/test/activation/ime-visual-capture.test.mjs",
         id: "visual proof preserves cadence measurements without a functional gap threshold"
       }
     ],
@@ -1546,7 +1546,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       {
-        file: "e2e/activation/terminal-ime-document.test.mjs",
+        file: "e2e/test/activation/terminal-ime-document.test.mjs",
         id: "terminal observation reads status pairs concurrently around the screen sample"
       }
     ],
@@ -1588,11 +1588,11 @@ const FEATURE_LINKS = [
     ],
     tests: [
       {
-        file: "e2e/activation/terminal-ime-document.test.mjs",
+        file: "e2e/test/activation/terminal-ime-document.test.mjs",
         id: "terminal observer stop releases each subscription once across repeated and concurrent calls"
       },
       {
-        file: "e2e/activation/terminal-ime-document.test.mjs",
+        file: "e2e/test/activation/terminal-ime-document.test.mjs",
         id: "terminal observer stop retries only subscriptions whose release did not succeed"
       },
       {
@@ -1632,8 +1632,8 @@ const FEATURE_LINKS = [
       { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function attachImeFrameIdentities(" },
     ],
     tests: [
-      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "IME capture does not start when renderer metadata is absent" },
-      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "display time differs" },
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "IME capture does not start when renderer metadata is absent" },
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "display time differs" },
     ],
     expected: "IME capture requires renderer metadata and opt-in identity capture, and joins each exact callback display time to its issued source identity.",
     levels: ["unit"],
@@ -1858,9 +1858,9 @@ const FEATURE_LINKS = [
       { file: "e2e/activation/ime-reference-steps.mjs", symbol: "export async function compareAppKitReference(" },
     ],
     tests: [
-      { file: "e2e/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input finishes each presentation before the next key" },
-      { file: "e2e/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input rejects lost reference focus before sending another key" },
-      { file: "e2e/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input rejects a stale intermediate document before the next key" },
+      { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input finishes each presentation before the next key" },
+      { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input rejects lost reference focus before sending another key" },
+      { file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input rejects a stale intermediate document before the next key" },
       { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
     ],
     expected: "Lifecycle reference input checks each expected document and focus before the next presentation checkpoint and preserves failures at their first input step.",
@@ -2919,7 +2919,7 @@ const FEATURE_LINKS = [
     id: "F0.5.9-3",
     implementation: [{ file: "packages/window-check/app.mjs", symbol: "acquireWindowCheckSlot" }],
     tests: [
-      { file: "e2e/app-contract.test.mjs", id: "window checks reject overlapping sessions that target the same application" },
+      { file: "e2e/test/app-contract.test.mjs", id: "window checks reject overlapping sessions that target the same application" },
       { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
       { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
       { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
@@ -3246,7 +3246,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "shutdown_waiters" },
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "CloseOwner" },
     ],
-    tests: [{ file: "e2e/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
+    tests: [{ file: "e2e/test/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
     expected: "Normal application quit acknowledges owned-session closure, stops the service, and removes its endpoint.",
     levels: ["application"],
   },
@@ -3255,7 +3255,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "Close" },
     ],
-    tests: [{ file: "e2e/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
+    tests: [{ file: "e2e/test/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
     expected: "Closing terminal tabs reaps their PTY children while retaining the shared terminal service.",
     levels: ["native", "application"],
   },
@@ -7415,8 +7415,8 @@ const FEATURE_LINKS = [
     id: "F239-47-12",
     implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata(" }],
     tests: [
-      { file: "e2e/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" },
-      { file: "e2e/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" },
+      { file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" },
+      { file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" },
     ],
     expected: "The visual calculator validates the producer screen.render metadata and its distinct capture pixel format, effective glyph colors, fractional geometry, and blink-off cursor representation.",
     levels: ["unit"],
@@ -7427,14 +7427,14 @@ const FEATURE_LINKS = [
       { file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function mapCaptureRaster(" },
       { file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function measureRenderedCell(" },
     ],
-    tests: [{ file: "e2e/activation/terminal-ime-visual.test.mjs", id: "raw glyph ink bounds preserve signed overhang and clip only to the raster" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "raw glyph ink bounds preserve signed overhang and clip only to the raster" }],
     expected: "Signed glyph and underline bounds retain their source coordinates, map through capture raster origin, and clip only to the raster while rejecting mismatched frame provenance.",
     levels: ["unit"],
   },
   {
     id: "F239-47-14",
     implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata(" }],
-    tests: [{ file: "e2e/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" }],
     expected: "Cursor rectangle and color metadata are required only when the producer draws the cursor, including normal and difference blend rules.",
     levels: ["unit"],
   },
@@ -7476,7 +7476,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-47-15",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalObserverStatusesMatch(" }],
-    tests: [{ file: "e2e/activation/terminal-ime-document.test.mjs", id: "a fresh compose and cursor update can use unchanged known PTY rows" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a fresh compose and cursor update can use unchanged known PTY rows" }],
     expected: "The terminal observer accepts a fresh semantic composition update against unchanged known PTY rows while checking the current cursor state.",
     levels: ["unit"],
   },
@@ -7484,8 +7484,8 @@ const FEATURE_LINKS = [
     id: "F239-47-16",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function startTerminalStatusObserver(" }],
     tests: [
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "a managed cursor until releases the observer's raw cursor watch" },
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "focus waits on the existing raw status stream after reference handoff" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a managed cursor until releases the observer's raw cursor watch" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "focus waits on the existing raw status stream after reference handoff" },
     ],
     expected: "The terminal status observer retains ownership of its raw status subscriptions while the consumer waits for cursor focus after the reference handoff.",
     levels: ["unit"],
@@ -7494,8 +7494,8 @@ const FEATURE_LINKS = [
     id: "F239-47-17",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus(" }],
     tests: [
-      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "indexes an advanced cursor frame against prior rows when identical rows suppress screen status" },
-      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "rejects future rows but reuses identical rows across a frame generation change" },
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an advanced cursor frame against prior rows when identical rows suppress screen status" },
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "rejects future rows but reuses identical rows across a frame generation change" },
     ],
     expected: "Visual status indexing associates a cursor frame with the valid preceding screen rows even when identical rows suppress a new screen event, and rejects future row state.",
     levels: ["unit"],
@@ -7504,8 +7504,8 @@ const FEATURE_LINKS = [
     id: "F239-47-18",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function selectCoherentTerminalObservation(" }],
     tests: [
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "returns the latest coherent reread and its accepted event slice" },
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "does not select a terminal observation before reread and presentation are coherent" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "returns the latest coherent reread and its accepted event slice" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "does not select a terminal observation before reread and presentation are coherent" },
     ],
     expected: "The selected terminal observation is the latest coherent reread, screen, region and accepted event slice; an incoherent earlier read is not returned.",
     levels: ["unit"],
@@ -7514,8 +7514,8 @@ const FEATURE_LINKS = [
     id: "F239-47-19",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function planVisualStage(" }],
     tests: [
-      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "stage planning accepts prior base rows with the exact current overlay frame" },
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "requires coherent base screen presentation without equating a later overlay frame" },
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "stage planning accepts prior base rows with the exact current overlay frame" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "requires coherent base screen presentation without equating a later overlay frame" },
     ],
     expected: "Visual stages retain the exact cursor overlay frame and use prior base-screen rows without requiring those distinct frames to have equal sequence identities.",
     levels: ["unit"],
@@ -7524,8 +7524,8 @@ const FEATURE_LINKS = [
     id: "F239-47-20",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function waitForTerminalStage(" }],
     tests: [
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "waits for the seven-vowel Backspace document after a coherent eight-vowel intermediate" },
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "keeps notifications that arrive after the first status wakes the input stage" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "waits for the seven-vowel Backspace document after a coherent eight-vowel intermediate" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "keeps notifications that arrive after the first status wakes the input stage" },
     ],
     expected: "The stage waits for the same-window AppKit document after each input instead of accepting an earlier coherent intermediate state.",
     levels: ["unit"],
@@ -7556,9 +7556,9 @@ const FEATURE_LINKS = [
     id: "F239-47-26",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalInputReceiptMatches(" }],
     tests: [
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "one terminal input request acknowledges a committed character key" },
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "input transaction validation checks every action and correlation identifier" },
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "native report and terminal request preserve actions, preedit and CID" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "one terminal input request acknowledges a committed character key" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "input transaction validation checks every action and correlation identifier" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "native report and terminal request preserve actions, preedit and CID" },
     ],
     expected: "The acceptance consumer matches current native input transactions and the single corresponding terminal request using ordered actions, final preedit and correlation identity.",
     levels: ["unit"],
@@ -7567,8 +7567,8 @@ const FEATURE_LINKS = [
     id: "F239-47-27",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "function strictAction(value, label)" }],
     tests: [
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "native and terminal transactions preserve the ordered focus action" },
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "focus-only transactions do not acknowledge a key from retained preedit" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "native and terminal transactions preserve the ordered focus action" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "focus-only transactions do not acknowledge a key from retained preedit" },
     ],
     expected: "The strict input transaction reader preserves ordered focus actions and does not count focus-only events as character-key receipts.",
     levels: ["unit"],
@@ -7583,7 +7583,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-47-29",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "function strictTraceSequence(value, label)" }],
-    tests: [{ file: "e2e/activation/terminal-ime-document.test.mjs", id: "zero-based input trace sequence keeps the native report before its terminal request" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "zero-based input trace sequence keeps the native report before its terminal request" }],
     expected: "The input trace accepts a zero-based native sequence followed by its later terminal request and rejects invalid or non-increasing sequence numbers.",
     levels: ["unit"],
   },
@@ -7665,7 +7665,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-47-31",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalStageEvents(events, stageOffset)" }],
-    tests: [{ file: "e2e/activation/terminal-ime-document.test.mjs", id: "a status notification delivered during a sample satisfies the sample's original event offset" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a status notification delivered during a sample satisfies the sample's original event offset" }],
     expected: "A status notification that arrives after the first event wakes a wait remains in the current physical-key stage using its original event offset.",
     levels: ["unit"],
   },
@@ -7673,8 +7673,8 @@ const FEATURE_LINKS = [
     id: "F239-47-35",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function initialCursorFrameMatchesScreen(cursor, screen)" }],
     tests: [
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "initial cursor baseline requires the accepted screen frame" },
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "initial cursor baseline accepts null render only for the accepted screen frame" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "initial cursor baseline requires the accepted screen frame" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "initial cursor baseline accepts null render only for the accepted screen frame" },
     ],
     expected: "The initial cursor matches the accepted screen frame exactly; null renderer metadata is allowed, and present renderer metadata must identify that same frame.",
     levels: ["unit"],
@@ -7683,8 +7683,8 @@ const FEATURE_LINKS = [
     id: "F239-60",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function observeTerminalBaseline" }],
     tests: [
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "the initial terminal baseline observes a frame advanced during its read" },
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "a failed initial baseline stops its observer and preserves the read error" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "the initial terminal baseline observes a frame advanced during its read" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a failed initial baseline stops its observer and preserves the read error" },
     ],
     expected: "The terminal observer is active before baseline reads can advance the frame, and a failed baseline read stops the observer while preserving its error.",
     levels: ["unit"],
@@ -7693,8 +7693,8 @@ const FEATURE_LINKS = [
     id: "F239-51",
     implementation: [{ file: "e2e/files-open-failure.mjs", symbol: "export function treeNodes(snapshot)" }],
     tests: [
-      { file: "e2e/files-open-failure.test.mjs", id: "the Files tree node lookup finds a nested path in its declared snapshot" },
-      { file: "e2e/files-open-failure.test.mjs", id: "file-open failure check reads the declared tree snapshot, not removed status values" },
+      { file: "e2e/test/files-open-failure.test.mjs", id: "the Files tree node lookup finds a nested path in its declared snapshot" },
+      { file: "e2e/test/files-open-failure.test.mjs", id: "file-open failure check reads the declared tree snapshot, not removed status values" },
     ],
     expected: "The Files open-failure consumer finds the nested selected path in the declared tree snapshot and does not read removed status values.",
     levels: ["unit"],
@@ -7703,8 +7703,8 @@ const FEATURE_LINKS = [
     id: "F239-52",
     implementation: [{ file: "e2e/project-close-snapshot.mjs", symbol: "export async function getClosedProjectSnapshot(" }],
     tests: [
-      { file: "e2e/project-close-snapshot.test.mjs", id: "a closed-project pull waits through a stale accepted snapshot for the exact current source" },
-      { file: "e2e/project-close-snapshot.test.mjs", id: "a closed-project pull rejects a source id that does not match the plugin host contract" },
+      { file: "e2e/test/project-close-snapshot.test.mjs", id: "a closed-project pull waits through a stale accepted snapshot for the exact current source" },
+      { file: "e2e/test/project-close-snapshot.test.mjs", id: "a closed-project pull rejects a source id that does not match the plugin host contract" },
     ],
     expected: "The project-close consumer pulls the declared Files status through the exact current plugin-host source and rejects a mismatched source before pulling.",
     levels: ["unit"],
@@ -7818,7 +7818,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-47-10",
     implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata" }],
-    tests: [{ file: "e2e/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" }],
     expected: "Renderer metadata is accepted only when its geometry and pixel layout belong to the measured frame.",
     levels: ["unit"],
   },
@@ -7975,8 +7975,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-303",
-    implementation: [{ file: ".github/workflows/ci.yml", symbol: "test-without-presentation" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the native tests that need display presentation run in no workflow and the others in the hosted job" }],
+    implementation: [{ file: ".github/workflows/ci.yml", symbol: "run: make -C core/native/darwin test" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the hosted native job runs the native unit tests" }],
     expected: "The native-darwin job runs every native test that a hosted runner can run, and the presentation tests run in the local checks.",
     levels: ["unit"],
   },
@@ -8190,7 +8190,7 @@ const FEATURE_LINKS = [
   {
     id: "F298-2",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2]" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "no workflow runs an end-to-end check" }],
+    tests: [{ file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" }],
     expected: "No workflow runs an end-to-end check, and the release publishes after the checks, the gate and the two host builds succeed.",
     levels: ["unit"],
   },
@@ -8202,6 +8202,23 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/display.test.mjs", id: "a recording request is sent whatever the environment of the run holds" },
     ],
     expected: "The harness has no path for a run without a display or a person, and it sends every recording request.",
+    levels: ["unit"],
+  },
+  {
+    id: "F298-5",
+    implementation: [
+      { file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS = " },
+      { file: "Makefile", symbol: "e2e: docs-check e2e-check exposure-check" },
+      { file: "e2e/package.json", symbol: "\"test\": \"node --test test/\"" },
+    ],
+    tests: [
+      { file: "scripts/test/test-kinds.test.mjs", id: "native unit targets run no end-to-end case and native end-to-end targets carry the e2e prefix" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "the root make targets are the only entry points of the window checks" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "the test script of the e2e package runs only its unit test folder" },
+      { file: "scripts/test/workflows.test.mjs", id: "the hosted native job runs the native unit tests" },
+      { file: "scripts/test/e2e-host-parity.test.mjs", id: "a window-check file that does not run both adapters is an error whatever its name" },
+    ],
+    expected: "The name of a make target decides the kind of its checks: test runs unit tests only and a target whose name starts with e2e runs end-to-end checks.",
     levels: ["unit"],
   },
   {
@@ -8331,28 +8348,28 @@ const FEATURE_LINKS = [
   {
     id: "F239-98-1-1",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
-    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
     expected: "Visual proof persistence requires complete cadence evidence and records measured outcomes before rejection.",
     levels: ["unit"],
   },
   {
     id: "F239-98-1",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
-    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
     expected: "Complete visual results and cadence measurements are persisted before incomplete functional proof is rejected.",
     levels: ["unit"],
   },
   {
     id: "F239-98-2",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus" }],
-    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "visual indexing projects rows-only screen status without inventing a screen frame" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual indexing projects rows-only screen status without inventing a screen frame" }],
     expected: "Visual input uses prior rows-only terminal screen status without inventing a screen frame identity.",
     levels: ["unit"],
   },
   {
     id: "F239-98-3",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function semanticRasterColorSpace(name)" }],
-    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "source manifest loads only digest-verified frame-bound rasters" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "source manifest loads only digest-verified frame-bound rasters" }],
     expected: "The retained-source consumer maps the emitted CoreGraphics sRGB name to the semantic sRGB label and rejects unsupported names without changing raster bytes.",
     levels: ["unit"],
   },
@@ -8501,8 +8518,8 @@ const FEATURE_LINKS = [
     id: "F239-134",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexAcceptedFrameTrace(" }],
     tests: [
-      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" },
-      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "joins repeated screen messages to every exact accepted native frame tuple" },
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" },
+      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "joins repeated screen messages to every exact accepted native frame tuple" },
     ],
     expected: "Visual screen records join only to accepted native frame tuples with exact trace and hash identity.",
     levels: ["unit"],
@@ -8538,8 +8555,8 @@ const FEATURE_LINKS = [
     id: "F239-141",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "async function readObservationBatch(" }],
     tests: [
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "terminal observation reads status pairs concurrently around the screen sample" },
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "terminal observation reports every failed read in each concurrent phase" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "terminal observation reads status pairs concurrently around the screen sample" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "terminal observation reports every failed read in each concurrent phase" },
     ],
     expected: "Terminal observation reads each status pair concurrently in phase order and reports every failed read.",
     levels: ["unit"],
@@ -8602,7 +8619,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-151",
     implementation: [{ file: "e2e/activation/ime-reference-steps.mjs", symbol: "export async function runReferenceSteps(" }],
-    tests: [{ file: "e2e/activation/ime-reference-steps.test.mjs", id: "the next AppKit reference key waits for the prior presentation checkpoint" }],
+    tests: [{ file: "e2e/test/activation/ime-reference-steps.test.mjs", id: "the next AppKit reference key waits for the prior presentation checkpoint" }],
     expected: "Each reference key waits for the preceding document check and window presentation checkpoint.",
     levels: ["unit"],
   },
@@ -8650,8 +8667,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-158",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.test.mjs", symbol: "@capture-fixture/sidecar" }],
-    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" }],
+    implementation: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", symbol: "@capture-fixture/sidecar" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" }],
     expected: "Consumer capture fixtures retain wire behavior without naming a workspace sidecar implementation.",
     levels: ["unit"],
   },
@@ -8912,7 +8929,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-191",
-    implementation: [{ file: "native/darwin/Makefile", symbol: "test-activation:" }],
+    implementation: [{ file: "native/darwin/Makefile", symbol: "e2e-activation:" }],
     tests: [{ file: "scripts/test/native-tests.test.mjs", id: "activation target builds and runs its cases through the native test runner" }],
     expected: "Activation cases build their declared executables and use the sequential bounded native runner without changing their order.",
     levels: ["unit"],
@@ -9074,7 +9091,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-152",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalInputBaselineAfterReference(" }],
-    tests: [{ file: "e2e/activation/terminal-ime-document.test.mjs", id: "the first terminal key compares against the prompt redrawn after reference focus" }],
+    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "the first terminal key compares against the prompt redrawn after reference focus" }],
     expected: "The terminal observer validates and uses the post-reference prompt baseline while retaining strict per-key checks.",
     levels: ["unit"],
   },
@@ -9092,7 +9109,7 @@ const FEATURE_LINKS = [
     id: "F239-47-2",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function visibleInputBeforeCursor(" }],
     tests: [
-      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "reconstructs committed screen text plus only the current marked buffer" },
+      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "reconstructs committed screen text plus only the current marked buffer" },
       { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
     ],
     expected: "Each Hangul and Backspace input matches its reference document and exact-frame visual state independently of the recording quality result.",
@@ -9101,7 +9118,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-98-4",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function evaluateTagScopedStage(" }],
-    tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],
+    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],
     expected: "Tag-scoped visual proof evaluates the exact issued target despite unrelated incomplete source state.",
     levels: ["unit"],
   },

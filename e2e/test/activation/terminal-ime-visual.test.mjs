@@ -8,14 +8,14 @@ import {
   measureRenderedCell,
   rasterizeCellBounds,
   validateRenderMetadata,
-} from "./terminal-ime-visual.mjs";
+} from "../../activation/terminal-ime-visual.mjs";
 
 function testWithTimeout(name, body) {
   test(name, { timeout: 2000 }, body);
 }
 
-const screenRenderFixture = JSON.parse(readFileSync(new URL("./fixtures/screen-render.json", import.meta.url), "utf8"));
-const overlayRenderFixture = JSON.parse(readFileSync(new URL("./fixtures/screen-render-overlay.json", import.meta.url), "utf8"));
+const screenRenderFixture = JSON.parse(readFileSync(new URL("../../activation/fixtures/screen-render.json", import.meta.url), "utf8"));
+const overlayRenderFixture = JSON.parse(readFileSync(new URL("../../activation/fixtures/screen-render-overlay.json", import.meta.url), "utf8"));
 
 function renderFixture({ grapheme = "ㅏ", foreground = "#000000", background = "#ffffff",
   bounds = { x: 1.25, y: 1.25, width: 1.5, height: 2 }, underlineRect = { x: 0, y: 5, width: 4, height: 1 },

@@ -1,6 +1,6 @@
 // A person operates the save panel of the debug view, which the native input of a check cannot reach: the panel is not
 // the key window of the application that the input names. Each test opens the panel and waits for the person; the
-// instruction is in the diagnostics of the run. Run it with `pnpm -F @soksak/e2e verify:person` while a person is at the
+// instruction is in the diagnostics of the run. Run it with `make e2e-person` while a person is at the
 // machine (docs/operations/examples.md).
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, rmSync } from "node:fs";

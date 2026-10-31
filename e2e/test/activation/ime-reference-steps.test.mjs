@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runReferenceSteps, compareAppKitReference } from "./ime-reference-steps.mjs";
+import { runReferenceSteps, compareAppKitReference } from "../../activation/ime-reference-steps.mjs";
 
 test("the next AppKit reference key waits for the prior presentation checkpoint", { timeout: 5000 }, async () => {
   let releasePresentation;

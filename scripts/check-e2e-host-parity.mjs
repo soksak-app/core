@@ -1,14 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+// The window checks of the e2e folder; the unit tests of their helpers are in e2e/test/ (docs/operations/examples.md#test-kinds).
 const ROOT = new URL("../e2e/", import.meta.url);
-const UNIT_ONLY = new Map([
-  ["app-contract.test.mjs", "endpoint freshness is a client-side unit contract"],
-  ["composition-measurement.test.mjs", "pixel and gesture measurement helpers are host-independent"],
-  ["files-open-failure.test.mjs", "tree-node lookup and failure-row helpers consume declared status fixtures without opening an application"],
-  ["project-close-snapshot.test.mjs", "plugin snapshot watermark helpers consume declared status fixtures without opening an application"],
-  ["terminal-processes.test.mjs", "process-row parsing is host-independent"],
-]);
 
 export function auditE2EHostParity(
   files = readdirSync(ROOT).filter((file) => file.endsWith(".test.mjs")),
@@ -16,14 +10,8 @@ export function auditE2EHostParity(
 ) {
   const errors = [];
   const shared = [];
-  const unitOnly = [];
   for (const file of files.sort()) {
     const source = read(file);
-    const reason = UNIT_ONLY.get(file);
-    if (reason) {
-      unitOnly.push({ file, reason });
-      continue;
-    }
     if (!/import\s*\{[^}]*\bAPPS\b[^}]*\}\s*from\s+["']@soksak\/window-check\/app\.mjs["']/.test(source)) {
       errors.push(`${file}: app behavior test does not import APPS`);
       continue;
@@ -34,7 +22,7 @@ export function auditE2EHostParity(
     }
     shared.push(file);
   }
-  return { errors, shared, unitOnly };
+  return { errors, shared };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -44,6 +32,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     for (const error of result.errors) console.error(`- ${error}`);
     process.exitCode = 1;
   } else {
-    console.log(`E2E host parity audit passed: ${result.shared.length} shared app suites, ${result.unitOnly.length} explicit unit suites`);
+    console.log(`E2E host parity audit passed: ${result.shared.length} shared app suites`);
   }
 }

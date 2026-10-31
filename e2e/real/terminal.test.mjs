@@ -1,5 +1,5 @@
 // Real-input-tier terminal check: selection, copy, paste and wheel of the terminal go through the path of a person's mouse and keyboard (window server, key window, menu key equivalents).
-// Run it only with `pnpm -F @soksak/e2e verify:real` in a run that the user approved.
+// Run it only with `make e2e-real` in a run that the user approved.
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

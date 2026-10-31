@@ -115,7 +115,7 @@ Window checks are end-to-end checks of the applications with installed plugins. 
 - Never activate or focus a window. Capture with `diagnostics.capture.still`, and record with `diagnostics.capture.start` and `diagnostics.capture.stop`. Inspect images at original resolution. An image is observation, not a pass result.
 - For visual or time behavior, record the whole gesture and derive the measured frame gaps and coordinates as tracked evidence.
 - Every application error during a check fails it unless the check declares it with `expectError`.
-- The input method checks (`make -C native/darwin test-activation`, `pnpm -F @soksak/e2e verify:activation`) run only with the person's approval.
+- The input method checks (`make e2e-activation`) run only with the person's approval.
 - Time limits follow [AGENTS.md](../../AGENTS.md) (Verification).
 
 ### Decisions that need a review

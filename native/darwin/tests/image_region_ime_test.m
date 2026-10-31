@@ -2,7 +2,7 @@
 //
 // The input method handles only the active input context of the key window, so this check activates the application and takes the focus,
 // and during the check switches the input source between English and Korean 2-set. At the end it restores the previous input source and the previous application.
-// It is not part of make test and runs only by make test-activation. It fails if the Korean 2-set input source is not enabled.
+// It is not part of make test and runs only by make e2e-activation. It fails if the Korean 2-set input source is not enabled.
 // Keys are sent through the same -[NSWindow sendEvent:] path as the endpoint injector. The check first confirms that the AppKit text view control produces
 // the correct document through this path, records the callbacks of a minimal input client without a document as measured values,
 // and then checks that the image region commits exactly the order reported by the user (Hangul after ddd).
@@ -553,7 +553,7 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
             @([controlNative count]), @([regionNative count])]);
 }
 
-// tests/support/no_activation.m: this check activates the application in make test-activation.
+// tests/support/no_activation.m: this check activates the application in make e2e-activation.
 void sp_test_declare_activation(void);
 
 static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {

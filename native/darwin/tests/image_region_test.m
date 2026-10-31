@@ -244,7 +244,7 @@ void sp_test_declare_activation(void);
 
 int main(int argc, char **argv) { @autoreleasepool {
     // activation activates the application and checks whether a press in the OS event queue makes the web view the first responder.
-    // Used only by make test-activation.
+    // Used only by make e2e-activation.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
     // The records of the input method are info and debug events, which the default policy refuses (docs/spec/logging.md#policy):

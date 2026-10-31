@@ -23,7 +23,7 @@ import {
   waitForStateEvent,
   waitForTerminalStage,
   terminalStageEvents,
-} from "./terminal-ime-document.mjs";
+} from "../../activation/terminal-ime-document.mjs";
 
 function screen(rows) {
   return { frame: { generation: 2, raster: 3, sequence: 4 }, rows };

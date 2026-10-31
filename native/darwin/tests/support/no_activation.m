@@ -4,7 +4,7 @@
 #import <unistd.h>
 
 // Checks of make test do not activate the application. Every check links this file, and a check fails at exit if the
-// process is active. Checks of make test-activation call sp_test_declare_activation before they activate.
+// process is active. Checks of make e2e-activation call sp_test_declare_activation before they activate.
 void sp_test_declare_activation(void);
 
 static bool declared;

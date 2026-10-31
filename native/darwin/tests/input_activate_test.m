@@ -1,7 +1,7 @@
 // Checks whether, after the window is activated, a move without a button updates the hover of the page.
 //
 // This check activates the application and so takes the user's focus. It is not part of make test and
-// runs only by make test-activation. The move is delivered directly to the tracking area owner, so it is independent of the real pointer position.
+// runs only by make e2e-activation. The move is delivered directly to the tracking area owner, so it is independent of the real pointer position.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
 #import "private/webkit.h"
@@ -143,7 +143,7 @@ static void checkFailures(void) {
     for (NSWindow *window in @[pending, hiddenWindow, other, lost, unkeyable]) [window close];
 }
 
-// tests/support/no_activation.m: this check activates the application in make test-activation.
+// tests/support/no_activation.m: this check activates the application in make e2e-activation.
 void sp_test_declare_activation(void);
 
 int main(void) { @autoreleasepool {

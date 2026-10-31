@@ -115,7 +115,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 - 창을 활성화하거나 focus하지 않는다. `diagnostics.capture.still`로 캡처하고 `diagnostics.capture.start`와 `diagnostics.capture.stop`으로 녹화한다. 이미지는 원래 해상도로 본다. 이미지는 관찰이지 통과 결과가 아니다.
 - 화면이나 시간 동작은 gesture 전체를 녹화하고, 잰 frame 간격과 좌표를 추적되는 증거로 만든다.
 - 검사 중 application 오류는 검사가 `expectError`로 선언하지 않으면 모두 실패다.
-- 입력기 검사(`make -C native/darwin test-activation`, `pnpm -F @soksak/e2e verify:activation`)는 사람의 승인을 받고만 돌린다.
+- 입력기 검사(`make e2e-activation`)는 사람의 승인을 받고만 돌린다.
 - 시간 한도는 [AGENTS.md](../../AGENTS.ko.md)(검증)를 따른다.
 
 ### 검증이 필요한 결정

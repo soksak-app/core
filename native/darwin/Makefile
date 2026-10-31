@@ -10,7 +10,7 @@
 #                         title bar height display inside a layout transaction, the start transaction of a re-read, display wait,
 #                         webview focus, view focus, document region, image region, release of a closed window, and window object count.
 #                         It does not activate the application
-#   make test-activation  runs the hover check after window activation, the overlapping webview input check (baseline run and
+#   make e2e-activation  runs the hover check after window activation, the overlapping webview input check (baseline run and
 #                         registered run), the web inspector check, the OS event queue click and key check of the document region,
 #                         the Korean input method composition check of the image region, and the activated view-focus page/key check.
 #                         It activates the application and takes the focus
@@ -69,7 +69,7 @@
 #                         at 33 ms; the baseline interval and first-pulse response latency are not gated
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
-#   make repeat-activation-backspace COUNT=<n>
+#   make e2e-activation-backspace-repeat COUNT=<n>
 #                         runs the focused ABC-baseline eight-k, Backspace and Space activation target in separate processes, stopping at the first failure
 #   make test-ime-source-restoration
 #                         checks the input-source baseline setup and cleanup ordering with controlled callbacks; it does not activate
@@ -112,7 +112,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: all fetch capture-text-path test test-without-presentation test-presentation test-capture-frame-identity test-capture-stop-intake test-activation test-input-reference-readiness test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
+.PHONY: all fetch capture-text-path test e2e test-capture-frame-identity test-capture-stop-intake e2e-activation e2e-input-reference-readiness e2e-view-focus-restore e2e-activation-backspace e2e-activation-backspace-repeat build-ime-activation-target test-ime-cli e2e-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
 
 all: fetch $(LIBRARY) $(PKGCONFIG)
 
@@ -371,10 +371,9 @@ NATIVE_TESTS = observe_test \
   notifications_test \
   notifications_test.app/Contents/MacOS/notifications_test,--bundled
 
-# The native tests that need the presentation times and the ScreenCaptureKit frames of a display. The virtual machine of
-# a hosted runner reports no display, so CI runs them in the job of the desktop runner
-# (docs/operations/examples.md#continuous-integration), and test runs them after NATIVE_TESTS.
-NATIVE_PRESENTATION_TESTS = window_titlebar_layout_test \
+# The native end-to-end tests: they need the presentation times and the ScreenCaptureKit frames of a display, so they run only
+# locally through e2e (docs/operations/examples.md#test-kinds). test runs the unit tests of NATIVE_TESTS.
+NATIVE_E2E_TESTS = window_titlebar_layout_test \
   window_titlebar_reload_test \
   surface_layout_test \
   capture_presentation_test \
@@ -382,19 +381,16 @@ NATIVE_PRESENTATION_TESTS = window_titlebar_layout_test \
 
 comma := ,
 executables = $(foreach entry,$(1),$(firstword $(subst $(comma), ,$(entry))))
-NATIVE_TEST_EXECUTABLES := $(call executables,$(NATIVE_TESTS) $(NATIVE_PRESENTATION_TESTS))
+NATIVE_TEST_EXECUTABLES := $(call executables,$(NATIVE_TESTS))
 NATIVE_TEST_RUNNER := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../scripts/native-tests.mjs)
 # The shared cases of the view page insertion, which the plugin-api test and the native tests run (docs/spec/plugin-processes.md, rule 4).
 VIEW_PAGE_CASES := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../packages/plugin-api/contract/view-page.json)
 
 test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
-	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS) $(NATIVE_PRESENTATION_TESTS)
-
-test-without-presentation: $(addprefix $(BUILD)/,$(call executables,$(NATIVE_TESTS)))
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS)
 
-test-presentation: $(addprefix $(BUILD)/,$(call executables,$(NATIVE_PRESENTATION_TESTS)))
-	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_PRESENTATION_TESTS)
+e2e: $(addprefix $(BUILD)/,$(call executables,$(NATIVE_E2E_TESTS)))
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_E2E_TESTS)
 
 benchmark-webview-resize-cadence: $(BUILD)/webview_resize_cadence_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) webview_resize_cadence_test
@@ -408,20 +404,20 @@ test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test
 
-test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test $(BUILD)/view_focus_test
+e2e-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_test $(BUILD)/image_region_ime_test $(BUILD)/view_focus_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) input_activate_test webview_inspector_test window_fullscreen_test webview_input_test,--baseline webview_input_test document_view_test,--activation image_region_test,--activation image_region_ime_test view_focus_test,--activation
 
 # Runs only the focused AppKit reference input-context readiness case and restores the outer input source and application.
-test-input-reference-readiness: $(BUILD)/input_reference_test
+e2e-input-reference-readiness: $(BUILD)/input_reference_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) input_reference_test,--activation-readiness
 
-test-view-focus-restore: $(BUILD)/view_focus_test
+e2e-view-focus-restore: $(BUILD)/view_focus_test
 	@$(BUILD)/view_focus_test --frontmost-restore-test
 
 # Focused Korean IME comparison. This records the outer input source and frontmost application, establishes ABC,
 # activates the test application, selects Korean 2-set, and sends eight k keys, Backspace, and Space to an AppKit reference and an image region.
 # Run only with approval for an activation-tier input check.
-test-activation-backspace: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
+e2e-activation-backspace: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
 	@SOKSAK_IME_SOURCE_PROBE="$(BUILD)/ime_source_probe" node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) image_region_ime_test,--backspace-trace-abc-baseline
 
 # Build the activation executable without running it; the absolute prerequisite is the only supported build target.
@@ -434,8 +430,8 @@ $(BUILD)/ime_cli_test: tests/ime_cli_test.m tests/support/ime_cli.m tests/suppor
 	@clang -fblocks -Wall -Werror -O2 -mmacosx-version-min=14.4 -I$(CURDIR)/tests $< tests/support/ime_cli.m -o $@
 
 # Repeat the focused activation variant and preserve each child output plus an independent source read after process exit.
-repeat-activation-backspace: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
-	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-activation-backspace requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
+e2e-activation-backspace-repeat: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
+	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "e2e-activation-backspace-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@set -eu; \
 	  evidence_root=$$(mktemp -d "$${TMPDIR:-/tmp}/soksak-F239-47-8-activation-repeat.XXXXXX"); \
 	  echo "EVIDENCE: $$evidence_root"; \
@@ -458,7 +454,7 @@ repeat-activation-backspace: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_
 	  i=$$((i + 1)); \
 	done; echo "PASS: image_region_ime_test --backspace-trace-abc-baseline passed $(COUNT) consecutive runs"
 
-test-activation-backspace-reference: $(BUILD)/ime_reference_state_test
+e2e-activation-backspace-reference: $(BUILD)/ime_reference_state_test
 	@$(BUILD)/ime_reference_state_test
 
 test-ime-source-restoration: $(BUILD)/ime_source_restore_test
@@ -489,7 +485,7 @@ repeat-suite: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-suite requires a positive COUNT" >&2; exit 2;; esac
 	@i=1; while [ $$i -le $(COUNT) ]; do \
 	  echo "START: test suite run $$i of $(COUNT)"; \
-	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS) $(NATIVE_PRESENTATION_TESTS) || { echo "FAIL: test suite run $$i of $(COUNT) ($$(uptime))" >&2; exit 1; }; \
+	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS) || { echo "FAIL: test suite run $$i of $(COUNT) ($$(uptime))" >&2; exit 1; }; \
 	  i=$$((i + 1)); \
 	done; echo "PASS: test suite passed $(COUNT) consecutive runs"
 

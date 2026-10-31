@@ -39,7 +39,7 @@ static NSString *describe(NSRect rect) {
     return [NSString stringWithFormat:@"%.0f,%.0f %.0fx%.0f", rect.origin.x, rect.origin.y, rect.size.width, rect.size.height];
 }
 
-// tests/support/no_activation.m: this check activates the app in make test-activation.
+// tests/support/no_activation.m: this check activates the app in make e2e-activation.
 void sp_test_declare_activation(void);
 
 int main(void) { @autoreleasepool {

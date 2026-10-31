@@ -276,7 +276,7 @@ DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "
 .PHONY: native-darwin native-darwin-fetch registry registry-install install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 frontend-wailsv3-core frontend-tauriv2-core host-test-wailsv3 host-test-tauriv2 host-contract-check release-check-wailsv3 release-check-tauriv2 rust-format-check rust-clippy-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
-        examples-verify examples-size
+        e2e e2e-activation e2e-real e2e-person examples-size
 
 # rustup installs cargo here and adds the path to the shell profile. The shell of make
 # does not read the profile.
@@ -474,8 +474,23 @@ release-check-tauriv2: tauriv2-build-release
 	@node scripts/check-release.mjs --host tauriv2 --macos-minimum $(MACOS_MINIMUM) --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
 
 # Checks the windows of already running apps in sequence through the local endpoint. The harness does not start the apps.
-examples-verify: docs-check e2e-check exposure-check
-	@pnpm -F @soksak/e2e run verify
+# The end-to-end checks (docs/operations/examples.md#test-kinds): the window checks of the running applications and the native
+# end-to-end tests. They need a display, so they run only locally. e2e-activation runs the activation tier and e2e-real the
+# real-input tier, which a person approves because they activate the applications and change the input source; e2e-person runs
+# the checks that a person operates at the machine.
+e2e: docs-check e2e-check exposure-check
+	@node scripts/node-tests.mjs --script verify --concurrency 1 --timeout 600 $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
+	@$(MAKE) -C native/darwin e2e
+
+e2e-activation:
+	@node scripts/node-tests.mjs --script verify:activation --concurrency 1 --timeout 600
+	@$(MAKE) -C native/darwin e2e-activation
+
+e2e-real:
+	@node scripts/node-tests.mjs --script verify:real --concurrency 1 --timeout 600
+
+e2e-person:
+	@node scripts/node-tests.mjs --script verify:person --concurrency 1 --timeout 600
 
 # The two-profile builds of the two apps and their sizes.
 examples-size: tauriv2-build tauriv2-build-release wailsv3-build-release wailsv3-build

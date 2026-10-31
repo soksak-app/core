@@ -19,12 +19,11 @@ function fake(directory, relative, body) {
   return path;
 }
 
-// The entries of the suite lists NATIVE_TESTS and NATIVE_PRESENTATION_TESTS in the Makefile, which repeat-suite runs,
-// as `<executable>[,<argument>...]`.
+// The entries of the unit suite list NATIVE_TESTS in the Makefile, which repeat-suite runs, as `<executable>[,<argument>...]`.
 function nativeTestEntries() {
   const lines = readFileSync(join(native, 'Makefile'), 'utf8').split('\n');
   const entries = [];
-  for (const list of ['NATIVE_TESTS = ', 'NATIVE_PRESENTATION_TESTS = ']) {
+  for (const list of ['NATIVE_TESTS = ']) {
     const start = lines.findIndex((line) => line.startsWith(list));
     assert.notEqual(start, -1, `the Makefile has no ${list.trim()} list`);
     for (let i = start; i < lines.length; i += 1) {
@@ -54,12 +53,12 @@ test('make repeat names the native test of each run, reports its result and elap
   assert.match(result.stderr, /FAIL: fake_test run 2 of 3; /, result.stdout + result.stderr);
 });
 
-test('repeat-activation-backspace forwards its focused variant and stops at its first failed run', (t) => {
+test('e2e-activation-backspace-repeat forwards its focused variant and stops at its first failed run', (t) => {
   const build = mkdtempSync(join(tmpdir(), 'soksak-native-activation-repeat-'));
   t.after(() => rmSync(build, { recursive: true }));
   const executable = fake(build, 'image_region_ime_test', 'counter="$0.count"; n=$(cat "$counter" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$counter"; echo "arg:$1 run:$n"; [ "$1" = "--backspace-trace-abc-baseline" ] && [ "$n" -lt 2 ]');
   const probe = fake(build, 'ime_source_probe', 'echo \'{"source":"com.apple.inputmethod.Korean.2SetKorean","frontmostPID":100,"processPID":200}\'');
-  const result = spawnSync('make', ['-C', native, 'repeat-activation-backspace', 'COUNT=3', `BUILD=${build}`, '-o', executable, '-o', probe], {
+  const result = spawnSync('make', ['-C', native, 'e2e-activation-backspace-repeat', 'COUNT=3', `BUILD=${build}`, '-o', executable, '-o', probe], {
     encoding: 'utf8', timeout: 60000,
   });
   assert.match(result.stdout, /^RUN  image_region_ime_test --backspace-trace-abc-baseline \(1 running, limit 120\.000s\)$/m, result.stdout + result.stderr);

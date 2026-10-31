@@ -1,7 +1,7 @@
 // Real-input-tier window check: checks that the input tool sends events by the same path as the user.
 //
 // This tier sends HID events with CGEventPost, so it uses the pointer and the keyboard of the user and activates the application. It is not part of the default window checks,
-// and runs only in a run that the user approved, with pnpm -F @soksak/e2e verify:real.
+// and runs only in a run that the user approved, with make e2e-real.
 import assert from "node:assert/strict";
 import test from "node:test";
 

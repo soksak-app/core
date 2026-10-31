@@ -5,7 +5,7 @@
 // and ends the composition when the input source changes. The expected committed string is the marked text that the input method reported last. This check
 // activates the app and takes the user's focus, switches the input source through diagnostics.input.source of the diagnostic build,
 // and restores the previous input source at the end. It fails when the input source is not enabled. A run that the user approved runs it
-// only through pnpm -F @soksak/e2e verify:activation.
+// only through make e2e-activation.
 import assert from "node:assert/strict";
 import test from "node:test";
 

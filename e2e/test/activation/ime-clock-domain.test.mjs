@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { capturesByInputStage } from "./ime-visual-capture.mjs";
+import { capturesByInputStage } from "../../activation/ime-visual-capture.mjs";
 
 test("capture stage attribution refuses a mismatched explicit clock domain", { timeout: 2000 }, () => {
   const callback = { displayTime: "1000000000", machTimebaseNumerator: 1, machTimebaseDenominator: 1,
