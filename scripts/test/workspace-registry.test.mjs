@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-import { checkDeclaration, installFolders, packPlugin, pluginEntry, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
+import { checkDeclaration, checkPluginId, installFolders, packPlugin, pluginEntry, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
 
 const SHA = "a".repeat(64);
 
@@ -39,27 +39,18 @@ test("registry entries carry the declarations of package.json and the file URL a
 test("the workspace registry declaration names sibling folders and is checked before anything is built", { timeout: 1000 }, () => {
   const declaration = checkDeclaration(JSON.parse(readFileSync(new URL("../workspace-registry.json", import.meta.url), "utf8")));
   assert.ok(declaration.plugins.length > 0);
-  const base = { plugins: ["../plugins/a"], sidecars: [{ repository: "../sidecars/a", folder: "." }], packs: [] };
+  const base = { plugins: [{ repository: "../plugins/a", id: "a" }], sidecars: [{ repository: "../sidecars/a", folder: "." }], packs: [] };
   assert.deepEqual(checkDeclaration(base), base);
   for (const [change, message] of [
-    [{ plugins: ["/abs/a"] }, /plugins must be relative folders/],
-    [{ plugins: ["../plugins/a", "../plugins/a"] }, /a plugin folder is repeated/],
+    [{ plugins: ["../plugins/a"] }, /plugins must be \{ repository, id \} with a relative folder and a plugin id/],
+    [{ plugins: [{ repository: "/abs/a", id: "a" }] }, /plugins must be \{ repository, id \} with a relative folder and a plugin id/],
+    [{ plugins: [{ repository: "../plugins/a", id: "" }] }, /plugins must be \{ repository, id \} with a relative folder and a plugin id/],
+    [{ plugins: [{ repository: "../plugins/a", id: "a" }, { repository: "../plugins/a", id: "b" }] }, /a plugin folder is repeated/],
+    [{ plugins: [{ repository: "../plugins/a", id: "a" }, { repository: "../plugins/b", id: "a" }] }, /a plugin id is repeated/],
     [{ sidecars: [{ repository: "../sidecars/a" }] }, /sidecars must be \{ repository, folder \}/],
     [{ packs: {} }, /packs must be a list/],
     [{ extra: 1 }, /expected the keys packs, plugins and sidecars/],
   ]) assert.throws(() => checkDeclaration({ ...base, ...change }), message);
-});
-
-test("the workflows check out every repository that the workspace registry declaration names", { timeout: 1000 }, () => {
-  const declaration = JSON.parse(readFileSync(new URL("../workspace-registry.json", import.meta.url), "utf8"));
-  const folders = [...declaration.plugins, ...declaration.sidecars.map((sidecar) => sidecar.repository)]
-    .map((folder) => folder.replace(/^\.\.\//, ""));
-  for (const workflow of ["ci.yml"]) {
-    const text = readFileSync(new URL(`../../.github/workflows/${workflow}`, import.meta.url), "utf8");
-    const paths = new Set([...text.matchAll(/^\s+path: (\S+)$/gm)].map((match) => match[1]));
-    const missing = folders.filter((folder) => !paths.has(folder));
-    assert.deepEqual(missing, [], `${workflow} checks out no repository into ${missing.join(", ")}`);
-  }
 });
 
 test("the registry releases every declared sidecar, also one that no workspace plugin uses", { timeout: 1000 }, () => {
@@ -72,7 +63,7 @@ test("the registry releases every declared sidecar, also one that no workspace p
 
 test("the repository table names the plugins that the workspace registry declares", { timeout: 1000 }, () => {
   const declaration = JSON.parse(readFileSync(new URL("../workspace-registry.json", import.meta.url), "utf8"));
-  const declared = declaration.plugins.map((folder) => folder.replace(/^\.\.\/plugins\//, "")).sort();
+  const declared = declaration.plugins.map((plugin) => plugin.repository.replace(/^\.\.\/plugins\//, "")).sort();
   const spec = readFileSync(new URL("../../docs/spec/plugins.md", import.meta.url), "utf8");
   const sentence = spec.match(/The plugins are ([^;|]+?)[;|]/)?.[1] ?? "";
   const listed = [...sentence.matchAll(/`([^`]+)`/g)].map((match) => match[1]).sort();
@@ -100,7 +91,7 @@ test("a plugin is packed by the make pack target of its repository with the sok 
 });
 
 test("the installation stage runs make install once in every declared repository", { timeout: 1000 }, () => {
-  const declaration = { plugins: ["../plugins/a", "../plugins/b"],
+  const declaration = { plugins: [{ repository: "../plugins/a", id: "a" }, { repository: "../plugins/b", id: "b" }],
     sidecars: [{ repository: "../sidecars/s", folder: "one" }, { repository: "../sidecars/s", folder: "two" }], packs: [] };
   assert.deepEqual(installFolders(declaration, (relative) => `/work/${relative.slice(3)}`),
     ["/work/plugins/a", "/work/plugins/b", "/work/sidecars/s"]);
@@ -115,4 +106,12 @@ test("a relative output folder and sok executable of a pack resolve from the wor
   const pack = packPlugin(relative(process.cwd(), "/opt/sok"), repository, relative(process.cwd(), out), false);
   assert.equal(pack.release, join(out, "probe-0.0.1.tgz"));
   assert.equal(readFileSync(pack.release, "utf8"), "/opt/sok");
+});
+
+// make boundaries reads the plugin ids from the declaration, so the registry build, which reads each plugin.json, rejects a
+// declaration that names another id.
+test("a plugin.json that names another id than its declaration fails the registry build with the file and both values", { timeout: 1000 }, () => {
+  assert.equal(checkPluginId({ repository: "../plugins/a", id: "a" }, { id: "a" }, "/work/plugins/a/plugin.json"), undefined);
+  assert.throws(() => checkPluginId({ repository: "../plugins/a", id: "a" }, { id: "b" }, "/work/plugins/a/plugin.json"),
+    /^Error: \/work\/plugins\/a\/plugin\.json: id is "b", but scripts\/workspace-registry\.json declares "a"$/);
 });

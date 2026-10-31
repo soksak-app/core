@@ -25,7 +25,7 @@ Plugin과 sidecar는 자기 repository에 있다([Repository](#repository)).
 
 ## Repository
 
-Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, `make boundaries`는 `scripts/workspace-registry.json`이 선언한 각 폴더의 `package.json` name과 dependency key, `plugin.json` id를 읽고, 선언한 폴더가 없으면 실패한다. `make registry`는 선언된 sibling repository를 읽어 plugin을 pack하고 sidecar를 release하며, `make install-plugins`는 `make registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다.
+Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, `make boundaries`는 `scripts/workspace-registry.json`이 선언한 plugin id를 읽고 다른 repository는 읽지 않으므로 core checkout만으로 실행된다. `make registry`는 선언된 sibling repository를 읽어 plugin을 pack하고 sidecar를 release하며, `plugin.json`의 `id`가 선언과 다르면 파일과 두 값을 밝히며 실패하고, `make install-plugins`는 `make registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다.
 
 | 폴더 | Repository | GitHub |
 | --- | --- | --- |
@@ -50,11 +50,11 @@ Plugin repository에서 `make test`는 plugin의 test를, `make check`는 그 re
 
 Terminal `make check`는 plugin literal과 screen-message vector를 입력으로 받아 `CORE_PLUGIN_API_DIR`가 지정한 SDK 디렉터리의 `view-check.js`를 직접 실행한다. `@soksak/plugin-api`는 `view-check.js`를 `soksak-view-check` package bin으로 제공하며, 이 bin을 사용하는 package는 checker와 runtime 파일을 포함한다.
 
-Checkout은 repository를 이 sibling 폴더에 두고, repository 둘 이상이 필요한 workflow도 같은 방식으로 checkout한다. 그래서 `scripts/workspace-registry.json`의 상대 폴더가 어디서나 성립한다.
+로컬 checkout은 repository를 이 sibling 폴더에 두므로 `scripts/workspace-registry.json`의 상대 폴더가 그곳에서 성립한다. 어떤 workflow도 workspace의 다른 repository를 checkout하지 않는다.
 
 Plugin이나 sidecar의 version은 자기 것이며 core version과 관계가 없다. Plugin의 `engines.soksak` 범위가 그 plugin을 설치하는 core version을 정한다. Plugin repository는 build 의존으로 `@soksak/plugin-api`에 git 의존을 둔다. 자기 `package.json`이 지정한 core release tag와 `path:/packages/plugin-api`를 쓴다. Test가 `validateSidecar`로 `sidecar.json`을 검사하는 sidecar repository도 같은 방식으로 의존한다. Plugin이나 sidecar repository의 release workflow는 자기가 릴리스하는 tag와 무관하게, workflow가 `CORE_RELEASE`에 선언한 core release에서 `sok`를 build한다. Plugin repository는 build를 위해 sidecar에 의존하지 않고, `plugin.json`의 `dependencies`가 설치할 sidecar와 그 범위를 가리킨다. `make install`은 plugin이나 sidecar repository의 설치 단계다. Build에 필요한 고정된 의존성과 외부 source를 받고, build, test, pack은 설치하지 않고 그것이 설치한 것을 쓴다. `make test`는 plugin repository의 test를 실행하고, `make pack OUT=<folder> [SOK=<sok>] [PACK_FLAGS=<flags>]`는 release에 필요한 것을 build한 뒤 `sok plugin pack`으로 release를 쓴다. core의 workspace registry는 이 target으로 plugin마다 pack한다. Sidecar repository에는 `make test`, `sidecar.json`이 가리키는 실행 파일을 쓰는 `make build`, 현재 platform으로 `sok sidecar release`를 실행하는 `make release OUT=<folder>`가 있다. Registry repository `../registry`는 제3자의 것을 포함해 새 plugin, sidecar, version을 항목 파일을 바꾸는 pull request로 받는다. 그 workflow가 pull request를 검사하고 merge한 뒤 index를 게시하며([공개 registry](registry.ko.md)), 그 `make build`는 `sok registry build`를 실행한다. `sok registry build`는 `index.json`을 쓰기 전에 모든 release를 그 항목과 대조한다.
 
-Core window check는 registry fixture에서 plugin을 설치한다. `scripts/workspace-registry.json`은 main checkout(git common directory의 상위 폴더, 따라서 worktree도 같은 sibling 폴더를 찾는다) 기준 상대 폴더로 plugin repository, sidecar 폴더(`sidecar.json`을 가진 폴더), pack을 선언한다. `make registry`는 선언된 각 sidecar를 build하고 release하며, 선언된 각 plugin을 pack하고, `target/registry`에 index를 만든다. Network는 쓰지 않는다. `shell` plugin과 `@soksak/sidecar-shell`은 repository가 있지만 선언하지 않으므로, 두 애플리케이션의 새 space layout은 shell card 자리에 terminal card를 둔다.
+Core window check는 registry fixture에서 plugin을 설치한다. `scripts/workspace-registry.json`은 main checkout(git common directory의 상위 폴더, 따라서 worktree도 같은 sibling 폴더를 찾는다) 기준 상대 폴더로 plugin repository와 각 plugin의 id(`{repository, id}`), sidecar 폴더(`sidecar.json`을 가진 폴더), pack을 선언한다. `make registry`는 선언된 각 sidecar를 build하고 release하며, 선언된 각 plugin을 pack하고, `target/registry`에 index를 만든다. Network는 쓰지 않는다. `shell` plugin과 `@soksak/sidecar-shell`은 repository가 있지만 선언하지 않으므로, 두 애플리케이션의 새 space layout은 shell card 자리에 terminal card를 둔다.
 
 ## plugin.json
 

@@ -1,5 +1,11 @@
 {
-  "plugins": ["../plugins/browser", "../plugins/editor", "../plugins/files", "../plugins/hwp", "../plugins/terminal"],
+  "plugins": [
+    { "repository": "../plugins/browser", "id": "browser" },
+    { "repository": "../plugins/editor", "id": "editor" },
+    { "repository": "../plugins/files", "id": "files" },
+    { "repository": "../plugins/hwp", "id": "hwp" },
+    { "repository": "../plugins/terminal", "id": "terminal" }
+  ],
   "sidecars": [
     { "repository": "../sidecars/files", "folder": "." },
     { "repository": "../sidecars/vt", "folder": "vt-alacritty" }

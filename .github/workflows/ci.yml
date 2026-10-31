@@ -176,39 +176,10 @@ jobs:
     env:
       GOTOOLCHAIN: local
     steps:
-      # Structural checks read the repositories declared by the workspace registry.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: core
           fetch-depth: 0
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: soksak-app/plugin-browser
-          path: plugins/browser
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: soksak-app/plugin-editor
-          path: plugins/editor
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: soksak-app/plugin-files
-          path: plugins/files
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: soksak-app/plugin-hwp
-          path: plugins/hwp
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: soksak-app/plugin-terminal
-          path: plugins/terminal
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: soksak-app/sidecar-files
-          path: sidecars/files
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: soksak-app/sidecar-vt
-          path: sidecars/vt
       - uses: ./core/.github/actions/setup-node
         with:
           root: core

@@ -1,8 +1,8 @@
 // Checks that core package sources and package tests do not name plugins or sidecars in code.
 //
 // Components are connected only by declaration files. Plugins and sidecars live in their own repositories
-// (docs/spec/plugins.md#repositories), and their names are read from the package.json and plugin.json of the folders that scripts/workspace-registry.json
-// declares. Every `@soksak/` name whose base is not exactly a core package name fails, whether it is declared or not
+// (docs/spec/plugins.md#repositories), and the plugin ids are read from scripts/workspace-registry.json, so the check reads no
+// other repository and runs in CI with the core checkout alone. Every `@soksak/` name whose base is not exactly a core package name fails, whether it is declared or not
 // (decision D3, rule 1), except a declared end-to-end window check, which tests the application's installed cohort.
 // Other scopes are not checked.
 // Declaration files (package.json, plugin.json, sidecar.json) and documents (.md) are not checked either.
@@ -15,7 +15,7 @@ import { join, posix, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parse } from "acorn";
 import { declaresFile, specFilesOf, workspacePackages } from "./node-tests.mjs";
-import { checkDeclaration, gitCommonDir, repositoryFolder } from "./workspace-registry.mjs";
+import { checkDeclaration } from "./workspace-registry.mjs";
 
 const ROOT = resolve(process.argv[2] ?? new URL("../", import.meta.url).pathname);
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "target", "frontend", "bin", "gen"]);
@@ -32,7 +32,7 @@ const listDirs = (path) => existsSync(path)
   ? readdirSync(path).map((name) => join(path, name)).filter((dir) => existsSync(join(dir, "package.json")))
   : [];
 
-/** A component. kind is one of core, plugin, and sidecar. Only the core of this checkout has sources that are read. */
+/** A component. kind is core or plugin. Only the core of this checkout has sources that are read; a plugin is its declared id. */
 export function components(root = ROOT) {
   const found = [];
   const add = (dir, kind) => {
@@ -46,11 +46,7 @@ export function components(root = ROOT) {
   for (const dir of listDirs(join(root, "packages"))) add(dir, "core");
   for (const dir of listDirs(join(root, "packages/host"))) add(dir, "core");
   const declaration = checkDeclaration(readJson(join(root, "scripts/workspace-registry.json")));
-  const commonDir = gitCommonDir(root);
-  for (const folder of declaration.plugins) add(repositoryFolder(folder, commonDir), "plugin");
-  for (const { repository, folder } of declaration.sidecars) {
-    add(join(repositoryFolder(repository, commonDir), folder), "sidecar");
-  }
+  for (const { repository, id } of declaration.plugins) found.push({ dir: repository, kind: "plugin", name: id, allowed: new Set(), pluginId: id });
   return found;
 }
 

@@ -24,18 +24,22 @@ const read = (url) => JSON.parse(readFileSync(url, "utf8"));
 const folderText = (value) => typeof value === "string" && value !== "" && !value.startsWith("/");
 
 /**
- * Checks the declarations of scripts/workspace-registry.json. plugins are plugin repository folders, sidecars are
- * {repository, folder} (folder is the folder in the repository that holds sidecar.json), and packs are registry pack entries.
- * Folders are paths relative to the core checkout.
+ * Checks the declarations of scripts/workspace-registry.json. plugins are {repository, id} (id is the id of the plugin.json of
+ * the repository, which make boundaries reads without the repository), sidecars are {repository, folder} (folder is the folder
+ * in the repository that holds sidecar.json), and packs are registry pack entries. Folders are paths relative to the core checkout.
  */
 export function checkDeclaration(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${DECLARATION}: expected an object`);
   const keys = Object.keys(value).sort().join();
   if (keys !== "packs,plugins,sidecars") throw new Error(`${DECLARATION}: expected the keys packs, plugins and sidecars`);
-  if (!Array.isArray(value.plugins) || !value.plugins.every(folderText)) {
-    throw new Error(`${DECLARATION}: plugins must be relative folders`);
+  if (!Array.isArray(value.plugins) || !value.plugins.every((item) => item && folderText(item.repository)
+    && typeof item.id === "string" && item.id !== "" && Object.keys(item).sort().join() === "id,repository")) {
+    throw new Error(`${DECLARATION}: plugins must be { repository, id } with a relative folder and a plugin id`);
   }
-  if (new Set(value.plugins).size !== value.plugins.length) throw new Error(`${DECLARATION}: a plugin folder is repeated`);
+  if (new Set(value.plugins.map((item) => item.repository)).size !== value.plugins.length) {
+    throw new Error(`${DECLARATION}: a plugin folder is repeated`);
+  }
+  if (new Set(value.plugins.map((item) => item.id)).size !== value.plugins.length) throw new Error(`${DECLARATION}: a plugin id is repeated`);
   if (!Array.isArray(value.sidecars) || !value.sidecars.every((item) => item && folderText(item.repository) && folderText(item.folder)
     && Object.keys(item).sort().join() === "folder,repository")) {
     throw new Error(`${DECLARATION}: sidecars must be { repository, folder } with relative folders`);
@@ -122,9 +126,14 @@ export function packPlugin(binary, repository, out, diagnostics) {
   return { release, sha256: createHash("sha256").update(readFileSync(release)).digest("hex") };
 }
 
+/** Fails when the plugin.json at file names another id than the declaration item of its repository. */
+export function checkPluginId(item, manifest, file) {
+  if (manifest.id !== item.id) throw new Error(`${file}: id is ${JSON.stringify(manifest.id)}, but ${DECLARATION} declares ${JSON.stringify(item.id)}`);
+}
+
 /** The declared plugin and sidecar repository folders, each once, in declaration order. folder resolves a declared folder. */
 export function installFolders(declaration, folder) {
-  return [...new Set([...declaration.plugins, ...declaration.sidecars.map((item) => item.repository)].map(folder))];
+  return [...new Set([...declaration.plugins, ...declaration.sidecars].map((item) => folder(item.repository)))];
 }
 
 /** Runs `make install` of every declared repository (docs/spec/plugins.md#repositories). */
@@ -176,11 +185,12 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
   }
   const releases = join(out, "releases");
   for (const name of ["plugins", "sidecars", "packs", "releases"]) rmSync(join(out, name), { recursive: true, force: true });
-  const plugins = new Set(declaration.plugins.map((relative) => read(pathToFileURL(join(folder(relative), "package.json"))).name));
+  const plugins = new Set(declaration.plugins.map((item) => read(pathToFileURL(join(folder(item.repository), "package.json"))).name));
   const manifests = [];
-  for (const relative of declaration.plugins) {
-    const dir = folder(relative);
+  for (const item of declaration.plugins) {
+    const dir = folder(item.repository);
     const manifest = read(pathToFileURL(join(dir, "plugin.json")));
+    checkPluginId(item, manifest, join(dir, "plugin.json"));
     const pkg = read(pathToFileURL(join(dir, "package.json")));
     const pack = packPlugin(binary, dir, releases, diagnostics);
     write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack, new Set(declared.keys())));

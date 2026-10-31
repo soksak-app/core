@@ -274,3 +274,12 @@ test('no workflow runs an end-to-end check', { timeout: 1000 }, () => {
   }
   assert.equal(existsSync(join(WORKFLOWS, 'window-checks.yml')), false, 'the window-check workflow exists');
 });
+
+// A repository consumes a lower layer only as its published release, and core consumes no plugin or sidecar, so a workflow
+// of core checks out only core (AGENTS.md, Verification).
+test('no workflow checks out another repository of the workspace', { timeout: 1000 }, () => {
+  for (const file of readdirSync(WORKFLOWS).filter((name) => name.endsWith('.yml'))) {
+    const others = [...readFileSync(join(WORKFLOWS, file), 'utf8').matchAll(/^\s+repository:\s*(\S+)$/gm)].map((match) => match[1]);
+    assert.deepEqual(others, [], `${file} checks out ${others.join(', ')}`);
+  }
+});

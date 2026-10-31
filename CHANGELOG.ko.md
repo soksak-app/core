@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F298-3: core의 어떤 workflow도 workspace의 다른 저장소를 checkout하지 않는다. `scripts/workspace-registry.json`은 각 plugin을 `{repository, id}`로 선언한다. `make boundaries`는 그 선언에서 plugin id를 읽고 sibling 폴더를 읽지 않으며, `make registry`는 `plugin.json`의 `id`가 선언과 다르면 파일과 두 값을 밝히며 실패한다. `equivalence` job은 core만 checkout한다. 검증: workflow test(checkout 일곱 개), sibling 폴더 없는 checkout의 boundary audit(선언이 거부됨), plugin id 검사(함수가 없음)는 이전 코드에서 실패했고 변경 뒤 통과한다. `make boundaries docs-check parity-check`가 통과한다.
 - F298-2: 어떤 workflow도 end-to-end 검사를 실행하지 않는다. `.github/workflows/window-checks.yml`을 지웠고, `release.yml`의 `publish` job은 검사, gate, 두 host build만 요구한다. 창 검사는 로컬에서 실행한다. `scripts/test/workflows.test.mjs`는 창 검사, native presentation test, activation tier, 가상 display를 실행하는 workflow에서 실패한다. 검증: 이 test는 이전 workflow(`publish`의 needs와 `window-checks.yml`의 `virtual_display`)에서 실패했고 변경 뒤 통과한다. `make docs-check parity-check`가 통과한다.
 - F298-1: AGENTS.md와 `docs/operations/examples.md`(test 종류)가 unit test와 end-to-end 검사를 정의한다. end-to-end 검사는 실행 중인 애플리케이션, frame을 내보내는 display, 또는 사람이나 애플리케이션의 활성화가 필요하며 로컬에서 make로만 실행한다. CI와 release job은 자기 저장소의 unit test와 구조 검사만 실행하고 workspace의 다른 저장소를 checkout하지 않는다. workflow는 F298-2부터 F298-6에서 따른다.
 - F292-75: sidecar-files 0.0.8과 새 plugin 판은 모두 core 0.0.21이 필요하다. core 0.0.20에서 editor 0.0.4, files 0.0.6, hwp 0.0.2를 위해 files sidecar를 새로 선택하면 sidecar-files 0.0.8이 선택되어 `sidecar.json: unknown field displayName`으로 실패한다. core 0.0.20의 reader가 `sidecar.json`의 이전 필드만 받기 때문이다. 이전 files sidecar를 이미 쓰는 설치는 그것을 유지한다. core 0.0.20 설치는 앱을 0.0.21로 갱신한다(registry G54.1).
