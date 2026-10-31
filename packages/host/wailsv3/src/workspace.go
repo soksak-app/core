@@ -70,6 +70,26 @@ type WorkspaceRequest struct {
 
 // readProjects reads the projects of projects.json, which holds them under the `projects` member beside the format
 // member of the stored form (docs/spec/installation.md#stored-data-formats).
+// projectSettings reads the overrides of the project settings file at path; a missing file holds no override.
+func projectSettings(path string) (Record, error) {
+	settings, err := readStored(path, "settings.json", settingsFormat)
+	if err != nil {
+		return nil, err
+	}
+	if settings == nil {
+		settings = Record{}
+	}
+	for _, key := range commonOnly {
+		if _, has := settings[key]; has {
+			return nil, fmt.Errorf("%s: %s is common-only", path, key)
+		}
+	}
+	// The format member is the carrier of the stored form, not a setting, so the snapshot does not show it
+	// (docs/spec/installation.md#stored-data-formats).
+	delete(settings, "format")
+	return settings, nil
+}
+
 func readProjects(path string) ([]Record, error) {
 	document, err := readStored(path, "projects.json", projectsFormat)
 	if err != nil || document == nil {
@@ -412,20 +432,13 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 			if !ok {
 				return nil, fmt.Errorf("invalid project root")
 			}
-			path := filepath.Join(root, ".soksak", "settings.json")
-			settings, err := readStored(path, "settings.json", settingsFormat)
+			// A project settings file that is refused is reported at its project, which the page does not open, so the other
+			// projects and the page start (docs/spec/projects.md#settings).
+			settings, err := projectSettings(filepath.Join(root, ".soksak", "settings.json"))
 			if err != nil {
-				return nil, err
+				p["settingsError"] = err.Error()
+				continue
 			}
-			if settings == nil {
-				settings = Record{}
-			}
-			for _, key := range commonOnly {
-				if _, has := settings[key]; has {
-					return nil, fmt.Errorf("%s: %s is common-only", path, key)
-				}
-			}
-			delete(settings, "format")
 			p["settings"] = settings
 		}
 		// The format member is the carrier of the stored form, not a setting, so the snapshot does not show it

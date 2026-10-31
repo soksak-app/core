@@ -191,16 +191,20 @@ export function begin(snapshot) {
   let opened = null;
   if (layout) {
     try {
-      checkSpace(requested, requested.activeSpaceId);
+      checkProject(requested);
       opened = requested;
     } catch {
-      // silent: for a layout that the plane cannot open, the activation of initialise reports the error and the window stays at the library.
+      // silent: for a project that the window cannot open, the activation of initialise reports the error and the window stays at the library.
     }
   }
   prepareInitialProjectContext(Boolean(opened));
   // default: when no project was opened, the settings have no project either.
   beginSettings(snapshot, opened?.id ?? null);
   if (!opened) {
+    // The first screen is the library, so no project is shown or resumed.
+    activeProjectId = null;
+    browsing = true;
+    begun = null;
     changed();
     return;
   }
@@ -450,8 +454,11 @@ export function activate(id) {
   return inTurn(() => activateInTurn(id));
 }
 
-/** Checks whether the plane can open the layout of the active space of the project. On failure it throws the error before it changes the project, the window or the stored records. */
+/**
+ * Checks whether the window can open the project: the host read its settings file, and the plane can open the layout of its active space. On failure it throws the error before it changes the project, the window or the stored records. A project whose settings file the host refused does not open, because no settings take the place of that file (docs/spec/projects.md#settings).
+ */
 function checkProject(project) {
+  if (project.settingsError) throw new Error(project.settingsError);
   checkSpace(project, project.activeSpaceId);
 }
 

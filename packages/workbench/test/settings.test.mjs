@@ -150,6 +150,32 @@ test('stored settings of a plugin that is not loaded are kept and not applied', 
   }
 });
 
+test('a settings file of the shown project that the host refuses is reported and the applied settings stay', async () => {
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const memory = { common: { gap: 8 }, projects: [{ id: 'prj-a', root: '/work/a', settings: { gap: 12 } }] };
+  let changed;
+  const { beginSettings, connectSettings, value } = await import('../settings.js?test=refused-project-file');
+  try {
+    beginSettings(structuredClone(memory), 'prj-a');
+    await connectSettings({ snapshot: async () => structuredClone(memory), settings: async () => {}, onChange: (listener) => { changed = listener; } });
+    const error = '/work/a/.soksak/settings.json: settings.json: format must be 1';
+    memory.projects[0] = { id: 'prj-a', root: '/work/a', settingsError: error };
+    const reported = [];
+    const realDispatch = globalThis.dispatchEvent;
+    globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
+    try {
+      await changed();
+    } finally {
+      globalThis.dispatchEvent = realDispatch;
+    }
+    assert.deepEqual(reported, [error], 'the refused project settings file was not reported');
+    assert.equal(value('gap'), 12, 'the refused file replaced the applied project settings');
+  } finally {
+    globalThis.document = realDocument;
+  }
+});
+
 test('the start document applies the common and project settings in the current format before the store connects', async () => {
   const realDocument = globalThis.document;
   globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };

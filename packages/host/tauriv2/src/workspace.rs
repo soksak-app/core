@@ -70,6 +70,18 @@ fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
     serde_json::from_value(projects).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// Reads the overrides of the project settings file at path; a missing file holds no override.
+fn project_settings(path: &Path) -> Result<Map<String, Value>, String> {
+    let mut settings = read_stored(path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default(); // default: a missing project settings file holds no overrides.
+    if let Some(key) = COMMON_ONLY.iter().find(|key| settings.contains_key(**key)) {
+        return Err(format!("{}: {key} is common-only", path.display()));
+    }
+    // The format member is the carrier of the stored form, not a setting, so the snapshot does not show it
+    // (docs/spec/installation.md#stored-data-formats).
+    settings.remove("format");
+    Ok(settings)
+}
+
 /// The current format numbers of the stored files that the host writes (docs/spec/installation.md#stored-data-formats).
 pub(crate) const PROJECTS_FORMAT: u64 = 1;
 pub(crate) const SETTINGS_FORMAT: u64 = 1;
@@ -385,15 +397,12 @@ impl Workspace {
                 for project in &mut projects {
                     let path = Path::new(project["root"].as_str().ok_or("invalid project root")?)
                         .join(".soksak/settings.json");
-                    let mut settings =
-                        read_stored(&path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default(); // default: a missing project settings file holds no overrides.
-                    if let Some(key) = COMMON_ONLY.iter().find(|key| settings.contains_key(**key)) {
-                        return Err(format!("{}: {key} is common-only", path.display()));
+                    // A project settings file that is refused is reported at its project, which the page does not open,
+                    // so the other projects and the page start (docs/spec/projects.md#settings).
+                    match project_settings(&path) {
+                        Ok(settings) => project["settings"] = settings.into(),
+                        Err(error) => project["settingsError"] = error.into(),
                     }
-                    // The format member is the carrier of the stored form, not a setting, so the snapshot does not show
-                    // it (docs/spec/installation.md#stored-data-formats).
-                    settings.remove("format");
-                    project["settings"] = settings.into();
                 }
                 common.remove("format");
                 return Ok(json!({"projects": projects, "common": common}));

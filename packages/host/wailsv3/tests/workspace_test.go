@@ -342,10 +342,61 @@ func TestProjectTextSizeOverrideIsRejected(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"format":1,"textSize":1.5}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err = store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
-	if want := path + ": textSize is common-only"; err == nil || err.Error() != want {
-		t.Fatalf("a project settings file with textSize returned %v, want %q", err, want)
+	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
+	if err != nil {
+		t.Fatalf("the snapshot failed: %v", err)
 	}
+	project := snapshot.(host.Record)["projects"].([]host.Record)[0]
+	if want := path + ": textSize is common-only"; project["settingsError"] != want {
+		t.Fatalf("a project settings file with textSize reported %v, want %q", project["settingsError"], want)
+	}
+}
+
+// contract: workspace.settings.refuses-project-file-at-its-project
+func TestARefusedProjectSettingsFileIsReportedAtItsProject(t *testing.T) {
+	refusedRoot, keptRoot := t.TempDir(), t.TempDir()
+	store := host.NewWorkspace(t.TempDir())
+	for _, project := range []host.Record{{"id": "prj-refused", "root": refusedRoot, "identity": "1:2"}, {"id": "prj-kept", "root": keptRoot, "identity": "1:3"}} {
+		if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: project}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	refused := filepath.Join(refusedRoot, ".soksak", "settings.json")
+	kept := filepath.Join(keptRoot, ".soksak", "settings.json")
+	for file, text := range map[string]string{refused: `{"gap":5}`, kept: `{"format":1,"gap":7}`} {
+		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
+	if err != nil {
+		t.Fatalf("the snapshot failed: %v", err)
+	}
+	projects := map[string]host.Record{}
+	for _, project := range snapshot.(host.Record)["projects"].([]host.Record) {
+		projects[project["id"].(string)] = project
+	}
+	// The refused file is reported at its project without settings, and the other project keeps its settings.
+	want := host.Record{"id": "prj-refused", "root": refusedRoot, "identity": "1:2", "settingsError": refused + ": settings.json: format must be 1"}
+	if got, _ := json.Marshal(projects["prj-refused"]); string(got) != string(must(json.Marshal(want))) {
+		t.Fatalf("refused project = %s", got)
+	}
+	if got, _ := json.Marshal(projects["prj-kept"]["settings"]); string(got) != `{"gap":7}` {
+		t.Fatalf("kept project settings = %s", got)
+	}
+	if _, has := projects["prj-kept"]["settingsError"]; has {
+		t.Fatalf("kept project reported %v", projects["prj-kept"]["settingsError"])
+	}
+}
+
+func must(data []byte, err error) []byte {
+	if err != nil {
+		panic(err)
+	}
+	return data
 }
 
 // contract: workspace.tab-state.put-keeps-other-entries

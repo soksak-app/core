@@ -309,6 +309,32 @@ test("the start document draws the project synchronously while the host theme re
   beginThemeReply = async () => {};
 });
 
+test("a project whose settings file the host refused is not opened, and the start shows the library with the error", async () => {
+  const error = "/work/refused/.soksak/settings.json: settings.json: format must be 1";
+  const refused = { ...structuredClone(PROJECT), id: "prj-refused", root: "/work/refused", settingsError: error };
+  delete refused.settings;
+  const snapshot = { common: {}, projects: [structuredClone(PROJECT), structuredClone(refused)], open: [] };
+  globalThis.location = new URL(`http://soksak.test/index.html?project=${refused.id}`);
+  begunSettings.length = 0;
+  plane.events.length = 0;
+  reported.length = 0;
+  projects.begin(structuredClone(snapshot));
+  assert.equal(projects.active(), null, "the first screen drew the project whose settings file was refused");
+  assert.deepEqual(begunSettings, [null], "the settings began with the project whose settings file was refused");
+  openRequests.length = 0;
+  await projects.initialise({ ...store, snapshot: async () => structuredClone(snapshot), patch: async () => {} });
+  assert.equal(projects.active(), null);
+  assert.equal(projects.inLibrary(), true);
+  assert.deepEqual(openRequests, [], "the refused project asked the host for a window");
+  assert.deepEqual(reported, [error], "the start did not report the refused settings file once");
+  await assert.rejects(projects.activate(refused.id), { message: error });
+  assert.deepEqual(openRequests, [], "the refused open asked the host for a window");
+  // The other project opens.
+  await projects.activate(PROJECT.id);
+  assert.equal(projects.active().id, PROJECT.id);
+  await projects.flush();
+});
+
 test("a project that the start document drew falls back to the library when its activation fails", async () => {
   const missing = { ...structuredClone(PROJECT), id: "prj-gone", root: "/work/missing" };
   const snapshot = { common: {}, projects: [structuredClone(missing)], open: [] };

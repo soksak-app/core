@@ -287,11 +287,52 @@ fn a_project_text_size_override_is_rejected() {
     let path = root.path().join(".soksak/settings.json");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(&path, r#"{"format":1,"textSize":1.5}"#).unwrap();
-    let refused = store.apply(serde_json::from_value(json!({"kind":"snapshot"})).unwrap());
+    let snapshot = apply(&store, json!({"kind":"snapshot"}));
     assert_eq!(
-        refused.err(),
-        Some(format!("{}: textSize is common-only", path.display()))
+        snapshot["projects"][0]["settingsError"],
+        json!(format!("{}: textSize is common-only", path.display()))
     );
+}
+
+// contract: workspace.settings.refuses-project-file-at-its-project
+#[test]
+fn a_refused_project_settings_file_is_reported_at_its_project() {
+    let config = folder::Folder::new();
+    let refused_root = folder::Folder::new();
+    let kept_root = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-refused", "root":refused_root.path(), "identity":"1:2"}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-kept", "root":kept_root.path(), "identity":"1:3"}}),
+    );
+    let refused = refused_root.path().join(".soksak/settings.json");
+    fs::create_dir_all(refused.parent().unwrap()).unwrap();
+    fs::write(&refused, r#"{"gap":5}"#).unwrap();
+    let kept = kept_root.path().join(".soksak/settings.json");
+    fs::create_dir_all(kept.parent().unwrap()).unwrap();
+    fs::write(&kept, r#"{"format":1,"gap":7}"#).unwrap();
+    let snapshot = apply(&store, json!({"kind":"snapshot"}));
+    let project = |id: &str| {
+        snapshot["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|project| project["id"] == id)
+            .unwrap()
+            .clone()
+    };
+    // The refused file is reported at its project without settings, and the other project keeps its settings.
+    assert_eq!(
+        project("prj-refused"),
+        json!({"id":"prj-refused", "root":refused_root.path(), "identity":"1:2",
+            "settingsError": format!("{}: settings.json: format must be 1", refused.display())})
+    );
+    assert_eq!(project("prj-kept")["settings"], json!({"gap":7}));
+    assert_eq!(project("prj-kept").get("settingsError"), None);
 }
 
 // contract: workspace.settings.records-each-change

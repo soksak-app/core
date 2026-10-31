@@ -435,6 +435,9 @@ async function refresh() {
   const snapshot = await store.snapshot();
   if (changes || mine !== revision) return;
   const project = snapshot.projects.find((p) => p.id === projectId);
+  // The settings file of the shown project that the host now refuses is reported, and the applied settings stay
+  // (docs/spec/projects.md#settings).
+  if (project?.settingsError) throw new Error(project.settingsError);
   // default: a project that overrides no setting has no settings.
   const nextOverrides = project?.settings ?? {};
   validateValues(snapshot.common, "settings.json");

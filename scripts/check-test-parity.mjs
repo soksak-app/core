@@ -8230,6 +8230,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F321-2",
+    implementation: [
+      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func projectSettings(" },
+      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "fn project_settings(" },
+      { file: "packages/workbench/projects.js", symbol: "if (project.settingsError) throw new Error(project.settingsError);" },
+      { file: "packages/workbench/settings.js", symbol: "if (project?.settingsError) throw new Error(project.settingsError);" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestARefusedProjectSettingsFileIsReportedAtItsProject" },
+      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "a_refused_project_settings_file_is_reported_at_its_project" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a project whose settings file the host refused is not opened, and the start shows the library with the error" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "a settings file of the shown project that the host refuses is reported and the applied settings stay" },
+    ],
+    expected: "A refused project settings file is reported at its project in the snapshot of both hosts, and the page does not open that project while the other projects and the page start.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F321-1",
     implementation: [
       { file: "packages/host/wailsv3/src/installed.go", symbol: "func NewInstalledSidecars(" },
