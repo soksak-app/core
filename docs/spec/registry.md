@@ -40,7 +40,8 @@ The check of a pull request reads the files of the pull request as data with the
 - an entry breaks an entry rule;
 - the author does not own an entry that the pull request adds or changes;
 - `sok registry build` fails on the whole registry of the pull request: every release is read over https and compared with its `sha256`, and each plugin release must hold the `plugin.json` and `package.json` of its entry.
-- for a core version that `core.json` lists, the plugin version that installation selects for it ([version selection](installation.md#version-selection)) has a manifest that `validateManifest` of the `@soksak/plugin-api` of that core release rejects.
+- for a core version that `core.json` lists, the plugin version that installation selects for it ([version selection](installation.md#version-selection)) has a manifest that `validateManifest` of the `@soksak/plugin-api` of that core release rejects;
+- a plugin version that `revoked.json` does not withdraw has an `engines.soksak` range that contains a core version newer than the newest core version that `core.json` lists and `revoked.json` does not withdraw, read with the range rule of that newest core and probed with its next patch, minor and major version. A core release publishes before the plugin releases for it, so such a range would make that core select a plugin version whose manifest its reader was never checked against; a plugin publishes a version for each core release instead.
 
 Publication runs the same checks on the files of `main`. A core version enters `core.json` only when every plugin version that installation selects for it passes, so the application update of [installation](installation.md#application-update) offers a core version only with plugins that it accepts. The release of core reads no registry, and a published core release that `core.json` does not list yet is not offered.
 

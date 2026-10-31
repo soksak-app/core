@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F329: registry 검사가 범위가 가장 새 listed core보다 새 core를 포함하는 철회되지 않은 plugin version에서 실패한다.
 - F327: release 본문이 `docs/operations/install.md`의 각 상대 link를 release tag의 그 file로 풀므로 release 페이지의 link가 그 문서를 연다.
 - F326: 작업공간 version은 release candidate `0.0.24`이고, 게시된 `v0.0.23`과 구별된다. `v0.0.23`은 이전 형태의 `projects.json`이나 `settings.json`으로 시작하지 않았고 registry에 올리지 않았다.
 - F321-8: 설정 폴더의 거부된 `projects.json`이나 `settings.json`이 더 이상 page 시작을 멈추지 않는다. workspace snapshot이 그것을 `projectsError`나 `settingsError`로 보고하고, page는 오류를 보이며 시작하고, 거부된 file에 쓰면 file을 바꾸지 않고 실패한다.
