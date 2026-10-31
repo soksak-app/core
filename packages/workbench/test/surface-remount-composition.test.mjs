@@ -4,7 +4,6 @@ import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
-import { viewCommandsOf } from "../view-commands.js";
 import { pageIdentity } from "../page-identity.js";
 
 setSurfaceTextSize(() => 1);
@@ -329,7 +328,6 @@ test("a rejected view listener registration releases successful listeners and re
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual([...removed].sort(), ["view-call", "view-presentation-abandoned", "view-reply", "view-responsiveness", "view-stopped"].sort(),
       "every successful listener registration must be released");
-    assert.equal(viewCommandsOf(id), null, "failed mount retained its view-command layer");
     assert.equal(mountedSurface(id), null, "failed mount retained its mounted entry");
     assert.equal(slot.querySelector(".surface-module-host"), null, "failed mount retained its host");
     assert.deepEqual(unhandled, [], "listener rejection escaped as an unhandled promise");
@@ -469,7 +467,6 @@ test("a listener failure before readiness reports an error and releases the view
     assert.equal(states.at(-1).error, registrationError);
     assert.deepEqual([...removed].sort(), ["view-call", "view-presentation-abandoned", "view-reply", "view-responsiveness", "view-stopped"].sort());
     assert.equal(compositionCalls, 0, "a view with an incomplete listener setup declared its composition");
-    assert.equal(viewCommandsOf(id), null, "post-readiness failure retained the view-command layer");
     assert.equal(mountedSurface(id), null, "post-readiness failure retained the mounted entry");
     assert.deepEqual(unhandled, [], "post-readiness listener rejection became unhandled");
   } finally {

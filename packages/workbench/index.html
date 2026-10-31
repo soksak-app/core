@@ -52,7 +52,7 @@ import { latest, onCommit, onRun, placeCompositorRecord, publish, publishAhead }
 import { authorizeSurface, disposeSurfacesExcept, mountedSurface, onMountedChange, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { prepareRetainedSurface, releaseRetainedSurfaceSlots } from "./retained-surface-mounts.js";
 import { memoryPlacement } from "./memory-placement.js";
-import { afterDeclaredSnapshotIngress, prepareDeclaredSnapshotIngress } from "./declared-source.js";
+import { prepareSourceOriginIngress, startSourceOriginIngress } from "./source-origins.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
 import { onTabReports, reportTabState, reportTitle, setMountedTab, settleLeftTabs, tabKeeps, viewRefusal } from "./tab-reports.js";
@@ -307,7 +307,7 @@ onCommit((record) => {
     observe: observeMemory,
     start: (entries) => commitStarts(entries, holders),
   });
-  return Promise.all([afterDeclaredSnapshotIngress(() => {}), placing]).then(async ([, { surfaces: all, retain: ids, unload }]) => {
+  return Promise.all([startSourceOriginIngress(), placing]).then(async ([, { surfaces: all, retain: ids, unload }]) => {
     // An unloaded tab stays in the layout: it is not declared to the host, its surface is released in the unload mode, and
     // it is retained so that it is not released as a closed tab.
     // A tab of a plugin that is not loaded is not a surface, but its placeholder must stay alive (docs/spec/plugins.md).
@@ -670,7 +670,7 @@ const library = createLibrary(document.getElementById("library"), coreChanged);
    this screen (docs/spec/native-host.md#page-start). The layout queue is connected after it so that the first draw of the plane does not wait for
    the native preparation. The plugin content and the native surfaces are filled in afterwards. */
 projects.onChange(() => { drawBars(); drawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
-prepareDeclaredSnapshotIngress();
+prepareSourceOriginIngress();
 // The surfaces whose image detach is pending wait for its end before they mount (docs/spec/sidecars.md).
 holdImageDetachSurfaces(start.pendingSurfaces);
 onImageDetachEnded((event) => {
@@ -738,8 +738,9 @@ addEventListener("focusout", coreChanged);
 try {
   const storage = await openStore();
   await connectSettings(storage);
+  // The source generations of the native view sources are seeded before the layout is placed.
+  await startSourceOriginIngress();
   // default: a plugin that is not loaded declares no surface.unload.
-  await afterDeclaredSnapshotIngress(() => {});
   const initialising = projects.initialise(storage, (plugin) => pluginUnits().find((unit) => unit.id === plugin)?.unload ?? false);
   // Tab state is available before initialise activates the requested project and waits for its first presentation.
   // Classify startup tabs here so a drawn placement can wait without blocking the synchronous plane draw or project activation.

@@ -39,7 +39,6 @@
     "links.js",
     "list.js",
     "calls.js",
-    "snapshots.js",
     "view.js",
     "view-start.js",
     "view-check.js",

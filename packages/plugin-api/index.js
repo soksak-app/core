@@ -26,7 +26,6 @@ export { createLinkBridge } from "./links.js";
 export { drawList } from "./list.js";
 export { createOperationCids } from "./operation.js";
 export { causeCids, createCalls, DEFAULT_CALL_TIMEOUT, ENDED_CALLS_KEPT, MAX_CALL_TIMEOUT, PEER_LOST_REASONS } from "./calls.js";
-export { createSnapshotReceiver, createSnapshotSender, pullSnapshots, SNAPSHOT_EVENT, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
 
 export const ENVIRONMENT = "environment.json";
 export const MANIFEST = "plugin.json";
@@ -789,7 +788,7 @@ export function validateManifest(manifest) {
     }
   }
   if (manifest.exposes !== undefined) {
-    // A plugin host registers the declared statuses and commands of its plugin (docs/spec/plugin-host.md#exposure).
+    // The exposes of a plugin declare its statuses and commands (docs/spec/exposure.md).
     if (manifest.surface === undefined && manifest.sections === undefined) {
       throw new Error(`${where}: exposes require a surface or sections`);
     }

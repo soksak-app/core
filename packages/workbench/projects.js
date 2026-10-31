@@ -7,7 +7,7 @@ import { beginSettings, selectProject, value, flushSettings } from "./settings.j
 import { flushEvents } from "./page-log.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
-import { commitData, configureData, prepareData, restoreData, showData } from "./plugin-data.js";
+import { configureData } from "./plugin-data.js";
 import { openTabStates } from "./tab-state.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
@@ -152,7 +152,7 @@ export function browse() {
     const previous = { id: activeProjectId, browsing };
     try {
       await selectProject(null);
-      await publishProjectData(await prepareData(null), null);
+      await windows.projectShown(null);
     } catch (error) {
       try { await selectProject(previous.browsing ? null : previous.id); } catch (restoreError) { failed(restoreError); }
       throw error;
@@ -342,7 +342,6 @@ async function readProjects() {
     history.replaceState(null, "", location.pathname);
     savedLayout = "";
     await awaited("projects.read.selectProject", () => selectProject(null));
-    await awaited("projects.read.showData", () => showData(null));
     await inTurn(emptyToLibrary);
   } else if (removed.length && !browsing) listener?.update();
   if (removedProjects) {
@@ -388,13 +387,12 @@ function activateHere(id) {
   return inTurn(() => showProject(id));
 }
 
-async function showProject(id, prepared = null, openedProject = null, stagedOwner = false) {
+async function showProject(id, openedProject = null, stagedOwner = false) {
   if (id === activeProjectId && !browsing && owned.has(id)) {
     const previous = { id: activeProjectId, browsing };
     try {
       await selectProject(id);
-      if (prepared) await publishProjectData(prepared, active());
-      else await windows.projectShown(active());
+      await windows.projectShown(active());
     } catch (error) {
       try { await selectProject(previous.browsing ? null : previous.id); } catch (restoreError) { failed(restoreError); }
       throw error;
@@ -408,11 +406,10 @@ async function showProject(id, prepared = null, openedProject = null, stagedOwne
   const project = openedProject ?? projects.find((p) => p.id === id); // default: when no opened record was supplied, resolve it from the refreshed project list.
   if (!project) throw new Error(`Unknown project: ${id}`);
   if (!openedProject) checkProject(project);
-  const nextContext = prepared ?? await awaited("projects.show.prepareData", () => prepareData({ id, root: project.root })); // default: prepare data when the caller did not provide a staged context.
   const previous = { id: activeProjectId, browsing };
   try {
     await awaited("projects.show.selectProject", () => selectProject(id));
-    await awaited("projects.show.publishProjectData", () => publishProjectData(nextContext, project));
+    await awaited("projects.show.projectShown", () => announceProject(project));
   } catch (error) {
     try { await selectProject(previous.browsing ? null : previous.id); } catch (restoreError) { failed(restoreError); }
     if (stagedOwner) {
@@ -440,14 +437,9 @@ async function showProject(id, prepared = null, openedProject = null, stagedOwne
   await awaited("projects.show.presented", () => listener.presented());
 }
 
-async function publishProjectData(context, project) {
-  const previous = commitData(context);
-  try {
-    await windows.projectShown(project ? { id: project.id, root: project.root, title: project.title } : null);
-  } catch (error) {
-    restoreData(context, previous);
-    throw error;
-  }
+/** Reports the project that the window shows to the host, or null for the library. */
+function announceProject(project) {
+  return windows.projectShown(project ? { id: project.id, root: project.root, title: project.title } : null);
 }
 
 export function activate(id) {
@@ -491,16 +483,7 @@ async function activateInTurn(id) {
     await store.patch(id, { lastOpened: Date.now() });
     return;
   }
-  let prepared;
-  try {
-    prepared = await awaited("projects.activate.prepareData", () => prepareData({ id, root: project.root }));
-  } catch (error) {
-    if (result.staged) {
-      try { await windows.releaseProject(id); } catch (cleanupError) { failed(cleanupError); }
-    }
-    throw error;
-  }
-  await showProject(id, prepared, project, result.staged);
+  await showProject(id, project, result.staged);
   await awaited("projects.activate.patch", () => store.patch(id, { lastOpened: Date.now() }));
 }
 

@@ -37,7 +37,7 @@ export function registerPlugin(plugin) {
  * @param {object} section
  * @param {string} section.id    a set refers to the section by this id
  * @param {string} section.name  name shown in the sidebar
- * @param {string} section.status  declared UI status that draws the section
+ * @param {object} section.surface  the surface that draws the section
  */
 export function registerSection(section) {
   if (registeredSections.some((s) => s.id === section.id)) {

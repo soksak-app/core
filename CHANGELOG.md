@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F332-4-1: `packages/workbench` and `packages/plugin-api` no longer contain the declared UI modules, the plugin host module, the snapshot channel of `@soksak/plugin-api` (`snapshots.js` and its contract cases), the view bridge snapshot, `runtime.project` and `window.sokHost` branches, or the sidecar facts staging. The parity registry drops the evidence of completed items whose code this removes (F226, F239-39, F239-41, F239-41-1, F239-42, F239-42-1, F239-42-2, F239-241, F248-7), and the `boundaries` fixtures of `surface-listing.test.mjs` use the neutral id `probe`.
+
 - F332-8: `validateManifest` and the `sok` manifest readers accept a sidebar section as a view `{id, name, composition, height, unload?}` and refuse `status`, `module` and `fill` of a section, `host` and `hostOperations` of plugin.json, and `hostReadOperations` of sidecar.json, each with its text; `data` and `exposes` require a surface or sections, and `dependencies` accept sections. The shared manifest cases cover each refusal and acceptance.
 - F332-9: The main page answers the view calls `runtime.status.watch` and `runtime.status.unwatch` with `surface`, which follows the status on a surface of the view's plugin that the window holds, and answers `runtime.data.get` and `runtime.data.set` for the project of the view's start values; a request without `surface` chooses only tab surfaces.
 - F331: `surface.opens` no longer accepts `"*"`; each plugin declares the extensions that it opens, and `core.file.open` fails with `no plugin opens <path>` for a file whose extension no loaded plugin declares, instead of opening it in the plugin that declared `"*"`.

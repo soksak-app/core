@@ -9,9 +9,6 @@
 // receives requests and no surface.
 import { host } from "@soksak/runtime";
 import { errorText } from "./error-text.js";
-import { forwardHostExposure, hostKeyOf, hostCommandsOf, listenPluginHostCalls, pluginSidecarsOf } from "./plugin-host.js";
-import { SNAPSHOT_REQUEST_COMMAND, createPluginRuntime } from "@soksak/plugin-api";
-import { pluginRecords } from "./plugin-records.js";
 import { timed, trace } from "./performance.js";
 import { emitEvent } from "./page-log.js";
 import {
@@ -88,10 +85,6 @@ export function createRegistry({ call = null, report = null } = {}) {
   const methods = new Map();
   /* For each declaration key, the surfaces that registered the entry. Registration order is kept. */
   const surfaces = new Map();
-  // The plugin of the plugin host that registered each entry, by declaration key; its owner key is plugin:<plugin id>
-  // (docs/spec/plugin-host.md#exposure). A host registration is kept apart from the surfaces, so a request that names a
-  // surface and a watch of a surface never reach a plugin host.
-  const hosts = new Map();
   const surfaceNames = (surface) => [...surfaces].filter(([, owners]) => owners.has(surface)).map(([key]) => key);
   const registrationTrace = (phase, surface, fields = {}) => trace("surface.registration", {
     phase, surface, timeOrigin: performance.timeOrigin, hasPort: surfacePorts.has(surface), ...fields,
@@ -129,39 +122,6 @@ export function createRegistry({ call = null, report = null } = {}) {
       // default: a refusal value may not be an Error, so the value itself is written.
       report(new Error(`status ${name} change was refused: ${errorText(error)}`, { cause: error })));
   };
-
-  /**
-   * Sends a request to the plugin host of plugin through its channel (docs/spec/plugin-host.md#exposure). A command runs
-   * within its declared time limit, a status get pulls the current value of the status once, and every other request is
-   * refused, because the host page pushes its statuses as declared UI snapshots.
-   */
-  async function forwardHost(plugin, method, params) {
-    const commands = hostCommandsOf(plugin);
-    if (commands === null) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `plugin host ${plugin} has no channel`);
-    try {
-      if (method.startsWith("dom.")) {
-        // The dom request reaches the host page as exposure-request, which answers it (docs/spec/plugin-host.md#channel).
-        const reply = await forwardHostExposure(plugin, method, params);
-        if (reply.error !== undefined) throw new ExposureError(reply.error.code, reply.error.message);
-        return reply.result;
-      }
-      // default: a command request without params runs the command with null, the value of no params.
-      if (method === "command.run") return await commands.run(params.name, params.params ?? null);
-      if (method === "status.get") {
-        const reply = await commands.run(SNAPSHOT_REQUEST_COMMAND, { status: params.name.slice(plugin.length + 1) });
-        // The snapshot reply is {seq, value} (docs/spec/plugin-host.md#declared-ui-snapshots); any other reply is refused.
-        if (typeof reply !== "object" || reply === null || !Number.isInteger(reply.seq) || reply.seq < 0 || !("value" in reply)) {
-          throw new ExposureError(EXPOSURE_ERRORS.failed, `plugin host ${plugin} answered status ${params.name} without {seq, value}`);
-        }
-        return { value: reply.value, version: reply.seq };
-      }
-    } catch (error) {
-      if (error instanceof ExposureError) throw error;
-      // default: a rejection that is not an Error carries its value as the reason.
-      throw new ExposureError(EXPOSURE_ERRORS.failed, errorText(error));
-    }
-    throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `plugin host ${plugin} does not serve ${method}`);
-  }
 
   /**
    * Forwards a request to a surface. When the command declaration has a timeout, the host waits for that time.
@@ -293,11 +253,6 @@ export function createRegistry({ call = null, report = null } = {}) {
     }
     if (!found || !surfaceName(name)) return core.answer(method, params, changed);
     const requested = params.surface;
-    // A request without surface for a name that no surface page registered is answered by the plugin host that registered
-    // it (docs/spec/plugin-host.md#exposure).
-    const hostPlugin = requested === undefined && !tabSurfacesOf(surfaces.get(declarationKey(kind, name))).length
-      ? hosts.get(declarationKey(kind, name)) : undefined;
-    if (hostPlugin !== undefined) return forwardHost(hostPlugin.plugin, method, params);
     const key = watchKey(name, requested);
     if (method === "status.unwatch") {
       const watch = following.get(key);
@@ -333,7 +288,7 @@ export function createRegistry({ call = null, report = null } = {}) {
         ...declaration,
         registered: surfaceName(declaration.name)
           // default: when no surface registered the name, the number of registered surfaces is 0.
-          ? (surfaces.get(key)?.size ?? 0) > 0 || hosts.has(key) || Boolean(pageOf(kind, declaration.name))
+          ? (surfaces.get(key)?.size ?? 0) > 0 || Boolean(pageOf(kind, declaration.name))
           : core.registered(kind, declaration.name),
       });
     }
@@ -583,51 +538,6 @@ export function createRegistry({ call = null, report = null } = {}) {
     },
 
     /**
-     * Registers an entry of the plugin host of plugin under the owner key plugin:<plugin id>
-     * (docs/spec/plugin-host.md#exposure). The name must be declared by the plugin.
-     */
-    hostRegistered({ plugin, kind, name, generation }) {
-      const key = declarationKey(kind, name);
-      if (!declared.has(key)) throw new Error(`plugin ${plugin} registered undeclared ${kind} ${name}`);
-      if (ownerOf(name) !== plugin) throw new Error(`plugin ${plugin} cannot register ${name}`);
-      if (!Number.isSafeInteger(generation) || generation < 1) throw new TypeError(`plugin host ${plugin} registration requires a positive generation`);
-      hosts.set(key, { plugin, generation });
-      registrationTrace("registered", hostKeyOf(plugin), { kind, name });
-      registrationChanged();
-    },
-
-    /** Removes every registration of the plugin host of plugin, whose channel ended (docs/spec/plugin-host.md#exposure). */
-    hostUnregistered(plugin, generation) {
-      for (const [key, owner] of [...hosts]) {
-        if (owner.plugin === plugin && owner.generation === generation) hosts.delete(key);
-      }
-      registrationTrace("disposed", hostKeyOf(plugin));
-      registrationChanged();
-    },
-
-    /** The owner key plugin:<plugin id> of the plugin host that registered the entry, or null when none did. */
-    hostRegistrant(kind, name) {
-      const host = hosts.get(declarationKey(kind, name));
-      return host === undefined ? null : { id: hostKeyOf(host.plugin), generation: host.generation };
-    },
-
-    /**
-     * Runs a command that the plugin host of plugin registered, for a command call of that host (docs/spec/plugin-host.md#command-call).
-     * The registration must be under the owner key plugin:<plugin id>, and another owner is refused with the registry error.
-     */
-    runHosted(name, params, plugin) {
-      if (hosts.get(declarationKey("command", name))?.plugin !== plugin) {
-        return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `owner ${hostKeyOf(plugin)} has not registered command ${name}`));
-      }
-      return forwardHost(plugin, "command.run", { name, params });
-    },
-
-    /** The declared time limit of the command name, or undefined when its declaration states none. */
-    commandTimeout(name) {
-      return declared.get(declarationKey("command", name))?.declaration.timeout;
-    },
-
-    /**
      * Applies the pending registrations of surfaces whose owner plugin became known. Registrations that do not match the declaration or the plugin are not applied; they are collected and thrown as one exception.
      */
     revisit() {
@@ -785,7 +695,7 @@ export function installExposure(document) {
  *
  * When a registration does not match the declaration, values.report(line) leaves an error line. The host has already received the call of the surface, so there is no path that returns the failure to that surface.
  */
-export async function connectExposure({ report, projectData, ...values }) {
+export async function connectExposure({ report, ...values }) {
   if (typeof report !== "function") throw new TypeError("connectExposure requires report(line)");
   registry.configure({
     ...values,
@@ -814,23 +724,5 @@ export async function connectExposure({ report, projectData, ...values }) {
     } catch (error) {
       report(`exposure: ${error.message}`);
     }
-  });
-  listenPluginHostCalls({
-    register: (plugin, kind, name, generation) => registry.hostRegistered({ plugin, kind, name, generation }),
-    unregister: (plugin, generation) => registry.hostUnregistered(plugin, generation),
-    timeoutOf: (name) => registry.commandTimeout(name),
-    // default: a rejection that is not an Error is reported with its text.
-    report: (error) => report(`plugin host: ${errorText(error)}`),
-    // The listing error of a host page is written through the line reporter of the page (docs/spec/plugin-host.md#channel).
-    displayError: (line) => report(line),
-    // The sidecars that environment.js declared for each plugin (docs/plans/plugin-host-routes.md rule 8).
-    sidecarsOf: pluginSidecarsOf,
-    // The project data of the shown project, which answers the data calls of a plugin host.
-    projectData,
-    // A core command runs as the main page runs it, and a command that the host registered runs under its owner check.
-    runCore: (name, params) => registry.run(name, params),
-    runOwned: (name, params, owner) => registry.runHosted(name, params, owner),
-    // The log of the plugin context of the plugin, which writes its records through the event writer of the page (docs/spec/logging.md).
-    pluginLog: (plugin) => createPluginRuntime({ pluginId: plugin, hooks: pluginRecords }).log,
   });
 }

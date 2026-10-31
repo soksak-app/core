@@ -143,7 +143,7 @@ test("the document audit includes separate binders and open shadow roots and rel
   await request("status.unwatch", "core.surface.document");
 });
 
-test("a plugin host bridge registers no surface document entries", { timeout: 5000 }, async (t) => {
+test("a view bridge without a surface registers no surface document entries", { timeout: 5000 }, async (t) => {
   const { registrations } = setup(t, { surface: false });
   await turn();
   assert.deepEqual(registrations(), []);

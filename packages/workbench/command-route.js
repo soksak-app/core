@@ -1,5 +1,5 @@
-// The owner routing of a command call of a view or a plugin host (docs/spec/native-surfaces.md#view-surfaces,
-// docs/spec/plugin-host.md#command-call). It has no import, so the page modules and the tests load it alone.
+// The owner routing of a command call of a view (docs/spec/native-surfaces.md#view-surfaces). It has no import, so the page
+// modules and the tests load it alone.
 
 /**
  * Runs the command named by a call with the owner checks of the view call: a core command runs through runCore, a command
@@ -7,8 +7,8 @@
  *
  *     name      the non-empty command name of the call
  *     params    the params of the call, as the command takes them
- *     options   call: the name of the caller in the refusal text, `view call` or `plugin host call`
- *               plugin: the plugin id of the view or the plugin host
+ *     options   call: the name of the caller in the refusal text, `view call`
+ *               plugin: the plugin id of the view
  *               runCore(name, params): runs a core command
  *               runOwned(name, params, owner): runs a command that the plugin registered under its owner
  */

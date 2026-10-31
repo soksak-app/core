@@ -47,7 +47,7 @@ test("a native stale-source disposition resolves the command without converting 
   const { commands } = setup({ post: async () => cancellation });
   try {
     const result = await Promise.race([
-      commands.run("declared-ui.snapshot.request", { status: "lines" }).then((value) => ({ value })),
+      commands.run("probe.read", { status: "lines" }).then((value) => ({ value })),
       tick().then(() => ({ pending: true })),
     ]);
     assert.deepEqual(result, { value: cancellation });

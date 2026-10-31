@@ -1,15 +1,10 @@
-// Holds the project data that each plugin declares, for the visible project (docs/spec/plugins.md#project-data).
-//
-// A plugin host reads and writes its declared keys through pluginHostData. When the window shows another project or the library,
-// the values of the previous project are no longer served.
+// Holds the project data that each plugin declares (docs/spec/plugins.md#project-data). A view reads and writes the keys of the
+// project that its start values name, through viewDataOf.
 import { checkProjectData } from "@soksak/plugin-api";
 
 /** The declared project data of each plugin, from its plugin.json data field. */
 const declaredData = new Map();
 let options = null;
-// The project-data context that plugin-host calls currently use.
-let activeContext = { project: null, access: new Map() };
-let turn = Promise.resolve();
 
 /**
  * Sets the host functions that the project data uses.
@@ -20,7 +15,7 @@ export function configureData(values) {
   options = values;
 }
 
-/** Declares the project data of a plugin, which its plugin host reads and writes (docs/spec/plugins.md#project-data). */
+/** Declares the project data of a plugin, which its views read and write (docs/spec/plugins.md#project-data). */
 export function declareProjectData(plugin, data) {
   declaredData.set(plugin, data);
 }
@@ -52,7 +47,7 @@ function checkStored(project, plugin, declared) {
 }
 
 /**
- * The project data functions of one plugin for one project: get(key) and set(key, value), which the plugin host calls with the same
+ * The project data functions of one plugin for one project: get(key) and set(key, value), which the views of the plugin call with the same
  * checks. failures holds the stored-format failures of the keys (checkStored).
  */
 function dataOf(project, plugin, declared, failures) {
@@ -71,73 +66,13 @@ function dataOf(project, plugin, declared, failures) {
   return { get: read, set: write };
 }
 
-async function prepare(project) {
-  const context = { project: project ?? null, access: new Map() }; // default: a library window has no visible project.
-  if (!project) return context;
-  for (const [plugin, declared] of declaredData) {
-    const failures = checkStored(project, plugin, declared);
-    context.access.set(plugin, dataOf(project, plugin, declared, failures));
-  }
-  return context;
-}
-
-/**
- * The project data of a plugin host for the visible project (docs/spec/plugin-host.md#project-data-calls). It waits for the
- * show in progress, then refuses with the named error when no project is shown.
- */
-export const pluginHostData = {
-  async get(plugin, key) {
-    const context = activeContext;
-    return accessOf(plugin, context).get(key);
-  },
-  async set(plugin, key, value) {
-    const context = activeContext;
-    return accessOf(plugin, context).set(key, value);
-  },
-};
-
-function accessOf(plugin, context) {
-  if (context.project === null) throw new Error(`plugin host ${plugin}: no project is shown`);
-  const access = context.access.get(plugin);
-  if (access !== undefined) return access;
-  // A plugin that declares no project data has no key to read, so every key is refused as not declared.
-  if (!declaredData.has(plugin)) return dataOf(context.project, plugin, {}, new Map());
-  throw new Error(`plugin ${plugin} data of project ${context.project.id} is not loaded`);
-}
-
 /**
  * The project data of a plugin for the project that a view names in its start values (docs/spec/plugins.md#project-data). The
  * project may be one that the window does not show, so the view reads and writes its own project. declares(key) tells whether the
- * plugin declares the key, and get(key) and set(key, value) run the checks of the plugin host.
+ * plugin declares the key, and get(key) and set(key, value) run the checks of the stored data.
  */
 export function viewDataOf(project, plugin) {
   const declared = declaredData.get(plugin) ?? {};
   const access = dataOf(project, plugin, declared, checkStored(project, plugin, declared));
   return { declares: (key) => Object.hasOwn(declared, key), get: access.get, set: access.set };
-}
-
-/** Prepares a project's declared data without changing the project that plugin-host calls currently use. */
-export function prepareData(project) {
-  const done = turn.then(() => prepare(project));
-  turn = done.catch((error) => dispatchEvent(new ErrorEvent("error", { message: `plugin data: ${error.message}` })));
-  return done;
-}
-
-/** Installs a successfully prepared project-data context as the owner of subsequent plugin-host calls. */
-export function commitData(context) {
-  if (!context || !(context.access instanceof Map)) throw new Error("invalid prepared project data context");
-  const previous = activeContext;
-  activeContext = context;
-  return previous;
-}
-
-/** Restores the prior context when publishing an installed context fails before the host changes its shown project. */
-export function restoreData(installed, previous) {
-  if (!installed || !previous || activeContext !== installed) throw new Error("project data context cannot be restored after another project commit");
-  activeContext = previous;
-}
-
-/** Reports the project {id, root} that the window shows, or null. Preparation and installation are serialized. */
-export async function showData(project) {
-  commitData(await prepareData(project));
 }

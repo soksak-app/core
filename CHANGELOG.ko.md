@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F332-4-1: `packages/workbench`와 `packages/plugin-api`에서 declared UI 모듈, plugin host 모듈, `@soksak/plugin-api`의 snapshot channel(`snapshots.js`와 그 계약 case), view bridge의 snapshot, `runtime.project`, `window.sokHost` 분기, sidecar facts staging을 뺀다. parity 등록부는 이 변경이 코드를 지운 완료 항목(F226, F239-39, F239-41, F239-41-1, F239-42, F239-42-1, F239-42-2, F239-241, F248-7)의 근거를 뺐고, `surface-listing.test.mjs`의 `boundaries` fixture는 중립 id `probe`를 쓴다.
+
 - F332-8: `validateManifest`와 `sok`의 manifest reader는 sidebar section을 view `{id, name, composition, height, unload?}`로 받고, section의 `status`, `module`, `fill`, plugin.json의 `host`와 `hostOperations`, sidecar.json의 `hostReadOperations`를 각각의 문구로 거부한다. `data`와 `exposes`는 surface 또는 sections를 요구하며, `dependencies`는 sections를 받는다. 공유 manifest 사례가 각 거부와 허용을 다룬다.
 - F332-9: main page는 view call `runtime.status.watch`와 `runtime.status.unwatch`를 `surface`와 함께 답한다. 그 status는 창이 가진 plugin의 surface에서 따른다. `runtime.data.get`과 `runtime.data.set`은 view 시작 값의 project에 대해 답한다. `surface`가 없는 요청은 tab surface만 고른다.
 - F331: `surface.opens`는 더 이상 `"*"`를 받지 않는다. 각 plugin은 자기가 여는 확장자를 선언하고, `core.file.open`은 그 확장자를 선언한 불러온 plugin이 없는 파일을 `"*"`를 선언한 plugin에서 여는 대신 `no plugin opens <path>`로 실패한다.

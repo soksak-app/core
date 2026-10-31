@@ -8,36 +8,6 @@ import { causeCids, createCalls, DEFAULT_CALL_TIMEOUT } from "@soksak/plugin-api
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of plugin-api. */
 const FAILED_COMMAND = -32000;
 
-// The command layer of each view surface, by surface id. The answers of a surface keep its layer here, so every sender of a
-// command of the view (the exposure requests and the declared UI pull) sends through one layer, and each reply of the surface
-// reaches one layer.
-const layers = new Map();
-const layerGenerations = new Map();
-
-/** Keeps the command layer of the view of surfaceId and returns the function that removes it. */
-export function keepViewCommands(surfaceId, commands, generation) {
-  if (!Number.isSafeInteger(generation) || generation < 1) throw new TypeError("view command layer requires a positive source generation");
-  layers.set(surfaceId, commands);
-  layerGenerations.set(surfaceId, generation);
-  return () => {
-    if (layers.get(surfaceId) === commands) {
-      layers.delete(surfaceId);
-      layerGenerations.delete(surfaceId);
-    }
-  };
-}
-
-/** The command layer of the view of surfaceId, or null while its answers are not connected. */
-export function viewCommandsOf(surfaceId) {
-  // default: a view whose answers are not connected has no layer, and its reader treats null as no command path.
-  return layers.get(surfaceId) ?? null;
-}
-
-/** The generation of the command layer of surfaceId, or null while it has no layer. */
-export function viewCommandGenerationOf(surfaceId) {
-  return layerGenerations.get(surfaceId) ?? null; // default: a closed or unregistered command layer has no generation.
-}
-
 /**
  * Creates the command layer of one view surface.
  *

@@ -87,7 +87,7 @@ test("a declaring view writes its tab state and reads it back, and refusals name
   const { recordOrigin } = await import("../tab-reports.js");
   const id = "view-state-a";
   recordOrigin(id, null, "test fixture");
-  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-unload", UNLOAD));
   await waitSurfaceCompositionDeclared(id);
@@ -112,7 +112,7 @@ test("a view whose plugin does not declare surface.unload has no tab state", { t
   const { recordOrigin } = await import("../tab-reports.js");
   const id = "view-state-plain";
   recordOrigin(id, null, "test fixture");
-  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
@@ -128,7 +128,7 @@ test("the tab reports of a view set its title, its modified mark and its error",
   const reports = await import("../tab-reports.js");
   const id = "view-report-a";
   reports.recordOrigin(id, null, "test fixture");
-  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
@@ -148,7 +148,7 @@ test("the composition of a view places nothing while a place that leaves the vie
   const reports = await import("../tab-reports.js");
   const id = "view-place-a";
   reports.recordOrigin(id, null, "test fixture");
-  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
@@ -170,7 +170,7 @@ test("a region query of a view that a running place leaves out waits for the pla
   const reports = await import("../tab-reports.js");
   const id = "view-place-regions";
   reports.recordOrigin(id, null, "test fixture");
-  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
@@ -200,7 +200,7 @@ test("a region query of a view waits for a failed place that left the view out a
   const reports = await import("../tab-reports.js");
   const id = "view-failed-place-regions";
   reports.recordOrigin(id, null, "test fixture");
-  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
@@ -227,7 +227,7 @@ test("a view declares its composition only after the host authorizes its surface
   const reports = await import("../tab-reports.js");
   const id = "view-auth-a";
   reports.recordOrigin(id, null, "test fixture");
-  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   const mounted = mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(h.calls.filter((call) => call.name === "compositionDeclare").length, 0, "the view declared before authorization");
@@ -246,7 +246,7 @@ test("a later retained mount waits for the preceding placement release", { timeo
   const { recordOrigin } = await import("../tab-reports.js");
   const id = "view-retained-placement-order";
   recordOrigin(id, null, "test fixture");
-  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   let release, entered;
   const held = new Promise((resolve) => { release = resolve; });
   const started = new Promise((resolve) => { entered = resolve; });
@@ -306,7 +306,7 @@ test("a replacement view registers its command once in its own source generation
   });
   registry.declare("fixture-plain", { status: [], commands: [{ name: command, description: "Runs the fixture command.", params: { type: "object" }, result: { type: "null" } }], dom: [] });
   recordOrigin(id, null, "test fixture");
-  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   h.modules.authorizeSurface(id);
   await h.modules.mountSurface(h.slot, { ...viewOf(id, "fixture-plain", false),
     declarations: { status: [], commands: [{ name: command, description: "Runs the fixture command.", params: { type: "object" }, result: { type: "null" } }], dom: [] },
@@ -333,7 +333,7 @@ test("a failed view command registration returns its declaration error", { timeo
   const { recordOrigin } = await import("../tab-reports.js");
   const id = "view-invalid-command-registration";
   recordOrigin(id, null, "test fixture");
-  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
   h.modules.authorizeSurface(id);
   await h.modules.mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   try {

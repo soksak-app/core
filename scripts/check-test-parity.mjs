@@ -113,7 +113,6 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs", "scripts/test/fixture-compositions.test.mjs"]),
   lane("log contract", "js-ts", ["packages/log-contract/*.js"], ["packages/log-contract/test/**/*.mjs"]),
   lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
-  lane("declared UI benchmark", "js-ts", ["packages/workbench/benchmark/declared-ui.mjs"], ["packages/workbench/test/declared-ui-benchmark.test.mjs"], { sharedTests: true }),
   lane("client", "js-ts", [
     "packages/client/*.js",
     "packages/client/platform/**/*.js",
@@ -1230,7 +1229,7 @@ const FEATURE_LINKS = [
     },
     {
       "file": "packages/plugin-api/test/view-reporter.test.mjs",
-      "id": "ordinary call counts and close or coalescing reports stay out of the application error path"
+      "id": "ordinary call counts and closed-surface call ends stay out of the application error path"
     },
     {
       "file": "packages/plugin-api/test/view-reporter.test.mjs",
@@ -2550,13 +2549,10 @@ const FEATURE_LINKS = [
     id: "F249",
     implementation: [
       { file: "packages/workbench/command-route.js", symbol: "export function runCommandCall" },
-      { file: "packages/workbench/plugin-host.js", symbol: "export function listenPluginHostCalls" },
       { file: "packages/host/wailsv3/src/plugin_host_channel.go", symbol: "func servedPluginHostCall" },
       { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "pub fn forwarded_call" },
     ],
     tests: [
-      { file: "packages/workbench/test/plugin-host-calls.test.mjs", id: "runtime.command runs a core command through runCore and a command of the plugin through runOwned, with the checks of the view call" },
-      { file: "packages/workbench/test/plugin-host-calls.test.mjs", id: "runtime.log writes the record of the plugin through its log with the checks of the plugin context" },
       { file: "packages/host/wailsv3/src/plugin_host_channel_test.go", id: "TestPluginHostChannelForwardsTheCommandCall" },
       { file: "packages/host/wailsv3/src/plugin_host_channel_test.go", id: "TestPluginHostChannelForwardsTheLogCall" },
       { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "the_host_forwards_the_command_call_to_the_main_page" },
@@ -2568,38 +2564,21 @@ const FEATURE_LINKS = [
   {
     id: "F248-8",
     implementation: [
-      { file: "packages/workbench/declared-section.js", symbol: "export function createDeclaredSection" },
       { file: "packages/workbench/page-layout.js", symbol: "export function reportUncaught" },
     ],
     tests: [
-      { file: "packages/workbench/test/declared-section.test.mjs", id: "a failed pull leaves the section cleared, reports its error once, and is not retried" },
-      { file: "packages/workbench/test/sidebar-sections.test.mjs", id: "a declared section whose pull fails reports the error once through the page error event and draws nothing" },
       { file: "packages/workbench/test/page-error-display.test.mjs", id: "an error event without a source location writes no location detail" },
     ],
     expected: "A failed declared pull leaves the section cleared, reports its error once through the page error event, is not retried on a timer, and an error event without a source location writes no location detail, each checked by a workbench test.",
     levels: ["unit"],
   },
   {
-    id: "F248-7",
-    implementation: [
-      { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
-      { file: "packages/plugin-api/snapshots.js", symbol: "export function createSnapshotSender" },
-    ],
-    tests: [
-      { file: "packages/plugin-api/test/view-snapshot-pull-contract.test.mjs", id: "view snapshot pull contract publishes the required cases in order" },
-    ],
-    expected: "The view answers a declared UI snapshot pull with seq 0 and value null only when the store has no value, and answers any other store error with that error and reports it, replayed against the bridge with a test-controlled store fault.",
-    levels: ["unit"],
-  },
-  {
     id: "F248-6",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
-      { file: "packages/plugin-api/snapshots.js", symbol: "export function createSnapshotSender" },
     ],
     tests: [
       { file: "packages/plugin-api/test/view-tab-calls-contract.test.mjs", id: "view tab call contract publishes the required cases in order" },
-      { file: "packages/plugin-api/test/view-snapshot-pull-contract.test.mjs", id: "view snapshot pull contract publishes the required cases in order" },
     ],
     expected: "The view bridge posts each tab call with its parameters and passes the host reply and refusal through, and it answers a declared UI snapshot pull with the pushed value or with seq 0 and value null, each replayed against the bridge with the same outputs.",
     levels: ["unit"],
@@ -2683,7 +2662,6 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/index.js", symbol: "export function createExpose" },
       { file: "packages/plugin-api/surface-composition.js", symbol: "export async function createSurfaceCompositionController" },
       { file: "packages/plugin-api/binder.js", symbol: "export const INTERACTIVE" },
-      { file: "packages/plugin-api/snapshots.js", symbol: "export function createSnapshotSender" },
     ],
     tests: [
       { file: "packages/plugin-api/test/view-composition-contract.test.mjs", id: "view composition contract publishes the required cases in order" },
@@ -2691,7 +2669,6 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/command-registration-contract.test.mjs", id: "command registration contract publishes the required cases in order" },
       { file: "packages/plugin-api/test/view-commands-contract.test.mjs", id: "view command contract publishes the required cases in order" },
       { file: "packages/plugin-api/test/view-native-contract.test.mjs", id: "view native contract publishes the required cases in order" },
-      { file: "packages/plugin-api/test/declared-ui-snapshot-contract.test.mjs", id: "declared UI snapshot contract publishes the required cases in order" },
       { file: "packages/plugin-api/test/interactive-contract.test.mjs", id: "INTERACTIVE is the published selector of operable elements" },
     ],
     expected: "Each published case file lists its ordered steps, and the owning test runs each case against the implementation with the same outputs.",
@@ -4674,7 +4651,6 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/index.js", symbol: "export async function replyPayload" },
       { file: "packages/workbench/exposure.js", symbol: "async function follow(key, name, watch)" },
       { file: "packages/workbench/surface-modules.js", symbol: "view call ${event.id} reply" },
-      { file: "packages/workbench/plugin-host.js", symbol: "export function checkHostSidecarRequest" },
       { file: "packages/workbench/page-log.js", symbol: "function consoleText" },
       { file: "scripts/test-command.mjs", symbol: "export function combineFailures" },
       { file: "scripts/test-discovery.mjs", symbol: "export function cargoTestExecutables" },
@@ -4687,9 +4663,6 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/exposure.test.mjs", id: "an undefined status value or command result is refused with an error that names it, and null is the no-value" },
       { file: "packages/workbench/test/surface-view.test.mjs", id: "a view reply the host refuses is reported through the page error path" },
       { file: "packages/workbench/test/exposure.test.mjs", id: "a status watch that fails for a reason other than the closed surface reports the error" },
-      { file: "packages/workbench/test/exposure.test.mjs", id: "a plugin host status reply without seq and value is refused instead of read as an empty value" },
-      { file: "packages/workbench/test/plugin-host-operations.test.mjs", id: "a body that is not an object or has no string operation field is refused" },
-      { file: "packages/workbench/test/plugin-host-calls.test.mjs", id: "a host reply that arrives after its layer left is reported, not dropped" },
       { file: "packages/workbench/test/plugin-operations.test.mjs", id: "a host call that rejects with a value that is not an Error is reported with its text" },
       { file: "packages/workbench/test/page-log.test.mjs", id: "a console argument that JSON cannot serialize is recorded as a marker with its reason, not as [object Object]" },
       { file: "scripts/test/test-command.test.mjs", id: "keeps a process error and a cleanup error together when both occur" },
@@ -4787,13 +4760,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F226",
-    implementation: [{ file: "packages/workbench/sidebar-sections.js", symbol: "mountDeclared" }],
-    tests: [{ file: "packages/workbench/test/sidebar-sections.test.mjs", id: "a declared section draws the value of its source, shows its rejection, and reports mounted, error, text and controls" }],
-    expected: "The workbench uses the declared full status name of a section for the registry and the display, so a declared section of a view matches its registration and draws.",
-    levels: ["unit"],
-  },
-  {
     id: "F251",
     implementation: [
       { file: "packages/workbench/view-calls.js", symbol: "statusNameOf" },
@@ -4839,13 +4805,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "native/darwin/src/capture.m", symbol: "static bool beginCaptureSourceArtifacts(" }],
     tests: [{ file: "native/darwin/tests/capture_source_writer_test.m", id: "source artifacts and their manifest finish before the held frame writer is released" }],
     expected: "Accepted diagnostic source artifacts progress independently of a held frame writer and both owned writers drain before recording state is released.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-241",
-    implementation: [{ file: "packages/plugin-api/view.js", symbol: "if (window.sokHost !== undefined)" }],
-    tests: [{ file: "packages/plugin-api/test/view.test.mjs", id: "a plugin-host page writes one record through the plugin-host log contract" }],
-    expected: "The SDK bridge preserves the declared plugin-host log request shape and operation identifiers while surface views use direct batches.",
     levels: ["unit"],
   },
   {
@@ -4937,13 +4896,6 @@ const FEATURE_LINKS = [
       { file: "scripts/test/rust-repeat.test.mjs", id: "cargoTargetArgs rejects non-string selectors instead of coercing them" },
     ],
     expected: "Rust repeat target selection limits prebuild and discovery before exact test-name filtering while preserving package-wide defaults.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-42-2",
-    implementation: [{ file: "packages/workbench/test/declared-source.test.mjs", symbol: "delayListenerRegistration = false;" }],
-    tests: [{ file: "packages/workbench/test/declared-source.test.mjs", id: "the ingress ACKs each valid view event once and routes only its source and status" }],
-    expected: "The ingress ACK consumer test configures its own listener fixture and ends within its individual timeout when selected by name.",
     levels: ["unit"],
   },
   {
@@ -5061,67 +5013,10 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-42-1",
-    implementation: [{ file: "packages/workbench/declared-source.js", symbol: "ingressReady.catch((error) =>" }],
-    tests: [{ file: "packages/workbench/test/declared-source.test.mjs", id: "listener registration failure remains observable without an early unhandled rejection" }],
-    expected: "A listener-registration failure is observed immediately to prevent an early unhandled rejection, while startup consumers still receive the same rejected readiness promise.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-42",
-    implementation: [
-      { file: "packages/workbench/declared-source.js", symbol: "export function startDeclaredSnapshotIngress()" },
-      { file: "packages/workbench/declared-source.js", symbol: "createSnapshotReceiver({" },
-      { file: "packages/workbench/index.html", symbol: "prepareDeclaredSnapshotIngress()" },
-      { file: "packages/workbench/index.html", symbol: "afterDeclaredSnapshotIngress(() => {})" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/declared-section.test.mjs", id: "sections sharing a source acknowledge only snapshots of their own status" },
-      { file: "packages/workbench/test/declared-section.test.mjs", id: "a hidden status keeps its sender moving while another status section is mounted" },
-      { file: "packages/workbench/test/declared-section.test.mjs", id: "a push before a section mounts releases its sender slot before the next push" },
-      { file: "packages/workbench/test/declared-source.test.mjs", id: "the ingress ACKs each valid view event once and routes only its source and status" },
-      { file: "packages/workbench/test/declared-source-no-host.test.mjs", id: "a page without a native bridge starts ingress without a fallback transport" },
-    ],
-    expected: "One window ingress validates and acknowledges every pushed snapshot once, routes it by plugin, source and status, and releases sender slots when no matching section is mounted. Provider startup waits for ingress readiness, and a page without a native bridge starts without a fallback transport.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-41",
-    implementation: [
-      { file: "packages/workbench/declared-source.js", symbol: "export function startDeclaredSnapshotIngress()" },
-      { file: "packages/workbench/declared-section.js", symbol: "const ready = link.onMessage" },
-      { file: "packages/plugin-api/snapshots.js", symbol: "export function createSnapshotReceiver" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/declared-section.test.mjs", id: "the first push is subscribed before the source is pulled" },
-      { file: "packages/workbench/test/declared-section.test.mjs", id: "a source change before subscription readiness unsubscribes late and never pulls the old source" },
-      { file: "packages/workbench/test/declared-section.test.mjs", id: "closing before subscription readiness unsubscribes late and never pulls" },
-      { file: "packages/workbench/test/declared-section.test.mjs", id: "reconciling the ready source again keeps one listener and one pull" },
-      { file: "packages/workbench/test/declared-source.test.mjs", id: "a view channel resolves readiness only after the runtime listener is installed" },
-      { file: "packages/plugin-api/test/snapshots.test.mjs", id: "the receiver resolves an asynchronous subscription after it installs its listener" },
-    ],
-    expected: "The workbench installs the snapshot listener before pulling a chosen source, accepts a push that arrives before the pull reply, rejects invalid unsubscribe results, and releases a delayed subscription after its source becomes obsolete.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-41-1",
-    implementation: [
-      { file: "packages/workbench/declared-section.js", symbol: "mine !== generation" },
-      { file: "packages/workbench/declared-source.js", symbol: "if (closed) return" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/declared-section.test.mjs", id: "a queued callback from the first A subscription is discarded after an A to B to A change" },
-      { file: "packages/workbench/test/declared-source.test.mjs", id: "the channel delivers each snapshot of its surface and plugin, and the unsubscribe ends the delivery" },
-    ],
-    expected: "A snapshot callback changes a declared section only while the exact subscription generation that received it remains current, and a closed transport ignores callbacks already queued before unsubscribe.",
-    levels: ["unit"],
-  },
-  {
     id: "F244",
     implementation: [{ file: "packages/workbench/tab-reports.js", symbol: "tabOrigin" }],
     tests: [
       { file: "packages/workbench/test/surface-view.test.mjs", id: "the start values of a view carry its params, origin, project, declarations and diagnostic declaration" },
-      { file: "packages/workbench/test/declared-ui-draw-time.test.mjs", id: "a list of 1000 items validates and draws every item" },
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI inspects every executable in the bundle" },
       { file: "scripts/test/native-tests.test.mjs", id: "the native tests run one at a time, each with its start and end, and a failure fails the run" },
       { file: "scripts/test/node-tests.test.mjs", id: "a change under a package selects the test files of that package only" },
@@ -5147,29 +5042,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "the_host_forwards_only_the_registration_calls_and_refuses_every_other_call" },
     ],
     expected: "Both hosts relay the replies, the registration calls and the snapshots of a plugin host page to the main page without a surface, refuse every other call, post the theme and the messages of the main page to the ready document, and send plugin-host-ended when the host ends.",
-    levels: ["unit"],
-  },
-  {
-    id: "F212.9-3-2",
-    implementation: [
-      { file: "packages/workbench/plugin-host.js", symbol: "listenPluginHostCalls" },
-      { file: "packages/workbench/exposure.js", symbol: "forwardHost" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/exposure.test.mjs", id: "a plugin host answers only a request without surface for a name that no surface registered" },
-      { file: "packages/workbench/test/plugin-host-calls.test.mjs", id: "plugin-host-ended removes the registrations of the host and ends its open requests" },
-    ],
-    expected: "The main page answers the registration calls of a plugin host under plugin:<plugin id>, answers a request without surface through the host only when no surface page registered the name, and removes the registrations when the host ends.",
-    levels: ["unit"],
-  },
-  {
-    id: "F212.9-3-3",
-    implementation: [{ file: "packages/workbench/declared-source.js", symbol: "createDeclaredSource" }],
-    tests: [
-      { file: "packages/workbench/test/declared-source.test.mjs", id: "the channel of a plugin host source acknowledges through pluginHostEvent and delivers the snapshots of its plugin" },
-      { file: "packages/workbench/test/declared-source.test.mjs", id: "the pull of a plugin host source runs the snapshot request through the layer of its host" },
-    ],
-    expected: "The source of a plugin host receives the snapshots of its plugin without a surface, acknowledges through pluginHostEvent and pulls through the request layer of the host.",
     levels: ["unit"],
   },
 
@@ -7350,16 +7222,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/test_mark_test.rs", id: "a_test_mark_is_stored_when_lifecycle_is_off" },
     ],
     expected: "Both hosts store and flush host.test.start and host.test.end at info under lifecycle=error and lifecycle=off, return their event positions, and still gate ordinary lifecycle/info records.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-39",
-    implementation: [
-      { file: "packages/workbench/exposure.js", symbol: "onRegistrationChange(listener)" },
-      { file: "packages/workbench/sidebar-sections.js", symbol: "entry.declared?.reconcile()" },
-    ],
-    tests: [{ file: "packages/workbench/test/sidebar-sections.test.mjs", id: "a declared section selects and pulls a host that registers after the section is drawn" }],
-    expected: "A drawn declared section reselects and pulls its host status source after registration changes, and the same test verifies repeated registration, source changes, and cleanup.",
     levels: ["unit"],
   },
   {
@@ -10513,8 +10375,12 @@ const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F
 // files and the crash reports of the window-check workflow, which F298-2 removes: no workflow runs an end-to-end check.
 // F286, F290 and F292-26-3 wrote the options that skip a window check in a run without a display or a person, which F298-4
 // removes: window checks run only on a computer with a display and a person.
+// F226, F239-39, F239-41, F239-41-1, F239-42, F239-42-1, F239-42-2, F239-241 and F248-7 wrote the declared section, the declared
+// source, the snapshot channel and the plugin-host log of the workbench and the view bridge, which F332-4-1 removes: the declared UI
+// and the plugin host are removed, and a sidebar section is a view of its plugin.
 const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68",
-  "F278", "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3"]);
+  "F278", "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
+  "F239-42-1", "F239-42-2", "F239-241", "F248-7"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

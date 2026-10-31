@@ -35,5 +35,5 @@ export function icon(name) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
 }
 
-/** Whether the core icon table has the name (docs/spec/declared-ui.md, icons). */
+/** Whether the core icon table has the name. */
 export const hasIcon = (name) => Object.hasOwn(PATHS, name);

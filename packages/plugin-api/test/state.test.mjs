@@ -1,4 +1,4 @@
-// Checks the project data declaration of a plugin host, and the refusal of the removed state module.
+// Checks the project data declaration of a plugin, and the refusal of the removed state module.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { checkProjectData, validateManifest } from "../index.js";

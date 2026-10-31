@@ -9,15 +9,12 @@ import { contributionsState, onContributionsChange } from "./contributions.js";
 import { checkOpenPath } from "./file-open.js";
 import { registry, connectExposure, revisitRegistrations, whenRepliesSent } from "./exposure.js";
 import { log, reloadPage, report } from "./host.js";
-import { pluginHostData } from "./plugin-data.js";
 import { createPluginApply } from "./plugin-apply.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
 import { onFocusSourceChange, setResponder } from "./view-focus.js";
 import { trackPointer } from "./pointer-state.js";
-import { moveTreeFocus, setTreeExpanded } from "./declared-ui.js";
-import { resolveSectionControl, resolveSectionStatusLine } from "./section-address.js";
-import { acceptedSnapshots, losses, onPluginProcessChange, openCalls, views } from "./plugin-processes.js";
+import { losses, onPluginProcessChange, openCalls, views } from "./plugin-processes.js";
 import { tabMenuItems } from "./tab-menu.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
@@ -345,7 +342,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   status("core.plugin.open-calls", openCalls);
   status("core.plugin.losses", losses);
   status("core.plugin.views", views);
-  status("core.plugin.snapshots", acceptedSnapshots);
   onPluginProcessChange(coreChanged);
   status("core.focus", () => focusState(document));
   onFocusSourceChange(coreChanged);
@@ -529,8 +525,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.card.sidebar.size", ({ card, side, size }) => { resizeSidebar(card, side, size); });
   registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); });
   registry.command("core.sidebar.section.fold", ({ sidebar, section }) => { foldSection(sidebar, section); });
-  registry.command("core.declared-ui.tree.expand", (params) => setTreeExpanded(params));
-  registry.command("core.declared-ui.tree.move", (params) => moveTreeFocus(params));
   registry.command("core.text.larger", async () => { await changeTextSize(1, "core.text.larger"); });
   registry.command("core.text.smaller", async () => { await changeTextSize(-1, "core.text.smaller"); });
   registry.command("core.text.reset", async () => { await changeTextSize(0, "core.text.reset"); });
@@ -626,9 +620,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   });
 
   for (const { name } of registry.list().dom) {
-    if (name.startsWith("core.")) registry.dom(name, undefined,
-      name === "core.sidebar.section.control" ? resolveSectionControl :
-        name === "core.sidebar.section.status-line" ? resolveSectionStatusLine : undefined);
+    if (name.startsWith("core.")) registry.dom(name);
   }
 
   onPicker(coreChanged);
@@ -644,7 +636,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
       const record = seated()?.surfaces.find((entry) => entry.id === surface);
       return record ? shift(record.applied, planeOrigin()) : null;
     },
-    unloaded: (surface) => memory.unloaded(surface), projectData: pluginHostData });
+    unloaded: (surface) => memory.unloaded(surface) });
 }
 
 // Action marker for window size changes (V5-104). It marks the log so that an event can be matched to the action that preceded it.

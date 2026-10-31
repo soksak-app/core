@@ -3,10 +3,8 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
 import { endSourceOrigin, registerSourceOrigin, seedSourceOrigins, sourceOrigin } from "../source-origins.js";
-import { viewCommandGenerationOf } from "../view-commands.js";
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
-import { chooseSource } from "../declared-section.js";
 import { pageIdentity } from "../page-identity.js";
 
 setSurfaceTextSize(() => 1);
@@ -22,7 +20,7 @@ function sourceListenerMap() {
 }
 
 function seedViewSource(plugin, surface, generation = 1) {
-  seedSourceOrigins({ floor: generation, pluginHosts: {}, views: { [surface]: generation } });
+  seedSourceOrigins({ floor: generation, views: { [surface]: generation } });
 }
 
 function pageOf(dom) {
@@ -119,7 +117,7 @@ test("a view mount waits for its actual source registration before serving the f
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition: { kind: "view", page: "ui/page.html" } };
   try {
     authorizeSurface(surfaceId);
-    seedSourceOrigins({ floor: 0, pluginHosts: {}, views: {} });
+    seedSourceOrigins({ floor: 0, views: {} });
     await mountSurface(document.querySelector("#slot"), surface);
     await waitSurfaceCompositionDeclared(surfaceId);
     assert.equal(calls.some(({ name }) => name === "viewRequest"), false, "mount invented a view command generation");
@@ -127,15 +125,11 @@ test("a view mount waits for its actual source registration before serving the f
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(replies, [], "an unregistered generation was served");
     assert.equal(registerSourceOrigin(pluginId, surfaceId, 1), true, "the native source registration was not accepted");
-    assert.equal(viewCommandGenerationOf(surfaceId), 1, "registration did not bind the command layer before the first call");
     assert.equal(endSourceOrigin(pluginId, surfaceId, 1), true, "the source end did not retire its exact generation");
     listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
-    assert.equal(viewCommandGenerationOf(surfaceId), null, "process end did not release the commands of the ended document");
 
     assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source registration was not accepted");
-    assert.equal(viewCommandGenerationOf(surfaceId), 2, "the replacement registration did not bind its own command layer");
     listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
-    assert.equal(viewCommandGenerationOf(surfaceId), 2, "a late old process end removed the replacement command layer");
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 2, id: 2, command: "runtime.settings.read", params: null });
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(replies, [{ id: 2, result: {}, page: pageOf(dom), generation: 2 }], "the first current call was not served after actual registration");
@@ -273,7 +267,7 @@ test("a view declares its composition only after native call listeners are ready
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition: { kind: "view", page: "ui/page.html" } };
   let mounting;
   try {
-    seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [surfaceId]: 1 } });
+    seedSourceOrigins({ floor: 1, views: { [surfaceId]: 1 } });
     mounting = mountSurface(document.querySelector("#slot"), surface);
     authorizeSurface(surfaceId);
     await viewCallRegistration;
@@ -382,7 +376,7 @@ test("a page-start view waits for the initial project context and a disposed pre
   let obsoleteMount;
   let currentMount;
   try {
-    seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [disposedId]: 1, [currentId]: 1 } });
+    seedSourceOrigins({ floor: 1, views: { [disposedId]: 1, [currentId]: 1 } });
     authorizeSurface(disposedId);
     obsoleteMount = mountSurface(document.querySelector("#slot"), surface(disposedId));
     await new Promise((resolve) => setImmediate(resolve));
@@ -954,7 +948,7 @@ test("a view registers its exposure through the page and its port consumes forwa
   }
 });
 
-// The declared UI contract binds a registration to its source process. Ending the current view process removes that process's
+// The view source contract binds a registration to its source process. Ending the current view process removes that process's
 // registrations; a replacement can register again, while a delayed end from the old generation cannot remove the replacement.
 test("a view process end removes its status registrations and preserves replacement registrations", { timeout: 20000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
@@ -994,8 +988,6 @@ test("a view process end removes its status registrations and preserves replacem
     composition: { kind: "view", page: "ui/page.html" } };
   const registerStatus = (generation, id) => listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation, id,
     command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: statusId } } });
-  const choose = () => chooseSource({ active: surfaceId, activeGeneration: sourceOrigin(pluginId, surfaceId),
-    registrants: registry.registrants("status", statusId) });
   const stopRegistrationObservation = registry.onRegistrationChange(() => {
     registrationObservations.push({
       registrants: registry.registrants("status", statusId),
@@ -1015,7 +1007,6 @@ test("a view process end removes its status registrations and preserves replacem
     await mountSurface(document.querySelector("#slot"), surface);
     registerStatus(1, 1);
     await settleRegistration(true);
-    assert.deepEqual(choose(), { id: surfaceId, surface: surfaceId, generation: 1 }, "the current registered view was not selected");
 
     assert.equal(endSourceOrigin(pluginId, surfaceId, 1), true, "the current source generation did not end");
     assert.deepEqual(registry.registrants("status", statusId), [], "the ended view registration remained available before process-end cleanup");
@@ -1023,18 +1014,14 @@ test("a view process end removes its status registrations and preserves replacem
     listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
     await settleRegistration(false);
     assert.equal(sourceOrigin(pluginId, surfaceId), undefined, "the ended generation remains current");
-    assert.equal(viewCommandGenerationOf(surfaceId), null, "the ended view command layer remains current");
-    assert.equal(choose(), null, "an ended view registration remained eligible as a declared UI source");
 
     assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source generation did not register");
     registerStatus(2, 2);
     await settleRegistration(true);
-    assert.deepEqual(choose(), { id: surfaceId, surface: surfaceId, generation: 2 }, "the replacement registration was not selected");
 
     assert.equal(endSourceOrigin(pluginId, surfaceId, 1), false, "a delayed old end retired the replacement generation");
     listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
     assert.deepEqual(registry.registrants("status", statusId), [surfaceId], "a delayed old end removed the replacement registration");
-    assert.equal(viewCommandGenerationOf(surfaceId), 2, "a delayed old end removed the replacement command layer");
     assert.equal(calls.filter(({ name }) => name === "exposureRegister").length, 2, "both view generations must register the status with the host");
   } finally {
     stopRegistrationObservation();
@@ -1486,7 +1473,6 @@ test("a view surface mounted again after its dispose registers its port while th
     seedViewSource(pluginId, surfaceId);
     const firstMount = mountSurface(document.querySelector("#slot"), surface);
     assert.equal(releases.length, 1, "the first mount did not begin its delayed view-call listener registration");
-    assert.equal(viewCommandGenerationOf(surfaceId), 1, "the first mount did not register its view port before waiting for listeners");
     await disposeSurface(surfaceId);
     await firstMount;
 
