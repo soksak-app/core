@@ -605,6 +605,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.declaration.rejects-absolute-executable` | 절대 실행 파일 경로는 `executable <path> is not a path inside the package`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | both |
 | `sidecars.declaration.rejects-unsupported-protocol` | 지원하지 않는 프로토콜 버전은 `protocol <n> is not supported`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | both |
 | `sidecars.declaration.rejects-unknown-transport` | 알 수 없는 전송 방식은 `transport <value> is not supported`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | both |
+| `sidecars.declaration.rejects-host-read-operations` | `hostReadOperations`가 있는 `sidecar.json`은 `<sidecar.json 경로>: hostReadOperations is removed`로 거부된다. 그 사이드카는 선언되지 않고, 생성은 성공하며, 그 사이드카로 보내는 요청은 사이드카 이름과 그 이유를 밝히며 실패한다. | both |
 | `sidecars.declaration.invalid-sidecar-leaves-others-declared` | 올바른 sidecar 옆의 거부된 sidecar는 생성 때와 이후 선언 때 모두 올바른 sidecar를 선언된 채로 둔다. 올바른 sidecar에 대한 요청은 그 sidecar에 닿고, 거부된 sidecar에 대한 요청은 `sidecar <name>: <path>: displayName is required`로 실패한다. | both |
 | `sidecars.declaration.persistent-requires-config-directory` | 설정 디렉터리가 없는 지속 전송은 생성을 실패시킨다. | both |
 | `sidecars.persistent.accepts-non-canonical-config-directory` | 지속 전송은 정규화되지 않은 설정 디렉터리 경로를 받아들인다. | both |
@@ -949,7 +950,7 @@ fn invalid_json_closes_connection() {
 | `installed.document.names-from-package-json` | `/installed-plugins.json` 항목의 `package`와 설치된 plugin의 `/modules/<package>`는 기록된 `path`의 `package.json`의 `name`이며, `package.json`이 없으면 `{"error":"<file>: no such file or directory"}`다. | both |
 | `installed.document.refuses-package` | Plugin이 `package`를 담은 `installed.json`은 `{"error":"<file>: plugins/installed.json <id>: unknown field package"}`다. | both |
 | `installed.document.reports-errors` | 켜진 plugin의 `plugin.json`이 없거나 잘못되었거나, `diagnostics.json`이나 `installed.json`이 잘못되었으면 `/installed-plugins.json`은 파일과 이유를 담은 `{"error":...}`다. | both |
-| `installed.document.sidecar-facts` | `/installed-plugins.json`의 plugin `sidecars` 항목은 사이드카 의존마다 그 사이드카의 `sidecar.json`에 있는 `message`와 `hostReadOperations`를 사이드카 이름 아래 담으며, 사이드카 의존이 없는 plugin에는 `sidecars` 필드가 없다. | both |
+| `installed.document.sidecar-facts` | `/installed-plugins.json`의 plugin `sidecars` 항목은 사이드카 의존마다 그 사이드카의 `sidecar.json`에 있는 `message`를 사이드카 이름 아래 담으며, 사이드카 의존이 없는 plugin에는 `sidecars` 필드가 없다. | both |
 | `installed.plugin-json.invalid-text` | 켜진 plugin의 `plugin.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
 | `installed.json.invalid-text` | `installed.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
 | `installed.package-json.invalid-text` | 켜진 plugin의 `package.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |

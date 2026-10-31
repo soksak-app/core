@@ -1314,10 +1314,16 @@ impl<O: Owner> Sidecars<O> {
             protocol: u64,
             #[serde(default)]
             transport: Option<String>,
+            #[serde(rename = "hostReadOperations", default)]
+            host_read_operations: Option<serde_json::Value>,
         }
         let path = item.folder.join("sidecar.json").display().to_string();
         let sidecar: Sidecar =
             serde_json::from_slice(&item.data).map_err(|e| format!("{path}: {e}"))?;
+        // The member was read by the removed plugin host, so a declaration that still carries it is of an earlier form.
+        if sidecar.host_read_operations.is_some() {
+            return Err(format!("{path}: hostReadOperations is removed"));
+        }
         if sidecar.protocol != 1 {
             return Err(format!(
                 "{path}: protocol {} is not supported",

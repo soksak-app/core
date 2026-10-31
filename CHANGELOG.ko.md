@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F332-4-7: 두 host는 `hostReadOperations`가 있는 `sidecar.json`을 `<sidecar.json 경로>: hostReadOperations is removed`로 거부하며, installed document는 사이드카 의존마다 `message`만 담는다.
 - F332-4-6: host는 declared UI snapshot을 더 이상 전달하지 않는다. event가 `declared-ui.snapshot`인 view message는 모르는 view event로 거부되고, window event `declared-ui-snapshot`과 계약 case `view.declared-ui.snapshot`은 지워진다.
 - F332-4-5: host의 source event, origin 조회, 순서 있는 source stream은 view source라는 이름을 가진다(`view-source-registered`, `view-source-ended`, `viewSourceOrigins`, `view_source_event_stream`). 계약 case는 `view-source-stream.*`이다.
 - F332-12: `expose.dom(name, provide)`는 여러 요소의 dom 항목에서 현재 요소들을 돌려주는 함수를 등록하고 요청마다 다시 읽는다. 그래서 행 요소를 바꾸는 view는 지운 요소를 들고 있지 않는다.

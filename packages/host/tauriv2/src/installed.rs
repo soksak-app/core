@@ -86,7 +86,7 @@ fn sidecar_facts(config_dir: &Path) -> Result<SidecarFacts, String> {
         };
         let kept: serde_json::Map<String, serde_json::Value> = object
             .into_iter()
-            .filter(|(key, _)| key == "message" || key == "hostReadOperations")
+            .filter(|(key, _)| key == "message")
             .collect();
         for plugin in &declaration.dependents {
             facts

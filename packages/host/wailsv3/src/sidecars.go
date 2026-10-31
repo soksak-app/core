@@ -531,9 +531,15 @@ func (c *Sidecars) checkDeclaration(item SidecarDeclaration, basenames map[strin
 		DisplayName any    `json:"displayName"`
 		Protocol    int    `json:"protocol"`
 		Transport   string `json:"transport"`
+		// HostReadOperations is decoded only to refuse it: the removed plugin host read it, so a declaration that still carries it
+		// is of an earlier form.
+		HostReadOperations json.RawMessage `json:"hostReadOperations"`
 	}
 	if err := json.Unmarshal(item.Data, &sidecar); err != nil {
 		return checkedDeclaration{}, fmt.Errorf("%s: %w", file, err)
+	}
+	if sidecar.HostReadOperations != nil {
+		return checkedDeclaration{}, fmt.Errorf("%s: hostReadOperations is removed", file)
 	}
 	if sidecar.Protocol != 1 {
 		return checkedDeclaration{}, fmt.Errorf("%s: protocol %d is not supported", file, sidecar.Protocol)

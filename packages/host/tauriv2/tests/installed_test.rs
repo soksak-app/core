@@ -104,7 +104,7 @@ fn installed_plugins_document_declares_the_message_form_and_host_operations_of_e
     );
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
-        r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"hostReadOperations":["list"],"message":{"form":"json-object","operationField":"operation"}}}}]}"#
+        r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}"#
     );
 }
 

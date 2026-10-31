@@ -77,12 +77,11 @@ func PluginFolder(configDir, plugin string) (string, error) {
 	return plugins[index].dir, nil
 }
 
-// sidecarFacts are the facts of a sidecar dependency that the installed document carries: the operations that the host may call and
-// the message form (docs/spec/sidecars.md#messages). Each field is copied from sidecar.json as it is, and the page validates it. A field that
+// sidecarFacts are the facts of a sidecar dependency that the installed document carries: the message form
+// (docs/spec/sidecars.md#messages). The field is copied from sidecar.json as it is, and the page validates it. A field that
 // sidecar.json lacks is omitted.
 type sidecarFacts struct {
-	HostReadOperations json.RawMessage `json:"hostReadOperations,omitempty"`
-	Message            json.RawMessage `json:"message,omitempty"`
+	Message json.RawMessage `json:"message,omitempty"`
 }
 
 // sidecarFactsOf returns, for each plugin id, the facts of its sidecar dependencies by sidecar name. A plugin without sidecar dependencies has no entry.
@@ -110,7 +109,7 @@ func sidecarFactsOf(configDir string) (map[string]map[string]sidecarFacts, error
 			if facts[dependent] == nil {
 				facts[dependent] = map[string]sidecarFacts{}
 			}
-			facts[dependent][declaration.Name] = sidecarFacts{HostReadOperations: fields["hostReadOperations"], Message: fields["message"]}
+			facts[dependent][declaration.Name] = sidecarFacts{Message: fields["message"]}
 		}
 	}
 	return facts, nil

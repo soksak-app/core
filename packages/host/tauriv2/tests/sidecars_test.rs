@@ -478,6 +478,17 @@ fn an_unsupported_protocol_is_not_declared() {
     assert!(error.ends_with("protocol 2 is not supported"), "{error}");
 }
 
+// contract: sidecars.declaration.rejects-host-read-operations
+#[test]
+fn a_declaration_with_host_read_operations_is_not_declared() {
+    let config = folder::Folder::new();
+    let error = refusal(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"hostReadOperations":["list"]}"#,
+        config.path(),
+    );
+    assert!(error.ends_with("hostReadOperations is removed"), "{error}");
+}
+
 // contract: sidecars.declaration.rejects-unknown-transport
 #[test]
 fn an_unknown_transport_is_not_declared() {

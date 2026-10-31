@@ -200,14 +200,8 @@ function isRange(range) {
 }
 
 /**
- * The operation names of a list of sidecar facts (hostReadOperations of the installed document): non-empty strings, each once.
- */
-const isOperationList = (value) => Array.isArray(value) && value.length > 0
-  && value.every((name) => isText(name)) && new Set(value).size === value.length;
-
-/**
- * Checks the message form of a sidecar, which the body of a plugin host request takes (docs/spec/sidecars.md#messages). where names
- * the declaration that holds it.
+ * Checks the message form of a sidecar, which the body of a request to it takes (docs/spec/sidecars.md#messages). where names the
+ * declaration that holds it.
  */
 function checkSidecarMessage(where, message) {
   if (!isObject(message)) throw new Error(`${where}: message must be an object`);
@@ -218,14 +212,9 @@ function checkSidecarMessage(where, message) {
   }
 }
 
-/** Checks the list of operations that a sidecar allows a plugin host, hostReadOperations. where names the declaration that holds it. */
-function checkHostReadOperations(where, operations) {
-  if (!isOperationList(operations)) throw new Error(`${where}: hostReadOperations must be a list of distinct operation names`);
-}
-
 /**
- * Checks the sidecar facts of an installed plugin: each sidecar dependency maps to the message form and the host read operations of its
- * sidecar.json, which the installed document carries (docs/spec/installation.md). A name that is not a dependency is refused.
+ * Checks the sidecar facts of an installed plugin: each sidecar dependency maps to the message form of its sidecar.json, which the
+ * installed document carries (docs/spec/installation.md). A name that is not a dependency is refused.
  */
 function checkSidecarFacts(where, sidecars, dependencies) {
   if (!isObject(sidecars)) throw new Error(`${where}: sidecars must map sidecars to facts`);
@@ -233,9 +222,8 @@ function checkSidecarFacts(where, sidecars, dependencies) {
     if (!Object.hasOwn(dependencies, name)) throw new Error(`${where}: sidecars ${name} is not a dependency`);
     const sidecarWhere = `${where} sidecar ${name}`;
     if (!isObject(facts)) throw new Error(`${sidecarWhere}: facts must be an object`);
-    only(sidecarWhere, facts, ["message", "hostReadOperations"]);
+    only(sidecarWhere, facts, ["message"]);
     if (facts.message !== undefined) checkSidecarMessage(sidecarWhere, facts.message);
-    if (facts.hostReadOperations !== undefined) checkHostReadOperations(sidecarWhere, facts.hostReadOperations);
   }
 }
 
@@ -834,13 +822,13 @@ function validateEventsPath(where, events) {
 
 export function validateSidecar(sidecar) {
   if (!isObject(sidecar)) throw new Error("sidecar.json: expected an object");
-  // The host read operations are removed: a plugin host calls no operation of a sidecar (docs/spec/sidecars.md#messages).
+  // The host read operations are removed with the plugin host that read them (docs/spec/sidecars.md#messages).
   if (sidecar.hostReadOperations !== undefined) throw new Error("sidecar.json: hostReadOperations is removed");
   only("sidecar.json", sidecar, ["executable", "displayName", "protocol", "helpers", "transport", "events", "replay", "message"]);
   if (typeof sidecar.displayName !== "string" || !/^soksak:\/\/sidecar\/[a-z][a-z0-9-]*$/.test(sidecar.displayName)) {
     throw new Error("sidecar.json: displayName must be soksak://sidecar/ followed by one lowercase identifier");
   }
-  // The message form that a plugin host's body takes; the host parses the body in this form (docs/spec/sidecars.md#messages).
+  // The message form that the body of a request to the sidecar takes; the host parses the body in this form (docs/spec/sidecars.md#messages).
   if (sidecar.message !== undefined) checkSidecarMessage("sidecar.json", sidecar.message);
   validateEventsPath("sidecar.json", sidecar.events);
   const { executable } = sidecar;

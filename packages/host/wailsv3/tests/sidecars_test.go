@@ -433,7 +433,7 @@ func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
 	sidecars.Stop()
 }
 
-// contract: sidecars.declaration.rejects-executable-escaping-package, sidecars.declaration.rejects-absolute-executable, sidecars.declaration.rejects-unsupported-protocol, sidecars.declaration.rejects-unknown-transport, sidecars.display-name.requires-canonical-component
+// contract: sidecars.declaration.rejects-executable-escaping-package, sidecars.declaration.rejects-absolute-executable, sidecars.declaration.rejects-unsupported-protocol, sidecars.declaration.rejects-unknown-transport, sidecars.declaration.rejects-host-read-operations, sidecars.display-name.requires-canonical-component
 func TestInvalidSidecarDeclarationsAreNotDeclared(t *testing.T) {
 	const canonical = "displayName must be soksak://sidecar/ followed by one lowercase identifier"
 	cases := map[string]struct {
@@ -444,6 +444,7 @@ func TestInvalidSidecarDeclarationsAreNotDeclared(t *testing.T) {
 		"absolute executable":     {`{"executable":"/bin/sh","displayName":"soksak://sidecar/probe","protocol":1}`, "executable /bin/sh is not a path inside the package"},
 		"unknown protocol":        {`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":2}`, "protocol 2 is not supported"},
 		"unknown transport":       {`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"ptyd"}`, "transport ptyd is not supported"},
+		"host read operations":    {`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"hostReadOperations":["list"]}`, "hostReadOperations is removed"},
 		"missing display name":    {`{"executable":"echo","protocol":1}`, "displayName is required"},
 		"null display name":       {`{"executable":"echo","protocol":1,"displayName":null}`, "displayName is required"},
 		"non-string display name": {`{"executable":"echo","protocol":1,"displayName":1}`, canonical},

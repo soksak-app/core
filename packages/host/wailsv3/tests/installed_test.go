@@ -69,12 +69,12 @@ func TestInstalledPluginsDocumentListsEnabledPluginsById(t *testing.T) {
 }
 
 // contract: installed.document.sidecar-facts
-func TestInstalledPluginsDocumentDeclaresTheMessageFormAndHostOperationsOfEachSidecar(t *testing.T) {
+func TestInstalledPluginsDocumentDeclaresTheMessageFormOfEachSidecar(t *testing.T) {
 	config := installedFixture(t)
 	writeInstalled(t, config, map[string]string{
 		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe", "message": {"form": "json-object", "operationField": "operation"}, "hostReadOperations": ["list"]}`,
 	})
-	want := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"hostReadOperations":["list"],"message":{"form":"json-object","operationField":"operation"}}}}]}`
+	want := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}`
 	if got := string(host.InstalledPluginsDocument(config, false)); got != want {
 		t.Fatalf("document %s", got)
 	}

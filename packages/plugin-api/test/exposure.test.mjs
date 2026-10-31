@@ -416,11 +416,11 @@ test("the installed plugin document lists plugins with their manifests and diagn
   assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], manifest: { id: "alpha" } }] }), /name/);
 });
 
-// The sidecar facts of an installed plugin are the message form and the host read operations of each sidecar dependency (docs/spec/sidecars.md#messages).
+// The sidecar facts of an installed plugin are the message form of each sidecar dependency (docs/spec/sidecars.md#messages).
 test("the installed plugin document validates the sidecar facts of each sidecar dependency", () => {
   const manifest = { id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     dependencies: { "@fixture/sidecar-probe": "^0.1.0" } };
-  const facts = { message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"] };
+  const facts = { message: { form: "json-object", operationField: "operation" } };
   const plugin = { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest };
   const withSidecars = (sidecars) => ({ plugins: [{ ...plugin, sidecars }] });
   assert.deepEqual(validateInstalledPlugins({ plugins: [plugin] }), [plugin]);
@@ -433,8 +433,8 @@ test("the installed plugin document validates the sidecar facts of each sidecar 
     /message form must be json-object/);
   assert.throws(() => validateInstalledPlugins(withSidecars({ "@fixture/sidecar-probe": { message: { form: "json-object", operationField: "" } } })),
     /message operationField must be a field name/);
-  assert.throws(() => validateInstalledPlugins(withSidecars({ "@fixture/sidecar-probe": { hostReadOperations: ["list", "list"] } })),
-    /hostReadOperations must be a list of distinct operation names/);
+  assert.throws(() => validateInstalledPlugins(withSidecars({ "@fixture/sidecar-probe": { hostReadOperations: ["list"] } })),
+    /unknown field hostReadOperations/);
 });
 
 test("a rejected installed manifest names the plugin, its version and package", () => {
