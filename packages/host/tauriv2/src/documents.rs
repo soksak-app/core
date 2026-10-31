@@ -3278,6 +3278,10 @@ mod theme_tests;
 mod surface_close_tests;
 
 #[cfg(test)]
+#[path = "presentation_end_test.rs"]
+mod presentation_end_tests;
+
+#[cfg(test)]
 #[path = "view_start_test.rs"]
 mod start_tests;
 
@@ -3486,14 +3490,29 @@ fn end_ticket_presentation_wait(
     ticket: u64,
     reason: &str,
 ) {
-    let result = window_data(window).and_then(|data| {
-        data.documents
-            .presentation()
-            .end(surface, generation, ticket, reason)
-            .map(usize::from)
-            .map_err(|error| error.to_string())
-    });
+    let result = end_ticket_waits(&window_data(window), surface, generation, ticket, reason);
     report_ended_presentation_waits(window, surface, reason, result);
+}
+
+/// Ends the join of surface, generation and ticket in `records`, the lookup of the records of its window when the deferred end runs on
+/// the main thread, and returns the number of waits that ended without presentation. A window that closed before the end ran
+/// abandoned every presentation wait on its Destroyed event (windows.rs), so the end has no join to end and records its cancellation.
+pub(crate) fn end_ticket_waits(
+    records: &Result<std::sync::Arc<WindowData>, String>,
+    surface: &str,
+    generation: u64,
+    ticket: u64,
+    reason: &str,
+) -> Result<usize, String> {
+    let Ok(data) = records else {
+        record_view_message_cancelled(surface, "window-closed");
+        return Ok(0);
+    };
+    data.documents
+        .presentation()
+        .end(surface, generation, ticket, reason)
+        .map(usize::from)
+        .map_err(|error| error.to_string())
 }
 
 fn report_ended_presentation_waits(
