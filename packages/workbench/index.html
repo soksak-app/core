@@ -36,6 +36,7 @@ import installedPlugins from "./installed-plugins.json" with { type: "json" };
 import { openStore, windows } from "@soksak/runtime";
 /* The request that fetches the start document starts the page of this window (docs/spec/native-host.md#page-start). */
 import start from "./runtime/start.js";
+import { storedFileErrors } from "./host-store.js";
 
 import { installTheme } from "soksak";
 
@@ -107,6 +108,9 @@ if (start.error !== undefined) {
   showError(start.error);
   await new Promise(() => {});
 }
+// A refused projects.json or settings.json is left out of the snapshot with its error, so the error is shown and the page
+// starts without it.
+for (const text of storedFileErrors(start.workspace)) showError(text);
 
 installExposure(exposureFile);
 // An installed plugin that the page refuses is left out and its error is shown, so the other plugins and the page start. An

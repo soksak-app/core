@@ -5277,8 +5277,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/plugin-data.js", symbol: "function checkStored" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestEarlierStoredFormsAreRejectedBySnapshot" },
-      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "earlier_stored_forms_are_rejected_by_snapshot" },
+      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
+      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
       { file: "packages/workbench/test/plugin-data.test.mjs", id: "a value stored without a format entry is refused by the read and is not changed" },
       { file: "scripts/test/workflows.test.mjs", id: "the release workflow runs no stored data migration step and no release step script" },
     ],
@@ -8254,10 +8254,9 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/wailsv3/src/start_test.go", id: "TestAFailedWorkspaceSnapshotStillReadsTheControlsAndCarriesTheError" },
       { file: "packages/host/tauriv2/src/start_test.rs", id: "a_failed_workspace_snapshot_still_reads_the_controls_and_carries_the_error" },
-      { file: "e2e/start-failure.test.mjs", id: "a failed workspace snapshot stops the page start with a shown and logged error" },
     ],
     expected: "On a failed workspace snapshot both hosts set the title bar for absent settings, read the controls and answer the start document with the error, and the page reserves the window button area before it shows the error and stops.",
-    levels: ["native", "application"],
+    levels: ["native"],
   },
   {
     id: "F322-1",
@@ -8275,6 +8274,23 @@ const FEATURE_LINKS = [
     ],
     expected: "exposure.list with owner host answers the host entries without the main page on both hosts, and sok checks a host command against them, so host.quit runs whatever the state of the page.",
     levels: ["native"],
+  },
+  {
+    id: "F321-8",
+    implementation: [
+      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func snapshot(" },
+      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "fn snapshot(" },
+      { file: "packages/workbench/host-store.js", symbol: "export function storedFileErrors(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
+      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
+      { file: "packages/workbench/test/stored-file-errors.test.mjs", id: "a snapshot lists the error of a refused projects.json and of a refused settings.json" },
+      { file: "packages/workbench/test/stored-file-errors.test.mjs", id: "the start document shows the errors of the refused stored files before the page draws" },
+      { file: "e2e/start-failure.test.mjs", id: "a refused projects.json is shown and logged and the page starts without it" },
+    ],
+    expected: "A refused projects.json or settings.json is reported in the snapshot, the page shows the error and starts, and a write of the refused file fails without changing it.",
+    levels: ["native", "unit", "application"],
   },
   {
     id: "F325-1",

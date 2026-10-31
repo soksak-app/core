@@ -2,6 +2,14 @@
 //
 // The runtime module of a native application creates this store in openStore().
 
+/**
+ * The errors of the refused stored files of a snapshot: the host reports a refused projects.json as projectsError and a
+ * refused settings.json as settingsError, and the page shows each of them and starts (docs/spec/projects.md#settings).
+ */
+export function storedFileErrors(snapshot) {
+  return [snapshot.projectsError, snapshot.settingsError].filter((text) => text !== undefined);
+}
+
 export class HostWorkspaceStore {
   constructor(host) {
     this.host = host;

@@ -70,6 +70,67 @@ fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
     serde_json::from_value(projects).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// Returns the projects when every record has an id, a root and an identity, or the error that names projects.json.
+fn check_projects(registry: &Path, projects: Vec<Value>) -> Result<Vec<Value>, String> {
+    for project in &projects {
+        let valid = project["id"].as_str().is_some_and(|id| {
+            !id.is_empty()
+                && id
+                    .bytes()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+        }) && project["root"]
+            .as_str()
+            .is_some_and(|root| !root.is_empty())
+            && project["identity"]
+                .as_str()
+                .is_some_and(|identity| !identity.is_empty());
+        if !valid {
+            return Err(format!("{}: invalid project record", registry.display()));
+        }
+    }
+    Ok(projects)
+}
+
+/// The project list with the settings of each project, and the common settings. A refused projects.json is reported as
+/// projectsError with no project and a refused settings.json as settingsError with no common setting, so the page starts
+/// and shows each error; every write reads the file again and fails with its error without changing it
+/// (docs/spec/projects.md#settings).
+fn snapshot(directory: &Path, listed: Result<Vec<Value>, String>) -> Result<Value, String> {
+    let mut document = Map::new();
+    let mut projects = match listed {
+        Ok(projects) => projects,
+        Err(error) => {
+            document.insert("projectsError".into(), error.into());
+            vec![]
+        }
+    };
+    let mut common = match read_stored(
+        &directory.join("settings.json"),
+        "settings.json",
+        SETTINGS_FORMAT,
+    ) {
+        Ok(common) => common.unwrap_or_default(), // default: a missing settings.json holds no common settings.
+        Err(error) => {
+            document.insert("settingsError".into(), error.into());
+            Map::new()
+        }
+    };
+    for project in &mut projects {
+        let path = Path::new(project["root"].as_str().ok_or("invalid project root")?)
+            .join(".soksak/settings.json");
+        // A project settings file that is refused is reported at its project, which the page does not open, so the other
+        // projects and the page start (docs/spec/projects.md#settings).
+        match project_settings(&path) {
+            Ok(settings) => project["settings"] = settings.into(),
+            Err(error) => project["settingsError"] = error.into(),
+        }
+    }
+    common.remove("format");
+    document.insert("projects".into(), projects.into());
+    document.insert("common".into(), common.into());
+    Ok(Value::Object(document))
+}
+
 /// Reads the overrides of the project settings file at path; a missing file holds no override.
 fn project_settings(path: &Path) -> Result<Map<String, Value>, String> {
     let mut settings = read_stored(path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default(); // default: a missing project settings file holds no overrides.
@@ -370,43 +431,16 @@ impl Workspace {
             _ => {}
         }
         let registry = self.directory.join("projects.json");
-        let mut projects: Vec<Value> = read_projects(&registry)?;
-        for project in &projects {
-            let id = project["id"].as_str().ok_or("invalid project id")?;
-            if id.is_empty()
-                || !id
-                    .bytes()
-                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
-                || project["root"].as_str().is_none_or(str::is_empty)
-                || project["identity"].as_str().is_none_or(str::is_empty)
-            {
-                return Err(format!("{}: invalid project record", registry.display()));
-            }
+        let listed =
+            read_projects(&registry).and_then(|projects| check_projects(&registry, projects));
+        if req.kind == "snapshot" {
+            return snapshot(&self.directory, listed);
         }
+        let mut projects = listed?;
         let at = projects
             .iter()
             .position(|p| p["id"].as_str() == req.id.as_deref());
         match req.kind.as_str() {
-            "snapshot" => {
-                let mut common = read_stored(
-                    &self.directory.join("settings.json"),
-                    "settings.json",
-                    SETTINGS_FORMAT,
-                )?
-                .unwrap_or_default(); // default: a missing settings.json holds no common settings.
-                for project in &mut projects {
-                    let path = Path::new(project["root"].as_str().ok_or("invalid project root")?)
-                        .join(".soksak/settings.json");
-                    // A project settings file that is refused is reported at its project, which the page does not open,
-                    // so the other projects and the page start (docs/spec/projects.md#settings).
-                    match project_settings(&path) {
-                        Ok(settings) => project["settings"] = settings.into(),
-                        Err(error) => project["settingsError"] = error.into(),
-                    }
-                }
-                common.remove("format");
-                return Ok(json!({"projects": projects, "common": common}));
-            }
             "add" => {
                 let mut project = req.project.ok_or("project is missing")?;
                 if let Some(found) = projects

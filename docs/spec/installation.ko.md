@@ -100,7 +100,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 ## 저장 데이터 형식
 
-계약의 저장 file은 각자 표가 이름하는 member에 자기 형태를 싣는다. Reader는 자기 file의 현재 번호만 받는다. member가 다른 번호를 담고 있거나 member가 없는 file은 `<file>: <name>: format must be <n>`로 실패하며, 여기서 `<file>`은 file의 경로, `<name>`은 표의 이름, `<n>`은 현재 번호이고, file은 바뀌지 않는다. 파싱되지 않는 file은 그 file을 이름하는 오류로 실패한다. 저장 file의 형태를 바꾸는 release는 그 file의 형식 번호를 올리고 변경을 changelog에 기록한다. 0.0.x release version인 동안 그런 release는 마이그레이션을 싣지 않는다: 정의를 데이터로도 코드로도 싣지 않으며, 어떤 reader도 이전 형태를 변환하지 않는다. 폴더를 옮기거나 file을 넘는 변경은 replacement change다: 자기 release가 문서화하고 재설치가 수행한다.
+계약의 저장 file은 각자 표가 이름하는 member에 자기 형태를 싣는다. Reader는 자기 file의 현재 번호만 받는다. member가 다른 번호를 담고 있거나 member가 없는 file은 `<file>: <name>: format must be <n>`로 실패하며, 여기서 `<file>`은 file의 경로, `<name>`은 표의 이름, `<n>`은 현재 번호이고, file은 바뀌지 않는다. 거부된 file은 application의 시작을 막지 않는다. 시작은 그 file을 빼고 오류를 보인다. 거부된 `plugins/installed.json`은 plugin을 설치하지 않고, 거부된 `projects.json`이나 `settings.json`은 workspace snapshot에서 보고된다([projects](projects.md#settings)). 거부된 file에 쓰는 모든 동작은 그 오류로 실패한다. 파싱되지 않는 file은 그 file을 이름하는 오류로 실패한다. 저장 file의 형태를 바꾸는 release는 그 file의 형식 번호를 올리고 변경을 changelog에 기록한다. 0.0.x release version인 동안 그런 release는 마이그레이션을 싣지 않는다: 정의를 데이터로도 코드로도 싣지 않으며, 어떤 reader도 이전 형태를 변환하지 않는다. 폴더를 옮기거나 file을 넘는 변경은 replacement change다: 자기 release가 문서화하고 재설치가 수행한다.
 
 계약의 저장 file들과 소유자, 형식 번호를 실는 member, file class:
 

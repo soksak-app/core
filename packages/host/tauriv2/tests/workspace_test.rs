@@ -658,31 +658,37 @@ fn a_project_settings_write_refuses_another_form_and_stores_the_current_form() {
     );
 }
 
-// contract: install.stored.rejects-an-earlier-form
+// contract: install.stored.rejects-an-earlier-form, workspace.snapshot.reports-refused-stored-files
 #[test]
-fn earlier_stored_forms_are_rejected_by_snapshot() {
+fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     let config = folder::Folder::new();
     let store = Workspace::new(config.path().into());
+    let apply = |request: Value| store.apply(serde_json::from_value(request).unwrap());
     let projects = config.path().join("projects.json");
     let bare = r#"[{"id":"prj-a","root":"/x","identity":"1:1"}]"#;
     fs::write(&projects, bare).unwrap();
-    let refused = store
-        .apply(serde_json::from_value(json!({"kind":"snapshot"})).unwrap())
-        .unwrap_err();
+    let refusal = format!("{}: projects.json: format must be 1", projects.display());
     assert_eq!(
-        refused,
-        format!("{}: projects.json: format must be 1", projects.display())
+        apply(json!({"kind":"snapshot"})).unwrap(),
+        json!({"projects": [], "common": {}, "projectsError": refusal})
+    );
+    assert_eq!(
+        apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}}))
+            .unwrap_err(),
+        refusal
     );
     assert_eq!(fs::read_to_string(&projects).unwrap(), bare);
     fs::remove_file(&projects).unwrap();
     let settings = config.path().join("settings.json");
     fs::write(&settings, r#"{"gap":6}"#).unwrap();
-    let refused = store
-        .apply(serde_json::from_value(json!({"kind":"snapshot"})).unwrap())
-        .unwrap_err();
+    let refusal = format!("{}: settings.json: format must be 1", settings.display());
     assert_eq!(
-        refused,
-        format!("{}: settings.json: format must be 1", settings.display())
+        apply(json!({"kind":"snapshot"})).unwrap(),
+        json!({"projects": [], "common": {}, "settingsError": refusal})
+    );
+    assert_eq!(
+        apply(json!({"kind":"settings","patch":{"gap":3}})).unwrap_err(),
+        refusal
     );
     assert_eq!(fs::read_to_string(&settings).unwrap(), r#"{"gap":6}"#);
 }

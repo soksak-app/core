@@ -606,8 +606,8 @@ func TestProjectSettingsWriteRefusesAnotherFormAndStoresTheCurrentForm(t *testin
 	assertProjectFileForm(t, filepath.Join(fresh, ".soksak", "settings.json"), map[string]any{"format": float64(1), "gap": float64(3)})
 }
 
-// contract: install.stored.rejects-an-earlier-form
-func TestEarlierStoredFormsAreRejectedBySnapshot(t *testing.T) {
+// contract: install.stored.rejects-an-earlier-form, workspace.snapshot.reports-refused-stored-files
+func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T) {
 	config := t.TempDir()
 	store := host.NewWorkspace(config)
 	projects := filepath.Join(config, "projects.json")
@@ -615,11 +615,16 @@ func TestEarlierStoredFormsAreRejectedBySnapshot(t *testing.T) {
 	if err := os.WriteFile(projects, []byte(bare), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"}); err == nil || err.Error() != projects+": projects.json: format must be 1" {
-		t.Fatalf("a bare array of projects returned %v", err)
+	refusal := projects + ": projects.json: format must be 1"
+	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
+	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
+		t.Fatalf("a bare array of projects returned %#v, %v; want %#v", snapshot, err, want)
+	}
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "1:2"}}); err == nil || err.Error() != refusal {
+		t.Fatalf("an add to a refused projects.json returned %v", err)
 	}
 	if data, _ := os.ReadFile(projects); string(data) != bare {
-		t.Fatalf("a refused read changed projects.json: %s", data)
+		t.Fatalf("a refused projects.json changed: %s", data)
 	}
 	if err := os.Remove(projects); err != nil {
 		t.Fatal(err)
@@ -629,11 +634,16 @@ func TestEarlierStoredFormsAreRejectedBySnapshot(t *testing.T) {
 	if err := os.WriteFile(settings, []byte(former), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"}); err == nil || err.Error() != settings+": settings.json: format must be 1" {
-		t.Fatalf("settings.json without the format member returned %v", err)
+	refusal = settings + ": settings.json: format must be 1"
+	snapshot, err = store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
+	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "settingsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
+		t.Fatalf("settings.json without the format member returned %#v, %v; want %#v", snapshot, err, want)
+	}
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "settings", Patch: map[string]any{"gap": 3}}); err == nil || err.Error() != refusal {
+		t.Fatalf("a settings write to a refused settings.json returned %v", err)
 	}
 	if data, _ := os.ReadFile(settings); string(data) != former {
-		t.Fatalf("a refused read changed settings.json: %s", data)
+		t.Fatalf("a refused settings.json changed: %s", data)
 	}
 }
 

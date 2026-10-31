@@ -90,6 +90,60 @@ func projectSettings(path string) (Record, error) {
 	return settings, nil
 }
 
+// checkProjects returns the error that names projects.json when a record has no valid id, root or identity.
+func checkProjects(registry string, projects []Record) error {
+	for _, p := range projects {
+		id, idOK := p["id"].(string)
+		root, rootOK := p["root"].(string)
+		identity, identityOK := p["identity"].(string)
+		if !idOK || !validProjectID(id) || !rootOK || root == "" || !identityOK || identity == "" {
+			return fmt.Errorf("%s: invalid project record", registry)
+		}
+	}
+	return nil
+}
+
+// snapshot returns the project list with the settings of each project, and the common settings. A refused projects.json is
+// reported as projectsError with no project and a refused settings.json as settingsError with no common setting, so the page
+// starts and shows each error; every write reads the file again and fails with its error without changing it
+// (docs/spec/projects.md#settings).
+func snapshot(directory string, projects []Record, projectsErr error) (Record, error) {
+	document := Record{}
+	if projectsErr != nil {
+		document["projectsError"] = projectsErr.Error()
+		projects = []Record{}
+	}
+	common, err := readStored(filepath.Join(directory, "settings.json"), "settings.json", settingsFormat)
+	if err != nil {
+		document["settingsError"] = err.Error()
+		common = nil
+	}
+	if common == nil {
+		// default: a missing or refused settings.json holds no common settings.
+		common = Record{}
+	}
+	for _, p := range projects {
+		root, ok := p["root"].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid project root")
+		}
+		// A project settings file that is refused is reported at its project, which the page does not open, so the other
+		// projects and the page start (docs/spec/projects.md#settings).
+		settings, err := projectSettings(filepath.Join(root, ".soksak", "settings.json"))
+		if err != nil {
+			p["settingsError"] = err.Error()
+			continue
+		}
+		p["settings"] = settings
+	}
+	// The format member is the carrier of the stored form, not a setting, so the snapshot does not show it
+	// (docs/spec/installation.md#stored-data-formats).
+	delete(common, "format")
+	document["projects"] = projects
+	document["common"] = common
+	return document, nil
+}
+
 func readProjects(path string) ([]Record, error) {
 	document, err := readStored(path, "projects.json", projectsFormat)
 	if err != nil || document == nil {
@@ -400,16 +454,14 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 	registry := filepath.Join(w.directory, "projects.json")
 	// The file holds the projects under the `projects` member beside the format member (docs/spec/installation.md#stored-data-formats).
 	projects, err := readProjects(registry)
+	if err == nil {
+		err = checkProjects(registry, projects)
+	}
+	if req.Kind == "snapshot" {
+		return snapshot(w.directory, projects, err)
+	}
 	if err != nil {
 		return nil, err
-	}
-	for _, p := range projects {
-		id, idOK := p["id"].(string)
-		root, rootOK := p["root"].(string)
-		identity, identityOK := p["identity"].(string)
-		if !idOK || !validProjectID(id) || !rootOK || root == "" || !identityOK || identity == "" {
-			return nil, fmt.Errorf("%s: invalid project record", registry)
-		}
 	}
 	at := -1
 	for i, p := range projects {
@@ -419,32 +471,6 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		}
 	}
 	switch req.Kind {
-	case "snapshot":
-		common, err := readStored(filepath.Join(w.directory, "settings.json"), "settings.json", settingsFormat)
-		if err != nil {
-			return nil, err
-		}
-		if common == nil {
-			common = Record{}
-		}
-		for _, p := range projects {
-			root, ok := p["root"].(string)
-			if !ok {
-				return nil, fmt.Errorf("invalid project root")
-			}
-			// A project settings file that is refused is reported at its project, which the page does not open, so the other
-			// projects and the page start (docs/spec/projects.md#settings).
-			settings, err := projectSettings(filepath.Join(root, ".soksak", "settings.json"))
-			if err != nil {
-				p["settingsError"] = err.Error()
-				continue
-			}
-			p["settings"] = settings
-		}
-		// The format member is the carrier of the stored form, not a setting, so the snapshot does not show it
-		// (docs/spec/installation.md#stored-data-formats).
-		delete(common, "format")
-		return Record{"projects": projects, "common": common}, nil
 	case "add":
 		for _, p := range projects {
 			if p["root"] == req.Project["root"] || p["identity"] == req.Project["identity"] {

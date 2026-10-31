@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F321-8: A refused `projects.json` or `settings.json` of the configuration directory no longer stops the page start: the workspace snapshot reports it as `projectsError` or `settingsError`, the page shows the error and starts, and a write of the refused file fails without changing it.
 - F325-1: The `equivalence` job no longer runs both host suites again after the host jobs run them; it keeps the static comparison of the two hosts, and a CI run takes about 11 minutes less.
 - F325-2: The release gate and both host bundle builds run beside the checks, and publication still requires the success of all of them, so a release run no longer waits for the checks before it builds.
 - F321-6-1: The module mocks of `environment.js` in four workbench tests export `refusedPlugins`, which `installed-plugins.js` imports, so these tests pass.
