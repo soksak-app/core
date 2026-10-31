@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F332-11: A view follows the changes of the project data of its project with `runtime.data.on(listener)`, the view call `runtime.data.on` and the event `data` `{key}`, for its own writes and for the writes of other windows.
 - F332-8-1: The exposure check accepts a section id of the manifest as a declared name, a command registered through `commands.register` of the view bridge, and a declared command of the plugin run through `runtime.command`.
 - F332-4-2: The event catalog and the `sok` event classes no longer declare `page.trace.declared-ui.snapshot.skipped`.
 - F332-9-1: A view runs a command of its plugin on a named surface of the plugin with `runtime.command(name, params, {surface})`, the view call `runtime.command.run`, and a plugin command without surface runs on the preferred tab surface of the plugin that registered it.

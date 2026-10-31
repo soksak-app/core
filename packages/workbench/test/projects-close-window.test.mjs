@@ -43,8 +43,7 @@ mock.module("../host.js", {
     report: () => {} },
 });
 mock.module("../plugin-data.js", {
-  namedExports: { configureData: () => {}, prepareData: async (project) => ({ project }), commitData: () => null,
-    restoreData: () => {}, showData: async () => {} },
+  namedExports: { configureData: () => {}, compareProjectData: () => {} },
 });
 mock.module("../page-log.js", {
   namedExports: { flushEvents: async () => { events.push("logflush"); }, emitEvent: () => {} },

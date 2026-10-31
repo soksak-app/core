@@ -127,6 +127,8 @@ The per-key format names the form of each value inside a file that the core owns
 
 A stored entry is in the current form when it is an object with exactly `format`, a positive integer, and `value`. When the window shows a project, the workbench checks each declared key that the project stores. A stored entry of another format, a value stored without an entry, and a value that does not match the schema are left unchanged, and `runtime.data.get` of that key fails with a message that names the project, plugin, key and formats, or the schema mismatch. The workbench converts no stored value.
 
+A view follows the changes of the project data of its start project with `runtime.data.on`, which the SDK sends for `runtime.data.on(listener)`: the main page pushes the event `data` `{key}` to the view after a write of a view of this window is stored and after the window reads a stored value of the key that another window wrote, and the view reads the value again with `runtime.data.get`. Two views of the plugin for one project, such as two sections, see the same values this way. A view whose start values carry no project is refused with `view call runtime.data.on requires a project`.
+
 ## Extension points
 
 A plugin extends another plugin through an extension point that the other plugin declares. The provider declares the point in `extends`, a contributor declares items in `contributes`, and the workbench connects them from these declarations alone; no plugin names another in its code.

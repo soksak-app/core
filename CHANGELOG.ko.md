@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F332-11: view는 `runtime.data.on(listener)`, 곧 view call `runtime.data.on`과 event `data` `{key}`로 자기 프로젝트의 프로젝트 데이터 변경을 따라간다. 자기 창의 쓰기와 다른 창의 쓰기 모두를 받는다.
 - F332-8-1: exposure 검사는 manifest의 section id를 선언된 이름으로, view bridge의 `commands.register`로 등록한 명령을, `runtime.command`로 실행한 plugin의 선언된 명령을 받는다.
 - F332-4-2: event catalog와 `sok` event class는 더 이상 `page.trace.declared-ui.snapshot.skipped`를 선언하지 않는다.
 - F332-9-1: view는 `runtime.command(name, params, {surface})`, 곧 view call `runtime.command.run`으로 그 plugin의 지정한 surface에서 plugin 명령을 실행하고, surface 없는 plugin 명령은 그것을 등록한 plugin의 선호 tab surface에서 실행된다.

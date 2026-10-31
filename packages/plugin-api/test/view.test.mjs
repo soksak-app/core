@@ -865,3 +865,21 @@ test("published view bridge cases match calls, replies, events, and refusals", a
     });
   }
 });
+
+test("runtime.data.on subscribes once and passes the key of each change of the project data to every listener", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const seen = [];
+  const first = runtime.data.on((change) => seen.push(["a", change.key]));
+  const second = runtime.data.on((change) => seen.push(["b", change.key]));
+  const calls = posted.filter(({ command }) => command !== undefined);
+  assert.deepEqual(calls.map(({ command }) => command), ["runtime.data.on"], "the page subscription is requested once");
+  host({ sok: 1, id: calls[0].id, result: null });
+  const offFirst = await first;
+  await second;
+  host({ sok: 1, event: "data", data: { key: "marks" } });
+  assert.deepEqual(seen, [["a", "marks"], ["b", "marks"]]);
+  offFirst();
+  host({ sok: 1, event: "data", data: { key: "names" } });
+  assert.deepEqual(seen.at(-1), ["b", "names"], "a removed listener receives no later change");
+});

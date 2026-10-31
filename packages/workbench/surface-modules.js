@@ -2,7 +2,7 @@ import { LOG_LEVELS, createSurfaceContext, releaseSurfaceReady } from "@soksak/p
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { surfaceErrorText } from "./surface-status.js";
 import { markViewSurface, registry } from "./exposure.js";
-import { viewDataOf } from "./plugin-data.js";
+import { onDataChange, viewDataOf } from "./plugin-data.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands } from "./view-commands.js";
@@ -433,6 +433,10 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     // The surface runtime returns the off function at once; the view subscriptions take a promise of it (view-events.js).
     textSize: (listener) => Promise.resolve(context.runtime.textSize.on(listener)),
     settings: (listener) => Promise.resolve(context.runtime.settings.on(listener)),
+    // The changes of the project data of the plugin for the start project of the view (docs/spec/plugins.md#project-data).
+    data: (listener) => Promise.resolve(onDataChange((project, plugin, key) => {
+      if (plugin === surface.pluginId && project === viewStartProjectOf(surface.surfaceId)?.id) listener(key);
+    })),
     // The value of a status of the view: the registry follows the status and reports each value to the listener. A status that the
     // exposure declares names no status of the view, so the declaration is checked before the observation (view-calls.js).
     status: (name, watched, listener) => registry.observe(name, watched, (value) => listener(value), { exact: watched !== undefined }),
@@ -527,6 +531,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
         sidecarFailure: (id) => subscriptions.sidecarFailure(id),
         textSize: () => subscriptions.textSize(),
         settings: () => subscriptions.settings(),
+        data: () => subscriptions.data(),
         logLevels: () => subscriptions.logLevels(),
         statusWatch: (name, watched) => {
           if (!registry.declared("status", name)) throw new Error(`view call runtime.status.watch ${name} is not a declared status`);

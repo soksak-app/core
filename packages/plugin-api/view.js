@@ -232,8 +232,10 @@ export function createViewBridge({ handler, report }) {
       watch: watchStatus,
     },
     // The project data of the plugin for the project of the view (docs/spec/plugins.md#project-data): get(key) resolves with the stored
-    // value or the default, and set(key, value) resolves with null after the store accepted the write.
+    // value or the default, and set(key, value) resolves with null after the store accepted the write. on(listener) registers listener({key})
+    // for each change of a key, by a view of this window or by another window, under one subscription of the page.
     data: {
+      on: (listener) => listen("data", () => calls.request("runtime.data.on", null), listener),
       get: (key) => {
         requireDataKey("runtime.data.get", key);
         return calls.request("runtime.data.get", { key });
@@ -288,7 +290,7 @@ export function createViewBridge({ handler, report }) {
   };
   // The key of the listeners of a host event: a sidecar event has the session id in its data, and a theme has one key.
   const keyOf = (message) => {
-    if (message.event === "theme" || message.event === "textSize" || message.event === "settings" || message.event === "log.levels") {
+    if (["theme", "textSize", "settings", "data", "log.levels"].includes(message.event)) {
       return message.event;
     }
     if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;

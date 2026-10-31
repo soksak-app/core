@@ -54,6 +54,7 @@ let dataOptions = null;
 mock.module("../plugin-data.js", {
   namedExports: {
     configureData: (values) => { dataOptions = values; },
+    compareProjectData: () => {},
   },
 });
 /* The project that the first screen chose for the settings. */

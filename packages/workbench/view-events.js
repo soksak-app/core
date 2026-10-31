@@ -17,6 +17,8 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *                 resolves with the off function
  *     settings    settings(fn): registers fn(values) for the changes of the settings of the plugin, as runtime.settings.on does;
  *                 resolves with the off function
+ *     data        data(fn): registers fn(key) for the changes of the project data of the plugin for the start project of the view;
+ *                 resolves with the off function
  *     logLevels   {read(), on(fn)}: read() returns the stored levels of a record of the plugin, and on(fn) registers fn for each
  *                 change of the policy in force; on resolves with the off function
  *     status      status(name, surface, fn): follows the value of the status name on the surface, as the registry observe does, and on the
@@ -27,14 +29,14 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *     cancel      cancel(event): records a delivery canceled by document or surface end
  *     report      report(text): receives the text of a push that the host refused
  *
- * Returns {native(name), sidecarMessage(id), sidecarFailure(id), textSize(), settings(), logLevels(), statusWatch(name, surface),
+ * Returns {native(name), sidecarMessage(id), sidecarFailure(id), textSize(), settings(), data(), logLevels(), statusWatch(name, surface),
  * statusUnwatch(name, surface), restart(), close()}. A subscription call resolves with null, and a second call for the same name or id registers
  * nothing; a status watch is keyed by its name and its surface.
  * restart() ends current subscriptions and invalidates pending deliveries while allowing the new document to subscribe again. An unwatch
  * of a name that is not watched ends nothing and resolves with null. A refusal after document or surface end is canceled; a refusal while
  * the current document remains open is reported.
  */
-export function createViewSubscriptions({ native, sidecar, textSize, settings, logLevels, status, push, report, closing, cancel = () => {} }) {
+export function createViewSubscriptions({ native, sidecar, textSize, settings, data, logLevels, status, push, report, closing, cancel = () => {} }) {
   if (typeof push !== "function" || typeof report !== "function") {
     throw new TypeError("createViewSubscriptions requires the push and report functions");
   }
@@ -123,6 +125,13 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, l
       return subscribe("settings", () => {
         const owner = generation;
         return settings((values) => forward("settings", values, owner));
+      });
+    },
+    // A change of a key of the project data is pushed as the event data with {key}; the view reads the value with runtime.data.get.
+    data() {
+      return subscribe("data", () => {
+        const owner = generation;
+        return data((key) => forward("data", { key }, owner));
       });
     },
     // The stored levels are read again at each change of the policy, and only levels that differ from the last are pushed.

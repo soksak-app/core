@@ -24,10 +24,11 @@ function fakes() {
   };
   const textSize = listen("textSize");
   const settings = listen("settings");
+  const data = listen("data");
   const push = async (event, data) => {
     pushed.push({ event, data });
   };
-  return { listeners, off, pushed, failures, native, sidecar, textSize, settings, push };
+  return { listeners, off, pushed, failures, native, sidecar, textSize, settings, data, push };
 }
 
 test("a later view event waits for the earlier event delivery", async () => {
@@ -142,6 +143,19 @@ test("a settings subscription is registered once and pushes each change of the s
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(pushed, [{ event: "settings", data: { home: "" } }]);
   await subs.close();
+});
+
+test("a data subscription is registered once and pushes the key of each change of the project data", async () => {
+  const { listeners, off, data, pushed } = fakes();
+  const subs = createViewSubscriptions({ native: null, sidecar: null, textSize: null, settings: null, data,
+    push: async (event, value) => { pushed.push({ event, data: value }); }, report: () => {} });
+  assert.equal(await subs.data(), null);
+  assert.equal(await subs.data(), null);
+  listeners.get("data:change")("marks");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(pushed, [{ event: "data", data: { key: "marks" } }]);
+  await subs.close();
+  assert.deepEqual(off, ["data:change"]);
 });
 
 test("closing the surface ends every subscription, and an event after it is pushed to nothing", async () => {

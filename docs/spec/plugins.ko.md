@@ -127,6 +127,8 @@ per-key 형식은 코어가 소유한 file 안의 값마다 형태를 정하며,
 
 저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 창이 프로젝트를 표시할 때 그 프로젝트에 저장된 선언 키를 확인한다. 선언한 format과 다른 format으로 저장된 항목, format 없이 저장된 값, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `runtime.data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다. 워크벤치는 저장된 값을 변환하지 않는다.
 
+view는 `runtime.data.on`으로 자기 시작 프로젝트의 프로젝트 데이터 변경을 따라간다. SDK는 `runtime.data.on(listener)`에 이 call을 보낸다. 메인 페이지는 이 창의 view가 쓴 값이 저장된 뒤, 그리고 다른 창이 쓴 그 키의 저장 값을 창이 읽은 뒤 view에 event `data` `{key}`를 보내고, view는 `runtime.data.get`으로 값을 다시 읽는다. 그래서 한 프로젝트에 대한 plugin의 두 view(두 section 등)가 같은 값을 본다. 시작 값에 프로젝트가 없는 view는 `view call runtime.data.on requires a project`로 거부된다.
+
 ## 확장 지점
 
 plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한다. 제공자는 `extends`에 지점을 선언하고, 기여자는 `contributes`에 항목을 선언하며, workbench는 이 선언만으로 둘을 잇는다. 어떤 plugin도 코드에서 다른 plugin의 이름을 쓰지 않는다.

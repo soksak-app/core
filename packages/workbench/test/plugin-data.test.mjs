@@ -9,7 +9,7 @@ globalThis.document = dom.window.document;
 globalThis.dispatchEvent = (event) => dom.window.dispatchEvent(event);
 globalThis.ErrorEvent = dom.window.ErrorEvent;
 
-const { configureData, declareProjectData, viewDataOf } = await import("../plugin-data.js");
+const { configureData, declareProjectData, viewDataOf, onDataChange, compareProjectData } = await import("../plugin-data.js");
 
 const stored = new Map();
 configureData({
@@ -72,4 +72,24 @@ test("a view reads and writes the declared keys of the project it names, whether
   assert.equal(await viewDataOf({ id: "p5", root: "/work/p5" }, "view-probe").get("note"), "");
   await assert.rejects(async () => access.set("note", 5), /view-probe data note does not match its schema/);
   assert.deepEqual(stored.get("p4/view-probe").note, { format: 1, value: "stored for p4" });
+});
+
+test("a write of a view and a stored change of another window each report the changed key of the project and the plugin", async () => {
+  declareProjectData("marks-probe", { marks: { schema: { type: "array", items: { type: "string" } }, default: [] } });
+  const changes = [];
+  const off = onDataChange((project, plugin, key) => changes.push({ project, plugin, key }));
+  try {
+    await viewDataOf({ id: "p7", root: "/work/p7" }, "marks-probe").set("marks", ["a"]);
+    assert.deepEqual(changes, [{ project: "p7", plugin: "marks-probe", key: "marks" }]);
+    changes.length = 0;
+    const entry = (value) => ({ format: 1, value });
+    compareProjectData(
+      [{ id: "p7", plugins: { "marks-probe": { marks: entry(["a"]) } } }, { id: "p8", plugins: { other: { x: entry(1) } } }],
+      [{ id: "p7", plugins: { "marks-probe": { marks: entry(["a", "b"]) } } }, { id: "p8", plugins: { other: { x: entry(1) } } },
+        { id: "p9", plugins: { other: { y: entry(2) } } }]);
+    assert.deepEqual(changes, [{ project: "p7", plugin: "marks-probe", key: "marks" }, { project: "p9", plugin: "other", key: "y" }],
+      "an unchanged key reports nothing, and a key of a new project is a change");
+  } finally { off(); }
+  await viewDataOf({ id: "p7", root: "/work/p7" }, "marks-probe").set("marks", []);
+  assert.equal(changes.length, 2, "a listener that turned off receives nothing");
 });

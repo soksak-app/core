@@ -5,6 +5,36 @@ import { checkProjectData } from "@soksak/plugin-api";
 /** The declared project data of each plugin, from its plugin.json data field. */
 const declaredData = new Map();
 let options = null;
+// The listeners of the changes of project data, each called with (project id, plugin, key).
+const changeListeners = new Set();
+
+/** Registers fn(project, plugin, key) for each change of a key of project data; returns the function that removes it. */
+export function onDataChange(fn) {
+  changeListeners.add(fn);
+  return () => { changeListeners.delete(fn); };
+}
+
+const changed = (project, plugin, key) => { for (const fn of [...changeListeners]) fn(project, plugin, key); };
+
+/**
+ * Reports each key of plugin data that differs between the projects that the window read before and the projects that it read now,
+ * as a write of another window reaches this window through the store (docs/spec/plugins.md#project-data).
+ */
+export function compareProjectData(before, after) {
+  const earlier = new Map(before.map((project) => [project.id, project.plugins ?? {}]));
+  for (const project of after) {
+    // default: a project that the window had not read, and a project or plugin that stored no data, have no stored keys.
+    const old = earlier.get(project.id) ?? {};
+    const now = project.plugins ?? {};
+    for (const plugin of new Set([...Object.keys(old), ...Object.keys(now)])) {
+      const was = old[plugin] ?? {};
+      const is = now[plugin] ?? {};
+      for (const key of new Set([...Object.keys(was), ...Object.keys(is)])) {
+        if (JSON.stringify(was[key]) !== JSON.stringify(is[key])) changed(project.id, plugin, key);
+      }
+    }
+  }
+}
 
 /**
  * Sets the host functions that the project data uses.
@@ -62,6 +92,7 @@ function dataOf(project, plugin, declared, failures) {
     checkProjectData(plugin, declared, key, value);
     await options.data.set(project.id, plugin, key, { format: formatOf(declared[key]), value });
     failures.delete(key);
+    changed(project.id, plugin, key);
   };
   return { get: read, set: write };
 }

@@ -277,6 +277,10 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       await data.set(fields.key, fields.value);
       return null;
     }
+    case "runtime.data.on":
+      if (startProject() === null) throw new Error(`view call ${command} requires a project`);
+      await runtime.subscribe.data();
+      return null;
     case "runtime.links.open":
       if (typeof params !== "string" || params === "") throw new TypeError(`view call ${command} requires a non-empty URL`);
       await runtime.links.open(params);

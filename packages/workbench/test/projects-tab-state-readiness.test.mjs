@@ -11,7 +11,7 @@ mock.module("../host.js", { namedExports: {
   log: () => {}, retainSidecarSessions: async () => ({ closed: 0 }), windowSidecar: () => null,
 } });
 mock.module("../plugin-data.js", { namedExports: {
-  configureData: () => {}, commitData: () => null, prepareData: async () => null, restoreData: () => {}, showData: async () => {},
+  configureData: () => {}, compareProjectData: () => {},
 } });
 mock.module("../settings.js", { namedExports: {
   beginSettings: () => {}, selectProject: async () => {}, value: () => "tabs", flushSettings: async () => {},

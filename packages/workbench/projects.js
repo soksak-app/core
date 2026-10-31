@@ -7,7 +7,7 @@ import { beginSettings, selectProject, value, flushSettings } from "./settings.j
 import { flushEvents } from "./page-log.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
-import { configureData } from "./plugin-data.js";
+import { compareProjectData, configureData } from "./plugin-data.js";
 import { openTabStates } from "./tab-state.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
@@ -342,10 +342,12 @@ async function readProjects() {
   // default: the store of the browser example has no other window, so it carries no open.
   openProjects = new Set(snapshot.open ?? []);
   const previous = new Map(projects.map((p) => [p.id, p]));
+  const read = projects;
   projects = snapshot.projects.map((p) => {
     const old = previous.get(p.id);
     return owned.has(p.id) && old ? { ...p, spaces: old.spaces, activeSpaceId: old.activeSpaceId, named: old.named } : p;
   });
+  compareProjectData(read, projects);
   const removed = [...owned].filter(id => !projects.some(p => p.id === id));
   for (const id of removed) owned.delete(id);
   const ended = activeProjectId !== null && !active();

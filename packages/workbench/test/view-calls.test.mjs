@@ -70,6 +70,7 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
         sidecarFailure: async (id) => { ran.subscribed.push({ sidecarFailure: id }); return null; },
         textSize: async () => { ran.subscribed.push({ textSize: true }); return null; },
         settings: async () => { ran.subscribed.push({ settings: true }); return null; },
+        data: async () => { ran.subscribed.push({ data: true }); return null; },
         logLevels: async () => { ran.subscribed.push({ logLevels: true }); return null; },
         statusWatch: async (name, surface) => { ran.subscribed.push(surface === undefined ? { statusWatch: name } : { statusWatch: name, surface }); return null; },
         statusUnwatch: async (name, surface) => { ran.subscribed.push(surface === undefined ? { statusUnwatch: name } : { statusUnwatch: name, surface }); return null; },
@@ -183,6 +184,15 @@ test("runtime.data calls refuse a view whose start values carry no project, and 
   await assert.rejects(answerViewCall({ id: 1, command: "runtime.data.get", params: { key: "note" } }, options), /view call runtime.data.get requires a project/);
   await assert.rejects(answerViewCall({ id: 2, command: "runtime.data.set", params: { key: "note", value: "x" } }, options), /view call runtime.data.set requires a project/);
   assert.deepEqual(ran.data, []);
+});
+
+test("runtime.data.on subscribes to the changes of the project data of the start project, and a view without project is refused", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.data.on", params: null }, options), null);
+  assert.deepEqual(ran.subscribed, [{ data: true }]);
+  const without = fakes({ startProject: null });
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.data.on", params: null }, without.options), /^Error: view call runtime.data.on requires a project$/);
+  assert.deepEqual(without.ran.subscribed, []);
 });
 
 test("runtime.data calls refuse a key that the plugin does not declare, and a key that is not text", async () => {
