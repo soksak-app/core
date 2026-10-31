@@ -50,7 +50,10 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
     shortcuts: SHORTCUTS,
     emitEvent: (level, event, fields) => { ran.events.push({ level, event, fields }); },
     runCore: async (name, params) => { ran.core.push({ name, params }); return { core: true }; },
-    runOwned: async (name, params, owner) => { ran.owned.push({ name, params, owner }); return { owned: true }; },
+    runOwned: async (name, params, owner, cids, surface) => {
+      ran.owned.push(surface === undefined ? { name, params, owner } : { name, params, owner, surface });
+      return { owned: true };
+    },
     runtime: {
       native: { call: async (name, payload) => { ran.native.push({ name, payload }); return { native: true }; } },
       sidecar: { send: async (id, body, cids, sidecar) => { ran.sidecar.push({ id, body, cids, sidecar }); return { sidecar: true }; } },
@@ -143,6 +146,24 @@ test("a status watch names only a surface that the window holds for the view's p
   await assert.rejects(answerViewCall({ id: 2, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "tab-z" } }, options),
     /view call runtime.status.unwatch surface tab-z is not a surface of probe/);
   assert.deepEqual(ran.subscribed, []);
+});
+
+test("runtime.command.run runs a command of the view's plugin on a surface that the window holds for the plugin", async () => {
+  const { ran, options } = fakes();
+  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.command.run", params: { name: "probe.run", params: { x: 1 }, surface: "tab-a" } }, options),
+    { owned: true });
+  assert.deepEqual(ran.owned, [{ name: "probe.run", params: { x: 1 }, owner: "probe", surface: "tab-a" }]);
+});
+
+test("runtime.command.run refuses a surface that the window does not hold for the plugin and a command of another owner", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.command.run", params: { name: "probe.run", params: null, surface: "tab-z" } }, options),
+    /^Error: view call runtime.command.run surface tab-z is not a surface of probe$/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.command.run", params: { name: "core.tab.select", params: null, surface: "tab-a" } }, options),
+    /^Error: view call runtime.command.run core.tab.select is not a command of probe$/);
+  await assert.rejects(answerViewCall({ id: 3, command: "runtime.command.run", params: { name: "probe.run", params: null } }, options),
+    /^TypeError: view call runtime.command.run requires a non-empty surface$/);
+  assert.deepEqual(ran.owned, []);
 });
 
 test("runtime.data.get and runtime.data.set answer for the start project of the view", async () => {

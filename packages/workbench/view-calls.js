@@ -14,7 +14,8 @@ import { setViewFocus } from "./view-focus.js";
  *               surface: the surface id of the view, which names the place of the error lines of the view
  *               pending: Map of the pending calls of the view, from id to AbortController; the caller keeps one Map for each view
  *               runCore(name, params): runs a core command, as runtime.command does
- *               runOwned(name, params, owner): runs a command that the plugin registered, as the exposure owner check does
+ *               runOwned(name, params, owner, surface): runs a command that the plugin registered, as the exposure owner check
+ *                 does; surface names the surface that runs it, or undefined to choose it
  *               shortcuts: the rows of the shortcut table (packages/workbench/shortcuts.json)
  *               startProject(): the project {id, root} of the start values of the view, or null when they carry none
  *               emitEvent(level, event, fields): the event writer of the page, which stores the shortcut records of the view
@@ -74,7 +75,7 @@ export async function answerViewCall(event, options) {
     // its run, and a core command passes them on the host calls that it makes (docs/spec/native-surfaces.md#view-surfaces).
     const withCause = {
       ...options,
-      runOwned: (name, value, owner) => options.runOwned(name, value, owner, carried),
+      runOwned: (name, value, owner, surface) => options.runOwned(name, value, owner, carried, surface),
       runCore: (name, value) => options.runCore(name, value, carried),
     };
     return await untilCancelled(run(command, params, withCause), controller.signal);
@@ -250,6 +251,17 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       if (command === "runtime.status.watch") await runtime.subscribe.statusWatch(watch.name, watch.surface);
       else await runtime.subscribe.statusUnwatch(watch.name, watch.surface);
       return null;
+    }
+    // A command of the plugin on a named surface of the plugin, which a section view runs on the surface that it follows
+    // (docs/spec/native-surfaces.md#view-surfaces, view calls). The surface is checked as a status watch checks it.
+    case "runtime.command.run": {
+      const fields = objectOf(command, params);
+      if (typeof fields.name !== "string" || fields.name === "") throw new TypeError(`view call ${command} requires a non-empty name`);
+      if (fields.name.slice(0, fields.name.indexOf(".")) !== plugin) throw new Error(`view call ${command} ${fields.name} is not a command of ${plugin}`);
+      if (typeof fields.surface !== "string" || fields.surface === "") throw new TypeError(`view call ${command} requires a non-empty surface`);
+      if (!runtime.holdsSurface(plugin, fields.surface)) throw new Error(`view call ${command} surface ${fields.surface} is not a surface of ${plugin}`);
+      // default: a command without parameters runs with null, as runtime.command sends it.
+      return runOwned(fields.name, fields.params ?? null, plugin, fields.surface);
     }
     // The project data of the plugin for the project of the start values of the view (docs/spec/plugins.md#project-data). A view of a
     // project that the window does not show reads and writes that project, so the project is not the shown one.

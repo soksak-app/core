@@ -644,6 +644,17 @@ test("runtime.command sends a command name through the view call route and resol
 
 });
 
+test("runtime.command with surface runs the command of the plugin on that surface through runtime.command.run", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const sent = runtime.command("probe.go", { index: 2 }, { surface: "tab-a" });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.command.run",
+    params: { name: "probe.go", params: { index: 2 }, surface: "tab-a" } });
+  host({ sok: 1, id: 1, result: null });
+  assert.equal(await sent, null);
+  assert.throws(() => runtime.command("probe.go", null, { surface: "" }), /runtime\.command requires a non-empty surface/);
+});
+
 /**
  * Prepares a view page with one region element and a handler that answers each call of the view at once with the reply of its
  * command in replies, or null. The window gets the observers and the viewport that the composition controller reads.

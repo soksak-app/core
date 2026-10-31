@@ -278,9 +278,13 @@ export function createViewBridge({ handler, report }) {
     // The one route of a view to run a command that core or the view declares (docs/spec/native-surfaces.md#view-surfaces, input).
     // The call layer keeps the owner check of each name; the bridge adds no set of names.
     // The options carry cids, the identifiers of the operation that the command belongs to; a command without them has none.
-    command: (name, params = null, { cids } = {}) => {
+    // surface names the surface of the plugin that runs a command of the plugin, as a section view runs it on the surface that it
+    // follows; the call is then runtime.command.run (docs/spec/native-surfaces.md#view-surfaces, view calls).
+    command: (name, params = null, { cids, surface } = {}) => {
       if (typeof name !== "string" || name === "") throw new TypeError("runtime.command requires a non-empty name");
-      return calls.request(name, params, { cids: causeCids(cids) });
+      if (surface === undefined) return calls.request(name, params, { cids: causeCids(cids) });
+      if (typeof surface !== "string" || surface === "") throw new TypeError("runtime.command requires a non-empty surface");
+      return calls.request("runtime.command.run", { name, params, surface }, { cids: causeCids(cids) });
     },
     // Starts an operation of this view (docs/spec/native-surfaces.md#view-surfaces): the identifier is assigned in the page's form,
     // the first event is stored through runtime.log with it, and the list is returned for the calls that carry the operation out.

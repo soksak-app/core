@@ -474,12 +474,25 @@ export function createRegistry({ call = null, report = null } = {}) {
      */
     chosen: (kind, name, wanted, exact = false) => target(kind, name, wanted, exact),
 
-    runOwned(name, params, owner, cids) {
+    /**
+     * Runs a command that a surface of plugin owner registered: on surface when the caller names it, otherwise on the preferred tab
+     * surface of the owner (docs/spec/native-surfaces.md#view-surfaces, view calls).
+     */
+    runOwned(name, params, owner, cids, surface) {
       if (pageOf("command", name)) return answer("command.run", commandRequest(name, params, undefined, cids));
-      const surface = target("command", name, owner, true);
+      const owners = surfaces.get(declarationKey("command", name));
+      if (surface !== undefined) {
+        if (!owners?.has(surface) || options.surfacePlugin(surface) !== owner) {
+          return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `surface ${surface} has not registered command ${name}`));
+        }
+        return answer("command.run", commandRequest(name, params, surface, cids));
+      }
+      const choices = tabSurfacesOf(owners).filter((candidate) => options.surfacePlugin(candidate) === owner);
+      // default: when the preferred surface has not registered, the surface registered last answers.
+      const chosen = options.preferred().find((candidate) => choices.includes(candidate)) ?? choices.at(-1);
       // default: the error sentence writes a missing owner (null) as none.
-      if (surface === null) return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `owner ${owner ?? "none"} has not registered command ${name}`));
-      return answer("command.run", commandRequest(name, params, surface, cids));
+      if (chosen === undefined) return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `owner ${owner ?? "none"} has not registered command ${name}`));
+      return answer("command.run", commandRequest(name, params, chosen, cids));
     },
 
     /**

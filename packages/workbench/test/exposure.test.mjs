@@ -724,6 +724,22 @@ test("run forwards a plugin command to the named surface", async () => {
   await assert.rejects(made.run("probe.send", {}, "tab-c"), { code: EXPOSURE_ERRORS.unregistered });
 });
 
+test("runOwned runs a command of the plugin on the named surface, and otherwise on a tab surface of the plugin", async () => {
+  const host = fakeHost(({ surface }) => ({ result: surface }));
+  const made = coreRegistry(host);
+  const plugins = { "tab-a": "probe", "tab-b": "probe", "left/probe.tree": "probe" };
+  made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null, preferred: () => ["tab-b"] });
+  made.registered({ surface: "tab-a", kind: "command", name: "probe.send" });
+  made.registered({ surface: "tab-b", kind: "command", name: "probe.send" });
+  made.registered({ surface: "left/probe.tree", kind: "command", name: "probe.send" });
+  assert.equal(await made.runOwned("probe.send", {}, "probe", [], "tab-a"), "tab-a");
+  assert.equal(await made.runOwned("probe.send", {}, "probe", []), "tab-b", "without surface the preferred tab surface of the plugin runs it");
+  await assert.rejects(made.runOwned("probe.send", {}, "probe", [], "tab-c"),
+    { code: EXPOSURE_ERRORS.unregistered, message: "surface tab-c has not registered command probe.send" });
+  await assert.rejects(made.runOwned("probe.other", {}, "probe", []),
+    { code: EXPOSURE_ERRORS.unregistered, message: "owner probe has not registered command probe.other" });
+});
+
 test("observe reports a failed watch, value read, or release instead of hiding it", async () => {
   const host = fakeHost(({ surface, method }) => {
     if (method === "status.next") return new Promise(() => {});
