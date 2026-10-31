@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F323: 작업공간 version은 release candidate `0.0.22`이고, 게시된 `v0.0.21`과 구별된다. `v0.0.21`은 이전 형식의 설치 component로 시작하지 않아 registry에서 내려졌다. version checker는 두 identity를 밝히고, 작업공간 Cargo.lock 항목 셋은 candidate를 쓴다.
 - F322-1: `exposure.list`가 `owner` `host`를 받고, 두 host는 main page 없이 host entry로 답한다. `sok command`는 `host.` command를 그 목록으로 검사하므로, page가 시작하지 않은 동안에도 `sok command host.quit`이 application을 끝낸다.
 - F322: page 시작의 workspace 스냅샷이 실패하면 두 host가 500 대신 창 controls와 스냅샷 오류를 담은 시작 문서로 답하고, main page는 창 버튼 영역을 비운 뒤 오류를 보이고 멈춘다. 그래서 창 버튼이 멈춘 page의 logo를 더 이상 덮지 않는다.
 - F321-3: main page는 시작을 멈추는 대신 받아들인 설치 plugin을 등록하고, 거부된 각 plugin이나 `/installed-plugins.json`의 `error` 문서의 오류를 보인다. plugin의 staged page는 거부된 plugin 옆에서도 시작한다. `@soksak/plugin-api`가 `acceptInstalledPlugins`를 내보낸다.

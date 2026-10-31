@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F323: The workspace version is release candidate `0.0.22`, distinct from published `v0.0.21`, which was withdrawn from the registry because it did not start with installed components of earlier forms. The version checker names both identities, and the three workspace Cargo.lock entries use the candidate.
 - F322-1: `exposure.list` takes `owner` `host`, which both hosts answer from the host entries without the main page, and `sok command` checks a `host.` command against them, so `sok command host.quit` ends the application while the page has not started.
 - F322: When the workspace snapshot of a page start fails, both hosts answer the start document with the window controls and the snapshot error instead of 500, and the main page reserves the window button area before it shows the error and stops, so the window buttons no longer cover the logo of a page that stopped.
 - F321-3: The main page registers the installed plugins that it accepts and shows the error of each refused plugin, or of an `error` document of `/installed-plugins.json`, instead of stopping its start; a staged page of a plugin starts beside a refused plugin. `@soksak/plugin-api` exports `acceptInstalledPlugins`.

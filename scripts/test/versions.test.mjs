@@ -5,8 +5,8 @@ import test from "node:test";
 import { auditVersions, cargoPackageVersion, LATEST_PUBLISHED, RELEASE, workspaceManifests } from "../check-versions.mjs";
 
 test("the development contract has a distinct identity from the latest published release", { timeout: 1000 }, () => {
-  assert.equal(RELEASE, "0.0.21");
-  assert.equal(LATEST_PUBLISHED, "0.0.20");
+  assert.equal(RELEASE, "0.0.22");
+  assert.equal(LATEST_PUBLISHED, "0.0.21");
   assert.notEqual(RELEASE, LATEST_PUBLISHED);
 });
 

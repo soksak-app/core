@@ -1,6 +1,6 @@
 {
   "name": "@soksak-check/plugin-host-raf-probe",
-  "version": "0.0.21",
+  "version": "0.0.22",
   "private": true,
   "type": "module",
   "description": "Window-check fixture that reports plugin-host animation-frame counts on request.",
