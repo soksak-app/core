@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F322-1: `exposure.list`가 `owner` `host`를 받고, 두 host는 main page 없이 host entry로 답한다. `sok command`는 `host.` command를 그 목록으로 검사하므로, page가 시작하지 않은 동안에도 `sok command host.quit`이 application을 끝낸다.
 - F322: page 시작의 workspace 스냅샷이 실패하면 두 host가 500 대신 창 controls와 스냅샷 오류를 담은 시작 문서로 답하고, main page는 창 버튼 영역을 비운 뒤 오류를 보이고 멈춘다. 그래서 창 버튼이 멈춘 page의 logo를 더 이상 덮지 않는다.
 - F321-3: main page는 시작을 멈추는 대신 받아들인 설치 plugin을 등록하고, 거부된 각 plugin이나 `/installed-plugins.json`의 `error` 문서의 오류를 보인다. plugin의 staged page는 거부된 plugin 옆에서도 시작한다. `@soksak/plugin-api`가 `acceptInstalledPlugins`를 내보낸다.
 - F321-5: 두 host의 내부 선언 test가 F321의 계약을 검사한다. `sidecar.json`이 parse되지 않는 선언은 성공하고 `host.sidecars`에 한 번 알린다.

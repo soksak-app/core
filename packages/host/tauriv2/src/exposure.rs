@@ -203,6 +203,19 @@ pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
 
 /// Adds the host entries to the exposure.list that the page sent. The page entries stay as the received text, and each
 /// kind is written in name order (the same as the Wails host).
+/// The exposure list of a request (docs/spec/exposure.md). With owner host it holds only the host entries, which need no main
+/// page, so they are listed while the page has not started; otherwise it is the page list with the host entries added.
+pub fn exposure_list(
+    params: &Map<String, Value>,
+    page: impl FnOnce() -> Result<Box<RawValue>, Failure>,
+) -> Result<Box<RawValue>, Failure> {
+    match params.get("owner") {
+        None => with_host_entries(&page()?),
+        Some(Value::String(owner)) if owner == "host" => with_host_entries(&raw(&json!({}))?),
+        Some(_) => Err(Failure::params("exposure.list owner must be host")),
+    }
+}
+
 pub fn with_host_entries(listed: &RawValue) -> Result<Box<RawValue>, Failure> {
     let Ok(mut lists) = serde_json::from_str::<BTreeMap<String, Vec<Box<RawValue>>>>(listed.get())
     else {
@@ -2502,7 +2515,10 @@ impl Host {
         match method {
             "input.pointer" => raw(&self.input_pointer(window, pointer(&params)?)?),
             "input.key" => raw(&self.input_key(window, key(&params)?)?),
-            "exposure.list" => with_host_entries(&self.page(window, method, params, TIMEOUT)?),
+            "exposure.list" => {
+                let page_params = params.clone();
+                exposure_list(&params, || self.page(window, method, page_params, TIMEOUT))
+            }
             #[cfg(feature = "diagnostics")]
             _ if method.starts_with("diagnostics.") => {
                 raw(&crate::diagnostics::call(self, window, method, params)?)

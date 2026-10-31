@@ -228,7 +228,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 | --- | --- | --- |
 | `windows.list` | 없음 | `[{window, title, project, key, ready}]`. `project`는 창에 마지막으로 열린 프로젝트의 루트 디렉터리이며, 창에 열린 프로젝트가 없으면 `null`이다. 창의 마지막 프로젝트를 해제하면 창 제목도 라이브러리 제목으로 돌아간다. `ready`는 창의 메인 페이지가 준비를 알린 뒤 참이고 로드하는 동안 거짓이다. 페이지가 로드 중인 창에 대한 요청은 1003으로 실패한다 |
 | `log.query` | 질의 매개변수, `window` 없음 | `{rows, next, tail, scanned}`: 설정 폴더의 event 파일의 event page 하나([endpoint](endpoint.ko.md#log-query), [logging](logging.ko.md#질의)) |
-| `exposure.list` | `{window}` | `{status, commands, dom}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다 |
+| `exposure.list` | `{window, owner?}` | `{status, commands, dom}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다. `owner`가 `host`이면 호스트 항목만 반환하며, 호스트가 main page 없이 답하므로 page가 시작하지 않은 동안에도 목록이 나온다. 다른 `owner`는 `exposure.list owner must be host`로 거부한다. `sok command`는 `host.` 명령을 호스트 항목으로 검사한다 |
 | `status.get` | `{window, name, surface?}` | 현재 값 |
 | `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다 |
 | `status.unwatch` | `{window, name, surface?}` | `null` |

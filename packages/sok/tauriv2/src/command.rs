@@ -233,11 +233,14 @@ pub(crate) fn run_command(
         flags: HashMap::new(),
     };
     let window = select_window(&arguments, &mut client)?;
-    let listed = client.request(
-        "exposure.list",
-        Some(serde_json::json!({"window": window})),
-        &mut no_notify,
-    )?;
+    // A host command is checked against the host entries, which the host lists without the main page, so it runs while the
+    // page has not started (docs/spec/exposure.md).
+    let request = if parsed.name.starts_with("host.") {
+        serde_json::json!({"window": window, "owner": "host"})
+    } else {
+        serde_json::json!({"window": window})
+    };
+    let listed = client.request("exposure.list", Some(request), &mut no_notify)?;
     let exposures: Value = serde_json::from_str(&listed)
         .map_err(|error| format!("exposure.list returned an unexpected value: {error}"))?;
     let commands = exposures["commands"].as_array().ok_or_else(|| {

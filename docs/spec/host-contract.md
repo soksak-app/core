@@ -380,6 +380,7 @@ Items:
 | `exposure-reply.target.main-and-surface-distinct` | A reply without a surface targets the window's main document, and a reply with a surface targets that surface document. | both |
 | `exposure-reply.target.invalid-surface-rejected` | A reply whose surface is null, empty, a number, or an object is an error, not a main reply. | both |
 | `exposure-reply.removed-surface-discarded` | A reply from a surface page whose surface was removed is discarded with the observation `exposure reply <id> of removed surface "<surface>" arrived after its request ended` instead of an error. | both |
+| `exposure.list.host-owner-without-page` | The exposure list with `owner` `host` holds only the host entries as registered and does not ask the main page, and another `owner` fails with `exposure.list owner must be host`. | both |
 | `exposure.list.appends-host-entries-registered` | The exposure list keeps the page's entries and adds the host status and command entries as registered. | both |
 | `exposure.list.host-entries-exact-sorted-set` | The host status and command names equal an exact sorted list. | both |
 | `exposure.list.host-entries-described` | Every host entry has a non-empty description. | both |
@@ -827,6 +828,7 @@ Items:
 | `debug.record.writes-the-state-file` | Recording writes `logs/state-<time>.json` with the given state and its UTC `time` `YYYYMMDDTHHMMSSZ` and answers its relative path. | both |
 | `debug.record.keeps-the-newest-20-state-files` | After a state file is written, the host removes the `logs/state-<time>.json` files beyond the newest 20 by their time and keeps other files of `logs/`. | both |
 | `cli.identity.build-identifier` | A build with the `dev` flag uses `app.soksak.<wails or tauri>.dev`; any other build, also a diagnostic one, uses `app.soksak.<wails or tauri>`. | both |
+| `cli.command.host-command-without-page` | A `host.` command is checked against `exposure.list` with `owner` `host`, so it runs through `command.run` while the main page answers no exposure list. | both |
 | `cli.command.flags-from-schema` | A declared command runs through `command.run` with the window, the surface and parameters converted from its flags by the declared schema: text, numbers, integers, booleans, enum values, `null` for a nullable type, JSON objects and arrays, and a value after `=` that starts with `--`; `--params` gives the whole object. | both |
 | `cli.command.rejects-undeclared-or-invalid-values` | An undeclared flag, a value that does not match its schema, a flag without its value, a boolean followed by a value, `--params` with parameter flags, and an undeclared command exit with status 2 before `command.run` is sent. | both |
 | `cli.commands.lists-declared-commands` | `sok commands` prints the `commands` list of `exposure.list` in the order the application declares them. | both |

@@ -44,6 +44,47 @@ func TestExposureListAppendsHostEntries(t *testing.T) {
 	}
 }
 
+// contract: exposure.list.host-owner-without-page
+func TestExposureListOfTheHostOwnerDoesNotAskThePage(t *testing.T) {
+	backend := newFakeBackend()
+	backend.failures = map[string]error{"exposure.list": &host.RPCError{Code: 1003, Message: "the main page is not ready"}}
+	_, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main", "owner": "host"})
+	if got.Error != nil {
+		t.Fatalf("exposure.list of the host owner failed: %+v", got.Error)
+	}
+	var list struct {
+		Status, Commands []struct {
+			Name       string
+			Registered bool
+		}
+	}
+	if err := json.Unmarshal(got.Result, &list); err != nil {
+		t.Fatal(err)
+	}
+	quit := false
+	for _, entry := range append(list.Status, list.Commands...) {
+		if !strings.HasPrefix(entry.Name, "host.") || !entry.Registered {
+			t.Fatalf("entry %s registered %v in the host list %s", entry.Name, entry.Registered, got.Result)
+		}
+		quit = quit || entry.Name == "host.quit"
+	}
+	if !quit {
+		t.Fatalf("host.quit is missing from %s", got.Result)
+	}
+	backend.mu.Lock()
+	asked := slices.Contains(backend.requests, "exposure.list")
+	backend.mu.Unlock()
+	if asked {
+		t.Fatal("exposure.list of the host owner asked the page")
+	}
+	other := call(t, conn, 2, "exposure.list", map[string]any{"window": "main", "owner": "core"})
+	if other.Error == nil || other.Error.Message != "exposure.list owner must be host" {
+		t.Fatalf("exposure.list of another owner answered %+v", other)
+	}
+}
+
 // contract: exposure.list.host-entries-exact-sorted-set, exposure.list.host-entries-described, exposure.list.host-quit-result-null
 func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 	_, address, _ := serve(t, newFakeBackend())

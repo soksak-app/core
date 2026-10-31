@@ -226,7 +226,13 @@ func runCommand(args []string, stdout io.Writer, options Options) error {
 	if err != nil {
 		return err
 	}
-	listed, err := client.Request("exposure.list", map[string]any{"window": window})
+	// A host command is checked against the host entries, which the host lists without the main page, so it runs while the page has not started
+	// (docs/spec/exposure.md).
+	list := map[string]any{"window": window}
+	if strings.HasPrefix(parsed.name, "host.") {
+		list["owner"] = "host"
+	}
+	listed, err := client.Request("exposure.list", list)
 	if err != nil {
 		return err
 	}

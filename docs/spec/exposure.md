@@ -228,7 +228,7 @@ Clients call these JSON-RPC 2.0 methods.
 | --- | --- | --- |
 | `windows.list` | none | `[{window, title, project, key, ready}]`. `project` is the root directory of the project last opened in the window, or `null` when the window holds no open project; releasing the last project of a window also returns its title to the library title. `ready` is true after the main page of the window reports ready and false while it loads; requests for a window whose page is loading fail with 1003 |
 | `log.query` | the query parameters, no `window` | `{rows, next, tail, scanned}`: one page of the events of the event files of the configuration directory ([endpoint](endpoint.md#log-query), [logging](logging.md#query)) |
-| `exposure.list` | `{window}` | `{status, commands, dom}`: the declared entries of core, the host, and loaded plugins in the declaration format, each with `registered` |
+| `exposure.list` | `{window, owner?}` | `{status, commands, dom}`: the declared entries of core, the host, and loaded plugins in the declaration format, each with `registered`. With `owner` `host`, only the host entries, which the host answers without the main page, so they are listed while the page has not started; another `owner` is refused with `exposure.list owner must be host`. `sok command` checks a `host.` command against the host entries |
 | `status.get` | `{window, name, surface?}` | Current value |
 | `status.watch` | `{window, name, surface?}` | `null`; the host then sends `status.changed` notifications `{window, name, surface?, value}` on each change until `status.unwatch` or until the connection closes. Watches with different `surface` values are separate |
 | `status.unwatch` | `{window, name, surface?}` | `null` |

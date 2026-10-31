@@ -317,6 +317,33 @@ func declared(t *testing.T) *fakeEndpoint {
 	})
 }
 
+// contract: cli.command.host-command-without-page
+func TestAHostCommandIsCheckedAgainstTheHostEntriesWithoutThePage(t *testing.T) {
+	host := `{"status":[],"commands":[{"name":"host.quit","description":"q","params":{"type":"object","properties":{}},"registered":true}],"dom":[]}`
+	fake := startEndpoint(t, func(method string, params map[string]any) answer {
+		switch method {
+		case "windows.list":
+			return answer{result: oneWindow}
+		case "exposure.list":
+			if params["owner"] == "host" {
+				return answer{result: host}
+			}
+			return answer{code: 1003, message: "the main page is not ready"}
+		case "command.run":
+			return answer{result: "null"}
+		}
+		return answer{code: -32601, message: "unexpected " + method}
+	})
+	code, _, stderr := run("host.quit", "--config-dir", fake.configDir)
+	if code != 0 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	sent, _ := json.Marshal(fake.last())
+	if string(sent) != `{"name":"host.quit","params":{},"window":"main"}` {
+		t.Fatalf("sent %s", sent)
+	}
+}
+
 // contract: cli.command.flags-from-schema
 func TestDeclaredCommandFlagsFollowTheSchema(t *testing.T) {
 	fake := declared(t)

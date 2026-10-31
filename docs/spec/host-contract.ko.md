@@ -383,6 +383,7 @@ fn invalid_json_closes_connection() {
 | `exposure-reply.target.main-and-surface-distinct` | surface가 없는 응답은 창의 주 문서를, surface가 있는 응답은 그 표면 문서를 대상으로 한다. | both |
 | `exposure-reply.target.invalid-surface-rejected` | surface가 null, 빈 문자열, 숫자, 객체인 응답은 주 응답이 아니라 오류다. | both |
 | `exposure-reply.removed-surface-discarded` | 표면이 제거된 표면 페이지의 답은 오류 대신 관측 `exposure reply <id> of removed surface "<surface>" arrived after its request ended`와 함께 버려진다. | both |
+| `exposure.list.host-owner-without-page` | `owner`가 `host`인 노출 목록은 호스트 항목만 등록된 항목으로 담고 main page에 묻지 않으며, 다른 `owner`는 `exposure.list owner must be host`로 실패한다. | both |
 | `exposure.list.appends-host-entries-registered` | 노출 목록은 페이지 항목을 유지하고 호스트 상태와 명령 항목을 등록된 항목으로 더한다. | both |
 | `exposure.list.host-entries-exact-sorted-set` | 호스트 상태와 명령 이름은 정해진 정렬 목록과 같다. | both |
 | `exposure.list.host-entries-described` | 모든 호스트 항목은 비어 있지 않은 설명을 가진다. | both |
@@ -830,6 +831,7 @@ fn invalid_json_closes_connection() {
 | `debug.record.writes-the-state-file` | 기록은 주어진 상태와 UTC `time` `YYYYMMDDTHHMMSSZ`를 담은 `logs/state-<time>.json`을 쓰고 그 상대 경로로 답한다. | both |
 | `debug.record.keeps-the-newest-20-state-files` | 상태 파일을 쓴 뒤 host는 시각으로 가장 새 20개를 넘는 `logs/state-<time>.json` 파일을 지우고 `logs/`의 다른 파일은 둔다. | both |
 | `cli.identity.build-identifier` | `dev` 플래그 build는 `app.soksak.<wails 또는 tauri>.dev`를 쓰고, 진단 build를 포함한 다른 build는 `app.soksak.<wails 또는 tauri>`를 쓴다. | both |
+| `cli.command.host-command-without-page` | `host.` command는 `owner`가 `host`인 `exposure.list`로 검사되므로, main page가 노출 목록에 답하지 않는 동안에도 `command.run`으로 실행된다. | both |
 | `cli.command.flags-from-schema` | 선언된 command는 창, surface, 그리고 선언된 schema로 flag에서 바꾼 매개변수와 함께 `command.run`으로 실행된다. 텍스트, 숫자, 정수, boolean, enum 값, nullable type의 `null`, JSON 객체와 배열, `--`로 시작하며 `=` 뒤에 준 값이며, `--params`는 객체 전체를 준다. | both |
 | `cli.command.rejects-undeclared-or-invalid-values` | 선언되지 않은 flag, schema와 맞지 않는 값, 값이 없는 flag, 값이 따라오는 boolean, 매개변수 flag와 함께 쓴 `--params`, 선언되지 않은 command는 `command.run`을 보내기 전에 종료 상태 2로 끝난다. | both |
 | `cli.commands.lists-declared-commands` | `sok commands`는 `exposure.list`의 `commands` 목록을 애플리케이션이 선언한 순서대로 출력한다. | both |

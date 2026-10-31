@@ -1060,8 +1060,20 @@ func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 	if err != nil {
 		return nil, err
 	}
-	reply, err := e.backend.PageRequest(window, "exposure.list", json.RawMessage(`{}`))
-	if err != nil {
+	var fields struct {
+		Owner *string `json:"owner"`
+	}
+	if err := json.Unmarshal(params, &fields); err != nil {
+		return nil, rpcError(codeInvalidParams, "%v", err)
+	}
+	// The host entries of owner host are answered without the main page, so they are listed while the page has not started
+	// (docs/spec/exposure.md).
+	reply := json.RawMessage(`{}`)
+	if fields.Owner != nil {
+		if *fields.Owner != "host" {
+			return nil, rpcError(codeInvalidParams, "exposure.list owner must be host")
+		}
+	} else if reply, err = e.backend.PageRequest(window, "exposure.list", json.RawMessage(`{}`)); err != nil {
 		return nil, err
 	}
 	var list map[string][]json.RawMessage

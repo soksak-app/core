@@ -497,6 +497,34 @@ fn declared() -> Fake {
     })
 }
 
+// contract: cli.command.host-command-without-page
+#[test]
+fn a_host_command_is_checked_against_the_host_entries_without_the_page() {
+    let host = r#"{"status":[],"commands":[{"name":"host.quit","description":"q","params":{"type":"object","properties":{}},"registered":true}],"dom":[]}"#;
+    let fake = start(move |method, params| match method {
+        "windows.list" => result(ONE_WINDOW),
+        "exposure.list" if params["owner"] == "host" => result(host),
+        "exposure.list" => Answer {
+            code: 1003,
+            message: "the main page is not ready".into(),
+            ..Answer::default()
+        },
+        "command.run" => result("null"),
+        _ => Answer {
+            code: -32601,
+            message: format!("unexpected {method}"),
+            ..Answer::default()
+        },
+    });
+    let dir = fake.dir();
+    let (code, _, stderr) = run(&["host.quit", "--config-dir", &dir]);
+    assert_eq!(code, 0, "{stderr}");
+    assert_eq!(
+        fake.last().to_string(),
+        r#"{"name":"host.quit","params":{},"window":"main"}"#
+    );
+}
+
 // contract: cli.command.flags-from-schema
 #[test]
 fn declared_command_flags_follow_the_schema() {

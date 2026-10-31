@@ -8260,6 +8260,23 @@ const FEATURE_LINKS = [
     levels: ["native", "application"],
   },
   {
+    id: "F322-1",
+    implementation: [
+      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "exposure.list owner must be host" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "pub fn exposure_list(" },
+      { file: "packages/sok/wailsv3/src/command.go", symbol: "list[\"owner\"] = \"host\"" },
+      { file: "packages/sok/tauriv2/src/command.rs", symbol: "serde_json::json!({\"window\": window, \"owner\": \"host\"})" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/exposure_test.go", id: "TestExposureListOfTheHostOwnerDoesNotAskThePage" },
+      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "the_exposure_list_of_the_host_owner_does_not_ask_the_page" },
+      { file: "packages/sok/wailsv3/tests/sok_test.go", id: "TestAHostCommandIsCheckedAgainstTheHostEntriesWithoutThePage" },
+      { file: "packages/sok/tauriv2/tests/sok_test.rs", id: "a_host_command_is_checked_against_the_host_entries_without_the_page" },
+    ],
+    expected: "exposure.list with owner host answers the host entries without the main page on both hosts, and sok checks a host command against them, so host.quit runs whatever the state of the page.",
+    levels: ["native"],
+  },
+  {
     id: "F321-5",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },

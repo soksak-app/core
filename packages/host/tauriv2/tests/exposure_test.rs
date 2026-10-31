@@ -221,6 +221,32 @@ fn request_without_timeout_waits_until_the_document_closes() {
     assert_eq!(failure.code, 1003);
 }
 
+// contract: exposure.list.host-owner-without-page
+#[test]
+fn the_exposure_list_of_the_host_owner_does_not_ask_the_page() {
+    let not_ready = || -> Result<Box<RawValue>, soksak_host_tauriv2::endpoint::Failure> {
+        panic!("the exposure list of the host owner asked the page")
+    };
+    let params = json!({"window": "main", "owner": "host"});
+    let listed = value(&exposure::exposure_list(params.as_object().unwrap(), not_ready).unwrap());
+    let entries: Vec<&Value> = listed["status"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .chain(listed["commands"].as_array().unwrap())
+        .collect();
+    for entry in &entries {
+        assert!(
+            entry["name"].as_str().unwrap().starts_with("host.") && entry["registered"] == true,
+            "entry {entry} in the host list"
+        );
+    }
+    assert!(entries.iter().any(|entry| entry["name"] == "host.quit"));
+    let other = json!({"window": "main", "owner": "core"});
+    let failure = exposure::exposure_list(other.as_object().unwrap(), not_ready).unwrap_err();
+    assert_eq!(failure.message, "exposure.list owner must be host");
+}
+
 // contract: exposure.list.appends-host-entries-registered, exposure.list.host-entries-exact-sorted-set, exposure.list.host-entries-described, exposure.list.host-quit-result-null, exposure.list.non-object-list-rejected
 #[test]
 fn host_entries_are_appended_as_registered() {
