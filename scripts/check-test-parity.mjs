@@ -8230,6 +8230,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F317-1",
+    implementation: [{ file: "native/darwin/tests/support/temporary_folder.m", symbol: "static void writeRemainingEntries(const char *folder)" }],
+    tests: [{ file: "native/darwin/tests/temporary_folder_test.m", id: "the message names the entry that remains with its mode and flags" }],
+    expected: "A temporary folder that a native test cannot remove fails the process with each remaining entry, its mode and its flags.",
+    levels: ["native"],
+  },
+  {
     id: "F315",
     implementation: [{ file: "native/darwin/Makefile", symbol: "NATIVE_E2E_TESTS = " }],
     tests: [

@@ -347,6 +347,7 @@ NATIVE_TESTS = observe_test \
   link_test \
   diagnostic_reports_test \
   capture_boundary_test \
+  temporary_folder_test \
   capture_stop_late_test \
   capture_stop_intake_test \
   capture_cleanup_test \

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F317-1: 임시 폴더를 지우지 못한 native test가 남은 항목마다 mode와 flag를 밝힌다.
 - F315: 실제 창을 녹화하는 native test는 `make -C native/darwin e2e`에서 돌고, `capture_boundary_test`가 capture boundary case를 unit test에서 실행한다. hosted display가 frame을 최대 1초 간격으로 내보내기 때문이다.
 - F292-34: F292 window check의 수정을 담은 plugin과 sidecar release가 core v0.0.21 뒤에 게시되었고 registry에 올라 있다.
 - F314: plugin specification은 plugin과 sidecar repository가 core release의 pack된 release 파일에 의존하고, `CORE_RELEASE`의 `sok`와 `soksak-release-gate`로 `main`에서 release한다고 밝힌다.

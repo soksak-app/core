@@ -1,9 +1,40 @@
 #import "temporary_folder.h"
 #include <errno.h>
+#include <fts.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+// Writes each entry that remains under a folder whose removal failed, with its permission bits and its file flags, so the
+// failure names what refused the removal. An entry that cannot be read is written with its error.
+static void writeRemainingEntries(const char *folder) {
+    char *roots[] = { (char *)folder, NULL };
+    // FTS_PHYSICAL lists a symbolic link itself, and each path starts with the folder path as the process created it.
+    FTS *walk = fts_open(roots, FTS_PHYSICAL | FTS_NOCHDIR, NULL);
+    if (!walk) {
+        fprintf(stderr, "  remains: %s unreadable: %s\n", folder, strerror(errno));
+        return;
+    }
+    for (;;) {
+        // fts_read returns NULL at the end with errno 0 and on an error with errno set, so errno is cleared before each read.
+        errno = 0;
+        FTSENT *entry = fts_read(walk);
+        if (!entry) break;
+        if (entry->fts_info == FTS_DP) continue;
+        if (entry->fts_info == FTS_DNR || entry->fts_info == FTS_ERR || entry->fts_info == FTS_NS) {
+            fprintf(stderr, "  remains: %s unreadable: %s\n", entry->fts_path, strerror(entry->fts_errno));
+            if (entry->fts_info != FTS_DNR) continue;
+        }
+        char *flags = fflagstostr(entry->fts_statp->st_flags);
+        fprintf(stderr, "  remains: %s mode %04o flags %s\n", entry->fts_path, entry->fts_statp->st_mode & 07777,
+            flags && flags[0] ? flags : "none");
+        free(flags);
+    }
+    if (errno != 0) fprintf(stderr, "  remains: the walk of %s ended: %s\n", folder, strerror(errno));
+    fts_close(walk);
+}
 
 // The folders that the process created, removed at exit in the order of creation.
 static char *folders[64];
@@ -17,6 +48,7 @@ static void removeFolders(void) {
         NSError *error = nil;
         if (![NSFileManager.defaultManager removeItemAtPath:path error:&error]) {
             fprintf(stderr, "FAIL: the temporary folder %s is not removed: %s\n", folders[i], error.localizedDescription.UTF8String);
+            writeRemainingEntries(folders[i]);
             failed = YES;
         }
     }
