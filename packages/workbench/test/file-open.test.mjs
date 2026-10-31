@@ -5,19 +5,20 @@ import { checkOpenPath, chooseOpener } from "../file-open.js";
 
 const plugins = [
   { id: "notes", opens: ["md", "txt"] },
-  { id: "any", opens: ["*"] },
+  { id: "rust", opens: ["rs"] },
   { id: "plain", opens: null },
 ];
 
-test("the plugin that declares the extension opens a file, and otherwise the plugin that declares *", () => {
+test("the plugin that declares the extension opens a file, and a file whose extension no plugin declares has no opener", () => {
   assert.equal(chooseOpener(plugins, "docs/a.md"), "notes");
   assert.equal(chooseOpener(plugins, "docs/A.MD"), "notes");
-  assert.equal(chooseOpener(plugins, "src/main.rs"), "any");
-  assert.equal(chooseOpener(plugins, "Makefile"), "any");
-  assert.equal(chooseOpener(plugins, ".gitignore"), "any");
-  assert.throws(() => chooseOpener([{ id: "notes", opens: ["md"] }], "a.rs"), /no plugin opens a\.rs/);
+  assert.equal(chooseOpener(plugins, "src/main.rs"), "rust");
+  assert.throws(() => chooseOpener(plugins, "src/main.go"), /^Error: no plugin opens src\/main\.go$/);
+  assert.throws(() => chooseOpener(plugins, "Makefile"), /^Error: no plugin opens Makefile$/);
+  assert.throws(() => chooseOpener(plugins, ".gitignore"), /^Error: no plugin opens \.gitignore$/);
+  // A declaration of * is not a declaration of any extension.
+  assert.throws(() => chooseOpener([...plugins, { id: "any", opens: ["*"] }], "Makefile"), /^Error: no plugin opens Makefile$/);
   assert.throws(() => chooseOpener([...plugins, { id: "other", opens: ["md"] }], "a.md"), /a\.md is opened by notes and other/);
-  assert.throws(() => chooseOpener([...plugins, { id: "rest", opens: ["*"] }], "a.rs"), /a\.rs is opened by any and rest/);
 });
 
 test("a path to open is relative to the project root", () => {

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F331: `surface.opens` no longer accepts `"*"`; each plugin declares the extensions that it opens, and `core.file.open` fails with `no plugin opens <path>` for a file whose extension no loaded plugin declares, instead of opening it in the plugin that declared `"*"`.
 - F330: The view start values carry `diagnostics`, the diagnostic declaration of the plugin or `null`, which both hosts require and inject in `window.sokSurface`, so a view page reads its diagnostic declaration without requesting `diagnostics.json`, which a release holds no file of.
 - F328: The latest version of a plugin card and the update list is the version that installation selects for the running core, and a plugin without such a version shows core <version>에 맞는 버전 없음; `pluginsState` reports the running core as `core`.
 - F329: The registry check fails on an unrevoked plugin version whose range contains a core newer than the newest listed core.

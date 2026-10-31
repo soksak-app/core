@@ -453,13 +453,13 @@ test("a surface that opens files declares extensions and a path parameter", () =
   const params = { type: "object", properties: { path: { type: "string" } } };
   const opener = { ...card, surface: { ...card.surface, params, opens: { extensions: ["md", "txt"] } } };
   assert.deepEqual(validateManifest(opener).surface.opens.extensions, ["md", "txt"]);
-  assert.deepEqual(validateManifest({ ...opener, surface: { ...opener.surface, opens: { extensions: ["*"] } } }).surface.opens.extensions, ["*"]);
   for (const [surface, error] of [
     [{ ...card.surface, opens: { extensions: ["md"] } }, /surface opens requires surface params with a string property path/],
     [{ ...card.surface, params: { type: "object" }, opens: { extensions: ["md"] } }, /surface opens requires surface params with a string property path/],
     [{ ...opener.surface, opens: { extensions: [] } }, /surface opens extensions must be a non-empty array/],
-    [{ ...opener.surface, opens: { extensions: [".md"] } }, /surface opens extension \.md must be \* or lowercase letters and digits/],
-    [{ ...opener.surface, opens: { extensions: ["MD"] } }, /surface opens extension MD must be \* or lowercase letters and digits/],
+    [{ ...opener.surface, opens: { extensions: ["*"] } }, /surface opens extension \* must be lowercase letters and digits/],
+    [{ ...opener.surface, opens: { extensions: [".md"] } }, /surface opens extension \.md must be lowercase letters and digits/],
+    [{ ...opener.surface, opens: { extensions: ["MD"] } }, /surface opens extension MD must be lowercase letters and digits/],
     [{ ...opener.surface, opens: { extensions: ["md", "md"] } }, /surface opens extension md is repeated/],
     [{ ...opener.surface, opens: { extensions: ["md"], mime: [] } }, /unknown field mime/],
   ]) assert.throws(() => validateManifest({ ...card, surface }), error);

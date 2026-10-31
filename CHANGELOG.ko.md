@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F331: `surface.opens`는 더 이상 `"*"`를 받지 않는다. 각 plugin은 자기가 여는 확장자를 선언하고, `core.file.open`은 그 확장자를 선언한 불러온 plugin이 없는 파일을 `"*"`를 선언한 plugin에서 여는 대신 `no plugin opens <path>`로 실패한다.
 - F330: view 시작 값은 plugin의 진단 선언 또는 `null`인 `diagnostics`를 담고, 두 host는 이 값을 요구하며 `window.sokSurface`에 주입한다. 그래서 view page는 release에 없는 `diagnostics.json`을 요청하지 않고 진단 선언을 읽는다.
 - F328: plugin 카드와 업데이트 목록의 최신 버전은 설치가 실행 중인 core에 고르는 version이고, 그런 version이 없는 plugin은 core <version>에 맞는 버전 없음을 보인다. `pluginsState`가 실행 중인 core를 `core`로 보고한다.
 - F329: registry 검사가 범위가 가장 새 listed core보다 새 core를 포함하는 철회되지 않은 plugin version에서 실패한다.

@@ -1,6 +1,6 @@
 // Chooses the plugin that opens a file with core.file.open, from the surface.opens declarations of the loaded plugins
-// (docs/spec/plugins.md#pluginjson). A declared extension decides before *, and two plugins that declare the deciding
-// entry are an error, not a choice.
+// (docs/spec/plugins.md#pluginjson). Only a declared extension connects a file to a plugin: a file whose extension no plugin
+// declares has no opener, and two plugins that declare the extension are an error, not a choice.
 
 /** The extension of the file name of path in lowercase, or null for a name without one. */
 function extensionOf(path) {
@@ -12,11 +12,10 @@ function extensionOf(path) {
 /** The id of the plugin that opens path; plugins are {id, opens}, with opens the declared extensions or null. */
 export function chooseOpener(plugins, path) {
   const extension = extensionOf(path);
-  const named = extension === null ? [] : plugins.filter((plugin) => plugin.opens?.includes(extension));
-  const deciding = named.length ? named : plugins.filter((plugin) => plugin.opens?.includes("*"));
-  if (deciding.length === 0) throw new Error(`no plugin opens ${path}`);
-  if (deciding.length > 1) throw new Error(`${path} is opened by ${deciding.map((plugin) => plugin.id).join(" and ")}`);
-  return deciding[0].id;
+  const openers = extension === null ? [] : plugins.filter((plugin) => plugin.opens?.includes(extension));
+  if (openers.length === 0) throw new Error(`no plugin opens ${path}`);
+  if (openers.length > 1) throw new Error(`${path} is opened by ${openers.map((plugin) => plugin.id).join(" and ")}`);
+  return openers[0].id;
 }
 
 /** Returns path when it is relative to the project root and has no .. segment. */

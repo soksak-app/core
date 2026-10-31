@@ -765,8 +765,8 @@ export function validateManifest(manifest) {
       if (!Array.isArray(extensions) || extensions.length === 0) throw new Error(`${where}: surface opens extensions must be a non-empty array`);
       const seen = new Set();
       for (const extension of extensions) {
-        if (extension !== "*" && !(typeof extension === "string" && /^[a-z0-9]+$/.test(extension))) {
-          throw new Error(`${where}: surface opens extension ${extension} must be * or lowercase letters and digits`);
+        if (!(typeof extension === "string" && /^[a-z0-9]+$/.test(extension))) {
+          throw new Error(`${where}: surface opens extension ${extension} must be lowercase letters and digits`);
         }
         if (seen.has(extension)) throw new Error(`${where}: surface opens extension ${extension} is repeated`);
         seen.add(extension);

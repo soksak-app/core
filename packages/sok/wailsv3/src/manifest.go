@@ -844,8 +844,8 @@ func checkOpens(where string, raw any, params any) error {
 	seen := map[string]bool{}
 	for _, item := range extensions {
 		extension, isText := item.(string)
-		if !isText || (extension != "*" && !extensionPattern.MatchString(extension)) {
-			return fmt.Errorf("%s: surface opens extension %s must be * or lowercase letters and digits", where, jsValueText(item))
+		if !isText || !extensionPattern.MatchString(extension) {
+			return fmt.Errorf("%s: surface opens extension %s must be lowercase letters and digits", where, jsValueText(item))
 		}
 		if seen[extension] {
 			return fmt.Errorf("%s: surface opens extension %s is repeated", where, extension)

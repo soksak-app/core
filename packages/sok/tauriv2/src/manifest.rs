@@ -952,13 +952,12 @@ fn check_opens(where_: &str, raw: &Value, params: Option<&Value>) -> Result<(), 
         let extension = item.as_str();
         match extension {
             Some(e)
-                if e == "*"
-                    || (!e.is_empty()
-                        && e.bytes()
-                            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())) => {}
+                if !e.is_empty()
+                    && e.bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) => {}
             _ => {
                 return Err(format!(
-                    "{where_}: surface opens extension {} must be * or lowercase letters and digits",
+                    "{where_}: surface opens extension {} must be lowercase letters and digits",
                     js_value_text(item)
                 ));
             }

@@ -8362,6 +8362,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F331",
+    implementation: [
+      { file: "packages/workbench/file-open.js", symbol: "const openers = extension === null ? [] : plugins.filter((plugin) => plugin.opens?.includes(extension));" },
+      { file: "packages/plugin-api/index.js", symbol: "surface opens extension ${extension} must be lowercase letters and digits" },
+      { file: "packages/sok/wailsv3/src/manifest.go", symbol: "surface opens extension %s must be lowercase letters and digits" },
+      { file: "packages/sok/tauriv2/src/manifest.rs", symbol: "surface opens extension {} must be lowercase letters and digits" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/file-open.test.mjs", id: "the plugin that declares the extension opens a file, and a file whose extension no plugin declares has no opener" },
+      { file: "packages/plugin-api/test/validate.test.mjs", id: "a surface that opens files declares extensions and a path parameter" },
+    ],
+    expected: "Only a declared extension connects a file to a plugin, and a manifest that declares * is refused.",
+    levels: ["unit"],
+  },
+  {
     id: "F330",
     implementation: [
       { file: "packages/workbench/surface-modules.js", symbol: "diagnostics: surface.diagnostics," },

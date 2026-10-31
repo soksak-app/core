@@ -2957,7 +2957,43 @@
         "icon": "<svg></svg>"
       },
       "accepted": false,
-      "error": "plugin probe: surface opens extension MD must be * or lowercase letters and digits",
+      "error": "plugin probe: surface opens extension MD must be lowercase letters and digits",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.opens-catch-all",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "opens": {
+            "extensions": [
+              "md",
+              "*"
+            ]
+          },
+          "params": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface opens extension * must be lowercase letters and digits",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -3013,7 +3049,7 @@
           "opens": {
             "extensions": [
               "md",
-              "*"
+              "txt"
             ]
           },
           "params": {
