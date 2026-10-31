@@ -1,0 +1,116 @@
+name: repeat
+# build-machine: skip smoke reason=the workflow repeats one unit test that a person dispatches; it builds no release
+
+# Repeats one unit test on the hosted runner, where an intermittent failure of the checks occurred, through the tracked
+# repeat targets (docs/operations/examples.md#continuous-integration). A failure keeps the run folder and the crash reports.
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: native runs make -C native/darwin repeat; rust runs make rust-repeat
+        type: choice
+        options: [native, rust]
+        required: true
+      test:
+        description: The native test name, or the exact Rust test name
+        type: string
+        required: true
+      count:
+        description: The number of runs
+        type: number
+        required: true
+      package:
+        description: The Cargo package of a Rust test
+        type: string
+        required: false
+      test_target:
+        description: The Cargo target of a Rust test, lib or test:<target>
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    if: inputs.kind == 'native'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-native
+        with:
+          root: core
+      - name: Fetch locked Node dependencies
+        run: pnpm -C core install --frozen-lockfile
+      - name: Fetch pinned native release file
+        run: make -C core native-darwin-fetch
+      - name: Build the native library offline
+        env:
+          OFFLINE: '1'
+        run: make -C core native-darwin
+      - name: Repeat the native test
+        env:
+          OFFLINE: '1'
+          SOKSAK_NATIVE_TEST_RUN_FOLDER: ${{ runner.temp }}/soksak-native-darwin
+          TEST: ${{ inputs.test }}
+          COUNT: ${{ inputs.count }}
+        run: make -C core/native/darwin repeat TEST="$TEST" COUNT="$COUNT"
+      - name: Resolve user DiagnosticReports directory
+        if: failure()
+        id: native-diagnostic-reports
+        shell: bash
+        run: |
+          directory="$(swift -e 'import Foundation; guard let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { fputs("user Library directory is unavailable\n", stderr); exit(1) }; print(library.appendingPathComponent("Logs/DiagnosticReports", isDirectory: true).path)')"
+          printf 'directory=%s\n' "$directory" >> "$GITHUB_OUTPUT"
+      - name: Keep native failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: repeat-native-failure
+          path: |
+            ${{ runner.temp }}/soksak-native-darwin
+            ${{ steps.native-diagnostic-reports.outputs.directory }}
+          if-no-files-found: warn
+
+  rust:
+    if: inputs.kind == 'rust'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-rust
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-native
+        with:
+          root: core
+      - name: Fetch locked Node dependencies
+        run: pnpm -C core install --frozen-lockfile
+      - name: Fetch locked Rust dependencies
+        working-directory: core
+        run: cargo fetch --locked
+      - name: Fetch pinned native release file
+        run: make -C core native-darwin-fetch
+      - name: Build the native library and the Tauri frontend offline
+        env:
+          OFFLINE: '1'
+        run: make -C core native-darwin frontend-tauriv2-core
+      - name: Repeat the Rust test
+        env:
+          CARGO_NET_OFFLINE: 'true'
+          OFFLINE: '1'
+          PKG_CONFIG_PATH: ${{ github.workspace }}/core/native/darwin/build
+          PACKAGE: ${{ inputs.package }}
+          TEST_TARGET: ${{ inputs.test_target }}
+          TEST: ${{ inputs.test }}
+          COUNT: ${{ inputs.count }}
+        run: make -C core rust-repeat PACKAGE="$PACKAGE" TEST_TARGET="$TEST_TARGET" TEST="$TEST" COUNT="$COUNT"

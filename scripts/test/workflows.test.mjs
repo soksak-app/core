@@ -283,3 +283,18 @@ test('the release publishes sok and the packed releases that plugins and sidecar
   assert.match(upload.text, /path: core\/dist\/\*\n/, 'the upload of release-wailsv3 does not hold every file of dist');
   assert.ok(list.indexOf(pack) < list.indexOf(upload), 'the packed releases are made after the upload');
 });
+
+test('repeat.yml starts on a dispatch and runs only the tracked repeat targets', () => {
+  const file = '.github/workflows/repeat.yml';
+  assert.ok(existsSync(join(ROOT, file)), `${file} does not exist`);
+  const text = read(file);
+  assert.match(text, /^on:\n {2}workflow_dispatch:\n/m, 'repeat.yml starts only on a dispatch');
+  const commands = steps(text).flatMap((step) => [...step.text.matchAll(/^\s*run:\s*(.+)$/gm)].map((match) => match[1]));
+  const repeats = commands.filter((command) => /\brepeat\b/.test(command));
+  assert.deepEqual(repeats, [
+    'make -C core/native/darwin repeat TEST="$TEST" COUNT="$COUNT"',
+    'make -C core rust-repeat PACKAGE="$PACKAGE" TEST_TARGET="$TEST_TARGET" TEST="$TEST" COUNT="$COUNT"',
+  ], `repeat.yml runs ${repeats.join(' | ')}`);
+  // The dispatched values reach the commands through the environment, so no value is spliced into a shell line.
+  assert.doesNotMatch(commands.join('\n'), /\$\{\{\s*inputs\./, 'a run line splices a dispatched input');
+});
