@@ -13,9 +13,14 @@ const SHORTCUTS = [
   { key: "Escape", owner: "view", command: "none", menu: null, when: "A plugin view has keyboard focus" },
 ];
 
-function fakes() {
+// The surfaces of the probe plugin that the window holds; a surface that is not listed belongs to no plugin of the window.
+const HELD = new Set(["probe left/files.tree", "probe tab-a"]);
+
+function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
   const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [],
-    reports: [], log: [], textSize: [], settings: [], registered: [], errors: [], failed: [], events: [], composition: [] };
+    reports: [], log: [], textSize: [], settings: [], registered: [], errors: [], failed: [], events: [], composition: [], data: [] };
+  // The project data of each project and key; a key that holds no value reads its default.
+  const stored = new Map();
   const item = (plugin, index) => Object.freeze({ plugin, index, item: { name: plugin }, module: `/modules/@scope/plugin-${plugin}/ui/${plugin}.js`,
     fail: (reason) => { ran.failed.push({ plugin, index, reason }); } });
   // The PNG payload that the clipboard of the surface holds; a case sets bytes to null for an absent payload.
@@ -24,6 +29,7 @@ function fakes() {
     plugin: "probe",
     surface: "probe-surface",
     pending: new Map(),
+    startProject: () => startProject,
     tab: {
       state: {
         read: () => ({ count: 2 }),
@@ -62,8 +68,8 @@ function fakes() {
         textSize: async () => { ran.subscribed.push({ textSize: true }); return null; },
         settings: async () => { ran.subscribed.push({ settings: true }); return null; },
         logLevels: async () => { ran.subscribed.push({ logLevels: true }); return null; },
-        statusWatch: async (name) => { ran.subscribed.push({ statusWatch: name }); return null; },
-        statusUnwatch: async (name) => { ran.subscribed.push({ statusUnwatch: name }); return null; },
+        statusWatch: async (name, surface) => { ran.subscribed.push(surface === undefined ? { statusWatch: name } : { statusWatch: name, surface }); return null; },
+        statusUnwatch: async (name, surface) => { ran.subscribed.push(surface === undefined ? { statusUnwatch: name } : { statusUnwatch: name, surface }); return null; },
       },
       command: {
         register: async (name) => { ran.declared.push(name); return null; },
@@ -84,6 +90,20 @@ function fakes() {
       exposure: {
         registered: async ({ kind, name }) => { ran.registered.push({ kind, name }); return null; },
       },
+      holdsSurface: (plugin, surface) => HELD.has(`${plugin} ${surface}`),
+      data: {
+        of: (project, plugin) => ({
+          declares: (key) => key === "note",
+          get: async (key) => {
+            ran.data.push({ read: key, project: project.id, plugin });
+            return stored.get(`${project.id} ${plugin} ${key}`) ?? "default";
+          },
+          set: async (key, value) => {
+            ran.data.push({ write: key, value, project: project.id, plugin });
+            stored.set(`${project.id} ${plugin} ${key}`, value);
+          },
+        }),
+      },
     },
     // The page operations of the surface view; each records its arguments.
     composition: (() => {
@@ -103,6 +123,54 @@ function fakes() {
   };
   return { ran, options, png };
 }
+
+test("a status watch with a surface follows the status on that surface of the view's plugin", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.status.watch", params: { name: "probe.lines" } }, options), null);
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.status.watch", params: { name: "probe.lines", surface: "left/files.tree" } }, options), null);
+  assert.equal(await answerViewCall({ id: 3, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "left/files.tree" } }, options), null);
+  assert.deepEqual(ran.subscribed, [
+    { statusWatch: "probe.lines" },
+    { statusWatch: "probe.lines", surface: "left/files.tree" },
+    { statusUnwatch: "probe.lines", surface: "left/files.tree" },
+  ]);
+});
+
+test("a status watch names only a surface that the window holds for the view's plugin, and otherwise runs nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.status.watch", params: { name: "probe.lines", surface: "other-surface" } }, options),
+    /view call runtime.status.watch surface other-surface is not a surface of probe/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "tab-z" } }, options),
+    /view call runtime.status.unwatch surface tab-z is not a surface of probe/);
+  assert.deepEqual(ran.subscribed, []);
+});
+
+test("runtime.data.get and runtime.data.set answer for the start project of the view", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.data.get", params: { key: "note" } }, options), "default");
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.data.set", params: { key: "note", value: "kept" } }, options), null);
+  assert.equal(await answerViewCall({ id: 3, command: "runtime.data.get", params: { key: "note" } }, options), "kept");
+  assert.deepEqual(ran.data, [
+    { read: "note", project: "p1", plugin: "probe" },
+    { write: "note", value: "kept", project: "p1", plugin: "probe" },
+    { read: "note", project: "p1", plugin: "probe" },
+  ]);
+});
+
+test("runtime.data calls refuse a view whose start values carry no project, and run nothing", async () => {
+  const { ran, options } = fakes({ startProject: null });
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.data.get", params: { key: "note" } }, options), /view call runtime.data.get requires a project/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.data.set", params: { key: "note", value: "x" } }, options), /view call runtime.data.set requires a project/);
+  assert.deepEqual(ran.data, []);
+});
+
+test("runtime.data calls refuse a key that the plugin does not declare, and a key that is not text", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.data.get", params: { key: "secret" } }, options), /view call runtime.data.get secret is not a data key of probe/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.data.set", params: { key: "secret", value: 1 } }, options), /view call runtime.data.set secret is not a data key of probe/);
+  await assert.rejects(answerViewCall({ id: 3, command: "runtime.data.get", params: { key: "" } }, options), /view call runtime.data.get requires a non-empty key/);
+  assert.deepEqual(ran.data, []);
+});
 
 test("a forwarded tab.state.read returns the tab state of its surface", async () => {
   const { options } = fakes();

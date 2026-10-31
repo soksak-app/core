@@ -9,7 +9,7 @@ globalThis.document = dom.window.document;
 globalThis.dispatchEvent = (event) => dom.window.dispatchEvent(event);
 globalThis.ErrorEvent = dom.window.ErrorEvent;
 
-const { commitData, configureData, declareProjectData, pluginHostData, prepareData, showData } = await import("../plugin-data.js");
+const { commitData, configureData, declareProjectData, pluginHostData, prepareData, showData, viewDataOf } = await import("../plugin-data.js");
 
 const stored = new Map();
 configureData({
@@ -117,4 +117,20 @@ test("failed data preparation leaves the active project-data owner unchanged", a
   } });
   await assert.rejects(prepareData({ id: "p-bad", root: "/work/bad" }), /project data read failed/);
   assert.equal(await pluginHostData.get("probe", "note"), "new value");
+});
+
+test("a view reads and writes the declared keys of the project it names, whether or not the window shows that project", async () => {
+  declareProjectData("view-probe", { note: { schema: { type: "string" }, default: "" } });
+  await showData({ id: "p3", root: "/work/p3" });
+  const access = viewDataOf({ id: "p4", root: "/work/p4" }, "view-probe");
+  assert.equal(access.declares("note"), true);
+  assert.equal(access.declares("other"), false);
+  assert.equal(await access.get("note"), "");
+  await access.set("note", "stored for p4");
+  assert.deepEqual(stored.get("p4/view-probe").note, { format: 1, value: "stored for p4" });
+  assert.equal(await viewDataOf({ id: "p4", root: "/work/p4" }, "view-probe").get("note"), "stored for p4");
+  assert.equal(await pluginHostData.get("view-probe", "note"), "");
+  await assert.rejects(access.set("note", 5), /view-probe data note does not match its schema/);
+  assert.deepEqual(stored.get("p4/view-probe").note, { format: 1, value: "stored for p4" });
+  await showData(null);
 });

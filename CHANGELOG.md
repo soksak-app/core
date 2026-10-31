@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F332-9: The main page answers the view calls `runtime.status.watch` and `runtime.status.unwatch` with `surface`, which follows the status on a surface of the view's plugin that the window holds, and answers `runtime.data.get` and `runtime.data.set` for the project of the view's start values; a request without `surface` chooses only tab surfaces.
 - F331: `surface.opens` no longer accepts `"*"`; each plugin declares the extensions that it opens, and `core.file.open` fails with `no plugin opens <path>` for a file whose extension no loaded plugin declares, instead of opening it in the plugin that declared `"*"`.
 - F330: The view start values carry `diagnostics`, the diagnostic declaration of the plugin or `null`, which both hosts require and inject in `window.sokSurface`, so a view page reads its diagnostic declaration without requesting `diagnostics.json`, which a release holds no file of.
 - F328: The latest version of a plugin card and the update list is the version that installation selects for the running core, and a plugin without such a version shows core <version>에 맞는 버전 없음; `pluginsState` reports the running core as `core`.

@@ -102,6 +102,14 @@ export function createViewReporter({ reportError, console }) {
   };
 }
 
+/** The key of a status watch of the view: a watch of a name on a surface is apart from the watch of the name on another surface. */
+const statusKey = (name, surface) => `status:${JSON.stringify([name, surface ?? null])}`;
+
+/** Refuses a project data call whose key is not a non-empty text (docs/spec/plugins.md#project-data). */
+function requireDataKey(command, key) {
+  if (typeof key !== "string" || key === "") throw new TypeError(`${command} requires a non-empty key`);
+}
+
 /**
  * Creates the calls and the declared UI snapshots of a view over one view channel. The calls are createCalls() and the snapshot
  * sender is createSnapshotSender(), both sending through the channel. The channel has one listener, which passes each
@@ -112,8 +120,8 @@ export function createViewReporter({ reportError, console }) {
  *               report them; a view page passes createViewReporter()
  *
  * Returns {calls, snapshots}. runtime serves the context entries of the view page: native.on, sidecar(name).on, .onFailure and .send,
- * theme, and textSize and settings with read and on each. composition.create({regions, overlays}) creates the composition of the
- * declared regions of the view (docs/spec/native-surfaces.md#view-surfaces, regions).
+ * theme, status.watch, data.get and data.set, and textSize and settings with read and on each. composition.create({regions, overlays})
+ * creates the composition of the declared regions of the view (docs/spec/native-surfaces.md#view-surfaces, regions).
  */
 export function createViewBridge({ handler, report }) {
   if (typeof report !== "function") throw new TypeError("createViewBridge requires the report function");
@@ -148,17 +156,22 @@ export function createViewBridge({ handler, report }) {
     });
   };
   const subscribe = (name) => calls.request("runtime.native.on", { name });
-  // The status watches of the view: one page subscription per name, and each listener of the name receives the value of the status.
-  // A refused watch removes its listeners and records the refusal as an error line of the view; the stop function ends the watch when
-  // no listener of the name remains (docs/spec/native-surfaces.md#view-surfaces, view events).
-  const watchStatus = (name, listener) => {
+  // The status watches of the view: one page subscription per name and surface, and each listener of the watch receives the value of the
+  // status. A refused watch removes its listeners and records the refusal as an error line of the view; the stop function ends the watch
+  // when no listener of the watch remains (docs/spec/native-surfaces.md#view-surfaces, view events).
+  const watchStatus = (name, listener, { surface } = {}) => {
     if (typeof name !== "string" || name === "") throw new TypeError("runtime.status.watch requires a non-empty name");
     if (typeof listener !== "function") throw new TypeError("runtime.status.watch requires a listener");
-    const key = `status:${name}`;
+    if (surface !== undefined && (typeof surface !== "string" || surface === "")) {
+      throw new TypeError("runtime.status.watch requires a non-empty surface");
+    }
+    const key = statusKey(name, surface);
+    // The call names the surface only when the watch has one, so a watch of the workbench is the same call as before.
+    const params = surface === undefined ? { name } : { name, surface };
     if (!listeners.has(key)) listeners.set(key, new Set());
     listeners.get(key).add(listener);
     if (!subscriptions.has(key)) {
-      const pending = calls.request("runtime.status.watch", { name });
+      const pending = calls.request("runtime.status.watch", params);
       subscriptions.set(key, pending);
       pending.catch((error) => {
         if (subscriptions.get(key) !== pending) return;
@@ -176,7 +189,7 @@ export function createViewBridge({ handler, report }) {
       if (set && set.size > 0) return;
       listeners.delete(key);
       subscriptions.delete(key);
-      calls.request("runtime.status.unwatch", { name }).catch(recordError(`status ${name}`));
+      calls.request("runtime.status.unwatch", params).catch(recordError(`status ${name}`));
     };
   };
   // Records the refusal of a call that the view makes on its own as an error line of the view at the place where.
@@ -228,10 +241,24 @@ export function createViewBridge({ handler, report }) {
         send: (id, body, cids = []) => calls.request("runtime.sidecar.send", { id, sidecar: name, body, cids }),
       };
     },
-    // The value of a status of the plugin or of core (docs/spec/native-surfaces.md#view-surfaces, view events): watch(name, listener)
-    // returns the function that ends the watch of the listener.
+    // The value of a status of the plugin or of core (docs/spec/native-surfaces.md#view-surfaces, view events). watch(name, listener, {surface})
+    // follows the status on the surface that the options name, or on the workbench when they name none, and returns the function that ends
+    // the watch of the listener. surface is a surface of the plugin of the view that the window holds, such as a section surface
+    // (docs/spec/plugins.md#sections).
     status: {
       watch: watchStatus,
+    },
+    // The project data of the plugin for the project of the view (docs/spec/plugins.md#project-data): get(key) resolves with the stored
+    // value or the default, and set(key, value) resolves with null after the store accepted the write.
+    data: {
+      get: (key) => {
+        requireDataKey("runtime.data.get", key);
+        return calls.request("runtime.data.get", { key });
+      },
+      set: (key, value) => {
+        requireDataKey("runtime.data.set", key);
+        return calls.request("runtime.data.set", { key, value });
+      },
     },
     // The scale of the surface and the settings of the plugin: read reads the current value, and on registers one listener
     // under the one subscription of its key, which the page registers once (docs/spec/native-surfaces.md#view-surfaces).
@@ -287,7 +314,7 @@ export function createViewBridge({ handler, report }) {
       return message.event;
     }
     if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;
-    if (message.event === "status") return `status:${message.data?.name}`;
+    if (message.event === "status") return statusKey(message.data?.name, message.data?.surface);
     return `native:${message.event}`;
   };
   // The command handlers of the view by command name, registered through commands.register.
