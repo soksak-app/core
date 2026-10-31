@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F324: The workspace version is release candidate `0.0.23`, distinct from published `v0.0.22`, which reloaded its page while an installed plugin was refused and was not listed in the registry.
 - F321-7: With a `plugins/installed.json` that cannot be read, both hosts serve the paths under `/modules/` from the bundled frontend instead of answering 500, so the core modules load and the page starts with the error of the installation.
 - F321-6: An installed plugin that the window refused has the state `refused` (불러오지 못함) instead of `reload`, so the page no longer reloads at every start while such a plugin is installed; the tab placeholder of that plugin states it.
 - F323: The workspace version is release candidate `0.0.22`, distinct from published `v0.0.21`, which was withdrawn from the registry because it did not start with installed components of earlier forms. The version checker names both identities, and the three workspace Cargo.lock entries use the candidate.
