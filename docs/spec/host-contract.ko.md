@@ -603,6 +603,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.start.refuses-zero-hello-timeout` | 영값 `Sidecars`로 영속 서비스를 시작하면 서비스 생성 전에 거부하며 `HelloTimeout`을 이름 붙인 오류를 낸다. | wailsv3 only: Go는 영값 `Sidecars`를 허용하지만 Tauri는 공개 영값 구조체가 아니라 builder로 사이드카 core를 만든다 |
 | `sidecars.start.passes-log-directory` | 표준 입출력 sidecar는 인자 `--log-dir <config-dir>/logs`만 받아 시작한다. | both |
 | `sidecars.declaration.refuses-missing-sidecar-json` | sidecar.json이 없는 설치 sidecar 폴더나 installed.json에 version이 없는 sidecar는 선언되지 않고, 그 sidecar에 대한 요청은 없는 파일이나 그 sidecar를 나열한 plugin.json을 밝히는 `sidecar <name>: <path>: <reason>`으로 실패한다. | both |
+| `installed.sidecars.unreadable-installation-starts-without-sidecars` | `installed.json`이 이전 형식이거나 사용 중인 plugin의 `plugin.json`이 parse되지 않으면, host 시작의 sidecar channel은 선언 없이 만들어지고, host는 `installed plugins: <error>`를 기록하며, 설치된 sidecar에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패한다. | both |
 | `sidecars.declaration.adds-sidecars-installed-after-start` | 생성 뒤에 설치 sidecar를 선언하면 선언되지 않은 것을 더하므로 그 sidecar로의 보내기가 그것을 시작한다. | both |
 | `sidecars.declaration.rejects-executable-escaping-package` | sidecar 밖의 실행 파일 경로는 `executable <path> is not a path inside the package`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | both |
 | `sidecars.declaration.rejects-absolute-executable` | 절대 실행 파일 경로는 `executable <path> is not a path inside the package`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | both |

@@ -232,6 +232,28 @@ func TestInstalledAssetsServeTheSharedModulesOfExtensionPoints(t *testing.T) {
 	}
 }
 
+// contract: installed.sidecars.unreadable-installation-starts-without-sidecars
+func TestAnUnreadableInstallationStartsTheSidecarsWithoutDeclarations(t *testing.T) {
+	cases := map[string]map[string]string{
+		"an earlier installed.json form": {"plugins/installed.json": `{"format": 2, "plugins": {}}`},
+		"an invalid plugin.json":         {"plugins/term/0.1.0/plugin.json": "{"},
+	}
+	for name, files := range cases {
+		config := installedFixture(t)
+		writeInstalled(t, config, files)
+		sidecars, err := host.NewInstalledSidecars(config)
+		if err != nil {
+			t.Errorf("%s: the start failed: %v", name, err)
+			continue
+		}
+		err = sidecars.Send(newFakeOwner("/projects/a"), "@scope/sidecar-worker", "s1", json.RawMessage(`{}`))
+		if want := "sidecar @scope/sidecar-worker is not declared by any plugin"; err == nil || err.Error() != want {
+			t.Errorf("%s: send error = %v, want %q", name, err, want)
+		}
+		sidecars.Stop()
+	}
+}
+
 // installedSendError is the error of a send to the installed sidecar name after the host declares the installed sidecars of config.
 func installedSendError(t *testing.T, config, name string) string {
 	t.Helper()

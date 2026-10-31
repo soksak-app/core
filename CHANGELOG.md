@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F321-1: A host whose `installed.json` or `plugin.json` cannot be read records `installed plugins: <error>` and starts without sidecars instead of ending its start.
 - F321: An installed sidecar whose declaration cannot be read or checked is refused alone: the host records the error, a request for that sidecar fails with it, and the other sidecars and the application start. Before, one such sidecar ended the start of both hosts.
 - F320: The core release publishes `sok` only inside its application zips; a plugin or sidecar release takes the `sok` of the zip of the host that its workflow declares in `CORE_HOST`.
 - F317-1: A native test that cannot remove its temporary folder names each entry that remains with its mode and flags.

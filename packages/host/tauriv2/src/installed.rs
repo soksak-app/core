@@ -14,7 +14,7 @@ use soksak_sok::install::{InstalledState, PluginFiles};
 
 use crate::application_log::log_error;
 use crate::platform::CoreRootHost;
-use crate::sidecars::SidecarDeclaration;
+use crate::sidecars::{Owner, SidecarDeclaration, Sidecars};
 
 /// The path through which the page reads the list of installed plugins.
 pub const INSTALLED_PLUGINS_PATH: &str = "/installed-plugins.json";
@@ -395,6 +395,18 @@ fn core_content_type(url_path: &str) -> &'static str {
         Some("png") => "image/png",
         _ => "application/octet-stream",
     }
+}
+
+/// Creates the sidecar channel of a host start with the installed sidecars of config_dir. When the installation cannot be
+/// read, it records the error at the place installed plugins and declares no sidecar, so the host starts;
+/// /installed-plugins.json carries the same error to the page (docs/spec/sidecars.md#declaration-and-startup).
+pub fn new_installed_sidecars<O: Owner>(config_dir: PathBuf) -> Result<Sidecars<O>, String> {
+    // default: an installation that cannot be read declares no sidecar; the error is recorded, and the page shows it.
+    let declarations = installed_sidecars(&config_dir).unwrap_or_else(|error| {
+        log_error("installed plugins", &error);
+        Vec::new()
+    });
+    Sidecars::new(&declarations, config_dir)
 }
 
 /// Returns the sidecars that the plugin.json dependencies of an enabled installed plugin specify, together with the

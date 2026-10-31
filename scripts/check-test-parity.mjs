@@ -8230,6 +8230,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F321-1",
+    implementation: [
+      { file: "packages/host/wailsv3/src/installed.go", symbol: "func NewInstalledSidecars(" },
+      { file: "packages/host/tauriv2/src/installed.rs", symbol: "pub fn new_installed_sidecars<" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/installed_test.go", id: "TestAnUnreadableInstallationStartsTheSidecarsWithoutDeclarations" },
+      { file: "packages/host/tauriv2/tests/installed_test.rs", id: "an_unreadable_installation_starts_the_sidecars_without_declarations" },
+    ],
+    expected: "A host start whose installed.json or plugin.json cannot be read records the error and creates its sidecar channel without declarations on both hosts.",
+    levels: ["native"],
+  },
+  {
     id: "F321",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },

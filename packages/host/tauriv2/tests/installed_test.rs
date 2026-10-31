@@ -471,6 +471,37 @@ fn installed_sidecars_resolve_the_installed_version_folders() {
     );
 }
 
+// contract: installed.sidecars.unreadable-installation-starts-without-sidecars
+#[test]
+fn an_unreadable_installation_starts_the_sidecars_without_declarations() {
+    for (case, file, text) in [
+        (
+            "an earlier installed.json form",
+            "plugins/installed.json",
+            r#"{"format": 2, "plugins": {}}"#,
+        ),
+        (
+            "an invalid plugin.json",
+            "plugins/term/0.1.0/plugin.json",
+            "{",
+        ),
+    ] {
+        let config = installed_fixture();
+        write_installed(config.path(), &[(file, text)]);
+        let sidecars = installed::new_installed_sidecars::<Window>(config.path().to_path_buf())
+            .unwrap_or_else(|error| panic!("{case}: the start failed: {error}"));
+        let body = serde_json::value::RawValue::from_string("{}".into()).unwrap();
+        assert_eq!(
+            sidecars
+                .send(&Window, "@scope/sidecar-worker", "s1", &body)
+                .unwrap_err(),
+            "sidecar @scope/sidecar-worker is not declared by any plugin",
+            "{case}"
+        );
+        sidecars.stop();
+    }
+}
+
 // contract: installed.sidecars.leave-out-plugin-dependencies
 #[test]
 fn installed_sidecars_leave_out_the_packages_of_installed_plugins() {

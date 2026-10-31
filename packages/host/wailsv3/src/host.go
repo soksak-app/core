@@ -172,11 +172,7 @@ func Run(assets fs.FS, options Options) error {
 	log.SetFlags(0)
 	// The install state is read after the process lock is taken and the application log is open. A read error is kept in the application log
 	// (docs/spec/installation.md). endpoint.json does not exist yet, so no request that uses a sidecar arrives.
-	declarations, err := InstalledSidecars(configDirectory)
-	if err != nil {
-		return fmt.Errorf("installed plugins: %w", err)
-	}
-	sidecars, err := NewSidecars(declarations, configDirectory)
+	sidecars, err := NewInstalledSidecars(configDirectory)
 	if err != nil {
 		return err
 	}

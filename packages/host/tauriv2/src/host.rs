@@ -465,9 +465,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     }),
                     Box::new(move |change| windows::notify_plugins(&handle, change)),
                 )?);
-                let declarations = installed::installed_sidecars(&directory)
-                    .map_err(|error| format!("installed plugins: {error}"))?;
-                let sidecars = WindowSidecars::new(&declarations, directory)?;
+                let sidecars: WindowSidecars = installed::new_installed_sidecars(directory)?;
                 let reporting = app.handle().clone();
                 sidecars.on_status_changed(move |value| crate::exposure::sidecars_status_changed(&reporting, value));
                 let changed = app.handle().clone();

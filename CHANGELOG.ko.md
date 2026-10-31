@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F321-1: `installed.json`이나 `plugin.json`을 읽을 수 없는 host는 시작을 끝내지 않고 `installed plugins: <error>`를 기록한 뒤 sidecar 없이 시작한다.
 - F321: 선언을 읽거나 검사할 수 없는 설치 sidecar는 그 하나만 거부된다. host는 오류를 기록하고, 그 sidecar에 대한 요청은 그 오류로 실패하며, 다른 sidecar와 application은 시작한다. 전에는 그런 sidecar 하나가 두 host의 시작을 끝냈다.
 - F320: core release는 `sok`를 application zip 안에만 게시한다. plugin이나 sidecar의 release는 workflow가 `CORE_HOST`에 선언한 host의 zip에서 `sok`를 쓴다.
 - F317-1: 임시 폴더를 지우지 못한 native test가 남은 항목마다 mode와 flag를 밝힌다.

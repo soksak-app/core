@@ -445,6 +445,18 @@ func InstalledAssets(configDir string) application.Middleware {
 	}
 }
 
+// NewInstalledSidecars creates the sidecar channel of a host start with the installed sidecars of configDir. When the
+// installation cannot be read, it records the error at the place installed plugins and declares no sidecar, so the host
+// starts; /installed-plugins.json carries the same error to the page (docs/spec/sidecars.md#declaration-and-startup).
+func NewInstalledSidecars(configDir string) (*Sidecars, error) {
+	declarations, err := InstalledSidecars(configDir)
+	if err != nil {
+		LogError("installed plugins", err)
+		declarations = nil
+	}
+	return NewSidecars(declarations, configDir)
+}
+
 // InstalledSidecars returns the sidecars that the plugin.json dependencies of the enabled installed plugins specify, together with the folder that the installation recorded.
 // A dependency that names the package of an installed plugin is not a sidecar.
 func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
