@@ -73,6 +73,11 @@ type SidecarFacts = BTreeMap<String, BTreeMap<String, serde_json::Map<String, se
 fn sidecar_facts(config_dir: &Path) -> Result<SidecarFacts, String> {
     let mut facts: SidecarFacts = BTreeMap::new();
     for declaration in installed_sidecars(config_dir)? {
+        // A sidecar that the installation cannot read has no facts; the host refuses it and a send to it fails with the
+        // error.
+        if declaration.error.is_some() {
+            continue;
+        }
         let file = declaration.folder.join("sidecar.json");
         let value: serde_json::Value = serde_json::from_slice(&declaration.data)
             .map_err(|error| format!("{}: {error}", file.display()))?;
@@ -425,23 +430,38 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
                 item.dependents.push(plugin.id.clone());
                 continue;
             }
-            let sidecar = state.sidecars.get(&name).ok_or_else(|| {
-                format!(
+            // A sidecar that the installation cannot read is declared with its error, so the host refuses that sidecar
+            // alone (docs/spec/sidecars.md#declaration-and-startup).
+            let refused = |error: String| SidecarDeclaration {
+                name: name.clone(),
+                folder: PathBuf::new(),
+                data: Vec::new(),
+                error: Some(error),
+                version: String::new(),
+                dependents: vec![plugin.id.clone()],
+            };
+            let Some(sidecar) = state.sidecars.get(&name) else {
+                declarations.push(refused(format!(
                     "{}: sidecar {name} has no installed version",
                     file.display()
-                )
-            })?;
+                )));
+                continue;
+            };
             let folder = config_dir.join(&sidecar.path);
             let declaration = folder.join("sidecar.json");
-            let data = std::fs::read(&declaration)
-                .map_err(|error| format!("{}: {error}", declaration.display()))?;
-            declarations.push(SidecarDeclaration {
-                name,
-                folder,
-                data,
-                version: sidecar.version.clone(),
-                dependents: vec![plugin.id.clone()],
-            });
+            match std::fs::read(&declaration) {
+                Ok(data) => declarations.push(SidecarDeclaration {
+                    name,
+                    folder,
+                    data,
+                    error: None,
+                    version: sidecar.version.clone(),
+                    dependents: vec![plugin.id.clone()],
+                }),
+                Err(error) => {
+                    declarations.push(refused(format!("{}: {error}", declaration.display())))
+                }
+            }
         }
     }
     Ok(declarations)

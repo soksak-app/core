@@ -1047,6 +1047,8 @@ struct Declarations {
     basenames: HashMap<String, String>,
     /// The plugins that list each declared sidecar in dependencies.
     dependents: HashMap<String, Vec<String>>,
+    /// The installed sidecars that are not declared because their declaration cannot be read or checked, with the error.
+    refused: HashMap<String, String>,
 }
 
 impl<O> Core<O> {
@@ -1075,6 +1077,21 @@ impl<O> Core<O> {
         let program = declarations.declared.get(name)?.clone();
         Some((program, declarations.persistent[name]))
     }
+
+    /// The error of a request for the sidecar name that is not declared: the error of its refused declaration, or that
+    /// no plugin declares it.
+    fn undeclared(&self, name: &str) -> String {
+        let declarations = self
+            .declarations
+            .read()
+            // default: a lock that a panicking thread poisoned still holds the sidecar declarations, which are only
+            // read; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        match declarations.refused.get(name) {
+            Some(error) => format!("sidecar {name}: {error}"),
+            None => format!("sidecar {name} is not declared by any plugin"),
+        }
+    }
 }
 
 fn valid_sidecar_display_name(value: &str) -> bool {
@@ -1093,12 +1110,23 @@ pub struct Sidecars<O: Owner> {
     pub stop_timeout: Duration,
 }
 
+/// The facts of a sidecar.json that passed its check.
+struct CheckedDeclaration {
+    program: PathBuf,
+    display_name: String,
+    persistent: bool,
+    basename: String,
+}
+
 /// One installed sidecar. data is the content of its sidecar.json and folder is the folder that holds it.
 #[derive(Clone, Debug)]
 pub struct SidecarDeclaration {
     pub name: String,
     pub folder: PathBuf,
     pub data: Vec<u8>,
+    /// The error that kept the installation from reading the sidecar, such as a missing sidecar.json; a declaration with
+    /// an error is refused with it, and its folder, data and version are empty.
+    pub error: Option<String>,
     /// The version that installed.json records for the sidecar.
     pub version: String,
     /// The ids of the plugins whose plugin.json lists the sidecar in dependencies (docs/spec/sidecars.md#failure).
@@ -1232,7 +1260,7 @@ impl<O: Owner> Sidecars<O> {
                 // amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             let before = status_locked(&self.core, &state);
-            let changed = self.replace_declarations(declarations)?;
+            let changed = self.replace_declarations(declarations);
             let declaration_changed = before != status_locked(&self.core, &state);
             let declaration_notification = closing_notification(&state, declaration_changed);
             // A sidecar that is starting registers when its start ends, so the start is awaited before the running
@@ -1271,12 +1299,13 @@ impl<O: Owner> Sidecars<O> {
         Ok(())
     }
 
-    /// Replaces the declarations with declarations and returns the declared sidecars whose executable changed or that
-    /// are no longer declared. Nothing changes when a declaration is invalid.
-    fn replace_declarations(
+    /// Checks the sidecar.json of one installed sidecar against the declarations read before it, whose persistent
+    /// executables hold basenames. The error names the path of the sidecar.json.
+    fn check_declaration(
         &self,
-        declarations: &[SidecarDeclaration],
-    ) -> Result<Vec<String>, String> {
+        item: &SidecarDeclaration,
+        basenames: &HashMap<String, String>,
+    ) -> Result<CheckedDeclaration, String> {
         #[derive(Deserialize)]
         struct Sidecar {
             executable: String,
@@ -1286,62 +1315,91 @@ impl<O: Owner> Sidecars<O> {
             #[serde(default)]
             transport: Option<String>,
         }
+        let path = item.folder.join("sidecar.json").display().to_string();
+        let sidecar: Sidecar =
+            serde_json::from_slice(&item.data).map_err(|e| format!("{path}: {e}"))?;
+        if sidecar.protocol != 1 {
+            return Err(format!(
+                "{path}: protocol {} is not supported",
+                sidecar.protocol
+            ));
+        }
+        let display_name = sidecar
+            .display_name
+            .ok_or_else(|| format!("{path}: displayName is required"))?
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| {
+                format!(
+                    "{path}: displayName must be soksak://sidecar/ followed by one lowercase identifier"
+                )
+            })?;
+        if !valid_sidecar_display_name(&display_name) {
+            return Err(format!(
+                "{path}: displayName must be soksak://sidecar/ followed by one lowercase identifier"
+            ));
+        }
+        let persistent = match sidecar.transport.as_deref() {
+            None => false,
+            Some("persistent") => true,
+            Some(value) => return Err(format!("{path}: transport {value} is not supported")),
+        };
+        let executable = Path::new(&sidecar.executable);
+        let inside = executable
+            .components()
+            .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
+        let file = executable.file_name().filter(|_| inside).ok_or_else(|| {
+            format!(
+                "{path}: executable {} is not a path inside the package",
+                sidecar.executable
+            )
+        })?;
+        let basename = file.to_string_lossy().into_owned();
+        if persistent && let Some(other) = basenames.get(&basename) {
+            return Err(format!(
+                "{path}: executable basename {basename} is already used by {other}"
+            ));
+        }
+        Ok(CheckedDeclaration {
+            program: item.folder.join(executable),
+            display_name,
+            persistent,
+            basename,
+        })
+    }
+
+    /// Replaces the declarations with declarations and returns the declared sidecars whose executable changed or that
+    /// are no longer declared. A sidecar whose declaration cannot be read or checked is refused and not declared.
+    fn replace_declarations(&self, declarations: &[SidecarDeclaration]) -> Vec<String> {
         let mut next = Declarations::default();
         for item in declarations {
             let name = item.name.clone();
-            let path = item.folder.join("sidecar.json").display().to_string();
-            let sidecar: Sidecar =
-                serde_json::from_slice(&item.data).map_err(|e| format!("{path}: {e}"))?;
-            if sidecar.protocol != 1 {
-                return Err(format!(
-                    "{path}: protocol {} is not supported",
-                    sidecar.protocol
-                ));
-            }
-            let display_name = sidecar
-                .display_name
-                .ok_or_else(|| format!("{path}: displayName is required"))?
-                .as_str()
-                .map(str::to_string)
-                .ok_or_else(|| {
-                    format!(
-                        "{path}: displayName must be soksak://sidecar/ followed by one lowercase identifier"
-                    )
-                })?;
-            if !valid_sidecar_display_name(&display_name) {
-                return Err(format!(
-                    "{path}: displayName must be soksak://sidecar/ followed by one lowercase identifier"
-                ));
-            }
-            let is_persistent = match sidecar.transport.as_deref() {
-                None => false,
-                Some("persistent") => true,
-                Some(value) => return Err(format!("{path}: transport {value} is not supported")),
+            // A declaration that cannot be read or checked refuses that sidecar alone, so the other installed sidecars
+            // and the host start (docs/spec/sidecars.md#declaration-and-startup).
+            let checked = match &item.error {
+                Some(error) => Err(error.clone()),
+                None => self.check_declaration(item, &next.basenames),
             };
-            let executable = Path::new(&sidecar.executable);
-            let inside = executable
-                .components()
-                .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
-            let file = executable.file_name().filter(|_| inside).ok_or_else(|| {
-                format!(
-                    "{path}: executable {} is not a path inside the package",
-                    sidecar.executable
-                )
-            })?;
-            if is_persistent {
-                let basename = file.to_string_lossy().into_owned();
-                if let Some(other) = next.basenames.insert(basename.clone(), name.clone()) {
-                    return Err(format!(
-                        "{path}: executable basename {basename} is already used by {other}"
-                    ));
+            match checked {
+                Ok(checked) => {
+                    if checked.persistent {
+                        next.basenames.insert(checked.basename, name.clone());
+                    }
+                    next.declared.insert(name.clone(), checked.program);
+                    next.display_names
+                        .insert(name.clone(), checked.display_name);
+                    next.versions.insert(name.clone(), item.version.clone());
+                    next.persistent.insert(name.clone(), checked.persistent);
+                    next.dependents.insert(name, item.dependents.clone());
+                }
+                Err(error) => {
+                    crate::application_log::log_error(
+                        "sidecar declaration",
+                        format!("sidecar {name}: {error}"),
+                    );
+                    next.refused.insert(name, error);
                 }
             }
-            next.declared
-                .insert(name.clone(), item.folder.join(executable));
-            next.display_names.insert(name.clone(), display_name);
-            next.versions.insert(name.clone(), item.version.clone());
-            next.persistent.insert(name.clone(), is_persistent);
-            next.dependents.insert(name, item.dependents.clone());
         }
         let mut current = self
             .core
@@ -1360,7 +1418,7 @@ impl<O: Owner> Sidecars<O> {
             .map(|(name, _)| name.clone())
             .collect();
         *current = next;
-        Ok(changed)
+        changed
     }
 
     /// Changes the upper limit of the time until a newly started persistent service prints its endpoint. A check gives
@@ -1576,7 +1634,7 @@ impl<O: Owner> Sidecars<O> {
             return Err("sidecars are stopped".into());
         }
         if self.core.declaration(name).is_none() {
-            return Err(format!("sidecar {name} is not declared by any plugin"));
+            return Err(self.core.undeclared(name));
         }
         if let Some(other) = state.owners.get(surface)
             && other.key() != owner.key()
@@ -2649,7 +2707,7 @@ impl<O: Owner> Core<O> {
     fn start(core: &Arc<Self>, name: &str, lost: Option<&Revival>) -> Result<Started, String> {
         let (program, persistent) = core
             .declaration(name)
-            .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
+            .ok_or_else(|| core.undeclared(name))?;
         // default: a sidecar that did not declare persistent runs for each window.
         if persistent {
             return Self::start_persistent(core, name, &program, lost);

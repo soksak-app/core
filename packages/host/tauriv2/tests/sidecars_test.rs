@@ -101,6 +101,7 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
             name: name.to_string(),
             folder: folder.to_path_buf(),
             data: data.as_bytes().to_vec(),
+            error: None,
             version: "0.0.1".to_string(),
             dependents: Vec::new(),
         })
@@ -112,6 +113,27 @@ fn create(files: &Files, directory: &Path) -> Result<Sidecars<FakeOwner>, String
 }
 
 const ECHO: &str = "@fixture/sidecar-echo";
+
+/// Constructs the sidecars with one @fixture/sidecar-echo whose sidecar.json is manifest, and returns the error of a send
+/// to it. An invalid declaration leaves the sidecar undeclared without failing the construction, and the send names the
+/// sidecar and the path of its sidecar.json (docs/spec/sidecars.md#declaration-and-startup).
+fn refusal(manifest: &str, config: &Path) -> String {
+    let directory = folder::Folder::new();
+    let sidecars = Sidecars::<FakeOwner>::new(
+        &declare(&files(manifest), directory.path()),
+        config.to_path_buf(),
+    )
+    .unwrap();
+    let (window, _events) = owner("a", "/projects/a");
+    let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
+    let path = directory.path().join("sidecar.json").display().to_string();
+    assert!(
+        error.starts_with(&format!("sidecar {ECHO}: {path}: ")),
+        "{error}"
+    );
+    sidecars.stop();
+    error
+}
 
 /// Declares the fake sidecar @fixture/sidecar-echo, which prints the received line as it is and leaves it in the
 /// request record file.
@@ -262,6 +284,7 @@ fn close_reaches_only_the_sidecar_that_holds_the_surface() {
         folder: folder.to_path_buf(),
         data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
             .to_vec(),
+        error: None,
         version: "0.0.1".to_string(),
         dependents: Vec::new(),
     };
@@ -402,32 +425,28 @@ fn declaring_adds_sidecars_installed_after_the_start() {
 
 // contract: sidecars.declaration.rejects-executable-escaping-package
 #[test]
-fn an_executable_outside_the_package_fails() {
-    let directory = folder::Folder::new();
-    let error = create(
-        &files(r#"{"executable":"../escape","displayName":"soksak://sidecar/probe","protocol":1}"#),
-        directory.path(),
-    )
-    .err()
-    .unwrap();
+fn an_executable_outside_the_package_is_not_declared() {
+    let config = folder::Folder::new();
+    let error = refusal(
+        r#"{"executable":"../escape","displayName":"soksak://sidecar/probe","protocol":1}"#,
+        config.path(),
+    );
     assert!(
-        error.contains(&directory.path().join("sidecar.json").display().to_string()),
+        error.ends_with("executable ../escape is not a path inside the package"),
         "{error}"
     );
 }
 
 // contract: sidecars.declaration.rejects-absolute-executable
 #[test]
-fn an_absolute_executable_fails() {
-    let directory = folder::Folder::new();
-    let error = create(
-        &files(r#"{"executable":"/bin/sh","displayName":"soksak://sidecar/probe","protocol":1}"#),
-        directory.path(),
-    )
-    .err()
-    .unwrap();
+fn an_absolute_executable_is_not_declared() {
+    let config = folder::Folder::new();
+    let error = refusal(
+        r#"{"executable":"/bin/sh","displayName":"soksak://sidecar/probe","protocol":1}"#,
+        config.path(),
+    );
     assert!(
-        error.contains("is not a path inside the package"),
+        error.ends_with("executable /bin/sh is not a path inside the package"),
         "{error}"
     );
 }
@@ -450,31 +469,78 @@ fn persistent_transport_requires_a_config_directory() {
 
 // contract: sidecars.declaration.rejects-unsupported-protocol
 #[test]
-fn an_unsupported_protocol_fails() {
-    let directory = folder::Folder::new();
-    let error = create(
-        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":2}"#),
-        directory.path(),
-    )
-    .err()
-    .unwrap();
-    assert!(
-        error.contains(&directory.path().join("sidecar.json").display().to_string()),
-        "{error}"
+fn an_unsupported_protocol_is_not_declared() {
+    let config = folder::Folder::new();
+    let error = refusal(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":2}"#,
+        config.path(),
     );
+    assert!(error.ends_with("protocol 2 is not supported"), "{error}");
 }
 
 // contract: sidecars.declaration.rejects-unknown-transport
 #[test]
-fn persistent_transport_rejects_unknown_transport() {
+fn an_unknown_transport_is_not_declared() {
+    let config = folder::Folder::new();
+    let error = refusal(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"ptyd"}"#,
+        config.path(),
+    );
+    assert!(
+        error.ends_with("transport ptyd is not supported"),
+        "{error}"
+    );
+}
+
+// contract: sidecars.declaration.invalid-sidecar-leaves-others-declared
+#[test]
+fn an_invalid_declaration_leaves_the_other_sidecars_declared() {
+    const EARLIER: &str = "@fixture/sidecar-earlier";
     let directory = folder::Folder::new();
-    let error = create(
-        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"ptyd"}"#),
-        directory.path(),
-    )
-    .err()
-    .unwrap();
-    assert!(error.contains("transport ptyd is not supported"), "{error}");
+    let program = directory.path().join("echo");
+    std::fs::write(&program, "#!/bin/sh\ncat\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let fixture: Files = vec![
+        (
+            ECHO,
+            r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
+                .to_string(),
+        ),
+        (EARLIER, r#"{"executable":"echo","protocol":1}"#.to_string()),
+    ];
+    let path = directory.path().join("sidecar.json").display().to_string();
+    let refused = format!("sidecar {EARLIER}: {path}: displayName is required");
+    let mut sidecars = create(&fixture, directory.path()).unwrap();
+    sidecars.stop_timeout = STALL;
+    let (window, events) = owner("a", "/projects/a");
+    assert_eq!(
+        sidecars
+            .send(&window, EARLIER, "s2", &raw("{}"))
+            .unwrap_err(),
+        refused
+    );
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    assert_eq!(events.recv_timeout(STALL).unwrap().surface, "s1");
+    // A declaration after the start keeps the valid sidecar running and the invalid one undeclared.
+    sidecars
+        .declare(&declare(&fixture, directory.path()))
+        .unwrap();
+    assert_eq!(
+        sidecars
+            .send(&window, EARLIER, "s2", &raw("{}"))
+            .unwrap_err(),
+        refused
+    );
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"next"}"#))
+        .unwrap();
+    assert_eq!(
+        events.recv_timeout(STALL).unwrap().body.get(),
+        r#"{"operation":"next"}"#
+    );
+    sidecars.stop();
 }
 
 // contract: sidecars.persistent.accepts-non-canonical-config-directory
@@ -2163,6 +2229,7 @@ fn restart_sidecars(clock: &RestartClock) -> (Stopping, folder::Folder) {
         folder: directory.path().to_path_buf(),
         data: br#"{"executable":"fake","displayName":"soksak://sidecar/probe","protocol":1}"#
             .to_vec(),
+        error: None,
         version: "0.0.1".to_string(),
         dependents: vec!["plugin-a".to_string()],
     }];

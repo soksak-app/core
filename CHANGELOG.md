@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F321: An installed sidecar whose declaration cannot be read or checked is refused alone: the host records the error, a request for that sidecar fails with it, and the other sidecars and the application start. Before, one such sidecar ended the start of both hosts.
 - F320: The core release publishes `sok` only inside its application zips; a plugin or sidecar release takes the `sok` of the zip of the host that its workflow declares in `CORE_HOST`.
 - F317-1: A native test that cannot remove its temporary folder names each entry that remains with its mode and flags.
 - F315: The native tests that record a real window run in `make -C native/darwin e2e`, and `capture_boundary_test` runs the capture boundary cases in the unit tests, because the hosted display presents frames up to 1 s apart.

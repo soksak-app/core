@@ -456,7 +456,7 @@ fn invalid_json_closes_connection() {
 | `tauriv2.sidecars.receive-trace.records-before-dispatch` | Tauri sidecar receive trace callback은 처리되는 message와 일반 message에서 각각 한 번 실행되며 native image dispatch보다 먼저 실행된다. 일반 message는 page 전달에 계속 사용할 수 있다. | tauriv2 only: Rust receive hook의 trace 관찰과 native dispatch 순서를 검증한다 |
 | `sidecars.trace.first-answer-after-spawn-is-recorded` | host가 spawn한 sidecar마다 event `host.trace.sidecar.ready`(level `debug`)를 남기며, 필드 `sidecar`, `pid`, `ms`를 담는다. `ms`는 spawn부터 그 프로세스가 보낸 첫 메시지 줄까지의 밀리초다. spawn마다 한 번 남기며, 다른 host가 시작한 프로세스는 아무것도 남기지 않는다. | both |
 | `sidecars.lifetime.start-and-exit-events` | 호스트가 시작하는 표준 입출력 사이드카 프로세스마다 `name`과 `pid`를 가진 event `host.sidecar.start`가 있고, 그 종료는 `name`, `pid`, `status`(`exit status <code>` 또는 `signal <number>`), 호스트가 멈추는 중이었는지 알려 주는 `stopping`을 가진 event `host.sidecar.exit`다. | both |
-| `sidecars.display-name.requires-canonical-component` | 사이드카 선언에는 `displayName`이 필요하며 `soksak://sidecar/<lowercase-id>` 형식의 component 하나여야 한다. 누락, 문자열이 아닌 값, 잘못된 scheme 또는 role, 추가 path component, 대문자 id는 거부된다. | both |
+| `sidecars.display-name.requires-canonical-component` | 사이드카 선언에는 `displayName`이 필요하며 `soksak://sidecar/<lowercase-id>` 형식의 component 하나여야 한다. 누락, 문자열이 아닌 값, 잘못된 scheme 또는 role, 추가 path component, 대문자 id는 거부된다. 없거나 null인 값은 `displayName is required`로, 다른 값은 `displayName must be soksak://sidecar/ followed by one lowercase identifier`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | both |
 | `sidecars.display-name.is-not-injected-into-child-environment` | 호스트는 자식 프로세스에 이미 있는 `SOKSAK_SIDECAR_DISPLAY_NAME` 값을 선언의 `displayName`으로 덮어쓰지 않는다. | both |
 | `sidecars-transport.persistent.connection-events` | host가 영구 service에 연결할 때마다 `name`, service `pid`, `spawned`를 가진 event `host.sidecar.connect`가 있고, 그 끝은 `name`, `pid`, `stopping`, 위반 문구 `violation`(service가 연결을 닫았으면 빈 문자열)을 가진 event `host.sidecar.disconnect`다. | both |
 | `windows.events.window-event-is-recorded` | 창 event는 `window`와 `kind`(`resize`, `move`, `scale_factor_changed`, `show`, `hide`, `occlusion_changed`, `focus`, `lost_focus`, `close_requested`, `closed`, `web_process_ended`, `navigation_committed`, `window-active`)를 가진 event `host.window.event`이며, `resize`, `move`, `scale_factor_changed`는 level `debug`, 나머지는 `info`다. 목록에 없는 kind는 표준 오류에 보고하고 아무것도 저장하지 않는다. | both |
@@ -602,12 +602,13 @@ fn invalid_json_closes_connection() {
 | `sidecars.start.fails-on-missing-executable` | 디스크에 없는 선언된 실행 파일은 첫 보내기를 사이드카 이름과 함께 실패시킨다. | both |
 | `sidecars.start.refuses-zero-hello-timeout` | 영값 `Sidecars`로 영속 서비스를 시작하면 서비스 생성 전에 거부하며 `HelloTimeout`을 이름 붙인 오류를 낸다. | wailsv3 only: Go는 영값 `Sidecars`를 허용하지만 Tauri는 공개 영값 구조체가 아니라 builder로 사이드카 core를 만든다 |
 | `sidecars.start.passes-log-directory` | 표준 입출력 sidecar는 인자 `--log-dir <config-dir>/logs`만 받아 시작한다. | both |
-| `sidecars.declaration.fails-on-missing-sidecar-json` | sidecar.json이 없는 설치 sidecar 폴더는 그 경로와 함께 설치 sidecar 찾기를 실패시킨다. | both |
+| `sidecars.declaration.refuses-missing-sidecar-json` | sidecar.json이 없는 설치 sidecar 폴더나 installed.json에 version이 없는 sidecar는 선언되지 않고, 그 sidecar에 대한 요청은 없는 파일이나 그 sidecar를 나열한 plugin.json을 밝히는 `sidecar <name>: <path>: <reason>`으로 실패한다. | both |
 | `sidecars.declaration.adds-sidecars-installed-after-start` | 생성 뒤에 설치 sidecar를 선언하면 선언되지 않은 것을 더하므로 그 sidecar로의 보내기가 그것을 시작한다. | both |
-| `sidecars.declaration.rejects-executable-escaping-package` | sidecar 밖의 실행 파일 경로는 생성을 실패시킨다. | both |
-| `sidecars.declaration.rejects-absolute-executable` | 절대 실행 파일 경로는 생성을 실패시킨다. | both |
-| `sidecars.declaration.rejects-unsupported-protocol` | 지원하지 않는 프로토콜 버전은 생성을 실패시킨다. | both |
-| `sidecars.declaration.rejects-unknown-transport` | 알 수 없는 전송 방식은 "is not supported"로 생성을 실패시킨다. | both |
+| `sidecars.declaration.rejects-executable-escaping-package` | sidecar 밖의 실행 파일 경로는 `executable <path> is not a path inside the package`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | both |
+| `sidecars.declaration.rejects-absolute-executable` | 절대 실행 파일 경로는 `executable <path> is not a path inside the package`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | both |
+| `sidecars.declaration.rejects-unsupported-protocol` | 지원하지 않는 프로토콜 버전은 `protocol <n> is not supported`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | both |
+| `sidecars.declaration.rejects-unknown-transport` | 알 수 없는 전송 방식은 `transport <value> is not supported`로 거부된다. 그 sidecar는 선언되지 않고 생성은 성공하며, 그 sidecar에 대한 요청은 `sidecar <name>: <sidecar.json 경로>: <reason>`으로 실패한다. | both |
+| `sidecars.declaration.invalid-sidecar-leaves-others-declared` | 올바른 sidecar 옆의 거부된 sidecar는 생성 때와 이후 선언 때 모두 올바른 sidecar를 선언된 채로 둔다. 올바른 sidecar에 대한 요청은 그 sidecar에 닿고, 거부된 sidecar에 대한 요청은 `sidecar <name>: <path>: displayName is required`로 실패한다. | both |
 | `sidecars.declaration.persistent-requires-config-directory` | 설정 디렉터리가 없는 지속 전송은 생성을 실패시킨다. | both |
 | `sidecars.persistent.accepts-non-canonical-config-directory` | 지속 전송은 정규화되지 않은 설정 디렉터리 경로를 받아들인다. | both |
 | `sidecars.send.fails-fast-when-sidecar-not-keeping-up` | 읽지 않는 사이드카로의 큰 보내기는 "is not keeping up"으로 끝난다. | both |

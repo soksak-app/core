@@ -77,6 +77,7 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
             name: name.to_string(),
             folder: folder.to_path_buf(),
             data: data.as_bytes().to_vec(),
+            error: None,
             version: "0.0.1".to_string(),
             dependents: Vec::new(),
         })
@@ -126,55 +127,63 @@ fn sidecar_process_does_not_receive_its_display_name_from_the_host() {
 // contract: sidecars.display-name.requires-canonical-component
 #[test]
 fn sidecar_declaration_requires_one_display_name_component() {
-    for display_name in [
-        None,
-        Some(""),
-        Some("soksak://sidecar/"),
-        Some("sok://sidecar/probe"),
-        Some("soksak://plugin/probe"),
-        Some("soksak://sidecar/probe/child"),
-        Some("soksak://sidecar/Probe"),
+    for (manifest, reason) in [
+        (
+            r#"{"executable":"echo","protocol":1}"#,
+            "displayName is required",
+        ),
+        (
+            r#"{"executable":"echo","protocol":1,"displayName":1}"#,
+            "displayName must be soksak://sidecar/ followed by one lowercase identifier",
+        ),
+        (
+            r#"{"executable":"echo","protocol":1,"displayName":""}"#,
+            "displayName must be soksak://sidecar/ followed by one lowercase identifier",
+        ),
+        (
+            r#"{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/"}"#,
+            "displayName must be soksak://sidecar/ followed by one lowercase identifier",
+        ),
+        (
+            r#"{"executable":"echo","protocol":1,"displayName":"sok://sidecar/probe"}"#,
+            "displayName must be soksak://sidecar/ followed by one lowercase identifier",
+        ),
+        (
+            r#"{"executable":"echo","protocol":1,"displayName":"soksak://plugin/probe"}"#,
+            "displayName must be soksak://sidecar/ followed by one lowercase identifier",
+        ),
+        (
+            r#"{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/probe/child"}"#,
+            "displayName must be soksak://sidecar/ followed by one lowercase identifier",
+        ),
+        (
+            r#"{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/Probe"}"#,
+            "displayName must be soksak://sidecar/ followed by one lowercase identifier",
+        ),
     ] {
-        let manifest = if let Some(display_name) = display_name {
-            format!(r#"{{"executable":"echo","protocol":1,"displayName":"{display_name}"}}"#)
-        } else {
-            r#"{"executable":"echo","protocol":1}"#.to_string()
-        };
         let executable_directory = folder::Folder::new();
         let config_directory = folder::Folder::new();
-        let fixture = files(&manifest);
-        let error = Sidecars::<FakeOwner>::new(
-            &declare(&fixture, executable_directory.path()),
+        // The invalid declaration leaves the sidecar undeclared, and a send to it names its sidecar.json and the field.
+        let sidecars = Sidecars::<FakeOwner>::new(
+            &declare(&files(manifest), executable_directory.path()),
             config_directory.path().to_path_buf(),
         )
-        .err()
-        .unwrap_or_else(|| panic!("accepted display name {display_name:?}"));
-        assert!(
-            error.contains("sidecar.json"),
-            "error omitted manifest path: {error}"
+        .unwrap_or_else(|error| panic!("{manifest}: the construction failed: {error}"));
+        let (window, _events) = owner("a", "/projects/a");
+        let error = sidecars
+            .send(&window, "@fixture/sidecar-echo", "s1", &raw("{}"))
+            .unwrap_err();
+        let path = executable_directory.path().join("sidecar.json");
+        assert_eq!(
+            error,
+            format!(
+                "sidecar @fixture/sidecar-echo: {}: {reason}",
+                path.display()
+            ),
+            "{manifest}"
         );
-        assert!(
-            error.contains("displayName"),
-            "error omitted field: {error}"
-        );
+        sidecars.stop();
     }
-    let non_string = files(r#"{"executable":"echo","protocol":1,"displayName":1}"#);
-    let executable_directory = folder::Folder::new();
-    let config_directory = folder::Folder::new();
-    let error = Sidecars::<FakeOwner>::new(
-        &declare(&non_string, executable_directory.path()),
-        config_directory.path().to_path_buf(),
-    )
-    .err()
-    .expect("accepted a non-string display name");
-    assert!(
-        error.contains("sidecar.json"),
-        "error omitted manifest path: {error}"
-    );
-    assert!(
-        error.contains("displayName"),
-        "error omitted field: {error}"
-    );
 }
 
 // A page reload sends a sidecar only the detach of each captured image: the persistent service echoes every line that it

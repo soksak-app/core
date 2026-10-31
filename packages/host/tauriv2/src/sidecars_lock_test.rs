@@ -414,7 +414,7 @@ fn outdated_fixture(
 ) {
     let folder = crate::test_folder::Folder::new();
     let declaration = super::SidecarDeclaration { name: "fixture-service".into(), folder: folder.path().to_path_buf(),
-  data: br#"{"executable":"service","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#.to_vec(), version: installed.into(), dependents: vec![] };
+  data: br#"{"executable":"service","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#.to_vec(), error: None, version: installed.into(), dependents: vec![] };
     let sidecars = Sidecars::new(
         std::slice::from_ref(&declaration),
         folder.path().to_path_buf(),

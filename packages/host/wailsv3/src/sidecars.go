@@ -153,12 +153,15 @@ type Sidecars struct {
 	imageDetachTimeout  time.Duration
 	// requests remembers the requests with correlation identifiers that wait for a reply (sidecar_reply.go).
 	requests requestLedger
-	// declarations protects declared, displayNames, persistent and basenames.
+	// declarations protects declared, displayNames, persistent, basenames and refused.
 	// An installation adds declarations while the application runs and a start
 	// reads the executable outside c.mu, so it is separate from c.mu.
 	declarations sync.RWMutex
 	declared     map[string]string
 	displayNames map[string]string
+	// refused holds the installed sidecars that are not declared because their declaration cannot be read or checked, with
+	// the error.
+	refused map[string]string
 	// versions holds the version that installed.json records for each declared sidecar.
 	versions   map[string]string
 	persistent map[string]bool
@@ -347,6 +350,9 @@ type SidecarDeclaration struct {
 	Name   string
 	Folder string
 	Data   []byte
+	// Error is the error that kept the installation from reading the sidecar, such as a missing sidecar.json; a declaration
+	// with an error is refused with it, and its Folder, Data and Version are empty.
+	Error string
 	// Version is the version that installed.json records for the sidecar.
 	Version string
 	// Dependents are the ids of the plugins whose plugin.json lists the sidecar in dependencies (docs/spec/sidecars.md#failure).
@@ -457,8 +463,14 @@ func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
 	return nil
 }
 
+// errNoConfigDirectory is the error of a persistent sidecar of a host without a configuration directory. It is an error of
+// the host and not of the installed sidecar, so it fails the declaration.
+var errNoConfigDirectory = errors.New("persistent transport requires a config directory")
+
 // declare replaces the declarations with declarations and returns the declared sidecars whose executable changed or
-// that are no longer declared. Nothing changes when a declaration is invalid.
+// that are no longer declared. A sidecar whose declaration cannot be read or checked is refused and not declared, so the
+// other installed sidecars and the host start (docs/spec/sidecars.md#declaration-and-startup). Nothing changes when the
+// host has no configuration directory for a persistent sidecar.
 func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) {
 	c.declarations.Lock()
 	defer c.declarations.Unlock()
@@ -468,44 +480,28 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 	persistent := map[string]bool{}
 	basenames := map[string]string{}
 	dependents := map[string][]string{}
+	refused := map[string]string{}
 	for _, item := range declarations {
 		name := item.Name
-		file := filepath.Join(item.Folder, "sidecar.json")
-		var sidecar struct {
-			Executable  string  `json:"executable"`
-			DisplayName *string `json:"displayName"`
-			Protocol    int     `json:"protocol"`
-			Transport   string  `json:"transport"`
+		var checked checkedDeclaration
+		err := errors.New(item.Error)
+		if item.Error == "" {
+			checked, err = c.checkDeclaration(item, basenames)
 		}
-		if err := json.Unmarshal(item.Data, &sidecar); err != nil {
-			return nil, fmt.Errorf("%s: %w", file, err)
+		if errors.Is(err, errNoConfigDirectory) {
+			return nil, err
 		}
-		if sidecar.Executable == "" || path.IsAbs(sidecar.Executable) ||
-			strings.Contains("/"+sidecar.Executable+"/", "/../") {
-			return nil, fmt.Errorf("%s: executable must be a path inside the package", file)
+		if err != nil {
+			LogError("sidecar declaration", fmt.Sprintf("sidecar %s: %v", name, err))
+			refused[name] = err.Error()
+			continue
 		}
-		if sidecar.Protocol != 1 {
-			return nil, fmt.Errorf("%s: protocol must be 1", file)
-		}
-		if sidecar.DisplayName == nil || !validSidecarDisplayName(*sidecar.DisplayName) {
-			return nil, fmt.Errorf("%s: displayName must be soksak://sidecar/ followed by one lowercase identifier", file)
-		}
-		displayNames[name] = *sidecar.DisplayName
-		if sidecar.Transport != "" && sidecar.Transport != "persistent" {
-			return nil, fmt.Errorf("%s: transport %s is not supported", file, sidecar.Transport)
-		}
-		if sidecar.Transport == "persistent" && c.configDir == "" {
-			return nil, fmt.Errorf("%s: persistent transport requires a config directory", file)
-		}
-		if sidecar.Transport == "persistent" {
-			base := path.Base(sidecar.Executable)
-			if other, exists := basenames[base]; exists {
-				return nil, fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
-			}
-			basenames[base] = name
+		if checked.persistent {
+			basenames[checked.basename] = name
 			persistent[name] = true
 		}
-		declared[name] = filepath.Join(item.Folder, filepath.FromSlash(sidecar.Executable))
+		declared[name] = checked.program
+		displayNames[name] = checked.displayName
 		versions[name] = item.Version
 		dependents[name] = item.Dependents
 	}
@@ -515,8 +511,67 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 			changed = append(changed, name)
 		}
 	}
-	c.declared, c.displayNames, c.versions, c.persistent, c.basenames, c.dependents = declared, displayNames, versions, persistent, basenames, dependents
+	c.declared, c.displayNames, c.versions, c.persistent, c.basenames, c.dependents, c.refused = declared, displayNames, versions, persistent, basenames, dependents, refused
 	return changed, nil
+}
+
+// checkedDeclaration holds the facts of a sidecar.json that passed its check.
+type checkedDeclaration struct {
+	program     string
+	displayName string
+	persistent  bool
+	basename    string
+}
+
+// checkDeclaration checks the sidecar.json of one installed sidecar against the declarations read before it, whose
+// persistent executables hold basenames. The error names the path of the sidecar.json.
+func (c *Sidecars) checkDeclaration(item SidecarDeclaration, basenames map[string]string) (checkedDeclaration, error) {
+	file := filepath.Join(item.Folder, "sidecar.json")
+	var sidecar struct {
+		Executable  string `json:"executable"`
+		DisplayName any    `json:"displayName"`
+		Protocol    int    `json:"protocol"`
+		Transport   string `json:"transport"`
+	}
+	if err := json.Unmarshal(item.Data, &sidecar); err != nil {
+		return checkedDeclaration{}, fmt.Errorf("%s: %w", file, err)
+	}
+	if sidecar.Protocol != 1 {
+		return checkedDeclaration{}, fmt.Errorf("%s: protocol %d is not supported", file, sidecar.Protocol)
+	}
+	if sidecar.DisplayName == nil {
+		return checkedDeclaration{}, fmt.Errorf("%s: displayName is required", file)
+	}
+	displayName, ok := sidecar.DisplayName.(string)
+	if !ok || !validSidecarDisplayName(displayName) {
+		return checkedDeclaration{}, fmt.Errorf("%s: displayName must be soksak://sidecar/ followed by one lowercase identifier", file)
+	}
+	if sidecar.Transport != "" && sidecar.Transport != "persistent" {
+		return checkedDeclaration{}, fmt.Errorf("%s: transport %s is not supported", file, sidecar.Transport)
+	}
+	if sidecar.Executable == "" || path.IsAbs(sidecar.Executable) || strings.Contains("/"+sidecar.Executable+"/", "/../") {
+		return checkedDeclaration{}, fmt.Errorf("%s: executable %s is not a path inside the package", file, sidecar.Executable)
+	}
+	isPersistent := sidecar.Transport == "persistent"
+	base := path.Base(sidecar.Executable)
+	if isPersistent && c.configDir == "" {
+		return checkedDeclaration{}, fmt.Errorf("%s: %w", file, errNoConfigDirectory)
+	}
+	if other, exists := basenames[base]; isPersistent && exists {
+		return checkedDeclaration{}, fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
+	}
+	return checkedDeclaration{program: filepath.Join(item.Folder, filepath.FromSlash(sidecar.Executable)), displayName: displayName, persistent: isPersistent, basename: base}, nil
+}
+
+// undeclared is the error of a request for the sidecar name that is not declared: the error of its refused declaration,
+// or that no plugin declares it.
+func (c *Sidecars) undeclared(name string) error {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	if refusal, ok := c.refused[name]; ok {
+		return fmt.Errorf("sidecar %s: %s", name, refusal)
+	}
+	return fmt.Errorf("sidecar %s is not declared by any plugin", name)
 }
 
 func validSidecarDisplayName(value string) bool {
@@ -622,7 +677,7 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body 
 		return fmt.Errorf("sidecars are stopped")
 	}
 	if _, _, ok := c.declaration(name); !ok {
-		return fmt.Errorf("sidecar %s is not declared by any plugin", name)
+		return c.undeclared(name)
 	}
 	if other, ok := c.owners[surface]; ok && other != owner {
 		return fmt.Errorf("surface %s belongs to another window", surface)
@@ -1497,7 +1552,7 @@ func (c *Sidecars) process(name string, lost *revival) (process *sidecar, starte
 func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 	program, persistent, ok := c.declaration(name)
 	if !ok {
-		return nil, fmt.Errorf("sidecar %s is not declared by any plugin", name)
+		return nil, c.undeclared(name)
 	}
 	if persistent {
 		return c.processPersistent(name, program, lost)

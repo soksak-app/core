@@ -93,6 +93,10 @@ func sidecarFactsOf(configDir string) (map[string]map[string]sidecarFacts, error
 	}
 	facts := map[string]map[string]sidecarFacts{}
 	for _, declaration := range declarations {
+		// A sidecar that the installation cannot read has no facts; the host refuses it and a send to it fails with the error.
+		if declaration.Error != "" {
+			continue
+		}
 		file := filepath.Join(declaration.Folder, "sidecar.json")
 		var fields map[string]json.RawMessage
 		if err := json.Unmarshal(declaration.Data, &fields); err != nil {
@@ -481,16 +485,25 @@ func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 				declarations[index].Dependents = append(declarations[index].Dependents, plugin.id)
 				continue
 			}
+			declaredAt[name] = len(declarations)
+			// A sidecar that the installation cannot read is declared with its error, so the host refuses that sidecar alone
+			// (docs/spec/sidecars.md#declaration-and-startup).
 			sidecar, ok := state.Sidecars[name]
 			if !ok {
-				return nil, fmt.Errorf("%s: sidecar %s has no installed version", file, name)
+				declarations = append(declarations, SidecarDeclaration{Name: name, Error: fmt.Sprintf("%s: sidecar %s has no installed version", file, name), Dependents: []string{plugin.id}})
+				continue
 			}
 			folder := filepath.Join(configDir, sidecar.Path)
-			declaration, err := os.ReadFile(filepath.Join(folder, "sidecar.json"))
+			declarationFile := filepath.Join(folder, "sidecar.json")
+			declaration, err := os.ReadFile(declarationFile)
 			if err != nil {
-				return nil, err
+				// The error of the operating system without the operation and the path that the error names first.
+				if pathError := (*fs.PathError)(nil); errors.As(err, &pathError) {
+					err = pathError.Err
+				}
+				declarations = append(declarations, SidecarDeclaration{Name: name, Error: fmt.Sprintf("%s: %v", declarationFile, err), Dependents: []string{plugin.id}})
+				continue
 			}
-			declaredAt[name] = len(declarations)
 			declarations = append(declarations, SidecarDeclaration{Name: name, Folder: folder, Data: declaration, Version: sidecar.Version, Dependents: []string{plugin.id}})
 		}
 	}

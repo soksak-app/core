@@ -8230,6 +8230,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F321",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn check_declaration(" },
+      { file: "packages/host/wailsv3/src/installed.go", symbol: "SidecarDeclaration{Name: name, Error:" },
+      { file: "packages/host/tauriv2/src/installed.rs", symbol: "let refused = |error: String| SidecarDeclaration {" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared" },
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestInvalidSidecarDeclarationsAreNotDeclared" },
+      { file: "packages/host/wailsv3/tests/installed_test.go", id: "TestInstalledSidecarsResolveTheInstalledVersionFolders" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "an_invalid_declaration_leaves_the_other_sidecars_declared" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "sidecar_declaration_requires_one_display_name_component" },
+      { file: "packages/host/tauriv2/tests/installed_test.rs", id: "installed_sidecars_resolve_the_installed_version_folders" },
+    ],
+    expected: "An installed sidecar whose declaration cannot be read or checked is refused alone on both hosts: the construction succeeds, the other sidecars are declared, and a send to the refused one fails with sidecar <name>: <path>: <reason>.",
+    levels: ["native"],
+  },
+  {
     id: "F320",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "pnpm -C packages/plugin-api pack --pack-destination" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release publishes the packed releases that plugins and sidecars build with and sok only inside the bundles" }],

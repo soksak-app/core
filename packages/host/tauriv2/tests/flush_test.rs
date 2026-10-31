@@ -71,6 +71,7 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
             name: name.to_string(),
             folder: folder.to_path_buf(),
             data: data.as_bytes().to_vec(),
+            error: None,
             version: "0.0.1".to_string(),
             dependents: Vec::new(),
         })

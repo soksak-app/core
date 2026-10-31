@@ -88,6 +88,7 @@ fn fixture(script: &str, names: &[&str]) -> Fixture {
             folder: executable.path().to_path_buf(),
             data: br#"{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/probe"}"#
                 .to_vec(),
+            error: None,
             version: "0.0.1".to_string(),
             dependents: Vec::new(),
         })

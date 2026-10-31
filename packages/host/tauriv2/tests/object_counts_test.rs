@@ -95,6 +95,7 @@ fn sidecar_sessions_list_only_the_surfaces_that_sent() {
         folder: directory.path().to_path_buf(),
         data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
             .to_vec(),
+        error: None,
         version: "0.0.1".to_string(),
         dependents: Vec::new(),
     }];
@@ -133,6 +134,7 @@ fn sidecar_session_and_pending_reply_counts_follow_the_owner() {
         folder: directory.path().to_path_buf(),
         data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
             .to_vec(),
+        error: None,
         version: "0.0.1".to_string(),
         dependents: Vec::new(),
     }];

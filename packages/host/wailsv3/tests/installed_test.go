@@ -232,7 +232,26 @@ func TestInstalledAssetsServeTheSharedModulesOfExtensionPoints(t *testing.T) {
 	}
 }
 
-// contract: installed.sidecars.resolve-installed-folders, sidecars.declaration.fails-on-missing-sidecar-json
+// installedSendError is the error of a send to the installed sidecar name after the host declares the installed sidecars of config.
+func installedSendError(t *testing.T, config, name string) string {
+	t.Helper()
+	declarations, err := host.InstalledSidecars(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := host.NewSidecars(declarations, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sidecars.Stop()
+	err = sidecars.Send(newFakeOwner("/projects/a"), name, "s1", json.RawMessage(`{}`))
+	if err == nil {
+		t.Fatalf("a send to %s succeeded", name)
+	}
+	return err.Error()
+}
+
+// contract: installed.sidecars.resolve-installed-folders, sidecars.declaration.refuses-missing-sidecar-json
 func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 	config := installedFixture(t)
 	declarations, err := host.InstalledSidecars(config)
@@ -250,12 +269,15 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 	if err := os.Remove(filepath.Join(folder, "sidecar.json")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := host.InstalledSidecars(config); err == nil || !strings.Contains(err.Error(), filepath.Join(folder, "sidecar.json")) {
-		t.Fatalf("missing sidecar.json: %v", err)
+	// The sidecar without sidecar.json is not declared, and a send to it names the missing file.
+	missing := filepath.Join(folder, "sidecar.json")
+	if err := installedSendError(t, config, "@scope/sidecar-worker"); !strings.HasPrefix(err, "sidecar @scope/sidecar-worker: "+missing+": ") {
+		t.Fatalf("missing sidecar.json: %s", err)
 	}
 	writeInstalled(t, config, map[string]string{"plugins/term/0.1.0/plugin.json": `{"id": "term", "dependencies": {"@scope/sidecar-other": "^0.1.0"}}`})
-	if _, err := host.InstalledSidecars(config); err == nil || !strings.Contains(err.Error(), "sidecar @scope/sidecar-other has no installed version") {
-		t.Fatalf("unknown sidecar: %v", err)
+	manifest := filepath.Join(config, "plugins/term/0.1.0/plugin.json")
+	if err := installedSendError(t, config, "@scope/sidecar-other"); err != "sidecar @scope/sidecar-other: "+manifest+": sidecar @scope/sidecar-other has no installed version" {
+		t.Fatalf("unknown sidecar: %s", err)
 	}
 	if declarations, err := host.InstalledSidecars(t.TempDir()); err != nil || len(declarations) != 0 {
 		t.Fatalf("empty configuration %v %v", declarations, err)

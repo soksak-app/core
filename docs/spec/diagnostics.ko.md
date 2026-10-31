@@ -163,6 +163,7 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | 알림 센터가 실패를 알리거나, 이벤트를 읽지 못하거나, 알림의 종류를 모르거나, 창과 표면이 없거나, 닫힌 창을 가리킨다 | `error host notification: <reason>` |
 | 이전 실행의 crash report를 읽을 수 없거나, crash report 폴더를 나열하거나 알아낼 수 없다 | `error host crash reports: <reason>`, `error native diagnostic reports: the system names no Library folder for the user`. 이유는 파일이나 폴더를 밝히며, 읽을 수 없는 report는 한 번만 보고한다([로깅](logging.ko.md)) |
 | 설치된 plugin의 catalog를 쓸 수 없다: 없거나 JSON이 아니거나 `plugin.<plugin>.` 밖의 이름이나 모르는 class를 선언한다 | `error host plugin catalog: <file>: <reason>`. 그 plugin의 event는 `undeclared`로 남고 다른 plugin은 class를 유지한다([로깅](logging.ko.md#plugin-catalog)) |
+| 설치된 sidecar의 선언을 읽거나 검사할 수 없다: `sidecar.json`이 없거나 틀렸거나, `installed.json`에 그 version이 없다 | `error host sidecar declaration: sidecar <name>: <path>: <reason>`. 그 sidecar는 선언되지 않고, 그 sidecar에 대한 요청은 `sidecar <name>: <path>: <reason>`으로 실패하며, 다른 sidecar와 application은 시작한다([사이드카](sidecars.ko.md#선언과-시작)) |
 | image region event의 `cids`가 식별자 목록이 아니거나 `type`이 없어 host가 그 중계를 기록하지 못한다 | `error host input relay: <reason>` |
 | 딥링크가 거부된다: URL을 해석할 수 없거나 [딥링크](native-host.ko.md#딥링크) 형식에 맞지 않거나, 열린 창이 없거나, 가리키는 command가 실패한다 | `error host deep link: <url>: <reason>`, URL마다 한 번 |
 | Tauri host가 딥링크의 실행 URL을 읽지 못한다 | `error host deep link: launch URL: <reason>` |

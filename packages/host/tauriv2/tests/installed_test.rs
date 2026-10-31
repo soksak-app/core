@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use soksak_host_tauriv2::installed::{self, InstalledAssets, Module};
+use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, Sidecars};
 use tauri::Assets;
 use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
 
@@ -394,7 +395,34 @@ fn installed_assets_serve_the_shared_modules_of_extension_points() {
     assert!(error.contains(&manifest.display().to_string()), "{error}");
 }
 
-// contract: installed.sidecars.resolve-installed-folders, sidecars.declaration.fails-on-missing-sidecar-json
+/// A window that receives nothing: the checks of the installed sidecars read only the error of a send.
+#[derive(Clone)]
+struct Window;
+
+impl Owner for Window {
+    fn key(&self) -> String {
+        "a".into()
+    }
+    fn root(&self) -> Result<String, String> {
+        Ok("/projects/a".into())
+    }
+    fn deliver(&self, _message: Message) {}
+    fn deliver_failure(&self, failure: Failure) {
+        panic!("unexpected sidecar failure: {failure:?}");
+    }
+}
+
+/// The error of a send to the installed sidecar name after the host declares the installed sidecars of config.
+fn send_error(config: &Path, name: &str) -> String {
+    let declarations = installed::installed_sidecars(config).unwrap();
+    let sidecars = Sidecars::<Window>::new(&declarations, config.to_path_buf()).unwrap();
+    let body = serde_json::value::RawValue::from_string("{}".into()).unwrap();
+    let error = sidecars.send(&Window, name, "s1", &body).unwrap_err();
+    sidecars.stop();
+    error
+}
+
+// contract: installed.sidecars.resolve-installed-folders, sidecars.declaration.refuses-missing-sidecar-json
 #[test]
 fn installed_sidecars_resolve_the_installed_version_folders() {
     let config = installed_fixture();
@@ -411,8 +439,15 @@ fn installed_sidecars_resolve_the_installed_version_folders() {
     );
     let missing = folder.join("sidecar.json");
     std::fs::remove_file(&missing).unwrap();
-    let error = installed::installed_sidecars(config.path()).unwrap_err();
-    assert!(error.contains(&missing.display().to_string()), "{error}");
+    // The sidecar without sidecar.json is not declared, and a send to it names the missing file.
+    let error = send_error(config.path(), "@scope/sidecar-worker");
+    assert!(
+        error.starts_with(&format!(
+            "sidecar @scope/sidecar-worker: {}: ",
+            missing.display()
+        )),
+        "{error}"
+    );
     write_installed(
         config.path(),
         &[(
@@ -420,10 +455,13 @@ fn installed_sidecars_resolve_the_installed_version_folders() {
             r#"{"id": "term", "dependencies": {"@scope/sidecar-other": "^0.1.0"}}"#,
         )],
     );
-    let error = installed::installed_sidecars(config.path()).unwrap_err();
-    assert!(
-        error.contains("sidecar @scope/sidecar-other has no installed version"),
-        "{error}"
+    let manifest = config.path().join("plugins/term/0.1.0/plugin.json");
+    assert_eq!(
+        send_error(config.path(), "@scope/sidecar-other"),
+        format!(
+            "sidecar @scope/sidecar-other: {}: sidecar @scope/sidecar-other has no installed version",
+            manifest.display()
+        )
     );
     let empty = folder::Folder::new();
     assert!(

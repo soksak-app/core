@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F321: 선언을 읽거나 검사할 수 없는 설치 sidecar는 그 하나만 거부된다. host는 오류를 기록하고, 그 sidecar에 대한 요청은 그 오류로 실패하며, 다른 sidecar와 application은 시작한다. 전에는 그런 sidecar 하나가 두 host의 시작을 끝냈다.
 - F320: core release는 `sok`를 application zip 안에만 게시한다. plugin이나 sidecar의 release는 workflow가 `CORE_HOST`에 선언한 host의 zip에서 `sok`를 쓴다.
 - F317-1: 임시 폴더를 지우지 못한 native test가 남은 항목마다 mode와 flag를 밝힌다.
 - F315: 실제 창을 녹화하는 native test는 `make -C native/darwin e2e`에서 돌고, `capture_boundary_test`가 capture boundary case를 unit test에서 실행한다. hosted display가 frame을 최대 1초 간격으로 내보내기 때문이다.

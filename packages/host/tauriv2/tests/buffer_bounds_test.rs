@@ -102,6 +102,7 @@ impl Blocked {
             folder: directory.path().to_path_buf(),
             data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
                 .to_vec(),
+            error: None,
             version: "0.0.1".to_string(),
             dependents: Vec::new(),
         }];
@@ -452,6 +453,7 @@ fn a_line_that_is_written_at_once_stores_no_write_wait() {
         folder: directory.path().to_path_buf(),
         data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
             .to_vec(),
+        error: None,
         version: "0.0.1".to_string(),
         dependents: Vec::new(),
     }];

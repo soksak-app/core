@@ -433,34 +433,82 @@ func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
 	sidecars.Stop()
 }
 
-// contract: sidecars.declaration.rejects-executable-escaping-package, sidecars.declaration.rejects-absolute-executable, sidecars.declaration.rejects-unsupported-protocol, sidecars.declaration.rejects-unknown-transport, sidecars.declaration.persistent-requires-config-directory, sidecars.display-name.requires-canonical-component
-func TestInvalidSidecarDeclarationsFail(t *testing.T) {
+// contract: sidecars.declaration.rejects-executable-escaping-package, sidecars.declaration.rejects-absolute-executable, sidecars.declaration.rejects-unsupported-protocol, sidecars.declaration.rejects-unknown-transport, sidecars.display-name.requires-canonical-component
+func TestInvalidSidecarDeclarationsAreNotDeclared(t *testing.T) {
+	const canonical = "displayName must be soksak://sidecar/ followed by one lowercase identifier"
 	cases := map[string]struct {
 		sidecar string
-		want    string
+		reason  string
 	}{
-		"escaping executable":       {`{"executable":"../escape","displayName":"soksak://sidecar/probe","protocol":1}`, "inside the package"},
-		"absolute executable":       {`{"executable":"/bin/sh","displayName":"soksak://sidecar/probe","protocol":1}`, "inside the package"},
-		"unknown protocol":          {`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":2}`, "protocol"},
-		"persistent without config": {`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}`, "persistent transport requires a config directory"},
-		"unknown transport":         {`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"ptyd"}`, "transport ptyd is not supported"},
-		"missing display name":      {`{"executable":"echo","protocol":1}`, "displayName"},
-		"null display name":         {`{"executable":"echo","protocol":1,"displayName":null}`, "displayName"},
-		"non-string display name":   {`{"executable":"echo","protocol":1,"displayName":1}`, "displayName"},
-		"invalid display scheme":    {`{"executable":"echo","protocol":1,"displayName":"sok://sidecar/probe"}`, "displayName"},
-		"invalid display role":      {`{"executable":"echo","protocol":1,"displayName":"soksak://plugin/probe"}`, "displayName"},
-		"extra display path":        {`{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/probe/child"}`, "displayName"},
-		"uppercase display id":      {`{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/Probe"}`, "displayName"},
+		"escaping executable":     {`{"executable":"../escape","displayName":"soksak://sidecar/probe","protocol":1}`, "executable ../escape is not a path inside the package"},
+		"absolute executable":     {`{"executable":"/bin/sh","displayName":"soksak://sidecar/probe","protocol":1}`, "executable /bin/sh is not a path inside the package"},
+		"unknown protocol":        {`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":2}`, "protocol 2 is not supported"},
+		"unknown transport":       {`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"ptyd"}`, "transport ptyd is not supported"},
+		"missing display name":    {`{"executable":"echo","protocol":1}`, "displayName is required"},
+		"null display name":       {`{"executable":"echo","protocol":1,"displayName":null}`, "displayName is required"},
+		"non-string display name": {`{"executable":"echo","protocol":1,"displayName":1}`, canonical},
+		"empty display name":      {`{"executable":"echo","protocol":1,"displayName":""}`, canonical},
+		"invalid display scheme":  {`{"executable":"echo","protocol":1,"displayName":"sok://sidecar/probe"}`, canonical},
+		"invalid display role":    {`{"executable":"echo","protocol":1,"displayName":"soksak://plugin/probe"}`, canonical},
+		"extra display path":      {`{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/probe/child"}`, canonical},
+		"uppercase display id":    {`{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/Probe"}`, canonical},
 	}
 	for name, c := range cases {
+		// The invalid declaration leaves the sidecar undeclared without failing the construction, and a send to it names
+		// the sidecar, its sidecar.json and the reason.
 		directory := t.TempDir()
-		configDirectory := directory
-		if name == "persistent without config" {
-			configDirectory = ""
+		sidecars, err := host.NewSidecars(declare(directory, c.sidecar), directory)
+		if err != nil {
+			t.Errorf("%s: the construction failed: %v", name, err)
+			continue
 		}
-		if _, err := host.NewSidecars(declare(directory, c.sidecar), configDirectory); err == nil || !strings.Contains(err.Error(), c.want) {
-			t.Errorf("%s: error = %v, want %q", name, err, c.want)
+		err = sidecars.Send(newFakeOwner("/projects/a"), echoSidecar, "s1", json.RawMessage(`{}`))
+		want := "sidecar " + echoSidecar + ": " + filepath.Join(directory, "sidecar.json") + ": " + c.reason
+		if err == nil || err.Error() != want {
+			t.Errorf("%s: send error = %v, want %q", name, err, want)
 		}
+		sidecars.Stop()
+	}
+}
+
+// contract: sidecars.declaration.invalid-sidecar-leaves-others-declared
+func TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared(t *testing.T) {
+	const earlier = "@fixture/sidecar-earlier"
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ncat\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	declarations := append(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`),
+		host.SidecarDeclaration{Name: earlier, Folder: directory, Data: []byte(`{"executable":"echo","protocol":1}`)})
+	refused := "sidecar " + earlier + ": " + filepath.Join(directory, "sidecar.json") + ": displayName is required"
+	sidecars, err := host.NewSidecars(declarations, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars.StopTimeout = stall
+	defer sidecars.Stop()
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, earlier, "s2", json.RawMessage(`{}`)); err == nil || err.Error() != refused {
+		t.Fatalf("send to the refused sidecar = %v, want %q", err, refused)
+	}
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if event := owner.next(t); event.Surface != "s1" {
+		t.Fatalf("event = %+v", event)
+	}
+	// A declaration after the start keeps the valid sidecar running and the invalid one undeclared.
+	if err := sidecars.Declare(declarations); err != nil {
+		t.Fatal(err)
+	}
+	if err := sidecars.Send(owner, earlier, "s2", json.RawMessage(`{}`)); err == nil || err.Error() != refused {
+		t.Fatalf("send to the refused sidecar after the declaration = %v, want %q", err, refused)
+	}
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"next"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if event := owner.next(t); string(event.Body) != `{"operation":"next"}` {
+		t.Fatalf("event = %+v", event)
 	}
 }
 
