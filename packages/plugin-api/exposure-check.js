@@ -40,7 +40,7 @@ export function* sourceFiles(dir, test) {
  * and core is the name lists { status, commands } of the core, which a runtime.command call names. where is the place of the component
  * used in registration errors.
  */
-export function auditExposure({ owner, where, exposes, sources, registrations = [], core = null }) {
+export function auditExposure({ owner, where, exposes, sources, registrations = [], core = null, sections = [] }) {
   const errors = [];
   const report = (path, index, text) => errors.push(`${path}:${index + 1}: ${text}`);
   // default: status, commands and dom of exposes are optional fields; when missing, there is no declaration of that kind.
@@ -49,8 +49,10 @@ export function auditExposure({ owner, where, exposes, sources, registrations = 
   // default: without core (the check of the core itself) the core name list is empty.
   const coreNames = (list) => new Set(list ?? []);
   const coreCommand = coreNames(core?.commands);
-  // A name is declared when it is declared as one of the three kinds.
-  const any = (name) => Object.values(declared).some((set) => set.has(name));
+  // A name is declared when it is declared as one of the three kinds or is the id of a section of the plugin, which a section view
+  // reads from its start values (docs/spec/plugins.md#sections).
+  const sectionIds = new Set(sections);
+  const any = (name) => sectionIds.has(name) || Object.values(declared).some((set) => set.has(name));
   const quoted = new RegExp(`["'\`](${owner}\\.[a-z0-9-]+(?:\\.[a-z0-9-]+)*)["'\`]`, "g");
   const shown = new Set();
 
@@ -66,9 +68,11 @@ export function auditExposure({ owner, where, exposes, sources, registrations = 
       for (const [, name] of line.matchAll(/\b(?:mark|bind)\(\s*\w+(?:\.\w+|\([^)]*\))*\s*,\s*["']([^"']+)["']/g)) {
         if (!declared.command.has(name)) report(path, index, `${name} is bound to an element but is not a declared command`);
       }
-      // A surface module runs a command of core through runtime.command (docs/spec/plugins.md#surface-module-ownership).
+      // A view runs a command of core or a command of its plugin through runtime.command (docs/spec/native-surfaces.md#view-surfaces).
       for (const [, name] of line.matchAll(/\bruntime\.command\(\s*["']([^"']+)["']/g)) {
-        if (!coreCommand.has(name)) report(path, index, `${name} is run through runtime.command but is not a command of core`);
+        if (!coreCommand.has(name) && !declared.command.has(name)) {
+          report(path, index, `${name} is run through runtime.command but is not a command of core or a declared command of the plugin`);
+        }
       }
       for (const [, name] of line.matchAll(/(?<!runtime\.)\b(?:run|command)\(\s*["']([^"']+)["']/g)) {
         if (!declared.command.has(name)) report(path, index, `${name} is run but is not a declared command`);
@@ -97,7 +101,9 @@ export function auditExposure({ owner, where, exposes, sources, registrations = 
     if (!new RegExp(pattern).test(all)) errors.push(`${where}: status ${name} is declared but not registered`);
   }
   for (const name of declared.command) {
-    const pattern = owner === "core" ? `(?:registry|expose)\\.command\\(\\s*"${name}"` : `(?:expose|context\\.exposure)\\.command\\(\\s*["']${name}["']`;
+    // A view registers its command through commands.register of the view bridge (docs/spec/native-surfaces.md#view-surfaces).
+    const pattern = owner === "core" ? `(?:registry|expose)\\.command\\(\\s*"${name}"`
+      : `(?:(?:expose|context\\.exposure)\\.command|commands\\.register)\\(\\s*["']${name}["']`;
     if (!new RegExp(pattern).test(all)) errors.push(`${where}: command ${name} is declared but not registered`);
   }
   for (const name of declared.dom) {
@@ -122,6 +128,8 @@ export function checkPluginRepository(root, core = coreExposure()) {
     [key, [...(manifest.exposes?.[key] ?? []), ...(diagnostics[key] ?? [])]]));
   return auditExposure({
     owner: manifest.id, where: `plugin ${manifest.id}`, exposes,
+    // default: sections is an optional field of plugin.json; without it the plugin has no section id.
+    sections: (manifest.sections ?? []).map((section) => section.id),
     sources: paths.map((path) => ({ path: relative(root, path), text: readFileSync(path, "utf8") })),
     core,
   });

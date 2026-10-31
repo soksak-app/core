@@ -20,7 +20,7 @@ function repository(t, manifest, files) {
 const manifest = {
   id: "probe",
   exposes: { status: [{ name: "probe.state" }], commands: [{ name: "probe.open" }], dom: [{ name: "probe.view" }] },
-  sections: [{ id: "probe.declared", name: "Declared", status: "probe.state" }],
+  sections: [{ id: "probe.declared", name: "Declared", composition: { kind: "view", page: "ui/section.html" }, height: "fill" }],
 };
 
 test("a plugin repository whose sources match its declarations passes", (t) => {
@@ -53,6 +53,26 @@ test("a surface module runs a command of core through runtime.command, and an un
       + 'await context.runtime.command("core.file.place", { name });\nawait context.runtime.command("core.nothing", {});\n',
   });
   assert.deepEqual(checkPluginRepository(root, { status: [], commands: ["core.file.place"] }), [
-    "ui/page.js:5: core.nothing is run through runtime.command but is not a command of core",
+    "ui/page.js:5: core.nothing is run through runtime.command but is not a command of core or a declared command of the plugin",
+  ]);
+});
+
+test("a view registers a command through commands.register, names a declared section id, and runs its own command", (t) => {
+  const root = repository(t, manifest, {
+    "ui/page.js": 'expose.status("probe.state", read);\nel.dataset.expose = "probe.view";\n',
+    "ui/section.js": 'commands.register("probe.open", open);\nif (section.id === "probe.declared") draw();\n'
+      + 'runtime.command("probe.open", null, { surface });\n',
+  });
+  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), []);
+});
+
+test("runtime.command of an undeclared command of the plugin is still reported", (t) => {
+  const root = repository(t, manifest, {
+    "ui/page.js": 'expose.status("probe.state", read);\nexpose.command("probe.open", open);\nel.dataset.expose = "probe.view";\n'
+      + 'runtime.command("probe.missing", null);\n',
+  });
+  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), [
+    "ui/page.js:4: probe.missing is not declared",
+    "ui/page.js:4: probe.missing is run through runtime.command but is not a command of core or a declared command of the plugin",
   ]);
 });

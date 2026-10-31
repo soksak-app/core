@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F332-8-1: exposure 검사는 manifest의 section id를 선언된 이름으로, view bridge의 `commands.register`로 등록한 명령을, `runtime.command`로 실행한 plugin의 선언된 명령을 받는다.
 - F332-4-2: event catalog와 `sok` event class는 더 이상 `page.trace.declared-ui.snapshot.skipped`를 선언하지 않는다.
 - F332-9-1: view는 `runtime.command(name, params, {surface})`, 곧 view call `runtime.command.run`으로 그 plugin의 지정한 surface에서 plugin 명령을 실행하고, surface 없는 plugin 명령은 그것을 등록한 plugin의 선호 tab surface에서 실행된다.
 - F332-10: 메모리 절약은 보이는 스페이스의 section surface를 탭과 함께 관찰하고, 각 탭과 section surface의 unload 선언을 그 descriptor에서 읽으며, 접힌 섹션과 선택되지 않은 탭의 섹션을 숨겨진 것으로 다루고, `core.tab.memory`에 `kind`를 나열한다. `core.tab.unload`, `core.tab.keep`, `core.tab.menu`는 section surface id를 `<id> is a section surface, not a tab`으로 거부한다. section surface는 보이는 스페이스에만 있고, 지워진 사이드바는 그 해제를 다음 commit에 맡기며, load의 맞춤은 사이드바가 창 사이드바이거나 layout 카드의 사이드바인 동안 section surface의 저장된 상태와 session을 남긴다.
