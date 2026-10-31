@@ -3263,9 +3263,14 @@ pub fn surface_start_script(surface: &str, start: &ViewStart) -> Result<String, 
         .declarations
         .as_ref()
         .map_or_else(|| "{}".to_string(), |value| value.to_string());
+    crate::surfaces::check_view_diagnostics(surface, start.diagnostics.as_ref())?;
+    let diagnostics = match start.diagnostics.as_ref() {
+        Some(value @ Value::Object(_)) => format!("Object.freeze({value})"),
+        _ => "null".to_string(),
+    };
     let id = Value::String(surface.to_string());
     Ok(format!(
-        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations})}});"
+        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations}),\"diagnostics\":{diagnostics}}});"
     ))
 }
 

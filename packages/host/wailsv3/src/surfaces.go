@@ -66,6 +66,9 @@ type ViewStart struct {
 	Origin       json.RawMessage `json:"origin,omitempty"`
 	Project      *SurfaceProject `json:"project,omitempty"`
 	Declarations json.RawMessage `json:"declarations,omitempty"`
+	// Diagnostics is the diagnostic declaration of the plugin or JSON null, kept raw so that a missing value is refused
+	// (validateViewStart).
+	Diagnostics json.RawMessage `json:"diagnostics,omitempty"`
 }
 
 // validateViewStart checks the start values of the view of the surface (docs/spec/native-surfaces.md#view-surfaces).
@@ -85,8 +88,26 @@ func validateViewStart(surface string, start *ViewStart) error {
 			return fmt.Errorf("surface %q: view start declarations are not an object", surface)
 		}
 	}
-	_, err := viewOriginDirectory(surface, start.Origin)
-	return err
+	if _, err := viewOriginDirectory(surface, start.Origin); err != nil {
+		return err
+	}
+	return checkViewDiagnostics(surface, start.Diagnostics)
+}
+
+// checkViewDiagnostics checks the diagnostic declaration of the start values of the view of surface: it is required, and it is an
+// object or null (docs/spec/native-surfaces.md#view-surfaces).
+func checkViewDiagnostics(surface string, diagnostics json.RawMessage) error {
+	if diagnostics == nil {
+		return fmt.Errorf("surface %q: view start diagnostics is missing", surface)
+	}
+	if strings.TrimSpace(string(diagnostics)) == "null" {
+		return nil
+	}
+	var declaration map[string]json.RawMessage
+	if err := json.Unmarshal(diagnostics, &declaration); err != nil {
+		return fmt.Errorf("surface %q: view start diagnostics is not an object or null", surface)
+	}
+	return nil
 }
 
 // viewOriginDirectory returns the directory that the origin of the view of surface records, or nil when it records none. The origin
@@ -270,6 +291,7 @@ type syncViewStartWire struct {
 	Origin       json.RawMessage `json:"origin,omitempty"`
 	Project      *SurfaceProject `json:"project,omitempty"`
 	Declarations json.RawMessage `json:"declarations"`
+	Diagnostics  json.RawMessage `json:"diagnostics,omitempty"`
 }
 
 // decodeSyncRequest resolves the request-local declaration table before any surface state is read or changed.
@@ -314,7 +336,7 @@ func decodeSyncRequest(raw json.RawMessage) (SyncRequest, error) {
 			used[index] = true
 			surface.Start = &ViewStart{
 				Params: item.Start.Params, Origin: item.Start.Origin, Project: item.Start.Project,
-				Declarations: declarations[index],
+				Declarations: declarations[index], Diagnostics: item.Start.Diagnostics,
 			}
 		} else if item.Start != nil {
 			return SyncRequest{}, fmt.Errorf("surface %q: non-view composition cannot carry start values", item.ID)

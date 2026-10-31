@@ -14,11 +14,12 @@ fn the_start_values_script_freezes_the_start_values_for_the_first_page_script() 
         "origin": {"directory": "/work/one"},
         "project": {"id": "prj-one", "root": "/work/one"},
         "declarations": {"commands": []},
+        "diagnostics": {"module": "ui/probe-diagnostics.js", "exposes": {}},
     }))
     .expect("the start values have their form");
     assert_eq!(
         surface_start_script("probe-surface", &start).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]})});"##,
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"})});"##,
         "the script sets the frozen start values"
     );
 }
@@ -29,11 +30,12 @@ fn the_start_values_script_freezes_the_start_values_for_the_first_page_script() 
 fn the_start_values_script_carries_absent_values_as_null() {
     let start = ViewStart {
         origin: Some(json!({"directory": null})),
+        diagnostics: Some(serde_json::Value::Null),
         ..Default::default()
     };
     assert_eq!(
         surface_start_script("probe-surface", &start).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({})});"##,
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null});"##,
         "the script carries the absent values as null"
     );
 }

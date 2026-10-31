@@ -79,6 +79,10 @@ pub struct ViewStart {
     pub(crate) project: Option<SurfaceProject>,
     #[serde(default)]
     pub(crate) declarations: Option<Value>,
+    /// The diagnostic declaration of the plugin or null, kept raw so that a missing value is refused (check_view_diagnostics);
+    /// the Go host runs the same check.
+    #[serde(default, deserialize_with = "present_value")]
+    pub(crate) diagnostics: Option<Value>,
 }
 
 /// The wire start values of a view. `declarations` is an index into the request-local table and has no default, so a
@@ -92,6 +96,8 @@ struct ViewStartRequest {
     #[serde(default)]
     project: Option<SurfaceProject>,
     declarations: u64,
+    #[serde(default, deserialize_with = "present_value")]
+    diagnostics: Option<Value>,
 }
 
 /// Keeps a present value, null included, so that an absent field and a null field are told apart.
@@ -165,7 +171,24 @@ fn validate_view_start(surface: &str, start: &ViewStart) -> Result<(), String> {
         ));
     }
     view_origin_directory(surface, start.origin.as_ref())?;
-    Ok(())
+    check_view_diagnostics(surface, start.diagnostics.as_ref())
+}
+
+/// Checks the diagnostic declaration of the start values of the view of surface: it is required, and it is an object or null
+/// (docs/spec/native-surfaces.md#view-surfaces).
+pub(crate) fn check_view_diagnostics(
+    surface: &str,
+    diagnostics: Option<&Value>,
+) -> Result<(), String> {
+    match diagnostics {
+        None => Err(format!(
+            "surface {surface:?}: view start diagnostics is missing"
+        )),
+        Some(Value::Null | Value::Object(_)) => Ok(()),
+        Some(_) => Err(format!(
+            "surface {surface:?}: view start diagnostics is not an object or null"
+        )),
+    }
 }
 
 pub fn validate_rect(name: &str, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
@@ -488,6 +511,7 @@ impl SyncRequest {
                         origin: start.origin,
                         project: start.project,
                         declarations: Some(declarations.clone()),
+                        diagnostics: start.diagnostics,
                     })
                 }
                 None => None,

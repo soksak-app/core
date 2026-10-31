@@ -38,6 +38,7 @@ fn sync_request_resolves_request_local_view_declaration_indices() {
                 "origin": {"directory": "/work/one"},
                 "project": {"id": "prj-one", "root": "/work/one"},
                 "declarations": index,
+                "diagnostics": null,
             },
         })
     };
@@ -78,7 +79,7 @@ fn sync_request_resolves_request_local_view_declaration_indices() {
     );
 
     let negative_zero: Result<SyncRequest, _> = serde_json::from_str(
-        r#"{"settled":true,"titlebar":40,"declarations":[{"commands":[]}],"surfaces":[{"id":"tab-zero","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"page","composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":-0}}]}"#,
+        r#"{"settled":true,"titlebar":40,"declarations":[{"commands":[]}],"surfaces":[{"id":"tab-zero","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"page","composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":-0,"diagnostics":null}}]}"#,
     );
     assert!(
         negative_zero.is_err(),
@@ -148,7 +149,7 @@ fn surface(id: &str, w: f64) -> serde_json::Value {
     serde_json::json!({
         "id": id, "module": "surface.js", "x": 0.0, "y": 0.0, "w": w, "h": 10.0,
         "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "view", "page": "ui/page.html", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
-        "start": {"origin": {"directory": null}, "declarations": 0},
+        "start": {"origin": {"directory": null}, "declarations": 0, "diagnostics": null},
     })
 }
 
@@ -304,6 +305,24 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0,
         "declarations": [{"commands": []}],
+        "surfaces": [view(serde_json::json!({"origin": {"directory": null}, "declarations": 0}))],
+    }));
+    assert_eq!(
+        check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
+        r#"surface "tab-1": view start diagnostics is missing"#
+    );
+    let request = sync_request(serde_json::json!({
+        "settled": true, "titlebar": 40.0,
+        "declarations": [{"commands": []}],
+        "surfaces": [view(serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": []}))],
+    }));
+    assert_eq!(
+        check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
+        r#"surface "tab-1": view start diagnostics is not an object or null"#
+    );
+    let request = sync_request(serde_json::json!({
+        "settled": true, "titlebar": 40.0,
+        "declarations": [{"commands": []}],
         "surfaces": [view(serde_json::json!({"origin": {"directory": null}, "declarations": 1}))],
     }));
     assert_eq!(
@@ -392,7 +411,7 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0,
         "declarations": [{"commands": []}],
-        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}, "declarations": 0})))],
+        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null})))],
     }));
     assert!(check_sync_request(&request, &held, &plugins).is_ok());
 }

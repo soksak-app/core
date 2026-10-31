@@ -29,10 +29,10 @@ mod declaration_table {
                 {"id":"one","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
                  "plugin":"page","composition":{"kind":"view","page":"one.html"},
                  "start":{"params":{"path":"one.md"},"origin":{"directory":"/work/one"},
-                          "project":{"id":"project-one","root":"/work/one"},"declarations":0}},
+                          "project":{"id":"project-one","root":"/work/one"},"declarations":0,"diagnostics":null}},
                 {"id":"two","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
                  "plugin":"page","composition":{"kind":"view","page":"two.html"},
-                 "start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0}}
+                 "start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null}}
             ]
         }))
         .expect("the indexed wire request is valid");
@@ -65,7 +65,7 @@ mod declaration_table {
         assert_eq!(
             crate::documents::surface_start_script("two", two)
                 .expect("the resolved start values form a valid script"),
-            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"dom":["alpha"],"nested":{"keep":true}})});"##
+            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"dom":["alpha"],"nested":{"keep":true}}),"diagnostics":null});"##
         );
 
         let next: SyncRequest = serde_json::from_value(serde_json::json!({

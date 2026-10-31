@@ -486,11 +486,19 @@ func surfaceStartScript(surface string, start ViewStart) (string, error) {
 	if start.Declarations != nil {
 		declarations = string(start.Declarations)
 	}
+	if err := checkViewDiagnostics(surface, start.Diagnostics); err != nil {
+		return "", err
+	}
+	diagnostics := "null"
+	if text := strings.TrimSpace(string(start.Diagnostics)); text != "null" {
+		diagnostics = "Object.freeze(" + text + ")"
+	}
 	return "window.sokSurface = Object.freeze({\"surface\":" + string(id) +
 		",\"params\":" + params +
 		",\"origin\":Object.freeze({\"directory\":" + directory + "})" +
 		",\"project\":" + project +
-		",\"declarations\":Object.freeze(" + declarations + ")});", nil
+		",\"declarations\":Object.freeze(" + declarations + ")" +
+		",\"diagnostics\":" + diagnostics + "});", nil
 }
 
 // viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the

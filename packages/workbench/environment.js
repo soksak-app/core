@@ -33,7 +33,7 @@ export function defaultRegistry() {
 /** Converts a surface declaration into a function that returns the surface target for a tab id. */
 function surfaceOf(name, pluginId, surface) {
   return (tabId) => ({ composition: surface.composition, surfaceId: tabId,
-    pluginId, declarations: surface.declarations, sidecars: surface.sidecars,
+    pluginId, declarations: surface.declarations, sidecars: surface.sidecars, diagnostics: surface.diagnostics,
     // default: a surface without surface.unload (undeclared, or beside background) is never unloaded.
     unload: surface.unload ?? false,
     contributions: (point) => contributionsOf(pluginId, point) });
@@ -101,6 +101,9 @@ export function installEnvironment(environmentDocument, installedDocument) {
           ...manifest.surface,
           // default: exposes is an optional field of plugin.json; without it there is no declaration.
           declarations: exposes ?? {},
+          // The diagnostic declaration goes to the start values of each view of the plugin, so the view page requests no
+          // diagnostics.json (docs/spec/plugins.md#diagnostic-declarations).
+          diagnostics,
           sidecars: manifestSidecars(manifest, pluginNames),
         }),
       });

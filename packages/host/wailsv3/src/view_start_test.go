@@ -10,11 +10,13 @@ import (
 )
 
 // nullOriginStart is the start values of a view whose tab recorded no directory: its origin is {"directory": null}.
-func nullOriginStart() ViewStart { return ViewStart{Origin: json.RawMessage(`{"directory":null}`)} }
+func nullOriginStart() ViewStart {
+	return ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`)}
+}
 
 // contract: view.start-values.first-script
 // A view that the host creates receives, before its page loads, the document-start script that sets window.sokSurface to the
-// frozen start values {surface, params, origin, project, declarations} of its surface, so the first page script reads them.
+// frozen start values {surface, params, origin, project, declarations, diagnostics} of its surface, so the first page script reads them.
 func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 	clock := &fakeClock{}
 	fake := &lifecyclePlatform{ended: map[unsafe.Pointer]func(){}, responsiveness: map[unsafe.Pointer]func(bool){}, scripts: map[unsafe.Pointer][]string{}}
@@ -29,7 +31,7 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 	}
 	native := unsafe.Pointer(new(int))
 	var start ViewStart
-	if err := json.Unmarshal([]byte(`{"params":{"path":"a.md"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"declarations":{"commands":[]}}`), &start); err != nil {
+	if err := json.Unmarshal([]byte(`{"params":{"path":"a.md"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"declarations":{"commands":[]},"diagnostics":{"module":"ui/probe-diagnostics.js","exposes":{}}}`), &start); err != nil {
 		t.Fatalf("start values: %v", err)
 	}
 	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
@@ -40,7 +42,7 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 	if len(fake.created) != 1 {
 		t.Fatalf("views created: %d, want one", len(fake.created))
 	}
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]})});`
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"module":"ui/probe-diagnostics.js","exposes":{}})});`
 	scripts := fake.scripts[fake.created[0]]
 	if len(scripts) != 2 {
 		t.Fatalf("user scripts of the view: %q, want the theme script and the start values script", scripts)
@@ -62,7 +64,7 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 // The start values script carries the start values that the surface has none of as JSON null.
 // contract: view.start-values.first-script
 func TestSurfaceStartScriptCarriesAbsentValuesAsNull(t *testing.T) {
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({})});`
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null});`
 	got, err := surfaceStartScript("probe-surface", nullOriginStart())
 	if err != nil {
 		t.Fatalf("start values script: %v", err)
@@ -87,7 +89,15 @@ func TestSyncRequestValidatesTheStartValuesOfAView(t *testing.T) {
 	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": view start project id is empty` {
 		t.Fatalf("empty project id: %v", err)
 	}
-	entries[0].Start = &ViewStart{Origin: json.RawMessage(`{"directory":""}`)}
+	entries[0].Start = &ViewStart{Origin: json.RawMessage(`{"directory":null}`)}
+	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": view start diagnostics is missing` {
+		t.Fatalf("missing diagnostics: %v", err)
+	}
+	entries[0].Start = &ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`[]`)}
+	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": view start diagnostics is not an object or null` {
+		t.Fatalf("diagnostics of another type: %v", err)
+	}
+	entries[0].Start = &ViewStart{Origin: json.RawMessage(`{"directory":""}`), Diagnostics: json.RawMessage(`null`)}
 	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": view start origin directory is empty` {
 		t.Fatalf("empty origin directory: %v", err)
 	}
@@ -107,7 +117,7 @@ func TestSyncRequestValidatesTheStartValuesOfAView(t *testing.T) {
 
 // contract: view.start-values.declaration-table
 func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
-	const surface = `"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10,"start":{"params":{"path":"/work/one"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"}`
+	const surface = `"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10,"start":{"params":{"path":"/work/one"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"diagnostics":null`
 	request := func(table, index string) json.RawMessage {
 		return json.RawMessage(`{"settled":true,"titlebar":40,"declarations":` + table + `,"surfaces":[{` + surface + `,"declarations":` + index + `}}]}`)
 	}
@@ -213,7 +223,7 @@ func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
 		{"origin without directory", `{` + view + `,"start":{"origin":{}}}`, malformed},
 		{"directory that is not a string", `{` + view + `,"start":{"origin":{"directory":1}}}`, malformed},
 		{"origin with another member", `{` + view + `,"start":{"origin":{"directory":"/work/one","root":"/work/one"}}}`, malformed},
-		{"null directory", `{` + view + `,"start":{"origin":{"directory":null}}}`, ""},
+		{"null directory", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null}}`, ""},
 	}
 	for _, tc := range cases {
 		var surface Surface

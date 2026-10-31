@@ -302,7 +302,7 @@ func TestSurfaceNameIsForgottenInTheStepThatClosesItsNativeView(t *testing.T) {
 // contract: view.placement.requires-current-page-declaration
 func TestSyncRequestRejectsAViewWithoutACurrentPageDeclaration(t *testing.T) {
 	composition := SurfaceComposition{Kind: "view", Page: "ui/page.html", Regions: []SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}}, Overlays: []string{}}
-	surface := Surface{ID: "tab-unannounced", Visible: true, Plugin: "page", Composition: composition, Start: &ViewStart{Origin: json.RawMessage(`{"directory":null}`)}, Rect: Rect{W: 10, H: 10}}
+	surface := Surface{ID: "tab-unannounced", Visible: true, Plugin: "page", Composition: composition, Start: &ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`)}, Rect: Rect{W: 10, H: 10}}
 	request := SyncRequest{Settled: true, Titlebar: 40, Surfaces: []Surface{surface}}
 	_, err := CheckSyncRequest(request, map[string]SurfaceComposition{}, map[string]string{})
 	if want := `surface "tab-unannounced" has no composition declaration in the current page`; err == nil || err.Error() != want {

@@ -278,6 +278,8 @@ function viewStartValuesFromDeclarations(surface, project, origin, declarations)
     project: project === null ? null : { id: project.id, root: project.root },
     declarations: Object.fromEntries(["status", "commands", "dom"].map((kind) =>
       [kind, [...declarations[kind], ...(surface.declarations[kind] ?? [])]])), // default: a surface without plugin declarations contributes none beyond core declarations.
+    // The surface of each plugin carries its diagnostic declaration, which is null without one (docs/spec/native-surfaces.md#view-surfaces).
+    diagnostics: surface.diagnostics,
   };
 }
 

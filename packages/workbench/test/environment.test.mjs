@@ -55,7 +55,7 @@ test("the environment registers card plugins, sections, and sidebar defaults fro
   assert.deepEqual(registry.plugins().map((p) => p.id), ["card"], "a plugin without a surface is not a card plugin");
   const { contributions, ...target } = registry.plugin("card").surface("tab 1");
   assert.deepEqual(target,
-    { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] }, surfaceId: "tab 1", pluginId: "card", declarations: { status: [{ name: "card.info", description: "검사용 상태.", schema: { type: "object" } }] }, sidecars: ["@fixture/sidecar-card"], unload: false });
+    { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] }, surfaceId: "tab 1", pluginId: "card", declarations: { status: [{ name: "card.info", description: "검사용 상태.", schema: { type: "object" } }] }, sidecars: ["@fixture/sidecar-card"], diagnostics: null, unload: false });
   // card declares no extension point, so every point is undeclared.
   assert.throws(() => contributions("language"), /extension point language is not declared by card/);
   assert.equal(registry.plugin("card").ink, "--fixture-ink");

@@ -825,24 +825,27 @@ test("a view responsiveness notice is the state of its surface until the surface
 // The start values of a view (docs/spec/native-surfaces.md#view-surfaces): the host injects them as window.sokSurface before the
 // page of the view runs. origin is the directory that the tab that opened the tab recorded, and project is the project that the
 // window shows, or null.
-test("the start values of a view carry its params, origin, project and declarations", async () => {
+test("the start values of a view carry its params, origin, project, declarations and diagnostic declaration", async () => {
   const { viewStartValues } = await import("../surface-modules.js?view-start");
   const { reportDirectory } = await import("../tab-reports.js");
   reportDirectory("tab-with-directory", "/work/one");
   recordOrigin("tab-of-directory", "tab-with-directory", "test fixture");
-  const surface = { surfaceId: "tab-of-directory", params: { path: "a.md" }, declarations: { commands: [] } };
+  const diagnostics = { module: "ui/fixture-diagnostics.js", exposes: { commands: [] } };
+  const surface = { surfaceId: "tab-of-directory", params: { path: "a.md" }, declarations: { commands: [] }, diagnostics };
   assert.deepEqual(viewStartValues(surface, { id: "prj-one", root: "/work/one" }), {
     params: { path: "a.md" },
     origin: { directory: "/work/one" },
     project: { id: "prj-one", root: "/work/one" },
     declarations: { status: [], commands: [], dom: [] },
+    diagnostics,
   });
   recordOrigin("tab-without-directory", null, "test fixture");
-  assert.deepEqual(viewStartValues({ surfaceId: "tab-without-directory", declarations: {} }, null), {
+  assert.deepEqual(viewStartValues({ surfaceId: "tab-without-directory", declarations: {}, diagnostics: null }, null), {
     params: null,
     origin: { directory: null },
     project: null,
     declarations: { status: [], commands: [], dom: [] },
+    diagnostics: null,
   });
 });
 

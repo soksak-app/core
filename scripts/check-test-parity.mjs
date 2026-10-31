@@ -5120,7 +5120,7 @@ const FEATURE_LINKS = [
     id: "F244",
     implementation: [{ file: "packages/workbench/tab-reports.js", symbol: "tabOrigin" }],
     tests: [
-      { file: "packages/workbench/test/surface-view.test.mjs", id: "the start values of a view carry its params, origin, project and declarations" },
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "the start values of a view carry its params, origin, project, declarations and diagnostic declaration" },
       { file: "packages/workbench/test/declared-ui-draw-time.test.mjs", id: "a list of 1000 items validates and draws every item" },
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI inspects every executable in the bundle" },
       { file: "scripts/test/native-tests.test.mjs", id: "the native tests run one at a time, each with its start and end, and a failure fails the run" },
@@ -8359,6 +8359,21 @@ const FEATURE_LINKS = [
     implementation: [{ file: ".github/workflows/ci.yml", symbol: "CARGO_PROFILE_DEV_DEBUG: line-tables-only" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the Tauri host job builds its tests with line tables as debug information, set on the job so that the Rust cache key holds it" }],
     expected: "The Tauri host job builds its tests with line tables as debug information, and the Rust cache key holds the setting.",
+    levels: ["unit"],
+  },
+  {
+    id: "F330",
+    implementation: [
+      { file: "packages/workbench/surface-modules.js", symbol: "diagnostics: surface.diagnostics," },
+      { file: "packages/host/wailsv3/src/surfaces.go", symbol: "func checkViewDiagnostics(surface string, diagnostics json.RawMessage) error" },
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "pub(crate) fn check_view_diagnostics(" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "the start values of a view carry its params, origin, project, declarations and diagnostic declaration" },
+      { file: "packages/host/wailsv3/src/view_start_test.go", id: "TestSyncRequestValidatesTheStartValuesOfAView" },
+      { file: "packages/host/tauriv2/tests/surfaces_geometry_test.rs", id: "sync_request_check_validates_the_start_values_of_a_view" },
+    ],
+    expected: "The view start values carry the diagnostic declaration of the plugin or null, which both hosts require and inject.",
     levels: ["unit"],
   },
   {
