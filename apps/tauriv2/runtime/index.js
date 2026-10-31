@@ -170,7 +170,7 @@ function hostInvoke() {
 export const host = (() => {
   const invoke = hostInvoke();
   const orderedWindowEvents = new Set([
-    "view-source-registered", "view-source-ended", "declared-ui-snapshot",
+    "view-source-registered", "view-source-ended",
     "view-call", "view-reply", "view-process-ended", "view-stopped", "view-responsiveness",
   ]);
   const orderedSubscribers = new Map();

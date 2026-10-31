@@ -3,7 +3,7 @@ use serde_json::json;
 
 // contract: view.source-registration-precedes-provider-messages
 #[test]
-fn a_view_lifecycle_snapshot_and_status_call_share_the_issued_generation() {
+fn a_view_lifecycle_and_status_call_share_the_issued_generation() {
     let origins = crate::source_origins::ViewSourceOrigins::default();
     let generation = origins
         .issue_view("surface")
@@ -13,16 +13,6 @@ fn a_view_lifecycle_snapshot_and_status_call_share_the_issued_generation() {
 
     let registered =
         crate::source_origins::view_source_origin_event("probe", Some("surface"), generation);
-    let snapshot = tag_view_generation(
-        channels
-            .snapshot(
-                "surface",
-                r#"{"message":{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"items":[]}}}"#,
-            )
-            .expect("the view snapshot envelope is valid")
-            .expect("the view snapshot is relayed"),
-        generation,
-    );
     let status_registration = tag_view_generation(
         channels
             .call(
@@ -38,7 +28,6 @@ fn a_view_lifecycle_snapshot_and_status_call_share_the_issued_generation() {
         registered,
         json!({"plugin":"probe","surface":"surface","generation":generation})
     );
-    assert_eq!(snapshot["generation"], generation);
     assert_eq!(status_registration["generation"], generation);
 }
 

@@ -1693,17 +1693,6 @@ func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, va
 		s.emitToSurface(surface, "view-call", payload)
 		return true, nil
 	}
-	snapshot, isSnapshot, err := DeclaredSnapshotEvent(surface, plugin, received.Message)
-	if err != nil {
-		return true, err
-	}
-	if isSnapshot {
-		// A declared UI snapshot goes to the main page of the window, which acknowledges it and draws it
-		// (docs/spec/declared-ui.md). The host relays the snapshot and writes no event for it (rule 2).
-		snapshot["generation"] = generation
-		s.emitToSurface(surface, declaredSnapshotWindowEvent, snapshot)
-		return true, nil
-	}
 	var event struct {
 		Event      string   `json:"event"`
 		Plugin     string   `json:"plugin"`
@@ -1756,7 +1745,7 @@ func validateViewMessageEnvelope(surface string, message json.RawMessage) error 
 		var event *string
 		if err := json.Unmarshal(raw, &event); err == nil && event != nil {
 			switch *event {
-			case "view.ready", declaredSnapshotEvent:
+			case "view.ready":
 				return nil
 			case "view.error":
 				var fields struct {
@@ -1942,51 +1931,6 @@ func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]
 		payload["cids"] = cids
 	}
 	return payload, true, nil
-}
-
-// The event name of a declared UI snapshot of a view (docs/spec/plugin-processes.md, messages and events).
-const declaredSnapshotEvent = "declared-ui.snapshot"
-
-// declaredSnapshotWindowEvent is the window event that relays a declared UI snapshot to the main page. It is not the message name, so the
-// relay name is the one that the Tauri host also uses.
-const declaredSnapshotWindowEvent = "declared-ui-snapshot"
-
-// DeclaredSnapshotEvent returns the payload of the declared-ui.snapshot event for a snapshot of the view of surface, which has the
-// plugin id. A snapshot is {"event": "declared-ui.snapshot", "plugin", "status", "seq", "value", "skipped"}, whose seq is an integer
-// from 1 and whose skipped is a count of 0 or more. It returns false when message is not a snapshot, and an error for a snapshot
-// whose fields are invalid. The host relays the snapshot and writes no event for it (docs/spec/plugin-processes.md, rule 2).
-func DeclaredSnapshotEvent(surface, plugin string, message json.RawMessage) (map[string]any, bool, error) {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(message, &fields); err != nil {
-		return nil, false, fmt.Errorf("%s: view message is not an object: %w", surface, err)
-	}
-	if string(fields["event"]) != `"`+declaredSnapshotEvent+`"` {
-		return nil, false, nil
-	}
-	var named string
-	if raw, ok := fields["plugin"]; !ok || json.Unmarshal(raw, &named) != nil || named == "" {
-		return nil, true, fmt.Errorf("%s: declared UI snapshot names no plugin", surface)
-	}
-	if named != plugin {
-		return nil, true, fmt.Errorf("%s: declared UI snapshot names plugin %q, want plugin %q", surface, named, plugin)
-	}
-	var status string
-	if raw, ok := fields["status"]; !ok || json.Unmarshal(raw, &status) != nil || status == "" {
-		return nil, true, fmt.Errorf("%s: declared UI snapshot has no status", surface)
-	}
-	var seq uint64
-	if raw, ok := fields["seq"]; !ok || json.Unmarshal(raw, &seq) != nil || seq < 1 {
-		return nil, true, fmt.Errorf("%s: declared UI snapshot of status %q has no seq from 1", surface, status)
-	}
-	var skipped uint64
-	if raw, ok := fields["skipped"]; !ok || json.Unmarshal(raw, &skipped) != nil {
-		return nil, true, fmt.Errorf("%s: declared UI snapshot of status %q has no skipped count", surface, status)
-	}
-	value, ok := fields["value"]
-	if !ok {
-		return nil, true, fmt.Errorf("%s: declared UI snapshot of status %q has no value", surface, status)
-	}
-	return map[string]any{"surface": surface, "plugin": plugin, "status": status, "seq": seq, "skipped": skipped, "value": value}, true, nil
 }
 
 // ViewReplyRequest is the reply of the main page to a call request of the view of Surface. It has a result or an error, not both.

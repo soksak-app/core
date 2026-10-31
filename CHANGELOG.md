@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F332-4-6: The hosts no longer relay a declared UI snapshot; a view message with the event `declared-ui.snapshot` is refused as an unknown view event, and the window event `declared-ui-snapshot` and the contract case `view.declared-ui.snapshot` are removed.
 - F332-4-5: The source events, the origin query and the ordered source stream of the hosts are named view source (`view-source-registered`, `view-source-ended`, `viewSourceOrigins`, `view_source_event_stream`), and their contract cases are `view-source-stream.*`.
 - F332-12: `expose.dom(name, provide)` registers a function that returns the current elements of a dom entry of many, which each request reads again, so a view that replaces its row elements keeps none that it removed.
 - F332-11: A view follows the changes of the project data of its project with `runtime.data.on(listener)`, the view call `runtime.data.on` and the event `data` `{key}`, for its own writes and for the writes of other windows.

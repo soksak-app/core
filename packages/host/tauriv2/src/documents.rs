@@ -742,7 +742,7 @@ fn retired_view_error(surface: &str, value: &str) -> Option<RetiredViewError> {
     };
     match fields.get("event").and_then(Value::as_str) {
         Some("view.error") => {}
-        Some("view.ready" | DECLARED_SNAPSHOT_MESSAGE) => return None,
+        Some("view.ready") => return None,
         Some(event) => {
             return Some(RetiredViewError::Channel(format!(
                 "{surface}: view event {event:?} is unknown"
@@ -857,7 +857,6 @@ enum ViewDispatch {
     Reply(Value),
     Call(Value),
     Log(ViewLogCall),
-    Snapshot(Value),
     Ready(Result<bool, String>),
 }
 
@@ -907,17 +906,6 @@ impl ViewChannels {
             }
             return self.call_received(surface, received).map(|payload| {
                 ViewDispatch::Call(payload.expect("a command or cancel selected the call handler"))
-            });
-        }
-        if message
-            .and_then(|message| message.get("event"))
-            .and_then(Value::as_str)
-            == Some(DECLARED_SNAPSHOT_MESSAGE)
-        {
-            return self.snapshot_received(surface, received).map(|payload| {
-                ViewDispatch::Snapshot(
-                    payload.expect("the snapshot event selected the snapshot handler"),
-                )
             });
         }
         Ok(ViewDispatch::Ready(
@@ -1375,76 +1363,6 @@ impl ViewChannels {
         Ok(Some(payload))
     }
 
-    /// Returns the declared-ui.snapshot payload of a snapshot of the view of surface, or None when the message is not one.
-    /// A snapshot is {"event", "plugin", "status", "seq", "value", "skipped"} with an integer seq from 1 and a skipped
-    /// count of 0 or more; a snapshot with an invalid field is an error (docs/spec/plugin-processes.md, rule 2 and
-    /// messages and events). The host relays the snapshot and writes no event for it.
-    pub fn snapshot(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
-        let received: ViewReceived = serde_json::from_str(value)
-            .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
-        self.snapshot_received(surface, received)
-    }
-
-    fn snapshot_received(
-        &self,
-        surface: &str,
-        received: ViewReceived,
-    ) -> Result<Option<Value>, String> {
-        let Some(message) = received.message else {
-            return Ok(None);
-        };
-        if message.get("event").and_then(Value::as_str) != Some(DECLARED_SNAPSHOT_MESSAGE) {
-            return Ok(None);
-        }
-        let plugin = self
-            .lock()
-            .get(surface)
-            .map(|channel| channel.plugin.clone())
-            .ok_or_else(|| {
-                format!("{surface}: view channel message of a surface without a view")
-            })?;
-        let named = message
-            .get("plugin")
-            .and_then(Value::as_str)
-            .filter(|named| !named.is_empty())
-            .ok_or_else(|| format!("{surface}: declared UI snapshot names no plugin"))?;
-        if named != plugin {
-            return Err(format!(
-                "{surface}: declared UI snapshot names plugin {named:?}, want plugin {plugin:?}"
-            ));
-        }
-        let status = message
-            .get("status")
-            .and_then(Value::as_str)
-            .filter(|status| !status.is_empty())
-            .ok_or_else(|| format!("{surface}: declared UI snapshot has no status"))?;
-        let seq = message
-            .get("seq")
-            .and_then(Value::as_u64)
-            .filter(|seq| *seq >= 1)
-            .ok_or_else(|| {
-                format!("{surface}: declared UI snapshot of status {status:?} has no seq from 1")
-            })?;
-        let skipped = message
-            .get("skipped")
-            .and_then(Value::as_u64)
-            .ok_or_else(|| {
-                format!("{surface}: declared UI snapshot of status {status:?} has no skipped count")
-            })?;
-        // A value of null stays present: the receiver validates it like any other value (docs/spec/declared-ui.md).
-        let value = message.get("value").ok_or_else(|| {
-            format!("{surface}: declared UI snapshot of status {status:?} has no value")
-        })?;
-        Ok(Some(json!({
-            "surface": surface,
-            "plugin": plugin,
-            "status": status,
-            "seq": seq,
-            "skipped": skipped,
-            "value": value,
-        })))
-    }
-
     /// Records the navigation state of the view of surface. A navigation that starts after the last state clears the ready document
     /// of the view; the progress of a navigation keeps it, because the document that sent the ready message is still the one loading.
     pub fn state(&self, surface: &str, state: &str) -> Result<(), String> {
@@ -1483,11 +1401,6 @@ impl ViewChannels {
 /// The name of the view web view of a view surface. No composition region has an empty name, so the view cannot collide with a
 /// region, and the view closes with the other documents of its surface.
 pub(crate) const VIEW_NAME: &str = "";
-/// The event name of a declared UI snapshot of a view (docs/spec/plugin-processes.md, messages and events).
-pub const DECLARED_SNAPSHOT_MESSAGE: &str = "declared-ui.snapshot";
-/// The window event that relays a declared UI snapshot to the main page. Tauri accepts only alphanumeric characters, '-', '/', ':' and
-/// '_' in an event name, so the relay name is not the message name; the main page listens to this name.
-pub const DECLARED_SNAPSHOT_WINDOW_EVENT: &str = "declared-ui-snapshot";
 
 /// Creates the view web view of a view surface, with the view configuration (`view` is true), and loads soksak://<plugin>/<page>
 /// into it. When the load does not succeed, the view is closed and the error is returned. create, load and close are the
@@ -1557,10 +1470,7 @@ fn retire_view_before_replacement(
     before_process_ended();
     let mut ended = view_process_ended_event(surface);
     ended["generation"] = json!(origin.generation);
-    if let Err(error) = data
-        .view_source_events
-        .send("view-process-ended", ended)
-    {
+    if let Err(error) = data.view_source_events.send("view-process-ended", ended) {
         log_error("view channel", error);
     }
     replace();
@@ -1864,20 +1774,8 @@ fn view_message(
         }
         Ok(ViewDispatch::Call(payload)) => {
             let payload = tag_view_generation(payload, origin.generation);
-            if let Err(error) =
-                crate::windows::emit_view_source_event(window, "view-call", payload)
+            if let Err(error) = crate::windows::emit_view_source_event(window, "view-call", payload)
             {
-                log_error("view channel", error);
-            }
-            return;
-        }
-        Ok(ViewDispatch::Snapshot(payload)) => {
-            let payload = tag_view_generation(payload, origin.generation);
-            if let Err(error) = crate::windows::emit_view_source_event(
-                window,
-                DECLARED_SNAPSHOT_WINDOW_EVENT,
-                payload,
-            ) {
                 log_error("view channel", error);
             }
             return;
@@ -1958,8 +1856,7 @@ fn view_log_message(
     let reply_call = call.clone();
     let posted = on_main(window, move || {
         let current = window_data(&reply_window)?;
-        if current.view_source_origins.current_view(&reply_surface)
-            != Some(reply_origin.generation)
+        if current.view_source_origins.current_view(&reply_surface) != Some(reply_origin.generation)
             || !current
                 .documents
                 .views()
@@ -3138,10 +3035,7 @@ pub fn view_event_message(event: &ViewEventRequest) -> Result<Value, String> {
     if event.generation == 0 {
         return Err("view event has no source generation".to_string());
     }
-    crate::source_origins::validate_view_source_generation_limit(
-        event.generation,
-        "view event",
-    )?;
+    crate::source_origins::validate_view_source_generation_limit(event.generation, "view event")?;
     if event.event.is_empty() {
         return Err("view event has an empty event name".to_string());
     }
@@ -3159,10 +3053,7 @@ pub fn view_reply_message(reply: &ViewReply) -> Result<Value, String> {
     if reply.generation == 0 {
         return Err("view reply has no source generation".to_string());
     }
-    crate::source_origins::validate_view_source_generation_limit(
-        reply.generation,
-        "view reply",
-    )?;
+    crate::source_origins::validate_view_source_generation_limit(reply.generation, "view reply")?;
     match (&reply.result, &reply.error) {
         (None, None) => Err(format!(
             "view reply {} has neither a result nor an error",

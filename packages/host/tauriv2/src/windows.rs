@@ -118,7 +118,6 @@ fn is_view_source_event(name: &str) -> bool {
         name,
         "view-source-registered"
             | "view-source-ended"
-            | "declared-ui-snapshot"
             | "view-call"
             | "view-reply"
             | "view-process-ended"
@@ -132,9 +131,7 @@ pub(crate) fn emit_view_source_event(
     name: &str,
     value: Value,
 ) -> Result<(), String> {
-    window_data(window)?
-        .view_source_events
-        .send(name, value)
+    window_data(window)?.view_source_events.send(name, value)
 }
 
 pub(crate) fn register_view_source_event_stream(
@@ -147,9 +144,7 @@ pub(crate) fn register_view_source_event_stream(
         window.label(),
         "view source event stream",
     )?;
-    window_data(&window)?
-        .view_source_events
-        .install(channel);
+    window_data(&window)?.view_source_events.install(channel);
     Ok(())
 }
 

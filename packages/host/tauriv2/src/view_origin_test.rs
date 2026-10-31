@@ -52,7 +52,6 @@ mod view_decode {
         for message in [
             json!({"reply": 1, "result": {"items": [1, 2, 3]}}),
             json!({"id": 2, "command": "probe.run", "params": {"items": [1, 2, 3]}}),
-            json!({"event": "declared-ui.snapshot", "plugin": "probe", "status": "state", "seq": 1, "skipped": 0, "value": {"items": [1, 2, 3]}}),
             json!({"event": "view.ready", "plugin": "probe", "document": "doc-1", "time_origin": 1791948729050.0}),
         ] {
             let channels = ViewChannels::default();
@@ -72,10 +71,26 @@ mod view_decode {
                 ViewDispatch::Reply(payload) => assert_eq!(payload["result"], message["result"]),
                 ViewDispatch::Call(payload) => assert_eq!(payload["params"], message["params"]),
                 ViewDispatch::Log(_) => panic!("the probe command is not a log request"),
-                ViewDispatch::Snapshot(payload) => assert_eq!(payload["value"], message["value"]),
                 ViewDispatch::Ready(ready) => assert_eq!(ready, Ok(true)),
             }
         }
+    }
+
+    // contract: view.message.unknown-event
+    #[test]
+    fn view_dispatch_refuses_an_unknown_event_and_forwards_nothing() {
+        let channels = ViewChannels::default();
+        channels.register("surface", "probe", 1);
+        let dispatched = channels.dispatch(
+            "surface",
+            r#"{"message":{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null,"skipped":0}}"#,
+        );
+        assert_eq!(
+            dispatched,
+            Ok(ViewDispatch::Ready(Err(
+                "surface: view event \"declared-ui.snapshot\" is unknown".to_string()
+            ))),
+        );
     }
 
     // contract: tauriv2.view.dispatch.preserves-precedence-and-errors
@@ -535,19 +550,18 @@ fn a_view_process_end_retires_its_origin_before_replacement_registration() {
     let data = WindowData::default();
     let received = Arc::new(Mutex::new(Vec::<ViewSourceEvent>::new()));
     let destination = received.clone();
-    data.view_source_events
-        .install(Channel::new(move |body| {
-            let InvokeResponseBody::Json(value) = body else {
-                panic!("view source event uses a raw channel payload");
-            };
-            let event = serde_json::from_str(&value)
-                .expect("the channel payload is a view source event");
-            destination
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .push(event);
-            Ok(())
-        }));
+    data.view_source_events.install(Channel::new(move |body| {
+        let InvokeResponseBody::Json(value) = body else {
+            panic!("view source event uses a raw channel payload");
+        };
+        let event =
+            serde_json::from_str(&value).expect("the channel payload is a view source event");
+        destination
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(event);
+        Ok(())
+    }));
 
     let old_generation = data
         .view_source_origins
@@ -581,10 +595,7 @@ fn a_view_process_end_retires_its_origin_before_replacement_registration() {
             );
         },
         || {
-            assert_eq!(
-                data.view_source_origins.current_view("probe-surface"),
-                None
-            );
+            assert_eq!(data.view_source_origins.current_view("probe-surface"), None);
             assert_eq!(data.documents.views().generation("probe-surface"), None);
             let replacement = register_view_source(
                 &data.view_source_origins,

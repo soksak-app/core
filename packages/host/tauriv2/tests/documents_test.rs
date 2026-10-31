@@ -932,97 +932,6 @@ fn view_call_request_carries_the_cids_of_its_cause_and_refuses_invalid_ones() {
     );
 }
 
-// contract: view.declared-ui.snapshot
-#[test]
-fn view_declared_snapshot_is_forwarded_with_its_surface_and_plugin() {
-    let channels = ViewChannels::default();
-    channels.register("probe-surface", "probe", 1);
-    assert_eq!(
-        channels.snapshot(
-            "probe-surface",
-            r#"{"message":{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":3,"value":{"elements":[]},"skipped":1}}"#,
-        ),
-        Ok(Some(json!({
-            "surface": "probe-surface",
-            "plugin": "probe",
-            "status": "probe.lines",
-            "seq": 3,
-            "skipped": 1,
-            "value": {"elements": []}
-        }))),
-        "a snapshot is forwarded with its surface and plugin"
-    );
-    // A value of null stays present: the receiver validates it like any other value (docs/spec/declared-ui.md).
-    assert_eq!(
-        channels.snapshot(
-            "probe-surface",
-            r#"{"message":{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null,"skipped":0}}"#,
-        ),
-        Ok(Some(json!({
-            "surface": "probe-surface",
-            "plugin": "probe",
-            "status": "probe.lines",
-            "seq": 1,
-            "skipped": 0,
-            "value": null
-        }))),
-        "a snapshot with a null value keeps the value present"
-    );
-    assert_eq!(
-        channels.snapshot("probe-surface", READY),
-        Ok(None),
-        "a ready message is not a snapshot"
-    );
-}
-
-// contract: view.declared-ui.snapshot
-#[test]
-fn view_declared_snapshot_invalid_fields_are_errors_not_forwarded() {
-    let channels = ViewChannels::default();
-    channels.register("probe-surface", "probe", 1);
-    for (message, want) in [
-        (
-            r#"{"event":"declared-ui.snapshot","status":"probe.lines","seq":1,"value":null,"skipped":0}"#,
-            "probe-surface: declared UI snapshot names no plugin",
-        ),
-        (
-            r#"{"event":"declared-ui.snapshot","plugin":"other","status":"probe.lines","seq":1,"value":null,"skipped":0}"#,
-            "probe-surface: declared UI snapshot names plugin \"other\", want plugin \"probe\"",
-        ),
-        (
-            r#"{"event":"declared-ui.snapshot","plugin":"probe","seq":1,"value":null,"skipped":0}"#,
-            "probe-surface: declared UI snapshot has no status",
-        ),
-        (
-            r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"","seq":1,"value":null,"skipped":0}"#,
-            "probe-surface: declared UI snapshot has no status",
-        ),
-        (
-            r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","value":null,"skipped":0}"#,
-            "probe-surface: declared UI snapshot of status \"probe.lines\" has no seq from 1",
-        ),
-        (
-            r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":0,"value":null,"skipped":0}"#,
-            "probe-surface: declared UI snapshot of status \"probe.lines\" has no seq from 1",
-        ),
-        (
-            r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null}"#,
-            "probe-surface: declared UI snapshot of status \"probe.lines\" has no skipped count",
-        ),
-        (
-            r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"skipped":0}"#,
-            "probe-surface: declared UI snapshot of status \"probe.lines\" has no value",
-        ),
-    ] {
-        let wrapped = format!(r#"{{"message":{message}}}"#);
-        assert_eq!(
-            channels.snapshot("probe-surface", &wrapped),
-            Err(want.to_string()),
-            "the snapshot {message} is an error, not a forwarding"
-        );
-    }
-}
-
 // contract: view.call.reply
 #[test]
 fn view_call_reply_is_the_channel_message_with_its_id() {
@@ -1165,7 +1074,7 @@ fn view_commands_reject_generations_above_the_javascript_safe_integer_limit() {
     let event = ViewEventRequest {
         surface: "probe-surface".into(),
         generation,
-        event: "declared-ui.snapshot.ack".into(),
+        event: "probe.event".into(),
         data: Some(json!({"status":"items","seq":1})),
     };
 

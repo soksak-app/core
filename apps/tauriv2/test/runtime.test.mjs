@@ -53,7 +53,7 @@ test("ordered main events register before subscribers proceed and dispatch throu
     const { host } = await import("../runtime/index.js?test=ordered-main-events");
     const delivered = [];
     const eventNames = [
-      "view-source-registered", "view-source-ended", "declared-ui-snapshot",
+      "view-source-registered", "view-source-ended",
       "view-call", "view-reply", "view-process-ended", "view-stopped", "view-responsiveness",
     ];
     let queryStarted = false;

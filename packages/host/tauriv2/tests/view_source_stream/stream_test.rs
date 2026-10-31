@@ -33,10 +33,10 @@ fn source_events_are_sent_to_the_current_channel_in_call_order() {
         .expect("source registration is sent");
     stream
         .send(
-            "declared-ui-snapshot",
-            json!({"plugin":"probe","generation":4,"seq":1}),
+            "view-reply",
+            json!({"plugin":"probe","generation":4,"id":6}),
         )
-        .expect("snapshot is sent");
+        .expect("host reply is sent");
     stream
         .send("view-call", json!({"plugin":"probe","generation":4,"id":7}))
         .expect("host call is sent");
@@ -51,8 +51,8 @@ fn source_events_are_sent_to_the_current_channel_in_call_order() {
                 value: json!({"plugin":"probe","generation":4}),
             },
             ViewSourceEvent {
-                name: "declared-ui-snapshot".into(),
-                value: json!({"plugin":"probe","generation":4,"seq":1}),
+                name: "view-reply".into(),
+                value: json!({"plugin":"probe","generation":4,"id":6}),
             },
             ViewSourceEvent {
                 name: "view-call".into(),

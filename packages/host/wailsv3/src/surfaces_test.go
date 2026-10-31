@@ -489,7 +489,6 @@ type channelPlatform struct {
 	receive       func(string)
 	posted        []string
 	postedOnUI    []bool
-	messageOnSet  string
 	messageOnLoad string
 	beforeUITask  func()
 	afterPost     func()
@@ -525,9 +524,6 @@ func (p *channelPlatform) LoadDocument(document unsafe.Pointer, url string) bool
 
 func (p *channelPlatform) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
 	p.receive = message
-	if p.messageOnSet != "" {
-		message(p.messageOnSet)
-	}
 	return nil
 }
 
@@ -552,9 +548,8 @@ func hostMessage(value string) string {
 }
 
 // contract: view.source-registration-precedes-provider-messages
-func TestViewSourceRegistrationPrecedesFirstSnapshotAndStatusRegistration(t *testing.T) {
+func TestViewSourceRegistrationPrecedesFirstStatusRegistration(t *testing.T) {
 	fake := &channelPlatform{
-		messageOnSet:  hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"lines","seq":1,"skipped":0,"value":{"text":"first"}}`),
 		messageOnLoad: hostMessage(`{"id":1,"command":"runtime.native.call","plugin":"probe","params":{"name":"registered","payload":{"kind":"status","name":"probe.lines"}}}`),
 	}
 	saved := system
@@ -569,11 +564,11 @@ func TestViewSourceRegistrationPrecedesFirstSnapshotAndStatusRegistration(t *tes
 	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
 		t.Fatal(err)
 	}
-	if len(events) < 3 || events[0].name != "view-source-registered" || events[1].name != "declared-ui-snapshot" || events[2].name != "view-call" {
-		t.Fatalf("source lifecycle and first provider messages were ordered %v, want registration, snapshot, then status registration call", events)
+	if len(events) < 2 || events[0].name != "view-source-registered" || events[1].name != "view-call" {
+		t.Fatalf("source lifecycle and first provider messages were ordered %v, want registration, then status registration call", events)
 	}
 	generation := events[0].data.(map[string]any)["generation"]
-	for i, event := range events[:3] {
+	for i, event := range events[:2] {
 		data, ok := event.data.(map[string]any)
 		if !ok || data["plugin"] != "probe" || data["surface"] != "probe-surface" || data["generation"] != generation {
 			t.Fatalf("event %d does not carry the registered view identity: %+v", i, event)
@@ -767,59 +762,21 @@ func TestViewCallIsForwardedWithItsPluginAndSurface(t *testing.T) {
 	}
 }
 
-// contract: view.declared-ui.snapshot
-func TestViewDeclaredSnapshotIsForwardedWithItsSurfaceAndPlugin(t *testing.T) {
-	payload, ok, err := DeclaredSnapshotEvent("probe-surface", "probe", json.RawMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":3,"value":{"elements":[]},"skipped":1}`))
-	if err != nil {
-		t.Fatalf("snapshot: %v", err)
+// contract: view.message.unknown-event
+func TestViewMessageRefusesAnUnknownEventAndForwardsNothing(t *testing.T) {
+	s, _ := newViewChannelSurfaces(t)
+	events := []hostEvent{}
+	s.events = func(name string, data any) { events = append(events, hostEvent{name, data}) }
+	if err := s.viewMessage("probe-surface", hostMessage(`{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}`)); err != nil {
+		t.Fatalf("ready message: %v", err)
 	}
-	if !ok {
-		t.Fatalf("a declared UI snapshot is not forwarded")
+	before := len(events)
+	err := s.viewMessage("probe-surface", hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null,"skipped":0}`))
+	if err == nil || err.Error() != `probe-surface: view event "declared-ui.snapshot" is unknown` {
+		t.Fatalf("unknown event: %v, want probe-surface: view event \"declared-ui.snapshot\" is unknown", err)
 	}
-	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["status"] != "probe.lines" || payload["seq"] != uint64(3) || payload["skipped"] != uint64(1) {
-		t.Fatalf("forwarded payload %v, want surface probe-surface, plugin probe, status probe.lines, seq 3, skipped 1", payload)
-	}
-	value, ok := payload["value"].(json.RawMessage)
-	if !ok || string(value) != `{"elements":[]}` {
-		t.Fatalf("forwarded value %v, want the value of the snapshot", payload["value"])
-	}
-	// A value of null stays present: the receiver validates it like any other value (docs/spec/declared-ui.md).
-	payload, ok, err = DeclaredSnapshotEvent("probe-surface", "probe", json.RawMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null,"skipped":0}`))
-	if err != nil || !ok {
-		t.Fatalf("snapshot with a null value: ok %v, err %v", ok, err)
-	}
-	if value, ok := payload["value"].(json.RawMessage); !ok || string(value) != "null" {
-		t.Fatalf("forwarded value %v, want null", payload["value"])
-	}
-	if _, ok, _ := DeclaredSnapshotEvent("probe-surface", "probe", json.RawMessage(`{"event":"view.ready","plugin":"probe","document":"doc-1"}`)); ok {
-		t.Fatalf("a ready message is forwarded as a snapshot")
-	}
-}
-
-// contract: view.declared-ui.snapshot
-func TestViewDeclaredSnapshotInvalidFieldsAreErrorsNotForwarded(t *testing.T) {
-	for _, test := range []struct{ message, want string }{
-		{`{"event":"declared-ui.snapshot","status":"probe.lines","seq":1,"value":null,"skipped":0}`, `probe-surface: declared UI snapshot names no plugin`},
-		{`{"event":"declared-ui.snapshot","plugin":"other","status":"probe.lines","seq":1,"value":null,"skipped":0}`, `probe-surface: declared UI snapshot names plugin "other", want plugin "probe"`},
-		{`{"event":"declared-ui.snapshot","plugin":"probe","seq":1,"value":null,"skipped":0}`, `probe-surface: declared UI snapshot has no status`},
-		{`{"event":"declared-ui.snapshot","plugin":"probe","status":"","seq":1,"value":null,"skipped":0}`, `probe-surface: declared UI snapshot has no status`},
-		{`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","value":null,"skipped":0}`, `probe-surface: declared UI snapshot of status "probe.lines" has no seq from 1`},
-		{`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":0,"value":null,"skipped":0}`, `probe-surface: declared UI snapshot of status "probe.lines" has no seq from 1`},
-		{`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null}`, `probe-surface: declared UI snapshot of status "probe.lines" has no skipped count`},
-		{`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"skipped":0}`, `probe-surface: declared UI snapshot of status "probe.lines" has no value`},
-	} {
-		payload, _, err := DeclaredSnapshotEvent("probe-surface", "probe", json.RawMessage(test.message))
-		if err == nil || err.Error() != test.want {
-			t.Fatalf("message %s: %v, want %s", test.message, err, test.want)
-		}
-		if payload != nil {
-			t.Fatalf("message %s returns payload %v with its error", test.message, payload)
-		}
-	}
-	// A snapshot that names another plugin is an error, not a forwarding.
-	payload, ok, err := DeclaredSnapshotEvent("probe-surface", "other", json.RawMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null,"skipped":0}`))
-	if err == nil || err.Error() != `probe-surface: declared UI snapshot names plugin "probe", want plugin "other"` || payload != nil || !ok {
-		t.Fatalf("foreign plugin: ok %v, payload %v, err %v", ok, payload, err)
+	if len(events) != before {
+		t.Fatalf("an unknown event forwarded %v", events[before:])
 	}
 }
 
