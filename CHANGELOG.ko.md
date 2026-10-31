@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F292-34: F292 window check의 수정을 담은 plugin과 sidecar release가 core v0.0.21 뒤에 게시되었고 registry에 올라 있다.
 - F314: plugin specification은 plugin과 sidecar repository가 core release의 pack된 release 파일에 의존하고, `CORE_RELEASE`의 `sok`와 `soksak-release-gate`로 `main`에서 release한다고 밝힌다.
 - F313: Tauri host test의 crash report watch는 `<application>-*.ips`만 받아들인다. 그래서 시스템이 저장된 report로 rename하는 숨김 파일을 지우지 않는다.
 - F312: F301-1, F303, F305-2의 Tauri host test가 `tauriv2 only` contract case를 선언한다.
