@@ -63,3 +63,35 @@ func TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending(t *testi
 	default:
 	}
 }
+
+// contract: page.start.snapshot-error-carries-controls
+func TestAFailedWorkspaceSnapshotStillReadsTheControlsAndCarriesTheError(t *testing.T) {
+	var commons []Record
+	read := false
+	workspace, workspaceErr, controls, err := startParts(nil, errors.New("/config/projects.json: projects format 1 is required"),
+		func(common Record) error {
+			commons = append(commons, common)
+			return nil
+		},
+		func() (Chrome, error) {
+			read = true
+			return Chrome{Controls: Rect{X: 7, Y: 8, W: 52, H: 14}, Row: 40}, nil
+		})
+	if !read {
+		t.Fatal("the controls were not read after the snapshot failed")
+	}
+	if len(commons) != 1 || len(commons[0]) != 0 {
+		t.Fatalf("title bar commons %v, want one set for absent settings", commons)
+	}
+	if err != nil {
+		t.Fatalf("a failed snapshot answered no start document: %v", err)
+	}
+	data, err := StartDocument(workspace, workspaceErr, controls, []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"error":"/config/projects.json: projects format 1 is required","controls":{"controls":{"x":7,"y":8,"w":52,"h":14},"row":40},"pendingSurfaces":[]}`
+	if string(data) != want {
+		t.Fatalf("start document %s", data)
+	}
+}

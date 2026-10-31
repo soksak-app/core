@@ -24,13 +24,47 @@ const windowIDHeader = "x-wails-window-id"
 // ErrNoStartWindow is the error for a start document request that points to no window.
 var ErrNoStartWindow = errors.New("the start document request names no window")
 
-// StartDocument is the start document that carries the workspace snapshot and the window button reply.
-func StartDocument(workspace any, controls Chrome, pendingSurfaces []string) ([]byte, error) {
-	return json.Marshal(struct {
-		Workspace       any      `json:"workspace"`
+// StartDocument is the start document that carries the workspace snapshot, or the error of the snapshot in its place, and the window button reply.
+func StartDocument(workspace any, workspaceErr error, controls Chrome, pendingSurfaces []string) ([]byte, error) {
+	document := struct {
+		Workspace       any      `json:"workspace,omitempty"`
+		Error           string   `json:"error,omitempty"`
 		Controls        Chrome   `json:"controls"`
 		PendingSurfaces []string `json:"pendingSurfaces"`
-	}{workspace, controls, pendingSurfaces})
+	}{Controls: controls, PendingSurfaces: pendingSurfaces}
+	if workspaceErr != nil {
+		document.Error = workspaceErr.Error()
+	} else {
+		document.Workspace = workspace
+	}
+	return json.Marshal(document)
+}
+
+// startParts returns the workspace part and the window button reply of a start document. The title bar is set to the first-row height of the common settings of the snapshot before the
+// controls are read (docs/spec/native-surfaces.md#title-bar-height). When the snapshot fails, the title bar takes the height for absent settings and the snapshot error takes the place
+// of the workspace, so the page reserves the window button area before it shows the error (docs/spec/native-host.md#page-start).
+func startParts(snapshot any, snapshotErr error, titlebar func(Record) error, controls func() (Chrome, error)) (any, error, Chrome, error) {
+	common := Record{}
+	if snapshotErr == nil {
+		record, ok := snapshot.(Record)
+		settings, has := record["common"].(Record)
+		if ok && has {
+			common = settings
+		} else {
+			snapshotErr = errors.New("the workspace snapshot has no common settings")
+		}
+	}
+	if err := titlebar(common); err != nil {
+		return nil, nil, Chrome{}, err
+	}
+	chrome, err := controls()
+	if err != nil {
+		return nil, nil, Chrome{}, err
+	}
+	if snapshotErr != nil {
+		return nil, snapshotErr, chrome, nil
+	}
+	return snapshot, nil, chrome, nil
 }
 
 // StartAssets passes a start document request to start with the number of the requesting window and passes other paths to next. When the window is not found, it answers 400 without starting
@@ -101,24 +135,13 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 	// The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md rule 7).
 	s.sidecars.closePluginSessions(s, func(pluginSession) bool { return true })
 	s.discardOverlay()
-	snapshot, err := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
-	if err != nil {
-		return nil, err
-	}
+	snapshot, snapshotErr := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
 	// The first draw of the page does not wait for the preparation, so the title bar is first set to the height of that first row and then the controls are read.
 	// (docs/spec/native-surfaces.md#title-bar-height).
-	record, ok := snapshot.(Record)
-	common, has := record["common"].(Record)
-	if !ok || !has {
-		return nil, errors.New("the workspace snapshot has no common settings")
-	}
-	if err := s.startTitlebar(common); err != nil {
-		return nil, err
-	}
-	controls, err := s.WindowChrome()
+	workspace, workspaceErr, controls, err := startParts(snapshot, snapshotErr, s.startTitlebar, s.WindowChrome)
 	if err != nil {
 		return nil, err
 	}
 	// The list is read after the detaches start, so a detach that ends later is told by its image-detach-ended event.
-	return StartDocument(snapshot, controls, s.pendingImageDetachSurfaces())
+	return StartDocument(workspace, workspaceErr, controls, s.pendingImageDetachSurfaces())
 }

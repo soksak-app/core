@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F322: When the workspace snapshot of a page start fails, both hosts answer the start document with the window controls and the snapshot error instead of 500, and the main page reserves the window button area before it shows the error and stops, so the window buttons no longer cover the logo of a page that stopped.
 - F321-3: The main page registers the installed plugins that it accepts and shows the error of each refused plugin, or of an `error` document of `/installed-plugins.json`, instead of stopping its start; a staged page of a plugin starts beside a refused plugin. `@soksak/plugin-api` exports `acceptInstalledPlugins`.
 - F321-5: The internal declaration tests of both hosts assert the contract of F321: a declaration whose `sidecar.json` does not parse succeeds and notifies `host.sidecars` once.
 - F321-2: A project settings file that is refused is reported at its project: the snapshot gives the project `settingsError`, the window does not open that project and reports the error, and the other projects and the page start. Before, one such file failed the snapshot and the page did not start.

@@ -8245,6 +8245,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F322",
+    implementation: [
+      { file: "packages/host/wailsv3/src/start.go", symbol: "func startParts(" },
+      { file: "packages/host/tauriv2/src/start.rs", symbol: "pub(crate) fn start_parts(" },
+      { file: "packages/workbench/index.html", symbol: "if (start.error !== undefined) {" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/start_test.go", id: "TestAFailedWorkspaceSnapshotStillReadsTheControlsAndCarriesTheError" },
+      { file: "packages/host/tauriv2/src/start_test.rs", id: "a_failed_workspace_snapshot_still_reads_the_controls_and_carries_the_error" },
+      { file: "e2e/start-failure.test.mjs", id: "a failed workspace snapshot stops the page start with a shown and logged error" },
+    ],
+    expected: "On a failed workspace snapshot both hosts set the title bar for absent settings, read the controls and answer the start document with the error, and the page reserves the window button area before it shows the error and stops.",
+    levels: ["native", "application"],
+  },
+  {
     id: "F321-5",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) checkDeclaration(" },

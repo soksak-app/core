@@ -1,5 +1,6 @@
 // An installed plugin whose manifest the page refuses is left out with its error shown and in the application log, and the page
-// starts without it (docs/spec/installation.md#serving-installed-plugins).
+// starts without it (docs/spec/installation.md#serving-installed-plugins). A workspace snapshot that fails stops the page start with
+// its error shown and in the application log (docs/spec/native-host.md#page-start).
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -37,5 +38,29 @@ for (const app of Object.values(APPS)) {
     assert.ok(line, `the start failure wrote no error line: ${JSON.stringify(errors)}`);
     t.diagnostic(`logged: ${line}`);
 
+  });
+
+  test(`${app.name}: a failed workspace snapshot stops the page start with a shown and logged error`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    // projects.json of another form fails the workspace snapshot of the start document.
+    const file = join(s.app.configDir, "projects.json");
+    const original = readFileSync(file, "utf8");
+    s.cleanup(async () => {
+      writeFileSync(file, original);
+      await s.run("host.window.reload");
+    });
+    writeFileSync(file, "[]");
+
+    const pattern = /^error page page: .*projects\.json/;
+    s.expectError(pattern);
+    // A page whose start stopped does not report ready, so the reload exceeds its deadline, which the host records.
+    s.expectError(/^error host endpoint timeout: command\.run: the reloaded page did not report ready within 10s; running host calls: .+$/);
+    await assert.rejects(s.run("host.window.reload"), /did not|not ready|within/);
+    await s.flushLog();
+    const { errors } = readEventErrors(s.app.configDir, s.eventStart);
+    const line = errors.find((item) => pattern.test(item));
+    assert.ok(line, `the snapshot failure wrote no error line: ${JSON.stringify(errors)}`);
+    t.diagnostic(`logged: ${line}`);
   });
 }

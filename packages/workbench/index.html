@@ -101,6 +101,12 @@ reportUncaught(globalThis, showError);
    document is applied first so that the first row does not cover the window buttons even when the start stops. */
 let controlsWidth = 0;
 if (chrome) applyControls(start.controls);
+/* A start document whose workspace snapshot failed carries the error in place of the workspace, and the window button area is
+   reserved above, so the error is shown and the start stops here without reporting ready (docs/spec/native-host.md#page-start). */
+if (start.error !== undefined) {
+  showError(start.error);
+  await new Promise(() => {});
+}
 
 installExposure(exposureFile);
 // An installed plugin that the page refuses is left out and its error is shown, so the other plugins and the page start. An

@@ -24,32 +24,67 @@ pub const PAGE_ORIGIN: &str = "tauri://localhost";
 /// The error when the requesting webview is not the main webview of any window.
 pub const NO_WINDOW: &str = "the start document request names no window";
 
-/// The start document that holds the workspace snapshot and the window button reply.
+/// The start document that holds the workspace snapshot, or the error of the snapshot in its place, and the window button
+/// reply.
 pub fn start_document(
-    workspace: &Value,
+    workspace: &Result<Value, String>,
     controls: &Value,
     pending_surfaces: &[String],
 ) -> Result<Vec<u8>, String> {
     #[derive(serde::Serialize)]
     #[serde(rename_all = "camelCase")]
     struct Document<'a> {
-        workspace: &'a Value,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        workspace: Option<&'a Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<&'a str>,
         controls: &'a Value,
         pending_surfaces: &'a [String],
     }
+    let (workspace, error) = match workspace {
+        Ok(workspace) => (Some(workspace), None),
+        Err(error) => (None, Some(error.as_str())),
+    };
     serde_json::to_vec(&Document {
         workspace,
+        error,
         controls,
         pending_surfaces,
     })
     .map_err(|error| error.to_string())
 }
 
+/// The workspace part and the window button reply of a start document. The title bar is set to the first-row height of the
+/// common settings of the snapshot before the controls are read (docs/spec/native-surfaces.md#title-bar-height). When the
+/// snapshot fails, the title bar takes the height for absent settings and the snapshot error takes the place of the
+/// workspace, so the page reserves the window button area before it shows the error (docs/spec/native-host.md#page-start).
+pub(crate) fn start_parts(
+    snapshot: Result<Value, String>,
+    titlebar: impl FnOnce(&Value) -> Result<(), String>,
+    controls: impl FnOnce() -> Result<Value, String>,
+) -> Result<(Result<Value, String>, Value), String> {
+    let workspace = snapshot.and_then(|snapshot| {
+        if snapshot.get("common").is_some_and(Value::is_object) {
+            Ok(snapshot)
+        } else {
+            Err("the workspace snapshot has no common settings".to_string())
+        }
+    });
+    let absent = Value::Object(serde_json::Map::new());
+    titlebar(
+        workspace
+            .as_ref()
+            .map_or(&absent, |snapshot| &snapshot["common"]),
+    )?;
+    let controls = controls()?;
+    Ok((workspace, controls))
+}
+
 /// Runs the page start, which sends the image detaches without waiting for them, then builds the parts of the document,
 /// and reads the pending surfaces last, so a detach that ends later is told by its image-detach-ended event.
 pub(crate) fn after_page_started(
     page_started: impl FnOnce() -> Result<(), String>,
-    parts: impl FnOnce() -> Result<(Value, Value), String>,
+    parts: impl FnOnce() -> Result<(Result<Value, String>, Value), String>,
     pending_surfaces: impl FnOnce() -> Result<Vec<String>, String>,
 ) -> Result<Vec<u8>, String> {
     page_started()?;
@@ -109,22 +144,19 @@ pub(crate) fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, Stri
     after_page_started(
         || crate::windows::page_started(&window),
         || {
-            let snapshot = crate::workspace::handle(
-                app,
-                serde_json::from_value(serde_json::json!({ "kind": "snapshot" }))
-                    .map_err(|error| error.to_string())?,
-            )?;
+            let snapshot = serde_json::from_value(serde_json::json!({ "kind": "snapshot" }))
+                .map_err(|error| error.to_string())
+                .and_then(|request| crate::workspace::handle(app, request));
             // The first draw of the page does not wait for readiness, so the title bar is first set to the height of that first
-            // row, and then the controls are read.
-            // (docs/spec/native-surfaces.md#title-bar-height).
-            let common = snapshot
-                .get("common")
-                .filter(|common| common.is_object())
-                .ok_or("the workspace snapshot has no common settings")?;
-            crate::windows::start_titlebar(&window, common)?;
-            let controls = serde_json::to_value(crate::windows::window_chrome(&window)?)
-                .map_err(|error| error.to_string())?;
-            Ok((snapshot, controls))
+            // row, and then the controls are read (docs/spec/native-surfaces.md#title-bar-height).
+            start_parts(
+                snapshot,
+                |common| crate::windows::start_titlebar(&window, common),
+                || {
+                    serde_json::to_value(crate::windows::window_chrome(&window)?)
+                        .map_err(|error| error.to_string())
+                },
+            )
         },
         || {
             Ok(crate::windows::window_data(&window)?

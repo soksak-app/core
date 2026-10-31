@@ -956,6 +956,7 @@ fn invalid_json_closes_connection() {
 | `installed.json.invalid-text` | `installed.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
 | `installed.package-json.invalid-text` | 켜진 plugin의 `package.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
 | `page.start.document` | 시작 문서는 작업 공간 스냅샷, window의 `windowControls` 답, pending image detach가 있는 surface의 byte 순서 목록을 이 순서로 담은 `{"workspace":...,"controls":...,"pendingSurfaces":[...]}`다. | both |
+| `page.start.snapshot-error-carries-controls` | page 시작의 작업 공간 스냅샷이 실패하면 host는 설정이 없을 때의 title bar를 설정하고, 그 뒤 `windowControls`를 읽으며, `workspace` 대신 스냅샷 오류를 담은 `{"error":...,"controls":...,"pendingSurfaces":[...]}`로 답한다. | both |
 | `page.start.requires-window` | 시작 문서 요청은 요청한 window를 시작한 뒤 문서를 `no-store`인 `application/json`으로 답하고, 요청이 window를 가리키지 않으면 아무것도 시작하지 않고 400과 `the start document request names no window`로 실패하며, 시작이 실패하면 500과 그 이유로 실패한다. | both |
 | `page.start.sok-core-owner` | Tauri는 시작 문서를 `soksak://core/start.json`에서 내보낸다. 다른 owner의 `soksak` 주소는 창을 시작하지 않고 404와 `soksak://<owner>/start.json not found`로 답한다. | tauriv2 only: Wails는 시작 문서를 asset server의 `/start.json`에서 내보낸다 |
 | `plugins.state.reports-registry-and-installed` | `pluginsState`는 `plugins/registry.json`이 없으면 `registry`와 `index`를 `null`로, 있으면 index URL과 검사한 index를, 읽거나 검사하지 못한 index는 `index`를 `{"error":...}`로 돌려주고, `installed.json`의 내용 또는 없을 때 빈 format 1 문서를 돌려준다. | both |

@@ -7,7 +7,7 @@ use soksak_host_tauriv2::start;
 #[test]
 fn start_document_carries_the_workspace_and_the_window_controls() {
     let data = start::start_document(
-        &json!({"common": {}, "projects": []}),
+        &Ok(json!({"common": {}, "projects": []})),
         &json!({"controls": {"x": 7.0, "y": 8.0, "w": 52.0, "h": 14.0}, "row": 32.0}),
         &["tab-a".to_string()],
     )

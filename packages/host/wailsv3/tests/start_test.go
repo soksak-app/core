@@ -14,7 +14,7 @@ import (
 
 // contract: page.start.document
 func TestStartDocumentCarriesTheWorkspaceAndTheWindowControls(t *testing.T) {
-	data, err := host.StartDocument(map[string]any{"common": map[string]any{}, "projects": []any{}},
+	data, err := host.StartDocument(map[string]any{"common": map[string]any{}, "projects": []any{}}, nil,
 		host.Chrome{Controls: host.Rect{X: 7, Y: 8, W: 52, H: 14}, Row: 32}, []string{"tab-a"})
 	if err != nil {
 		t.Fatal(err)

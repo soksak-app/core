@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F322: page 시작의 workspace 스냅샷이 실패하면 두 host가 500 대신 창 controls와 스냅샷 오류를 담은 시작 문서로 답하고, main page는 창 버튼 영역을 비운 뒤 오류를 보이고 멈춘다. 그래서 창 버튼이 멈춘 page의 logo를 더 이상 덮지 않는다.
 - F321-3: main page는 시작을 멈추는 대신 받아들인 설치 plugin을 등록하고, 거부된 각 plugin이나 `/installed-plugins.json`의 `error` 문서의 오류를 보인다. plugin의 staged page는 거부된 plugin 옆에서도 시작한다. `@soksak/plugin-api`가 `acceptInstalledPlugins`를 내보낸다.
 - F321-5: 두 host의 내부 선언 test가 F321의 계약을 검사한다. `sidecar.json`이 parse되지 않는 선언은 성공하고 `host.sidecars`에 한 번 알린다.
 - F321-2: 거부된 프로젝트 설정 파일은 그 프로젝트에서 보고된다. 스냅샷은 그 프로젝트에 `settingsError`를 주고, 창은 그 프로젝트를 열지 않고 오류를 보고하며, 다른 프로젝트와 페이지는 시작한다. 전에는 그런 파일 하나가 스냅샷을 실패시켜 페이지가 시작하지 않았다.
