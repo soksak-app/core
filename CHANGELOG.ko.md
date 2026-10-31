@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F300-2: macOS native code의 문서 영역은 닫힐 때까지 자신의 surface를 유지한다. 그래서 host가 먼저 닫은 surface 위의 영역을 닫아도 해제된 surface에 message를 보내지 않고, Wails host가 끝나지 않는다.
 - F300-4: host contract가 Wails host의 `log.fatal-error.writes-the-crash-file`을 정의하고, crash file 테스트가 그것을 선언한다.
 - F305-1: host의 record helper가 쓰는 기록마다 호출의 파일 이름과 줄인 field `site`를 담는다. 그래서 여러 호출이 같은 place와 text로 쓰는 오류도 자기 호출을 밝힌다.
 - F303: Tauri host의 layout step은 등록이 아직 surface handle을 가질 때만 그 handle을 쓴다. 그래서 창 close가 넣어진 step보다 먼저 닫은 surface가 더 이상 host를 `webviewSetSurfaceHidden`의 `SIGTRAP`으로 끝내지 않는다.

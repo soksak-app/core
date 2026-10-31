@@ -382,7 +382,9 @@ static void frameIdentityClose(SPDocumentView *view);
 // The number of navigations that the document has started. A progress change of a navigation does not change it, so the host
 // clears the ready document of a view only when a new navigation starts (docs/spec/native-surfaces.md, document-state).
 @property unsigned long long navigations;
-@property(assign) NSView *webSurface;
+// The surface that the document is placed on. The document observes its appearance until it closes, so it keeps the surface
+// until then, also when the host closes the surface first.
+@property(retain) NSView *webSurface;
 @property NSPoint offset;
 // The document streams (docs/spec/native-surfaces.md#document-streams). The host turns a stream on while it has a
 // subscriber; ready is set when the script of the current document is installed.
@@ -885,6 +887,7 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
     [_navigation release];
     [_countedNavigation release];
     [_eventMonitor release];
+    [_webSurface release];
     [self stopHiddenTimer];
     [super dealloc];
 }
@@ -2227,6 +2230,7 @@ void sp_document_close(void *handle) {
         view.eventMonitor = nil;
     }
     [view.webSurface removeObserver:view forKeyPath:@"effectiveAppearance" context:&kAppearanceContext];
+    view.webSurface = nil;
     view.event = NULL;
     view.eventContext = NULL;
     for (NSString *key in observedKeys()) [view removeObserver:view forKeyPath:key context:&kStateContext];

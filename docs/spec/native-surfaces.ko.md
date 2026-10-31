@@ -15,6 +15,7 @@ Tauri host의 native 이미지 표시 commit은 framework event callback 밖의 
 - 배치 라이브러리는 카드 사각형을 계산하고 카드 DOM 요소를 갱신한다.
 - 예제 컴포지터는 카드 사각형과 DOM 내부 여백으로 표면 사각형을 계산한다.
 - 호스트는 네이티브 뷰를 생성하고 표면 사각형을 적용한 뒤 실제 좌표를 반환한다.
+- 문서 영역은 자신이 놓인 surface의 appearance를 observe하므로, 영역이 닫힐 때까지 그 surface를 유지한다. 호스트는 surface를 그 위의 영역보다 먼저 닫을 수 있다(영역을 만드는 중에 surface가 제거되는 경우). 그때도 영역의 close는 살아 있는 surface에서 observation을 끝낸다.
 - macOS 표시 처리는 창의 단일 앱 DOM이 표시를 확인하고 보이는 모든 그림 영역에 정확한 현재 래스터가 준비된 뒤 네이티브 좌표를 커밋한다.
 
 호스트는 DOM과 네이티브 렌더링의 차이가 최대 한 프레임이라고 가정하지 않는다.

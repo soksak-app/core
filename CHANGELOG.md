@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F300-2: A document region of the macOS native code keeps its surface until the region closes, so the close of a region on a surface that the host closed first no longer messages a released surface and ends the Wails host.
 - F300-4: The host contract defines `log.fatal-error.writes-the-crash-file` for the Wails host, and the test of the crash file declares it.
 - F305-1: Each record that a record helper of a host writes carries the field `site`, the file name and line of the call, so an error that several calls write with the same place and text names its call.
 - F303: The layout steps of the Tauri host use a surface handle only while its registration still holds it, so a surface that a window close closed before a queued step no longer ends the host with `SIGTRAP` in `webviewSetSurfaceHidden`.

@@ -15,6 +15,7 @@ The Tauri host runs native image presentation commits through the native UI queu
 - The layout library computes card rectangles and updates their DOM elements.
 - The example compositor derives surface rectangles from card rectangles and DOM insets.
 - The host creates native views, applies surface rectangles, and reports actual geometry.
+- A document region keeps the surface that it is placed on until the region closes, because it observes the appearance of that surface; a host can close a surface before a region on it, as when a surface is removed while a region on it is created, and the close of the region then still ends its observation on a live surface.
 - The macOS presentation code commits native geometry after the window's single app DOM confirms presentation and every visible image region has its exact current raster.
 
 The host must not assume that DOM and native rendering differ by at most one frame.
