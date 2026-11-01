@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F355-4-2: native process identity library는 sidecar의 공통 기능이므로 core에 남는다. plugins 명세가 그것을 적고, F355-4-1이 만든 kit repository는 archive되었으며, core는 term `kit`이 도구를 가리키고 checklist reader가 사유가 있는 `Closed:`를 받는 records kit release 0.0.3을 pin한다. Red: `the records kit release that core pins defines the kit term`가 release 0.0.2에서 실패했다. Green: 통과한다.
 - F355-4-1-2: process identity kit `soksak-app/kit-process-identity-darwin`은 library, per-test runner를 쓰는 test, private API inventory 행, 명세를 담고, 그 release run이 `v0.0.1`을 게시했다.
 - F355-4-1-1: core는 term 목록이 `kit`을 정의하는 records kit release 0.0.2를 pin한다. Red: `the records kit release that core pins defines the kit term`가 release 0.0.1에서 실패했다. Green: 통과한다.
 - F355-3-4: plugin browser, editor, files, hwp, terminal과 sidecar files, VT는 core release의 `@soksak/plugin-api` 대신 records kit과 events kit release를 pin하고, manifest, exposure, engines, view, case 복사본 검사를 지웠다. application이 설치할 때 manifest를 검증하고, registry 검사가 각 plugin release의 exposed 이름을 각 listed core와 비교한다. 각 repository는 Red/Green test와 CI run을 통과한다.
