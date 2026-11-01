@@ -9,7 +9,7 @@
 import { emitEvent, reportRecord } from "./page-log.js";
 import { trace } from "./performance.js";
 import { host as bridge } from "@soksak/runtime";
-import { plugins } from "./registry.js";
+import { surfacePlugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
 import { gatedExposureReply, registerSurfacePort, registry } from "./exposure.js";
 import { logGate } from "./log-gate.js";
@@ -510,10 +510,10 @@ export const documents = native ? {
 
 /** The surface interface. Without an application it does nothing. */
 export const surfaces = native ? {
-    /* The plugin kinds that the application draws. Every plugin that has a surface is drawn here, so the registry is that
-       list. Writing names here would require editing this file whenever a plugin is added. */
+    /* The plugin kinds that the application draws. Every plugin that has a tab surface or a section surface is drawn here, so the
+       registry is that list. Writing names here would require editing this file whenever a plugin is added. */
     get kinds() {
-      return plugins().map((p) => p.id);
+      return surfacePlugins();
     },
 
     /** Sends one failure line to the application log. */

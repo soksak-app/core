@@ -56,6 +56,18 @@ export function plugin(id) {
   return found;
 }
 
+/**
+ * The ids of the plugins that draw a surface, in registration order: the plugins of the tab surfaces, then the plugins that declare
+ * only sections. The application draws each of them natively (docs/spec/plugins.md#sections).
+ */
+export const surfacePlugins = () => [...new Set([...registeredPlugins.map((p) => p.id), ...registeredSections.map((s) => s.plugin)])];
+
+/**
+ * Whether a surface {plugin, kind} keeps its session through the background path: only a tab of a plugin with background does; a
+ * section surface is not a tab (docs/spec/plugins.md#memory-saver).
+ */
+export const keepsBackground = ({ plugin: id, kind }) => kind === "tab" && Boolean(plugin(id).background);
+
 /** Returns whether the plugin is registered. A stored layout may have been made in another environment. */
 export const hasPlugin = (id) => registeredPlugins.some((p) => p.id === id);
 

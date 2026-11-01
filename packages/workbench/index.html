@@ -54,7 +54,7 @@ import { authorizeSurface, disposeSurfacesExcept, mountedSurface, onMountedChang
 import { prepareRetainedSurface, releaseRetainedSurfaceSlots } from "./retained-surface-mounts.js";
 import { memoryPlacement } from "./memory-placement.js";
 import { prepareSourceOriginIngress, startSourceOriginIngress } from "./source-origins.js";
-import { createMemorySaver } from "./memory-saver.js";
+import { createMemorySaver, unloadDeclaration } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
 import { onTabReports, reportTabState, reportTitle, setMountedTab, settleLeftTabs, tabKeeps, viewRefusal } from "./tab-reports.js";
 
@@ -228,10 +228,7 @@ const memorySaver = createMemorySaver({
   delay: () => value("memorySaverDelay"),
   // The unload of a tab comes from surface.unload of its plugin and the unload of a section surface from its section, as the
   // descriptor of the surface carries it (docs/spec/plugins.md#memory-saver).
-  declaration: ({ plugin, unload }) => {
-    if (registry.plugin(plugin).background) return "background";
-    return unload ? "unload" : "undeclared";
-  },
+  declaration: unloadDeclaration,
   keeps: tabKeeps,
   kept: (tab) => projects.tabStateStore()?.entry(tab)?.kept === true,
   setKept: (tab, on) => projects.tabStateStore().setKept(tab, on),
@@ -331,7 +328,7 @@ onCommit((record) => {
       (request) => host.place(request), host.kinds, {
         activeIds,
         mountedSurface,
-        background: ({ plugin }) => Boolean(registry.plugin(plugin).background),
+        background: (surface) => registry.keepsBackground({ plugin: surface.plugin, kind: surfaceKindOf(surface.surface).kind }),
         authorize: authorizeSurface,
         prepare: prepareRetainedSurface,
       }), { retain: ids, unload });

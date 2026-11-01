@@ -8001,6 +8001,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F338",
+    implementation: [
+      { file: "packages/workbench/registry.js", symbol: "export const surfacePlugins" },
+      { file: "packages/workbench/registry.js", symbol: "export const keepsBackground" },
+      { file: "packages/workbench/memory-saver.js", symbol: "export function unloadDeclaration" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-plugins.test.mjs", id: "a plugin with only sections is a plugin that draws a surface, once" },
+      { file: "packages/workbench/test/memory-saver-declaration.test.mjs", id: "a section surface takes its declaration from its own unload" },
+      { file: "packages/workbench/test/memory-saver-declaration.test.mjs", id: "only a tab of a plugin with background keeps its session through the background path" },
+    ],
+    expected: "A plugin with only sections draws its section surfaces natively, and only a tab of a plugin with background takes the background path.",
+    levels: ["unit"],
+  },
+  {
     id: "F339",
     implementation: [{ file: "packages/workbench/sidebar-sections.js", symbol: "const attempt = entry.mount = {};" }],
     tests: [{ file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "each section body is the slot of a view surface named <sidebar id>/<section id>" }],

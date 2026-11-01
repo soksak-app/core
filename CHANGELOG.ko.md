@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F338: 앱은 section만 선언한 plugin의 section surface를 그리고, memory saver와 hidden view 준비의 background 경로는 tab에만 적용된다(`keepsBackground`).
 - F339: `mountSurface`가 반환하기 전에 section mount가 알린 첫 상태는 mount를 실패시키지 않고 그 mount 시도의 상태로 기록된다.
 - F337: section surface는 없는 tab origin을 읽지 않고 context origin `{directory: null}`로 mount된다.
 - F336: 작업공간 version은 release 후보 `0.0.25`이며 게시된 `v0.0.24`와 구별된다.

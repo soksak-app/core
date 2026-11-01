@@ -2,6 +2,7 @@
 // memory pressure and restores it when the tab is shown again. Only this module decides when a tab is unloaded.
 
 import { emitEvent } from "./page-log.js";
+import { keepsBackground } from "./registry.js";
 
 const MINUTE = 60_000;
 const LEVELS = new Set(["normal", "warn", "critical"]);
@@ -10,6 +11,15 @@ const REGION_REASONS = new Set(["media", "media-unknown", "capture", "form"]);
 // The order of the one enumeration of reasons (docs/spec/exposure.md#tab-memory).
 const ORDER = ["shown", "recent", "keep:modified", "keep:busy", "media", "media-unknown", "capture", "form", "kept", "off",
   "undeclared", "background"];
+
+/**
+ * The declaration of a tab or section surface {plugin, kind, unload}: "background" for a tab of a plugin with background,
+ * "unload" for a surface whose descriptor declares unload, otherwise "undeclared" (docs/spec/plugins.md#memory-saver).
+ */
+export function unloadDeclaration({ plugin, kind, unload }) {
+  if (keepsBackground({ plugin, kind })) return "background";
+  return unload ? "unload" : "undeclared";
+}
 
 /**
  * Creates the memory saver over its dependencies:

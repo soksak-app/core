@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F338: The application draws the section surfaces of a plugin that declares only sections, and the background path of the memory saver and of hidden view preparation applies only to tabs (`keepsBackground`).
 - F339: The first state that a section mount reports before `mountSurface` returns is recorded for that mount attempt instead of failing the mount.
 - F337: A section surface mounts with the context origin `{directory: null}` instead of reading a tab origin that it does not have.
 - F336: The workspace version is release candidate `0.0.25`, distinct from published `v0.0.24`.
