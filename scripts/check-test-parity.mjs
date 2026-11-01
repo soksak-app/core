@@ -8046,6 +8046,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F372",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.sidebar.section.fold\", ({ sidebar, section }) => { foldSection(sidebar, section); settle(); });" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/section-choice-settled.test.mjs", id: "folding a section and selecting a section tab lay out the plane again" },
+    ],
+    expected: "A section fold and a section tab selection lay out the plane again, so the view of the hidden section is hidden.",
+    levels: ["unit"],
+  },
+  {
     id: "F371",
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "if (self.pluginRootView && self.viewDocumentCommitted && action.targetFrame.isMainFrame && !sameDocument(action, view.URL))" },

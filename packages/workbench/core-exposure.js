@@ -527,8 +527,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.card.sidebar.set", ({ card, side, set }) => { assignSidebar(card, side, set); });
   registry.command("core.card.sidebar.toggle", ({ card, side }) => { foldSidebar(card, side); });
   registry.command("core.card.sidebar.size", ({ card, side, size }) => { resizeSidebar(card, side, size); });
-  registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); });
-  registry.command("core.sidebar.section.fold", ({ sidebar, section }) => { foldSection(sidebar, section); });
+  // A section choice hides a section and gives its room to the others, so the plane is laid out again and the compositor publishes the
+  // new seats of the section surfaces (docs/spec/plugins.md#sections).
+  registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); settle(); });
+  registry.command("core.sidebar.section.fold", ({ sidebar, section }) => { foldSection(sidebar, section); settle(); });
   registry.command("core.text.larger", async () => { await changeTextSize(1, "core.text.larger"); });
   registry.command("core.text.smaller", async () => { await changeTextSize(-1, "core.text.smaller"); });
   registry.command("core.text.reset", async () => { await changeTextSize(0, "core.text.reset"); });

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F372: Folding a section and selecting a section tab lay out the plane again, so the host hides the view of the folded bookmarks section instead of leaving it at its earlier seat inside the files tree. Red: `folding a section and selecting a section tab lay out the plane again` failed with no layout after either command. Green: it passes.
 - F371: A view keeps its first document, so a reload no longer replaces the files tree document with one whose registrations the main page refused under the same source generation. Red: `view_channel_test` failed on `the view reports the refused reload within 10 seconds`. Green: it passes, and `document_view_test` passes.
 - F370: A right click in a view opens the surface menu of its plugin at the point of the click and never the default menu of the web view, whose Reload item reloaded the files tree without a command. Red: `surface.menu runs core.surface.menu at the window point of a right click in the view` and `the bridge cancels the default menu of a right click in the view and sends surface.menu with its point` failed, the first on the undeclared call and the second on the default menu that was not cancelled. Green: both pass.
 - F367: The plugins require `^0.0.29`, and the registry index lists core 0.0.29 and them.
