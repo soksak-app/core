@@ -68,7 +68,7 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
       report: (line) => { ran.errors.push(line); },
       subscribe: {
         native: async (name) => { ran.subscribed.push({ native: name }); return null; },
-        sidecarMessage: async (id) => { ran.subscribed.push({ sidecarMessage: id }); return null; },
+        sidecarMessage: async (id, sidecar) => { ran.subscribed.push({ sidecarMessage: id, sidecar }); return null; },
         sidecarFailure: async (id) => { ran.subscribed.push({ sidecarFailure: id }); return null; },
         textSize: async () => { ran.subscribed.push({ textSize: true }); return null; },
         settings: async () => { ran.subscribed.push({ settings: true }); return null; },
@@ -522,9 +522,9 @@ test("a call whose id is pending is refused", async () => {
 test("a subscription call of the view runs its page subscription and replies null", async () => {
   const { ran, options } = fakes();
   assert.equal(await answerViewCall({ id: 1, command: "runtime.native.on", params: { name: "probe.changed" } }, options), null);
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.sidecar.on", params: { id: "probe" } }, options), null);
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } }, options), null);
   assert.equal(await answerViewCall({ id: 3, command: "runtime.sidecar.onFailure", params: { id: "probe" } }, options), null);
-  assert.deepEqual(ran.subscribed, [{ native: "probe.changed" }, { sidecarMessage: "probe" }, { sidecarFailure: "probe" }]);
+  assert.deepEqual(ran.subscribed, [{ native: "probe.changed" }, { sidecarMessage: "probe", sidecar: "fixture-sidecar" }, { sidecarFailure: "probe" }]);
 });
 
 test("runtime.status.watch subscribes a core status or a status of the plugin and runtime.status.unwatch ends it", async () => {

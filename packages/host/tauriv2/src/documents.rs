@@ -2179,6 +2179,74 @@ fn post_for_view_generation(
     })
 }
 
+/// Posts a sidecar message to each routed view of the pair (docs/spec/native-surfaces.md#view-surfaces). The posts run in one
+/// main-thread task that the sidecar reader does not wait for, so the messages of a session reach a view in the order in which
+/// the sidecar sent them. A route whose view generation is no longer current is removed and recorded; a post that the current
+/// view refuses is written to the application log.
+pub(crate) fn post_sidecar_message(
+    window: &Window,
+    message: &crate::sidecars::Message,
+    views: Vec<(String, u64)>,
+) {
+    let text = crate::sidecar_routes::view_message(&message.surface, &message.body);
+    let sidecar = message.sidecar.clone();
+    let id = message.surface.clone();
+    let task_window = window.clone();
+    log_failure(
+        "view sidecar route",
+        window
+            .run_on_main_thread(move || {
+                let data = match window_data(&task_window) {
+                    Ok(data) => data,
+                    Err(error) => return log_error("view sidecar route", error),
+                };
+                for (surface, generation) in views {
+                    let current = data.view_source_origins.current_view(&surface)
+                        == Some(generation)
+                        && data.documents.views().generation(&surface) == Some(generation);
+                    if !current {
+                        data.sidecar_routes
+                            .remove_view(&sidecar, &id, &surface, generation);
+                        emit_host(
+                            Level::Debug,
+                            "host.view.sidecar.discard",
+                            json!({
+                                "surface": surface,
+                                "sidecar": sidecar,
+                                "id": id,
+                                "generation": generation,
+                                "reason": "view-generation-not-current",
+                            }),
+                        );
+                        continue;
+                    }
+                    if data.documents.views().ready_document(&surface).is_none() {
+                        log_error(
+                            "view sidecar route",
+                            format!("{surface}: no ready document"),
+                        );
+                        continue;
+                    }
+                    let posted = data
+                        .documents
+                        .get(&(surface.clone(), VIEW_NAME.to_string()))
+                        .and_then(|handle| platform::current()?.post_document(handle, &text));
+                    match posted {
+                        Ok(true) => {}
+                        Ok(false) => log_error(
+                            "view sidecar route",
+                            format!("{surface}: the view document refused the message"),
+                        ),
+                        Err(error) => {
+                            log_error("view sidecar route", format!("{surface}: {error}"))
+                        }
+                    }
+                }
+            })
+            .map_err(|e| e.to_string()),
+    );
+}
+
 /// Posts the current theme to each view of the window that has a ready document. A view without one is skipped, because the theme
 /// reaches it with its ready message.
 pub(crate) fn post_theme_to_views(window: &Window) -> Result<(), String> {

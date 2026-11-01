@@ -82,6 +82,7 @@ pub mod routine;
 pub mod running_calls;
 mod shapes;
 mod sidecar_reply;
+pub(crate) mod sidecar_routes;
 pub mod sidecars;
 pub(crate) mod source_origins;
 #[cfg(feature = "diagnostics")]

@@ -508,7 +508,9 @@ type Surfaces struct {
 	// records the tasks.
 	invoke   func(task func())
 	sidecars *Sidecars
-	watch    sync.Once
+	// The receivers of the sidecar messages of each pair of a sidecar and a session id (docs/spec/native-surfaces.md#view-surfaces).
+	sidecarRoutes sidecarRoutes
+	watch         sync.Once
 
 	// The theme that the main page set last. The page calls Theme after it loads.
 	theme Theme
@@ -543,6 +545,47 @@ func (s *Surfaces) windowEvent(name string, data any) {
 		return
 	}
 	s.window.EmitEvent(name, data)
+}
+
+// DeliverSidecarMessage posts a sidecar message to each routed view of its pair and sends sidecar-message to the main page only while
+// the main page listens to the pair (docs/spec/native-surfaces.md#view-surfaces). The posts run in one UI-thread task that the sidecar
+// reader does not wait for, so the messages of a session reach a view in the order in which the sidecar sent them.
+func (s *Surfaces) DeliverSidecarMessage(message SidecarMessage) {
+	page, views := s.sidecarRoutes.targets(message.Sidecar, message.Surface)
+	if len(views) > 0 {
+		text := string(viewSidecarMessage(message.Surface, message.Body))
+		application.InvokeAsync(func() { s.postSidecarMessage(message.Sidecar, message.Surface, text, views) })
+	}
+	if page {
+		s.Emit("sidecar-message", message)
+	}
+}
+
+// postSidecarMessage posts text to each view of views on the UI thread. A route whose view generation is no longer current is removed
+// and recorded; a post that the current view refuses is written to the application log.
+func (s *Surfaces) postSidecarMessage(sidecar, id, text string, views []sidecarRouteView) {
+	for _, view := range views {
+		if !s.currentViewGeneration(view.surface, view.generation) {
+			s.sidecarRoutes.removeView(sidecar, id, view.surface, view.generation)
+			EmitHost(LevelDebug, "host.view.sidecar.discard", map[string]any{
+				"surface": view.surface, "sidecar": sidecar, "id": id, "generation": view.generation, "reason": "view-generation-not-current",
+			})
+			continue
+		}
+		channel, _ := s.documents.view(view.surface)
+		if channel.document == "" {
+			LogError("view sidecar route", fmt.Errorf("%s: no ready document", view.surface))
+			continue
+		}
+		handle, err := s.documents.Get(DocumentKey{Surface: view.surface, Name: viewRegionName})
+		if err != nil {
+			LogError("view sidecar route", fmt.Errorf("%s: %w", view.surface, err))
+			continue
+		}
+		if !system.PostDocument(handle, text) {
+			LogError("view sidecar route", fmt.Errorf("%s: the view document refused the message", view.surface))
+		}
+	}
 }
 
 // Emit delivers an event to the single app DOM of this window.

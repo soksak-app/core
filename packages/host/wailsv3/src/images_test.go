@@ -10,8 +10,9 @@ import (
 
 type imageStatusTestOwner struct{}
 
-func (imageStatusTestOwner) ProjectRoot() string { return "" }
-func (imageStatusTestOwner) Emit(string, ...any) {}
+func (imageStatusTestOwner) ProjectRoot() string                  { return "" }
+func (imageStatusTestOwner) Emit(string, ...any)                  {}
+func (imageStatusTestOwner) DeliverSidecarMessage(SidecarMessage) {}
 
 // contract: exposure.window.region-reports-presented-frame
 func TestPresentedFrameChangeNotifiesAfterItsIdentityIsCurrent(t *testing.T) {

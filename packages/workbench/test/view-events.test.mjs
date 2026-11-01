@@ -14,8 +14,12 @@ function fakes() {
     return Promise.resolve(() => { off.push(`${kind}:${key}`); });
   };
   const native = register("native");
+  const routes = [];
   const sidecar = {
-    on: register("sidecar.on"),
+    route: (id, name) => {
+      routes.push(`on ${name} ${id}`);
+      return Promise.resolve(() => { routes.push(`off ${name} ${id}`); });
+    },
     onFailure: register("sidecar.onFailure"),
   };
   const listen = (kind) => (fn) => {
@@ -28,7 +32,7 @@ function fakes() {
   const push = async (event, data) => {
     pushed.push({ event, data });
   };
-  return { listeners, off, pushed, failures, native, sidecar, textSize, settings, data, push };
+  return { listeners, off, pushed, failures, native, sidecar, routes, textSize, settings, data, push };
 }
 
 test("a later view event waits for the earlier event delivery", async () => {
@@ -94,18 +98,18 @@ test("a log levels subscription pushes each change of the stored levels once and
   assert.equal(changed, null, "the close ends the subscription");
 });
 
-test("a sidecar subscription pushes its messages and failures with the session id", async () => {
-  const { listeners, sidecar, pushed, push } = fakes();
+test("a sidecar message subscription adds the host route of the view once, a restart removes it, and a failure is pushed", async () => {
+  const { listeners, sidecar, routes, pushed, push } = fakes();
   const subs = createViewSubscriptions({ native: null, sidecar, push, report: () => {} });
-  await subs.sidecarMessage("probe-surface");
+  await subs.sidecarMessage("probe-surface", "fixture-sidecar");
+  assert.equal(await subs.sidecarMessage("probe-surface", "fixture-sidecar"), null);
   await subs.sidecarFailure("probe-surface");
-  listeners.get("sidecar.on:probe-surface")({ n: 1 });
+  assert.deepEqual(routes, ["on fixture-sidecar probe-surface"], "the host posts the messages, so the page adds one route and pushes none");
   listeners.get("sidecar.onFailure:probe-surface")("exited");
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(pushed, [
-    { event: "sidecar.message", data: { id: "probe-surface", body: { n: 1 } } },
-    { event: "sidecar.failure", data: { id: "probe-surface", reason: "exited" } },
-  ]);
+  assert.deepEqual(pushed, [{ event: "sidecar.failure", data: { id: "probe-surface", reason: "exited" } }]);
+  await subs.restart();
+  assert.deepEqual(routes, ["on fixture-sidecar probe-surface", "off fixture-sidecar probe-surface"], "a restart removes the route");
 });
 
 test("an event for a view whose surface is left out is canceled without a push, and pushes resume when it is drawn again", async () => {

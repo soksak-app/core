@@ -34,7 +34,7 @@ import { setViewFocus } from "./view-focus.js";
  *                   display of the page
  *                 textSize: {read(), on(listener)} of the surface, as runtime.textSize of the surface context has
  *                 settings: {read(), on(listener)} of the plugin, as runtime.settings of the surface context has
- *                 subscribe.native(name), subscribe.sidecarMessage(id), subscribe.sidecarFailure(id), subscribe.textSize(),
+ *                 subscribe.native(name), subscribe.sidecarMessage(id, sidecar), subscribe.sidecarFailure(id), subscribe.textSize(),
  *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (view-events.js); each resolves when it is
  *                   registered
  *                 holdsSurface(plugin, surface): whether the surface is a surface of the plugin in the window (surface-modules.js)
@@ -128,7 +128,7 @@ export const REGION_HOST_CALLS = new Set([
 
 // The host calls of the view bridge (docs/spec/native-surfaces.md#view-surfaces, view channel). The page sends them itself, so a
 // plugin never reaches them.
-export const VIEW_BRIDGE_CALLS = new Set(["viewRequest", "viewEvent", "viewReply"]);
+export const VIEW_BRIDGE_CALLS = new Set(["viewRequest", "viewEvent", "viewReply", "viewSidecarRoute"]);
 
 // The host commands that plugin code may send through its native handle (docs/spec/native-surfaces.md#view-surfaces). A plugin
 // reaches a host command only through this allowlist: a command that is not listed is refused, so a command added to the host
@@ -246,7 +246,7 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     case "runtime.sidecar.onFailure": {
       const fields = objectOf(command, params);
       if (typeof fields.id !== "string" || fields.id === "") throw new TypeError(`view call ${command} requires a non-empty id`);
-      if (command === "runtime.sidecar.on") await runtime.subscribe.sidecarMessage(fields.id);
+      if (command === "runtime.sidecar.on") await runtime.subscribe.sidecarMessage(fields.id, fields.sidecar);
       else await runtime.subscribe.sidecarFailure(fields.id);
       return null;
     }

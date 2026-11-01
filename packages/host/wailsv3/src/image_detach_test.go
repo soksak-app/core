@@ -422,6 +422,9 @@ func TestAPageStartRecordsTheFailuresOfTheEndsItClears(t *testing.T) {
 func (o *imageDetachMessageOwner) ProjectRoot() string { return "/fixture/root" }
 
 func (o *imageDetachMessageOwner) Emit(name string, _ ...any) { o.events = append(o.events, name) }
+func (o *imageDetachMessageOwner) DeliverSidecarMessage(SidecarMessage) {
+	o.events = append(o.events, "sidecar-message")
+}
 
 // contract: images.detach.ack-consumed
 func TestImageDetachAcknowledgementIsConsumedByTheHost(t *testing.T) {

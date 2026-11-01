@@ -283,6 +283,8 @@ func cancelLayout(s *Surfaces, win *application.WebviewWindow) {
 
 // An app DOM reload replaces all plugin documents but does not end the sessions.
 func (s *Surfaces) reloadSurfaceDocuments() ([]imageDetachTarget, error) {
+	// The new main document registers its own sidecar receivers, and its views subscribe again.
+	s.sidecarRoutes.clear()
 	if s.invoke != nil {
 		s.invoke(func() {
 			if err := s.presentation.cancelAll(); err != nil {

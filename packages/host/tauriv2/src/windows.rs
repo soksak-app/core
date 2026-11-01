@@ -55,6 +55,8 @@ pub(crate) struct WindowData {
     pub images: crate::images::Images,
     /// The current view-source incarnations and the greatest generation issued in this window.
     pub view_source_origins: ViewSourceOrigins,
+    /// The receivers of the sidecar messages of each pair of a sidecar and a session id (docs/spec/native-surfaces.md#view-surfaces).
+    pub sidecar_routes: crate::sidecar_routes::SidecarRoutes,
     /// The ordered source events of the current main-page document.
     pub view_source_events: ViewSourceEventStream,
     /// The surface composition that the main page declared and that the host uses to check the authority of region
@@ -192,6 +194,8 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
             return Err(format!("{abandon}; cancelling layout: {cancel}"));
         }
     }
+    // The new main document registers its own sidecar receivers, and its views subscribe again.
+    data.sidecar_routes.clear();
     let surfaces: Vec<_> = data
         .surface_hosts
         .lock()

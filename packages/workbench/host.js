@@ -160,6 +160,43 @@ function listenSidecarFailures() {
   return failureListener;
 }
 
+/*
+ * The listeners of this document for each pair of a sidecar and a session id. The host sends sidecar-message only for the pairs that
+ * the main page listens to (docs/spec/native-surfaces.md#view-surfaces), so the first listener of a pair registers the page with
+ * sidecarListen and the last one removes it. The calls run one after another, so a removal and a later registration of the same pair
+ * reach the host in that order.
+ */
+const sidecarListens = new Map();
+let sidecarListenOrder = Promise.resolve();
+const applySidecarListen = (sidecar, id, on) => {
+  const applied = sidecarListenOrder.then(() => bridge.call("sidecarListen", { sidecar, id, on }));
+  // A refused call rejects its caller, which reports it; the order waits for the call to settle and continues with the next call.
+  sidecarListenOrder = Promise.allSettled([applied]);
+  return applied;
+};
+/** Calls fn(body) for each message of the session id of the sidecar name. The returned promise of the off function resolves after the host applied the registration. */
+function onSidecarMessage(name, id, fn) {
+  const key = JSON.stringify([name, id]);
+  let entry = sidecarListens.get(key);
+  if (!entry) sidecarListens.set(key, entry = { count: 0, applied: null });
+  entry.count += 1;
+  if (entry.count === 1) entry.applied = applySidecarListen(name, id, true);
+  const registered = Promise.resolve(bridge.on("sidecar-message", (event) => {
+    if (event?.sidecar === name && event?.surface === id) fn(event.body);
+  }));
+  const listening = entry;
+  return Promise.all([registered, listening.applied]).then(([off]) => () => {
+    off();
+    listening.count -= 1;
+    if (listening.count > 0) return;
+    sidecarListens.delete(key);
+    applySidecarListen(name, id, false).catch((error) => {
+      // default: the thrown value may not be an Error, so when it has no message the value itself is written as it is.
+      report(`sidecar ${name}: listen end failed: ${error?.message ?? error}`);
+    });
+  });
+}
+
 /** Receives the failures of the surface surface of the sidecar name through fn(reason). The returned unsubscribe function completes after registration. */
 function onSidecarFailure(name, surface, fn) {
   if (typeof fn !== "function") return Promise.reject(new TypeError("sidecar onFailure requires a listener"));
@@ -183,9 +220,7 @@ export function windowSidecar(name) {
   return {
     // cids are the correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#protocol).
     send: (surface, body, cids) => orderedSidecarPort(name).send(surface, body, cids),
-    on: (surface, listener) => Promise.resolve(bridge.on("sidecar-message", (event) => {
-      if (event?.sidecar === name && event?.surface === surface) listener(event.body);
-    })),
+    on: (surface, listener) => onSidecarMessage(name, surface, listener),
     onFailure: (surface, listener) => onSidecarFailure(name, surface, listener),
   };
 }
@@ -284,9 +319,9 @@ export function surfaceContextRuntime(surface, declarations = {}) {
         send: (id, body, cids) => id === surfaceId
           ? ordered.send(surfaceId, body, cids)
           : Promise.reject(new Error(`surface ${surfaceId} cannot send to sidecar surface ${id}`)),
-        on: (id, fn) => on("sidecar-message", (event) => {
-          if (event.sidecar === sidecarName && event.surface === id) fn(event.body);
-        }),
+        on: (id, fn) => id === surfaceId
+          ? onSidecarMessage(sidecarName, surfaceId, fn)
+          : Promise.reject(new Error(`surface ${surfaceId} cannot observe sidecar surface ${id}`)),
         onFailure: (id, fn) => id === surfaceId
           ? onSidecarFailure(sidecarName, surfaceId, fn)
           : Promise.reject(new Error(`surface ${surfaceId} cannot observe sidecar surface ${id}`)),

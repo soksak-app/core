@@ -266,6 +266,36 @@ func (h *Host) ViewEvent(ctx context.Context, reqJSON json.RawMessage) (bool, er
 	return s.pushViewEvent(req)
 }
 
+// SidecarListen sets whether the main page receives the messages of a pair of a sidecar and a session id
+// (docs/spec/native-surfaces.md#view-surfaces).
+func (h *Host) SidecarListen(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := sidecarListenRequestFrom(reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	s.sidecarRoutes.listen(req.sidecar, req.id, req.on)
+	return nil
+}
+
+// ViewSidecarRoute adds or removes a view as a receiver of the messages of a pair of a sidecar and a session id
+// (docs/spec/native-surfaces.md#view-surfaces).
+func (h *Host) ViewSidecarRoute(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := viewSidecarRouteRequestFrom(reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	s.sidecarRoutes.routeView(req.surface, req.generation, req.sidecar, req.id, req.on)
+	return nil
+}
+
 // ViewSourceOrigins returns the current source generations and issued generation floor of the window.
 func (h *Host) ViewSourceOrigins(ctx context.Context) (sourceOriginSnapshot, error) {
 	s, err := h.surface(ctx)

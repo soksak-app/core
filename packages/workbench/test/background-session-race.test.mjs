@@ -31,8 +31,9 @@ test("a background session whose tab closes before its subscription finished end
   // The subscription of a listener finishes only when the test lets it.
   const listeners = new Map();
   const pending = [];
+  const sends = [];
   const port = {
-    send: () => Promise.resolve({}),
+    send: (surface) => { sends.push(surface); return Promise.resolve({}); },
     on: (surface, listener) => new Promise((resolve) => {
       listeners.set(surface, listener);
       pending.push(() => resolve(() => { if (listeners.get(surface) === listener) listeners.delete(surface); }));
@@ -72,6 +73,10 @@ test("a background session whose tab closes before its subscription finished end
     plane.adopt(plane.fresh(), "spc-aaaaaa");
     const hidden = plane.currentGrid().card("main").data.tabs[1].id;
     assert.ok(listeners.has(hidden), "the tab without a surface got no background session");
+    // The host delivers the reply of the open only to a registered listener, so the open waits for the subscription
+    // (docs/spec/sidecars.md#page-interface).
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(sends, [], "a background session sent its open before its subscription finished");
     // The tab closes while the subscription of its listener has not finished.
     await plane.closeTabById(hidden);
     for (const finish of pending.splice(0)) finish();

@@ -1192,14 +1192,20 @@ function syncBackgroundSessions() {
       }
     })).then((stop) => {
       // A session that stopped before its subscription finished ends the subscription as soon as it exists.
-      if (state.stopped) stop();
-      else state.stop = stop;
+      if (state.stopped) {
+        stop();
+        return;
+      }
+      state.stop = stop;
+      // The host delivers the reply of the open only to a registered listener, so the open follows the subscription
+      // (docs/spec/sidecars.md#page-interface).
+      open().catch((error) => {
+        if (backgroundSessions.get(tab.id) === state) backgroundSessions.delete(tab.id);
+        report(`background session ${tab.id} open failed: ${error.message}`);
+      });
     }, (error) => {
-      report(`background session ${tab.id} listener failed: ${error.message}`);
-    });
-    open().catch((error) => {
       if (backgroundSessions.get(tab.id) === state) backgroundSessions.delete(tab.id);
-      report(`background session ${tab.id} open failed: ${error.message}`);
+      report(`background session ${tab.id} listener failed: ${error.message}`);
     });
   }
   for (const [tabId, state] of backgroundSessions) {

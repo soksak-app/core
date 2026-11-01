@@ -13,7 +13,9 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  * Creates the subscriptions of one view surface.
  *
  *     native      native(name, fn): the surface event of the name, as runtime.native.on; resolves with the off function
- *     sidecar     the sidecar of the surface with on(id, fn) and onFailure(id, fn), as runtime.sidecar() has; each resolves with the off function
+ *     sidecar     {route(id, name), onFailure(id, fn)}: route adds the host route of the view for the messages of the session id of the
+ *                 sidecar name (docs/spec/native-surfaces.md#view-surfaces), and onFailure is as runtime.sidecar() has; each resolves
+ *                 with the off function
  *     textSize    textSize(fn): registers fn(factor) for the changes of the text scale of the surface, as runtime.textSize.on does;
  *                 resolves with the off function
  *     settings    settings(fn): registers fn(values) for the changes of the settings of the plugin, as runtime.settings.on does;
@@ -32,7 +34,7 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *     cancel      cancel(event): records a delivery canceled by document or surface end
  *     report      report(text): receives the text of a push that the host refused
  *
- * Returns {native(name), sidecarMessage(id), sidecarFailure(id), textSize(), settings(), data(), logLevels(), statusWatch(name, surface),
+ * Returns {native(name), sidecarMessage(id, name), sidecarFailure(id), textSize(), settings(), data(), logLevels(), statusWatch(name, surface),
  * statusUnwatch(name, surface), restart(), close()}. A subscription call resolves with null, and a second call for the same name or id registers
  * nothing; a status watch is keyed by its name and its surface.
  * restart() ends current subscriptions and invalidates pending deliveries while allowing the new document to subscribe again. An unwatch
@@ -107,11 +109,10 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
         return native(name, (data) => forward(name, data, owner));
       });
     },
-    sidecarMessage(id) {
-      return subscribe(`sidecar.message:${id}`, () => {
-        const owner = generation;
-        return sidecar.on(id, (body) => forward("sidecar.message", { id, body }, owner));
-      });
+    // The host posts the messages of the session to the view itself (docs/spec/native-surfaces.md#view-surfaces); the registrar adds
+    // the route of the view, and its off function removes it.
+    sidecarMessage(id, name) {
+      return subscribe(`sidecar.message:${id}`, () => sidecar.route(id, name));
     },
     sidecarFailure(id) {
       return subscribe(`sidecar.failure:${id}`, () => {

@@ -3502,6 +3502,40 @@
       },
       "description": "The host forwarded the reply of a view call to the view; outcome is result or error, and the id is the id of the call."
     },
+    "host.view.sidecar.discard": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string"
+          },
+          "sidecar": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "sidecar",
+          "id",
+          "generation",
+          "reason"
+        ]
+      },
+      "description": "The host removed the sidecar route of a view whose generation is no longer current when a message of the route arrived."
+    },
     "host.view.reply.dispatch": {
       "layer": "host",
       "class": "call",

@@ -434,9 +434,15 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     native: (name, listener) => gate.on(name, name === "exposure-request"
       ? (request) => { if (!pageAnswers(request)) listener(request); }
       : listener),
-    // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
     sidecar: {
-      on: (id, listener) => page.sidecar().on(id, listener),
+      // The host posts each message of the session to the view (docs/spec/native-surfaces.md#view-surfaces). The route names the
+      // source generation of the subscribing view document, so the host delivers nothing to a later document through it.
+      route: (id, name) => {
+        const generation = viewGeneration;
+        const set = (on) => scoped.native.call("viewSidecarRoute", { generation, sidecar: name, id, on });
+        return set(true).then(() => () => set(false));
+      },
+      // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
       onFailure: (id, listener) => page.sidecar().onFailure(id, listener),
     },
     // The surface runtime returns the off function at once; the view subscriptions take a promise of it (view-events.js).
@@ -542,7 +548,11 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       settings: context.runtime.settings,
       subscribe: {
         native: (name) => subscriptions.native(name),
-        sidecarMessage: (id) => subscriptions.sidecarMessage(id),
+        // A view names the sidecar of its subscription; the name must be one that the surface declares.
+        sidecarMessage: (id, name) => {
+          if (!surface.sidecars.includes(name)) throw new Error(`view call runtime.sidecar.on: ${surface.pluginId} declares no sidecar ${name}`);
+          return subscriptions.sidecarMessage(id, name);
+        },
         sidecarFailure: (id) => subscriptions.sidecarFailure(id),
         textSize: () => subscriptions.textSize(),
         settings: () => subscriptions.settings(),

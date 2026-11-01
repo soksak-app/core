@@ -144,6 +144,9 @@ type sidecar struct {
 type SidecarOwner interface {
 	ProjectRoot() string
 	Emit(name string, data ...any)
+	// DeliverSidecarMessage passes a message that a sidecar sent to the receivers that the page of the window routed for it
+	// (docs/spec/native-surfaces.md#view-surfaces).
+	DeliverSidecarMessage(message SidecarMessage)
 }
 
 // Sidecars manages the sidecar processes of one application and the windows that own surfaces.
@@ -658,7 +661,7 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface string, body json.RawM
 			if body, err := connectionNotice(errRestartLimit); err != nil {
 				LogError("sidecar "+name, fmt.Sprintf("connection notice serialization: %v", err))
 			} else {
-				owner.Emit("sidecar-message", SidecarMessage{Sidecar: name, Surface: surface, Body: body})
+				owner.DeliverSidecarMessage(SidecarMessage{Sidecar: name, Surface: surface, Body: body})
 			}
 		}
 	}()
@@ -2099,7 +2102,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 			) {
 				continue
 			}
-			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
+			owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		} else {
 			c.dropMessage(process, event)
 		}
@@ -2313,7 +2316,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 			) {
 				continue
 			}
-			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
+			owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		} else {
 			c.dropMessage(process, event)
 		}
@@ -2496,7 +2499,7 @@ func (c *Sidecars) notifyConnection(name string, failure error) {
 				window.SidecarReconnected(name)
 			}
 		}
-		item.owner.Emit("sidecar-message", SidecarMessage{Sidecar: name, Surface: item.surface, Body: raw})
+		item.owner.DeliverSidecarMessage(SidecarMessage{Sidecar: name, Surface: item.surface, Body: raw})
 	}
 }
 
