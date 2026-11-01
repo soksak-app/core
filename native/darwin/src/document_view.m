@@ -1617,10 +1617,11 @@ bool sp_document_post(void *handle, const char *json) {
     if (!view || view.closed || !json || !view.plugin) return false;
     NSURL *url = view.URL;
     if (![url.scheme.lowercaseString isEqualToString:kApplicationScheme] || ![url.host isEqualToString:view.plugin]) return false;
-    id value = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:json length:strlen(json)]
-        options:NSJSONReadingFragmentsAllowed error:nil];
-    if (!value) return false;
-    [view callAsyncJavaScript:@"window.postMessage(message, location.origin);" arguments:@{ @"message": value }
+    // The document parses the text: converting a message into an object here and that object into a script value costs the host
+    // CPU in proportion to the message size at each post.
+    NSString *text = [NSString stringWithUTF8String:json];
+    if (!text) return false;
+    [view callAsyncJavaScript:@"window.postMessage(JSON.parse(text), location.origin);" arguments:@{ @"text": text }
         inFrame:nil inContentWorld:WKContentWorld.pageWorld completionHandler:^(id result, NSError *error) {
         (void)result;
         if (error) [view reportMessage:@{ @"error": [NSString stringWithFormat:@"post failed: %@", error.localizedDescription] }];

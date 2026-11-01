@@ -112,6 +112,14 @@ int main(void) { @autoreleasepool {
         check([messages[0] isEqual:@{ @"ping": @7 }], [NSString stringWithFormat:@"the page receives its own message first: %@", messages]);
         check([messages[1] isEqual:@{ @"pong": @7 }], [NSString stringWithFormat:@"the page receives the answer: %@", messages]);
 
+        // The document parses the posted text, so the host does not convert a large message into an object before the post; a
+        // text that is not JSON is reported through the message receiver.
+        NSUInteger beforeInvalid = messages.count;
+        check(sp_document_post(document, "{\"ping\":"), @"the page posts a text that the document parses");
+        until(@"the document reports the text that is not JSON", ^BOOL{ return messages.count > beforeInvalid; });
+        check([[messages[beforeInvalid][@"error"] description] hasPrefix:@"post failed: "],
+            [NSString stringWithFormat:@"a text that is not JSON is reported as a failed post: %@", messages[beforeInvalid]]);
+
         // A page message that JSON cannot hold is refused with the type of the value; a plain object arrives unchanged.
         NSArray<NSArray *> *replies = @[
             @[ @"buffer", @{ @"error": @"the message holds an ArrayBuffer, which is not JSON" } ],

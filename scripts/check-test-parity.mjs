@@ -8047,6 +8047,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F374-3",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "bool sp_document_post(void *handle, const char *json)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_plugin_test.m", id: "a text that is not JSON is reported as a failed post" },
+    ],
+    expected: "A document post passes the JSON text and the document parses it, and a text that is not JSON is reported through the message receiver.",
+    levels: ["unit"],
+  },
+  {
     id: "F374-2",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, char *declaredColorSpaceName, size_t nameCapacity)" },

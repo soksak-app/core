@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F374-3: 문서 post는 JSON text를 넘기고 문서가 그것을 parse하므로, host는 view로 보내기 전에 각 terminal screen 메시지를 객체와 script 값으로 변환하지 않는다. Red: post가 문서가 보기 전에 text를 거절해 `document_plugin_test`가 `the page posts a text that the document parses`에서 실패했다. Green: `document_plugin_test`, `document_binary_test`, `view_channel_test`가 통과한다.
 - F374-2: image region은 받아들인 각 frame을 선언된 color space를 담은 호스트 소유 IOSurface 복사본으로 보이므로, Core Animation이 더 이상 commit마다 terminal frame을 CPU에서 변환하지 않는다. 초당 20 frame을 다시 그리는 terminal에서 host는 43.6% 대신 한 core의 약 28%를 썼다. Red: `image_region_test`가 layer가 CGImage를 담아 `TEST 1: the layer presents a host-owned IOSurface`에서 실패했다. Green: `image_region_test`, `image_region_decoration_test`, `image_region_capture_presentation_test`, `capture_test`, `image_nonce_ownership_test`가 통과한다.
 - F374-1: `make terminal-redraw-usage`는 보이는 terminal이 고정된 속도로 status block을 다시 그리는 동안 각 프로세스의 CPU를 잰다. 수정이 아니라 측정이므로 Red가 없다. `scripts/test/measure-terminal-redraw.test.mjs`가 option parser, frame 비용, 화면 text, fixture를 검사하고 통과한다.
 - F373: 세로 list sidebar의 이웃한 두 열린 section 사이 divider가 그 크기를 바꾸므로, files tree와 bookmarks가 사람이 고른 대로 공간을 나눈다. `core.sidebar.section.size`가 높이를 정하고, `core.sidebars`가 그것을 `size`로 보고하며, space가 `sizes`에 저장한다. Red: `a dragged section height is applied, reported, saved with the space and restored`가 divider가 없어 실패했고, `folding, selecting and sizing a section lay out the plane again`이 등록되지 않은 명령에서 실패했다. Green: 둘 다 통과한다.

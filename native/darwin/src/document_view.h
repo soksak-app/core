@@ -105,8 +105,9 @@ bool sp_view_page_insert(const char *html, const char *map, char **output, char 
 // document lives.
 void sp_document_set_message(void *document, sp_document_message message, void *context);
 
-// Posts the JSON value json to the window of the current plugin document of the region's plugin. Returns false and
-// posts nothing when the current document is not such a document or json is not JSON.
+// Posts the JSON text json to the window of the current plugin document of the region's plugin, which parses it. Returns
+// false and posts nothing when the current document is not such a document or json is not UTF-8; a text that is not JSON
+// is reported through the message receiver as {error: "post failed: <reason>"}.
 bool sp_document_post(void *document, const char *json);
 
 // Sets the receiver of the messages of the document streams. NULL reports none. The caller keeps context while the
