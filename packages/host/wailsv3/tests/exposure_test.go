@@ -164,30 +164,28 @@ func TestExposureListRejectsANonObjectPageList(t *testing.T) {
 	}
 }
 
-// contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.status-next-unbounded, exposure.timeout.invalid-timeout-rejected, exposure.timeout.status-next-timeout-rejected
+// contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.every-forward-bounded, exposure.timeout.invalid-timeout-rejected
 func TestForwardedRequestsUseTheDeclaredTimeout(t *testing.T) {
+	// The time limit does not depend on the method, so every forwarded request has one.
 	cases := []struct {
-		method, timeout string
-		want            time.Duration
+		timeout string
+		want    time.Duration
 	}{
-		{"command.run", "", 10 * time.Second},
-		{"command.run", "600000", 600 * time.Second},
-		{"command.run", "1", time.Millisecond},
-		{"status.next", "", 0},
+		{"", 10 * time.Second},
+		{"null", 10 * time.Second},
+		{"600000", 600 * time.Second},
+		{"1", time.Millisecond},
 	}
 	for _, c := range cases {
-		got, invalid := host.ForwardTimeout(c.method, json.RawMessage(c.timeout))
+		got, invalid := host.ForwardTimeout(json.RawMessage(c.timeout))
 		if invalid != nil || got != c.want {
-			t.Fatalf("%s %q: %v %v, want %v", c.method, c.timeout, got, invalid, c.want)
+			t.Fatalf("%q: %v %v, want %v", c.timeout, got, invalid, c.want)
 		}
 	}
 	for _, timeout := range []string{"0", "600001", "1.5", `"10"`, "-1"} {
-		if _, invalid := host.ForwardTimeout("command.run", json.RawMessage(timeout)); invalid == nil || invalid.Code != -32602 {
+		if _, invalid := host.ForwardTimeout(json.RawMessage(timeout)); invalid == nil || invalid.Code != -32602 {
 			t.Fatalf("timeout %s: %v", timeout, invalid)
 		}
-	}
-	if _, invalid := host.ForwardTimeout("status.next", json.RawMessage("10")); invalid == nil || invalid.Code != -32602 {
-		t.Fatalf("status.next accepted a timeout: %v", invalid)
 	}
 }
 

@@ -528,17 +528,11 @@ type ExposureForwardRequest struct {
 // maxForwardTimeout is the longest time limit that a forwarded request can specify.
 const maxForwardTimeout = 600000
 
-// ForwardTimeout decides the time limit of a forwarded request. status.next does not reply until the value changes, so
-// it has no time limit (0) and does not accept timeout. timeout is an integer in ms from 1 to 600000.
-func ForwardTimeout(method string, timeout json.RawMessage) (time.Duration, *RPCError) {
+// ForwardTimeout decides the time limit of a forwarded request: 10 s, or timeout, an integer in ms from 1 to 600000.
+// Every forwarded request has a time limit, whatever its method, so a page that does not answer ends the request with 1005.
+func ForwardTimeout(timeout json.RawMessage) (time.Duration, *RPCError) {
 	if len(timeout) == 0 || string(timeout) == "null" {
-		if method == "status.next" {
-			return 0, nil
-		}
 		return pageTimeout, nil
-	}
-	if method == "status.next" {
-		return 0, &RPCError{Code: codeInvalidParams, Message: "status.next has no timeout"}
 	}
 	var ms float64
 	if err := json.Unmarshal(timeout, &ms); err != nil || ms != math.Trunc(ms) || ms < 1 || ms > maxForwardTimeout {
@@ -558,7 +552,7 @@ func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (Ex
 	if err != nil {
 		return ExposureResult{}, err
 	}
-	timeout, invalid := ForwardTimeout(req.Method, req.Timeout)
+	timeout, invalid := ForwardTimeout(req.Timeout)
 	if invalid != nil {
 		return ExposureResult{Error: invalid}, nil
 	}
@@ -570,7 +564,6 @@ func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (Ex
 	if declared {
 		call = RelayCall{Plugin: plugin, Command: req.Method}
 	}
-	// status.next has no time limit. It ends with 1003 when the surface closes.
 	reply := h.relay.RequestCall(relayTarget{owner: s, surface: req.Surface}, call, timeout, func(id uint64) error {
 		var sent bool
 		application.InvokeSync(func() {

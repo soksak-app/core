@@ -489,35 +489,25 @@ fn button_held_message_reports_mask_and_frontmost_application() {
     }
 }
 
-// contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.status-next-unbounded, exposure.timeout.invalid-timeout-rejected, exposure.timeout.status-next-timeout-rejected
+// contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.every-forward-bounded, exposure.timeout.invalid-timeout-rejected
 #[test]
 fn forwarded_requests_use_the_declared_timeout() {
-    assert_eq!(
-        exposure::forward_timeout("command.run", &Value::Null).unwrap(),
-        Some(exposure::TIMEOUT)
-    );
-    assert_eq!(
-        exposure::forward_timeout("command.run", &json!(600000)).unwrap(),
-        Some(Duration::from_secs(600))
-    );
-    assert_eq!(
-        exposure::forward_timeout("command.run", &json!(1)).unwrap(),
-        Some(Duration::from_millis(1))
-    );
-    assert_eq!(
-        exposure::forward_timeout("status.next", &Value::Null).unwrap(),
-        None
-    );
+    // The time limit does not depend on the method, so every forward request has one.
+    for (timeout, want) in [
+        (Value::Null, exposure::TIMEOUT),
+        (json!(600000), Duration::from_secs(600)),
+        (json!(1), Duration::from_millis(1)),
+    ] {
+        assert_eq!(
+            exposure::forward_timeout(&timeout).unwrap(),
+            Some(want),
+            "{timeout}"
+        );
+    }
     for invalid in [json!(0), json!(600001), json!(1.5), json!("10"), json!(-1)] {
-        let error = exposure::forward_timeout("command.run", &invalid).unwrap_err();
+        let error = exposure::forward_timeout(&invalid).unwrap_err();
         assert_eq!(error.code, -32602, "{invalid}");
     }
-    assert_eq!(
-        exposure::forward_timeout("status.next", &json!(10))
-            .unwrap_err()
-            .code,
-        -32602
-    );
 }
 
 // contract: endpoint.names.unknown-host-name-1001

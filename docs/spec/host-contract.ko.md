@@ -391,9 +391,8 @@ fn invalid_json_closes_connection() {
 | `exposure.host-window.reads-during-surface-close` | 네이티브 surface view는 닫는 단계가 id를 잊을 때까지 surface id를 유지하므로, view가 열려 있는 동안 window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | both |
 | `exposure.host-window.unregistered-surface-named` | window status 읽기가 등록된 surface가 없는 네이티브 surface view를 만나면 `unregistered native surface <id>`로 실패하며, `<id>`는 window facts의 네이티브 view 주소이고 두 host의 글은 같다. | both |
 | `exposure.timeout.command-run-default-and-declared` | command.run은 기본 10초를 기다리고 선언된 timeout을 쓴다. | both |
-| `exposure.timeout.status-next-unbounded` | timeout이 없는 status.next는 시간 제한이 없다. | both |
+| `exposure.timeout.every-forward-bounded` | timeout이 없는 forward 요청은 method와 관계없이 10초를 기다리므로, 시간 제한이 없는 forward는 없다. | both |
 | `exposure.timeout.invalid-timeout-rejected` | 0, 600000 초과, 소수, 문자열, 음수인 command.run timeout은 -32602를 반환한다. | both |
-| `exposure.timeout.status-next-timeout-rejected` | timeout이 있는 status.next는 -32602를 반환한다. | both |
 | `exposure.relay.reply-resolves-request` | 대상 문서에서 온 같은 id의 응답은 그 결과로 요청을 완료한다. | both |
 | `exposure.relay.keeps-value-text` | Page 응답은 page가 보낸 텍스트 그대로 중계되므로 값의 key 순서가 유지된다(`{"zeta":1,"alpha":{"b":2,"a":1}}`는 보낸 그대로다). | both |
 | `exposure.relay.missing-result-is-null` | result가 없는 응답은 null로 완료된다. | both |

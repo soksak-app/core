@@ -389,9 +389,8 @@ Items:
 | `exposure.host-window.reads-during-surface-close` | A native surface view keeps its surface id until the step that closes it also forgets the id, so a reading of the window status never finds a native view without its surface id while the view is open. | both |
 | `exposure.host-window.unregistered-surface-named` | A window status reading that finds a native surface view without a registered surface fails with `unregistered native surface <id>`, where `<id>` is the address of the native view in the window facts, the same text in both hosts. | both |
 | `exposure.timeout.command-run-default-and-declared` | command.run waits 10 s by default and uses a declared timeout. | both |
-| `exposure.timeout.status-next-unbounded` | status.next without a timeout has no time limit. | both |
+| `exposure.timeout.every-forward-bounded` | A forwarded request of any method without a timeout waits 10 s, so no forward is without a time limit. | both |
 | `exposure.timeout.invalid-timeout-rejected` | A command.run timeout of 0, above 600000, fractional, a string, or negative returns -32602. | both |
-| `exposure.timeout.status-next-timeout-rejected` | status.next with any timeout returns -32602. | both |
 | `exposure.relay.reply-resolves-request` | A reply from the target document with a matching id resolves the request with its result. | both |
 | `exposure.relay.keeps-value-text` | A page reply is relayed as the text the page sent, so the keys of a value keep their order (`{"zeta":1,"alpha":{"b":2,"a":1}}` stays as sent). | both |
 | `exposure.relay.missing-result-is-null` | A reply without a result resolves to null. | both |

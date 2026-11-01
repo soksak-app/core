@@ -8034,6 +8034,34 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F342",
+    implementation: [
+      { file: "packages/workbench/exposure.js", symbol: "function deliver({ surface, name, value, version })" },
+      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "pub fn forward_timeout(timeout: &Value)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/exposure.test.mjs", id: "a watched surface status receives the values that the surface sends, and no forward waits for a change" },
+      { file: "packages/host/wailsv3/tests/exposure_test.go", id: "TestForwardedRequestsUseTheDeclaredTimeout" },
+      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "forwarded_requests_use_the_declared_timeout" },
+    ],
+    expected: "A surface status watch is an event subscription and no forward waits without a time limit, so a ready main page reloads after its calls are answered.",
+    levels: ["unit"],
+  },
+  {
+    id: "F342-2",
+    implementation: [
+      { file: "packages/host/wailsv3/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
+      { file: "packages/host/tauriv2/src/exposure.rs", symbol: "pub fn forward_timeout(timeout: &Value)" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/exposure_test.go", id: "TestForwardedRequestsUseTheDeclaredTimeout" },
+      { file: "packages/host/tauriv2/tests/exposure_test.rs", id: "forwarded_requests_use_the_declared_timeout" },
+    ],
+    expected: "Every forwarded request has a time limit, 10 s or its declared timeout, whatever its method.",
+    levels: ["unit"],
+  },
+  {
     id: "F341",
     implementation: [{ file: "packages/workbench/exposure.js", symbol: "observe(name, surface, fn, { exact = false } = {})" }],
     tests: [{ file: "packages/workbench/test/exposure.test.mjs", id: "without a registered surface the observer receives null" }],

@@ -182,7 +182,7 @@ fn host_declarations() -> Value {
 /// Checks that the name whose owner is host is declared for this request method. An undeclared name is 1001.
 pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
     let kind = match method {
-        "status.get" | "status.watch" | "status.unwatch" | "status.next" => "status",
+        "status.get" | "status.watch" | "status.unwatch" => "status",
         "command.run" => "commands",
         _ => "",
     };
@@ -929,14 +929,11 @@ pub(crate) struct Forward {
 /// The longest time limit that a forward request can specify (ms).
 const MAX_FORWARD_TIMEOUT: u64 = 600_000;
 
-/// Sets the time limit of a forward request. status.next does not answer until the value changes, so it has no time
-/// limit (None) and accepts no timeout. timeout is an integer in ms from 1 to 600000.
-pub fn forward_timeout(method: &str, timeout: &Value) -> Result<Option<Duration>, Failure> {
+/// Sets the time limit of a forward request: 10 s, or timeout, an integer in ms from 1 to 600000. Every forward request
+/// has a time limit, whatever its method, so a page that does not answer ends the request with 1005.
+pub fn forward_timeout(timeout: &Value) -> Result<Option<Duration>, Failure> {
     if timeout.is_null() {
-        return Ok((method != "status.next").then_some(TIMEOUT));
-    }
-    if method == "status.next" {
-        return Err(Failure::params("status.next has no timeout"));
+        return Ok(Some(TIMEOUT));
     }
     let ms = timeout
         .as_f64()
@@ -968,13 +965,12 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValu
             plugin: plugin.clone(),
             command: request.method.clone(),
         });
-    let outcome = match forward_timeout(&request.method, &request.timeout) {
+    let outcome = match forward_timeout(&request.timeout) {
 		Err(invalid) => Err(invalid),
 		Ok(_) if !surface_exists => Err(Failure::new(
 			MISSING_DOCUMENT,
 			format!("surface {} does not exist", request.surface),
 		)),
-        // status.next has no time limit. When the surface closes, it ends with 1003.
         Ok(timeout) => window
             .state::<Exposure>()
 			.relay
