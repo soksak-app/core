@@ -59,6 +59,8 @@ const EXPECTED_IDS = [
   "screen.hash.blank-caret-8x4.sha256",
   "screen.hash.blank-two-cell-cursor.sha256",
   "screen.hash.linked-word.sha256",
+  "screen.apply.change-one-row",
+  "screen.apply.refuses-unfollowed-change",
 ];
 
 const MESSAGE_HASH_PAIRS = [
@@ -83,7 +85,7 @@ export async function runScreenHashCase(testCase) {
   const outputs = [];
   for (const step of testCase.steps) {
     assert.ok(step && typeof step === "object" && !Array.isArray(step), `${testCase.id}: step must be an object`);
-    const operations = ["bytes", "hash", "message"].filter((name) => Object.hasOwn(step, name));
+    const operations = ["bytes", "hash", "apply"].filter((name) => Object.hasOwn(step, name));
     assert.equal(operations.length, 1, `${testCase.id}: every step must have exactly one operation`);
     try {
       if (operations[0] === "bytes") {
@@ -91,7 +93,7 @@ export async function runScreenHashCase(testCase) {
       } else if (operations[0] === "hash") {
         outputs.push({ hash: await screenHash(step.hash.screen) });
       } else {
-        outputs.push({ screen: applyScreenMessage(null, step.message.value).screen });
+        outputs.push({ applied: applyScreenMessage(step.apply.previous, step.apply.message) });
       }
     } catch (error) {
       outputs.push({ error: error.message });
@@ -120,7 +122,7 @@ test("screenHash frame and preedit message pairs with its projected screen hash"
   const hashCase = CONTRACT.cases.find(({ id }) => id === "screen.hash.frame-preedit.sha256");
   assert.ok(messageCase, "frame and preedit message case is published");
   assert.ok(hashCase, "projected screen hash case is published");
-  const [{ screen }] = await runScreenHashCase(messageCase);
+  const [{ applied: { screen } }] = await runScreenHashCase(messageCase);
   assert.deepEqual(hashCase.steps[0].hash.screen, screen);
   assert.equal(hashCase.steps[0].output.hash, await screenHash(screen));
 });
@@ -133,7 +135,7 @@ test("screenHash publishes one unique hash input for each valid message projecti
     const hashCase = CONTRACT.cases.find(({ id }) => id === hashId);
     assert.ok(messageCase, `${messageId} is published`);
     assert.ok(hashCase, `${hashId} is published`);
-    const [{ screen }] = await runScreenHashCase(messageCase);
+    const [{ applied: { screen } }] = await runScreenHashCase(messageCase);
     assert.deepEqual(hashCase.steps[0].hash.screen, screen, `${hashId} does not hash ${messageId}'s projection`);
     assert.equal(hashCase.steps[0].output.hash, await screenHash(screen), `${hashId} is not the SDK hash`);
     const matches = hashInputs.filter(({ screen: candidate }) => JSON.stringify(candidate) === JSON.stringify(screen));

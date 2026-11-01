@@ -1,6 +1,6 @@
 {
   "surface": "packages/plugin-api/screen-hash.js#screenHash",
-  "description": "Ordered screenHash cases fix canonical screen bytes, the SHA-256 output, the projection from a screen message, and named refusals. Inputs and results are literals owned by this contract.",
+  "description": "Ordered screenHash cases fix canonical screen bytes, the SHA-256 output, the application of a full or change screen message to the previous result, and named refusals. Inputs and results are literals owned by this contract.",
   "cases": [
     {
       "id": "screen.bytes.canonical-order",
@@ -66,8 +66,9 @@
       "id": "screen.message.projects-hashed-fields",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 7,
               "segment": "seg-1",
@@ -95,23 +96,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "A",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 7,
+              "segment": "seg-1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "A",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         },
@@ -196,8 +202,9 @@
           }
         },
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "segment": "seg-1",
               "number": 1,
@@ -233,8 +240,9 @@
       "id": "screen.message.empty-one-cell",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
@@ -259,23 +267,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 2,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         },
@@ -310,8 +323,9 @@
       "id": "screen.message.empty-one-cell-attributes-change",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
@@ -336,23 +350,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 1
-                }
-              ]
+            "applied": {
+              "sequence": 2,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 1
+                  }
+                ]
+              }
             }
           }
         },
@@ -387,8 +406,9 @@
       "id": "screen.message.empty-one-cell.projects",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
@@ -413,23 +433,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 2,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -439,8 +464,9 @@
       "id": "screen.message.empty-one-cell-attributes-change.projects",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
@@ -465,23 +491,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 1
-                }
-              ]
+            "applied": {
+              "sequence": 2,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 1
+                  }
+                ]
+              }
             }
           }
         }
@@ -551,8 +582,9 @@
       "id": "screen.message.blank-underlined-cursor",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -588,30 +620,35 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 2,
-              "cursor": {
-                "row": 0,
-                "col": 1,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 2,
+                "cursor": {
+                  "row": 0,
+                  "col": 1,
+                  "visible": true
                 },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -621,8 +658,9 @@
       "id": "screen.message.korean-preedit",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -699,58 +737,63 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 2,
-              "cols": 3,
-              "cursor": {
-                "row": 1,
-                "col": 2,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 2,
+                "cols": 3,
+                "cursor": {
+                  "row": 1,
+                  "col": 2,
+                  "visible": true
                 },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -760,8 +803,9 @@
       "id": "screen.message.linked-word",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -836,65 +880,70 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 7,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "a",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 7,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
                 },
-                {
-                  "grapheme": " ",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "L",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "I",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "N",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "K",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": " ",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "a",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": " ",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "L",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "I",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "N",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "K",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": " ",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -904,8 +953,9 @@
       "id": "screen.message.empty-one-cell.frame-null",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
@@ -931,23 +981,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 2,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -957,8 +1012,9 @@
       "id": "screen.message.empty-one-cell-attributes-change.frame-null",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
@@ -984,23 +1040,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 1
-                }
-              ]
+            "applied": {
+              "sequence": 2,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 1
+                  }
+                ]
+              }
             }
           }
         }
@@ -1010,8 +1071,9 @@
       "id": "screen.message.refuses-missing-sequence.frame-null",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "segment": "b1",
               "number": 1,
@@ -1045,8 +1107,9 @@
       "id": "screen.message.refuses-zero-rows.frame-null",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
@@ -1081,8 +1144,9 @@
       "id": "screen.message.refuses-zero-cols.frame-null",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
@@ -1117,8 +1181,9 @@
       "id": "screen.message.refuses-cell-count.frame-null",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
@@ -1145,8 +1210,9 @@
       "id": "screen.message.refuses-cell-attributes.frame-null",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
@@ -1181,8 +1247,9 @@
       "id": "screen.message.refuses-empty-segment.frame-null",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 2,
               "segment": "",
@@ -1217,8 +1284,9 @@
       "id": "screen.message.blank-cell-cursor-visible",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -1247,23 +1315,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -1273,8 +1346,9 @@
       "id": "screen.message.letter-x-cursor-hidden",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -1303,23 +1377,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "x",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
+                },
+                "cells": [
+                  {
+                    "grapheme": "x",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -1329,8 +1408,9 @@
       "id": "screen.message.scrollback-offset-3",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -1363,23 +1443,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -1389,8 +1474,9 @@
       "id": "screen.message.scrollback-offset-25",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -1423,23 +1509,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -1449,8 +1540,9 @@
       "id": "screen.message.scrollback-background",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -1484,23 +1576,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -1510,8 +1607,9 @@
       "id": "screen.message.background-color",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -1541,23 +1639,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -1567,8 +1670,9 @@
       "id": "screen.message.attribute-flags",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "event": "screen",
               "sequence": 1,
               "segment": "b1",
@@ -1608,37 +1712,42 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 3,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "Z",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 45
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 3,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
                 },
-                {
-                  "grapheme": "Y",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 210
-                },
-                {
-                  "grapheme": "N",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "Z",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 45
+                  },
+                  {
+                    "grapheme": "Y",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 210
+                  },
+                  {
+                    "grapheme": "N",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -1648,8 +1757,9 @@
       "id": "screen.message.wide-cell-continuation",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -1713,58 +1823,63 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 6,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "A",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 6,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
                 },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "B",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "한",
-                  "width": 2,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 0,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "A",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "B",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "한",
+                    "width": 2,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 0,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -1774,8 +1889,9 @@
       "id": "screen.message.multiline-rows",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -1902,121 +2018,126 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 3,
-              "cols": 5,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "l",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 3,
+                "cols": 5,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
                 },
-                {
-                  "grapheme": "i",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "n",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "e",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "1",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "l",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "i",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "n",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "e",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "2",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "l",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "i",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "n",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "e",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "3",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "l",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "i",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "n",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "e",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "1",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "l",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "i",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "n",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "e",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "2",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "l",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "i",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "n",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "e",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "3",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -2026,8 +2147,9 @@
       "id": "screen.message.frame-screen-read",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -2088,51 +2210,56 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 5,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "l",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 5,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
                 },
-                {
-                  "grapheme": "i",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "n",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "e",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "1",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "l",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "i",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "n",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "e",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "1",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -2142,8 +2269,9 @@
       "id": "screen.message.null-frame-screen-read",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -2200,51 +2328,56 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 5,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "l",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 5,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
                 },
-                {
-                  "grapheme": "i",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "n",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "e",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "1",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "l",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "i",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "n",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "e",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "1",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -2254,8 +2387,9 @@
       "id": "screen.message.frame-screen-good",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -2309,44 +2443,49 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 4,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "g",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 4,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
                 },
-                {
-                  "grapheme": "o",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "o",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "d",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "g",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "o",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "o",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "d",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -2356,8 +2495,9 @@
       "id": "screen.message.frame-preedit",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -2424,44 +2564,49 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 4,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "g",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 4,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
                 },
-                {
-                  "grapheme": "o",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "o",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "d",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "g",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "o",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "o",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "d",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -2522,8 +2667,9 @@
       "id": "screen.message.caret-8x4",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -2771,240 +2917,245 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 4,
-              "cols": 8,
-              "cursor": {
-                "row": 3,
-                "col": 7,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 4,
+                "cols": 8,
+                "cursor": {
+                  "row": 3,
+                  "col": 7,
+                  "visible": true
                 },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -3014,8 +3165,9 @@
       "id": "screen.message.hollow-block-cursor",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -3051,30 +3203,35 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 2,
-              "cursor": {
-                "row": 0,
-                "col": 1,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 2,
+                "cursor": {
+                  "row": 0,
+                  "col": 1,
+                  "visible": true
                 },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -3084,8 +3241,9 @@
       "id": "screen.message.cursor-preedit-null",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -3150,58 +3308,63 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 2,
-              "cols": 3,
-              "cursor": {
-                "row": 1,
-                "col": 2,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 2,
+                "cols": 3,
+                "cursor": {
+                  "row": 1,
+                  "col": 2,
+                  "visible": true
                 },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -3211,8 +3374,9 @@
       "id": "screen.message.blank-hidden-cursor",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -3241,23 +3405,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -3267,8 +3436,9 @@
       "id": "screen.message.scrollback-background-offset-25",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -3302,23 +3472,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -3328,8 +3503,9 @@
       "id": "screen.message.cursor-without-preedit",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -3393,58 +3569,63 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 2,
-              "cols": 3,
-              "cursor": {
-                "row": 1,
-                "col": 2,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 2,
+                "cols": 3,
+                "cursor": {
+                  "row": 1,
+                  "col": 2,
+                  "visible": true
                 },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                },
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -3454,8 +3635,9 @@
       "id": "screen.message.scrollback-offset-0",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -3488,23 +3670,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -3514,8 +3701,9 @@
       "id": "screen.message.scrollback-offset-zero-hidden-cursor",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -3548,23 +3736,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": false
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": false
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -3574,8 +3767,9 @@
       "id": "screen.message.empty-scrollback",
       "steps": [
         {
-          "message": {
-            "value": {
+          "apply": {
+            "previous": null,
+            "message": {
               "sequence": 1,
               "segment": "b1",
               "number": 1,
@@ -3608,23 +3802,28 @@
             }
           },
           "output": {
-            "screen": {
-              "rows": 1,
-              "cols": 1,
-              "cursor": {
-                "row": 0,
-                "col": 0,
-                "visible": true
-              },
-              "cells": [
-                {
-                  "grapheme": "",
-                  "width": 1,
-                  "fg": null,
-                  "bg": null,
-                  "attributes": 0
-                }
-              ]
+            "applied": {
+              "sequence": 1,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 1,
+                "cols": 1,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
             }
           }
         }
@@ -4337,6 +4536,233 @@
           },
           "output": {
             "hash": "27fe81f7aea10a93fff440ae699b1e8d8f2f64eb5e2188c96efbbf731eebdcd9"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.apply.change-one-row",
+      "steps": [
+        {
+          "apply": {
+            "previous": {
+              "sequence": 2,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 2,
+                "cols": 2,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "a",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "b",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "c",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "d",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
+            },
+            "message": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "number": 2,
+              "base": false,
+              "previous": 1,
+              "rows": 2,
+              "cols": 2,
+              "cursor": {
+                "row": 1,
+                "col": 1,
+                "visible": true
+              },
+              "changed": [
+                {
+                  "row": 1,
+                  "cells": [
+                    {
+                      "grapheme": "x",
+                      "width": 1,
+                      "fg": null,
+                      "bg": null,
+                      "attributes": 0
+                    },
+                    {
+                      "grapheme": "y",
+                      "width": 1,
+                      "fg": null,
+                      "bg": null,
+                      "attributes": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "output": {
+            "applied": {
+              "sequence": 2,
+              "segment": "b1",
+              "number": 2,
+              "screen": {
+                "rows": 2,
+                "cols": 2,
+                "cursor": {
+                  "row": 1,
+                  "col": 1,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "a",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "b",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "x",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "y",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.apply.refuses-unfollowed-change",
+      "steps": [
+        {
+          "apply": {
+            "previous": {
+              "sequence": 2,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 2,
+                "cols": 2,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "a",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "b",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "c",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "d",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
+            },
+            "message": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "number": 2,
+              "base": false,
+              "previous": 3,
+              "rows": 2,
+              "cols": 2,
+              "cursor": {
+                "row": 1,
+                "col": 1,
+                "visible": true
+              },
+              "changed": [
+                {
+                  "row": 1,
+                  "cells": [
+                    {
+                      "grapheme": "x",
+                      "width": 1,
+                      "fg": null,
+                      "bg": null,
+                      "attributes": 0
+                    },
+                    {
+                      "grapheme": "y",
+                      "width": 1,
+                      "fg": null,
+                      "bg": null,
+                      "attributes": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "output": {
+            "error": "screen message: a change of previous 3 does not follow number 1"
           }
         }
       ]
