@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use tauri::{Manager, Webview, Window};
@@ -90,20 +91,62 @@ pub struct ViewStart {
 }
 
 /// The wire start values of a view. `declarations` is an index into the request-local table and has no default, so a
-/// missing, null, non-integer, negative or nested legacy value is refused by serde before sync can mutate surfaces.
-#[derive(Clone, Debug, Deserialize)]
+/// missing, null, non-integer, negative or nested legacy value is refused before sync can mutate surfaces.
+#[derive(Clone, Debug)]
 struct ViewStartRequest {
-    #[serde(default)]
     params: Option<Value>,
-    #[serde(default, deserialize_with = "present_value")]
     origin: Option<Value>,
-    #[serde(default)]
     project: Option<SurfaceProject>,
     declarations: u64,
-    #[serde(default, deserialize_with = "present_value")]
     diagnostics: Option<Value>,
-    #[serde(default, deserialize_with = "present_value")]
     section: Option<Value>,
+}
+
+impl<'de> Deserialize<'de> for ViewStartRequest {
+    /// Reads the start values as a map, so that the host call decoder, which skips a null member of a struct, keeps a null
+    /// origin, diagnostics and section as present values; the Wails host keeps them raw (ViewStart).
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Fields;
+        impl<'de> Visitor<'de> for Fields {
+            type Value = ViewStartRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("the start values of a view")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut params = None;
+                let mut origin = None;
+                let mut project = None;
+                let mut declarations = None;
+                let mut diagnostics = None;
+                let mut section = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "params" => params = map.next_value::<Option<Value>>()?,
+                        "origin" => origin = Some(map.next_value::<Value>()?),
+                        "project" => project = map.next_value::<Option<SurfaceProject>>()?,
+                        "declarations" => declarations = Some(map.next_value::<u64>()?),
+                        "diagnostics" => diagnostics = Some(map.next_value::<Value>()?),
+                        "section" => section = Some(map.next_value::<Value>()?),
+                        _ => {
+                            map.next_value::<de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(ViewStartRequest {
+                    params,
+                    origin,
+                    project,
+                    declarations: declarations
+                        .ok_or_else(|| de::Error::missing_field("declarations"))?,
+                    diagnostics,
+                    section,
+                })
+            }
+        }
+        deserializer.deserialize_map(Fields)
+    }
 }
 
 /// Keeps a present value, null included, so that an absent field and a null field are told apart.

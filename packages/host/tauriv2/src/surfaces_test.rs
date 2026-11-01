@@ -18,6 +18,31 @@ use super::{
 mod declaration_table {
     use super::super::SyncRequest;
 
+    // The page sends the start values of a view through the host call decoder, which skips a null member of a struct as the
+    // Wails host leaves a typed field unchanged; the Wails host keeps the null of its raw start values, so this decoder keeps it.
+    // contract: view.start-values.keeps-null-members
+    #[test]
+    fn the_host_call_decoder_keeps_the_null_start_values_of_a_view() {
+        let request: SyncRequest = crate::arguments::decode("request", &serde_json::json!({
+            "settled": true,
+            "titlebar": 40.0,
+            "declarations": [{"commands": []}],
+            "surfaces": [{"id":"left/probe.tree","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
+                          "plugin":"probe","composition":{"kind":"view","page":"tree.html"},
+                          "start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,
+                                   "diagnostics":null,"section":null}}]
+        }))
+        .expect("the page request decodes");
+        let resolved = request.resolve().expect("the declaration index resolves");
+        let start = resolved.surfaces[0]
+            .start
+            .as_ref()
+            .expect("view start values");
+        assert_eq!(start.diagnostics, Some(serde_json::Value::Null));
+        assert_eq!(start.section, Some(serde_json::Value::Null));
+        assert_eq!(start.origin, Some(serde_json::json!({"directory": null})));
+    }
+
     // contract: view.start-values.declaration-table
     #[test]
     fn resolving_declaration_indices_preserves_each_complete_start_and_is_request_local() {

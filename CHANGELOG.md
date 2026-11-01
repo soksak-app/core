@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F340: The tauriv2 host keeps a null `diagnostics` and `section` of the view start values, as the Wails host does, instead of refusing them as missing.
 - F338: The application draws the section surfaces of a plugin that declares only sections, and the background path of the memory saver and of hidden view preparation applies only to tabs (`keepsBackground`).
 - F339: The first state that a section mount reports before `mountSurface` returns is recorded for that mount attempt instead of failing the mount.
 - F337: A section surface mounts with the context origin `{directory: null}` instead of reading a tab origin that it does not have.

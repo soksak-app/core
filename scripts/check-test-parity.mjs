@@ -8016,6 +8016,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F340",
+    implementation: [{ file: "packages/host/tauriv2/src/surfaces.rs", symbol: "impl<'de> Deserialize<'de> for ViewStartRequest" }],
+    tests: [
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "the_host_call_decoder_keeps_the_null_start_values_of_a_view" },
+      { file: "packages/host/wailsv3/src/view_start_test.go", id: "TestSyncRequestDecoderKeepsTheNullStartValues" },
+    ],
+    expected: "Both hosts decode a null diagnostics and section of the view start values as present values.",
+    levels: ["unit"],
+  },
+  {
     id: "F339",
     implementation: [{ file: "packages/workbench/sidebar-sections.js", symbol: "const attempt = entry.mount = {};" }],
     tests: [{ file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "each section body is the slot of a view surface named <sidebar id>/<section id>" }],

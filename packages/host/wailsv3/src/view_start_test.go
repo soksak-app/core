@@ -264,6 +264,23 @@ func checkViewSurface(t *testing.T, surface string) error {
 	return err
 }
 
+// The decoder of the page call keeps the null origin directory, diagnostic declaration and section of the start values as
+// present raw values, which the start checks accept.
+// contract: view.start-values.keeps-null-members
+func TestSyncRequestDecoderKeepsTheNullStartValues(t *testing.T) {
+	request, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[{"commands":[]}],
+		"surfaces":[{"id":"left/probe.tree","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"probe",
+		"composition":{"kind":"view","page":"tree.html"},
+		"start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null}}]}`))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	start := request.Surfaces[0].Start
+	if start == nil || string(start.Diagnostics) != "null" || string(start.Section) != "null" {
+		t.Fatalf("start values %+v, want the null diagnostics and section kept", start)
+	}
+}
+
 // A view surface whose start values carry no section is refused with its reason. The section is checked after the origin and
 // the diagnostic declaration.
 // contract: view.start-values.refuses-a-missing-section
