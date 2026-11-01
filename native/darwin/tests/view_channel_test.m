@@ -164,6 +164,16 @@ int main(void) { @autoreleasepool {
         check([viewMessages[0][@"message"][@"event"] isEqual:@"view.ready"]
             && [viewMessages[0][@"message"][@"document"] isEqual:@"doc-1"],
             [NSString stringWithFormat:@"the view receives the ready message: %@", viewMessages[0]]);
+        // A reload of the view, which the default context menu or the page itself starts, would replace the document whose
+        // registrations the main page holds under the same source generation; the view keeps its first document.
+        NSUInteger readyMessages = viewMessages.count;
+        [(WKWebView *)view evaluateJavaScript:@"location.reload()" completionHandler:nil];
+        until(@"the view reports the refused reload", ^BOOL{ return [latest[@"error"] isKindOfClass:NSString.class]; });
+        check([latest[@"error"] hasPrefix:@"a view keeps its first document"],
+            [NSString stringWithFormat:@"the view refuses a reload of its document: %@", latest[@"error"]]);
+        check([latest[@"navigations"] isEqual:@1] && viewMessages.count == readyMessages,
+            [NSString stringWithFormat:@"the refused reload starts no navigation and no document: %@ navigations, %lu messages",
+                latest[@"navigations"], (unsigned long)viewMessages.count]);
         sp_document_set_view_ended(view, viewEndedReceiver, NULL);
         [(id<WKNavigationDelegate>)view webViewWebContentProcessDidTerminate:(WKWebView *)view];
         check(viewEnded == 1, [NSString stringWithFormat:@"the end of the view process calls the ended receiver once: %d", viewEnded]);

@@ -8046,6 +8046,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F371",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "if (self.pluginRootView && self.viewDocumentCommitted && action.targetFrame.isMainFrame && !sameDocument(action, view.URL))" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/view_channel_test.m", id: "the view refuses a reload of its document" },
+    ],
+    expected: "A view keeps its first document: a main-frame navigation after its commit, a reload included, is refused and logged.",
+    levels: ["unit"],
+  },
+  {
     id: "F370",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "view.addEventListener(\"contextmenu\", openMenu);" },

@@ -420,6 +420,8 @@ static void frameIdentityClose(SPDocumentView *view);
 @property CGColorRef viewportMarkerOriginalBorderColor;
 - (void)restoreViewportMarker;
 @property BOOL pluginRootView;
+// Whether the view of a plugin has committed its first document. A view keeps that document for its source generation.
+@property BOOL viewDocumentCommitted;
 @property(retain) SPDocumentFrameIdentity *frameIdentity;
 @property(retain) id frameIdentityMessage;
 #endif
@@ -1078,6 +1080,7 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
 // the script of the new document asks for its streams again when it is installed.
 // A main frame commit, a reload included, replaces every frame document, so every form flag is cleared.
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
+    if (self.pluginRootView) self.viewDocumentCommitted = YES;
     [self.formFrames removeAllObjects];
     self.ready = NO;
     self.dirty = NO;
@@ -1189,6 +1192,17 @@ static BOOL webAddress(NSURL *url) {
 }
 
 
+// Whether a navigation action moves to a fragment of the current document: not a reload, and the same address without fragment.
+static BOOL sameDocument(WKNavigationAction *action, NSURL *current) {
+    NSURL *target = action.request.URL;
+    if (action.navigationType == WKNavigationTypeReload || !current || target.fragment == nil) return NO;
+    NSURLComponents *from = [NSURLComponents componentsWithURL:current resolvingAgainstBaseURL:NO];
+    NSURLComponents *to = [NSURLComponents componentsWithURL:target resolvingAgainstBaseURL:NO];
+    from.fragment = nil;
+    to.fragment = nil;
+    return [from.URL isEqual:to.URL];
+}
+
 - (void)webView:(WKWebView *)view decidePolicyForNavigationAction:(WKNavigationAction *)action
     decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
     if (!webAddress(action.request.URL)) {
@@ -1197,6 +1211,17 @@ static BOOL webAddress(NSURL *url) {
         // A main frame navigation that was refused does not start. The navigation in progress is the one that
         // received this decision.
         if (action.targetFrame.isMainFrame) self.navigation = nil;
+        [self report];
+        decisionHandler(WKNavigationActionPolicyCancel);
+        return;
+    }
+    // A view of a plugin keeps its first document: the main page holds the registrations of that document under the source
+    // generation of the view, and a replacement document would register them again under the same generation
+    // (docs/spec/native-surfaces.md#view-surfaces). A navigation within the document, to a fragment, keeps the document.
+    if (self.pluginRootView && self.viewDocumentCommitted && action.targetFrame.isMainFrame && !sameDocument(action, view.URL)) {
+        self.failure = [NSString stringWithFormat:@"a view keeps its first document: navigation to %@ refused",
+            action.request.URL.absoluteString];
+        sp_log_error("document view", self.failure.UTF8String);
         [self report];
         decisionHandler(WKNavigationActionPolicyCancel);
         return;
