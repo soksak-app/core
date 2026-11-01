@@ -855,7 +855,7 @@
                 {
                   "grapheme": "x",
                   "width": 1,
-                  "fg": 4,
+                  "fg": "#040404",
                   "bg": null,
                   "attributes": 0
                 },
@@ -890,8 +890,8 @@
       ],
       "hashes": [
         "ca3d0c5c57ee06e465dea8671a28b35082c0880d8306e5bb068b7c01b62f888a",
-        "d99e304acb8d7f4d55af89c5a956d934c6d14efea6e78c2235f90f67eac4ee50",
-        "82ea1276c4a23986b20d503a1be20c8958c8c5f82b6e7808e13508b865a54852"
+        "d8a0e91bb5a85cec10c96982bdd1bf3ca696d3ca6e32fc89be45d93324717150",
+        "4b05291a4a27a681726ba4a299e1d802f8ce4d5fd2dd3e34fd83ed5283bab0ad"
       ]
     }
   ],
@@ -963,7 +963,7 @@
               {
                 "grapheme": "x",
                 "width": 1,
-                "fg": 4,
+                "fg": "#040404",
                 "bg": null,
                 "attributes": 0
               },
@@ -1048,7 +1048,7 @@
               {
                 "grapheme": "x",
                 "width": 1,
-                "fg": 4,
+                "fg": "#040404",
                 "bg": null,
                 "attributes": 0
               },
@@ -1133,7 +1133,7 @@
               {
                 "grapheme": "x",
                 "width": 1,
-                "fg": 4,
+                "fg": "#040404",
                 "bg": null,
                 "attributes": 0
               },
