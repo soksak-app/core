@@ -2,6 +2,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <IOSurface/IOSurface.h>
 #import <WebKit/WebKit.h>
+#import "support/layer_contents.h"
 #import "capture.h"
 #import "image_capture_match.h"
 #import "image_region.h"
@@ -42,7 +43,7 @@ static IOSurfaceRef identitySurface(size_t width, size_t height, unsigned char n
 
 static BOOL regionMatchesSurfaceBytes(void *handle, IOSurfaceRef surface, NSData *expected) {
     CALayer *layer = (CALayer *)((NSView *)handle).layer.sublayers.firstObject;
-    CGImageRef image = (CGImageRef)layer.contents;
+    CGImageRef image = layerContentsImage(layer);
     if (!image || !surface || !expected) return NO;
     CGDataProviderRef provider = CGImageGetDataProvider(image);
     CFDataRef actual = provider ? CGDataProviderCopyData(provider) : NULL;

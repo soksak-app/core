@@ -8047,6 +8047,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F374-2",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, char *declaredColorSpaceName, size_t nameCapacity)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 1: the layer presents a host-owned IOSurface" },
+    ],
+    expected: "The image region presents each accepted frame as a host-owned IOSurface copy with the declared color space, so Core Animation does not convert a CGImage on the CPU at each commit.",
+    levels: ["unit"],
+  },
+  {
     id: "F374-1",
     implementation: [
       { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function frameMilliseconds(cpuPercent, rate)" },

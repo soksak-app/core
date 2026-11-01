@@ -3,6 +3,7 @@
 #import <IOSurface/IOSurface.h>
 #import <objc/runtime.h>
 #include <unistd.h>
+#import "support/layer_contents.h"
 #import "event_ring.h"
 #import "image_region.h"
 #import "image_capture_match.h"
@@ -334,7 +335,12 @@ int main(int argc, char **argv) { @autoreleasepool {
         if (imageLayer) {
             check([imageLayer.contentsGravity isEqualToString:kCAGravityTopLeft],
                 @"TEST 1: terminal pixels are never scaled to fill a pending geometry");
-            CGImageRef snapshot = (CGImageRef)imageLayer.contents;
+            // The layer presents a host-owned IOSurface, so the compositor matches its colors; a CGImage would make Core Animation
+            // convert every frame on the CPU at commit.
+            id presentedContents = imageLayer.contents;
+            check(presentedContents && CFGetTypeID((__bridge CFTypeRef)presentedContents) == IOSurfaceGetTypeID(),
+                [NSString stringWithFormat:@"TEST 1: the layer presents a host-owned IOSurface (got %@)", presentedContents]);
+            CGImageRef snapshot = layerContentsImage(imageLayer);
             check(snapshot != NULL && CGImageGetWidth(snapshot) == (size_t)raster1[0]
                 && CGImageGetHeight(snapshot) == (size_t)raster1[1],
                 @"TEST 1: layer owns a copied snapshot at the exact native raster");
@@ -345,12 +351,12 @@ int main(int argc, char **argv) { @autoreleasepool {
                 sizeof(snapshotColorSpaceBuffer), kCFStringEncodingUTF8)
                 && strcmp(snapshotColorSpaceBuffer, "kCGColorSpaceDeviceRGB") == 0,
                 @"TEST 1: an IOSurface without a color-space tag keeps the DeviceRGB display interpretation");
-            check((CFTypeRef)snapshot != (CFTypeRef)testSurface1,
+            check((__bridge CFTypeRef)presentedContents != (CFTypeRef)testSurface1,
                 @"TEST 1: layer does not point at the supplier IOSurface");
             IOSurfaceLock(testSurface1, 0, NULL);
             *(uint32_t *)IOSurfaceGetBaseAddress(testSurface1) = 0;
             IOSurfaceUnlock(testSurface1, 0, NULL);
-            CFDataRef copied = CGDataProviderCopyData(CGImageGetDataProvider(snapshot));
+            CFDataRef copied = CGDataProviderCopyData(CGImageGetDataProvider(layerContentsImage(imageLayer)));
             uint32_t firstPixel = *(const uint32_t *)CFDataGetBytePtr(copied);
             check(firstPixel == 0xFFFF0000,
                 @"TEST 1: mutating the transfer IOSurface does not change the presented snapshot");
@@ -387,7 +393,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             identityToken, identityRaster[0], identityRaster[1], identityRaster[2], 91, 10, 1);
         check(initialPresented, @"TEST 1A: the original source snapshot is presented before tagging");
         CALayer *identityLayer = (CALayer *)((NSView *)identityRegion).layer.sublayers.firstObject;
-        CGImageRef rawSnapshot = identityLayer ? (CGImageRef)identityLayer.contents : NULL;
+        CGImageRef rawSnapshot = identityLayer ? layerContentsImage(identityLayer) : NULL;
         if (rawSnapshot) CGImageRetain(rawSnapshot);
         sp_image_capture_match_begin(NULL, NULL);
         char *identityError = NULL;
@@ -397,7 +403,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         BOOL taggedPresented = identitySurface && sp_region_present(identityRegion, IOSurfaceGetID(identitySurface),
             identityToken, identityRaster[0], identityRaster[1], identityRaster[2], 91, 10, 1);
         check(taggedPresented, @"TEST 1A: the tagged snapshot keeps the native presentation call successful");
-        CGImageRef taggedSnapshot = identityLayer ? (CGImageRef)identityLayer.contents : NULL;
+        CGImageRef taggedSnapshot = identityLayer ? layerContentsImage(identityLayer) : NULL;
         check(rawSnapshot != NULL && taggedSnapshot != NULL && rawSnapshot != taggedSnapshot,
             @"TEST 1A: the layer receives a tagged image separate from the raw source snapshot");
         NSSet<NSString *> *issuedPayloads = nil;
@@ -482,8 +488,8 @@ int main(int argc, char **argv) { @autoreleasepool {
             cleanupTokenB, cleanupRasterB[0], cleanupRasterB[1], cleanupRasterB[2], 95, 10, 1);
         CALayer *cleanupLayerA = (CALayer *)((NSView *)cleanupRegionA).layer.sublayers.firstObject;
         CALayer *cleanupLayerB = (CALayer *)((NSView *)cleanupRegionB).layer.sublayers.firstObject;
-        CGImageRef cleanupSnapshotA = (CGImageRef)cleanupLayerA.contents;
-        CGImageRef cleanupSnapshotB = (CGImageRef)cleanupLayerB.contents;
+        CGImageRef cleanupSnapshotA = layerContentsImage(cleanupLayerA);
+        CGImageRef cleanupSnapshotB = layerContentsImage(cleanupLayerB);
         if (cleanupSnapshotA) CGImageRetain(cleanupSnapshotA);
         if (cleanupSnapshotB) CGImageRetain(cleanupSnapshotB);
         check(sp_image_capture_match_identity_session_begin(&identityError) && identityError == NULL,
@@ -493,19 +499,23 @@ int main(int argc, char **argv) { @autoreleasepool {
             cleanupTokenA, cleanupRasterA[0], cleanupRasterA[1], cleanupRasterA[2], 94, 10, 2);
         BOOL cleanupTaggedB = cleanupRawB && sp_region_present(cleanupRegionB, IOSurfaceGetID(cleanupSurfaceB),
             cleanupTokenB, cleanupRasterB[0], cleanupRasterB[1], cleanupRasterB[2], 95, 10, 2);
-        check(cleanupTaggedA && cleanupTaggedB && cleanupLayerA.contents != (id)cleanupSnapshotA
-            && cleanupLayerB.contents != (id)cleanupSnapshotB,
+        // A tagged frame is the diagnostic CGImage with the identity code; the raw frame is the host-owned IOSurface.
+        CFTypeID taggedTypeA = cleanupLayerA.contents ? CFGetTypeID((__bridge CFTypeRef)cleanupLayerA.contents) : 0;
+        CFTypeID taggedTypeB = cleanupLayerB.contents ? CFGetTypeID((__bridge CFTypeRef)cleanupLayerB.contents) : 0;
+        check(cleanupTaggedA && cleanupTaggedB && taggedTypeA == CGImageGetTypeID() && taggedTypeB == CGImageGetTypeID()
+            && !imageBytesEqual(layerContentsImage(cleanupLayerA), cleanupSnapshotA)
+            && !imageBytesEqual(layerContentsImage(cleanupLayerB), cleanupSnapshotB),
             @"TEST 1A: both static regions retain tagged layers before a capture failure");
         BOOL smallPresented = smallSurface && sp_region_present(smallIdentityRegion, IOSurfaceGetID(smallSurface),
             smallToken, smallRaster[0], smallRaster[1], smallRaster[2], 92, 10, 1);
         check(smallPresented, @"TEST 1A: an undersized tag ROI does not block raw image presentation");
-        check(imageBytesEqual((CGImageRef)cleanupLayerA.contents, cleanupSnapshotA)
-            && imageBytesEqual((CGImageRef)cleanupLayerB.contents, cleanupSnapshotB),
+        check(imageBytesEqual(layerContentsImage(cleanupLayerA), cleanupSnapshotA)
+            && imageBytesEqual(layerContentsImage(cleanupLayerB), cleanupSnapshotB),
             @"TEST 1A: identity tagging failure immediately restores both static regions without another frame");
         sp_region_restore_capture_identity();
         sp_region_restore_capture_identity();
-        check(imageBytesEqual((CGImageRef)cleanupLayerA.contents, cleanupSnapshotA)
-            && imageBytesEqual((CGImageRef)cleanupLayerB.contents, cleanupSnapshotB),
+        check(imageBytesEqual(layerContentsImage(cleanupLayerA), cleanupSnapshotA)
+            && imageBytesEqual(layerContentsImage(cleanupLayerB), cleanupSnapshotB),
             @"TEST 1A: repeated identity cleanup preserves both restored raw snapshots");
         double restoredFactsA[6] = {0}, restoredFactsB[6] = {0};
         sp_region_frame(cleanupRegionA, restoredFactsA);
@@ -1576,7 +1586,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(presented23, @"TEST 23: sRGB-tagged IOSurface is accepted");
         NSView *regionView23 = (NSView *)region23;
         CALayer *imageLayer23 = regionView23.layer.sublayers.firstObject;
-        CGColorSpaceRef snapshotSpace23 = imageLayer23 ? CGImageGetColorSpace((CGImageRef)imageLayer23.contents) : NULL;
+        CGColorSpaceRef snapshotSpace23 = imageLayer23 ? CGImageGetColorSpace(layerContentsImage(imageLayer23)) : NULL;
         CFStringRef snapshotName23 = snapshotSpace23 ? CGColorSpaceGetName(snapshotSpace23) : NULL;
         char snapshotNameBuffer23[128] = {0};
         BOOL preservesSpace23 = snapshotName23 && CFStringGetCString(snapshotName23, snapshotNameBuffer23,

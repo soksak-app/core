@@ -1,6 +1,7 @@
 // An image region placed on a surface.
 //
-// The IOSurface is attached directly to the contents of the layer. The layer uses device pixel coordinates, so
+// The layer presents a host-owned IOSurface copy of each accepted frame, so the compositor matches its colors; a CGImage would
+// make Core Animation convert every frame on the CPU at commit. The layer uses device pixel coordinates, so
 // the layer scale is the number of device pixels that one unit covers. The pointer passes through (hitTest → nil).
 
 #import <Carbon/Carbon.h>
@@ -50,7 +51,8 @@ static void failFrameIdentitySession(NSString *message) {
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
-@property(assign) CGImageRef snapshot;   // The immutable presentation snapshot that the host copies and owns.
+@property(assign) IOSurfaceRef presented;  // The immutable presentation copy that the host owns and the layer shows.
+@property(assign) IOSurfaceRef spare;      // The earlier presentation copy, reused for the next frame when the compositor released it.
 @property size_t presentedWidth;
 @property size_t presentedHeight;
 @property double presentedScale;
@@ -202,10 +204,10 @@ static NSUInteger spOpenRegionCount = 0;
 void sp_region_restore_capture_identity(void) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     for (SPImageRegion *region in spLiveRegions) {
-        if (region.closed || region.snapshot == NULL || region.imageLayer.contents == (id)region.snapshot) continue;
+        if (region.closed || region.presented == NULL || region.imageLayer.contents == (__bridge id)region.presented) continue;
         [CATransaction begin];
         [CATransaction setDisableActions:YES];
-        region.imageLayer.contents = (id)region.snapshot;
+        region.imageLayer.contents = (__bridge id)region.presented;
         [CATransaction commit];
     }
 }
@@ -322,7 +324,8 @@ static void spEnsurePressOriginMonitor(void) {
     // the outer surface transaction shows it on screen together with the DOM.
     self.imageLayer.contentsGravity = kCAGravityTopLeft;
     self.imageLayer.magnificationFilter = kCAFilterNearest;
-    self.snapshot = NULL;
+    self.presented = NULL;
+    self.spare = NULL;
     return self;
 }
 
@@ -336,9 +339,10 @@ static void spEnsurePressOriginMonitor(void) {
     [_inputFailureReason release];
     [_lastValidPreeditJSON release];
     [_markedTextBuffer release];
-    // Releases the immutable snapshot after the contents of the layer are cleared.
+    // Releases the presentation copies after the contents of the layer are cleared.
     self.imageLayer.contents = nil;
-    if (_snapshot) CGImageRelease(_snapshot);
+    if (_presented) CFRelease(_presented);
+    if (_spare) CFRelease(_spare);
     [_imageLayer release];
     [_presentationError release];
     [_accessibilityText release];
@@ -1343,34 +1347,83 @@ static IOSurfaceRef lookupSurface(unsigned int surface_id) {
     return IOSurfaceLookup(surface_id);
 }
 
-static CGImageRef copySurfaceImage(IOSurfaceRef surface, char *declaredColorSpaceName, size_t nameCapacity) {
+// Copies the pixels and the declared color space of an accepted transfer image into a host-owned IOSurface and returns it
+// retained, or NULL when the declared color space cannot be decoded or a surface cannot be locked or created. The spare copy
+// of the region is reused when it has the same size and the compositor no longer uses it.
+static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, char *declaredColorSpaceName, size_t nameCapacity) {
+    size_t width = IOSurfaceGetWidth(source);
+    size_t height = IOSurfaceGetHeight(source);
+    CFPropertyListRef colorProperties = IOSurfaceCopyValue(source, kIOSurfaceColorSpace);
+    if (colorProperties) {
+        CGColorSpaceRef colors = CGColorSpaceCreateWithPropertyList(colorProperties);
+        if (!colors) {
+            CFRelease(colorProperties);
+            return NULL;
+        }
+        CFStringRef name = CGColorSpaceGetName(colors);
+        if (declaredColorSpaceName && nameCapacity &&
+            (!name || !CFStringGetCString(name, declaredColorSpaceName, nameCapacity, kCFStringEncodingUTF8)))
+            declaredColorSpaceName[0] = '\0';
+        CGColorSpaceRelease(colors);
+    }
+    IOSurfaceRef copy = NULL;
+    IOSurfaceRef spare = view.spare;
+    if (spare && IOSurfaceGetWidth(spare) == width && IOSurfaceGetHeight(spare) == height && !IOSurfaceIsInUse(spare)) {
+        copy = spare;
+        view.spare = NULL;
+    } else {
+        copy = IOSurfaceCreate((CFDictionaryRef)@{
+            (id)kIOSurfaceWidth: @(width),
+            (id)kIOSurfaceHeight: @(height),
+            (id)kIOSurfaceBytesPerElement: @4,
+            (id)kIOSurfacePixelFormat: @(kCVPixelFormatType_32BGRA),
+        });
+    }
+    if (!copy) {
+        if (colorProperties) CFRelease(colorProperties);
+        return NULL;
+    }
+    if (colorProperties) {
+        IOSurfaceSetValue(copy, kIOSurfaceColorSpace, colorProperties);
+        CFRelease(colorProperties);
+    } else {
+        IOSurfaceRemoveValue(copy, kIOSurfaceColorSpace);
+    }
+    if (IOSurfaceLock(source, kIOSurfaceLockReadOnly, NULL) != kIOReturnSuccess) {
+        CFRelease(copy);
+        return NULL;
+    }
+    if (IOSurfaceLock(copy, 0, NULL) != kIOReturnSuccess) {
+        IOSurfaceUnlock(source, kIOSurfaceLockReadOnly, NULL);
+        CFRelease(copy);
+        return NULL;
+    }
+    const char *from = IOSurfaceGetBaseAddress(source);
+    char *to = IOSurfaceGetBaseAddress(copy);
+    size_t fromRow = IOSurfaceGetBytesPerRow(source);
+    size_t toRow = IOSurfaceGetBytesPerRow(copy);
+    for (size_t row = 0; row < height; row++) memcpy(to + row * toRow, from + row * fromRow, width * 4);
+    IOSurfaceUnlock(copy, 0, NULL);
+    IOSurfaceUnlock(source, kIOSurfaceLockReadOnly, NULL);
+    return copy;
+}
+
+// The image of a presentation copy for the diagnostics that read source bytes and color space: its bytes with the declared
+// color space, or DeviceRGB when it declares none. The caller releases it.
+static CGImageRef copyPresentationImage(IOSurfaceRef surface) {
     if (IOSurfaceLock(surface, kIOSurfaceLockReadOnly, NULL) != kIOReturnSuccess) return NULL;
     size_t width = IOSurfaceGetWidth(surface);
     size_t height = IOSurfaceGetHeight(surface);
     size_t bytesPerRow = IOSurfaceGetBytesPerRow(surface);
-    void *base = IOSurfaceGetBaseAddress(surface);
-    CFDataRef data = base ? CFDataCreate(NULL, base, bytesPerRow * height) : NULL;
+    CFDataRef data = CFDataCreate(NULL, IOSurfaceGetBaseAddress(surface), bytesPerRow * height);
     IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
     if (!data) return NULL;
-    CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
     CFPropertyListRef colorProperties = IOSurfaceCopyValue(surface, kIOSurfaceColorSpace);
-    CGColorSpaceRef colors = colorProperties ? CGColorSpaceCreateWithPropertyList(colorProperties)
-        : CGColorSpaceCreateDeviceRGB();
-    if (colorProperties && !colors) {
-        CFRelease(colorProperties);
-        if (provider) CGDataProviderRelease(provider);
-        CFRelease(data);
-        return NULL;
-    }
-    if (colorProperties && declaredColorSpaceName && nameCapacity) {
-        CFStringRef name = CGColorSpaceGetName(colors);
-        if (!name || !CFStringGetCString(name, declaredColorSpaceName, nameCapacity, kCFStringEncodingUTF8))
-            declaredColorSpaceName[0] = '\0';
-    }
+    CGColorSpaceRef colors = colorProperties ? CGColorSpaceCreateWithPropertyList(colorProperties) : CGColorSpaceCreateDeviceRGB();
     if (colorProperties) CFRelease(colorProperties);
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
     CGImageRef image = provider && colors ? CGImageCreate(width, height, 8, 32, bytesPerRow, colors,
-        kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst,
-        provider, NULL, false, kCGRenderingIntentDefault) : NULL;
+        kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst, provider, NULL, false, kCGRenderingIntentDefault) : NULL;
     if (colors) CGColorSpaceRelease(colors);
     if (provider) CGDataProviderRelease(provider);
     CFRelease(data);
@@ -1513,15 +1566,23 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     }
 
     char declaredColorSpaceName[256] = {0};
-    CGImageRef snapshot = copySurfaceImage(surface, declaredColorSpaceName, sizeof(declaredColorSpaceName));
+    IOSurfaceRef presentation = copyPresentation(view, surface, declaredColorSpaceName, sizeof(declaredColorSpaceName));
     CFRelease(surface);
-    if (!snapshot) {
+    if (!presentation) {
         [view reject:@"presentFailed"];
         return false;
     }
 
     BOOL identityTagging = sp_image_capture_match_identity_session_active() && !view.isHiddenOrHasHiddenAncestor;
-    CGImageRef displaySnapshot = snapshot;
+    BOOL captureMatching = !identityTagging && sp_image_capture_match_active() && !view.isHiddenOrHasHiddenAncestor;
+    // The diagnostics read the source bytes and color space through an image of the presentation copy.
+    CGImageRef snapshot = identityTagging || captureMatching ? copyPresentationImage(presentation) : NULL;
+    if ((identityTagging || captureMatching) && !snapshot) {
+        CFRelease(presentation);
+        [view reject:@"presentFailed"];
+        return false;
+    }
+    id displayContents = (__bridge id)presentation;
     CGImageRef taggedSnapshot = NULL;
     CFDataRef sourceBytes = NULL;
     if (identityTagging) {
@@ -1592,7 +1653,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
                     : @"frame identity artifact failed before tagged presentation";
                 free(sessionError);
             }
-            if (!identityFailure) displaySnapshot = taggedSnapshot;
+            if (!identityFailure) displayContents = (__bridge id)taggedSnapshot;
             else if (issuedPayload) {
                 char *evictionError = NULL;
                 if (!sp_image_capture_match_identity_evict(nonce, identity, &evictionError))
@@ -1605,17 +1666,17 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         if (identityFailure) failFrameIdentitySession(identityFailure);
     }
 
-    // The previous snapshot is replaced only after all validation and copying are done. The layer never points at
-    // the IOSurface that the provider rewrites; snapshot remains the unmodified source while displaySnapshot may
-    // carry the opt-in diagnostic QR.
-    CGImageRef previous = view.snapshot;
+    // The previous presentation is replaced only after all validation and copying are done. The layer never points at
+    // the IOSurface that the provider rewrites; the presentation copy remains the unmodified source while displayContents
+    // may carry the opt-in diagnostic QR. The previous copy becomes the spare of the next frame.
+    IOSurfaceRef previous = view.presented;
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     [view applyInsetsInTransaction];
-    view.imageLayer.contents = (id)displaySnapshot;
+    view.imageLayer.contents = displayContents;
     [view updateContentsScale];
     [CATransaction commit];
-    view.snapshot = snapshot;
+    view.presented = presentation;
     view.presentedWidth = surfaceWidth;
     view.presentedHeight = surfaceHeight;
     view.presentedScale = scale;
@@ -1623,7 +1684,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     view.presentedRaster = raster;
     view.presentedSequence = sequence;
     view.presentationError = nil;
-    if (!identityTagging && sp_image_capture_match_active() && !view.isHiddenOrHasHiddenAncestor) {
+    if (captureMatching) {
         CGDataProviderRef provider = CGImageGetDataProvider(snapshot);
         CFDataRef snapshotBytes = provider ? CGDataProviderCopyData(provider) : NULL;
         const char *colorSpaceName = declaredColorSpaceName[0] ? declaredColorSpaceName : NULL;
@@ -1650,7 +1711,11 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     }
     if (sourceBytes) CFRelease(sourceBytes);
     if (taggedSnapshot) CGImageRelease(taggedSnapshot);
-    if (previous) CGImageRelease(previous);
+    if (snapshot) CGImageRelease(snapshot);
+    if (previous) {
+        if (view.spare) CFRelease(view.spare);
+        view.spare = previous;
+    }
 
     return true;
 }
@@ -1765,7 +1830,7 @@ const char *sp_region_facts(void *handle) {
     double presentedScale = 0;
     BOOL hasPresented = NO;
 
-    if (view.snapshot != NULL) {
+    if (view.presented != NULL) {
         presentedWidth = (int)view.presentedWidth;
         presentedHeight = (int)view.presentedHeight;
         presentedScale = view.presentedScale;

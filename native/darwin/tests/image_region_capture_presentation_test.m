@@ -8,6 +8,7 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
+#import "support/layer_contents.h"
 #import "capture.h"
 #import "image_region.h"
 #import "webview_geometry.h"
@@ -226,13 +227,13 @@ int main(int argc, const char **argv) { @autoreleasepool {
     NSString *captureICCReference = colorSpaceICC_SHA256(captureProfile);
     if (captureProfile) CGColorSpaceRelease(captureProfile);
     CALayer *imageLayer = (CALayer *)((NSView *)region).layer.sublayers.firstObject;
-    NSData *layerBytes = tightImageBytes((CGImageRef)imageLayer.contents);
+    NSData *layerBytes = tightImageBytes(layerContentsImage(imageLayer));
     BOOL sourceLayerExact = sourceBytes && layerBytes && [sourceBytes isEqualToData:layerBytes];
     NSColorSpace *windowColorSpace = window.colorSpace;
     NSString *windowColorName = windowColorSpace.localizedName ?: @"unavailable";
     NSString *windowICC = colorSpaceICC_SHA256(windowColorSpace.CGColorSpace);
     CGColorSpaceRef sourceProfile = imageLayer.contents
-        ? CGImageGetColorSpace((CGImageRef)imageLayer.contents) : NULL;
+        ? CGImageGetColorSpace(layerContentsImage(imageLayer)) : NULL;
     NSString *sourceICC = colorSpaceICC_SHA256(sourceProfile);
     NSView *regionView = (NSView *)region;
     NSRect localRegion = [regionView convertRect:regionView.bounds toView:nil];

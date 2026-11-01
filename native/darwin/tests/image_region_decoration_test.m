@@ -2,6 +2,7 @@
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
 #import <CoreVideo/CoreVideo.h>
+#import "support/layer_contents.h"
 #import "event_ring.h"
 #import "image_region.h"
 #import "webview_geometry.h"
@@ -138,7 +139,7 @@ int main(void) { @autoreleasepool {
         raster[0], raster[1], raster[2], 1, 1, 1);
     check(imagePresented, @"the image region accepts the known-color sidecar raster");
     CALayer *imageLayer = [view.layer.sublayers firstObject];
-    CGImageRef imageSnapshot = (CGImageRef)imageLayer.contents;
+    CGImageRef imageSnapshot = layerContentsImage(imageLayer);
     CFDataRef imageBytes = imageSnapshot ? CGDataProviderCopyData(CGImageGetDataProvider(imageSnapshot)) : NULL;
     check(imageSnapshot && CGImageGetWidth(imageSnapshot) == (size_t)raster[0]
         && CGImageGetHeight(imageSnapshot) == (size_t)raster[1]
