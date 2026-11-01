@@ -8034,6 +8034,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F332-4-1-1",
+    implementation: [{ file: "scripts/test/shortcut-table.test.mjs", symbol: "core.fixture.move" }],
+    tests: [{ file: "scripts/test/shortcut-table.test.mjs", id: "an arrow-key comparison without a workbench row is reported, and the table row clears it" }],
+    expected: "The arrow-key case of the shortcut audit test holds its own row.",
+    levels: ["unit"],
+  },
+  {
     id: "F352",
     implementation: [{ file: "packages/plugin-api/index.js", symbol: "export function applyTheme(root, theme)" }],
     tests: [{ file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge sets the start theme and each later theme message on the root of the view document" }],
