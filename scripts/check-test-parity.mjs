@@ -8046,6 +8046,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F370",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "view.addEventListener(\"contextmenu\", openMenu);" },
+      { file: "packages/workbench/view-calls.js", symbol: "case \"surface.menu\": {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge cancels the default menu of a right click in the view and sends surface.menu with its point" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "surface.menu runs core.surface.menu at the window point of a right click in the view" },
+    ],
+    expected: "A right click in a view cancels the default menu of the web view and opens the surface menu of its plugin at the point in the window.",
+    levels: ["unit"],
+  },
+  {
     id: "F365",
     implementation: [
       { file: "packages/workbench/registry.js", symbol: "export function sectionSurfacePlugin(surface)" },
