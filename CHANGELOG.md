@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F370: A right click in a view opens the surface menu of its plugin at the point of the click and never the default menu of the web view, whose Reload item reloaded the files tree without a command. Red: `surface.menu runs core.surface.menu at the window point of a right click in the view` and `the bridge cancels the default menu of a right click in the view and sends surface.menu with its point` failed, the first on the undeclared call and the second on the default menu that was not cancelled. Green: both pass.
 - F367: The plugins require `^0.0.29`, and the registry index lists core 0.0.29 and them.
 - F366: The release candidate is 0.0.29.
 - F365: The main page knows the plugin of a section surface, so the commands and statuses that a section view registers apply and a click on a row of the files tree selects it. Red: `surfacePlugin` returned null for a section surface. Green: it returns the plugin of the section.

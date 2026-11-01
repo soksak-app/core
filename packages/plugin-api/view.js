@@ -476,10 +476,19 @@ export function createViewBridge({ handler, report }) {
     };
     view.document.addEventListener("focusin", focusMoved, true);
     view.document.addEventListener("focusout", focusMoved, true);
+    // A right click opens the surface menu through the page (docs/spec/native-surfaces.md#view-surfaces, view calls): the default
+    // menu of the web view holds operations, such as Reload, that no command declares. A right click that the plugin cancelled is its own.
+    const openMenu = (event) => {
+      if (event.defaultPrevented) return;
+      event.preventDefault();
+      calls.request("surface.menu", { x: event.clientX, y: event.clientY }).catch(recordError("surface menu"));
+    };
+    view.addEventListener("contextmenu", openMenu);
     view.addEventListener("pagehide", () => {
       if (eventBatcher !== null) eventBatcher.flush().catch(recordError("log batch flush"));
       view.document.removeEventListener("focusin", focusMoved, true);
       view.document.removeEventListener("focusout", focusMoved, true);
+      view.removeEventListener("contextmenu", openMenu);
       state.dispose();
       expose.dispose().catch(recordError("core surface entries"));
     }, { once: true });

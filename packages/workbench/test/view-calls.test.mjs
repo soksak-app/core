@@ -25,6 +25,8 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
     fail: (reason) => { ran.failed.push({ plugin, index, reason }); } });
   // The PNG payload that the clipboard of the surface holds; a case sets bytes to null for an absent payload.
   const png = { bytes: new Uint8Array([1, 2, 3]) };
+  // The menu state of the surface; a case sets declared to false or frame to null.
+  const menu = { declared: true, frame: { x: 100, y: 40 } };
   const options = {
     plugin: "probe",
     surface: "probe-surface",
@@ -96,6 +98,8 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
         changed: (payload) => { ran.changed.push(payload); return null; },
       },
       holdsSurface: (plugin, surface) => HELD.has(`${plugin} ${surface}`),
+      // The surface menu of the view: whether the plugin declares surface.menu for the surface, and its applied frame in the window.
+      menu: { declared: () => menu.declared, frame: () => menu.frame },
       data: {
         of: (project, plugin) => ({
           declares: (key) => key === "note",
@@ -126,7 +130,7 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
       };
     })(),
   };
-  return { ran, options, png };
+  return { ran, menu, options, png };
 }
 
 test("a status watch with a surface follows the status on that surface of the view's plugin", async () => {
@@ -748,4 +752,22 @@ test("a core command call that carries the cids of its cause hands them to runCo
   const runCore = async (name, params, cids) => { seen.push({ name, cids }); return { core: true }; };
   assert.deepEqual(await answerViewCall({ id: 7, command: "core.surface.open", params: {}, cids: ["p1700000000000.5"] }, { ...options, runCore }), { core: true });
   assert.deepEqual(seen, [{ name: "core.surface.open", cids: ["p1700000000000.5"] }]);
+});
+
+test("surface.menu runs core.surface.menu at the window point of a right click in the view", async () => {
+  const { ran, menu, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "surface.menu", params: { x: 12, y: 8.5 } }, options), true);
+  assert.deepEqual(ran.core, [{ name: "core.surface.menu", params: { surface: "probe-surface", x: 112, y: 48.5 } }]);
+  menu.declared = false;
+  assert.equal(await answerViewCall({ id: 2, command: "surface.menu", params: { x: 1, y: 1 } }, options), false,
+    "a surface whose plugin declares no menu opens none");
+  assert.equal(ran.core.length, 1);
+  menu.declared = true;
+  menu.frame = null;
+  await assert.rejects(answerViewCall({ id: 3, command: "surface.menu", params: { x: 1, y: 1 } }, options),
+    { message: "view call surface.menu surface probe-surface has no applied frame" });
+  menu.frame = { x: 0, y: 0 };
+  await assert.rejects(answerViewCall({ id: 4, command: "surface.menu", params: { x: "1", y: Infinity } }, options),
+    { message: "view call surface.menu requires x and y as finite numbers" });
+  assert.equal(ran.core.length, 1);
 });

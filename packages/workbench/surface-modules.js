@@ -527,6 +527,11 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       },
       // Whether a surface is a surface of the plugin in the window, which a status watch with surface checks (view-calls.js).
       holdsSurface: (plugin, watched) => registry.holdsSurface(plugin, watched),
+      // The surface menu of a right click in the view (view-calls.js): a section declares no menu, and the frame moves the point into the window.
+      menu: {
+        declared: () => !isSectionSurface(surface.surfaceId) && plugin(surface.pluginId).menu !== null,
+        frame: () => registry.surfaceFrame(surface.surfaceId),
+      },
       // The project data of the plugin for a project, which the data calls of the view read and write (view-calls.js).
       data: { of: viewDataOf },
       clipboard: scoped.clipboard,

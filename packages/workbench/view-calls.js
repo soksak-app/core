@@ -38,6 +38,8 @@ import { setViewFocus } from "./view-focus.js";
  *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (view-events.js); each resolves when it is
  *                   registered
  *                 holdsSurface(plugin, surface): whether the surface is a surface of the plugin in the window (surface-modules.js)
+ *                 menu: {declared(), frame()} of the surface: whether its plugin declares surface.menu for it, and its applied frame
+ *                   {x, y} in the window or null
  *                 data.of(project, plugin): the project data of the plugin for the project, as viewDataOf of plugin-data.js has it
  *                 subscribe.statusWatch(name, surface), subscribe.statusUnwatch(name, surface): follow the value of a status of the view on
  *                   the surface, or on the workbench when surface is undefined, and end it (view-events.js); the names are checked by
@@ -303,6 +305,16 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     case "tab.footer":
       tab.footer(params);
       return null;
+    // A right click in the view opens the surface menu at its point in the window (docs/spec/native-surfaces.md#view-surfaces).
+    case "surface.menu": {
+      const fields = objectOf(command, params);
+      if (!Number.isFinite(fields.x) || !Number.isFinite(fields.y)) throw new TypeError(`view call ${command} requires x and y as finite numbers`);
+      if (!runtime.menu.declared()) return false;
+      const frame = runtime.menu.frame();
+      if (frame === null) throw new Error(`view call ${command} surface ${surface} has no applied frame`);
+      await runCore("core.surface.menu", { surface, x: frame.x + fields.x, y: frame.y + fields.y });
+      return true;
+    }
     case "tab.directory":
       tab.directory(params);
       return null;

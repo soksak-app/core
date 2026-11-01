@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F370: view 안의 오른쪽 click은 web view의 기본 menu가 아니라 click한 점에서 plugin의 surface menu를 연다. 기본 menu의 Reload 항목은 명령 없이 files tree를 다시 load했다. Red: `surface.menu runs core.surface.menu at the window point of a right click in the view`와 `the bridge cancels the default menu of a right click in the view and sends surface.menu with its point`가 실패했다. 앞의 것은 선언되지 않은 call에서, 뒤의 것은 취소되지 않은 기본 menu에서 실패했다. Green: 둘 다 통과한다.
 - F367: plugin은 `^0.0.29`를 요구하고, registry index가 core 0.0.29와 그것들을 올린다.
 - F366: release candidate는 0.0.29다.
 - F365: main page는 section surface의 plugin을 알므로, section view가 등록한 명령과 status가 적용되고 files tree의 행 click이 그 행을 고른다. Red: `surfacePlugin`이 section surface에 null을 돌려주었다. Green: section의 plugin을 돌려준다.

@@ -519,6 +519,9 @@ export function createRegistry({ call = null, report = null } = {}) {
      */
     holdsSurface: (plugin, surface) => options.surfacePlugin(surface) === plugin,
 
+    /** The applied frame {x, y, w, h} of surface in the window, or null when the composition has applied none. */
+    surfaceFrame: (surface) => options.surfaceFrame(surface),
+
     /** Registers a method that handles a request by its name. Diagnostic methods use it. */
     method(name, fn) {
       if (methods.has(name)) throw new Error(`method ${name} is already registered`);

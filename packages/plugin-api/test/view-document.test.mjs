@@ -247,3 +247,19 @@ test("the bridge reports each change of the focused exposed element of the view 
   assert.deepEqual(focusCalls(), [{ name: "probe.button", index: 0 }, { name: "probe.field", index: 0 }, null],
     "the view did not report each change of its focused exposed element once");
 });
+
+test("the bridge cancels the default menu of a right click in the view and sends surface.menu with its point", { timeout: 5000 }, async (t) => {
+  const { view, posted } = setup(t);
+  await turn();
+  const menuCalls = () => posted.filter((message) => message.command === "surface.menu").map((message) => message.params);
+  const click = new view.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 30, clientY: 12.5 });
+  view.document.querySelector("button").dispatchEvent(click);
+  await turn();
+  assert.equal(click.defaultPrevented, true, "the default context menu of the web view was not cancelled");
+  assert.deepEqual(menuCalls(), [{ x: 30, y: 12.5 }]);
+  const own = new view.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 1, clientY: 1 });
+  view.document.body.addEventListener("contextmenu", (event) => event.preventDefault(), { once: true });
+  view.document.body.dispatchEvent(own);
+  await turn();
+  assert.deepEqual(menuCalls(), [{ x: 30, y: 12.5 }], "a right click that the plugin cancelled sent surface.menu");
+});
