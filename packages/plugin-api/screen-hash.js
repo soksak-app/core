@@ -112,10 +112,11 @@ function messageCell(at, cell) {
 }
 
 /**
- * Applies a `screen` message of a sidecar (docs/spec/persistent-services.md#screen-message) and returns `{sequence, segment, screen}`, where
- * `screen` is the full screen that `screenHash` takes. `previous` is the result of the call for the message before it, or null. A message
- * with `base: true` carries every cell in `cells`; a message with `base: false` carries in `changed` only the rows that changed since the
- * message whose `sequence` is `previous`, of the same segment and size, and takes its other rows from `previous`. The members that the
+ * Applies a `screen` message of a sidecar (docs/spec/persistent-services.md#screen-message) and returns `{sequence, segment, number, screen}`,
+ * where `screen` is the full screen that `screenHash` takes. `previous` is the result of the call for the message before it, or null. A
+ * message with `base: true` carries every cell in `cells`; a message with `base: false` carries in `changed` only the rows that changed
+ * since the message whose `number` is `previous`, of the same segment and size, and takes its other rows from `previous`. The change names
+ * the number of a message and not its sequence, because two messages without an input between them have the same sequence. The members that the
  * hash does not cover (`link`, the cursor shape and focus) are left out. A message that lacks a member or does not follow `previous` throws
  * an error that names the member; the ranges of the values are checked by the screen hash. The page stores `sequence` and `segment` with
  * the hash.
@@ -129,6 +130,9 @@ export function applyScreenMessage(previous, message) {
   if (typeof message.segment !== "string" || message.segment === "") {
     messageRefuse(`segment must be a non-empty string, found ${shown(message.segment)}`);
   }
+  if (!Number.isInteger(message.number) || message.number < 1) {
+    messageRefuse(`number must be an integer from 1, found ${shown(message.number)}`);
+  }
   if (typeof message.base !== "boolean") messageRefuse(`base must be true or false, found ${shown(message.base)}`);
   if (!isObject(message.cursor)) messageRefuse(`cursor must be an object, found ${shown(message.cursor)}`);
   const { rows, cols } = message;
@@ -137,12 +141,12 @@ export function applyScreenMessage(previous, message) {
     if (!Array.isArray(message.cells)) messageRefuse(`cells must be an array, found ${shown(message.cells)}`);
     cells = message.cells.map((cell, index) => messageCell(`cells[${index}]`, cell));
   } else {
-    if (previous === null) messageRefuse(`a change needs the screen of sequence ${shown(message.previous)}, found none`);
+    if (previous === null) messageRefuse(`a change needs the screen of number ${shown(message.previous)}, found none`);
     if (message.segment !== previous.segment) {
       messageRefuse(`a change of segment ${message.segment} does not follow segment ${previous.segment}`);
     }
-    if (message.previous !== previous.sequence) {
-      messageRefuse(`a change of previous ${shown(message.previous)} does not follow sequence ${previous.sequence}`);
+    if (message.previous !== previous.number) {
+      messageRefuse(`a change of previous ${shown(message.previous)} does not follow number ${previous.number}`);
     }
     if (rows !== previous.screen.rows || cols !== previous.screen.cols) {
       messageRefuse(`a change of size ${shown(rows)}x${shown(cols)} does not follow size ${previous.screen.rows}x${previous.screen.cols}`);
@@ -167,5 +171,5 @@ export function applyScreenMessage(previous, message) {
   const { row, col, visible } = message.cursor;
   const screen = { rows, cols, cursor: { row, col, visible }, cells };
   screenBytes(screen);
-  return { sequence: message.sequence, segment: message.segment, screen };
+  return { sequence: message.sequence, segment: message.segment, number: message.number, screen };
 }

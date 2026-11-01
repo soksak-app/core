@@ -38,7 +38,7 @@ for (const sequence of messages.changes) {
     const [first, ...changes] = sequence.messages;
     const cells = first.cells.slice();
     for (const change of changes) for (const { row, cells: rowCells } of change.changed) cells.splice(row * first.cols, first.cols, ...rowCells);
-    const full = { ...first, sequence: changes.at(-1).sequence, cursor: changes.at(-1).cursor, cells };
+    const full = { ...first, sequence: changes.at(-1).sequence, number: changes.at(-1).number, cursor: changes.at(-1).cursor, cells };
     assert.equal(await screenHash(applyScreenMessage(null, full).screen), sequence.hashes.at(-1));
   });
 }
@@ -54,7 +54,7 @@ for (const document of ["../../../docs/spec/persistent-services.md", "../../../d
     const text = readFileSync(new URL(document, import.meta.url), "utf8");
     assert.ok(text.includes("`docs/spec/cases/log-contract/replay/screen-message.json`"), "the fixture of the messages is not named");
     for (const { name } of [...messages.rejected, ...messages.changes, ...messages.refused_changes]) assert.ok(text.includes(`\`${name}\``), `the rejected message "${name}" is not named`);
-    for (const member of ["sequence", "segment", "rows", "cols", "cursor", "cells", "grapheme", "width", "fg", "bg", "attributes", "base", "changed", "previous", "applyScreenMessage"]) {
+    for (const member of ["sequence", "segment", "rows", "cols", "cursor", "cells", "grapheme", "width", "fg", "bg", "attributes", "number", "base", "changed", "previous", "applyScreenMessage"]) {
       assert.ok(text.includes(`\`${member}\``), `the member "${member}" is not named`);
     }
   });

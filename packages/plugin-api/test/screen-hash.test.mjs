@@ -34,6 +34,7 @@ const message = () => ({
   event: "screen",
   sequence: 4,
   segment: "b1",
+  number: 1,
   base: true,
   rows: 1,
   cols: 2,
@@ -102,12 +103,12 @@ test("a message that is not an object is refused", () => {
 // The change form of a screen message carries only the rows that changed since the message that it names
 // (docs/spec/persistent-services.md#screen-message).
 const grid = () => ({
-  event: "screen", sequence: 7, segment: "b1", base: true, rows: 2, cols: 2,
+  event: "screen", sequence: 7, segment: "b1", number: 3, base: true, rows: 2, cols: 2,
   cursor: { row: 0, col: 0, visible: true },
   cells: [cell("a"), cell("b"), cell("c"), cell("d")],
 });
 const change = (fields) => ({
-  event: "screen", sequence: 8, segment: "b1", base: false, previous: 7, rows: 2, cols: 2,
+  event: "screen", sequence: 7, segment: "b1", number: 4, base: false, previous: 3, rows: 2, cols: 2,
   cursor: { row: 1, col: 1, visible: true },
   changed: [{ row: 1, cells: [cell("x", 1, 2), cell("y")] }],
   ...fields,
@@ -117,22 +118,27 @@ test("a change replaces the rows it carries in the screen of the message it name
   const first = applyScreenMessage(null, grid());
   const next = applyScreenMessage(first, change());
   assert.deepEqual(next, {
-    sequence: 8,
+    sequence: 7,
     segment: "b1",
+    number: 4,
     screen: { rows: 2, cols: 2, cursor: { row: 1, col: 1, visible: true }, cells: [cell("a"), cell("b"), cell("x", 1, 2), cell("y")] },
   });
   assert.deepEqual(first.screen.cells, [cell("a"), cell("b"), cell("c"), cell("d")], "a change does not alter the earlier screen");
-  const full = applyScreenMessage(null, { ...grid(), sequence: 8, cursor: { row: 1, col: 1, visible: true },
+  const full = applyScreenMessage(null, { ...grid(), number: 4, cursor: { row: 1, col: 1, visible: true },
     cells: [cell("a"), cell("b"), cell("x", 1, 2), cell("y")] });
   assert.equal(await screenHash(next.screen), await screenHash(full.screen), "a change gives the hash of the full screen");
-  const cursorOnly = applyScreenMessage(next, change({ sequence: 9, previous: 8, changed: [], cursor: { row: 0, col: 1, visible: false } }));
+  const cursorOnly = applyScreenMessage(next, change({ number: 5, previous: 4, changed: [], cursor: { row: 0, col: 1, visible: false } }));
   assert.deepEqual(cursorOnly.screen.cursor, { row: 0, col: 1, visible: false });
 });
 
 test("a change that does not follow the screen it names is refused with the member that differs", () => {
   const first = applyScreenMessage(null, grid());
-  assert.throws(() => applyScreenMessage(null, change()), { message: "screen message: a change needs the screen of sequence 7, found none" });
-  assert.throws(() => applyScreenMessage(first, change({ previous: 6 })), { message: "screen message: a change of previous 6 does not follow sequence 7" });
+  assert.throws(() => applyScreenMessage(null, change()), { message: "screen message: a change needs the screen of number 3, found none" });
+  // Two messages without an input between them have the same sequence, so a change names the number of the message it changes.
+  const lost = applyScreenMessage(first, change());
+  assert.throws(() => applyScreenMessage(first, change({ number: 5, previous: 4 })), { message: "screen message: a change of previous 4 does not follow number 3" });
+  assert.equal(lost.sequence, first.sequence, "the change has the sequence of the screen it changes");
+  assert.throws(() => applyScreenMessage(first, { ...grid(), number: 0 }), { message: "screen message: number must be an integer from 1, found 0" });
   assert.throws(() => applyScreenMessage(first, change({ segment: "b2" })), { message: "screen message: a change of segment b2 does not follow segment b1" });
   assert.throws(() => applyScreenMessage(first, change({ cols: 3 })), { message: "screen message: a change of size 2x3 does not follow size 2x2" });
   assert.throws(() => applyScreenMessage(first, change({ changed: [{ row: 1, cells: [cell()] }] })), { message: "screen message: changed[0].cells must hold 2 cells, found 1" });

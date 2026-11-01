@@ -71,6 +71,7 @@
               "event": "screen",
               "sequence": 7,
               "segment": "seg-1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -199,6 +200,7 @@
             "value": {
               "event": "screen",
               "segment": "seg-1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -236,6 +238,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -312,6 +315,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -388,6 +392,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -439,6 +444,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -549,6 +555,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {
@@ -618,6 +625,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {
@@ -756,6 +764,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "frame": null,
@@ -900,6 +909,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -952,6 +962,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -1003,6 +1014,7 @@
             "value": {
               "event": "screen",
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -1038,6 +1050,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 0,
               "cols": 1,
@@ -1073,6 +1086,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 0,
@@ -1108,6 +1122,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -1135,6 +1150,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -1170,6 +1186,7 @@
               "event": "screen",
               "sequence": 2,
               "segment": "",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 1,
@@ -1204,6 +1221,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {
@@ -1259,6 +1277,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "frame": null,
@@ -1314,6 +1333,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {
@@ -1373,6 +1393,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {
@@ -1432,6 +1453,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "background": "#102030",
@@ -1492,6 +1514,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "background": "#102030",
@@ -1549,6 +1572,7 @@
               "event": "screen",
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "rows": 1,
               "cols": 3,
@@ -1628,6 +1652,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "frame": null,
@@ -1753,6 +1778,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "frame": null,
@@ -2004,6 +2030,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "frame": {
@@ -2119,6 +2146,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "frame": null,
@@ -2230,6 +2258,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "frame": {
@@ -2331,6 +2360,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "frame": {
@@ -2496,6 +2526,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cols": 8,
@@ -2987,6 +3018,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {
@@ -3056,6 +3088,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {
@@ -3182,6 +3215,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "frame": null,
@@ -3237,6 +3271,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "background": "#102030",
@@ -3297,6 +3332,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {
@@ -3422,6 +3458,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {
@@ -3481,6 +3518,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {
@@ -3540,6 +3578,7 @@
             "value": {
               "sequence": 1,
               "segment": "b1",
+              "number": 1,
               "base": true,
               "event": "screen",
               "cursor": {

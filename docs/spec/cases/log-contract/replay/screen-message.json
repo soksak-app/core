@@ -7,6 +7,7 @@
         "event": "screen",
         "sequence": 2,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 1,
@@ -34,6 +35,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -78,6 +80,7 @@
         "event": "screen",
         "sequence": 4,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -119,6 +122,7 @@
         "event": "screen",
         "sequence": 5,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 2,
         "cols": 2,
@@ -167,6 +171,7 @@
         "event": "screen",
         "sequence": 6,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 2,
         "cols": 3,
@@ -229,6 +234,7 @@
         "event": "screen",
         "sequence": 7,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -270,6 +276,7 @@
         "event": "screen",
         "sequence": 8,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -311,6 +318,7 @@
       "message": {
         "event": "screen",
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -354,6 +362,7 @@
         "event": "screen",
         "sequence": 0,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -429,7 +438,8 @@
             "attributes": 0
           }
         ],
-        "base": true
+        "base": true,
+        "number": 1
       },
       "error": "screen message: segment must be a non-empty string, found undefined"
     },
@@ -482,6 +492,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -524,6 +535,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -566,6 +578,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -608,6 +621,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -644,6 +658,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -663,6 +678,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 1,
         "cols": 3,
@@ -705,6 +721,7 @@
       "message": {
         "event": "screen",
         "segment": "b1",
+        "number": 1,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -741,6 +758,32 @@
         "sequence": 2
       },
       "error": "screen message: base must be true or false, found undefined"
+    },
+    {
+      "name": "number missing",
+      "message": {
+        "event": "screen",
+        "sequence": 2,
+        "segment": "b1",
+        "base": true,
+        "rows": 1,
+        "cols": 1,
+        "cursor": {
+          "row": 0,
+          "col": 0,
+          "visible": true
+        },
+        "cells": [
+          {
+            "grapheme": "",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          }
+        ]
+      },
+      "error": "screen message: number must be an integer from 1, found undefined"
     }
   ],
   "changes": [
@@ -751,6 +794,7 @@
           "event": "screen",
           "sequence": 3,
           "segment": "b1",
+          "number": 1,
           "base": true,
           "rows": 2,
           "cols": 2,
@@ -794,8 +838,9 @@
           "event": "screen",
           "sequence": 5,
           "segment": "b1",
+          "number": 2,
           "base": false,
-          "previous": 3,
+          "previous": 1,
           "rows": 2,
           "cols": 2,
           "cursor": {
@@ -828,10 +873,11 @@
         },
         {
           "event": "screen",
-          "sequence": 6,
+          "sequence": 5,
           "segment": "b1",
+          "number": 3,
           "base": false,
-          "previous": 5,
+          "previous": 2,
           "rows": 2,
           "cols": 2,
           "cursor": {
@@ -856,6 +902,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 2,
         "cols": 2,
@@ -899,6 +946,7 @@
         "event": "screen",
         "sequence": 5,
         "segment": "b1",
+        "number": 2,
         "base": false,
         "previous": 2,
         "rows": 2,
@@ -931,7 +979,7 @@
           }
         ]
       },
-      "error": "screen message: a change of previous 2 does not follow sequence 3"
+      "error": "screen message: a change of previous 2 does not follow number 1"
     },
     {
       "name": "segment not followed",
@@ -939,6 +987,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 2,
         "cols": 2,
@@ -982,8 +1031,9 @@
         "event": "screen",
         "sequence": 5,
         "segment": "b2",
+        "number": 2,
         "base": false,
-        "previous": 3,
+        "previous": 1,
         "rows": 2,
         "cols": 2,
         "cursor": {
@@ -1022,6 +1072,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 2,
         "cols": 2,
@@ -1065,8 +1116,9 @@
         "event": "screen",
         "sequence": 5,
         "segment": "b1",
+        "number": 2,
         "base": false,
-        "previous": 3,
+        "previous": 1,
         "rows": 3,
         "cols": 2,
         "cursor": {
@@ -1105,6 +1157,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 2,
         "cols": 2,
@@ -1148,8 +1201,9 @@
         "event": "screen",
         "sequence": 5,
         "segment": "b1",
+        "number": 2,
         "base": false,
-        "previous": 3,
+        "previous": 1,
         "rows": 2,
         "cols": 2,
         "cursor": {
@@ -1187,6 +1241,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "number": 1,
         "base": true,
         "rows": 2,
         "cols": 2,
@@ -1230,8 +1285,9 @@
         "event": "screen",
         "sequence": 5,
         "segment": "b1",
+        "number": 2,
         "base": false,
-        "previous": 3,
+        "previous": 1,
         "rows": 2,
         "cols": 2,
         "cursor": {
