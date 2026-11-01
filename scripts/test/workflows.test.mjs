@@ -266,7 +266,7 @@ test('a push to main releases the declared version after the checks and the gate
   assert.match(release, /^on:\n {2}push:\n {4}branches: \[main\]\n/m, 'release.yml starts on a push to main');
   assert.doesNotMatch(release, /tags: \['v\*'\]/, 'release.yml does not start on a tag push');
   assert.match(release, /^concurrency:\n {2}group: release\n {2}cancel-in-progress: false$/m);
-  assert.match(release, /run: node packages\/plugin-api\/release-gate\.js packages\/plugin-api\/package\.json docs\/features\.md/);
+  assert.match(release, /run: pnpm exec soksak-release-gate packages\/plugin-api\/package\.json docs\/features\.md/);
   for (const job of ['release-wailsv3', 'release-tauriv2']) {
     assert.match(release, new RegExp(`  ${job}:\\n {4}needs: gate\\n {4}if: needs\\.gate\\.outputs\\.release == 'true'\\n`), `${job} runs only on a release`);
   }
@@ -321,4 +321,17 @@ test('repeat.yml starts on a dispatch and runs only the tracked repeat targets',
   ], `repeat.yml runs ${repeats.join(' | ')}`);
   // The dispatched values reach the commands through the environment, so no value is spliced into a shell line.
   assert.doesNotMatch(commands.join('\n'), /\$\{\{\s*inputs\./, 'a run line splices a dispatched input');
+});
+
+test('the hooks, the record targets and the release gate run the commands of the records kit release', () => {
+  const { devDependencies } = JSON.parse(read('package.json'));
+  assert.match(devDependencies['@soksak/kit-records'] ?? '', /^https:\/\/github\.com\/soksak-app\/kit-records\/releases\/download\/v\d+\.\d+\.\d+\/soksak-kit-records-\d+\.\d+\.\d+\.tgz$/,
+    'package.json pins the release file of the records kit');
+  assert.match(read('.githooks/commit-msg'), /exec pnpm --dir "\$\(git rev-parse --show-toplevel\)" exec soksak-commits "\$1"/);
+  assert.match(read('.githooks/pre-commit'), /exec pnpm --dir "\$root" exec soksak-records "\$root"/);
+  const makefile = read('Makefile');
+  assert.doesNotMatch(makefile, /packages\/plugin-api\/(?:records|commits)-check\.js/, 'the Makefile runs a record check of the plugin API');
+  assert.match(makefile, /^\t@pnpm exec soksak-records$/m);
+  assert.match(makefile, /^\t@pnpm exec soksak-commits \$\(RANGE\)$/m);
+  assert.match(read('scripts/checklist.mjs'), /^import \{ checklist \} from "@soksak\/kit-records\/checklist";$/m);
 });

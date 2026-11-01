@@ -5,16 +5,16 @@ SHELL := /bin/sh
 docs-check:
 	@node scripts/check-docs.mjs
 	@node scripts/check-failure-table.mjs
-	@node packages/plugin-api/records-check.js
+	@pnpm exec soksak-records
 
 # Checks that the documents and configuration comments state only facts about the repository (AGENTS.md Documentation).
 records-check:
-	@node packages/plugin-api/records-check.js
+	@pnpm exec soksak-records
 
 # Checks the commit message form of RANGE, which holds one or more revision ranges separated by spaces. Example: make commits-check RANGE=origin/main..HEAD
 commits-check:
 	@test -n "$(RANGE)" || { echo "make commits-check RANGE=<revision range>" >&2; exit 2; }
-	@node packages/plugin-api/commits-check.js $(RANGE)
+	@pnpm exec soksak-commits $(RANGE)
 
 # Sets the git hook folder of this checkout to .githooks. The commit-msg hook checks the commit message form.
 hooks:

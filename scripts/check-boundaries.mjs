@@ -84,8 +84,11 @@ export function corePackageNames(root = ROOT) {
   const names = [];
   for (const file of execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" }).split("\0")) {
     if (!/(^|\/)package\.json$/.test(file)) continue;
-    const name = readJson(join(root, file)).name;
-    if (typeof name === "string") names.push(name);
+    const manifest = readJson(join(root, file));
+    if (typeof manifest.name === "string") names.push(manifest.name);
+    // A kit is a tool of the repositories, and its release is the one release of another repository that a manifest names
+    // (docs/spec/plugins.md#repositories).
+    names.push(...Object.keys({ ...manifest.dependencies, ...manifest.devDependencies }).filter((name) => /^@soksak\/kit-[a-z0-9]/.test(name)));
   }
   return [...names, ...CORE_SERVED];
 }

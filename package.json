@@ -27,6 +27,7 @@
     "@soksak/window-check": "workspace:*"
   },
   "devDependencies": {
+    "@soksak/kit-records": "https://github.com/soksak-app/kit-records/releases/download/v0.0.1/soksak-kit-records-0.0.1.tgz",
     "acorn": "8.18.0",
     "yaml": "2.9.1"
   }

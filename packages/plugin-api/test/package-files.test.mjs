@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,4 +39,14 @@ test("the packed SDK contains every current contract file", { timeout: 15000 }, 
   } finally {
     rmSync(destination, { recursive: true, force: true });
   }
+});
+
+test("the plugin API ships no record check, release gate, checklist reader or term list", () => {
+  const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+  for (const command of ["soksak-commits", "soksak-records", "soksak-release-gate"]) assert.equal(manifest.bin?.[command], undefined, command);
+  for (const file of ["checklist.js", "commits-check.js", "records-check.js", "release-gate.js", "terms.json"]) {
+    assert.ok(!manifest.files.includes(file), file);
+    assert.ok(!existsSync(join(packageRoot, file)), file);
+  }
+  assert.equal(manifest.exports["./records-check"], undefined);
 });

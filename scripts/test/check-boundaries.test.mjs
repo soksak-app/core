@@ -39,6 +39,12 @@ test("corePackageNames reads every tracked package.json and the core-served pref
   assert.ok(!names.includes(scoped("plugin-api-x")));
 });
 
+test("corePackageNames includes a kit release that a core manifest declares, and no other declared name", () => {
+  const names = corePackageNames();
+  assert.ok(names.includes(scoped("kit-records")), "the records kit that package.json declares is a core name");
+  assert.ok(!names.includes(scoped("kit-x")));
+});
+
 test("checkNames allows the exact core names and refuses the others", () => {
   const files = ["packages/x/a.js", "packages/x/b.ts"];
   const source = {

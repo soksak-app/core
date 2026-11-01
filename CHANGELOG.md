@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F355-3-2: Core runs the commit message check, the record check and the release gate of the records kit release `soksak-kit-records-0.0.1.tgz`, and `@soksak/plugin-api` no longer ships them, the checklist reader or the term list; the term list is `terms.json` of the records kit. Red: `the hooks, the record targets and the release gate run the commands of the records kit release`, `the plugin API ships no record check, release gate, checklist reader or term list` `a push to main releases the declared version after the checks and the gate succeed` and `corePackageNames includes a kit release that a core manifest declares, and no other declared name` failed. Green: they pass, `make boundaries` accepts the declared records kit, and `make parity-check` passes with 1137 recorded tests.
 - F355-5-1: The workspace registry takes the platform of a sidecar release from the `<os>-<arch>` that ends its name, because platform detection belongs under `platform/<os>/`.
 - F355-6: Every declared workspace version is the release candidate 0.0.26, and the latest published release is 0.0.25, because the published 0.0.25 was built before F355-2 and does not install the `pnpm pack` and `npm pack` releases.
 - F355-5: A sidecar release is the `npm pack` file of the built sidecar folder. `sok plugin install` extracts it from `package/` and refuses a release that does not hold the `executable` or `replay.executable` of its `sidecar.json`; `sok sidecar release` is removed, and the workspace registry runs `make release OUT=<folder>` of a sidecar repository.

@@ -525,13 +525,11 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-288",
-    implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "export function checklist(" }, { file: "scripts/checklist.mjs", symbol: "export function checkCompletedItems(" }],
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "export function checkCompletedItems(" }],
     tests: [
-      { file: "packages/plugin-api/test/checklist.test.mjs", id: "a checklist identifier that two lines of one file state is refused with both lines, in any identifier form" },
-      { file: "packages/plugin-api/test/checklist.test.mjs", id: "a checklist item whose label starts with an identifier states it as `<identifier> — `" },
       { file: "scripts/test/checklist.test.mjs", id: "open, active and blocked checklist items cannot be removed without a paired retirement record" },
     ],
-    expected: "Every identifier form is checked for duplicates and states, an identifier is stated as `<identifier> — `, and an open item leaves the checklist only through a recorded state or a retirement record.",
+    expected: "An open item leaves the checklist only through a recorded state or a retirement record.",
     levels: ["unit"],
   },
   {
@@ -1907,7 +1905,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-208",
-    implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "function unavailableEvidenceErrors(" }],
+    implementation: [{ file: "scripts/checklist.mjs", symbol: 'import { checklist } from "@soksak/kit-records/checklist";' }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a fully specified unavailable-evidence record in both translations" }],
     expected: "Unavailable historical evidence records require scoped evidence, an explicitly unverified result and a follow-up condition without claiming a functional pass.",
     levels: ["unit"],
@@ -4531,13 +4529,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F224",
-    implementation: [{ file: "packages/plugin-api/records-check.js", symbol: "declaredFiles" }],
-    tests: [{ file: "packages/plugin-api/test/records-check.test.mjs", id: "a file the census declaration excludes is not a record of the repository" }],
-    expected: "The record check applies the census exclude of the checked repository, so a committed generated bundle is not read as a record.",
-    levels: ["unit"],
-  },
-  {
     id: "F227",
     implementation: [{ file: "packages/workbench/view-calls.js", symbol: "tab.state.read" }],
     tests: [
@@ -5101,13 +5092,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F167",
-    implementation: [{ file: "packages/plugin-api/terms.json", symbol: '"term": "image region"' }],
-    tests: [{ file: "packages/plugin-api/test/records-check.test.mjs", id: "a rejected synonym is reported with the term to use, also in identifiers" }],
-    expected: "The image region has one term, and a record that uses its rejected synonym is refused with the term to use.",
-    levels: ["unit"],
-  },
-  {
     id: "F165",
     implementation: [
       { file: "packages/host/wailsv3/src/images.go", symbol: "func imageReply" },
@@ -5138,29 +5122,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "log(`first run: the starter pack ${failedPack} was not installed: ${errorText(error)}`)" }],
     tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a first run that cannot read the registry starts the window without the pack and states why" }],
     expected: "A first run without a network, or with a registry that cannot be read, starts the window without the starter pack, states why, and installs the pack at the next start.",
-    levels: ["unit"],
-  },
-  {
-    id: "R3",
-    implementation: [
-      { file: "packages/plugin-api/records-check.js", symbol: "export function recordViolations" },
-      { file: "packages/plugin-api/records-check.js", symbol: "export function commitMessageErrors" },
-    ],
-    tests: [
-      { file: "packages/plugin-api/test/records-check.test.mjs", id: "record checks report each statement that is not a fact about the repository" },
-      { file: "packages/plugin-api/test/records-check.test.mjs", id: "commit messages use the subject form with a checklist ID, a body and no footer" },
-    ],
-    expected: "The records of core and of every plugin, sidecar and registry repository state facts about their repository, and each commit message carries the checklist ID in its subject and no footer.",
-    levels: ["unit"],
-  },
-  {
-    id: "R5",
-    implementation: [{ file: "packages/plugin-api/records-check.js", symbol: "export function termViolations" }],
-    tests: [
-      { file: "packages/plugin-api/test/records-check.test.mjs", id: "a rejected synonym is reported with the term to use, also in identifiers" },
-      { file: "packages/plugin-api/test/records-check.test.mjs", id: "a rejected synonym joined inside an identifier is reported" },
-    ],
-    expected: "Each concept has one term in the code, the specifications and the records of every repository, and the record check reports a rejected synonym with the term to use.",
     levels: ["unit"],
   },
   {
@@ -7514,7 +7475,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-83",
-    implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "function checklist(" }],
+    implementation: [{ file: "scripts/checklist.mjs", symbol: 'import { checklist } from "@soksak/kit-records/checklist";' }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits a platform-excluded item only with a named unavailable platform and unverified result" }],
     expected: "A platform-excluded checklist item names the unavailable platform and states that runtime behavior remains unverified.",
     levels: ["unit"],
@@ -7555,13 +7516,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "scripts/check-versions.mjs", symbol: "if (import.meta.main) {" }],
     tests: [{ file: "scripts/test/entry-guards.test.mjs", id: "check-versions.mjs can be imported by a process that has no script path" }],
     expected: "A command module of the scripts can be imported by a process without a script path.",
-    levels: ["unit"],
-  },
-  {
-    id: "F287",
-    implementation: [{ file: "packages/plugin-api/release-gate.js", symbol: "const carried = openItems(checklistName, checklistText);" }],
-    tests: [{ file: "packages/plugin-api/test/release-gate.test.mjs", id: "an item that is waiting, active or bypassed does not hold the release and is carried into the next version" }],
-    expected: "An open checklist item does not hold a release; the gate lists it as carried into the next version.",
     levels: ["unit"],
   },
   {
@@ -8628,27 +8582,8 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F272-1",
-    implementation: [{ file: "packages/plugin-api/checklist.js", symbol: "export function itemIdentifier(" }, { file: "packages/plugin-api/records-check.js", symbol: "itemIdentifier(label)" }],
-    tests: [
-      { file: "packages/plugin-api/test/checklist.test.mjs", id: "an identifier is a letter prefix and a number with dot or hyphen segments, stated as `<identifier> — `" },
-      { file: "packages/plugin-api/test/records-check.test.mjs", id: "a checklist that states one identifier on two lines is refused, in any identifier form" },
-    ],
-    expected: "One identifier grammar decides the items of every checklist, and the duplicate check of the record checks reads every identifier form.",
-    levels: ["unit"],
-  },
-  {
-    id: "F272-2",
-    implementation: [{ file: "packages/plugin-api/release-gate.js", symbol: "export function releaseDecision(" }],
-    tests: [
-      { file: "packages/plugin-api/test/release-gate.test.mjs", id: "a repository releases its declared version when the remote has no tag of it" },
-    ],
-    expected: "A repository releases its declared version only when the remote has no tag of it.",
-    levels: ["unit"],
-  },
-  {
     id: "F272-3",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "release-gate.js packages/plugin-api/package.json docs/features.md" }],
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "soksak-release-gate packages/plugin-api/package.json docs/features.md" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
     expected: "A push to main runs the checks once, and the release jobs and the tag follow only a gate that releases.",
     levels: ["unit"],
@@ -10339,7 +10274,9 @@ const NON_CAPABILITY_COMPLETIONS = new Set(["F334", "F329", "F292-34", "F314", "
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
 // those repositories, so they have no link here and each repository checks its own evidence.
-const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
+// F167, F224, F287, R3 and R5 wrote the term list, the record check and the release gate, which F355-3-2 moves to the
+// records kit; the kit holds their implementation and tests.
+const MOVED_COMPLETIONS = new Set(["F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
 
 // Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22
 // removed with the start that ended the recorded processes.

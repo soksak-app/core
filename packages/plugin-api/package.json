@@ -10,7 +10,6 @@
     "./view": "./view.js",
     "./exposure-check": "./exposure-check.js",
     "./package.json": "./package.json",
-    "./records-check": "./records-check.js",
     "./events-check": "./events-check.js",
     "./screen-hash": "./screen-hash.js",
     "./view-modules": "./view-modules.js",
@@ -46,24 +45,16 @@
     "log-batch.js",
     "bounded-json.js",
     "exposure-check.js",
-    "checklist.js",
-    "release-gate.js",
     "engines-check.js",
     "core-exposure.json",
-    "records-check.js",
     "events-check.js",
     "census-rules.json",
-    "commits-check.js",
-    "terms.json",
     "contract/"
   ],
   "bin": {
     "soksak-exposure": "./exposure-check.js",
     "soksak-engines": "./engines-check.js",
-    "soksak-records": "./records-check.js",
     "soksak-events": "./events-check.js",
-    "soksak-commits": "./commits-check.js",
-    "soksak-release-gate": "./release-gate.js",
     "soksak-view-check": "./view-check.js"
   },
   "scripts": {

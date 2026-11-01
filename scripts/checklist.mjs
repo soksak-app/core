@@ -1,5 +1,5 @@
 // Compares task ID, depth, and state instead of translated sentences.
-import { checklist } from "../packages/plugin-api/checklist.js";
+import { checklist } from "@soksak/kit-records/checklist";
 
 export function checkChecklistTranslations(english, korean) {
   const errors = [];

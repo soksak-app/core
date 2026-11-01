@@ -32,9 +32,11 @@ jobs:
       - uses: ./.github/actions/setup-node
         with:
           root: .
+      - name: Install the records kit
+        run: pnpm install --frozen-lockfile --filter soksak-workspace
       - name: Decide the release
         id: gate
-        run: node packages/plugin-api/release-gate.js packages/plugin-api/package.json docs/features.md
+        run: pnpm exec soksak-release-gate packages/plugin-api/package.json docs/features.md
 
   release-wailsv3:
     needs: gate

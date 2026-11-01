@@ -32,6 +32,9 @@ importers:
         specifier: workspace:*
         version: link:packages/window-check
     devDependencies:
+      '@soksak/kit-records':
+        specifier: https://github.com/soksak-app/kit-records/releases/download/v0.0.1/soksak-kit-records-0.0.1.tgz
+        version: https://github.com/soksak-app/kit-records/releases/download/v0.0.1/soksak-kit-records-0.0.1.tgz
       acorn:
         specifier: 8.18.0
         version: 8.18.0
@@ -223,6 +226,11 @@ packages:
   '@parcel/watcher@2.6.0':
     resolution: {integrity: sha512-7FNeNl8NCE7aINx7WXiKQrPYZWC/hvrTsmk6zmxbI7LTXE7hVek/n8AfVgpe2y82zl3w0HvCHN0bVKMBoJcC0w==}
     engines: {node: '>= 10.0.0'}
+
+  '@soksak/kit-records@https://github.com/soksak-app/kit-records/releases/download/v0.0.1/soksak-kit-records-0.0.1.tgz':
+    resolution: {integrity: sha512-Otp1aORvqozSgInZEahjajshJo99SQzKXGdZbDkMDDnCkUgARvXbch9N05Sdd6Li5qL6FIH3RT1LQvO5b7cpXQ==, tarball: https://github.com/soksak-app/kit-records/releases/download/v0.0.1/soksak-kit-records-0.0.1.tgz}
+    version: 0.0.1
+    hasBin: true
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
@@ -559,6 +567,8 @@ snapshots:
       is-glob: 4.0.3
       node-addon-api: 7.1.1
       picomatch: 4.0.7
+
+  '@soksak/kit-records@https://github.com/soksak-app/kit-records/releases/download/v0.0.1/soksak-kit-records-0.0.1.tgz': {}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true
