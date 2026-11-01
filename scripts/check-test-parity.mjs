@@ -8034,6 +8034,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F344",
+    implementation: [
+      { file: "packages/workbench/view-calls.js", symbol: "function statusWatchOf(command, params, plugin, holdsSurface)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a status unwatch of a surface that the window no longer holds ends the view's own watch" },
+    ],
+    expected: "A view's status unwatch ends its own watch also after the surface of the watch closed.",
+    levels: ["unit"],
+  },
+  {
     id: "F342",
     implementation: [
       { file: "packages/workbench/exposure.js", symbol: "function deliver({ surface, name, value, version })" },

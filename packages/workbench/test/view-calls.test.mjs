@@ -145,9 +145,15 @@ test("a status watch names only a surface that the window holds for the view's p
   const { ran, options } = fakes();
   await assert.rejects(answerViewCall({ id: 1, command: "runtime.status.watch", params: { name: "probe.lines", surface: "other-surface" } }, options),
     /view call runtime.status.watch surface other-surface is not a surface of probe/);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "tab-z" } }, options),
-    /view call runtime.status.unwatch surface tab-z is not a surface of probe/);
   assert.deepEqual(ran.subscribed, []);
+});
+
+test("a status unwatch of a surface that the window no longer holds ends the view's own watch", async () => {
+  // An unwatch ends only a watch of this view, whose surface was checked when it started; the surface can close before the view
+  // unwatches it.
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "tab-z" } }, options), null);
+  assert.deepEqual(ran.subscribed, [{ statusUnwatch: "probe.lines", surface: "tab-z" }]);
 });
 
 test("runtime.command.run runs a command of the view's plugin on a surface that the window holds for the plugin", async () => {

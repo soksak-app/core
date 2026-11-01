@@ -442,15 +442,18 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
 
 /**
  * The name and the surface of a status watch (docs/spec/native-surfaces.md#view-surfaces, view calls). surface is undefined when the
- * call names none. A named surface must be a surface of the plugin of the view that the window holds; any other surface is refused and
- * runs nothing.
+ * call names none. The surface of a watch must be a surface of the plugin of the view that the window holds; any other surface is refused
+ * and runs nothing. An unwatch ends only a watch of this view, whose surface was checked when it started, so its surface is not checked:
+ * the surface can close before the view unwatches it.
  */
 function statusWatchOf(command, params, plugin, holdsSurface) {
   const fields = objectOf(command, params);
   const name = statusNameOf(command, fields.name, plugin);
   if (fields.surface === undefined) return { name, surface: undefined };
   if (typeof fields.surface !== "string" || fields.surface === "") throw new TypeError(`view call ${command} requires a non-empty surface`);
-  if (!holdsSurface(plugin, fields.surface)) throw new Error(`view call ${command} surface ${fields.surface} is not a surface of ${plugin}`);
+  if (command === "runtime.status.watch" && !holdsSurface(plugin, fields.surface)) {
+    throw new Error(`view call ${command} surface ${fields.surface} is not a surface of ${plugin}`);
+  }
   return { name, surface: fields.surface };
 }
 
