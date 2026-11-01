@@ -1195,7 +1195,7 @@ static BOOL webAddress(NSURL *url) {
 // Whether a navigation action moves to a fragment of the current document: not a reload, and the same address without fragment.
 static BOOL sameDocument(WKNavigationAction *action, NSURL *current) {
     NSURL *target = action.request.URL;
-    if (action.navigationType == WKNavigationTypeReload || !current || target.fragment == nil) return NO;
+    if (action.navigationType == WKNavigationTypeReload || !current || target.fragment == nil) return NO; // silent: a reload, a first document or an address without a fragment is not a move within the document, and the caller refuses it
     NSURLComponents *from = [NSURLComponents componentsWithURL:current resolvingAgainstBaseURL:NO];
     NSURLComponents *to = [NSURLComponents componentsWithURL:target resolvingAgainstBaseURL:NO];
     from.fragment = nil;
