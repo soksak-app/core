@@ -8034,6 +8034,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F345",
+    implementation: [
+      { file: "packages/workbench/verify.js", symbol: "const predicted = (id) =>" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/verify-ahead.test.mjs", id: "V7c compares the predicted card surfaces and does not count a section surface that the drawing added" },
+      { file: "packages/workbench/test/verify-ahead.test.mjs", id: "a failed V7c names the drawn card surface that the prediction missed" },
+    ],
+    expected: "V7c compares the predicted card surfaces with the drawing and names the ids that it counts.",
+    levels: ["unit"],
+  },
+  {
     id: "F343-1",
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "bool sp_surface_place_view(void *surfaceHandle, void *viewHandle)" },

@@ -41,6 +41,41 @@ test("a failed V7c names the surface and both of its rectangles", async (t) => {
   assert.match(row.note, / · card 0,0 400×300 inset 30,34,0,26 · plane 6,6 400×300 · card style 400px×300px · devicePixelRatio 1$/);
 });
 
+/** Runs verify over a plane with one card slot "probe" at its predicted place and the extra slots of html. */
+async function verifyAhead(t, extra, guessed) {
+  const dom = new JSDOM(`<div class="chrome-bar"></div><div id="stage"><div id="plane"><article class="card" data-card-id="one"><div class="chrome"></div><div class="status"></div><div class="slot" data-native-surface data-native-surface-id="probe"></div></article>${extra}</div></div>`);
+  globalThis.document = dom.window.document;
+  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
+  globalThis.devicePixelRatio = 1;
+  t.after(() => { dom.window.close(); delete globalThis.devicePixelRatio; });
+  const plane = document.querySelector("#plane");
+  plane.getBoundingClientRect = () => rect(0, 0, 400, 300);
+  for (const slot of document.querySelectorAll(".slot")) slot.getBoundingClientRect = () => rect(0, 34, 400, 240);
+  const declared = { x: 0, y: 34, w: 400, h: 240 };
+  const guess = { seq: 7, surfaces: guessed.map((id) => ({ id, dim: false, declared, applied: declared, bands: null })) };
+  t.mock.module("../compositor.js", { exports: { ahead: () => guess, latest: () => null, placementPending: () => false, seated: () => null } });
+  t.mock.module("../plane.js", { exports: {
+    currentGrid: () => new Soksak(undefined, { width: 400, height: 300 }), dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane,
+    presentedCardRect: () => undefined, railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
+  } });
+  t.mock.module("../registry.js", { exports: { isPlace: () => false } });
+  t.mock.module("../settings.js", { exports: { cardRadius: () => 4 } });
+  const { verify } = await import(`../verify.js?ahead-${Math.random()}`);
+  return verify().find((item) => item.name.startsWith("V7c "));
+}
+
+test("V7c compares the predicted card surfaces and does not count a section surface that the drawing added", async (t) => {
+  // A section surface is measured after the drawing (docs/spec/native-surfaces.md#section-seats), so the prediction never holds it.
+  const row = await verifyAhead(t, '<div class="set__body slot" data-native-surface="view" data-native-surface-id="left/probe.tree"></div>', ["probe"]);
+  assert.equal(row.ok, true, row.note);
+});
+
+test("a failed V7c names the drawn card surface that the prediction missed", async (t) => {
+  const row = await verifyAhead(t, '<article class="card" data-card-id="two"><div class="chrome"></div><div class="status"></div><div class="slot" data-native-surface data-native-surface-id="tab-late"></div></article>', ["probe"]);
+  assert.equal(row.ok, false);
+  assert.match(row.note, /누락 1 \[tab-late\]/);
+});
+
 test("a failed V7b names the surface and its declared and applied rectangles", async (t) => {
   const dom = new JSDOM('<div class="chrome-bar"></div><div id="stage"><div id="plane"></div></div>');
   globalThis.document = dom.window.document;

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F345: page 검증 V7c는 예측한 card surface만 그리기와 비교하므로, 그리기 뒤의 commit이 재는 section surface를 그리기가 더해도 실패하지 않는다. V7a와 V7c는 누락하거나 사라진 것으로 센 surface의 id를 적는다.
 - F343-1: 이미 보이는 surface에 놓인 view는 첫 frame부터 불투명 backing을 그리지 않는다. `sp_surface_place_view`가 숨긴 surface를 보일 때만 설정되던 투명 backing을 설정하므로, section view는 page가 그리기 전에 WebKit의 흰 기본 backing을 보이지 않는다.
 - F344: view의 `runtime.status.unwatch`는 surface가 닫힌 뒤에도 view 자신의 watch를 끝낸다. 이전에는 `view call runtime.status.unwatch surface <surface> is not a surface of <plugin>`으로 거부되어, section view가 닫힌 tab을 unwatch할 때마다 application error를 기록했다.
 - F342-2: main page의 모든 forward 요청은 method와 관계없이 10초 또는 선언된 `timeout`의 시간 제한을 갖는다. host는 더 이상 `status.next`를 제한에서 빼지 않으며, contract case `exposure.timeout.every-forward-bounded`가 그것을 적는다.

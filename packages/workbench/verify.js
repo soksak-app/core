@@ -150,7 +150,12 @@ export function verify(controls = null) {
   // A commit holds not only the places but also the state of the surface. The blur is a value that the plane sets and records in the slot,
   // so if it differs from the drawn slot, the host applies a different alpha.
   const frameText = (r) => `${+r.x.toFixed(2)},${+r.y.toFixed(2)} ${+r.w.toFixed(2)}×${+r.h.toFixed(2)}`;
-  const compare = (surfaces) => {
+  // A section body is marked "view" by sidebar-sections.js. Its surface is measured after the drawing (docs/spec/native-surfaces.md#section-seats),
+  // so a prediction never holds it.
+  const predicted = (id) => onPlane.get(id).dataset.nativeSurface !== "view";
+  // The ids of a list, so a failure names the surfaces that it counts.
+  const named = (ids) => (ids.length ? ` [${ids.join(", ")}]` : "");
+  const compare = (surfaces, onlyPredicted = false) => {
     const told = new Set(surfaces.map((s) => s.id));
     let worst = 0;
     // The surface that is off the most and its two places. A failure states the measured values with which the cause can be found.
@@ -183,13 +188,9 @@ export function verify(controls = null) {
       }
       if (s.dim !== (slot.dataset.nativeDim === "true")) dim++;
     }
-    return {
-      worst,
-      at,
-      dim,
-      gone: surfaces.filter((s) => !onPlane.has(s.id)).length,
-      missed: [...onPlane.keys()].filter((id) => !told.has(id)).length,
-    };
+    const gone = surfaces.filter((s) => !onPlane.has(s.id)).map((s) => s.id);
+    const missed = [...onPlane.keys()].filter((id) => !told.has(id) && (!onlyPredicted || predicted(id)));
+    return { worst, at, dim, gone: gone.length, missed: missed.length, goneIds: named(gone), missedIds: named(missed) };
   };
 
   const record = latest();
@@ -197,24 +198,25 @@ export function verify(controls = null) {
   if (!record) add("V7a element − declared == 0", true, "아직 커밋 없음");
   else if (pendingPlacement) add("V7a element − declared == 0", true, "host placement pending");
   else {
-    const { worst, at, dim, gone, missed } = compare(record.surfaces);
+    const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(record.surfaces);
     add("V7a element − declared == 0", gone === 0 && missed === 0 && worst < 0.5 && dim === 0,
-        `최대 ${worst.toFixed(2)}px · 커밋에 없는 표면 ${missed} · 사라진 표면 ${gone} · ` +
+        `최대 ${worst.toFixed(2)}px · 커밋에 없는 표면 ${missed}${missedIds} · 사라진 표면 ${gone}${goneIds} · ` +
         `흐림이 다른 표면 ${dim} · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq}, ` +
         // default: when no layout has been seated yet, it is written as none.
         `seated ${seated()?.seq ?? "none"}, pending ${pendingPlacement})${at}`);
   }
 
   // V7c — is the place published in advance before drawing the same as the drawn place. The margin is measured against the drawn
-  // rectangle, so there is no place for an error to remain.
+  // rectangle, so there is no place for an error to remain. The prediction holds the card surfaces; a section surface that the drawing
+  // adds is measured by the commit that follows, which V7a checks.
   const guess = ahead();
   if (!guess) add("V7c 미리 게시한 자리 == 그려진 자리", true, "이번 렌더는 미리 게시하지 않았다");
   else if (pendingPlacement) add("V7c 미리 게시한 자리 == 그려진 자리", true, "host placement pending");
   else {
-    const { worst, at, dim, gone, missed } = compare(guess.surfaces);
+    const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(guess.surfaces, true);
     add("V7c 미리 게시한 자리 == 그려진 자리",
         gone === 0 && missed === 0 && worst === 0 && dim === 0,
-        `최대 ${worst.toFixed(2)}px · 없음 ${gone} · 누락 ${missed} · 흐림이 다른 표면 ${dim} ` +
+        `최대 ${worst.toFixed(2)}px · 없음 ${gone}${goneIds} · 누락 ${missed}${missedIds} · 흐림이 다른 표면 ${dim} ` +
         `(seq ${guess.seq})${at}`);
   }
 
