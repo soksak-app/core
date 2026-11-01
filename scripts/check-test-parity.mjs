@@ -5166,7 +5166,7 @@ const FEATURE_LINKS = [
   {
     id: "F160.35",
     implementation: [
-      { file: "packages/plugin-api/screen-hash.js", symbol: "export function screenFromMessage" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function applyScreenMessage" },
       { file: "packages/sok/wailsv3/src/replay.go", symbol: "func ReplayLogs" },
     ],
     tests: [
@@ -6981,7 +6981,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.message.frame-preedit" },
       { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.hash.frame-preedit.sha256" },
-      { file: "packages/plugin-api/screen-hash.js", symbol: "export function screenFromMessage(" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function applyScreenMessage(" },
     ],
     tests: [{ file: "packages/plugin-api/test/screen-hash-contract.test.mjs", id: "screenHash frame and preedit message pairs with its projected screen hash" }],
     expected: "The public SDK fixture pairs a non-null-frame preedit message with the exact projected screen used as its published hash input.",
@@ -6992,7 +6992,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.hash.letter-x-hidden-cursor.sha256" },
       { file: "packages/plugin-api/screen-hash.js", symbol: "export async function screenHash(" },
-      { file: "packages/plugin-api/screen-hash.js", symbol: "export function screenFromMessage(" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function applyScreenMessage(" },
     ],
     tests: [
       { file: "packages/plugin-api/test/screen-hash-contract.test.mjs", id: "screenHash publishes one unique hash input for each valid message projection" },
@@ -8044,6 +8044,18 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/plane-sidebar-space.test.mjs", id: "a sidebar draws the section surface ids of the space of the held layout while the project state shows the library" },
     ],
     expected: "The sidebars that the plane draws take the space of the held layout, also while the project state shows the library.",
+    levels: ["unit"],
+  },
+  {
+    id: "F374-5-1",
+    implementation: [
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function applyScreenMessage(previous, message)" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/screen-hash.test.mjs", id: "a change replaces the rows it carries in the screen of the message it names and takes its cursor" },
+      { file: "packages/plugin-api/test/screen-hash.test.mjs", id: "a change that does not follow the screen it names is refused with the member that differs" },
+    ],
+    expected: "A change form of a screen message replaces only its rows in the screen of the message it names and gives the hash of the full screen; a change that does not follow that screen is refused.",
     levels: ["unit"],
   },
   {

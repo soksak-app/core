@@ -7,6 +7,7 @@
         "event": "screen",
         "sequence": 2,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 1,
         "cursor": {
@@ -33,6 +34,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -76,6 +78,7 @@
         "event": "screen",
         "sequence": 4,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -116,6 +119,7 @@
         "event": "screen",
         "sequence": 5,
         "segment": "b1",
+        "base": true,
         "rows": 2,
         "cols": 2,
         "cursor": {
@@ -163,6 +167,7 @@
         "event": "screen",
         "sequence": 6,
         "segment": "b1",
+        "base": true,
         "rows": 2,
         "cols": 3,
         "cursor": {
@@ -224,6 +229,7 @@
         "event": "screen",
         "sequence": 7,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -264,6 +270,7 @@
         "event": "screen",
         "sequence": 8,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -304,6 +311,7 @@
       "message": {
         "event": "screen",
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -346,6 +354,7 @@
         "event": "screen",
         "sequence": 0,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -419,7 +428,8 @@
             "bg": null,
             "attributes": 0
           }
-        ]
+        ],
+        "base": true
       },
       "error": "screen message: segment must be a non-empty string, found undefined"
     },
@@ -429,6 +439,7 @@
         "event": "state",
         "sequence": 3,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -471,6 +482,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -512,6 +524,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -553,6 +566,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -594,6 +608,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cells": [
@@ -629,6 +644,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -647,6 +663,7 @@
         "event": "screen",
         "sequence": 3,
         "segment": "b1",
+        "base": true,
         "rows": 1,
         "cols": 3,
         "cursor": {
@@ -682,6 +699,562 @@
         ]
       },
       "error": "screen hash: cells[1].fg must be null, an integer from 0 to 255 or \"#rrggbb\", found 256"
+    },
+    {
+      "name": "base missing",
+      "message": {
+        "event": "screen",
+        "segment": "b1",
+        "rows": 1,
+        "cols": 3,
+        "cursor": {
+          "row": 0,
+          "col": 2,
+          "visible": false,
+          "shape": "block",
+          "blinking": false
+        },
+        "cells": [
+          {
+            "grapheme": "h",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0,
+            "link": "https://example.test/"
+          },
+          {
+            "grapheme": "i",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          }
+        ],
+        "sequence": 2
+      },
+      "error": "screen message: base must be true or false, found undefined"
+    }
+  ],
+  "changes": [
+    {
+      "name": "a change of one row and a change of the cursor",
+      "messages": [
+        {
+          "event": "screen",
+          "sequence": 3,
+          "segment": "b1",
+          "base": true,
+          "rows": 2,
+          "cols": 2,
+          "cursor": {
+            "row": 0,
+            "col": 0,
+            "visible": true
+          },
+          "cells": [
+            {
+              "grapheme": "a",
+              "width": 1,
+              "fg": null,
+              "bg": null,
+              "attributes": 0
+            },
+            {
+              "grapheme": "b",
+              "width": 1,
+              "fg": null,
+              "bg": null,
+              "attributes": 0
+            },
+            {
+              "grapheme": "c",
+              "width": 1,
+              "fg": null,
+              "bg": null,
+              "attributes": 0
+            },
+            {
+              "grapheme": "d",
+              "width": 1,
+              "fg": "#0a0b0c",
+              "bg": null,
+              "attributes": 0
+            }
+          ]
+        },
+        {
+          "event": "screen",
+          "sequence": 5,
+          "segment": "b1",
+          "base": false,
+          "previous": 3,
+          "rows": 2,
+          "cols": 2,
+          "cursor": {
+            "row": 1,
+            "col": 1,
+            "visible": true
+          },
+          "changed": [
+            {
+              "row": 1,
+              "cells": [
+                {
+                  "grapheme": "x",
+                  "width": 1,
+                  "fg": 4,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "y",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0,
+                  "link": "https://example.test/"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "event": "screen",
+          "sequence": 6,
+          "segment": "b1",
+          "base": false,
+          "previous": 5,
+          "rows": 2,
+          "cols": 2,
+          "cursor": {
+            "row": 0,
+            "col": 1,
+            "visible": false
+          },
+          "changed": []
+        }
+      ],
+      "hashes": [
+        "ca3d0c5c57ee06e465dea8671a28b35082c0880d8306e5bb068b7c01b62f888a",
+        "d99e304acb8d7f4d55af89c5a956d934c6d14efea6e78c2235f90f67eac4ee50",
+        "82ea1276c4a23986b20d503a1be20c8958c8c5f82b6e7808e13508b865a54852"
+      ]
+    }
+  ],
+  "refused_changes": [
+    {
+      "name": "previous not followed",
+      "previous": {
+        "event": "screen",
+        "sequence": 3,
+        "segment": "b1",
+        "base": true,
+        "rows": 2,
+        "cols": 2,
+        "cursor": {
+          "row": 0,
+          "col": 0,
+          "visible": true
+        },
+        "cells": [
+          {
+            "grapheme": "a",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "b",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "c",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "d",
+            "width": 1,
+            "fg": "#0a0b0c",
+            "bg": null,
+            "attributes": 0
+          }
+        ]
+      },
+      "message": {
+        "event": "screen",
+        "sequence": 5,
+        "segment": "b1",
+        "base": false,
+        "previous": 2,
+        "rows": 2,
+        "cols": 2,
+        "cursor": {
+          "row": 1,
+          "col": 1,
+          "visible": true
+        },
+        "changed": [
+          {
+            "row": 1,
+            "cells": [
+              {
+                "grapheme": "x",
+                "width": 1,
+                "fg": 4,
+                "bg": null,
+                "attributes": 0
+              },
+              {
+                "grapheme": "y",
+                "width": 1,
+                "fg": null,
+                "bg": null,
+                "attributes": 0,
+                "link": "https://example.test/"
+              }
+            ]
+          }
+        ]
+      },
+      "error": "screen message: a change of previous 2 does not follow sequence 3"
+    },
+    {
+      "name": "segment not followed",
+      "previous": {
+        "event": "screen",
+        "sequence": 3,
+        "segment": "b1",
+        "base": true,
+        "rows": 2,
+        "cols": 2,
+        "cursor": {
+          "row": 0,
+          "col": 0,
+          "visible": true
+        },
+        "cells": [
+          {
+            "grapheme": "a",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "b",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "c",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "d",
+            "width": 1,
+            "fg": "#0a0b0c",
+            "bg": null,
+            "attributes": 0
+          }
+        ]
+      },
+      "message": {
+        "event": "screen",
+        "sequence": 5,
+        "segment": "b2",
+        "base": false,
+        "previous": 3,
+        "rows": 2,
+        "cols": 2,
+        "cursor": {
+          "row": 1,
+          "col": 1,
+          "visible": true
+        },
+        "changed": [
+          {
+            "row": 1,
+            "cells": [
+              {
+                "grapheme": "x",
+                "width": 1,
+                "fg": 4,
+                "bg": null,
+                "attributes": 0
+              },
+              {
+                "grapheme": "y",
+                "width": 1,
+                "fg": null,
+                "bg": null,
+                "attributes": 0,
+                "link": "https://example.test/"
+              }
+            ]
+          }
+        ]
+      },
+      "error": "screen message: a change of segment b2 does not follow segment b1"
+    },
+    {
+      "name": "size not followed",
+      "previous": {
+        "event": "screen",
+        "sequence": 3,
+        "segment": "b1",
+        "base": true,
+        "rows": 2,
+        "cols": 2,
+        "cursor": {
+          "row": 0,
+          "col": 0,
+          "visible": true
+        },
+        "cells": [
+          {
+            "grapheme": "a",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "b",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "c",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "d",
+            "width": 1,
+            "fg": "#0a0b0c",
+            "bg": null,
+            "attributes": 0
+          }
+        ]
+      },
+      "message": {
+        "event": "screen",
+        "sequence": 5,
+        "segment": "b1",
+        "base": false,
+        "previous": 3,
+        "rows": 3,
+        "cols": 2,
+        "cursor": {
+          "row": 1,
+          "col": 1,
+          "visible": true
+        },
+        "changed": [
+          {
+            "row": 1,
+            "cells": [
+              {
+                "grapheme": "x",
+                "width": 1,
+                "fg": 4,
+                "bg": null,
+                "attributes": 0
+              },
+              {
+                "grapheme": "y",
+                "width": 1,
+                "fg": null,
+                "bg": null,
+                "attributes": 0,
+                "link": "https://example.test/"
+              }
+            ]
+          }
+        ]
+      },
+      "error": "screen message: a change of size 3x2 does not follow size 2x2"
+    },
+    {
+      "name": "row outside the screen",
+      "previous": {
+        "event": "screen",
+        "sequence": 3,
+        "segment": "b1",
+        "base": true,
+        "rows": 2,
+        "cols": 2,
+        "cursor": {
+          "row": 0,
+          "col": 0,
+          "visible": true
+        },
+        "cells": [
+          {
+            "grapheme": "a",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "b",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "c",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "d",
+            "width": 1,
+            "fg": "#0a0b0c",
+            "bg": null,
+            "attributes": 0
+          }
+        ]
+      },
+      "message": {
+        "event": "screen",
+        "sequence": 5,
+        "segment": "b1",
+        "base": false,
+        "previous": 3,
+        "rows": 2,
+        "cols": 2,
+        "cursor": {
+          "row": 1,
+          "col": 1,
+          "visible": true
+        },
+        "changed": [
+          {
+            "row": 2,
+            "cells": [
+              {
+                "grapheme": "x",
+                "width": 1,
+                "fg": null,
+                "bg": null,
+                "attributes": 0
+              },
+              {
+                "grapheme": "y",
+                "width": 1,
+                "fg": null,
+                "bg": null,
+                "attributes": 0
+              }
+            ]
+          }
+        ]
+      },
+      "error": "screen message: changed[0].row must be an integer from 0 to 1, found 2"
+    },
+    {
+      "name": "row cells not the width",
+      "previous": {
+        "event": "screen",
+        "sequence": 3,
+        "segment": "b1",
+        "base": true,
+        "rows": 2,
+        "cols": 2,
+        "cursor": {
+          "row": 0,
+          "col": 0,
+          "visible": true
+        },
+        "cells": [
+          {
+            "grapheme": "a",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "b",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "c",
+            "width": 1,
+            "fg": null,
+            "bg": null,
+            "attributes": 0
+          },
+          {
+            "grapheme": "d",
+            "width": 1,
+            "fg": "#0a0b0c",
+            "bg": null,
+            "attributes": 0
+          }
+        ]
+      },
+      "message": {
+        "event": "screen",
+        "sequence": 5,
+        "segment": "b1",
+        "base": false,
+        "previous": 3,
+        "rows": 2,
+        "cols": 2,
+        "cursor": {
+          "row": 1,
+          "col": 1,
+          "visible": true
+        },
+        "changed": [
+          {
+            "row": 1,
+            "cells": [
+              {
+                "grapheme": "x",
+                "width": 1,
+                "fg": null,
+                "bg": null,
+                "attributes": 0
+              }
+            ]
+          }
+        ]
+      },
+      "error": "screen message: changed[0].cells must hold 2 cells, found 1"
     }
   ]
 }

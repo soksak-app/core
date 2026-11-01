@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { screenBytes, screenFromMessage, screenHash } from "../screen-hash.js";
+import { applyScreenMessage, screenBytes, screenHash } from "../screen-hash.js";
 
 const cell = (grapheme = "", width = 1, fg = null, bg = null, attributes = 0) => ({ grapheme, width, fg, bg, attributes });
 const screen = (cells, cursor = { row: 0, col: 0, visible: true }, rows = 1, cols = cells.length) => ({ rows, cols, cursor, cells });
@@ -34,6 +34,7 @@ const message = () => ({
   event: "screen",
   sequence: 4,
   segment: "b1",
+  base: true,
   rows: 1,
   cols: 2,
   cursor: { row: 0, col: 1, visible: true, shape: "block", focused: true },
@@ -41,7 +42,7 @@ const message = () => ({
 });
 
 test("a screen message gives the screen that the hash takes, without the members that the hash does not cover", async () => {
-  const screen = screenFromMessage(message());
+  const screen = applyScreenMessage(null, message()).screen;
   assert.deepEqual(screen, {
     rows: 1,
     cols: 2,
@@ -58,9 +59,9 @@ test("screen projection excludes a presentation caret but hashes the engine curs
   movedPresentationCaret.cursor.caret = { row: 0, col: 1 };
   const absentPresentationCaret = message();
   absentPresentationCaret.cursor.caret = null;
-  const firstScreen = screenFromMessage(first);
-  const movedScreen = screenFromMessage(movedPresentationCaret);
-  const absentScreen = screenFromMessage(absentPresentationCaret);
+  const firstScreen = applyScreenMessage(null, first).screen;
+  const movedScreen = applyScreenMessage(null, movedPresentationCaret).screen;
+  const absentScreen = applyScreenMessage(null, absentPresentationCaret).screen;
 
   assert.deepEqual(firstScreen, movedScreen, "the projection retained the provider presentation caret");
   assert.equal(await screenHash(firstScreen), await screenHash(movedScreen),
@@ -72,28 +73,71 @@ test("screen projection excludes a presentation caret but hashes the engine curs
   const movedEngineCursor = message();
   movedEngineCursor.cursor.caret = { row: 0, col: 0 };
   movedEngineCursor.cursor.col = 0;
-  assert.notEqual(await screenHash(firstScreen), await screenHash(screenFromMessage(movedEngineCursor)),
+  assert.notEqual(await screenHash(firstScreen), await screenHash(applyScreenMessage(null, movedEngineCursor).screen),
     "changing the raw engine cursor did not change the screen hash");
 });
 
 test("a screen message without a sequence is refused with the member named", () => {
   const without = message();
   delete without.sequence;
-  assert.throws(() => screenFromMessage(without), { message: "screen message: sequence must be an integer from 1, found undefined" });
+  assert.throws(() => applyScreenMessage(null, without).screen, { message: "screen message: sequence must be an integer from 1, found undefined" });
 });
 
 test("a screen message without a segment is refused with the member named", () => {
   const without = message();
   delete without.segment;
-  assert.throws(() => screenFromMessage(without), { message: "screen message: segment must be a non-empty string, found undefined" });
+  assert.throws(() => applyScreenMessage(null, without).screen, { message: "screen message: segment must be a non-empty string, found undefined" });
 });
 
 test("a screen message with a cell that has no resolved foreground is refused with the cell named", () => {
   const without = message();
   delete without.cells[0].fg;
-  assert.throws(() => screenFromMessage(without), { message: 'screen message: cells[0].fg must be a resolved color (null, an integer from 0 to 255 or "#rrggbb"), found undefined' });
+  assert.throws(() => applyScreenMessage(null, without).screen, { message: 'screen message: cells[0].fg must be a resolved color (null, an integer from 0 to 255 or "#rrggbb"), found undefined' });
 });
 
 test("a message that is not an object is refused", () => {
-  assert.throws(() => screenFromMessage(null), { message: "screen message: message must be an object, found null" });
+  assert.throws(() => applyScreenMessage(null, null).screen, { message: "screen message: message must be an object, found null" });
+});
+
+// The change form of a screen message carries only the rows that changed since the message that it names
+// (docs/spec/persistent-services.md#screen-message).
+const grid = () => ({
+  event: "screen", sequence: 7, segment: "b1", base: true, rows: 2, cols: 2,
+  cursor: { row: 0, col: 0, visible: true },
+  cells: [cell("a"), cell("b"), cell("c"), cell("d")],
+});
+const change = (fields) => ({
+  event: "screen", sequence: 8, segment: "b1", base: false, previous: 7, rows: 2, cols: 2,
+  cursor: { row: 1, col: 1, visible: true },
+  changed: [{ row: 1, cells: [cell("x", 1, 2), cell("y")] }],
+  ...fields,
+});
+
+test("a change replaces the rows it carries in the screen of the message it names and takes its cursor", async () => {
+  const first = applyScreenMessage(null, grid());
+  const next = applyScreenMessage(first, change());
+  assert.deepEqual(next, {
+    sequence: 8,
+    segment: "b1",
+    screen: { rows: 2, cols: 2, cursor: { row: 1, col: 1, visible: true }, cells: [cell("a"), cell("b"), cell("x", 1, 2), cell("y")] },
+  });
+  assert.deepEqual(first.screen.cells, [cell("a"), cell("b"), cell("c"), cell("d")], "a change does not alter the earlier screen");
+  const full = applyScreenMessage(null, { ...grid(), sequence: 8, cursor: { row: 1, col: 1, visible: true },
+    cells: [cell("a"), cell("b"), cell("x", 1, 2), cell("y")] });
+  assert.equal(await screenHash(next.screen), await screenHash(full.screen), "a change gives the hash of the full screen");
+  const cursorOnly = applyScreenMessage(next, change({ sequence: 9, previous: 8, changed: [], cursor: { row: 0, col: 1, visible: false } }));
+  assert.deepEqual(cursorOnly.screen.cursor, { row: 0, col: 1, visible: false });
+});
+
+test("a change that does not follow the screen it names is refused with the member that differs", () => {
+  const first = applyScreenMessage(null, grid());
+  assert.throws(() => applyScreenMessage(null, change()), { message: "screen message: a change needs the screen of sequence 7, found none" });
+  assert.throws(() => applyScreenMessage(first, change({ previous: 6 })), { message: "screen message: a change of previous 6 does not follow sequence 7" });
+  assert.throws(() => applyScreenMessage(first, change({ segment: "b2" })), { message: "screen message: a change of segment b2 does not follow segment b1" });
+  assert.throws(() => applyScreenMessage(first, change({ cols: 3 })), { message: "screen message: a change of size 2x3 does not follow size 2x2" });
+  assert.throws(() => applyScreenMessage(first, change({ changed: [{ row: 1, cells: [cell()] }] })), { message: "screen message: changed[0].cells must hold 2 cells, found 1" });
+  assert.throws(() => applyScreenMessage(first, change({ changed: [{ row: 2, cells: [cell(), cell()] }] })), { message: "screen message: changed[0].row must be an integer from 0 to 1, found 2" });
+  assert.throws(() => applyScreenMessage(first, change({ changed: [{ row: 1, cells: [cell(), cell()] }, { row: 1, cells: [cell(), cell()] }] })), { message: "screen message: changed[1].row must be greater than 1, found 1" });
+  assert.throws(() => applyScreenMessage(first, { ...grid(), base: undefined }), { message: "screen message: base must be true or false, found undefined" });
+  assert.throws(() => applyScreenMessage(first, change({ changed: undefined })), { message: "screen message: changed must be an array, found undefined" });
 });

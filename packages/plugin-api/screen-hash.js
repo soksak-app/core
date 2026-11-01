@@ -101,13 +101,26 @@ function resolvedColor(name, color) {
   return messageRefuse(`${name} must be a resolved color (null, an integer from 0 to 255 or "#rrggbb"), found ${shown(color)}`);
 }
 
+// The cell of the screen that the hash takes, from a cell of a screen message at the member path at; the members that the hash does
+// not cover (`link`) are left out.
+function messageCell(at, cell) {
+  if (!isObject(cell)) messageRefuse(`${at} must be an object, found ${shown(cell)}`);
+  const fg = resolvedColor(`${at}.fg`, cell.fg);
+  const bg = resolvedColor(`${at}.bg`, cell.bg);
+  if (!Number.isInteger(cell.attributes)) messageRefuse(`${at}.attributes must be an integer from 0 to 255, found ${shown(cell.attributes)}`);
+  return { grapheme: cell.grapheme, width: cell.width, fg, bg, attributes: cell.attributes };
+}
+
 /**
- * The screen that `screenHash` takes, from a `screen` message of a sidecar (docs/spec/persistent-services.md#screen-message).
- * The message carries `sequence`, `segment` and every member of the screen, with each cell's `fg` and `bg` resolved; the members that the
- * hash does not cover (`link`, the cursor shape and focus) are left out. A message that lacks a member throws an error that names
- * the member; the ranges of the values are checked by the screen hash. The page stores `message.sequence` and `message.segment` with the hash.
+ * Applies a `screen` message of a sidecar (docs/spec/persistent-services.md#screen-message) and returns `{sequence, segment, screen}`, where
+ * `screen` is the full screen that `screenHash` takes. `previous` is the result of the call for the message before it, or null. A message
+ * with `base: true` carries every cell in `cells`; a message with `base: false` carries in `changed` only the rows that changed since the
+ * message whose `sequence` is `previous`, of the same segment and size, and takes its other rows from `previous`. The members that the
+ * hash does not cover (`link`, the cursor shape and focus) are left out. A message that lacks a member or does not follow `previous` throws
+ * an error that names the member; the ranges of the values are checked by the screen hash. The page stores `sequence` and `segment` with
+ * the hash.
  */
-export function screenFromMessage(message) {
+export function applyScreenMessage(previous, message) {
   if (!isObject(message)) messageRefuse(`message must be an object, found ${shown(message)}`);
   if (message.event !== "screen") messageRefuse(`event must be "screen", found ${shown(message.event)}`);
   if (!Number.isInteger(message.sequence) || message.sequence < 1) {
@@ -116,19 +129,43 @@ export function screenFromMessage(message) {
   if (typeof message.segment !== "string" || message.segment === "") {
     messageRefuse(`segment must be a non-empty string, found ${shown(message.segment)}`);
   }
+  if (typeof message.base !== "boolean") messageRefuse(`base must be true or false, found ${shown(message.base)}`);
   if (!isObject(message.cursor)) messageRefuse(`cursor must be an object, found ${shown(message.cursor)}`);
-  if (!Array.isArray(message.cells)) messageRefuse(`cells must be an array, found ${shown(message.cells)}`);
-  const cells = message.cells.map((cell, index) => {
-    const at = `cells[${index}]`;
-    if (!isObject(cell)) messageRefuse(`${at} must be an object, found ${shown(cell)}`);
-    const fg = resolvedColor(`${at}.fg`, cell.fg);
-    const bg = resolvedColor(`${at}.bg`, cell.bg);
-    if (!Number.isInteger(cell.attributes)) messageRefuse(`${at}.attributes must be an integer from 0 to 255, found ${shown(cell.attributes)}`);
-    return { grapheme: cell.grapheme, width: cell.width, fg, bg, attributes: cell.attributes };
-  });
   const { rows, cols } = message;
+  let cells;
+  if (message.base) {
+    if (!Array.isArray(message.cells)) messageRefuse(`cells must be an array, found ${shown(message.cells)}`);
+    cells = message.cells.map((cell, index) => messageCell(`cells[${index}]`, cell));
+  } else {
+    if (previous === null) messageRefuse(`a change needs the screen of sequence ${shown(message.previous)}, found none`);
+    if (message.segment !== previous.segment) {
+      messageRefuse(`a change of segment ${message.segment} does not follow segment ${previous.segment}`);
+    }
+    if (message.previous !== previous.sequence) {
+      messageRefuse(`a change of previous ${shown(message.previous)} does not follow sequence ${previous.sequence}`);
+    }
+    if (rows !== previous.screen.rows || cols !== previous.screen.cols) {
+      messageRefuse(`a change of size ${shown(rows)}x${shown(cols)} does not follow size ${previous.screen.rows}x${previous.screen.cols}`);
+    }
+    if (!Array.isArray(message.changed)) messageRefuse(`changed must be an array, found ${shown(message.changed)}`);
+    cells = previous.screen.cells.slice();
+    let last = -1;
+    message.changed.forEach((change, index) => {
+      const at = `changed[${index}]`;
+      if (!isObject(change)) messageRefuse(`${at} must be an object, found ${shown(change)}`);
+      if (!Number.isInteger(change.row) || change.row < 0 || change.row >= rows) {
+        messageRefuse(`${at}.row must be an integer from 0 to ${rows - 1}, found ${shown(change.row)}`);
+      }
+      if (change.row <= last) messageRefuse(`${at}.row must be greater than ${last}, found ${change.row}`);
+      last = change.row;
+      if (!Array.isArray(change.cells) || change.cells.length !== cols) {
+        messageRefuse(`${at}.cells must hold ${cols} cells, found ${Array.isArray(change.cells) ? change.cells.length : shown(change.cells)}`);
+      }
+      change.cells.forEach((cell, col) => { cells[change.row * cols + col] = messageCell(`${at}.cells[${col}]`, cell); });
+    });
+  }
   const { row, col, visible } = message.cursor;
   const screen = { rows, cols, cursor: { row, col, visible }, cells };
   screenBytes(screen);
-  return screen;
+  return { sequence: message.sequence, segment: message.segment, screen };
 }

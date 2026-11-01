@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { screenBytes, screenFromMessage, screenHash } from "../screen-hash.js";
+import { applyScreenMessage, screenBytes, screenHash } from "../screen-hash.js";
 
 const CONTRACT = JSON.parse(readFileSync(new URL("../contract/screen-hash.json", import.meta.url), "utf8"));
 const EXPECTED_IDS = [
@@ -91,7 +91,7 @@ export async function runScreenHashCase(testCase) {
       } else if (operations[0] === "hash") {
         outputs.push({ hash: await screenHash(step.hash.screen) });
       } else {
-        outputs.push({ screen: screenFromMessage(step.message.value) });
+        outputs.push({ screen: applyScreenMessage(null, step.message.value).screen });
       }
     } catch (error) {
       outputs.push({ error: error.message });
