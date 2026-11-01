@@ -14,8 +14,8 @@ import { setViewFocus } from "./view-focus.js";
  *               surface: the surface id of the view, which names the place of the error lines of the view
  *               pending: Map of the pending calls of the view, from id to AbortController; the caller keeps one Map for each view
  *               runCore(name, params): runs a core command, as runtime.command does
- *               runOwned(name, params, owner, surface): runs a command that the plugin registered, as the exposure owner check
- *                 does; surface names the surface that runs it, or undefined to choose it
+ *               runOwned(name, params, owner, cids, surface, caller): runs a command that the plugin registered, as the exposure owner
+ *                 check does; surface names the surface that runs it, or undefined to choose it, and caller is the surface of the view
  *               shortcuts: the rows of the shortcut table (packages/workbench/shortcuts.json)
  *               startProject(): the project {id, root} of the start values of the view, or null when they carry none
  *               emitEvent(level, event, fields): the event writer of the page, which stores the shortcut records of the view
@@ -75,7 +75,7 @@ export async function answerViewCall(event, options) {
     // its run, and a core command passes them on the host calls that it makes (docs/spec/native-surfaces.md#view-surfaces).
     const withCause = {
       ...options,
-      runOwned: (name, value, owner, surface) => options.runOwned(name, value, owner, carried, surface),
+      runOwned: (name, value, owner, surface) => options.runOwned(name, value, owner, carried, surface, options.surface),
       runCore: (name, value) => options.runCore(name, value, carried),
     };
     return await untilCancelled(run(command, params, withCause), controller.signal);

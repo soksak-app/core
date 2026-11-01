@@ -159,7 +159,7 @@ A reply of a modal document reaches the main page only while that modal is the o
 
 ### Choosing a surface
 
-Several surface pages can register the same name. A request for such a name can include `surface`, an identifier from `core.surfaces`, in `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, and `dom.act`. Without `surface`, the main page chooses the active tab of the focused card, then the visible surfaces in the latest layout, then the latest registration. A `surface` that has not registered the name returns 1002. The choice without `surface` takes only tab surfaces; a section surface answers only a request that names it, because several sections of one plugin register the same names and a section follows the tab that `core.sidebars` reports.
+Several surface pages can register the same name. A request for such a name can include `surface`, an identifier from `core.surfaces`, in `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, and `dom.act`. Without `surface`, the main page chooses the active tab of the focused card, then the visible surfaces in the latest layout, then the latest registration. A `surface` that has not registered the name returns 1002. The choice without `surface` takes only tab surfaces; a section surface answers only a request that names it, or a command that its own view runs ([view calls](native-surfaces.md#view-surfaces)), because several sections of one plugin register the same names and a section follows the tab that `core.sidebars` reports.
 
 ## Tab memory
 

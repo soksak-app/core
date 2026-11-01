@@ -514,7 +514,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     shortcuts: shortcutTable.shortcuts,
     emitEvent,
     runCore: (name, params, cids) => scoped.call(name, params, cids),
-    runOwned: (name, params, owner, cids, surface) => registry.runOwned(name, params, owner, cids, surface),
+    runOwned: (name, params, owner, cids, surface, caller) => registry.runOwned(name, params, owner, cids, surface, caller),
     startProject: () => viewStartProjectOf(surface.surfaceId),
     runtime: {
       native: gate,

@@ -660,6 +660,25 @@ test("runOwned runs a command of the plugin on the named surface, and otherwise 
     { code: EXPOSURE_ERRORS.unregistered, message: "owner probe has not registered command probe.other" });
 });
 
+test("runOwned without surface runs a command on the calling section surface when it registered it", async () => {
+  const host = fakeHost(({ surface }) => ({ result: surface }));
+  const plugins = { "tab-a": "probe", "spc-aaaaaa/left/probe.tree": "probe", "spc-aaaaaa/left/probe.other": "probe" };
+  const made = coreRegistry(host);
+  made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null, preferred: () => [] });
+  made.registered({ surface: "tab-a", kind: "command", name: "probe.send" });
+  made.registered({ surface: "spc-aaaaaa/left/probe.tree", kind: "command", name: "probe.send" });
+  assert.equal(await made.runOwned("probe.send", {}, "probe", [], undefined, "spc-aaaaaa/left/probe.tree"), "spc-aaaaaa/left/probe.tree");
+  assert.equal(await made.runOwned("probe.send", {}, "probe", [], undefined, "spc-aaaaaa/left/probe.other"), "tab-a",
+    "a caller that has not registered the command leaves the choice to the tab surfaces");
+  const sectionOnly = coreRegistry(host);
+  sectionOnly.configure({ surfacePlugin: (surface) => plugins[surface] ?? null, preferred: () => [] });
+  sectionOnly.registered({ surface: "spc-aaaaaa/left/probe.tree", kind: "command", name: "probe.send" });
+  assert.equal(await sectionOnly.runOwned("probe.send", {}, "probe", [], undefined, "spc-aaaaaa/left/probe.tree"),
+    "spc-aaaaaa/left/probe.tree", "a section runs its own command while the plugin has no tab");
+  await assert.rejects(sectionOnly.runOwned("probe.send", {}, "probe", [], undefined, "spc-aaaaaa/left/probe.other"),
+    { code: EXPOSURE_ERRORS.unregistered, message: "owner probe has not registered command probe.send" });
+});
+
 test("observe reports a failed watch, value read, or release instead of hiding it", async () => {
   const host = fakeHost(({ surface, method }) => {
     if (method === "status.next") return new Promise(() => {});

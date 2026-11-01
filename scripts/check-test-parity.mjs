@@ -8046,6 +8046,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F362",
+    implementation: [
+      { file: "packages/workbench/exposure.js", symbol: "runOwned(name, params, owner, cids, surface, caller)" },
+      { file: "packages/workbench/view-calls.js", symbol: "runOwned: (name, value, owner, surface) => options.runOwned(name, value, owner, carried, surface, options.surface)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/exposure.test.mjs", id: "runOwned without surface runs a command on the calling section surface when it registered it" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a core command runs through runCore and a command of the plugin through runOwned" },
+    ],
+    expected: "A command of the plugin that a view runs without surface runs on the surface of that view when it registered the command, otherwise on the preferred tab surface.",
+    levels: ["unit"],
+  },
+  {
     id: "F348",
     implementation: [
       { file: "packages/workbench/surface-modules.js", symbol: "export function surfaceLeftOut(surfaceId)" },

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F362: A section view runs the commands that it registered itself, so a click on a row of the files tree selects it without a files tab. Red: the registry chose only tab surfaces. Green: it chooses the calling surface when that surface registered the command.
 - F361: The sidecars publish files 0.0.10 and VT 0.0.19, terminal 0.0.27 requires VT `^0.0.19`, and the registry index lists them.
 - F360: The plugins publish browser 0.0.12, editor 0.0.12, files 0.0.13, hwp 0.0.10 and terminal 0.0.26 with `engines.soksak` `^0.0.27`, and the registry index lists core 0.0.27 with them.
 - F359: Every declared workspace version is the release candidate 0.0.27, and the latest published release is 0.0.26, so the release carries F355-3, F355-4 and F357.

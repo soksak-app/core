@@ -50,8 +50,8 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
     shortcuts: SHORTCUTS,
     emitEvent: (level, event, fields) => { ran.events.push({ level, event, fields }); },
     runCore: async (name, params) => { ran.core.push({ name, params }); return { core: true }; },
-    runOwned: async (name, params, owner, cids, surface) => {
-      ran.owned.push(surface === undefined ? { name, params, owner } : { name, params, owner, surface });
+    runOwned: async (name, params, owner, cids, surface, caller) => {
+      ran.owned.push({ ...(surface === undefined ? { name, params, owner } : { name, params, owner, surface }), caller });
       return { owned: true };
     },
     runtime: {
@@ -160,7 +160,7 @@ test("runtime.command.run runs a command of the view's plugin on a surface that 
   const { ran, options } = fakes();
   assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.command.run", params: { name: "probe.run", params: { x: 1 }, surface: "tab-a" } }, options),
     { owned: true });
-  assert.deepEqual(ran.owned, [{ name: "probe.run", params: { x: 1 }, owner: "probe", surface: "tab-a" }]);
+  assert.deepEqual(ran.owned, [{ name: "probe.run", params: { x: 1 }, owner: "probe", surface: "tab-a", caller: "probe-surface" }]);
 });
 
 test("runtime.command.run refuses a surface that the window does not hold for the plugin and a command of another owner", async () => {
@@ -233,7 +233,8 @@ test("a core command runs through runCore and a command of the plugin through ru
   assert.deepEqual(await answerViewCall({ id: 1, command: "core.surface.open", params: { a: 1 } }, options), { core: true });
   assert.deepEqual(await answerViewCall({ id: 2, command: "probe.run", params: { b: 2 } }, options), { owned: true });
   assert.deepEqual(ran.core, [{ name: "core.surface.open", params: { a: 1 } }]);
-  assert.deepEqual(ran.owned, [{ name: "probe.run", params: { b: 2 }, owner: "probe" }]);
+  assert.deepEqual(ran.owned, [{ name: "probe.run", params: { b: 2 }, owner: "probe", caller: "probe-surface" }],
+    "a command of the plugin carries the surface of the calling view");
 });
 
 test("a call request without an integer id is refused and runs nothing", async () => {

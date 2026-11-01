@@ -44,7 +44,7 @@ export function isSectionSurface(surface) {
 
 /**
  * The surfaces of owners that a request without surface may choose, in registration order: the tab surfaces. A section surface answers
- * only a request that names it (docs/spec/exposure.md#choosing-a-surface).
+ * only a request that names it or a command that its own view runs (docs/spec/exposure.md#choosing-a-surface).
  */
 // default: a name that no surface registered has no owners, so it has no tab surfaces.
 const tabSurfacesOf = (owners) => [...(owners?.keys() ?? [])].filter((surface) => !isSectionSurface(surface));
@@ -435,10 +435,11 @@ export function createRegistry({ call = null, report = null } = {}) {
     chosen: (kind, name, wanted, exact = false) => target(kind, name, wanted, exact),
 
     /**
-     * Runs a command that a surface of plugin owner registered: on surface when the caller names it, otherwise on the preferred tab
-     * surface of the owner (docs/spec/native-surfaces.md#view-surfaces, view calls).
+     * Runs a command that a surface of plugin owner registered: on surface when the caller names it, otherwise on caller, the surface
+     * of the calling view, when it registered the command, otherwise on the preferred tab surface of the owner
+     * (docs/spec/native-surfaces.md#view-surfaces, view calls).
      */
-    runOwned(name, params, owner, cids, surface) {
+    runOwned(name, params, owner, cids, surface, caller) {
       if (pageOf("command", name)) return answer("command.run", commandRequest(name, params, undefined, cids));
       const owners = surfaces.get(declarationKey("command", name));
       if (surface !== undefined) {
@@ -446,6 +447,10 @@ export function createRegistry({ call = null, report = null } = {}) {
           return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `surface ${surface} has not registered command ${name}`));
         }
         return answer("command.run", commandRequest(name, params, surface, cids));
+      }
+      // A view runs the commands that it registered itself; a section surface is chosen only this way, as the caller.
+      if (caller !== undefined && owners?.has(caller) && options.surfacePlugin(caller) === owner && !options.leftOut(caller)) {
+        return answer("command.run", commandRequest(name, params, caller, cids));
       }
       const choices = tabSurfacesOf(owners).filter((candidate) => options.surfacePlugin(candidate) === owner);
       // default: when the preferred surface has not registered, the surface registered last answers.

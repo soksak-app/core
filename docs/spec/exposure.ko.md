@@ -159,7 +159,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 ### 표면 선택
 
-여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. `surface` 없이 고르는 경우는 탭 표면만 고른다. section 표면은 그 이름을 적은 요청에만 답한다. 한 plugin의 여러 section이 같은 이름을 등록하고, section은 `core.sidebars`가 알리는 탭을 따르기 때문이다.
+여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. `surface` 없이 고르는 경우는 탭 표면만 고른다. section 표면은 그 이름을 적은 요청과 자기 view가 실행하는 명령([view call](native-surfaces.ko.md#view-표면))에만 답한다. 한 plugin의 여러 section이 같은 이름을 등록하고, section은 `core.sidebars`가 알리는 탭을 따르기 때문이다.
 
 ## Tab memory
 
