@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F361: The sidecars publish files 0.0.10 and VT 0.0.19, terminal 0.0.27 requires VT `^0.0.19`, and the registry index lists them.
 - F360: The plugins publish browser 0.0.12, editor 0.0.12, files 0.0.13, hwp 0.0.10 and terminal 0.0.26 with `engines.soksak` `^0.0.27`, and the registry index lists core 0.0.27 with them.
 - F359: Every declared workspace version is the release candidate 0.0.27, and the latest published release is 0.0.26, so the release carries F355-3, F355-4 and F357.
 - F357: The cleanup of the runner test with a large process table ends the group of its test process through `killGroup`, which treats the EPERM refusal of a group that holds only zombies as an ended group; it accepted only `ESRCH` and `ENOENT` and failed one core run with `kill EPERM`. Red: `the cleanup of a recorded group ends a group that macOS refuses with EPERM because only zombies remain` failed. Green: it passes. F355 is complete.

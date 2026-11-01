@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F361: sidecar는 files 0.0.10과 VT 0.0.19를 게시하고, terminal 0.0.27은 VT `^0.0.19`를 요구하며, registry index가 그것들을 올린다.
 - F360: plugin은 `engines.soksak` `^0.0.27`과 함께 browser 0.0.12, editor 0.0.12, files 0.0.13, hwp 0.0.10, terminal 0.0.26을 게시하고, registry index는 그것들과 함께 core 0.0.27을 올린다.
 - F359: 선언된 모든 작업공간 버전은 release candidate 0.0.27이고 최신 게시 release는 0.0.26이므로, release는 F355-3, F355-4, F357을 담는다.
 - F357: process table이 큰 runner test의 cleanup은 zombie만 남은 group의 EPERM 거부를 끝난 group으로 다루는 `killGroup`으로 test process의 group을 끝낸다. 이전 cleanup은 `ESRCH`와 `ENOENT`만 받아 core run 하나를 `kill EPERM`으로 실패시켰다. Red: `the cleanup of a recorded group ends a group that macOS refuses with EPERM because only zombies remain`가 실패했다. Green: 통과한다. F355가 완료되었다.
