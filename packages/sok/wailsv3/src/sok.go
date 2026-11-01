@@ -42,8 +42,6 @@ commands:
                             starts the application bundle TARGET again in the background after the process PID ended
   process wait PID --timeout-ms MILLISECONDS
                             waits for the operating system to report that PID ended
-  plugin pack DIRECTORY OUTPUT [--diagnostics]
-                            writes the plugin into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]
                             writes the sidecar release into OUTPUT and updates SHA256SUMS
   registry build DIRECTORY  checks a registry and writes its index.json
@@ -66,7 +64,7 @@ func (e UsageError) Error() string { return e.message }
 func usage(format string, args ...any) error { return UsageError{fmt.Sprintf(format, args...)} }
 
 // booleans are the flags that take no value.
-var booleans = map[string]bool{"watch": true, "activate": true, "help": true, "diagnostics": true}
+var booleans = map[string]bool{"watch": true, "activate": true, "help": true}
 
 // options are the flags that take a value.
 var options = map[string]bool{
@@ -553,7 +551,7 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 		_, err := fmt.Fprintln(stdout, Usage)
 		return err
 	}
-	if len(a.positionals) > 1 && (a.positionals[0] == "plugin" && a.positionals[1] != "pack" || a.positionals[0] == "registry" && a.positionals[1] == "use") {
+	if len(a.positionals) > 1 && (a.positionals[0] == "plugin" || a.positionals[0] == "registry" && a.positionals[1] == "use") {
 		return runPlugins(a, stdout, options)
 	}
 	if len(a.positionals) > 0 && a.positionals[0] == "registry" {
@@ -637,7 +635,7 @@ func runFiles(a arguments, stdout io.Writer) error {
 		return err
 	}
 	command := a.positionals[0] + " " + action
-	if command != "plugin pack" && command != "sidecar release" {
+	if command != "sidecar release" {
 		return usage("unknown command: %s", command)
 	}
 	dir, err := a.positional(2, "directory")
@@ -650,12 +648,6 @@ func runFiles(a arguments, stdout io.Writer) error {
 	}
 	if len(a.positionals) > 4 {
 		return usage("unexpected argument %s", a.positionals[4])
-	}
-	if command == "plugin pack" {
-		return runPack(dir, out, a.flags["diagnostics"], stdout)
-	}
-	if a.flags["diagnostics"] {
-		return usage("--diagnostics belongs to plugin pack")
 	}
 	platform, given := a.values["platform"]
 	if !given {

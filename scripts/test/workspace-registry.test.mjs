@@ -76,18 +76,19 @@ test("a declared repository folder resolves from the main checkout, also when th
   assert.equal(repositoryFolder("../sidecars/probe", "/work/core/.git"), "/work/sidecars/probe");
 });
 
-test("a plugin is packed by the make pack target of its repository with the sok executable and the pack flags", { timeout: 30000 }, (t) => {
+test("a plugin is packed by the make pack target of its repository, which receives only the output folder", { timeout: 30000 }, (t) => {
   const repository = mkdtempSync(join(tmpdir(), "workspace-pack-"));
   const out = mkdtempSync(join(tmpdir(), "workspace-releases-"));
   t.after(() => { rmSync(repository, { recursive: true, force: true }); rmSync(out, { recursive: true, force: true }); });
-  // The pack target of the repository writes the release that names the sok executable and the flags it received.
-  writeFileSync(join(repository, "Makefile"), 'pack:\n\t@printf "%s %s" "$(SOK)" "$(PACK_FLAGS)" > "$(OUT)/probe-0.0.1.tgz"\n');
-  const pack = packPlugin("/opt/sok", repository, out, true);
+  // The release is the pnpm pack file of the plugin (docs/spec/installation.md#plugin-release), so the target needs no sok
+  // executable and no flags; it writes a release that names the origin of each variable.
+  writeFileSync(join(repository, "Makefile"), 'pack:\n\t@printf "%s %s" "$(origin SOK)" "$(origin PACK_FLAGS)" > "$(OUT)/probe-0.0.1.tgz"\n');
+  const pack = packPlugin(repository, out);
   const release = join(out, "probe-0.0.1.tgz");
-  assert.equal(readFileSync(release, "utf8"), "/opt/sok --diagnostics");
-  assert.deepEqual(pack, { release, sha256: createHash("sha256").update("/opt/sok --diagnostics").digest("hex") });
+  assert.equal(readFileSync(release, "utf8"), "undefined undefined");
+  assert.deepEqual(pack, { release, sha256: createHash("sha256").update("undefined undefined").digest("hex") });
   // A release that the folder already holds is not a new release of this run.
-  assert.throws(() => packPlugin("/opt/sok", repository, out, false), /make pack of .* wrote 0 new files into .*; expected 1/);
+  assert.throws(() => packPlugin(repository, out), /make pack of .* wrote 0 new files into .*; expected 1/);
 });
 
 test("the installation stage runs make install once in every declared repository", { timeout: 1000 }, () => {
@@ -97,15 +98,15 @@ test("the installation stage runs make install once in every declared repository
     ["/work/plugins/a", "/work/plugins/b", "/work/sidecars/s"]);
 });
 
-test("a relative output folder and sok executable of a pack resolve from the working directory, not from the plugin repository", { timeout: 30000 }, (t) => {
+test("a relative output folder of a pack resolves from the working directory, not from the plugin repository", { timeout: 30000 }, (t) => {
   const repository = mkdtempSync(join(tmpdir(), "workspace-pack-"));
   const out = mkdtempSync(join(tmpdir(), "workspace-releases-"));
   t.after(() => { rmSync(repository, { recursive: true, force: true }); rmSync(out, { recursive: true, force: true }); });
-  // make -C runs the target in the repository, so the target receives the paths that it writes and runs.
-  writeFileSync(join(repository, "Makefile"), 'pack:\n\t@printf "%s" "$(SOK)" > "$(OUT)/probe-0.0.1.tgz"\n');
-  const pack = packPlugin(relative(process.cwd(), "/opt/sok"), repository, relative(process.cwd(), out), false);
+  // make -C runs the target in the repository, so the target receives the absolute folder that it writes into.
+  writeFileSync(join(repository, "Makefile"), 'pack:\n\t@printf "%s" "$(OUT)" > "$(OUT)/probe-0.0.1.tgz"\n');
+  const pack = packPlugin(repository, relative(process.cwd(), out));
   assert.equal(pack.release, join(out, "probe-0.0.1.tgz"));
-  assert.equal(readFileSync(pack.release, "utf8"), "/opt/sok");
+  assert.equal(readFileSync(pack.release, "utf8"), out);
 });
 
 // make boundaries reads the plugin ids from the declaration, so the registry build, which reads each plugin.json, rejects a

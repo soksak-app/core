@@ -1,5 +1,5 @@
-//! Writes plugin releases and sidecar releases (docs/spec/cli.md). Both are gzip-compressed tar files whose entries
-//! are in path order with modification time 0, owner 0 and mode 0644 or 0755. A failure leaves no file.
+//! Writes sidecar releases (docs/spec/cli.md): gzip-compressed tar files whose entries are in path order with modification
+//! time 0, owner 0 and mode 0644 or 0755. A failure leaves no file.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -229,111 +229,6 @@ fn listed_files(pkg: &Map<String, Value>) -> Result<Vec<String>, String> {
     Ok(listed)
 }
 
-/// Checks the plugin folder and writes `<id>-<version>.tgz`.
-/// Whether a path of files is path or a folder that contains path.
-fn covers(listed: &[String], path: &str) -> bool {
-    listed.iter().any(|file| {
-        // default: a trailing / only marks a folder, so the path is used unchanged when there is none.
-        let folder = format!("{}/", file.strip_suffix('/').unwrap_or(file));
-        path == file || path.starts_with(&folder)
-    })
-}
-
-/// The path segment that the binary store of a page reserves. The host answers that path before it looks up a file, so a
-/// plugin release cannot hold a file under it (docs/spec/native-surfaces.md).
-const BINARY_SEGMENT: &str = ".binary";
-
-/// Refuses a listed path that has a BINARY_SEGMENT part, with the same text as validateReleaseFiles of @soksak/plugin-api.
-fn check_release_files(listed: &[String]) -> Result<(), String> {
-    for file in listed {
-        if file.split('/').any(|segment| segment == BINARY_SEGMENT) {
-            return Err(format!(
-                "plugin release lists {file}: the {BINARY_SEGMENT} path is reserved for the binary store"
-            ));
-        }
-    }
-    Ok(())
-}
-
-/// The modules that plugin.json loads and their names: the surface module and the page of a view composition.
-fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
-    let mut modules = vec![];
-    let mut add = |what: String, value: &Value| {
-        if let Some(module) = value.as_str() {
-            modules.push((what, module.to_string()));
-        }
-    };
-    add("surface module".into(), &manifest["surface"]["module"]);
-    if manifest["surface"]["composition"]["kind"] == "view" {
-        add(
-            "view page".into(),
-            &manifest["surface"]["composition"]["page"],
-        );
-    }
-    modules
-}
-
-/// diagnostics.json of the plugin folder and its module paths. It is empty when diagnostics.json does not exist. Neither file is
-/// listed in files (docs/spec/plugins.md).
-fn diagnostic_files(dir: &Path, listed: &[String]) -> Result<Vec<String>, String> {
-    if !dir.join("diagnostics.json").exists() {
-        return Ok(vec![]);
-    }
-    let declared = read_json_file(dir, "diagnostics.json")?;
-    if !declared.is_object() {
-        return Err("diagnostics.json: expected an object".into());
-    }
-    let Some(module) = declared["module"]
-        .as_str()
-        .filter(|module| !leaves(module) && module.ends_with(".js"))
-    else {
-        return Err("diagnostics.json: module must be a JavaScript path inside the package".into());
-    };
-    for path in ["diagnostics.json", module] {
-        if covers(listed, path) {
-            return Err(format!(
-                "package.json files: {path} is diagnostic and must not be listed"
-            ));
-        }
-    }
-    Ok(vec!["diagnostics.json".into(), module.to_string()])
-}
-
-/// Checks the plugin folder and writes `<id>-<version>.tgz`. When diagnostics is true, it also includes the diagnostic declarations.
-fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> Result<(), String> {
-    let dir = Path::new(dir);
-    let pkg = read_json_file(dir, "package.json")?;
-    install::validate_package_json(&pkg)?;
-    let manifest = read_json_file(dir, "plugin.json")?;
-    crate::manifest::validate_manifest(&manifest)?;
-    // default: validate_manifest accepted the id, so it is text.
-    let id = manifest["id"].as_str().unwrap_or_default();
-    let object = pkg.as_object().ok_or("package.json: expected an object")?;
-    let mut listed = listed_files(object)?;
-    check_release_files(&listed)?;
-    for (what, module) in manifest_modules(&manifest) {
-        if !covers(&listed, &module) {
-            return Err(format!(
-                "plugin.json: {what} {module} must be listed in files"
-            ));
-        }
-    }
-    let extra = diagnostic_files(dir, &listed)?;
-    if diagnostics {
-        listed.extend(extra);
-    }
-    let entries = collect(dir, &listed)?;
-    let version = pkg["version"]
-        .as_str()
-        .ok_or("package.json version: expected x.y.z")?;
-    let output = output_path(out, &install::release_name(id, version))?;
-    let sum = write_release(&entries, &output)?;
-    print_json(
-        stdout,
-        &json!({"id": id, "version": version, "release": output.display().to_string(), "sha256": sum}),
-    )
-}
-
 /// Reads SHA256SUMS as a sha256 for each release name. The list is empty when the file does not exist.
 fn read_sums(path: &Path) -> Result<BTreeMap<String, String>, String> {
     let text = match std::fs::read_to_string(path) {
@@ -454,14 +349,13 @@ pub(crate) fn run_files(
     positionals: &[String],
     values: &std::collections::HashMap<String, String>,
     stdout: &mut dyn Write,
-    diagnostics: bool,
 ) -> Result<(), Error> {
     let kind = &positionals[0];
     let action = positionals
         .get(1)
         .ok_or_else(|| Error::Usage(format!("{kind} action is required")))?;
     let command = format!("{kind} {action}");
-    if command != "plugin pack" && command != "sidecar release" {
+    if command != "sidecar release" {
         return Err(Error::Usage(format!("unknown command: {command}")));
     }
     let dir = positionals
@@ -472,12 +366,6 @@ pub(crate) fn run_files(
         .ok_or_else(|| Error::Usage("output directory is required".into()))?;
     if let Some(extra) = positionals.get(4) {
         return Err(Error::Usage(format!("unexpected argument {extra}")));
-    }
-    if command == "plugin pack" {
-        return Ok(run_pack(dir, out, diagnostics, stdout)?);
-    }
-    if diagnostics {
-        return Err(Error::Usage("--diagnostics belongs to plugin pack".into()));
     }
     let platform = match values.get("platform") {
         Some(platform) => {

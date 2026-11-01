@@ -69,8 +69,6 @@ commands:
                             starts the application bundle TARGET again in the background after the process PID ended
   process wait PID --timeout-ms MILLISECONDS
                             waits for the operating system to report that PID ended
-  plugin pack DIRECTORY OUTPUT [--diagnostics]
-                            writes the plugin into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]
                             writes the sidecar release into OUTPUT and updates SHA256SUMS
   registry build DIRECTORY  checks a registry and writes its index.json
@@ -107,7 +105,7 @@ macro_rules! usage {
     ($($arg:tt)*) => { Error::Usage(format!($($arg)*)) };
 }
 
-const BOOLEANS: &[&str] = &["watch", "activate", "help", "diagnostics"];
+const BOOLEANS: &[&str] = &["watch", "activate", "help"];
 const OPTIONS: &[&str] = &[
     "wait",
     "bundle",
@@ -796,7 +794,7 @@ fn execute(
         a.positionals.first().map(String::as_str),
         a.positionals.get(1).map(String::as_str),
     );
-    if matches!(first_two, (Some("plugin"), Some(action)) if action != "pack")
+    if matches!(first_two, (Some("plugin"), Some(_)))
         || first_two == (Some("registry"), Some("use"))
     {
         return plugins::run_plugins(&a.positionals, &a.values, stdout, options);
@@ -808,7 +806,7 @@ fn execute(
         a.positionals.first().map(String::as_str),
         Some("plugin" | "sidecar")
     ) {
-        return release::run_files(&a.positionals, &a.values, stdout, a.flag("diagnostics"));
+        return release::run_files(&a.positionals, &a.values, stdout);
     }
     if a.positionals.first().map(String::as_str) == Some("debug") {
         return debug::run_debug(&a, stdout, stderr, options);

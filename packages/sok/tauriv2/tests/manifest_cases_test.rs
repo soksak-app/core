@@ -1,5 +1,5 @@
 //! Replays every case of the manifest case table (docs/spec/cases/manifest-validation.json, the table the
-//! page reader replays) through plugin pack and plugin install (docs/spec/installation.md#plugin-release).
+//! page reader replays) through plugin install of a release (docs/spec/installation.md#plugin-release).
 
 use std::path::Path;
 
@@ -8,6 +8,8 @@ use serde_json::{Value, json};
 
 #[path = "support/folder.rs"]
 mod folder;
+#[path = "support/plugin_release.rs"]
+mod plugin_release;
 
 use folder::Folder;
 
@@ -62,14 +64,13 @@ fn cases() -> Vec<ManifestCase> {
     cases
 }
 
-/// A registry index whose plugin probe has one release of version 0.2.0 that is not read: the test extracts the folder of
-/// the release first, so installation reads its plugin.json.
-fn index_for_probe() -> Folder {
-    let dir = Folder::new("manifest-cases");
+/// A registry index whose plugin probe 0.2.0 is the release at path with sum.
+fn index_for_release(path: &Path, sum: &str) -> Folder {
+    let dir = Folder::new("manifest-index");
     let plugin = json!({"id": "probe", "package": "@scope/plugin-probe", "name": "Probe",
         "description": "검사용 plugin.", "license": "MIT", "repository": "https://example.invalid/probe",
         "versions": [{"version": "0.2.0",
-            "release": {"url": "file:///nonexistent/probe-0.2.0.tgz", "sha256": "0".repeat(64)},
+            "release": {"url": format!("file://{}", path.display()), "sha256": sum},
             "engines": {"soksak": "^0.0.2"}, "sidecars": {}}]});
     let index = json!({"format": 1, "plugins": [plugin], "sidecars": [], "packs": [],
         "revoked": {"plugins": [], "sidecars": []}});
@@ -77,19 +78,14 @@ fn index_for_probe() -> Folder {
     dir
 }
 
-// contract: cli.pack.replays-manifest-cases
+// contract: install.manifest.replays-manifest-cases
 #[test]
-fn plugin_pack_replays_the_manifest_cases() {
+fn plugin_install_replays_the_manifest_cases() {
     let mut failures = Vec::new();
     for case in cases() {
-        let files = if case.package_files.is_empty() {
-            vec!["plugin.json".to_string()]
-        } else {
-            case.package_files.clone()
-        };
         let package = json!({"name": "@scope/plugin-probe", "version": "0.2.0",
-            "engines": {"soksak": "^0.0.2"}, "files": files});
-        let dir = Folder::new("manifest-pack");
+            "engines": {"soksak": "^0.0.2"}, "files": case.package_files});
+        let dir = Folder::new("manifest-plugin");
         write_tree(
             dir.path(),
             &[
@@ -97,34 +93,19 @@ fn plugin_pack_replays_the_manifest_cases() {
                 ("plugin.json", &case.manifest.to_string()),
             ],
         );
-        for file in files.iter().filter(|file| file.as_str() != "plugin.json") {
+        for file in case
+            .package_files
+            .iter()
+            .filter(|file| file.as_str() != "plugin.json")
+        {
             write_tree(dir.path(), &[(file.as_str(), "")]);
         }
-        let out = Folder::new("manifest-out");
-        let (code, _, stderr) = run(&["plugin", "pack", dir.text(), out.text()]);
-        let ok = if case.accepted {
-            code == 0
-        } else {
-            code == 1 && stderr == format!("sok: {}\n", case.error)
-        };
-        if !ok {
-            failures.push(format!("{}: code {code} stderr {stderr:?}", case.id));
-        }
-    }
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
-}
-
-// contract: install.manifest.replays-manifest-cases
-#[test]
-fn plugin_install_replays_the_refused_manifest_cases_of_the_probe() {
-    let mut failures = Vec::new();
-    for case in cases() {
-        // Installation checks the plugin id of the installation record first, so the cases of the id probe are replayed
-        // here; the other cases are replayed by the pack test, which runs the same validation.
-        if case.accepted || case.manifest.get("id") != Some(&json!("probe")) {
-            continue;
-        }
-        let index = index_for_probe();
+        let out = Folder::new("manifest-release");
+        let release = plugin_release::pack(dir.path(), out.path());
+        let index = index_for_release(
+            Path::new(release["release"].as_str().unwrap()),
+            release["sha256"].as_str().unwrap(),
+        );
         let config = Folder::new("manifest-config");
         let (code, _, stderr) = run(&[
             "registry",
@@ -134,24 +115,28 @@ fn plugin_install_replays_the_refused_manifest_cases_of_the_probe() {
             config.text(),
         ]);
         assert_eq!(code, 0, "registry use: {stderr}");
-        let folder = config.path().join("plugins/probe/0.2.0");
-        write_tree(
-            folder.as_path(),
-            &[
-                (
-                    "package.json",
-                    r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}"#,
-                ),
-                ("plugin.json", &case.manifest.to_string()),
-            ],
-        );
         let (code, _, stderr) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
-        let want = format!("sok: {}/plugin.json: {}\n", folder.display(), case.error);
-        if code != 1 || stderr != want || config.path().join("plugins/installed.json").exists() {
-            failures.push(format!(
-                "{}: code {code} stderr {stderr:?}, want {want:?}",
-                case.id
-            ));
+        let installed = config.path().join("plugins/installed.json").exists();
+        let ok = if case.accepted {
+            // The index holds no dependency of the plugin, so an accepted manifest with dependencies passes the reader
+            // and stops at the dependency check of the registry.
+            (code == 0 && installed)
+                || (code == 1 && stderr.starts_with("sok: probe 0.2.0: dependency ") && !installed)
+        } else {
+            // Install parses plugin.json before the reader runs and refuses a value that is not an object with its
+            // location; the reader text of that case names plugin.json itself.
+            let want = if case.manifest.is_object() {
+                format!(
+                    "sok: plugin probe 0.2.0 package: plugin.json: {}\n",
+                    case.error
+                )
+            } else {
+                "sok: plugin probe 0.2.0 package: plugin.json: expected an object\n".to_string()
+            };
+            code == 1 && stderr == want && !installed
+        };
+        if !ok {
+            failures.push(format!("{}: code {code} stderr {stderr:?}", case.id));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));

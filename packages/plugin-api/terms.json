@@ -22,7 +22,7 @@
     },
     {
       "term": "release",
-      "definition": "The file that sok plugin pack or sok sidecar release writes and that a registry lists: <id>-<version>.tgz of a plugin, <file name>-<version>-<platform>.tar.gz of a sidecar, or soksak-<version>-<platform>-<host>.zip of an application bundle.",
+      "definition": "The file that a registry lists: the pnpm pack file of a plugin, <scope>-<name>-<version>.tgz, <file name>-<version>-<platform>.tar.gz of a sidecar, or soksak-<version>-<platform>-<host>.zip of an application bundle.",
       "rejected": [
         "plugin package archive",
         "plugin archive",

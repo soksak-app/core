@@ -2287,10 +2287,8 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
-      { file: "packages/sok/wailsv3/tests/manifest_cases_test.go", id: "TestPluginPackReplaysTheManifestCases" },
-      { file: "packages/sok/wailsv3/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheRefusedManifestCases" },
-      { file: "packages/sok/tauriv2/tests/manifest_cases_test.rs", id: "plugin_pack_replays_the_manifest_cases" },
-      { file: "packages/sok/tauriv2/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_refused_manifest_cases_of_the_probe" },
+      { file: "packages/sok/wailsv3/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/tauriv2/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
     ],
     expected: "The reader and both sok implementations give every case of docs/spec/cases/manifest-validation.json the same result: a refused manifest fails with the reader's text, members are read in sorted key order, and a schema type that is not a type name is refused.",
     levels: ["unit"],
@@ -2299,12 +2297,10 @@ const FEATURE_LINKS = [
     id: "F258",
     implementation: [{ file: "packages/sok/wailsv3/src/manifest.go", symbol: "func ValidateManifest" }],
     tests: [
-      { file: "packages/sok/wailsv3/tests/release_test.go", id: "TestPluginPackRefusesASchemaOutsideTheSubset" },
       { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset" },
-      { file: "packages/sok/tauriv2/tests/release_test.rs", id: "plugin_pack_refuses_a_schema_outside_the_subset" },
       { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset" },
     ],
-    expected: "The pack and the install of sok refuse a plugin.json whose exposes declaration or surface params schema the reader refuses, with the reader's error text, in both the Go and the Rust implementation.",
+    expected: "The install of sok refuses a plugin.json whose exposes declaration or surface params schema the reader refuses, with the reader's error text, in both the Go and the Rust implementation.",
     levels: ["unit"],
   },
   {
@@ -8034,6 +8030,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F355-2",
+    implementation: [
+      { file: "packages/sok/tauriv2/src/registry.rs", symbol: "pub(crate) fn check_release_modules" },
+      { file: "packages/sok/wailsv3/src/registry.go", symbol: "func checkReleaseModules" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function pnpmPack(" },
+    ],
+    tests: [
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_entry_outside_package" },
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_without_the_view_page" },
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_with_a_binary_path" },
+      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseEntryOutsidePackage" },
+      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithoutTheViewPage" },
+      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithABinaryPath" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "a plugin is packed by the make pack target of its repository, which receives only the output folder" },
+    ],
+    expected: "sok plugin install reads the pnpm pack layout of a plugin release and refuses an entry outside package/, a release without the modules that plugin.json loads and a file under .binary; the workspace registry passes only the output folder to make pack.",
+    levels: ["unit"],
+  },
+  {
     id: "F332-4-1-1",
     implementation: [{ file: "scripts/test/shortcut-table.test.mjs", symbol: "core.fixture.move" }],
     tests: [{ file: "scripts/test/shortcut-table.test.mjs", id: "an arrow-key comparison without a workbench row is reported, and the table row clears it" }],
@@ -8550,9 +8565,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F275-2",
-    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "// make -C runs the target in the repository, so the paths that it receives are absolute." }],
-    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a relative output folder and sok executable of a pack resolve from the working directory, not from the plugin repository" }],
-    expected: "The workspace registry passes absolute output and sok paths to the make pack target of a plugin repository.",
+    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "// make -C runs the target in the repository, so the path that it receives is absolute." }],
+    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a relative output folder of a pack resolves from the working directory, not from the plugin repository" }],
+    expected: "The workspace registry passes an absolute output folder to the make pack target of a plugin repository.",
     levels: ["unit"],
   },
   {
@@ -8565,7 +8580,7 @@ const FEATURE_LINKS = [
   {
     id: "F275",
     implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function packPlugin(" }],
-    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a plugin is packed by the make pack target of its repository with the sok executable and the pack flags" }],
+    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a plugin is packed by the make pack target of its repository, which receives only the output folder" }],
     expected: "The workspace registry packs each plugin with the make pack target of its repository and records the one release that the target adds.",
     levels: ["unit"],
   },

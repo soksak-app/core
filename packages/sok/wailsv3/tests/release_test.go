@@ -1,6 +1,6 @@
 package tests
 
-// Checks the release and SHA256SUMS that plugin pack and sidecar release (docs/spec/cli.md) write.
+// Checks the release and SHA256SUMS that sidecar release (docs/spec/cli.md) writes.
 
 import (
 	"archive/tar"
@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -35,11 +34,10 @@ func writeTree(t *testing.T, dir string, files map[string]string) {
 }
 
 type tarEntry struct {
-	name    string
-	mode    int64
-	time    int64
-	owner   int
-	content string
+	name  string
+	mode  int64
+	time  int64
+	owner int
 }
 
 func readRelease(t *testing.T, path string) ([]tarEntry, string) {
@@ -68,11 +66,7 @@ func readRelease(t *testing.T, path string) ([]tarEntry, string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		content, err := io.ReadAll(reader)
-		if err != nil {
-			t.Fatal(err)
-		}
-		entries = append(entries, tarEntry{header.Name, header.Mode, header.ModTime.Unix(), header.Uid + header.Gid, string(content)})
+		entries = append(entries, tarEntry{header.Name, header.Mode, header.ModTime.Unix(), header.Uid + header.Gid})
 	}
 	return entries, hex.EncodeToString(sum[:])
 }
@@ -88,70 +82,6 @@ func pluginTree(t *testing.T) string {
 		"test/skip.mjs": "not listed",
 	})
 	return dir
-}
-
-// contract: cli.pack.writes-sorted-plugin-release
-func TestPluginPackWritesASortedReleaseOfTheListedFiles(t *testing.T) {
-	dir := pluginTree(t)
-	out := filepath.Join(t.TempDir(), "out")
-	code, stdout, stderr := run("plugin", "pack", dir, out)
-	if code != 0 {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-	release := filepath.Join(out, "probe-0.2.0.tgz")
-	entries, sum := readRelease(t, release)
-	want := fmt.Sprintf("{\n  \"id\": \"probe\",\n  \"release\": %q,\n  \"sha256\": %q,\n  \"version\": \"0.2.0\"\n}\n", release, sum)
-	if stdout != want {
-		t.Fatalf("stdout %q, want %q", stdout, want)
-	}
-	var names []string
-	for _, entry := range entries {
-		names = append(names, fmt.Sprintf("%s %o %d %d", entry.name, entry.mode, entry.time, entry.owner))
-	}
-	if got := strings.Join(names, ", "); got != "package.json 644 0 0, plugin.json 644 0 0, ui/a/run.sh 755 0 0, ui/b.js 644 0 0" {
-		t.Fatalf("entries %s", got)
-	}
-	if entries[3].content != "b" {
-		t.Fatalf("content %q", entries[3].content)
-	}
-	// Packing the same folder again writes the same bytes.
-	if code, again, _ := run("plugin", "pack", dir, out); code != 0 || again != stdout {
-		t.Fatalf("repeat %d %q", code, again)
-	}
-}
-
-// contract: cli.pack.rejects-links-and-manifest-mismatch
-func TestPluginPackRejectsLinksAndAManifestMismatchWithoutWriting(t *testing.T) {
-	dir := pluginTree(t)
-	if err := os.Symlink("b.js", filepath.Join(dir, "ui", "link.js")); err != nil {
-		t.Fatal(err)
-	}
-	out := filepath.Join(t.TempDir(), "out")
-	code, _, stderr := run("plugin", "pack", dir, out)
-	if code != 1 || stderr != "sok: ui/link.js is a symbolic link; an release holds no links\n" {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-	if names, _ := os.ReadDir(out); len(names) != 0 {
-		t.Fatalf("a failed pack left %v", names)
-	}
-	other := pluginTree(t)
-	writeTree(t, other, map[string]string{"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-		"soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"]}`})
-	code, _, stderr = run("plugin", "pack", other, out)
-	if code != 1 || stderr != "sok: package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json\n" {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-	other = pluginTree(t)
-	writeTree(t, other, map[string]string{"plugin.json": `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "latest"}}`})
-	code, _, stderr = run("plugin", "pack", other, out)
-	if code != 1 || stderr != "sok: plugin probe: dependencies @scope/sidecar-worker: invalid range latest\n" {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-	writeTree(t, other, map[string]string{"plugin.json": `{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`})
-	code, _, stderr = run("plugin", "pack", other, out)
-	if code != 1 || stderr != "sok: plugin.json: invalid id undefined\n" {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
 }
 
 func sidecarTree(t *testing.T, version string) string {
@@ -202,6 +132,12 @@ func TestSidecarReleaseWritesTheAssetAndKeepsSHA256SUMSSorted(t *testing.T) {
 		}
 		if len(entries) != 3 || entries[0].name != "build/worker" || entries[0].mode != 0o755 || entries[2].name != "sidecar.json" {
 			t.Fatalf("entries %v", entries)
+		}
+		// The writer sets time 0 and owner 0, so the same files give the same bytes.
+		for _, entry := range entries {
+			if entry.time != 0 || entry.owner != 0 {
+				t.Fatalf("entries %v", entries)
+			}
 		}
 		sums = append(sums, sum+"  "+name)
 	}
@@ -257,146 +193,5 @@ func TestSidecarReleaseRefusesAReplayExecutableThatThePackageDoesNotShip(t *test
 	code, _, stderr = run("sidecar", "release", missing, out, "--platform", "darwin-arm64")
 	if code != 1 || stderr != "sok: sidecar.json: replay.executable is required\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-}
-
-// contract: cli.pack.diagnostics-only-with-flag
-func TestPluginPackAddsDiagnosticDeclarationsOnlyWithTheFlag(t *testing.T) {
-	dir := pluginTree(t)
-	writeTree(t, dir, map[string]string{
-		"diagnostics.json":     `{"module": "probe-diagnostics.js", "exposes": {}}`,
-		"probe-diagnostics.js": "export const probe = true;",
-	})
-	for _, c := range []struct {
-		flags []string
-		want  string
-	}{
-		{nil, "package.json, plugin.json, ui/a/run.sh, ui/b.js"},
-		{[]string{"--diagnostics"}, "diagnostics.json, package.json, plugin.json, probe-diagnostics.js, ui/a/run.sh, ui/b.js"},
-	} {
-		out := t.TempDir()
-		code, _, stderr := run(append([]string{"plugin", "pack", dir, out}, c.flags...)...)
-		if code != 0 {
-			t.Fatalf("%v: code %d stderr %q", c.flags, code, stderr)
-		}
-		entries, _ := readRelease(t, filepath.Join(out, "probe-0.2.0.tgz"))
-		var names []string
-		for _, entry := range entries {
-			names = append(names, entry.name)
-		}
-		if got := strings.Join(names, ", "); got != c.want {
-			t.Fatalf("%v: entries %s", c.flags, got)
-		}
-	}
-	writeTree(t, dir, map[string]string{"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-		"files": ["plugin.json", "ui", "probe-diagnostics.js"]}`})
-	code, _, stderr := run("plugin", "pack", dir, t.TempDir())
-	if code != 1 || stderr != "sok: package.json files: probe-diagnostics.js is diagnostic and must not be listed\n" {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-	code, _, stderr = run("sidecar", "release", sidecarTree(t, "0.1.0"), t.TempDir(), "--diagnostics")
-	if code != 2 || !strings.HasPrefix(stderr, "sok: --diagnostics belongs to plugin pack\n") {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-}
-
-// contract: cli.pack.refuses-removed-fields
-func TestPluginPackRefusesRemovedManifestFields(t *testing.T) {
-	for _, c := range []struct{ manifest, want string }{
-		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}`, "plugin probe: section probe.list module is removed; a section takes composition and height"},
-		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}`, "plugin probe: state is removed; a plugin declares its project data with data (docs/spec/plugins.md#project-data)"},
-	} {
-		dir := pluginTree(t)
-		writeTree(t, dir, map[string]string{"plugin.json": c.manifest})
-		code, _, stderr := run("plugin", "pack", dir, t.TempDir())
-		if code != 1 || stderr != "sok: "+c.want+"\n" {
-			t.Fatalf("code %d stderr %q, want %q", code, stderr, c.want)
-		}
-	}
-}
-
-// contract: cli.pack.refuses-schema-outside-subset
-func TestPluginPackRefusesASchemaOutsideTheSubset(t *testing.T) {
-	for _, c := range []struct{ manifest, want string }{
-		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"params": {"type": "object", "required": ["path"]}}}`, "plugin probe surface params: unknown field required"},
-		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object", "required": ["x"]}, "result": {"type": "null"}}]}}`, "probe exposes probe.run params: unknown field required"},
-		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer", "minimum": 0}}}}]}}`, "probe exposes probe.state schema.n: unknown field minimum"},
-		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "string"}}]}}`, "plugin probe: exposes require a surface or sections"},
-		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"dom": [{"name": "probe.x", "description": "X.", "many": "yes"}]}}`, "probe exposes probe.x: many must be a boolean"},
-		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 600001}]}}`, "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds"},
-	} {
-		dir := pluginTree(t)
-		writeTree(t, dir, map[string]string{"plugin.json": c.manifest})
-		code, _, stderr := run("plugin", "pack", dir, t.TempDir())
-		if code != 1 || stderr != "sok: "+c.want+"\n" {
-			t.Fatalf("code %d stderr %q, want %q", code, stderr, c.want)
-		}
-	}
-	dir := pluginTree(t)
-	writeTree(t, dir, map[string]string{"ui/page.html": "<!doctype html>", "plugin.json": `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}, "params": {"type": "object", "properties": {"path": {"type": ["string", "null"]}}}}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer"}}, "items": {"enum": [1, 2]}}}], "commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 1000}]}}`})
-	if code, _, stderr := run("plugin", "pack", dir, t.TempDir()); code != 0 {
-		t.Fatalf("subset schemas: code %d stderr %q", code, stderr)
-	}
-}
-
-// contract: cli.pack.rejects-unlisted-modules
-func TestPluginPackRejectsAModuleThatFilesDoesNotList(t *testing.T) {
-	const head = `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}`
-	for _, c := range []struct{ manifest, want string }{
-		{head + `, "surface": {"module": "ui/b.js"}}`, "plugin probe: surface module is removed; a surface is a view (docs/spec/plugins.md#view-surfaces)"},
-		{head + `, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "page/probe.html"}}}`, "plugin.json: view page page/probe.html must be listed in files"},
-	} {
-		dir := pluginTree(t)
-		writeTree(t, dir, map[string]string{"plugin.json": c.manifest})
-		code, _, stderr := run("plugin", "pack", dir, t.TempDir())
-		if code != 1 || stderr != "sok: "+c.want+"\n" {
-			t.Fatalf("code %d stderr %q, want %q", code, stderr, c.want)
-		}
-	}
-}
-
-// contract: cli.pack.binary-path-refused
-func TestPluginPackRefusesABinaryPathInFilesWithoutWriting(t *testing.T) {
-	dir := pluginTree(t)
-	writeTree(t, dir, map[string]string{
-		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-			"files": ["plugin.json", "ui", ".binary/x"]}`,
-		".binary/x": "stored",
-	})
-	out := filepath.Join(t.TempDir(), "out")
-	code, _, stderr := run("plugin", "pack", dir, out)
-	want := "sok: plugin release lists .binary/x: the .binary path is reserved for the binary store\n"
-	if code != 1 || stderr != want {
-		t.Fatalf("code %d stderr %q, want %q", code, stderr, want)
-	}
-	if names, _ := os.ReadDir(out); len(names) != 0 {
-		t.Fatalf("a refused pack left %v", names)
-	}
-}
-
-// contract: cli.pack.view-page-listed
-func TestPluginPackRefusesAViewPageNotListedInFiles(t *testing.T) {
-	dir := pluginTree(t)
-	writeTree(t, dir, map[string]string{
-		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-			"files": ["plugin.json", "ui/b.js"]}`,
-		"plugin.json":  `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}}`,
-		"ui/page.html": "<!doctype html>",
-	})
-	out := filepath.Join(t.TempDir(), "out")
-	code, _, stderr := run("plugin", "pack", dir, out)
-	want := "sok: plugin.json: view page ui/page.html must be listed in files\n"
-	if code != 1 || stderr != want {
-		t.Fatalf("code %d stderr %q, want %q", code, stderr, want)
-	}
-	if names, _ := os.ReadDir(out); len(names) != 0 {
-		t.Fatalf("a refused pack left %v", names)
-	}
-	writeTree(t, dir, map[string]string{
-		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-			"files": ["plugin.json", "ui"]}`,
-	})
-	if code, _, stderr := run("plugin", "pack", dir, out); code != 0 {
-		t.Fatalf("listed view page: code %d stderr %q", code, stderr)
 	}
 }

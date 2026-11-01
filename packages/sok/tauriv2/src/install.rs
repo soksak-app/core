@@ -368,11 +368,6 @@ pub fn manifest_dependencies(manifest: &Value) -> Result<BTreeMap<String, String
         .collect())
 }
 
-/// The file name of a plugin release.
-pub fn release_name(id: &str, version: &str) -> String {
-    format!("{id}-{version}.tgz")
-}
-
 /// Converts a sidecar name to the form used for file names and folder names. `@scope/name` becomes `scope-name`.
 pub fn sidecar_file_name(name: &str) -> Result<String, String> {
     check_package_json_name("sidecar", Some(&Value::from(name)))?;

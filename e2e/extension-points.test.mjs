@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { pluginEntry } from "../scripts/workspace-registry.mjs";
+import { pluginEntry, pnpmPack } from "../scripts/workspace-registry.mjs";
 import { fresh, pluginChangeApplied } from "./fixture.mjs";
 
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
@@ -25,7 +25,7 @@ function probeRegistry(sok) {
   const sidecars = new Set(readdirSync(join(folder, "sidecars")).map((file) => JSON.parse(readFileSync(join(folder, "sidecars", file), "utf8")).name));
   for (const probe of ["provider", "contributor"]) {
     const dir = join(PROBES, probe);
-    const pack = JSON.parse(execFileSync(sok, ["plugin", "pack", dir, join(folder, "releases")], { encoding: "utf8" }));
+    const pack = pnpmPack(dir, join(folder, "releases"));
     const manifest = JSON.parse(readFileSync(join(dir, "plugin.json"), "utf8"));
     const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
     writeFileSync(join(folder, "plugins", `${manifest.id}.json`), JSON.stringify(pluginEntry(manifest, pkg, pack, sidecars), null, 2));

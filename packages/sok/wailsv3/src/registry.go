@@ -50,7 +50,68 @@ func readEntries(dir, kind string, validate func(any) error, fileName func(map[s
 	return entries, nil
 }
 
-// releaseFiles reads the content of names among the top-level files of a tar.gz.
+// pluginRoot is the folder of every entry of a plugin release, the layout that `pnpm pack` writes
+// (docs/spec/installation.md#plugin-release).
+const pluginRoot = "package/"
+
+// binarySegment is the path segment that the binary store of a page reserves. The host answers that path before it
+// looks up a file, so a plugin release cannot hold a file under it (docs/spec/native-surfaces.md).
+const binarySegment = ".binary"
+
+// manifestModules are the modules that plugin.json loads and their names: the surface module, the page of a view
+// composition.
+func manifestModules(manifest map[string]any) [][2]string {
+	var modules [][2]string
+	add := func(what string, value any) {
+		if module, ok := value.(string); ok {
+			modules = append(modules, [2]string{what, module})
+		}
+	}
+	if surface, ok := manifest["surface"].(map[string]any); ok {
+		add("surface module", surface["module"])
+		if composition, ok := surface["composition"].(map[string]any); ok && composition["kind"] == "view" {
+			add("view page", composition["page"])
+		}
+	}
+	return modules
+}
+
+// checkReleaseModules checks the files of a plugin release against its plugin.json: no file is under a binarySegment
+// folder, and every module that plugin.json loads is a file of the release.
+func checkReleaseModules(data []byte, manifest map[string]any) error {
+	zipped, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	reader := tar.NewReader(zipped)
+	paths := map[string]bool{}
+	for {
+		header, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		name, ok := strings.CutPrefix(header.Name, pluginRoot)
+		if !ok {
+			continue
+		}
+		if slices.Contains(strings.Split(name, "/"), binarySegment) {
+			return fmt.Errorf("plugin release holds %s: the %s path is reserved for the binary store", name, binarySegment)
+		}
+		paths[name] = true
+	}
+	for _, module := range manifestModules(manifest) {
+		if !paths[module[1]] {
+			return fmt.Errorf("plugin.json: %s %s is not in the release", module[0], module[1])
+		}
+	}
+	return nil
+}
+
+// releaseFiles reads the content of the files of a plugin release that are listed in names, each from
+// `package/<name>`.
 func releaseFiles(data []byte, names ...string) (map[string][]byte, error) {
 	zipped, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
@@ -66,8 +127,9 @@ func releaseFiles(data []byte, names ...string) (map[string][]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if slices.Contains(names, header.Name) {
-			if found[header.Name], err = io.ReadAll(reader); err != nil {
+		name, ok := strings.CutPrefix(header.Name, pluginRoot)
+		if ok && slices.Contains(names, name) {
+			if found[name], err = io.ReadAll(reader); err != nil {
 				return nil, err
 			}
 		}

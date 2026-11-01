@@ -16,7 +16,7 @@ use crate::install::{
     Need, Release, SelectedSidecar, Selection,
 };
 use crate::platform;
-use crate::registry::{read_release, release_files};
+use crate::registry::{PLUGIN_ROOT, check_release_modules, read_release, release_files};
 use crate::release::{current_platform, print_json, replace_file};
 use crate::{Error, Options, config_dir_of};
 
@@ -504,15 +504,16 @@ pub(crate) fn write_installed(config_dir: &Path, state: &InstalledState) -> Resu
 }
 
 /// Unpacks a tar.gz release into a temporary folder next to target, then renames it to target. It accepts only regular files and folders and rejects absolute paths and
-/// `..`.
-fn extract(data: &[u8], target: &Path) -> Result<(), String> {
+/// `..`. When root is not empty, every entry must be inside the folder root, which is removed from the installed paths: a plugin release
+/// holds its files under `package/` (docs/spec/installation.md#plugin-release), and a sidecar release at its top.
+fn extract(data: &[u8], target: &Path, root: &str) -> Result<(), String> {
     create_parent(target)?;
     let name = target
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| format!("{} has no name", target.display()))?;
     let temp = target.with_file_name(format!(".{name}.{}", std::process::id()));
-    let result = extract_into(data, &temp).and_then(|()| {
+    let result = extract_into(data, &temp, root).and_then(|()| {
         std::fs::rename(&temp, target)
             .map_err(|error| crate::files::file_error(target.display(), &error))
     });
@@ -521,7 +522,7 @@ fn extract(data: &[u8], target: &Path) -> Result<(), String> {
     })
 }
 
-fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
+fn extract_into(data: &[u8], temp: &Path, root: &str) -> Result<(), String> {
     std::fs::create_dir_all(temp)
         .map_err(|error| crate::files::file_error(temp.display(), &error))?;
     let mut reader = tar::Archive::new(flate2::read::GzDecoder::new(data));
@@ -534,8 +535,17 @@ fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
         if name.is_empty() || name.starts_with('/') || name.split('/').any(|part| part == "..") {
             return Err(format!("release entry {raw} leaves the folder"));
         }
-        let path = temp.join(name);
         let kind = entry.header().entry_type();
+        if !root.is_empty() && kind.is_dir() && name == root.trim_end_matches('/') {
+            continue;
+        }
+        let name = if root.is_empty() {
+            name
+        } else {
+            name.strip_prefix(root)
+                .ok_or_else(|| format!("entry {raw} is outside {root}"))?
+        };
+        let path = temp.join(name);
         if kind.is_dir() {
             std::fs::create_dir_all(&path)
                 .map_err(|error| crate::files::file_error(path.display(), &error))?;
@@ -572,7 +582,7 @@ fn install_release(at: &str, release: &Release, target: &Path) -> Result<(), Str
         Err(error) => return Err(crate::files::file_error(at, &error)),
     }
     let data = read_release(at, release)?;
-    extract(&data, target).map_err(|error| format!("{at}: {error}"))
+    extract(&data, target, "").map_err(|error| format!("{at}: {error}"))
 }
 
 /// The output of a plugin installation. The structure is written as it is, so the key order is the declaration order and the bytes match the Go implementation.
@@ -644,7 +654,7 @@ pub fn install_plugin(
             continue;
         };
         let plugin = &state.plugins[changed];
-        extract(data, &config_dir.join(&plugin.path))
+        extract(data, &config_dir.join(&plugin.path), PLUGIN_ROOT)
             .map_err(|error| format!("plugin {changed} {} package: {error}", plugin.version))?;
     }
     drop_unnamed_sidecars(&mut state);
@@ -883,9 +893,14 @@ impl DependencyPlan<'_> {
             Err(error) => return Err(crate::files::file_error(&at, &error)),
         };
         let manifest = parse_manifest(&file, &data)?;
-        install::check_plugin_id(id, &manifest).map_err(|error| format!("{file}: {error}"))?;
+        // The reader checks the manifest before its id is compared, so every case of the manifest case table gets the
+        // reader's text (docs/spec/installation.md#plugin-release).
         crate::manifest::validate_manifest(&manifest)
             .map_err(|error| format!("{file}: {error}"))?;
+        install::check_plugin_id(id, &manifest).map_err(|error| format!("{file}: {error}"))?;
+        if let Some(release) = self.releases.get(id) {
+            check_release_modules(release, &manifest).map_err(|error| format!("{at}: {error}"))?;
+        }
         let dependencies = manifest_dependencies_of(&file, &manifest)?;
         let (providers, _) =
             install::classify_dependencies(self.index, id, &version, &dependencies)?;

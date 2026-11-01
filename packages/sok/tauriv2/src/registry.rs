@@ -55,7 +55,64 @@ fn read_entries(
     Ok(entries)
 }
 
-/// Reads the contents of the top-level files of a tar.gz that are listed in names.
+/// The folder of every entry of a plugin release, the layout that `pnpm pack` writes (docs/spec/installation.md#plugin-release).
+pub(crate) const PLUGIN_ROOT: &str = "package/";
+
+/// The path segment that the binary store of a page reserves. The host answers that path before it looks up a file, so a
+/// plugin release cannot hold a file under it (docs/spec/native-surfaces.md).
+pub(crate) const BINARY_SEGMENT: &str = ".binary";
+
+/// The modules that plugin.json loads and their names: the surface module and the page of a view composition.
+pub(crate) fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
+    let mut modules = vec![];
+    let mut add = |what: String, value: &Value| {
+        if let Some(module) = value.as_str() {
+            modules.push((what, module.to_string()));
+        }
+    };
+    add("surface module".into(), &manifest["surface"]["module"]);
+    if manifest["surface"]["composition"]["kind"] == "view" {
+        add(
+            "view page".into(),
+            &manifest["surface"]["composition"]["page"],
+        );
+    }
+    modules
+}
+
+/// Checks the files of a plugin release against its plugin.json: no file is under a BINARY_SEGMENT folder, and every module
+/// that plugin.json loads is a file of the release.
+pub(crate) fn check_release_modules(data: &[u8], manifest: &Value) -> Result<(), String> {
+    let mut reader = tar::Archive::new(flate2::read::GzDecoder::new(data));
+    let mut paths = std::collections::BTreeSet::new();
+    for entry in reader.entries().map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry
+            .path()
+            .map_err(|error| error.to_string())?
+            .display()
+            .to_string();
+        let Some(name) = path.strip_prefix(PLUGIN_ROOT) else {
+            continue;
+        };
+        if name.split('/').any(|segment| segment == BINARY_SEGMENT) {
+            return Err(format!(
+                "plugin release holds {name}: the {BINARY_SEGMENT} path is reserved for the binary store"
+            ));
+        }
+        paths.insert(name.to_string());
+    }
+    for (what, module) in manifest_modules(manifest) {
+        if !paths.contains(&module) {
+            return Err(format!(
+                "plugin.json: {what} {module} is not in the release"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Reads the contents of the files of a plugin release that are listed in names, each from `package/<name>`.
 pub(crate) fn release_files(
     data: &[u8],
     names: &[&str],
@@ -69,12 +126,15 @@ pub(crate) fn release_files(
             .map_err(|error| error.to_string())?
             .display()
             .to_string();
-        if names.contains(&path.as_str()) {
+        let Some(name) = path.strip_prefix(PLUGIN_ROOT) else {
+            continue;
+        };
+        if names.contains(&name) {
             let mut content = vec![];
             entry
                 .read_to_end(&mut content)
                 .map_err(|error| error.to_string())?;
-            found.insert(path, content);
+            found.insert(name.to_string(), content);
         }
     }
     if let Some(name) = names.iter().find(|name| !found.contains_key(**name)) {

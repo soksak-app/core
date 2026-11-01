@@ -1,7 +1,7 @@
 package sok
 
-// Writes plugin releases and sidecar releases (docs/spec/cli.md). Both are gzip-compressed tar files whose entries
-// are in path order with modification time 0, owner 0 and mode 0644 or 0755. A failure leaves no file.
+// Writes sidecar releases (docs/spec/cli.md): gzip-compressed tar files whose entries are in path order with
+// modification time 0, owner 0 and mode 0644 or 0755. A failure leaves no file.
 
 import (
 	"archive/tar"
@@ -175,128 +175,6 @@ func outputPath(dir, name string) (string, error) {
 		return "", fileError(absolute, err)
 	}
 	return filepath.Join(absolute, name), nil
-}
-
-// covers reports whether one path of files is path or a folder that contains path.
-func covers(listed []string, path string) bool {
-	return slices.ContainsFunc(listed, func(file string) bool {
-		return path == file || strings.HasPrefix(path, strings.TrimSuffix(file, "/")+"/")
-	})
-}
-
-// binarySegment is the path segment that the binary store of a page reserves. The host answers that path before it
-// looks up a file, so a plugin release cannot hold a file under it (docs/spec/native-surfaces.md).
-const binarySegment = ".binary"
-
-// checkReleaseFiles refuses a listed path that has a binarySegment part, with the same text as validateReleaseFiles
-// of @soksak/plugin-api.
-func checkReleaseFiles(listed []string) error {
-	for _, file := range listed {
-		if slices.Contains(strings.Split(file, "/"), binarySegment) {
-			return fmt.Errorf("plugin release lists %s: the %s path is reserved for the binary store", file, binarySegment)
-		}
-	}
-	return nil
-}
-
-// manifestModules are the modules that plugin.json loads and their names: the surface module, the page of a view
-// composition, the module of each section, and the state.
-func manifestModules(manifest map[string]any) [][2]string {
-	var modules [][2]string
-	add := func(what string, value any) {
-		if module, ok := value.(string); ok {
-			modules = append(modules, [2]string{what, module})
-		}
-	}
-	if surface, ok := manifest["surface"].(map[string]any); ok {
-		add("surface module", surface["module"])
-		if composition, ok := surface["composition"].(map[string]any); ok && composition["kind"] == "view" {
-			add("view page", composition["page"])
-		}
-	}
-	return modules
-}
-
-// diagnosticFiles are diagnostics.json of the plugin folder and its module path. Without diagnostics.json it is empty.
-// The two files are not listed in files (docs/spec/plugins.md).
-func diagnosticFiles(dir string, listed []string) ([]string, error) {
-	value, err := readJSONFile(dir, "diagnostics.json")
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	declared, err := object("diagnostics.json", value)
-	if err != nil {
-		return nil, err
-	}
-	module, ok := text(declared["module"])
-	if !ok || strings.HasPrefix(module, "/") || slices.Contains(strings.Split(module, "/"), "..") || !strings.HasSuffix(module, ".js") {
-		return nil, fmt.Errorf("diagnostics.json: module must be a JavaScript path inside the package")
-	}
-	for _, path := range []string{"diagnostics.json", module} {
-		if covers(listed, path) {
-			return nil, fmt.Errorf("package.json files: %s is diagnostic and must not be listed", path)
-		}
-	}
-	return []string{"diagnostics.json", module}, nil
-}
-
-// runPack checks the plugin folder and writes `<id>-<version>.tgz`. When diagnostics is true, it also includes the
-// diagnostic declarations.
-func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
-	value, err := readJSONFile(dir, "package.json")
-	if err != nil {
-		return err
-	}
-	if err := ValidatePackageJSON(value); err != nil {
-		return err
-	}
-	pkg := value.(map[string]any)
-	manifestValue, err := readJSONFile(dir, "plugin.json")
-	if err != nil {
-		return err
-	}
-	manifest, err := object("plugin.json", manifestValue)
-	if err != nil {
-		return err
-	}
-	if err := ValidateManifest(manifest); err != nil {
-		return err
-	}
-	// default: ValidateManifest accepted the id, so it is text.
-	id, _ := text(manifest["id"])
-	listed := listedFiles(pkg)
-	if err := checkReleaseFiles(listed); err != nil {
-		return err
-	}
-	for _, module := range manifestModules(manifest) {
-		if !covers(listed, module[1]) {
-			return fmt.Errorf("plugin.json: %s %s must be listed in files", module[0], module[1])
-		}
-	}
-	extra, err := diagnosticFiles(dir, listed)
-	if err != nil {
-		return err
-	}
-	if diagnostics {
-		listed = append(listed, extra...)
-	}
-	entries, err := collect(dir, listed)
-	if err != nil {
-		return err
-	}
-	version := pkg["version"].(string)
-	output, err := outputPath(out, ReleaseName(id, version))
-	if err != nil {
-		return err
-	}
-	sum, err := writeRelease(entries, output)
-	if err != nil {
-		return err
-	}
-	return printJSON(stdout, map[string]string{"id": id, "version": version, "release": output, "sha256": sum})
 }
 
 // runRelease checks a sidecar folder, writes its release and updates SHA256SUMS.

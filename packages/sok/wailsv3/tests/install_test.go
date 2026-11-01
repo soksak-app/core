@@ -331,9 +331,6 @@ func TestInstallationKeepsOneSidecarVersionThatSatisfiesEveryInstalledPlugin(t *
 
 // contract: install.names.releases-and-paths
 func TestReleasesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
-	if name := sok.ReleaseName("probe", "0.2.0"); name != "probe-0.2.0.tgz" {
-		t.Fatal(name)
-	}
 	if name, err := sok.SidecarReleaseName("@scope/sidecar-worker", "0.1.1", "darwin-arm64"); err != nil || name != "scope-sidecar-worker-0.1.1-darwin-arm64.tar.gz" {
 		t.Fatal(name, err)
 	}

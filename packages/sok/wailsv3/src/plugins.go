@@ -428,8 +428,10 @@ func writeInstalled(configDir string, state *InstalledState) error {
 }
 
 // extract extracts a tar.gz release into a temporary folder next to target and then moves it to target by rename. It
-// accepts only regular files and folders and rejects absolute paths and `..`.
-func extract(data []byte, target string) (err error) {
+// accepts only regular files and folders and rejects absolute paths and `..`. When root is not empty, every entry must
+// be inside the folder root, which is removed from the installed paths: a plugin release holds its files under
+// `package/` (docs/spec/installation.md#plugin-release), and a sidecar release at its top.
+func extract(data []byte, target, root string) (err error) {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return fileError(filepath.Dir(target), err)
 	}
@@ -458,6 +460,16 @@ func extract(data []byte, target string) (err error) {
 		name := strings.TrimSuffix(header.Name, "/")
 		if name == "" || strings.HasPrefix(name, "/") || slices.Contains(strings.Split(name, "/"), "..") {
 			return fmt.Errorf("release entry %s leaves the folder", header.Name)
+		}
+		if root != "" {
+			if header.Typeflag == tar.TypeDir && name == strings.TrimSuffix(root, "/") {
+				continue
+			}
+			inside, ok := strings.CutPrefix(name, root)
+			if !ok {
+				return fmt.Errorf("entry %s is outside %s", header.Name, root)
+			}
+			name = inside
 		}
 		path := filepath.Join(temp, filepath.FromSlash(name))
 		switch header.Typeflag {
@@ -509,7 +521,7 @@ func installRelease(where string, release Release, target string) error {
 	if err != nil {
 		return err
 	}
-	if err := extract(data, target); err != nil {
+	if err := extract(data, target, ""); err != nil {
 		return fmt.Errorf("%s: %w", where, err)
 	}
 	return nil
@@ -555,7 +567,7 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 			continue
 		}
 		plugin := state.Plugins[changed]
-		if err := extract(data, filepath.Join(configDir, plugin.Path)); err != nil {
+		if err := extract(data, filepath.Join(configDir, plugin.Path), pluginRoot); err != nil {
 			return nil, fmt.Errorf("plugin %s %s package: %w", changed, plugin.Version, err)
 		}
 	}
@@ -868,11 +880,18 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 	if err != nil {
 		return err
 	}
+	// The reader checks the manifest before its id is compared, so every case of the manifest case table gets the
+	// reader's text (docs/spec/installation.md#plugin-release).
+	if err := ValidateManifest(manifest); err != nil {
+		return fmt.Errorf("%s: %w", file, err)
+	}
 	if err := checkPluginID(id, file, manifest); err != nil {
 		return err
 	}
-	if err := ValidateManifest(manifest); err != nil {
-		return fmt.Errorf("%s: %w", file, err)
+	if release, ok := p.releases[id]; ok {
+		if err := checkReleaseModules(release, manifest); err != nil {
+			return fmt.Errorf("%s: %w", where, err)
+		}
 	}
 	dependencies, err := manifestDependenciesOf(file, manifest)
 	if err != nil {

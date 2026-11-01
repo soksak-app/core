@@ -4,11 +4,6 @@ package tests
 // (docs/spec/cli.md).
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -20,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
+	"github.com/soksak-app/core/packages/sok/wailsv3/tests/support"
 )
 
 // pluginVersions builds a registry from one packed release for each version of the plugin probe and a release of
@@ -46,7 +42,7 @@ func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
 			"plugin.json": `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
 			"ui/b.js":     "b " + version,
 		})
-		result := runJSON(t, "plugin", "pack", dir, releases)
+		result := support.PackPlugin(t, dir, releases)
 		entries = append(entries, `{"version": "`+version+`", "release": {"url": "file://`+result["release"]+`", "sha256": "`+result["sha256"]+`"},
 			"engines": {"soksak": "^`+core+`"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}`)
 	}
@@ -152,32 +148,11 @@ func TestPluginInstallExtractsCheckedReleasesAndRecordsTheState(t *testing.T) {
 // its sha256.
 func unsafeRelease(t *testing.T, path string) string {
 	t.Helper()
-	var data bytes.Buffer
-	zipped := gzip.NewWriter(&data)
-	release := tar.NewWriter(zipped)
-	for _, entry := range [][2]string{
-		{"package.json", `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`},
-		{"plugin.json", `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}`},
-		{"../escape.txt", "outside"},
-	} {
-		if err := release.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: entry[0], Mode: 0o644, Size: int64(len(entry[1]))}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := release.Write([]byte(entry[1])); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := release.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := zipped.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, data.Bytes(), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	sum := sha256.Sum256(data.Bytes())
-	return hex.EncodeToString(sum[:])
+	return support.WriteRelease(t, path, []support.ReleaseEntry{
+		{Name: "package/package.json", Content: `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`, Mode: 0o644},
+		{Name: "package/plugin.json", Content: `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}`, Mode: 0o644},
+		{Name: "../escape.txt", Content: "outside", Mode: 0o644},
+	})
 }
 
 // contract: cli.plugin.install-failure-keeps-state
@@ -221,6 +196,80 @@ func TestPluginInstallFailureKeepsThePreviousState(t *testing.T) {
 	if exists(filepath.Join(config, "plugins/installed.json")) || exists(filepath.Join(config, "plugins/probe/0.2.0")) ||
 		exists(filepath.Join(config, "plugins/probe/escape.txt")) {
 		t.Fatal("an unsafe release changed the installation")
+	}
+}
+
+// installRelease points the probe 0.2.0 entry of the registry at a release of entries, without sidecars, rebuilds the
+// index and installs probe in a new configuration; it returns the configuration, the exit status and stderr.
+func installRelease(t *testing.T, entries []support.ReleaseEntry) (string, int, string) {
+	t.Helper()
+	registryDir := filepath.Dir(pluginVersions(t, "0.2.0"))
+	release := filepath.Join(registryDir, "custom.tgz")
+	sum := support.WriteRelease(t, release, entries)
+	entry := filepath.Join(registryDir, "plugins/probe.json")
+	replaceIn(t, entry, `"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]`, `"sidecars": {}}]`, 1)
+	text := readText(t, entry)
+	url := strings.Split(strings.Split(text, `"url": "file://`)[1], `"`)[0]
+	replaceIn(t, entry, url, release, 1)
+	old := strings.Split(strings.Split(text, `"sha256": "`)[1], `"`)[0]
+	replaceIn(t, entry, old, sum, 1)
+	runJSON(t, "registry", "build", registryDir)
+	config := t.TempDir()
+	runJSON(t, "registry", "use", filepath.Join(registryDir, "index.json"), "--config-dir", config)
+	code, _, stderr := run("plugin", "install", "probe", "--config-dir", config)
+	return config, code, stderr
+}
+
+// probeEntries are the release entries of probe 0.2.0 with manifest as plugin.json and the extra files.
+func probeEntries(manifest string, extra ...support.ReleaseEntry) []support.ReleaseEntry {
+	return append([]support.ReleaseEntry{
+		{Name: "package/package.json", Content: `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json", "ui"]}`, Mode: 0o644},
+		{Name: "package/plugin.json", Content: manifest, Mode: 0o644},
+	}, extra...)
+}
+
+const probeManifest = `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}`
+const viewManifest = `{"id": "probe", "name": "Probe", "description": "Sample.", "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}}`
+
+// contract: cli.plugin.install-refuses-entry-outside-package
+// A plugin release is the pnpm pack file (docs/spec/installation.md#plugin-release), so an entry that does not start
+// with package/ is refused and nothing is installed (F355-2).
+func TestPluginInstallRefusesAReleaseEntryOutsidePackage(t *testing.T) {
+	config, code, stderr := installRelease(t, probeEntries(probeManifest, support.ReleaseEntry{Name: "stray.txt", Content: "outside", Mode: 0o644}))
+	if code != 1 || stderr != "sok: plugin probe 0.2.0 package: entry stray.txt is outside package/\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	if exists(filepath.Join(config, "plugins/installed.json")) || exists(filepath.Join(config, "plugins/probe/0.2.0")) {
+		t.Fatal("a refused release changed the installation")
+	}
+}
+
+// contract: cli.plugin.install-requires-loaded-modules
+// The surface module and the view page that plugin.json loads are files of the release, so a release without one is
+// refused before anything is installed (F355-2).
+func TestPluginInstallRefusesAReleaseWithoutTheViewPage(t *testing.T) {
+	config, code, stderr := installRelease(t, probeEntries(viewManifest, support.ReleaseEntry{Name: "package/ui/b.js", Content: "b", Mode: 0o644}))
+	if code != 1 || stderr != "sok: plugin probe 0.2.0 package: plugin.json: view page ui/page.html is not in the release\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	if exists(filepath.Join(config, "plugins/installed.json")) {
+		t.Fatal("a refused release changed the installation")
+	}
+	if _, code, stderr := installRelease(t, probeEntries(viewManifest, support.ReleaseEntry{Name: "package/ui/page.html", Content: "<!doctype html>", Mode: 0o644})); code != 0 || stderr != "" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+}
+
+// contract: cli.plugin.install-refuses-binary-path
+// The .binary path segment is reserved for the binary store of a page, so a release that holds a file under it is
+// refused (F355-2).
+func TestPluginInstallRefusesAReleaseWithABinaryPath(t *testing.T) {
+	config, code, stderr := installRelease(t, probeEntries(probeManifest, support.ReleaseEntry{Name: "package/ui/.binary/x", Content: "x", Mode: 0o644}))
+	if code != 1 || stderr != "sok: plugin probe 0.2.0 package: plugin release holds ui/.binary/x: the .binary path is reserved for the binary store\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	if exists(filepath.Join(config, "plugins/installed.json")) {
+		t.Fatal("a refused release changed the installation")
 	}
 }
 
@@ -559,7 +608,7 @@ func dependencyRegistry(t *testing.T, versions ...dependent) string {
 				"files": ["plugin.json"]}`,
 			"plugin.json": jsonText(t, entry{"id": item.id, "name": "Probe", "description": "Sample.", "contributes": entry{"lib.point": []any{entry{"range": "^1.0.0", "module": "ui/b.js"}}}, "dependencies": item.dependencies}),
 		})
-		result := runJSON(t, "plugin", "pack", dir, releases)
+		result := support.PackPlugin(t, dir, releases)
 		sidecars := map[string]string{}
 		for name, rng := range item.dependencies {
 			if strings.HasPrefix(name, "@scope/sidecar-") {
@@ -845,7 +894,7 @@ func mismatchedIndex(t *testing.T) string {
 		"plugin.json":  `{"id": "other", "name": "Other", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}`,
 	})
 	releases := t.TempDir()
-	result := runJSON(t, "plugin", "pack", dir, releases)
+	result := support.PackPlugin(t, dir, releases)
 	index := t.TempDir()
 	writeTree(t, index, map[string]string{
 		"index.json": `{"format": 1, "plugins": [{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",

@@ -18,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { pluginEntry } from "../scripts/workspace-registry.mjs";
+import { pluginEntry, pnpmPack } from "../scripts/workspace-registry.mjs";
 import { allRows, tailOf } from "./chains.mjs";
 import { fresh, pluginChangeApplied } from "./fixture.mjs";
 
@@ -30,7 +30,7 @@ function probeRegistry(sok) {
   const folder = mkdtempSync(join(tmpdir(), "soksak-unload-registry-"));
   for (const name of ["plugins", "sidecars", "packs", "revoked.json"]) cpSync(join(REGISTRY, name), join(folder, name), { recursive: true });
   const sidecars = new Set(readdirSync(join(folder, "sidecars")).map((file) => JSON.parse(readFileSync(join(folder, "sidecars", file), "utf8")).name));
-  const pack = JSON.parse(execFileSync(sok, ["plugin", "pack", PROBE, join(folder, "releases")], { encoding: "utf8" }));
+  const pack = pnpmPack(PROBE, join(folder, "releases"));
   const manifest = JSON.parse(readFileSync(join(PROBE, "plugin.json"), "utf8"));
   const pkg = JSON.parse(readFileSync(join(PROBE, "package.json"), "utf8"));
   writeFileSync(join(folder, "plugins", `${manifest.id}.json`), JSON.stringify(pluginEntry(manifest, pkg, pack, sidecars), null, 2));

@@ -4,11 +4,10 @@
 // for the current platform, then writes the registry files from the result and creates index.json with `sok registry build`
 // (docs/spec/cli.md). Builds and window checks install plugins from this registry. It uses no network.
 //
-//   node scripts/workspace-registry.mjs --sok <sok executable> --out <registry folder> [--diagnostics]
+//   node scripts/workspace-registry.mjs --sok <sok executable> --out <registry folder>
 //   node scripts/workspace-registry.mjs --install
 //
 // --install runs `make install`, the installation stage, once in every declared plugin and sidecar repository.
-// --diagnostics packs the plugins as diagnostic packages. Diagnostic builds and window checks install from this registry.
 import { parseArgs } from "node:util";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -108,22 +107,28 @@ function sok(binary, args) {
 }
 
 /**
- * `make pack OUT=<folder> SOK=<sok> PACK_FLAGS=<flags>` of the plugin repository writes its release into the folder
- * (docs/spec/plugins.md#repositories), so a repository builds what its release needs before it packs. Returns the release that
- * the target added and its sha256; a target that adds no file or more than one file is an error.
+ * `make pack OUT=<folder>` of the plugin repository writes its release, the pnpm pack file of the plugin
+ * (docs/spec/installation.md#plugin-release), into the folder, so a repository builds what its release needs before it packs.
+ * Returns the release that the target added and its sha256; a target that adds no file or more than one file is an error.
  */
-export function packPlugin(binary, repository, out, diagnostics) {
-  // make -C runs the target in the repository, so the paths that it receives are absolute.
-  binary = resolve(binary);
+export function packPlugin(repository, out) {
+  // make -C runs the target in the repository, so the path that it receives is absolute.
   out = resolve(out);
   mkdirSync(out, { recursive: true });
   const before = new Set(readdirSync(out));
-  execFileSync("make", ["-C", repository, "pack", `OUT=${out}`, `SOK=${binary}`, `PACK_FLAGS=${diagnostics ? "--diagnostics" : ""}`],
-    { stdio: ["ignore", "inherit", "inherit"] });
+  execFileSync("make", ["-C", repository, "pack", `OUT=${out}`], { stdio: ["ignore", "inherit", "inherit"] });
   const added = readdirSync(out).filter((name) => !before.has(name));
   if (added.length !== 1) throw new Error(`make pack of ${repository} wrote ${added.length} new files into ${out}; expected 1`);
   const release = join(out, added[0]);
   return { release, sha256: createHash("sha256").update(readFileSync(release)).digest("hex") };
+}
+
+/** Writes the pnpm pack file of the plugin folder dir into out (docs/spec/installation.md#plugin-release) and returns it and its sha256. */
+export function pnpmPack(dir, out) {
+  mkdirSync(out, { recursive: true });
+  const { filename } = JSON.parse(execFileSync("pnpm", ["pack", "--json", "--pack-destination", resolve(out)],
+    { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }));
+  return { release: filename, sha256: createHash("sha256").update(readFileSync(filename)).digest("hex") };
 }
 
 /** Fails when the plugin.json at file names another id than the declaration item of its repository. */
@@ -172,7 +177,7 @@ export function sidecarReleases(declared, manifests, plugins) {
 }
 
 /** Writes the registry folder anew and creates index.json. Earlier entries in the output folder are removed. */
-export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
+export function buildWorkspaceRegistry(binary, out, root = ROOT) {
   const declaration = checkDeclaration(read(new URL(DECLARATION, root)));
   const commonDir = gitCommonDir(fileURLToPath(root));
   const folder = (relative) => repositoryFolder(relative, commonDir);
@@ -192,7 +197,7 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
     const manifest = read(pathToFileURL(join(dir, "plugin.json")));
     checkPluginId(item, manifest, join(dir, "plugin.json"));
     const pkg = read(pathToFileURL(join(dir, "package.json")));
-    const pack = packPlugin(binary, dir, releases, diagnostics);
+    const pack = packPlugin(dir, releases);
     write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack, new Set(declared.keys())));
     manifests.push(manifest);
   }
@@ -214,13 +219,13 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { values } = parseArgs({ options: { sok: { type: "string" }, out: { type: "string" }, diagnostics: { type: "boolean", default: false },
+  const { values } = parseArgs({ options: { sok: { type: "string" }, out: { type: "string" },
     install: { type: "boolean", default: false } }, strict: true });
   if (values.install) {
     installWorkspace();
     process.exit(0);
   }
   for (const name of ["sok", "out"]) if (!values[name]) throw new Error(`--${name} is required`);
-  const result = buildWorkspaceRegistry(values.sok, values.out, values.diagnostics);
+  const result = buildWorkspaceRegistry(values.sok, values.out);
   console.log(`Workspace registry: ${result.index} (${result.plugins} plugins, ${result.sidecars} sidecars, ${result.packs} packs)`);
 }

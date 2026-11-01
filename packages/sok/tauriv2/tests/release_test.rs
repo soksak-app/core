@@ -1,6 +1,5 @@
-//! Checks the releases and SHA256SUMS that plugin pack and sidecar release (docs/spec/cli.md) write.
+//! Checks the releases and SHA256SUMS that sidecar release (docs/spec/cli.md) writes.
 
-use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -48,7 +47,6 @@ struct TarEntry {
     mode: u32,
     time: u64,
     owner: u64,
-    content: String,
 }
 
 fn read_release(path: &Path) -> (Vec<TarEntry>, String) {
@@ -60,152 +58,20 @@ fn read_release(path: &Path) -> (Vec<TarEntry>, String) {
     let mut reader = tar::Archive::new(flate2::read::GzDecoder::new(data.as_slice()));
     let mut entries = vec![];
     for entry in reader.entries().expect("entries") {
-        let mut entry = entry.expect("entry");
+        let entry = entry.expect("entry");
         let header = entry.header().clone();
-        let mut content = String::new();
-        entry.read_to_string(&mut content).expect("content");
         entries.push(TarEntry {
             name: entry.path().unwrap().display().to_string(),
             mode: header.mode().unwrap(),
             time: header.mtime().unwrap(),
             owner: header.uid().unwrap() + header.gid().unwrap(),
-            content,
         });
     }
     (entries, sum)
 }
 
-fn plugin_tree() -> Folder {
-    let dir = Folder::new("release");
-    write_tree(
-        dir.path(),
-        &[
-            (
-                "package.json",
-                r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-                "files": ["plugin.json", "ui"]}"#,
-            ),
-            (
-                "plugin.json",
-                r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
-            ),
-            ("ui/b.js", "b"),
-            ("ui/a/run.sh*", "run"),
-            ("test/skip.mjs", "not listed"),
-        ],
-    );
-    dir
-}
-
 fn text(path: &Path) -> &str {
     path.to_str().expect("UTF-8 path")
-}
-
-// contract: cli.pack.writes-sorted-plugin-release
-#[test]
-fn plugin_pack_writes_a_sorted_release_of_the_listed_files() {
-    let dir = plugin_tree();
-    let base = Folder::new("release");
-    let out = base.path().join("out");
-    let (code, stdout, stderr) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
-    assert_eq!(code, 0, "{stderr}");
-    let release = out.join("probe-0.2.0.tgz");
-    let (entries, sum) = read_release(&release);
-    let want = format!(
-        "{{\n  \"id\": \"probe\",\n  \"release\": {:?},\n  \"sha256\": {sum:?},\n  \"version\": \"0.2.0\"\n}}\n",
-        text(&release)
-    );
-    assert_eq!(stdout, want);
-    let names: Vec<String> = entries
-        .iter()
-        .map(|entry| {
-            format!(
-                "{} {:o} {} {}",
-                entry.name, entry.mode, entry.time, entry.owner
-            )
-        })
-        .collect();
-    assert_eq!(
-        names,
-        [
-            "package.json 644 0 0",
-            "plugin.json 644 0 0",
-            "ui/a/run.sh 755 0 0",
-            "ui/b.js 644 0 0"
-        ]
-    );
-    assert_eq!(entries[3].content, "b");
-    // Packing the same folder again writes the same bytes.
-    let (code, again, _) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
-    assert_eq!((code, again), (0, stdout));
-}
-
-// contract: cli.pack.rejects-links-and-manifest-mismatch
-#[test]
-fn plugin_pack_rejects_links_and_a_manifest_mismatch_without_writing() {
-    let dir = plugin_tree();
-    std::os::unix::fs::symlink("b.js", dir.path().join("ui/link.js")).unwrap();
-    let base = Folder::new("release");
-    let out = base.path().join("out");
-    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
-    assert_eq!(
-        (code, stderr.as_str()),
-        (
-            1,
-            "sok: ui/link.js is a symbolic link; an release holds no links\n"
-        )
-    );
-    assert_eq!(
-        std::fs::read_dir(&out)
-            .map(|names| names.count())
-            .unwrap_or(0),
-        0,
-        "a failed pack left files"
-    );
-    let other = plugin_tree();
-    write_tree(
-        other.path(),
-        &[(
-            "package.json",
-            r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-            "soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"]}"#,
-        )],
-    );
-    let (code, _, stderr) = run(&["plugin", "pack", text(other.path()), text(&out)]);
-    assert_eq!(
-        (code, stderr.as_str()),
-        (
-            1,
-            "sok: package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json\n"
-        )
-    );
-    let other = plugin_tree();
-    write_tree(
-        other.path(),
-        &[(
-            "plugin.json",
-            r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "latest"}}"#,
-        )],
-    );
-    let (code, _, stderr) = run(&["plugin", "pack", text(other.path()), text(&out)]);
-    assert!(
-        code == 1
-            && stderr
-                == "sok: plugin probe: dependencies @scope/sidecar-worker: invalid range latest\n",
-        "code {code} stderr {stderr:?}"
-    );
-    write_tree(
-        other.path(),
-        &[(
-            "plugin.json",
-            r#"{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
-        )],
-    );
-    let (code, _, stderr) = run(&["plugin", "pack", text(other.path()), text(&out)]);
-    assert_eq!(
-        (code, stderr.as_str()),
-        (1, "sok: plugin.json: invalid id undefined\n")
-    );
 }
 
 fn sidecar_tree(version: &str) -> Folder {
@@ -297,6 +163,13 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
                 ("package.json", 0o644),
                 ("sidecar.json", 0o644)
             ]
+        );
+        // The writer sets time 0 and owner 0, so the same files give the same bytes.
+        assert!(
+            entries
+                .iter()
+                .all(|entry| entry.time == 0 && entry.owner == 0),
+            "{entries:?}"
         );
         sums.push(format!("{sum}  {name}"));
     }
@@ -424,242 +297,4 @@ fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() 
         (code, stderr.as_str()),
         (1, "sok: sidecar.json: replay.executable is required\n")
     );
-}
-
-// contract: cli.pack.diagnostics-only-with-flag
-#[test]
-fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {
-    let dir = plugin_tree();
-    write_tree(
-        dir.path(),
-        &[
-            (
-                "diagnostics.json",
-                r#"{"module": "probe-diagnostics.js", "exposes": {}}"#,
-            ),
-            ("probe-diagnostics.js", "export const probe = true;"),
-        ],
-    );
-    for (flags, want) in [
-        (vec![], "package.json, plugin.json, ui/a/run.sh, ui/b.js"),
-        (
-            vec!["--diagnostics"],
-            "diagnostics.json, package.json, plugin.json, probe-diagnostics.js, ui/a/run.sh, ui/b.js",
-        ),
-    ] {
-        let out = Folder::new("release");
-        let mut args = vec!["plugin", "pack", text(dir.path()), text(out.path())];
-        args.extend(flags.iter().copied());
-        let (code, _, stderr) = run(&args);
-        assert_eq!(code, 0, "{flags:?}: {stderr}");
-        let (entries, _) = read_release(&out.path().join("probe-0.2.0.tgz"));
-        let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
-        assert_eq!(names.join(", "), want, "{flags:?}");
-    }
-    write_tree(
-        dir.path(),
-        &[(
-            "package.json",
-            r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-            "files": ["plugin.json", "ui", "probe-diagnostics.js"]}"#,
-        )],
-    );
-    let out = Folder::new("release");
-    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
-    assert_eq!(
-        (code, stderr.as_str()),
-        (
-            1,
-            "sok: package.json files: probe-diagnostics.js is diagnostic and must not be listed\n"
-        )
-    );
-    let tree = sidecar_tree("0.1.0");
-    let (code, _, stderr) = run(&[
-        "sidecar",
-        "release",
-        text(tree.path()),
-        text(out.path()),
-        "--diagnostics",
-    ]);
-    assert_eq!(code, 2);
-    assert!(
-        stderr.starts_with("sok: --diagnostics belongs to plugin pack\n"),
-        "{stderr}"
-    );
-}
-
-// contract: cli.pack.refuses-removed-fields
-#[test]
-fn plugin_pack_refuses_removed_manifest_fields() {
-    for (manifest, want) in [
-        (
-            r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}"#,
-            "plugin probe: section probe.list module is removed; a section takes composition and height",
-        ),
-        (
-            r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}"#,
-            "plugin probe: state is removed; a plugin declares its project data with data (docs/spec/plugins.md#project-data)",
-        ),
-    ] {
-        let dir = plugin_tree();
-        write_tree(dir.path(), &[("plugin.json", manifest)]);
-        let out = Folder::new("release");
-        let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
-        assert_eq!((code, stderr), (1, format!("sok: {want}\n")));
-    }
-}
-
-// contract: cli.pack.refuses-schema-outside-subset
-#[test]
-fn plugin_pack_refuses_a_schema_outside_the_subset() {
-    for (manifest, want) in [
-        (
-            r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"params": {"type": "object", "required": ["path"]}}}"#,
-            "plugin probe surface params: unknown field required",
-        ),
-        (
-            r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object", "required": ["x"]}, "result": {"type": "null"}}]}}"#,
-            "probe exposes probe.run params: unknown field required",
-        ),
-        (
-            r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer", "minimum": 0}}}}]}}"#,
-            "probe exposes probe.state schema.n: unknown field minimum",
-        ),
-        (
-            r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "string"}}]}}"#,
-            "plugin probe: exposes require a surface or sections",
-        ),
-        (
-            r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"dom": [{"name": "probe.x", "description": "X.", "many": "yes"}]}}"#,
-            "probe exposes probe.x: many must be a boolean",
-        ),
-        (
-            r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 600001}]}}"#,
-            "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
-        ),
-    ] {
-        let dir = plugin_tree();
-        write_tree(dir.path(), &[("plugin.json", manifest)]);
-        let out = Folder::new("release");
-        let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
-        assert_eq!((code, stderr), (1, format!("sok: {want}\n")));
-    }
-    let dir = plugin_tree();
-    write_tree(dir.path(), &[("ui/page.html", "<!doctype html>")]);
-    write_tree(
-        dir.path(),
-        &[(
-            "plugin.json",
-            r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}, "params": {"type": "object", "properties": {"path": {"type": ["string", "null"]}}}}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer"}}, "items": {"enum": [1, 2]}}}], "commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 1000}]}}"#,
-        )],
-    );
-    let out = Folder::new("release");
-    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
-    assert_eq!((code, stderr), (0, String::new()), "subset schemas");
-}
-
-// contract: cli.pack.rejects-unlisted-modules
-#[test]
-fn plugin_pack_rejects_a_module_that_files_does_not_list() {
-    const HEAD: &str = r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}"#;
-    for (manifest, want) in [
-        (
-            format!(r#"{HEAD}, "surface": {{"module": "ui/b.js"}}}}"#),
-            "sok: plugin probe: surface module is removed; a surface is a view (docs/spec/plugins.md#view-surfaces)\n",
-        ),
-        (
-            format!(
-                r#"{HEAD}, "mark": "P", "icon": "<svg></svg>", "surface": {{"composition": {{"kind": "view", "page": "page/probe.html"}}}}}}"#
-            ),
-            "sok: plugin.json: view page page/probe.html must be listed in files\n",
-        ),
-    ] {
-        let dir = plugin_tree();
-        write_tree(dir.path(), &[("plugin.json", &manifest)]);
-        let out = Folder::new("release");
-        let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
-        assert_eq!((code, stderr.as_str()), (1, want));
-    }
-}
-
-// contract: cli.pack.binary-path-refused
-#[test]
-fn plugin_pack_refuses_a_binary_path_in_files_without_writing() {
-    let dir = plugin_tree();
-    write_tree(
-        dir.path(),
-        &[
-            (
-                "package.json",
-                r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-                "files": ["plugin.json", "ui", ".binary/x"]}"#,
-            ),
-            (".binary/x", "stored"),
-        ],
-    );
-    let base = Folder::new("release");
-    let out = base.path().join("out");
-    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
-    assert_eq!(
-        (code, stderr.as_str()),
-        (
-            1,
-            "sok: plugin release lists .binary/x: the .binary path is reserved for the binary store\n"
-        )
-    );
-    assert_eq!(
-        std::fs::read_dir(&out)
-            .map(|names| names.count())
-            .unwrap_or(0),
-        0,
-        "a refused pack left files"
-    );
-}
-
-// contract: cli.pack.view-page-listed
-#[test]
-fn plugin_pack_refuses_a_view_page_not_listed_in_files() {
-    let dir = plugin_tree();
-    write_tree(
-        dir.path(),
-        &[
-            (
-                "package.json",
-                r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-                "files": ["plugin.json", "ui/b.js"]}"#,
-            ),
-            (
-                "plugin.json",
-                r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}}"#,
-            ),
-            ("ui/page.html", "<!doctype html>"),
-        ],
-    );
-    let base = Folder::new("release");
-    let out = base.path().join("out");
-    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
-    assert_eq!(
-        (code, stderr.as_str()),
-        (
-            1,
-            "sok: plugin.json: view page ui/page.html must be listed in files\n"
-        )
-    );
-    assert_eq!(
-        std::fs::read_dir(&out)
-            .map(|names| names.count())
-            .unwrap_or(0),
-        0,
-        "a refused pack left files"
-    );
-    write_tree(
-        dir.path(),
-        &[(
-            "package.json",
-            r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
-                "files": ["plugin.json", "ui"]}"#,
-        )],
-    );
-    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
-    assert_eq!((code, stderr.as_str()), (0, ""));
 }

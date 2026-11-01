@@ -7,6 +7,8 @@ use serde_json::{Value, json};
 
 #[path = "support/folder.rs"]
 mod folder;
+#[path = "support/plugin_release.rs"]
+mod plugin_release;
 
 use folder::Folder;
 
@@ -84,20 +86,18 @@ fn registry_tree() -> Registry {
         ],
     );
     let mut results = vec![];
-    for args in [
-        vec!["plugin", "pack", plugin.text(), releases.text()],
-        vec![
-            "sidecar",
-            "release",
-            sidecar.text(),
-            releases.text(),
-            "--platform",
-            &platform,
-        ],
-    ] {
-        let (code, stdout, stderr) = run(&args);
-        assert_eq!(code, 0, "{stderr}");
-        let result: Value = serde_json::from_str(&stdout).unwrap();
+    let packed = plugin_release::pack(plugin.path(), releases.path());
+    let (code, stdout, stderr) = run(&[
+        "sidecar",
+        "release",
+        sidecar.text(),
+        releases.text(),
+        "--platform",
+        &platform,
+    ]);
+    assert_eq!(code, 0, "{stderr}");
+    let released: Value = serde_json::from_str(&stdout).unwrap();
+    for result in [packed, released] {
         results.push((
             result["release"].as_str().unwrap().to_string(),
             result["sha256"].as_str().unwrap().to_string(),
@@ -253,9 +253,7 @@ fn dependency_tree(plugins: Plugins) -> (Folder, Folder) {
             source.path(),
             &[("package.json", &package), ("plugin.json", &manifest)],
         );
-        let (code, stdout, stderr) = run(&["plugin", "pack", source.text(), releases.text()]);
-        assert_eq!(code, 0, "{stderr}");
-        let result: Value = serde_json::from_str(&stdout).unwrap();
+        let result = plugin_release::pack(source.path(), releases.path());
         let sidecars: serde_json::Map<String, Value> = dependencies
             .into_iter()
             .filter(|(name, _)| name.starts_with("@scope/sidecar-"))

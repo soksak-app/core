@@ -328,7 +328,7 @@ native-darwin:
 native-darwin-fetch:
 	@$(MAKE) -C native/darwin fetch
 
-# The workspace registry. Packs the sibling plugin repositories that scripts/workspace-registry.json declares as diagnostic builds,
+# The workspace registry. Packs the sibling plugin repositories that scripts/workspace-registry.json declares with their make pack,
 # builds every declared sidecar from its repository and releases them for the current platform, and then
 # creates index.json in target/registry (docs/spec/plugins.md#repositories).
 # Diagnostic builds and window checks install from here.
@@ -336,7 +336,7 @@ REGISTRY = target/registry
 
 registry:
 	@$(CARGO_ENV) cargo build --locked -p soksak-sok-tauriv2
-	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) --diagnostics
+	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY)
 
 # The installation stage of the workspace: `make install` of every plugin and sidecar repository that scripts/workspace-registry.json
 # declares. A fresh checkout runs it once before make registry builds and packs those repositories.

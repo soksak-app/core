@@ -47,20 +47,46 @@ struct Registry {
     _dirs: Vec<folder::Folder>,
 }
 
+/// Writes the release of tests/fixtures/plugin-probe in the layout that `pnpm pack` writes (docs/spec/installation.md#plugin-release),
+/// with the two files of the fixture under `package/`, into dir; returns its path and sha256.
+fn pack_fixture(dir: &Path) -> (String, String) {
+    use sha2::Digest;
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plugin-probe");
+    let mut data = vec![];
+    {
+        let zipped = flate2::write::GzEncoder::new(&mut data, flate2::Compression::default());
+        let mut release = tar::Builder::new(zipped);
+        for name in ["package.json", "plugin.json"] {
+            let content = std::fs::read(source.join(name)).unwrap();
+            let mut header = tar::Header::new_ustar();
+            header.set_entry_type(tar::EntryType::Regular);
+            header.set_size(content.len() as u64);
+            header.set_mode(0o644);
+            release
+                .append_data(&mut header, format!("package/{name}"), content.as_slice())
+                .unwrap();
+        }
+        release.into_inner().unwrap().finish().unwrap();
+    }
+    let path = dir.join(format!(
+        "plugin-probe-{}.tgz",
+        soksak_sok::version::CORE_VERSION
+    ));
+    std::fs::write(&path, &data).unwrap();
+    let sum = sha2::Sha256::digest(&data)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    (path.to_str().unwrap().to_string(), sum)
+}
+
 fn plugin_registry() -> Registry {
     let (releases, registry) = (folder::Folder::new(), folder::Folder::new());
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plugin-probe");
-    let packed = sok_json(&[
-        "plugin",
-        "pack",
-        source.to_str().unwrap(),
-        releases.path().to_str().unwrap(),
-    ]);
-    let release = packed["release"].as_str().unwrap().to_string();
+    let (release, sum) = pack_fixture(releases.path());
     let entry = json!({
         "id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
         "license": "MIT", "repository": "https://example.invalid/probe",
-        "versions": [{"version": soksak_sok::version::CORE_VERSION, "release": {"url": format!("file://{release}"), "sha256": packed["sha256"]},
+        "versions": [{"version": soksak_sok::version::CORE_VERSION, "release": {"url": format!("file://{release}"), "sha256": sum},
             "engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}],
     });
     write_tree(

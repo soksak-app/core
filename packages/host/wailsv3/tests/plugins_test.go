@@ -3,7 +3,11 @@ package host_test
 // Checks the plugin operations inside the application (docs/spec/installation.md#plugin-operations-in-the-application).
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -31,18 +35,51 @@ func sokJSON(t *testing.T, args ...string) map[string]any {
 	return value
 }
 
+// packFixture writes the release of fixtures/plugin-probe in the layout that `pnpm pack` writes
+// (docs/spec/installation.md#plugin-release), with the two files of the fixture under `package/`, into dir, and returns
+// its path and sha256.
+func packFixture(t *testing.T, dir string) (string, string) {
+	t.Helper()
+	var data bytes.Buffer
+	zipped := gzip.NewWriter(&data)
+	release := tar.NewWriter(zipped)
+	for _, name := range []string{"package.json", "plugin.json"} {
+		content, err := os.ReadFile(filepath.Join("fixtures/plugin-probe", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := release.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: "package/" + name, Mode: 0o644, Size: int64(len(content))}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := release.Write(content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := release.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := zipped.Close(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "plugin-probe-"+sok.CoreVersion+".tgz")
+	if err := os.WriteFile(path, data.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(data.Bytes())
+	return path, hex.EncodeToString(sum[:])
+}
+
 // pluginRegistry builds the current release of fixtures/plugin-probe and its registry, and
 // returns the paths of index.json and the release. go test runs in the folder of the Go package, so the fixture is below it.
 func pluginRegistry(t *testing.T) (index, release string) {
 	t.Helper()
 	version := sok.CoreVersion
 	releases, registry := t.TempDir(), t.TempDir()
-	packed := sokJSON(t, "plugin", "pack", "fixtures/plugin-probe", releases)
-	release = packed["release"].(string)
+	release, sum := packFixture(t, releases)
 	writeInstalled(t, registry, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
 			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "` + version + `",
-			"release": {"url": "file://` + release + `", "sha256": "` + packed["sha256"].(string) + `"},
+			"release": {"url": "file://` + release + `", "sha256": "` + sum + `"},
 			"engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
 	})

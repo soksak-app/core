@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak-app/core/packages/sok/wailsv3/src"
+	"github.com/soksak-app/core/packages/sok/wailsv3/tests/support"
 )
 
 // manifestCase is one case of the manifest case table that the plugin-api reader replays (docs/spec/installation.md#plugin-release).
@@ -40,62 +40,59 @@ func manifestCases(t *testing.T) []manifestCase {
 	return table.Cases
 }
 
-// contract: cli.pack.replays-manifest-cases
-func TestPluginPackReplaysTheManifestCases(t *testing.T) {
+// indexForRelease writes a registry index whose plugin probe 0.2.0 is the release at path with sum, and returns its path.
+func indexForRelease(t *testing.T, path, sum string) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"index.json": jsonText(t, map[string]any{"format": 1, "sidecars": []any{}, "packs": []any{},
+			"revoked": map[string]any{"plugins": []any{}, "sidecars": []any{}},
+			"plugins": []any{map[string]any{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe",
+				"description": "검사용 plugin.", "license": "MIT", "repository": "https://example.invalid/probe",
+				"versions": []any{map[string]any{"version": "0.2.0",
+					"release": map[string]any{"url": "file://" + path, "sha256": sum},
+					"engines": map[string]any{"soksak": "^0.0.2"}, "sidecars": map[string]any{}}}}}}),
+	})
+	return filepath.Join(dir, "index.json")
+}
+
+// contract: install.manifest.replays-manifest-cases
+func TestPluginInstallReplaysTheManifestCases(t *testing.T) {
 	for _, c := range manifestCases(t) {
 		t.Run(c.ID, func(t *testing.T) {
-			files := c.PackageFiles
-			if len(files) == 0 {
-				files = []string{"plugin.json"}
-			}
 			dir := t.TempDir()
 			writeTree(t, dir, map[string]string{
 				"package.json": jsonText(t, map[string]any{"name": "@scope/plugin-probe", "version": "0.2.0",
-					"engines": map[string]any{"soksak": "^0.0.2"}, "files": files}),
+					"engines": map[string]any{"soksak": "^0.0.2"}, "files": c.PackageFiles}),
 				"plugin.json": string(c.Manifest),
 			})
-			for _, file := range files {
+			for _, file := range c.PackageFiles {
 				if file != "plugin.json" {
 					writeTree(t, dir, map[string]string{file: ""})
 				}
 			}
-			code, _, stderr := run("plugin", "pack", dir, t.TempDir())
+			release := support.PackPlugin(t, dir, t.TempDir())
+			config := t.TempDir()
+			runJSON(t, "registry", "use", indexForRelease(t, release["release"], release["sha256"]), "--config-dir", config)
+			code, _, stderr := run("plugin", "install", "probe", "--config-dir", config)
+			installed := exists(filepath.Join(config, "plugins", "installed.json"))
 			if c.Accepted {
-				if code != 0 {
-					t.Fatalf("pack refused an accepted manifest: code %d stderr %q", code, stderr)
+				// The index holds no dependency of the plugin, so an accepted manifest with dependencies passes the
+				// reader and stops at the dependency check of the registry.
+				if !(code == 0 && installed) && !(code == 1 && strings.HasPrefix(stderr, "sok: probe 0.2.0: dependency ") && !installed) {
+					t.Fatalf("install refused an accepted manifest: code %d stderr %q", code, stderr)
 				}
 				return
 			}
-			if code != 1 || stderr != "sok: "+c.Error+"\n" {
-				t.Fatalf("code %d stderr %q, want %q", code, stderr, c.Error)
+			// Install parses plugin.json before the reader runs and refuses a value that is not an object with its
+			// location; the reader text of that case names plugin.json itself.
+			want := "sok: plugin probe 0.2.0 package: plugin.json: " + c.Error + "\n"
+			var manifest map[string]any
+			if json.Unmarshal(c.Manifest, &manifest) != nil {
+				want = "sok: plugin probe 0.2.0 package: plugin.json: expected an object\n"
 			}
-		})
-	}
-}
-
-// contract: install.manifest.replays-manifest-cases
-func TestPluginInstallReplaysTheRefusedManifestCases(t *testing.T) {
-	for _, c := range manifestCases(t) {
-		// Installation checks the plugin id of the installation record before the manifest, so the cases of the id probe are
-		// replayed here; the other cases are replayed by the pack test, which runs the same validation.
-		var manifest map[string]any
-		if c.Accepted || json.Unmarshal(c.Manifest, &manifest) != nil || manifest["id"] != "probe" {
-			continue
-		}
-		t.Run(c.ID, func(t *testing.T) {
-			index := schemaOutsideSubsetIndex(t)
-			config := t.TempDir()
-			runJSON(t, "registry", "use", index, "--config-dir", config)
-			writeTree(t, filepath.Join(config, "plugins/probe/0.2.0"), map[string]string{
-				"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
-				"plugin.json":  string(c.Manifest),
-			})
-			_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t))
-			if err == nil || !strings.HasSuffix(err.Error(), "/plugin.json: "+c.Error) {
-				t.Fatalf("error %v, want the plugin.json location and %q", err, c.Error)
-			}
-			if exists(filepath.Join(config, "plugins", "installed.json")) {
-				t.Fatal("a refused install wrote installed.json")
+			if code != 1 || stderr != want || installed {
+				t.Fatalf("code %d stderr %q, want %q", code, stderr, want)
 			}
 		})
 	}

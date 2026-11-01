@@ -9,6 +9,8 @@ use sha2::{Digest, Sha256};
 
 #[path = "support/folder.rs"]
 mod folder;
+#[path = "support/plugin_release.rs"]
+mod plugin_release;
 
 use folder::Folder;
 
@@ -97,7 +99,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
                 ("ui/b.js", &content),
             ],
         );
-        let result = run_json(&["plugin", "pack", dir.text(), releases.text()]);
+        let result = plugin_release::pack(dir.path(), releases.path());
         entries.push(format!(
             r#"{{"version": "{version}", "release": {{"url": "file://{}", "sha256": "{}"}},
             "engines": {{"soksak": "^{core}"}}, "sidecars": {{"@scope/sidecar-worker": "^0.1.0"}}}}"#,
@@ -220,11 +222,11 @@ fn unsafe_release(path: &Path) -> String {
         let mut release = tar::Builder::new(zipped);
         for (name, content) in [
             (
-                "package.json",
+                "package/package.json",
                 r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}"#,
             ),
             (
-                "plugin.json",
+                "package/plugin.json",
                 r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}"#,
             ),
             ("../escape.txt", "outside"),
@@ -321,6 +323,141 @@ fn plugin_install_failure_keeps_the_previous_state() {
     assert!(!config.path().join("plugins/installed.json").exists());
     assert!(!config.path().join("plugins/probe/0.2.0").exists());
     assert!(!config.path().join("plugins/probe/escape.txt").exists());
+}
+
+/// Points the probe 0.2.0 entry of registry at the release built from items, without sidecars, rebuilds the index and installs
+/// probe in a new configuration; returns the configuration, the exit status and stderr.
+fn install_release(
+    registry: &Registry,
+    items: Vec<(String, Vec<u8>, u32)>,
+) -> (Folder, i32, String) {
+    let release = registry.dir.path().join("custom.tgz");
+    plugin_release::entries(&release, items);
+    let sum: String = Sha256::digest(std::fs::read(&release).unwrap())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let entry = registry.dir.path().join("plugins/probe.json");
+    replace_in(
+        &entry,
+        r#""sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]"#,
+        r#""sidecars": {}}]"#,
+    );
+    let text = read_text(&entry);
+    let url = text
+        .split(r#""url": "file://"#)
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap()
+        .to_string();
+    replace_in(&entry, &url, &release.display().to_string());
+    let old = text
+        .split(r#""sha256": ""#)
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap()
+        .to_string();
+    replace_in(&entry, &old, &sum);
+    run_json(&["registry", "build", registry.dir.text()]);
+    let config = Folder::new("plugins");
+    run_json(&[
+        "registry",
+        "use",
+        &registry.index(),
+        "--config-dir",
+        config.text(),
+    ]);
+    let (code, _, stderr) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
+    (config, code, stderr)
+}
+
+/// The release entries of probe 0.2.0 with manifest as plugin.json and the extra files.
+fn probe_items(manifest: &str, extra: &[(&str, &str)]) -> Vec<(String, Vec<u8>, u32)> {
+    let mut items = vec![
+        ("package/package.json".to_string(), br#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json", "ui"]}"#.to_vec(), 0o644),
+        ("package/plugin.json".to_string(), manifest.as_bytes().to_vec(), 0o644),
+    ];
+    items.extend(
+        extra
+            .iter()
+            .map(|(name, content)| (name.to_string(), content.as_bytes().to_vec(), 0o644)),
+    );
+    items
+}
+
+const PROBE_MANIFEST: &str = r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}"#;
+const VIEW_MANIFEST: &str = r#"{"id": "probe", "name": "Probe", "description": "Sample.", "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}}"#;
+
+// contract: cli.plugin.install-refuses-entry-outside-package
+// A plugin release is the pnpm pack file (docs/spec/installation.md#plugin-release), so an entry that does not start with package/
+// is refused and nothing is installed (F355-2).
+#[test]
+fn plugin_install_refuses_a_release_entry_outside_package() {
+    let registry = plugin_versions_for("0.0.2", &["0.2.0"]);
+    let (config, code, stderr) = install_release(
+        &registry,
+        probe_items(PROBE_MANIFEST, &[("stray.txt", "outside")]),
+    );
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin probe 0.2.0 package: entry stray.txt is outside package/\n"
+        )
+    );
+    assert!(!config.path().join("plugins/installed.json").exists());
+    assert!(!config.path().join("plugins/probe/0.2.0").exists());
+}
+
+// contract: cli.plugin.install-requires-loaded-modules
+// The surface module and the view page that plugin.json loads are files of the release, so a release without one is refused
+// before anything is installed (F355-2).
+#[test]
+fn plugin_install_refuses_a_release_without_the_view_page() {
+    let registry = plugin_versions_for("0.0.2", &["0.2.0"]);
+    let (config, code, stderr) = install_release(
+        &registry,
+        probe_items(VIEW_MANIFEST, &[("package/ui/b.js", "b")]),
+    );
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin probe 0.2.0 package: plugin.json: view page ui/page.html is not in the release\n"
+        )
+    );
+    assert!(!config.path().join("plugins/installed.json").exists());
+    let (_, code, stderr) = install_release(
+        &plugin_versions_for("0.0.2", &["0.2.0"]),
+        probe_items(
+            VIEW_MANIFEST,
+            &[("package/ui/page.html", "<!doctype html>")],
+        ),
+    );
+    assert_eq!((code, stderr.as_str()), (0, ""));
+}
+
+// contract: cli.plugin.install-refuses-binary-path
+// The .binary path segment is reserved for the binary store of a page, so a release that holds a file under it is refused (F355-2).
+#[test]
+fn plugin_install_refuses_a_release_with_a_binary_path() {
+    let registry = plugin_versions_for("0.0.2", &["0.2.0"]);
+    let (config, code, stderr) = install_release(
+        &registry,
+        probe_items(PROBE_MANIFEST, &[("package/ui/.binary/x", "x")]),
+    );
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin probe 0.2.0 package: plugin release holds ui/.binary/x: the .binary path is reserved for the binary store\n"
+        )
+    );
+    assert!(!config.path().join("plugins/installed.json").exists());
 }
 
 // contract: cli.plugin.update-remove-enable-list
@@ -782,7 +919,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
             dir.path(),
             &[("package.json", &package), ("plugin.json", &manifest)],
         );
-        let result = run_json(&["plugin", "pack", dir.text(), releases.text()]);
+        let result = plugin_release::pack(dir.path(), releases.path());
         let sidecars: serde_json::Map<String, Value> = dependencies
             .into_iter()
             .filter(|(name, _)| name.starts_with("@scope/sidecar-"))
@@ -1168,7 +1305,7 @@ fn mismatched_index() -> Registry {
             ),
         ],
     );
-    let result = run_json(&["plugin", "pack", dir.text(), releases.text()]);
+    let result = plugin_release::pack(dir.path(), releases.path());
     let index = Folder::new("plugins");
     let plugin = json!({"id": "probe", "package": "@scope/plugin-probe", "name": "Probe",
         "description": "검사용 plugin.", "license": "MIT", "repository": "https://example.invalid/probe",

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
+	"github.com/soksak-app/core/packages/sok/wailsv3/tests/support"
 )
 
 // registryTree makes a release from a pack and a release, and writes a registry folder that holds its address and hash.
@@ -22,21 +23,16 @@ func registryTree(t *testing.T) (dir, pluginSum, sidecarSum string) {
 		t.Fatal(err)
 	}
 	releases := t.TempDir()
-	results := map[string]map[string]string{}
-	for name, args := range map[string][]string{
-		"plugin":  {"plugin", "pack", pluginTree(t), releases},
-		"sidecar": {"sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform},
-	} {
-		code, stdout, stderr := run(args...)
-		if code != 0 {
-			t.Fatalf("%s: code %d stderr %q", name, code, stderr)
-		}
-		var result map[string]string
-		if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-			t.Fatal(err)
-		}
-		results[name] = result
+	results := map[string]map[string]string{"plugin": support.PackPlugin(t, pluginTree(t), releases)}
+	code, stdout, stderr := run("sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
+	if code != 0 {
+		t.Fatalf("sidecar: code %d stderr %q", code, stderr)
 	}
+	var sidecar map[string]string
+	if err := json.Unmarshal([]byte(stdout), &sidecar); err != nil {
+		t.Fatal(err)
+	}
+	results["sidecar"] = sidecar
 	dir = t.TempDir()
 	writeTree(t, dir, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",

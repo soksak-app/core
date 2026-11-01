@@ -413,9 +413,6 @@ func ManifestDependencies(manifest map[string]any) (map[string]string, error) {
 	return ranges, nil
 }
 
-// ReleaseName is the file name of a plugin release.
-func ReleaseName(id, version string) string { return id + "-" + version + ".tgz" }
-
 // SidecarFileName turns a sidecar name into the form used for file names and folder names. `@scope/name` becomes
 // `scope-name`.
 func SidecarFileName(name string) (string, error) {

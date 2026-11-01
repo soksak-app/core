@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F355-2: A plugin release is the `pnpm pack` file of the plugin. `sok plugin install` extracts it from `package/`, refuses an entry outside `package/`, a release without the surface module or the view page of `plugin.json` and a file under `.binary`, and checks `plugin.json` with the reader before it compares the plugin id. `sok plugin pack` and its `--diagnostics` are removed; a plugin lists `diagnostics.json` and its module in `files`, and only a diagnostic build reads them. The workspace registry runs `make pack OUT=<folder>` of a plugin repository without `SOK` and `PACK_FLAGS`.
 - F352: `createViewBridge` sets the theme of the start script and each later theme message on the root of the view document through `applyTheme` of `@soksak/plugin-api`, so a view page that sets no theme, such as the files sections, draws with the theme tokens; the contract case `view.bridge.events-delivered-in-order` carries the theme form `{scheme, tokens}`.
 - F353: The probe views of the window checks pass `changed` in their exposure port, so they start after F342-1.
 - F354: The exposure port of a modal document in the Wails and Tauri runtimes has `changed`, which refuses a value because a modal document has no status watch route, so the surface picker and the settings window start after F342-1.

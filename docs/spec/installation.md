@@ -25,7 +25,7 @@ The version of `@soksak/plugin-api` identifies the core manifest and installatio
 
 ## Plugin release
 
-A plugin release is the file `<id>-<version>.tgz`, the file that `pnpm pack` writes for the plugin: a gzip tar whose entries are `package/package.json` and `package/<path>` for each file that `files` of `package.json` lists. A release whose entries do not all start with `package/` is refused with `<release>: entry <path> is outside package/`. Its `package.json` declares:
+A plugin release is the file that `pnpm pack` writes for the plugin, `<scope>-<name>-<version>.tgz` for the package `@<scope>/<name>`: a gzip tar whose entries are `package/package.json` and `package/<path>` for each file that `files` of `package.json` lists. A release whose entries do not all start with `package/` is refused with `<release>: entry <path> is outside package/`. Its `package.json` declares:
 
 | Field | Meaning |
 | --- | --- |
@@ -38,7 +38,7 @@ Other `package.json` fields belong to package tools and are not read, except `so
 
 A plugin repository builds against the `@soksak/plugin-api` of one core release. Its `engines.soksak` is `*`, which every core version satisfies, `^<version>` of that `@soksak/plugin-api`, which only that release satisfies, or `>=<x.y.z>` with a lower bound up to that version, which that core release and every later one satisfy; a plugin that uses a manifest field that core added in a release declares `>=` that release. The command `soksak-engines` of `@soksak/plugin-api` checks it in the plugin repository and fails with `package.json: engines.soksak <range> must be *, ^<version> or >= a version up to <version>, the @soksak/plugin-api version`; each plugin repository runs it in `make test`.
 
-`sok plugin pack` and `sok plugin install` check `plugin.json` with every rule of the reader's `validateManifest` (`@soksak/plugin-api`) in the reader's order, and refuse each manifest that the reader refuses, with the reader's error text. Pack fails with the text; install fails with the location of the `plugin.json` and the text, and writes nothing. The reader checks the members of each object in sorted key order, and so do pack and install, so the first refused member is the same whatever the order of the members in the file. The case table `docs/spec/cases/manifest-validation.json` lists the manifests and their results; the reader and both `sok` implementations replay it, and a case on which one of them differs fails.
+`sok plugin install` checks `plugin.json` with every rule of the reader's `validateManifest` (`@soksak/plugin-api`) in the reader's order, and refuses each manifest that the reader refuses: it fails with the location of the `plugin.json` and the reader's error text, and writes nothing. It also refuses a release that holds a file under a `.binary` segment, the path that the binary store of a page reserves ([native surfaces](native-surfaces.md#document-regions)), or that lacks the surface module or the view page that `plugin.json` loads. The reader checks the members of each object in sorted key order, and so does install, so the first refused member is the same whatever the order of the members in the file. The case table `docs/spec/cases/manifest-validation.json` lists the manifests and their results; the reader and the install of both `sok` implementations replay it, and a case on which one of them differs fails.
 
 ## Sidecar release
 
