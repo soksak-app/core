@@ -8016,6 +8016,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F341",
+    implementation: [{ file: "packages/workbench/exposure.js", symbol: "observe(name, surface, fn, { exact = false } = {})" }],
+    tests: [{ file: "packages/workbench/test/exposure.test.mjs", id: "without a registered surface the observer receives null" }],
+    expected: "A status observation delivers null while no surface registers the status.",
+    levels: ["unit"],
+  },
+  {
     id: "F340",
     implementation: [{ file: "packages/host/tauriv2/src/surfaces.rs", symbol: "impl<'de> Deserialize<'de> for ViewStartRequest" }],
     tests: [
