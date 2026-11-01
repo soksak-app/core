@@ -108,6 +108,24 @@ test("a sidecar subscription pushes its messages and failures with the session i
   ]);
 });
 
+test("an event for a view whose surface is left out is canceled without a push, and pushes resume when it is drawn again", async () => {
+  // A section surface whose section left the drawing exists until the commit releases it (docs/spec/plugins.md#sections).
+  const f = fakes();
+  let left = true;
+  const canceled = [];
+  const subs = createViewSubscriptions({ ...f, report: (text) => f.failures.push(text), leftOut: () => left,
+    cancel: (event) => canceled.push(event) });
+  await subs.native("probe.event");
+  f.listeners.get("native:probe.event")({ n: 1 });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(f.pushed, [], "a left-out view received an event");
+  assert.deepEqual(canceled, ["probe.event"]);
+  left = false;
+  f.listeners.get("native:probe.event")({ n: 2 });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(f.pushed, [{ event: "probe.event", data: { n: 2 } }]);
+});
+
 test("a push that the host refuses is reported with its text", async () => {
   const { listeners, native } = fakes();
   const reports = [];

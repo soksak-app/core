@@ -95,7 +95,7 @@ export function createRegistry({ call = null, report = null } = {}) {
   /* Surface statuses being watched: for each watch key, the followed surface, the requested surface and the last delivered version. */
   const following = new Map();
   let options = {
-    surfacePlugin: () => null, preferred: () => [], registrationChanged: () => {}, unloaded: () => false,
+    surfacePlugin: () => null, preferred: () => [], registrationChanged: () => {}, unloaded: () => false, leftOut: () => false,
     // Work to wait for after a core command ran. The document passes the drawing of the plane, so a command that changed the layout replies after it is drawn.
     settled: () => undefined,
     // default: without a composition source no applied frame is known, and a view rectangle is refused by forward.
@@ -302,9 +302,11 @@ export function createRegistry({ call = null, report = null } = {}) {
     if (pageOf(kind, name)) return null;
     const owners = surfaces.get(declarationKey(kind, name));
     if (!owners?.size) return null;
-    if (wanted && owners.has(wanted)) return wanted;
+    // A surface that a drawing or a place left out keeps its registrations until its view end is processed, but the host has closed or
+    // will close its view, so no request of this document goes to it (docs/spec/plugins.md#sections).
+    if (wanted && owners.has(wanted)) return options.leftOut(wanted) ? null : wanted;
     if (exact) return null;
-    const choices = tabSurfacesOf(owners);
+    const choices = tabSurfacesOf(owners).filter((surface) => !options.leftOut(surface));
     // default: when the preferred surface has not registered, the surface registered last answers.
     return options.preferred().find((surface) => choices.includes(surface)) ?? choices.at(-1) ?? null;
   }

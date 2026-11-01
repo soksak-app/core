@@ -38,7 +38,7 @@ import { filePlace, modalState, onFilesDropped, onModalState, onWindowResponder 
 import { plugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
 import { retainedSurfaceEntries, surfaceKindOf } from "./surface-listing.js";
-import { liveMounts, onMountedChange } from "./surface-modules.js";
+import { liveMounts, onMountedChange, surfaceLeftOut } from "./surface-modules.js";
 import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
@@ -638,7 +638,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
       const record = seated()?.surfaces.find((entry) => entry.id === surface);
       return record ? shift(record.applied, planeOrigin()) : null;
     },
-    unloaded: (surface) => memory.unloaded(surface) });
+    unloaded: (surface) => memory.unloaded(surface), leftOut: surfaceLeftOut });
 }
 
 // Action marker for window size changes (V5-104). It marks the log so that an event can be matched to the action that preceded it.

@@ -491,6 +491,25 @@ test("a status watch that the surface refuses is not kept, so the next watch is 
     "a new watch is forwarded after the refused one");
 });
 
+test("an observation chooses no surface that a drawing or a place left out, so no watch is forwarded to it", async () => {
+  // A place closes the views that it leaves out before their own ends reach the registry (docs/spec/plugins.md#sections).
+  const host = fakeHost(() => ({ result: null }));
+  const made = coreRegistry(host);
+  const left = new Set(["tab-b"]);
+  made.configure({ surfacePlugin: () => "probe", preferred: () => ["tab-b", "tab-a"], leftOut: (surface) => left.has(surface) });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  made.registered({ surface: "tab-b", kind: "status", name: "probe.lines" });
+  const exact = [];
+  const chosen = [];
+  made.observe("probe.lines", "tab-b", (value, from) => exact.push([value, from]), { exact: true });
+  made.observe("probe.lines", undefined, (value, from) => chosen.push(from));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const watched = host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.watch").map(([, arg]) => arg.surface);
+  assert.deepEqual(watched, ["tab-a"], "a watch was forwarded to a surface that is left out");
+  assert.deepEqual(exact, [[null, null]], "an exact observation of a left-out surface follows no surface");
+  assert.deepEqual(chosen, [], "the observation without a surface waits for the value of tab-a");
+});
+
 test("a request to an unloaded surface fails with tab <id> is unloaded", async () => {
   const made = coreRegistry(fakeHost(() => ({ result: null })));
   made.configure({ surfacePlugin: () => "probe", unloaded: (surface) => surface === "tab-u" });

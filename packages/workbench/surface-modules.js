@@ -1,7 +1,8 @@
 import { LOG_LEVELS, createSurfaceContext, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { surfaceErrorText } from "./surface-status.js";
-import { markViewSurface, registry } from "./exposure.js";
+import { isSectionSurface, markViewSurface, registry } from "./exposure.js";
+import { shownSectionSurfaces } from "./section-surfaces.js";
 import { onDataChange, viewDataOf } from "./plugin-data.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
@@ -454,6 +455,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     },
     push: (event, data) => scoped.native.call("viewEvent", { generation: viewGeneration, event, data }),
     closing,
+    leftOut: () => surfaceLeftOut(surface.surfaceId),
     cancel: (event) => emitEvent("debug", "page.view.event.cancel", {
       plugin: surface.pluginId, surface: surface.surfaceId, event,
     }),
@@ -1146,6 +1148,17 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
 
 // default: a surface that is not mounted is null.
 export const mountedSurface = (surfaceId) => mounted.get(surfaceId) ?? null;
+
+/**
+ * Whether a drawing or a place left the surface out (docs/spec/plugins.md#sections): a place has left it out of the host, or it is a
+ * section surface whose section no drawn sidebar holds. Such a surface exists until its release, and the main page neither chooses it
+ * for a forward nor pushes events to its view, because the host has closed or will close its view.
+ */
+export function surfaceLeftOut(surfaceId) {
+  const lifetime = mounted.get(surfaceId)?.lifetime;
+  if (lifetime?.suspended || lifetime?.released) return true;
+  return isSectionSurface(surfaceId) && !shownSectionSurfaces().includes(surfaceId);
+}
 
 /** Disposes the modules of the tabs that the current workspace no longer declares. */
 export async function disposeSurfacesExcept(surfaceIds, { released = false } = {}) {

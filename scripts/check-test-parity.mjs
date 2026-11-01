@@ -8034,6 +8034,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F348",
+    implementation: [
+      { file: "packages/workbench/surface-modules.js", symbol: "export function surfaceLeftOut(surfaceId)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/exposure.test.mjs", id: "an observation chooses no surface that a drawing or a place left out, so no watch is forwarded to it" },
+      { file: "packages/workbench/test/view-events.test.mjs", id: "an event for a view whose surface is left out is canceled without a push, and pushes resume when it is drawn again" },
+    ],
+    expected: "A surface that a drawing or a place left out receives no forwarded request and no view event until it is drawn again or released.",
+    levels: ["unit"],
+  },
+  {
     id: "F347",
     implementation: [
       { file: "packages/workbench/sidebar-sections.js", symbol: "export const sectionSurfaceId = (space, sidebar, sectionId) =>" },

@@ -26,6 +26,8 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *                 which it calls at the end of the watch
  *     push        push(event, data): posts {event, data} to the view through viewEvent; rejects when the host refuses it
  *     closing     optional AbortSignal of the surface lifetime; a refusal after abort cancels delivery
+ *     leftOut     leftOut(): whether a drawing or a place left the surface out; an event that is delivered while it is cancels, because
+ *                 the host has closed or will close the view, and a section that is drawn again in the same drawing receives the next event
  *     cancel      cancel(event): records a delivery canceled by document or surface end
  *     report      report(text): receives the text of a push that the host refused
  *
@@ -36,7 +38,7 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  * of a name that is not watched ends nothing and resolves with null. A refusal after document or surface end is canceled; a refusal while
  * the current document remains open is reported.
  */
-export function createViewSubscriptions({ native, sidecar, textSize, settings, data, logLevels, status, push, report, closing, cancel = () => {} }) {
+export function createViewSubscriptions({ native, sidecar, textSize, settings, data, logLevels, status, push, report, closing, leftOut = () => false, cancel = () => {} }) {
   if (typeof push !== "function" || typeof report !== "function") {
     throw new TypeError("createViewSubscriptions requires the push and report functions");
   }
@@ -50,7 +52,8 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
   let delivery = Promise.resolve();
   const forward = (event, data, owner = generation) => {
     delivery = delivery.then(async () => {
-      if (closed || closing?.aborted || owner !== generation) {
+      // A view whose surface a drawing or a place left out receives nothing until it is drawn again (docs/spec/plugins.md#sections).
+      if (closed || closing?.aborted || owner !== generation || leftOut()) {
         cancel(event);
         return;
       }
