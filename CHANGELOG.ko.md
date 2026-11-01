@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F355-4-1-2: process identity kit `soksak-app/kit-process-identity-darwin`은 library, per-test runner를 쓰는 test, private API inventory 행, 명세를 담고, 그 release run이 `v0.0.1`을 게시했다.
 - F355-4-1-1: core는 term 목록이 `kit`을 정의하는 records kit release 0.0.2를 pin한다. Red: `the records kit release that core pins defines the kit term`가 release 0.0.1에서 실패했다. Green: 통과한다.
 - F355-3-4: plugin browser, editor, files, hwp, terminal과 sidecar files, VT는 core release의 `@soksak/plugin-api` 대신 records kit과 events kit release를 pin하고, manifest, exposure, engines, view, case 복사본 검사를 지웠다. application이 설치할 때 manifest를 검증하고, registry 검사가 각 plugin release의 exposed 이름을 각 listed core와 비교한다. 각 repository는 Red/Green test와 CI run을 통과한다.
 - F355-3-3: registry 명세는 pull request 검사가 각 listed core의 plugin API release의 `checkPluginRepository`를 그것이 설치하는 plugin release에 실행한다고 적는다(registry 항목 G61). 그래서 plugin repository는 exposed 이름을 검사하려고 core release를 필요로 하지 않는다.

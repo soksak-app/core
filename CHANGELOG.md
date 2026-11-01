@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F355-4-1-2: The process identity kit `soksak-app/kit-process-identity-darwin` holds the library, its tests with a per-test runner, its private API inventory row and its specification, and its release run published `v0.0.1`.
 - F355-4-1-1: Core pins the records kit release 0.0.2, whose term list defines `kit`. Red: `the records kit release that core pins defines the kit term` failed on the release 0.0.1. Green: it passes.
 - F355-3-4: The plugins browser, editor, files, hwp and terminal and the sidecars files and VT pin the records kit and events kit releases instead of `@soksak/plugin-api` of a core release, and their manifest, exposure, engines, view and case copy checks are removed; the application validates the manifest at installation, and the registry check compares the exposed names of each plugin release with each listed core. Each repository passes its Red/Green test and its CI run.
 - F355-3-3: The registry specification states that the check of a pull request runs `checkPluginRepository` of the plugin API release of each listed core on the plugin releases that it installs (registry item G61), so a plugin repository needs no core release to check its exposed names.
