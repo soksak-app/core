@@ -4280,10 +4280,10 @@ impl Owner for Window {
         if !targets.views.is_empty() {
             crate::documents::post_sidecar_message(self, &message, targets.views);
         }
-        if targets.page {
-            if let Err(error) = emit_window(self, "sidecar-message", message) {
-                log_error("sidecar-message", error);
-            }
+        if targets.page
+            && let Err(error) = emit_window(self, "sidecar-message", message)
+        {
+            log_error("sidecar-message", error);
         }
     }
     fn deliver_failure(&self, failure: Failure) {

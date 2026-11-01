@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F374-4-1: F374-4의 전달 코드는 하나의 `if let` chain을 쓰므로 `make rust-clippy-check`가 통과한다. Red: `make rust-clippy-check`가 `packages/host/tauriv2/src/sidecars.rs`에서 `this if statement can be collapsed`로 실패했다. Green: `make rust-clippy-check`와 `make rust-format-check`가 통과한다.
 - F371-1: F371의 predicate `sameDocument`는 NO로 답하는 이유를 적는다. Red: `make census-check`가 `native/darwin/src/document_view.m:1198: m.error-return has neither an event nor a stated reason`으로 실패했다. Green: `make census-check`가 통과한다.
 - F374-4: host는 각 sidecar message를 main page가 `sidecarListen`과 `viewSidecarRoute`로 등록한 수신자에게만 전달하므로, terminal screen message는 main page를 거치지 않고 view에 닿는다. background session은 구독 뒤에 open을 보낸다. 초당 20 frame을 다시 그리는 terminal에서 main page는 13.5% 대신 2.9%를, host는 25–28% 대신 18.6%를 썼다. Red: 두 host의 route test, `window-sidecar-listen.test.mjs`, `view-events.test.mjs`의 sidecar case와 `view-calls.test.mjs`, `background-session-race.test.mjs`, 두 애플리케이션의 runtime 계약 test가 실패했다. Green: 그것들이 통과하고 `make hosts-check`, `make host-parity-check`, `make events-check`, `make exposure-check`, `make boundaries`, `make parity-check`도 통과한다.
 - F372-1: F372의 test는 workspace plugin의 id 대신 fixture section id `fixture.tree`와 `fixture.marks`를 쓴다. Red: `make boundaries`가 `core @soksak/workbench names plugin id files`로 실패했다. Green: `make boundaries`와 그 test가 통과한다.
