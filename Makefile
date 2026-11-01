@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -67,6 +67,13 @@ host-calls:
 app-usage:
 	@case "$(CONFIG_DIR)" in '') echo "app-usage requires CONFIG_DIR=DIR [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
 	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --interval $(or $(INTERVAL),10)
+
+# Reports the CPU of each process of the running application of CONFIG_DIR while the terminal SURFACE redraws a status block at RATE frames
+# per second (scripts/measure-terminal-redraw.mjs, docs/operations/examples.md). SOK defaults to the sok binary of target/debug.
+terminal-redraw-usage:
+	@case "$(CONFIG_DIR)" in '') echo "terminal-redraw-usage requires CONFIG_DIR=DIR SURFACE=TAB [RATE=20] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
+	@case "$(SURFACE)" in '') echo "terminal-redraw-usage requires SURFACE=TAB" >&2; exit 2;; esac
+	@node scripts/measure-terminal-redraw.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --surface "$(SURFACE)" --rate $(or $(RATE),20) --interval $(or $(INTERVAL),10)
 
 # Measures the share of the diagnostics in the memory of a running host: with the debug switch on and then off, it runs five repetitions of
 # object-counts and prints the footprint of the host process (docs/operations/examples.md).

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F374-1: `make terminal-redraw-usage` measures the CPU of each process while a shown terminal redraws a status block at a fixed rate. It is a measurement, not a correction, so it has no Red; `scripts/test/measure-terminal-redraw.test.mjs` checks its option parser, its frame cost, its screen text and the fixture, and passes.
 - F373: A divider between two adjacent open sections of a vertical list sidebar resizes them, so the files tree and the bookmarks share the room that the person chooses; `core.sidebar.section.size` sets the height, `core.sidebars` reports it as `size`, and the space stores it in `sizes`. Red: `a dragged section height is applied, reported, saved with the space and restored` failed with no divider, and `folding, selecting and sizing a section lay out the plane again` failed on the unregistered command. Green: both pass.
 - F372: Folding a section and selecting a section tab lay out the plane again, so the host hides the view of the folded bookmarks section instead of leaving it at its earlier seat inside the files tree. Red: `folding a section and selecting a section tab lay out the plane again` failed with no layout after either command. Green: it passes.
 - F371: A view keeps its first document, so a reload no longer replaces the files tree document with one whose registrations the main page refused under the same source generation. Red: `view_channel_test` failed on `the view reports the refused reload within 10 seconds`. Green: it passes, and `document_view_test` passes.

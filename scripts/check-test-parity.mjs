@@ -100,6 +100,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("object counts measurement", "js-ts", ["scripts/measure-object-counts.mjs"], ["scripts/test/measure-object-counts.test.mjs"]),
   lane("host call memory measurement", "js-ts", ["scripts/measure-host-calls.mjs"], ["scripts/test/measure-host-calls.test.mjs"]),
   lane("application usage measurement", "js-ts", ["scripts/measure-app-usage.mjs"], ["scripts/test/measure-app-usage.test.mjs"]),
+  lane("terminal redraw measurement", "js-ts", ["scripts/measure-terminal-redraw.mjs", "scripts/fixtures/status-redraw.mjs"], ["scripts/test/measure-terminal-redraw.test.mjs"]),
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
   lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),
   lane("Go repeat tests", "js-ts", ["scripts/go-tests.mjs"], ["scripts/test/go-repeat.test.mjs"]),
@@ -8043,6 +8044,19 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/plane-sidebar-space.test.mjs", id: "a sidebar draws the section surface ids of the space of the held layout while the project state shows the library" },
     ],
     expected: "The sidebars that the plane draws take the space of the held layout, also while the project state shows the library.",
+    levels: ["unit"],
+  },
+  {
+    id: "F374-1",
+    implementation: [
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function frameMilliseconds(cpuPercent, rate)" },
+      { file: "scripts/fixtures/status-redraw.mjs", symbol: "const SPINNER" },
+    ],
+    tests: [
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the cpu milliseconds per frame are the cpu share of a second divided by the frames of that second" },
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the fixture draws a start line, its frames and an end line with the number of frames" },
+    ],
+    expected: "The terminal redraw measurement prints the CPU share and the CPU milliseconds per frame of each process while a fixture redraws a status block at a fixed rate.",
     levels: ["unit"],
   },
   {

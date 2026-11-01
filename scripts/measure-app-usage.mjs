@@ -303,7 +303,7 @@ function cpuOf(before, after, pid, interval, where, errors) {
   }
 }
 
-async function measureApps({ sok, configDirs, interval }) {
+export async function measureApps({ sok, configDirs, interval }) {
   const errors = [];
   const table = parseProcessTable(run("ps", ["-axww", "-o", "pid=,command="]));
   const apps = configDirs.map((configDir) => ({ configDir, rows: applicationRows(configDir, sok, table, errors) }));

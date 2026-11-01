@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F374-1: `make terminal-redraw-usage`는 보이는 terminal이 고정된 속도로 status block을 다시 그리는 동안 각 프로세스의 CPU를 잰다. 수정이 아니라 측정이므로 Red가 없다. `scripts/test/measure-terminal-redraw.test.mjs`가 option parser, frame 비용, 화면 text, fixture를 검사하고 통과한다.
 - F373: 세로 list sidebar의 이웃한 두 열린 section 사이 divider가 그 크기를 바꾸므로, files tree와 bookmarks가 사람이 고른 대로 공간을 나눈다. `core.sidebar.section.size`가 높이를 정하고, `core.sidebars`가 그것을 `size`로 보고하며, space가 `sizes`에 저장한다. Red: `a dragged section height is applied, reported, saved with the space and restored`가 divider가 없어 실패했고, `folding, selecting and sizing a section lay out the plane again`이 등록되지 않은 명령에서 실패했다. Green: 둘 다 통과한다.
 - F372: section을 접거나 section tab을 고르면 plane을 다시 배치하므로, host는 접힌 bookmarks section의 view를 files tree 안의 이전 자리에 두지 않고 숨긴다. Red: `folding a section and selecting a section tab lay out the plane again`이 두 명령 뒤 배치가 없어 실패했다. Green: 통과한다.
 - F371: view는 첫 document를 유지하므로, reload가 더 이상 main page가 같은 source generation 아래에서 등록을 거부한 document로 files tree document를 대체하지 않는다. Red: `view_channel_test`가 `the view reports the refused reload within 10 seconds`에서 실패했다. Green: 통과하고, `document_view_test`도 통과한다.
