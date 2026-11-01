@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F359: Every declared workspace version is the release candidate 0.0.27, and the latest published release is 0.0.26, so the release carries F355-3, F355-4 and F357.
 - F357: The cleanup of the runner test with a large process table ends the group of its test process through `killGroup`, which treats the EPERM refusal of a group that holds only zombies as an ended group; it accepted only `ESRCH` and `ENOENT` and failed one core run with `kill EPERM`. Red: `the cleanup of a recorded group ends a group that macOS refuses with EPERM because only zombies remain` failed. Green: it passes. F355 is complete.
 - F355-4-3: The closed-item cases of `scripts/test/checklist.test.mjs` expect the message of the records kit 0.0.3, which names the `Closed:` reason. Red: the three cases failed on the pin of 0.0.3. Green: they pass.
 - F355-4-2: The native process identity library stays in core, because it is common functionality of the sidecars; the plugins specification states it, the kit repository that F355-4-1 created is archived, and core pins the records kit release 0.0.3, whose term `kit` names a tool and whose checklist reader accepts `Closed:` with a reason. Red: `the records kit release that core pins defines the kit term` failed on the release 0.0.2. Green: it passes.

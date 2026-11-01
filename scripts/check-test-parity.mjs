@@ -8181,14 +8181,14 @@ const FEATURE_LINKS = [
   {
     id: "F336",
     implementation: [
-      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.26"' },
-      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "0.0.25"' },
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.27"' },
+      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "0.0.26"' },
     ],
     tests: [
       { file: "scripts/test/versions.test.mjs", id: "the development contract has a distinct identity from the latest published release" },
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
     ],
-    expected: "The development release candidate is 0.0.26, distinct from latest published 0.0.25, and every declared workspace version and lock entry is 0.0.26.",
+    expected: "The development release candidate is 0.0.27, distinct from latest published 0.0.26, and every declared workspace version and lock entry is 0.0.27.",
     levels: ["unit"],
   },
   {
@@ -10194,9 +10194,10 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F329 states the later-core range rule of the registry check; the registry repository implements and tests it.
 // F334 makes Tauri host tests read only their own records; it changes no runtime capability.
 // F355 removes the dependencies of plugins and sidecars on core releases; each repository checks its own dependencies.
+// F359 names the release candidate 0.0.27; it changes no runtime capability.
 // F357 ends the group of one runner test through killGroup in its cleanup; it changes no runtime capability.
 // These items change no runtime capability and remain outside this capability-link inventory.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
