@@ -314,6 +314,7 @@ export function viewStartValues(surface, project) {
  * when that project is none or no start values were placed (docs/spec/native-surfaces.md#view-surfaces, view calls).
  */
 export function viewStartProjectOf(surfaceId) {
+  // default: a surface without a recorded start project is a view that started with no project.
   return viewStartProjects.get(surfaceId) ?? null;
 }
 

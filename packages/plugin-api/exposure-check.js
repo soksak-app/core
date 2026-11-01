@@ -52,6 +52,7 @@ export function auditExposure({ owner, where, exposes, sources, registrations = 
   // A name is declared when it is declared as one of the three kinds or is the id of a section of the plugin, which a section view
   // reads from its start values (docs/spec/plugins.md#sections).
   const sectionIds = new Set(sections);
+  // default: a name that is no section id is looked up in the declared sets.
   const any = (name) => sectionIds.has(name) || Object.values(declared).some((set) => set.has(name));
   const quoted = new RegExp(`["'\`](${owner}\\.[a-z0-9-]+(?:\\.[a-z0-9-]+)*)["'\`]`, "g");
   const shown = new Set();

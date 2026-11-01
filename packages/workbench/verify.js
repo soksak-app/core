@@ -189,6 +189,7 @@ export function verify(controls = null) {
       if (s.dim !== (slot.dataset.nativeDim === "true")) dim++;
     }
     const gone = surfaces.filter((s) => !onPlane.has(s.id)).map((s) => s.id);
+    // default: without onlyPredicted every surface of the plane is checked.
     const missed = [...onPlane.keys()].filter((id) => !told.has(id) && (!onlyPredicted || predicted(id)));
     return { worst, at, dim, gone: gone.length, missed: missed.length, goneIds: named(gone), missedIds: named(missed) };
   };

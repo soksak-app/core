@@ -330,6 +330,7 @@ fn tab_session_name(tab: &str) -> String {
 
 /// The session id whose file name is name (without .json), or None when name is not the session name of a session id.
 fn tab_session_id(name: &str) -> Option<String> {
+    // default: a name that does not decode to UTF-8 is not the session name of a session id, and the listing reports its file.
     let tab = percent_decode_str(name).decode_utf8().ok()?.into_owned();
     (valid_tab_session(&tab) && tab_session_name(&tab) == name).then_some(tab)
 }

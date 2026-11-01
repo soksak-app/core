@@ -3,6 +3,7 @@
 // {sok: 1, event, data} through push. The subscriptions end when the surface closes or its document process ends.
 
 /** The key of a status watch: a watch of a name on a surface is apart from a watch of the name on another surface or on the workbench. */
+// default: a watch without a surface is the watch of the name on the workbench, keyed by null.
 const statusKey = (name, surface) => `status:${JSON.stringify([name, surface ?? null])}`;
 
 /** The data of the status event of a watch: the surface is a member only when the watch names one. */

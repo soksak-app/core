@@ -46,6 +46,7 @@ function mount(entry) {
     onState: (state) => {
       if (entry.mount !== attempt) return;
       entry.phase = state.phase;
+      // default: an error that is not an Error is shown as its text.
       entry.error = state.phase === "error" ? state.error?.message ?? String(state.error) : null;
       notify();
     },

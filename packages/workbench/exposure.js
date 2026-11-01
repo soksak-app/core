@@ -46,6 +46,7 @@ export function isSectionSurface(surface) {
  * The surfaces of owners that a request without surface may choose, in registration order: the tab surfaces. A section surface answers
  * only a request that names it (docs/spec/exposure.md#choosing-a-surface).
  */
+// default: a name that no surface registered has no owners, so it has no tab surfaces.
 const tabSurfacesOf = (owners) => [...(owners?.keys() ?? [])].filter((surface) => !isSectionSurface(surface));
 
 /** The key of one watch. A watch that names a surface and a watch that does not are different. */

@@ -98,6 +98,7 @@ export function createViewReporter({ reportError, console }) {
 }
 
 /** The key of a status watch of the view: a watch of a name on a surface is apart from the watch of the name on another surface. */
+// default: a watch without a surface is the watch of the name on the workbench, keyed by null.
 const statusKey = (name, surface) => `status:${JSON.stringify([name, surface ?? null])}`;
 
 /** Refuses a project data call whose key is not a non-empty text (docs/spec/plugins.md#project-data). */

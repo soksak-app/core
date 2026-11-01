@@ -21,14 +21,15 @@ const changed = (project, plugin, key) => { for (const fn of [...changeListeners
  * as a write of another window reaches this window through the store (docs/spec/plugins.md#project-data).
  */
 export function compareProjectData(before, after) {
+  // default: a project or a plugin without stored data has the empty data in each comparison below.
   const earlier = new Map(before.map((project) => [project.id, project.plugins ?? {}]));
   for (const project of after) {
     // default: a project that the window had not read, and a project or plugin that stored no data, have no stored keys.
     const old = earlier.get(project.id) ?? {};
-    const now = project.plugins ?? {};
+    const now = project.plugins ?? {}; // default: a project that stored no data has no stored keys.
     for (const plugin of new Set([...Object.keys(old), ...Object.keys(now)])) {
-      const was = old[plugin] ?? {};
-      const is = now[plugin] ?? {};
+      const was = old[plugin] ?? {}; // default: a plugin that stored no data before has no stored keys.
+      const is = now[plugin] ?? {}; // default: a plugin that stores no data now has no stored keys.
       for (const key of new Set([...Object.keys(was), ...Object.keys(is)])) {
         if (JSON.stringify(was[key]) !== JSON.stringify(is[key])) changed(project.id, plugin, key);
       }
@@ -103,6 +104,7 @@ function dataOf(project, plugin, declared, failures) {
  * plugin declares the key, and get(key) and set(key, value) run the checks of the stored data.
  */
 export function viewDataOf(project, plugin) {
+  // default: a plugin that declares no data keys has the empty declaration.
   const declared = declaredData.get(plugin) ?? {};
   const access = dataOf(project, plugin, declared, checkStored(project, plugin, declared));
   return { declares: (key) => Object.hasOwn(declared, key), get: access.get, set: access.set };
