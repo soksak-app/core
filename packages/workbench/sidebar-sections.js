@@ -37,20 +37,22 @@ function mount(entry) {
   const surface = entry.surface;
   setSlotSurface(entry.body, surface);
   showSectionSurface(surface.surfaceId);
-  const mountOnce = entry.mount = mountSurface(entry.body, surface, {
+  // The attempt exists before mountSurface runs, because the mount reports its first state before it returns.
+  const attempt = entry.mount = {};
+  attempt.done = mountSurface(entry.body, surface, {
     onState: (state) => {
-      if (entry.mount !== mountOnce) return;
+      if (entry.mount !== attempt) return;
       entry.phase = state.phase;
       entry.error = state.phase === "error" ? state.error?.message ?? String(state.error) : null;
       notify();
     },
   });
-  mountOnce.then(() => {
-    if (entry.mount !== mountOnce) return;
+  attempt.done.then(() => {
+    if (entry.mount !== attempt) return;
     entry.mounted = true;
     notify();
   }, (error) => {
-    if (entry.mount !== mountOnce) return;
+    if (entry.mount !== attempt) return;
     entry.error = error.message;
     // A mount failure is shown through the page error display (docs/spec/plugins.md#sections).
     dispatchEvent(new ErrorEvent("error", { message: `section ${surface.surfaceId}: ${error.message}` }));

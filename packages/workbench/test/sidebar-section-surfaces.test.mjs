@@ -22,7 +22,12 @@ mock.module("../compositor.js", { namedExports: {
   clearSlotSurface: (slot) => { slots.delete(slot); },
 } });
 mock.module("../surface-modules.js", { namedExports: {
-  mountSurface: (slot, surface) => { mounts.push({ slot, surface }); return Promise.resolve(); },
+  // The mount reports its first state before it returns, as mountSurface of surface-modules.js does.
+  mountSurface: (slot, surface, { onState } = {}) => {
+    mounts.push({ slot, surface });
+    onState?.({ phase: "loading" });
+    return Promise.resolve();
+  },
   // The sidebar never disposes a surface itself; a call is recorded so that a test can show it.
   disposeSurface: (surfaceId) => { disposed.push(surfaceId); return Promise.resolve(); },
 } });

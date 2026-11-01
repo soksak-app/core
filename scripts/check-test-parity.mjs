@@ -8001,6 +8001,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F339",
+    implementation: [{ file: "packages/workbench/sidebar-sections.js", symbol: "const attempt = entry.mount = {};" }],
+    tests: [{ file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "each section body is the slot of a view surface named <sidebar id>/<section id>" }],
+    expected: "The first state that a section mount reports before mountSurface returns belongs to that mount attempt.",
+    levels: ["unit"],
+  },
+  {
     id: "F337",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "function surfaceOrigin(surface)" }],
     tests: [{ file: "packages/workbench/test/section-surface-mount.test.mjs", id: "a section surface mounts with an origin that records no directory" }],
