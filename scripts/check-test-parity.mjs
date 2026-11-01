@@ -8041,6 +8041,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F353",
+    implementation: [{ file: "e2e/fixtures/extension-probe/provider/ui/port.js", symbol: "export function providerExposurePort(bridge)" }],
+    tests: [{ file: "e2e/test/probe-exposure-port.test.mjs", id: "the ${name} exposure port sends a watched status value through the changed call of the view bridge" }],
+    expected: "The probe views pass changed in their exposure port.",
+    levels: ["unit"],
+  },
+  {
     id: "F351",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "async function documentReplies(client, window)" },

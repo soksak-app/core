@@ -2,6 +2,7 @@
 // the item, and reports the answers as the status probeprovider.items (docs/spec/plugins.md#extension-points).
 import { createExpose } from "@soksak/plugin-api";
 import { createViewBridge, createViewReporter } from "@soksak/plugin-api/view";
+import { providerExposurePort } from "./port.js";
 
 const bridge = createViewBridge({
   handler: window.webkit.messageHandlers["sok-view"],
@@ -19,11 +20,6 @@ for (const { plugin, item, module, fail } of await bridge.contributions("items")
 document.getElementById("root").textContent = answers.map((entry) => entry.answer).join("\n");
 // The view answers the exposure requests that the main page forwards for its surface (docs/spec/exposure.md#relay), so a status
 // watch of the surface reads the answers.
-const expose = createExpose({
-  register: bridge.exposure.register,
-  reply: bridge.exposure.reply,
-  report: (text) => bridge.runtime.error("probeprovider exposure", text),
-  onRequest: (answer) => bridge.runtime.native.on("exposure-request", answer),
-}, () => window.sokSurface.declarations);
+const expose = createExpose(providerExposurePort(bridge), () => window.sokSurface.declarations);
 // The answers are read once at the start, so the status has no change to announce.
 await expose.status("probeprovider.items", () => answers, () => () => {});

@@ -1,6 +1,17 @@
 // The view of the unload probe (docs/spec/plugins.md#memory-saver): one document region whose address the view writes as the tab
 // state, and whose state, with the session history and the tab state read at the start, is the status probeunload.location. The
 // view serves the status through its exposure, which answers the requests that the main page forwards for its surface.
+/** The exposure port of the probe view: registrations, replies and watched status values go through the view bridge. */
+export function probeExposurePort(bridge) {
+  return {
+    register: bridge.exposure.register,
+    reply: bridge.exposure.reply,
+    changed: bridge.exposure.changed,
+    report: (text) => bridge.runtime.error("probeunload exposure", text),
+    onRequest: (answer) => bridge.runtime.native.on("exposure-request", answer),
+  };
+}
+
 export async function startUnloadProbe({ bridge, expose, document }) {
   const restored = await bridge.calls.request("tab.state.read", null);
   const composition = await bridge.composition.create({ regions: { page: document.getElementById("document") }, overlays: {} });
