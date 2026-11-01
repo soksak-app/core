@@ -109,9 +109,11 @@ test("every workbench key handler has a workbench or view shortcut, and every su
 
 test("an arrow-key comparison without a workbench row is reported, and the table row clears it", () => {
   const source = 'if (event.key === "ArrowLeft") moveTreeFocus();';
+  // The table of this test holds its own ArrowLeft row, so the case does not depend on the rows that the workbench declares.
   const withoutRow = TABLE.filter((entry) => keyName(entry.key) !== "arrowleft");
+  const withRow = [...withoutRow, { key: "ArrowLeft", owner: "workbench", command: "core.fixture.move", menu: null, when: "A fixture row has focus" }];
   assert.deepEqual(undeclaredKeys(keyComparisons(source), withoutRow), ["arrowleft"], "the ArrowLeft comparison has no row");
-  assert.deepEqual(undeclaredKeys(keyComparisons(source), TABLE), [], "the table row of ArrowLeft does not clear the comparison");
+  assert.deepEqual(undeclaredKeys(keyComparisons(source), withRow), [], "the table row of ArrowLeft does not clear the comparison");
 });
 
 test("a typeof test of a key property is not a key comparison", () => {
