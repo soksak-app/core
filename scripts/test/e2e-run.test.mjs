@@ -2,7 +2,7 @@
 // configuration root for each run, the report of each step, and the failure on a process that remains after the applications quit.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -175,4 +175,28 @@ test("a failed run keeps the logs and removes the service folders, so the servic
     assert.equal(existsSync(join(failed, app, "logs", "host.jsonl")), true, `${app}: the logs are kept`);
   }
   assert.ok(lines.includes(`removed ${join(failed, "soksak-check-tauriv2", "services")}: the services of the run exit`), lines.join("\n"));
+});
+
+test("an interrupting signal ends the running step, runs the cleanup steps and fails the run with the signal", { timeout: 10000 }, async (t) => {
+  const root = workspace(t);
+  const pidFile = join(root, "check.pid");
+  const cleaned = join(root, "cleaned");
+  const controller = new AbortController();
+  const { lines, write } = recorder();
+  const steps = [
+    step("checks", "check", `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 30000);`),
+    step("later checks", "check", "process.exit(0)"),
+    step("cleanup", "cleanup", `require("node:fs").writeFileSync(${JSON.stringify(cleaned)}, "")`),
+  ];
+  const interrupt = setInterval(() => { if (existsSync(pidFile)) { clearInterval(interrupt); controller.abort("SIGTERM"); } }, 20);
+  t.after(() => clearInterval(interrupt));
+  let timer;
+  const ended = new Promise((resolve, reject) => { timer = setTimeout(() => reject(new Error("the run did not end within 5 s of the interrupt")), 5000); });
+  t.after(() => clearTimeout(timer));
+  const failures = await Promise.race([runPlan(steps, { write, interrupted: controller.signal }), ended]);
+  assert.deepEqual(failures, ["checks: interrupted by SIGTERM"]);
+  assert.ok(lines.includes("skipped later checks: interrupted by SIGTERM"), lines.join("\n"));
+  assert.ok(existsSync(cleaned), "the cleanup step did not run after the interrupt");
+  const pid = Number(readFileSync(pidFile, "utf8"));
+  assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }, `the process ${pid} of the interrupted step remains`);
 });

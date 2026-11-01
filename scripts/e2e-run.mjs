@@ -92,13 +92,26 @@ function limit(ms, message) {
   return { promise, clear: () => clearTimeout(timer) };
 }
 
-async function runCommand(item) {
+/** An error that states that a signal interrupted the run; the run stops its checks and runs its cleanup steps. */
+class Interrupted extends Error {}
+
+const interruptedBy = (signal) => new Interrupted(`interrupted by ${signal.reason}`);
+
+/** Runs a command; an interrupt of the run ends the command with SIGTERM and rejects with Interrupted. */
+async function runCommand(item, interrupted) {
   const child = spawn(item.argv[0], item.argv.slice(1), { cwd: ROOT, env: { ...process.env, ...item.env }, stdio: 'inherit' });
-  const [result] = await Promise.race([
-    exited(child).then((end) => [end]),
-    once(child, 'error').then(([error]) => { throw new Error(`cannot start ${item.argv[0]}: ${error.message}`); }),
-  ]);
-  if (result.code !== 0) throw new Error(`exited with ${describeExit(result)}`);
+  const stop = () => child.kill('SIGTERM');
+  interrupted?.addEventListener('abort', stop, { once: true });
+  try {
+    const [result] = await Promise.race([
+      exited(child).then((end) => [end]),
+      once(child, 'error').then(([error]) => { throw new Error(`cannot start ${item.argv[0]}: ${error.message}`); }),
+    ]);
+    if (interrupted?.aborted) throw interruptedBy(interrupted);
+    if (result.code !== 0) throw new Error(`exited with ${describeExit(result)}`);
+  } finally {
+    interrupted?.removeEventListener('abort', stop);
+  }
 }
 
 /**
@@ -189,9 +202,10 @@ function checkRemaining(item) {
 
 /**
  * Runs the steps in order and returns the failures as `<step>: <reason>`. `children` holds the started applications by name, so a quit
- * step reaches the application of an earlier start step.
+ * step reaches the application of an earlier start step. An abort of `interrupted`, whose reason is the name of the signal, ends the
+ * running command, skips the later steps that are not cleanup steps and runs the cleanup steps, so the applications and their services end.
  */
-export async function runPlan(steps, { write, children = new Map() }) {
+export async function runPlan(steps, { write, children = new Map(), interrupted }) {
   const failures = [];
   const since = Date.now();
   let stopped = null;
@@ -204,14 +218,20 @@ export async function runPlan(steps, { write, children = new Map() }) {
       write(`skipped ${item.name}: ${item.app} was not started`);
       continue;
     }
+    if (interrupted?.aborted && item.phase !== 'cleanup') {
+      write(`skipped ${item.name}: interrupted by ${interrupted.reason}`);
+      continue;
+    }
     write(`running ${item.name}`);
     const from = performance.now();
     try {
-      if (item.kind === 'run') await runCommand(item);
+      // A cleanup step runs to its end after an interrupt, because it ends what the earlier steps started.
+      if (item.kind === 'run') await runCommand(item, item.phase === 'cleanup' ? undefined : interrupted);
       else if (item.kind === 'start') await startApplication(item, children);
       else if (item.kind === 'quit') await quitApplication(item, children, since, write);
       else if (item.kind === 'remaining') checkRemaining(item);
       else throw new Error(`unknown step kind ${JSON.stringify(item.kind)}`);
+      if (interrupted?.aborted && item.phase !== 'cleanup') throw interruptedBy(interrupted);
       write(`passed ${item.name} ${((performance.now() - from) / 1000).toFixed(1)}s`);
     } catch (error) {
       write(`failed ${item.name} ${((performance.now() - from) / 1000).toFixed(1)}s: ${error.message}`);
@@ -249,7 +269,16 @@ async function main(argv) {
   const write = (line) => process.stdout.write(`${line}\n`);
   const configRoot = newConfigRoot(ROOT);
   write(`run ${configRoot}`);
-  const failures = await runPlan(e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native, whenIdle: values['when-idle'] }), { write });
+  // An interrupting signal ends the running step and runs the cleanup steps and finishRoot, so no application or service of the run remains.
+  const interrupt = new AbortController();
+  for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+    process.once(signal, () => {
+      write(`received ${signal}: the run ends its checks and runs its cleanup`);
+      interrupt.abort(signal);
+    });
+  }
+  const failures = await runPlan(e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native, whenIdle: values['when-idle'] }),
+    { write, interrupted: interrupt.signal });
   finishRoot(configRoot, failures, write);
   for (const failure of failures) write(`failure ${failure}`);
   return failures.length === 0 ? 0 : 1;

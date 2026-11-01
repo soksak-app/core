@@ -8034,6 +8034,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F350",
+    implementation: [
+      { file: "scripts/e2e-run.mjs", symbol: "async function runCommand(item, interrupted)" },
+    ],
+    tests: [
+      { file: "scripts/test/e2e-run.test.mjs", id: "an interrupting signal ends the running step, runs the cleanup steps and fails the run with the signal" },
+    ],
+    expected: "An interrupted end-to-end run ends its running step, runs its cleanup steps and fails with the signal.",
+    levels: ["unit"],
+  },
+  {
     id: "F347-1",
     implementation: [
       { file: "packages/workbench/plane.js", symbol: "export function adopt(kept, space)" },
