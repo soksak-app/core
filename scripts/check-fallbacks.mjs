@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Finds substitute values and swallowed errors in product code. AGENTS.md forbids substitute values, coercion, ignored results, and unreported errors.
 // A place where a default is part of the contract states its reason on that line or in the comment line right above it, in the one marker
-// form `(default|silent): <reason>` (packages/plugin-api/events-check.js). A place found without a reason fails, and so does a comment that
+// form `(default|silent): <reason>` (the events kit). A place found without a reason fails, and so does a comment that
 // opens with a marker word in another form.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { markerErrors, reasonFor } from "../packages/plugin-api/events-check.js";
+import { markerErrors, reasonFor } from "@soksak/kit-events/events-check";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 

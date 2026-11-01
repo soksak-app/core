@@ -335,3 +335,13 @@ test('the hooks, the record targets and the release gate run the commands of the
   assert.match(makefile, /^\t@pnpm exec soksak-commits \$\(RANGE\)$/m);
   assert.match(read('scripts/checklist.mjs'), /^import \{ checklist \} from "@soksak\/kit-records\/checklist";$/m);
 });
+
+test('the census check and the event scripts run the census check of the events kit release', () => {
+  const { devDependencies } = JSON.parse(read('package.json'));
+  assert.match(devDependencies['@soksak/kit-events'] ?? '', /^https:\/\/github\.com\/soksak-app\/kit-events\/releases\/download\/v\d+\.\d+\.\d+\/soksak-kit-events-\d+\.\d+\.\d+\.tgz$/,
+    'package.json pins the release file of the events kit');
+  assert.match(read('Makefile'), /^\t@pnpm exec soksak-events --census scripts\/census\.json$/m);
+  for (const file of ['scripts/check-events.mjs', 'scripts/check-fallbacks.mjs']) {
+    assert.match(read(file), /from ["']@soksak\/kit-events\/events-check["'];$/m, file);
+  }
+});

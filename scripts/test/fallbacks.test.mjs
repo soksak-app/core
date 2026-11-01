@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { markerErrors } from "../../packages/plugin-api/events-check.js";
+import { markerErrors } from "@soksak/kit-events/events-check";
 import { findFallbacks, listFallbacks } from "../check-fallbacks.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");

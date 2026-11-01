@@ -1617,19 +1617,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-170",
-    implementation: [
-      { file: "packages/plugin-api/events-check.js", symbol: "if (rule.id === 'rs.lock-result'" },
-    ],
-    tests: [
-      { file: "packages/plugin-api/test/events-check.test.mjs", id: "condition wait recovery checks include nested calls and closure blocks" },
-      { file: "packages/plugin-api/test/events-check.test.mjs", id: "condition wait argument boundaries ignore string and comment brackets" },
-      { file: "packages/plugin-api/test/events-check.test.mjs", id: "condition wait checks preserve recovered waits and lexical exclusions" },
-    ],
-    expected: "The census finds unsafe condition wait results with balanced nested arguments and preserves valid recovery and lexical exclusions.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-58",
     implementation: [
       { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const lifecycle = s.on(" },
@@ -5156,7 +5143,6 @@ const FEATURE_LINKS = [
   {
     id: "F160.34",
     implementation: [
-      { file: "packages/plugin-api/events-check.js", symbol: "export function parseCensusConfig" },
       { file: "packages/sok/wailsv3/src/replay_inputs.go", symbol: "func ReplaySessionProblem" },
       { file: "packages/sok/tauriv2/src/replay_inputs.rs", symbol: "pub fn replay_session_problem" },
     ],
@@ -5333,28 +5319,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/plugin-records.test.mjs", id: "the trace of a plugin builds no object while the trace is off" },
     ],
     expected: "The fields of a plugin event and of a plugin trace event are built only while the level is stored or the trace is on.",
-    levels: ["unit"],
-  },
-  {
-    id: "F160.32.3",
-    implementation: [
-      { file: "packages/plugin-api/events-check.js", symbol: "export function catalogReport" },
-    ],
-    tests: [
-      { file: "packages/plugin-api/test/events-check.test.mjs", id: "the census exclude removes a vendored file before the catalog check parses it" },
-    ],
-    expected: "The catalog check does not read a file that the census exclude names.",
-    levels: ["unit"],
-  },
-  {
-    id: "F160.32.5",
-    implementation: [
-      { file: "packages/plugin-api/events-check.js", symbol: "const relativeName" },
-    ],
-    tests: [
-      { file: "packages/plugin-api/test/events-check.test.mjs", id: "runtime.log entrances of plugin events are resolved by the plugin prefix" },
-    ],
-    expected: "The catalog check treats runtime.log.<level>( and runtime.log[level]( as entrances of plugin events.",
     levels: ["unit"],
   },
   {
@@ -8561,20 +8525,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F273-1",
-    implementation: [{ file: "packages/plugin-api/events-check.js", symbol: "return takesPoisonedGuard(code.slice" }],
-    tests: [{ file: "packages/plugin-api/test/events-check.test.mjs", id: "a wait recovery closure that reports the poison and ends with the recovered guard recovers it" }],
-    expected: "A condition variable wait whose recovery takes the guard with into_inner of its poison error is accepted as a lock recovery is, and a default substitution stays a finding.",
-    levels: ["unit"],
-  },
-  {
-    id: "F273",
-    implementation: [{ file: "packages/plugin-api/events-check.js", symbol: "function takesPoisonedGuard" }],
-    tests: [{ file: "packages/plugin-api/test/events-check.test.mjs", id: "a recovery closure that reports the poison and ends with the recovered guard recovers it" }],
-    expected: "A lock recovery that takes the guard with into_inner of its poison error is accepted, also when it reports the poison first, and a default substitution stays a finding.",
-    levels: ["unit"],
-  },
-  {
     id: "F272",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "needs.gate.outputs.release == 'true'" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
@@ -9151,13 +9101,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-197",
-    implementation: [{ file: "packages/plugin-api/events-check.js", symbol: "contextFields: ['surface']" }],
-    tests: [{ file: "packages/plugin-api/test/events-check.test.mjs", id: "plugin runtime contextual fields satisfy catalog requirements only at runtime.log entrances" }],
-    expected: "The event checker supplies the runtime-owned surface field only for runtime.log entrances, while generic producers still need to provide it.",
-    levels: ["unit"],
-  },
-  {
     id: "F212.14-5-3",
     implementation: [{ file: "e2e/view-process-footprint.mjs", symbol: "export function viewDocumentHistoryInventory(" }],
     tests: [{ file: "e2e/test/view-process-footprint.test.mjs", id: "an unstarted child document has no PID footprint or document-history row" }],
@@ -9529,33 +9472,15 @@ const FEATURE_LINKS = [
   {
     id: "F239-245",
     implementation: [
-      { file: "packages/plugin-api/events-check.js", symbol: "export function censusFindings" },
       { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn lifecycle_lock" },
       { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "fn pending_frame_identity_lock" },
     ],
     tests: [
-      { file: "packages/plugin-api/test/events-check.test.mjs", id: "a poisoned lock error may be explicitly propagated, while recovery defaults and discarded errors remain findings" },
       { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_poisoned_lifecycle_lock_is_reported_before_the_operation_runs" },
       { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_poisoned_pending_lock_is_reported_without_consuming_the_receiver" },
       { file: "packages/host/tauriv2/src/diagnostics_lock_test.rs", id: "a_pending_start_probe_releases_the_lock_before_receive" },
     ],
     expected: "The lock census accepts explicit error propagation while preserving findings for discarded errors and unapproved recovery defaults; poisoned identity lifecycle and pending-start locks return explicit errors, and the pending probe releases its guard before the receiving helper reacquires it.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-247",
-    implementation: [
-      { file: "packages/plugin-api/events-check.js", symbol: "function recoversPoisonedGuard" },
-      { file: "packages/plugin-api/events-check.js", symbol: "export function censusFindings" },
-      { file: "packages/plugin-api/census-rules.json", symbol: "rs.lock-result" },
-    ],
-    tests: [
-      { file: "packages/plugin-api/test/events-check.test.mjs", id: "lock and condition-wait fallback combinators are findings" },
-      { file: "packages/plugin-api/test/events-check.test.mjs", id: "lock and condition-wait map_or defaults are findings" },
-      { file: "packages/plugin-api/test/events-check.test.mjs", id: "condition wait recovery checks include nested calls and closure blocks" },
-      { file: "packages/plugin-api/test/events-check.test.mjs", id: "condition wait checks preserve recovered waits and lexical exclusions" },
-    ],
-    expected: "The Rust lock and condition-wait census detects unwrap, expect, fallback combinators, and map_or/map_or_else defaults while preserving explicitly accepted recovery cases and lexical exclusions.",
     levels: ["unit"],
   },
   {
@@ -10275,8 +10200,9 @@ const NON_CAPABILITY_COMPLETIONS = new Set(["F334", "F329", "F292-34", "F314", "
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
 // those repositories, so they have no link here and each repository checks its own evidence.
 // F167, F224, F287, R3 and R5 wrote the term list, the record check and the release gate, which F355-3-2 moves to the
-// records kit; the kit holds their implementation and tests.
-const MOVED_COMPLETIONS = new Set(["F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
+// records kit; the kit holds their implementation and tests. F239-170, F239-197, F239-247, F273 and F273-1 wrote rules of
+// the census check, which F355-3-5 moves to the events kit.
+const MOVED_COMPLETIONS = new Set(["F239-170", "F239-197", "F239-247", "F273", "F273-1", "F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
 
 // Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22
 // removed with the start that ended the recorded processes.

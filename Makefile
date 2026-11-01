@@ -97,10 +97,10 @@ boundaries:
 events-check:
 	@node scripts/check-events.mjs
 
-# Applies the census rules of packages/plugin-api/census-rules.json to the sources (docs/spec/logging.md#census): a source of occurrences has an event
+# Applies the census rules of the events kit to the sources (docs/spec/logging.md#census): a source of occurrences has an event
 # in its function or a reason marker, and a rule that waits for an entrance item is printed with its count. `--list` also prints each pending finding.
 census-check:
-	@node packages/plugin-api/events-check.js --census scripts/census.json
+	@pnpm exec soksak-events --census scripts/census.json
 
 # Checks that every error record whose place is written in the sources of the hosts and the native library has a row in the failure table of docs/spec/diagnostics.md.
 failures-check:
