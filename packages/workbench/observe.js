@@ -15,6 +15,7 @@ import { createTranscript, transcriptSender } from "./transcript.js";
 import { createSurfaceReplyHold } from "./surface-reply-hold.js";
 import { mountedSurface } from "./surface-modules.js";
 import { watchResizeLoop } from "./resize-loop.js";
+import { armLayoutFault } from "./page-layout.js";
 import { host } from "@soksak/runtime";
 import { currentGrid, surfaceInput } from "./plane.js";
 
@@ -70,6 +71,12 @@ host?.on("exposure-registered", (event) => {
 registry.method("diagnostics.surface.hold", ({ surface }) => {
   if (typeof surface === "string" && surface && !mountedSurface(surface)) throw new Error(`surface ${surface} is not mounted`);
   replyHold.hold(surface);
+  return null;
+});
+
+// The next layout draw throws, so a check observes that a draw that throws leaves the page answering (docs/spec/endpoint.md).
+registry.method("diagnostics.layout.fail", () => {
+  armLayoutFault();
   return null;
 });
 

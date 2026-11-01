@@ -102,6 +102,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.host.events",
     "diagnostics.surface.hold",
     "diagnostics.surface.held",
+    "diagnostics.layout.fail",
     TRANSCRIPT,
 ];
 #[cfg(not(feature = "diagnostics"))]

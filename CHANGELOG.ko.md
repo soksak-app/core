@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F349-1: 진단 메서드 `diagnostics.layout.fail`은 main page의 다음 layout 그리기가 한 번 던지게 하고, window check `layout-failure.test.mjs`는 예외를 던진 그리기 뒤에도 page가 요청에 계속 답하는지 확인한다.
 - F351: 요청과 그 뒤의 확인 요청 한 번에 애플리케이션이 답하지 않은 window check는 그것을 설정 폴더의 `unresponsive.json`에 기록한다. 그 애플리케이션의 이후 요청과 check는 각자의 timeout을 기다리지 않고 그 check, 요청, stall dump와 함께 즉시 실패한다.
 - F350: SIGTERM, SIGINT, SIGHUP이 중단한 `make e2e` 실행은 돌던 step을 끝내고 cleanup step을 실행한 뒤 `interrupted by <signal>`로 실패한다. 그래서 중단 뒤 실행의 애플리케이션과 persistent service가 더는 남지 않는다.
 - F347-1: plane이 그리는 사이드바는 section surface id에 plane이 가진 layout의 space를 쓴다. plane을 비우기 전에 project 상태를 library로 바꾸는 project close가 더는 매 그리기마다 `sidebar left draws sections without a shown space`를 던지며 main page를 응답 없이 붙잡지 않는다.

@@ -1,0 +1,25 @@
+// A layout draw that throws is shown once through the error display, and the main page keeps answering requests (F349). The
+// diagnostic method diagnostics.layout.fail makes the next draw throw (docs/spec/endpoint.md).
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh } from "./fixture.mjs";
+
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a layout draw that throws leaves the main page answering`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    s.expectError(/surface presentation failed: diagnostic layout fault/);
+    assert.equal(await s.request("diagnostics.layout.fail"), null);
+    // A resize lays the plane out again, and that draw throws.
+    const { content } = await s.get("host.window");
+    await s.run("host.window.resize", { width: content.width - 40, height: content.height });
+    await s.until("core.page.error", (text) => text?.includes("diagnostic layout fault"), "the failing draw was not shown");
+    // The page answers each request after the failure within the time limit of the request.
+    for (let round = 0; round < 5; round++) assert.ok(Array.isArray(await s.get("core.surfaces")), `round ${round}: core.surfaces did not answer`);
+    await s.run("host.window.resize", { width: content.width, height: content.height });
+    await s.until("core.verify", (verify) => verify.failed === 0, "a later layout did not draw after the failure");
+  });
+}

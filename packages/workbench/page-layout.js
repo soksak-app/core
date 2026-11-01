@@ -55,6 +55,15 @@ export function reportUncaught(target, showError) {
   });
 }
 
+/* The diagnostic fault of the next layout draw (diagnostics.layout.fail in docs/spec/endpoint.md). A check arms it, and the next draw of
+   a layout throws it once, so the check observes how the page handles a draw that throws. */
+let layoutFault = false;
+
+/** Arms the diagnostic fault: the next layout draw throws `diagnostic layout fault`. */
+export function armLayoutFault() {
+  layoutFault = true;
+}
+
 /**
  * Creates the layout queue of the main document and the functions that schedule and wait for its layouts.
  *
@@ -146,7 +155,15 @@ export function createPageLayout({
           mark("prepared");
           return result;
         },
-        draw: () => { mark("draw"); draw(); mark("drawn"); },
+        draw: () => {
+          mark("draw");
+          if (layoutFault) {
+            layoutFault = false;
+            throw new Error("diagnostic layout fault");
+          }
+          draw();
+          mark("drawn");
+        },
         frame: async (work) => { await nextTask(work); mark("frame"); },
         presented: async () => { await rendered(); mark("presented"); },
       }));

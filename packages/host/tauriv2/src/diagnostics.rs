@@ -160,6 +160,7 @@ pub(crate) fn call(
         "diagnostics.transcript"
         | "diagnostics.surface.hold"
         | "diagnostics.surface.held"
+        | "diagnostics.layout.fail"
         | "diagnostics.page.request"
         | "diagnostics.page.calls" => {
             exposure::parsed(&host.page(window, method, params, TIMEOUT)?)

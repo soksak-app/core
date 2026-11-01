@@ -75,6 +75,7 @@ func init() {
 	diagnosticMethods["diagnostics.host.events"] = diagnosticHostEvents
 	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
 	diagnosticMethods["diagnostics.surface.held"] = diagnosticPageMethod("diagnostics.surface.held")
+	diagnosticMethods["diagnostics.layout.fail"] = diagnosticPageMethod("diagnostics.layout.fail")
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
 		return "diagnostics.transcript", map[string]bool{"on": on}
