@@ -1,4 +1,4 @@
-// core.sidebar.section.fold and core.sidebar.section.select change the slots of the section surfaces: a folded section and the section of
+// core.sidebar.section.fold, core.sidebar.section.select and core.sidebar.section.size change the slots of the section surfaces: a folded section and the section of
 // an unselected tab are hidden, and the other sections take its room. The commands lay out the plane again, so the compositor publishes
 // the new seats and the host hides the view of the hidden section (docs/spec/plugins.md#sections).
 import assert from "node:assert/strict";
@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-test("folding a section and selecting a section tab lay out the plane again", { timeout: 5000 }, async (t) => {
+test("folding, selecting and sizing a section lay out the plane again", { timeout: 5000 }, async (t) => {
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const dom = new JSDOM(markup, { url: "http://localhost/" });
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
@@ -26,6 +26,7 @@ test("folding a section and selecting a section tab lay out the plane again", { 
   t.mock.module("../sidebar-sections.js", { exports: { ...actualSections,
     foldSection: (sidebar, section) => { events.push(`fold ${sidebar} ${section}`); },
     selectSection: (sidebar, section) => { events.push(`select ${sidebar} ${section}`); },
+    sizeSection: (sidebar, section, height) => { events.push(`size ${sidebar} ${section} ${height}`); },
   } });
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
@@ -36,7 +37,8 @@ test("folding a section and selecting a section tab lay out the plane again", { 
     });
     await registry.run("core.sidebar.section.fold", { sidebar: "left", section: "files.bookmarks" });
     await registry.run("core.sidebar.section.select", { sidebar: "rail", section: "files.tree" });
-    assert.deepEqual(events, ["fold left files.bookmarks", "settle", "select rail files.tree", "settle"],
+    await registry.run("core.sidebar.section.size", { sidebar: "left", section: "files.bookmarks", height: 200 });
+    assert.deepEqual(events, ["fold left files.bookmarks", "settle", "select rail files.tree", "settle", "size left files.bookmarks 200", "settle"],
       "a section choice did not lay out the plane again");
   } finally {
     dom.window.close();

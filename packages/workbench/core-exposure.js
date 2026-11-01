@@ -43,7 +43,7 @@ import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
-import { foldSection, onSectionsChange, selectSection, sidebarsState } from "./sidebar-sections.js";
+import { foldSection, onSectionsChange, selectSection, sidebarsState, sizeSection } from "./sidebar-sections.js";
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { pageIdentity } from "./page-identity.js";
@@ -531,6 +531,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   // new seats of the section surfaces (docs/spec/plugins.md#sections).
   registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); settle(); });
   registry.command("core.sidebar.section.fold", ({ sidebar, section }) => { foldSection(sidebar, section); settle(); });
+  registry.command("core.sidebar.section.size", ({ sidebar, section, height }) => { sizeSection(sidebar, section, height); settle(); });
   registry.command("core.text.larger", async () => { await changeTextSize(1, "core.text.larger"); });
   registry.command("core.text.smaller", async () => { await changeTextSize(-1, "core.text.smaller"); });
   registry.command("core.text.reset", async () => { await changeTextSize(0, "core.text.reset"); });

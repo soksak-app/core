@@ -3,14 +3,14 @@
 // Each section is a section surface: a view of its plugin whose slot is the body of the section, with the surface id
 // <space id>/<sidebar id>/<section id>. The sidebar draws only the frame (headers, tabs, heights); the plugin draws the body.
 // This module holds the tab selection and the section collapse for each sidebar.
-import { bind } from "./commands.js";
+import { bind, mark, run } from "./commands.js";
 import { clearSlotSurface, setSlotSurface } from "./compositor.js";
 import { icon } from "./icons.js";
 import { hasSection, section } from "./registry.js";
 import { hideSectionSurface, showSectionSurface } from "./section-surfaces.js";
 import { mountSurface } from "./surface-modules.js";
 
-/* Selected tab and collapsed sections for each sidebar id. */
+/* Selected tab, collapsed sections and dragged section heights for each sidebar id. */
 const choices = new Map();
 /* For each drawn set element, its sidebar, set and section items. */
 const drawn = new Map();
@@ -24,7 +24,7 @@ export function onSectionsChange(fn) {
 }
 
 function choiceOf(sidebar) {
-  if (!choices.has(sidebar)) choices.set(sidebar, { tab: null, folded: new Set() });
+  if (!choices.has(sidebar)) choices.set(sidebar, { tab: null, folded: new Set(), sizes: new Map() });
   return choices.get(sidebar);
 }
 
@@ -115,8 +115,57 @@ function apply(record) {
       entry.header.setAttribute("aria-expanded", String(!folded));
       entry.body.hidden = folded;
     }
+    // An integer height is the height of the open section; fill sections share the height left after the other sections. A dragged
+    // height replaces the declared one (docs/spec/plugins.md#sections).
+    const height = choice.sizes.get(id) ?? entry.section.height;
+    entry.element.dataset.height = String(height);
+    if (height === "fill") entry.element.style.removeProperty("--section-height");
+    else entry.element.style.setProperty("--section-height", `${height}px`);
     mount(entry);
   }
+  // A divider lies between two adjacent open sections of a vertical list.
+  record.entries.forEach((entry, index) => {
+    if (!entry.divider) return;
+    const above = record.entries[index - 1];
+    entry.divider.hidden = record.context.orientation !== "vertical" || choice.folded.has(above.section.id) || choice.folded.has(entry.section.id);
+    mark(entry.divider, "core.sidebar.section.size", { sidebar: record.sidebar, section: dividedSection(choice, above, entry).section.id });
+  });
+}
+
+/** The section that the divider between above and below sizes: below when it has an integer height, otherwise above. */
+function dividedSection(choice, above, below) {
+  return Number.isInteger(choice.sizes.get(below.section.id) ?? below.section.height) ? below : above;
+}
+
+/**
+ * Passes the drag of the divider between the sections above and below to core.sidebar.section.size at each move. The drag keeps the
+ * other section of the divider at least the minimum height (docs/spec/plugins.md#sections).
+ */
+function bindSectionDivider(divider, sidebar, above, below) {
+  divider.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+    divider.setPointerCapture(event.pointerId);
+    const target = dividedSection(choiceOf(sidebar), above, below);
+    const other = target === below ? above : below;
+    const startY = event.clientY;
+    const start = target.body.getBoundingClientRect().height;
+    const room = start + other.body.getBoundingClientRect().height;
+    if (![startY, start, room].every(Number.isFinite)) throw new Error(`invalid section drag extent in sidebar ${sidebar}`);
+    const move = (e) => {
+      const delta = target === below ? startY - e.clientY : e.clientY - startY;
+      if (!Number.isFinite(delta)) throw new Error(`invalid section pointer displacement in sidebar ${sidebar}`);
+      const height = Math.round(Math.min(SECTION_HEIGHT.max, room - SECTION_HEIGHT.min, Math.max(SECTION_HEIGHT.min, start + delta)));
+      run("core.sidebar.section.size", { sidebar, section: target.section.id, height });
+    };
+    const end = () => {
+      divider.removeEventListener("pointermove", move);
+      divider.removeEventListener("pointerup", end);
+      divider.removeEventListener("pointercancel", end);
+    };
+    divider.addEventListener("pointermove", move);
+    divider.addEventListener("pointerup", end);
+    divider.addEventListener("pointercancel", end);
+  });
 }
 
 /**
@@ -162,14 +211,10 @@ export function drawSet(container, sidebar, set, context) {
       element.className = "set__section";
       element.dataset.expose = "core.sidebar.section";
       element.dataset.section = section.id;
-      // An integer height is the height of the open section; fill sections share the height left after the other sections
-      // (docs/spec/plugins.md#sections).
-      element.dataset.height = String(section.height);
-      if (section.height !== "fill") element.style.setProperty("--section-height", `${section.height}px`);
       const surfaceId = sectionSurfaceId(space, sidebar, section.id);
       // default: a window sidebar has no card (docs/spec/native-surfaces.md#view-surfaces).
       const start = { id: section.id, sidebar, card: context.card ?? null };
-      const entry = { section, element, header: null, tab: null, body: document.createElement("div"),
+      const entry = { section, element, header: null, tab: null, divider: null, body: document.createElement("div"),
         surface: section.surface(surfaceId, start), mount: null, mounted: false, phase: null, error: null };
       entry.body.className = "set__body slot";
       entry.body.dataset.nativeSurface = "view";
@@ -198,6 +243,16 @@ export function drawSet(container, sidebar, set, context) {
         entry.header.querySelector(".set__name").textContent = section.name;
         bind(entry.header, "core.sidebar.section.fold", params);
         element.append(entry.header, entry.body);
+        if (record.entries.length > 0) {
+          entry.divider = document.createElement("div");
+          entry.divider.className = "set__divider";
+          entry.divider.dataset.expose = "core.sidebar.section.divider";
+          entry.divider.dataset.section = section.id;
+          entry.divider.setAttribute("role", "separator");
+          entry.divider.setAttribute("aria-orientation", "horizontal");
+          bindSectionDivider(entry.divider, sidebar, record.entries.at(-1), entry);
+          container.append(entry.divider);
+        }
       }
       record.entries.push(entry);
       container.append(element);
@@ -242,6 +297,26 @@ export function foldSection(sidebar, section) {
   choiceListener();
 }
 
+/** The bounds of a dragged section height in pixels (docs/spec/plugins.md#sections). */
+const SECTION_HEIGHT = { min: 32, max: 4096 };
+
+function checkSectionHeight(height) {
+  if (!Number.isInteger(height) || height < SECTION_HEIGHT.min || height > SECTION_HEIGHT.max) {
+    throw new Error(`section height must be an integer from ${SECTION_HEIGHT.min} to ${SECTION_HEIGHT.max}, got ${JSON.stringify(height)}`);
+  }
+}
+
+/** Sets the dragged height of one section in a sidebar with the list layout. */
+export function sizeSection(sidebar, section, height) {
+  const records = recordsOf(sidebar, section);
+  if (records[0].layout !== "list") throw new Error(`sidebar ${sidebar} does not use the list layout`);
+  checkSectionHeight(height);
+  choiceOf(sidebar).sizes.set(section, height);
+  for (const record of records) apply(record);
+  notify();
+  choiceListener();
+}
+
 /* Function to call when the user selects a tab or collapses a section. The document connects the space save to it. */
 let choiceListener = () => {};
 
@@ -251,13 +326,23 @@ export function onChoicesChange(fn) {
 }
 
 /** Selected tab and collapsed sections of each sidebar. The space stores them (docs/spec/projects.md#persistence). */
+// default: a sidebar without a dragged height omits sizes (docs/spec/projects.md#persistence).
 export const sidebarChoices = () => Object.fromEntries([...choices].map(([sidebar, choice]) =>
-  [sidebar, { tab: choice.tab, folded: [...choice.folded] }]));
+  [sidebar, { tab: choice.tab, folded: [...choice.folded], ...(choice.sizes.size > 0 ? { sizes: Object.fromEntries(choice.sizes) } : {}) }]));
 
 /** Replaces them with the stored selection and applies it to the drawn sidebars. Called when a space is opened. */
 export function restoreSidebarChoices(saved) {
+  const restored = new Map();
+  for (const [sidebar, { tab, folded, sizes = {} }] of Object.entries(saved)) {
+    for (const [section, height] of Object.entries(sizes)) {
+      if (!Number.isInteger(height) || height < SECTION_HEIGHT.min || height > SECTION_HEIGHT.max) {
+        throw new Error(`sidebar ${sidebar} stores an invalid size of ${section}: ${JSON.stringify(height)}`);
+      }
+    }
+    restored.set(sidebar, { tab, folded: new Set(folded), sizes: new Map(Object.entries(sizes)) });
+  }
   choices.clear();
-  for (const [sidebar, { tab, folded }] of Object.entries(saved)) choices.set(sidebar, { tab, folded: new Set(folded) });
+  for (const [sidebar, choice] of restored) choices.set(sidebar, choice);
   for (const record of drawn.values()) apply(record);
   notify();
 }
@@ -284,6 +369,8 @@ export function sidebarsState() {
           surfaceId: entry.surface.surfaceId,
           surface: record.context.surface,
           height: entry.section.height,
+          // default: a section that the person did not drag has no stored size.
+          size: choice.sizes.get(entry.section.id) ?? null,
           mounted: entry.mounted,
           phase: entry.phase,
           error: entry.error,

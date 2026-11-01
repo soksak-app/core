@@ -148,7 +148,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in document order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
+        "description": "The drawn sidebars in document order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
         "schema": {
           "type": "array",
           "items": {
@@ -198,6 +198,7 @@
                 "surfaceId": { "type": "string" },
                 "surface": { "type": ["string", "null"] },
                 "height": { "type": ["string", "integer"] },
+                "size": { "type": ["integer", "null"] },
                 "mounted": { "type": "boolean" },
                 "phase": { "type": ["string", "null"], "enum": ["loading", "ready", "error", null] },
                 "error": { "type": ["string", "null"] }
@@ -3211,6 +3212,27 @@
         }
       },
       {
+        "name": "core.sidebar.section.size",
+        "description": "Sets the height of one section of a vertical sidebar whose set uses the list layout, an integer from 32 to 4096 pixels; the height is kept for that sidebar and saved with the space.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sidebar": {
+              "type": "string"
+            },
+            "section": {
+              "type": "string"
+            },
+            "height": {
+              "type": "integer"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.sidebar.section.fold",
         "description": "Folds or unfolds one section of a sidebar whose set uses the list layout; the state is kept for that sidebar.",
         "params": {
@@ -4015,6 +4037,11 @@
       {
         "name": "core.sidebar.section.name",
         "description": "The names in the fold headers of list-layout sidebars in document order.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.section.divider",
+        "description": "The dividers between adjacent open sections of vertical list-layout sidebars in document order; dragging one sizes a section.",
         "many": true
       },
       {

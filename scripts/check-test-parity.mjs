@@ -8046,12 +8046,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F373",
+    implementation: [
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function sizeSection(sidebar, section, height)" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "function bindSectionDivider(divider, sidebar, above, below)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/sidebar-choices.test.mjs", id: "a dragged section height is applied, reported, saved with the space and restored" },
+      { file: "packages/workbench/test/section-choice-settled.test.mjs", id: "folding, selecting and sizing a section lay out the plane again" },
+    ],
+    expected: "The divider between two open sections of a vertical list sizes a section; the height is reported, saved with the space and restored.",
+    levels: ["unit"],
+  },
+  {
     id: "F372",
     implementation: [
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.sidebar.section.fold\", ({ sidebar, section }) => { foldSection(sidebar, section); settle(); });" },
     ],
     tests: [
-      { file: "packages/workbench/test/section-choice-settled.test.mjs", id: "folding a section and selecting a section tab lay out the plane again" },
+      { file: "packages/workbench/test/section-choice-settled.test.mjs", id: "folding, selecting and sizing a section lay out the plane again" },
     ],
     expected: "A section fold and a section tab selection lay out the plane again, so the view of the hidden section is hidden.",
     levels: ["unit"],

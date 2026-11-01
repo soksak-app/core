@@ -620,7 +620,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 /* The head line is an inner shadow, so the content box of the head is the same in every state and the name does not move. The bottom line is always present,
    and the top line is drawn only where the body ends because the previous section is expanded. When the previous section is collapsed, the bottom line of its head is the boundary. */
 .set__head{width:100%;box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge)}
-.set__section:not([data-folded=true]) + .set__section .set__head{
+.set__section:not([data-folded=true]) + .set__divider + .set__section .set__head{
   box-shadow:inset 0 var(--bw) 0 var(--edge),inset 0 calc(0px - var(--bw)) 0 var(--edge)}
 .set__head:hover,.set__tab:hover{background:color-mix(in srgb,var(--fg) 7%,var(--card))}
 /* The collapse indicator is the stroke icon of the core (chevron-down) at the head text size. It is rotated to point right when collapsed. */
@@ -649,4 +649,8 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set[data-orientation=horizontal][data-layout=list]{flex-direction:row;min-width:0}
 .set[data-orientation=horizontal][data-layout=list] > .set__section:not([data-folded=true]){flex:1 1 0;min-width:0;min-height:0;display:flex;flex-direction:column}
 .set[data-orientation=horizontal][data-layout=list] > .set__section > .set__body{flex:1 1 auto;min-height:0}
-.set[data-orientation=horizontal][data-layout=list] > .set__section + .set__section{border-left:var(--bw) solid var(--edge)}
+.set[data-orientation=horizontal][data-layout=list] > .set__divider + .set__section{border-left:var(--bw) solid var(--edge)}
+/* The divider between two open sections of a vertical list lies over the top of the head below it, which the page draws, so a view
+   never covers it; dragging it sizes a section (docs/spec/plugins.md#sections). */
+.set__divider{position:relative;z-index:1;flex:0 0 auto;height:6px;margin-bottom:-6px;cursor:row-resize;touch-action:none}
+.set__divider[hidden]{display:none}
