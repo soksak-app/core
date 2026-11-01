@@ -33,6 +33,8 @@ async function runCase(testCase) {
   Object.defineProperty(globalThis, "window", { value: dom.window, configurable: true, writable: true });
   try {
     dom.window.webkit = { messageHandlers: { "sok-view": { postMessage: () => {} } } };
+    // The host gives every view the start theme script (docs/spec/native-surfaces.md#view-surfaces).
+    dom.window.sokTheme = { scheme: "dark", tokens: {} };
     dom.window.eval(readFileSync(new URL("../view-start.js", import.meta.url), "utf8"));
     const bridge = createViewBridge({
       handler: { postMessage: (message) => posted.push(structuredClone(message)) },

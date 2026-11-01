@@ -1736,6 +1736,15 @@ export async function replyPayload(work) {
 }
 
 /**
+ * Sets the theme {scheme, tokens} on the root element of a document. A surface page, a modal page and a view are separate documents
+ * and do not inherit the stylesheet of the main page, so each sets the theme that the host sent on its own root.
+ */
+export function applyTheme(root, theme) {
+  root.style.colorScheme = theme.scheme;
+  for (const [token, value] of Object.entries(theme.tokens)) root.style.setProperty(token, value);
+}
+
+/**
  * Exposure registration of a surface page.
  *
  * port is page.exposure of the runtime and load is a function that returns a declaration bundle in the manifest format or a declaration Map.

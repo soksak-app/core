@@ -23,6 +23,8 @@ function setup(t, { url = "soksak://probe/", script = true, timeOrigins } = {}) 
   t.after(() => dom.window.close());
   const posted = [];
   dom.window.webkit = { messageHandlers: { "sok-view": { postMessage: (message) => posted.push(message) } } };
+  // The host gives every view the start theme script (docs/spec/native-surfaces.md#view-surfaces).
+  dom.window.sokTheme = { scheme: "dark", tokens: {} };
   if (timeOrigins) {
     let index = 0;
     Object.defineProperty(dom.window.performance, "timeOrigin", {
@@ -856,9 +858,9 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         const subscription = bridge.runtime.theme((value) => received.push(value));
         for (const step of item.steps.slice(1)) {
           host(step.input);
-          assert.equal(received.at(-1), step.output);
+          assert.deepEqual(plain(received.at(-1)), step.output);
         }
-        assert.deepEqual(received, item.steps.slice(1).map((step) => step.output));
+        assert.deepEqual(plain(received), item.steps.slice(1).map((step) => step.output));
         await subscription.dispose;
       }
       assertOpenCallSequence(reports, globalThis.window.location.host, OPEN_CALL_COUNTS[item.id]);

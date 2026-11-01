@@ -31,7 +31,6 @@ function setup(t, { surface = true, params = { path: "sample.txt" } } = {}) {
   view.eval(readFileSync(new URL("../view-start.js", import.meta.url), "utf8"));
   if (surface) view.sokSurface = { surface: "probe-tab", params, declarations };
   view.sokTheme = { scheme: "dark", tokens: { "--bg": "rgb(1, 2, 3)" } };
-  view.document.documentElement.style.colorScheme = "dark";
   const viewport = new view.EventTarget();
   Object.assign(viewport, { width: 400.5, height: 200.5 });
   Object.defineProperty(view, "visualViewport", { value: viewport });
@@ -64,8 +63,21 @@ function setup(t, { surface = true, params = { path: "sample.txt" } } = {}) {
   const changes = (name) => posted.filter((message) => message.command === "runtime.native.call"
     && message.params.name === "changed" && message.params.payload.name === name)
     .map((message) => ({ value: message.params.payload.value, version: message.params.payload.version }));
-  return { view, bridge, request, registrations, posted, changes };
+  return { view, bridge, request, registrations, posted, changes, host };
 }
+
+// A view is a separate document and does not inherit the stylesheet of the main page, so the bridge sets the theme of the start
+// script and each later theme message on the root of the view document (docs/spec/native-surfaces.md#view-surfaces, F352).
+test("the bridge sets the start theme and each later theme message on the root of the view document", { timeout: 5000 }, async (t) => {
+  const { view, host } = setup(t);
+  const root = view.document.documentElement;
+  assert.equal(root.style.colorScheme, "dark");
+  assert.equal(root.style.getPropertyValue("--bg"), "rgb(1, 2, 3)");
+  host({ sok: 1, event: "theme", data: { scheme: "light", tokens: { "--bg": "rgb(4, 5, 6)", "--fg": "rgb(7, 8, 9)" } } });
+  assert.equal(root.style.colorScheme, "light");
+  assert.equal(root.style.getPropertyValue("--bg"), "rgb(4, 5, 6)");
+  assert.equal(root.style.getPropertyValue("--fg"), "rgb(7, 8, 9)");
+});
 
 test("the bridge registers the actual view document without plugin exposure setup", { timeout: 5000 }, async (t) => {
   const { view, registrations, request } = setup(t);

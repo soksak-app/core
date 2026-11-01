@@ -12,7 +12,7 @@ import { createOperationCids } from "./operation.js";
 import { createPluginRuntime } from "./plugin-runtime.js";
 import { createEventBatcher } from "./log-batch.js";
 import { createSurfaceCompositionController } from "./surface-composition.js";
-import { createExpose } from "./index.js";
+import { applyTheme, createExpose } from "./index.js";
 import { observeSurfaceDocument, surfaceDocumentEntry } from "./surface-document.js";
 import { focusedExposure } from "./focus.js";
 
@@ -119,6 +119,10 @@ function requireDataKey(command, key) {
 export function createViewBridge({ handler, report }) {
   if (typeof report !== "function") throw new TypeError("createViewBridge requires the report function");
   const plugin = pluginOfView();
+  // A view does not inherit the stylesheet of the main page, so the bridge sets the theme of the start script on the root of the
+  // view document before any page script draws, and each later theme message in dispatch (docs/spec/native-surfaces.md#view-surfaces).
+  if (window.sokTheme === undefined) throw new Error(`view ${plugin} has no start theme`);
+  applyTheme(window.document.documentElement, window.sokTheme);
   const channel = createViewChannel({ handler });
   let onCall = null;
   let onCoreExposure = null;
@@ -333,7 +337,10 @@ export function createViewBridge({ handler, report }) {
       onCoreExposure(message.data);
       return;
     }
-    if (message.event === "theme") lastTheme = message.data;
+    if (message.event === "theme") {
+      lastTheme = message.data;
+      applyTheme(window.document.documentElement, lastTheme);
+    }
     // A status value reaches its listeners as the value, without the name that keys the event.
     const data = message.event === "status" ? message.data.value : message.data;
     // default: an event that no listener has has no listener to pass it to, so it is passed to none.

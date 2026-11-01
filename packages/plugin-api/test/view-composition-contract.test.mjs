@@ -35,6 +35,8 @@ async function runCase(testCase) {
   Object.defineProperty(globalThis, "window", { value: view, configurable: true, writable: true });
   try {
     view.webkit = { messageHandlers: { "sok-view": { postMessage: () => {} } } };
+    // The host gives every view the start theme script (docs/spec/native-surfaces.md#view-surfaces).
+    view.sokTheme = { scheme: "dark", tokens: {} };
     view.eval(readFileSync(new URL("../view-start.js", import.meta.url), "utf8"));
     view.document.body.innerHTML = Object.keys(CONTRACT.elements).map((name) => `<div id="${name}"></div>`).join("");
     // The composition measures the elements and the viewport; animation frames are not run by the case.

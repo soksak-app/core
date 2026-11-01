@@ -4,7 +4,7 @@
 // tokens that the host sent on their own root.
 import { page as runtimePage } from "@soksak/runtime";
 import {
-  createExpose, declarationMap, orderedSidecar, pageIdentity,
+  applyTheme, createExpose, declarationMap, orderedSidecar, pageIdentity,
 } from "@soksak/plugin-api";
 import { installDocumentErrors } from "./document-errors.js";
 import { createSurfaceCompositionController } from "./surface-composition.js";
@@ -53,11 +53,7 @@ if (page) {
 export function followTheme() {
   return new Promise((applied) => {
     page.theme((theme) => {
-      const root = document.documentElement;
-      root.style.colorScheme = theme.scheme;
-      for (const [token, value] of Object.entries(theme.tokens)) {
-        root.style.setProperty(token, value);
-      }
+      applyTheme(document.documentElement, theme);
       applied();
     });
   });

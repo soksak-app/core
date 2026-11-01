@@ -8034,6 +8034,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F352",
+    implementation: [{ file: "packages/plugin-api/index.js", symbol: "export function applyTheme(root, theme)" }],
+    tests: [{ file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge sets the start theme and each later theme message on the root of the view document" }],
+    expected: "The view bridge sets the start theme and each later theme message on the root of the view document.",
+    levels: ["unit"],
+  },
+  {
     id: "F351",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "async function documentReplies(client, window)" },

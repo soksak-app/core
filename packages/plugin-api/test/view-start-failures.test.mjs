@@ -10,6 +10,8 @@ function startPage() {
   const dom = new JSDOM("", { url: "soksak://fixture-plugin/ui/index.html", runScripts: "outside-only" });
   const posted = [];
   dom.window.webkit = { messageHandlers: { "sok-view": { postMessage: (message) => posted.push(structuredClone(message)) } } };
+  // The host gives every view the start theme script (docs/spec/native-surfaces.md#view-surfaces).
+  dom.window.sokTheme = { scheme: "dark", tokens: {} };
   dom.window.eval(readFileSync(new URL("../view-start.js", import.meta.url), "utf8"));
   return { window: dom.window, posted };
 }

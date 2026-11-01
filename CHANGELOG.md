@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F352: `createViewBridge` sets the theme of the start script and each later theme message on the root of the view document through `applyTheme` of `@soksak/plugin-api`, so a view page that sets no theme, such as the files sections, draws with the theme tokens; the contract case `view.bridge.events-delivered-in-order` carries the theme form `{scheme, tokens}`.
 - F349-1: The diagnostic method `diagnostics.layout.fail` makes the next layout draw of the main page throw once, and the window check `layout-failure.test.mjs` checks that the page keeps answering requests after a draw that throws.
 - F351: A window check whose application does not reply to a request and to one probe after it records that in `unresponsive.json` of the configuration folder, and every later request and check of that application fails at once with the check, the request and the stall dumps, instead of each waiting for its own timeouts.
 - F350: A `make e2e` run that SIGTERM, SIGINT or SIGHUP interrupts ends its running step, runs its cleanup steps and fails with `interrupted by <signal>`, so the applications and the persistent services of the run no longer remain after an interrupt.
