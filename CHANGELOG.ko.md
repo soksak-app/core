@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F355-4-1-1: core는 term 목록이 `kit`을 정의하는 records kit release 0.0.2를 pin한다. Red: `the records kit release that core pins defines the kit term`가 release 0.0.1에서 실패했다. Green: 통과한다.
 - F355-3-4: plugin browser, editor, files, hwp, terminal과 sidecar files, VT는 core release의 `@soksak/plugin-api` 대신 records kit과 events kit release를 pin하고, manifest, exposure, engines, view, case 복사본 검사를 지웠다. application이 설치할 때 manifest를 검증하고, registry 검사가 각 plugin release의 exposed 이름을 각 listed core와 비교한다. 각 repository는 Red/Green test와 CI run을 통과한다.
 - F355-3-3: registry 명세는 pull request 검사가 각 listed core의 plugin API release의 `checkPluginRepository`를 그것이 설치하는 plugin release에 실행한다고 적는다(registry 항목 G61). 그래서 plugin repository는 exposed 이름을 검사하려고 core release를 필요로 하지 않는다.
 - F355-3-5: core는 events kit release `soksak-kit-events-0.0.1.tgz`의 census 검사를 실행하고, `@soksak/plugin-api`는 census 검사, census 규칙, `ajv`를 더 이상 담지 않는다. Red: `the census check and the event scripts run the census check of the events kit release`와 `the plugin API ships no census check or census rules`가 실패했다. Green: 통과하고, `make parity-check`가 기록된 test 1136개로 통과한다.

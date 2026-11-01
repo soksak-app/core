@@ -323,6 +323,11 @@ test('repeat.yml starts on a dispatch and runs only the tracked repeat targets',
   assert.doesNotMatch(commands.join('\n'), /\$\{\{\s*inputs\./, 'a run line splices a dispatched input');
 });
 
+test('the records kit release that core pins defines the kit term', () => {
+  const { terms } = JSON.parse(readFileSync(fileURLToPath(import.meta.resolve('@soksak/kit-records/terms.json')), 'utf8'));
+  assert.ok(terms.some((entry) => entry.term === 'kit'), 'the term list of the pinned records kit has no entry for kit');
+});
+
 test('the hooks, the record targets and the release gate run the commands of the records kit release', () => {
   const { devDependencies } = JSON.parse(read('package.json'));
   assert.match(devDependencies['@soksak/kit-records'] ?? '', /^https:\/\/github\.com\/soksak-app\/kit-records\/releases\/download\/v\d+\.\d+\.\d+\/soksak-kit-records-\d+\.\d+\.\d+\.tgz$/,

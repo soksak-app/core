@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F355-4-1-1: Core pins the records kit release 0.0.2, whose term list defines `kit`. Red: `the records kit release that core pins defines the kit term` failed on the release 0.0.1. Green: it passes.
 - F355-3-4: The plugins browser, editor, files, hwp and terminal and the sidecars files and VT pin the records kit and events kit releases instead of `@soksak/plugin-api` of a core release, and their manifest, exposure, engines, view and case copy checks are removed; the application validates the manifest at installation, and the registry check compares the exposed names of each plugin release with each listed core. Each repository passes its Red/Green test and its CI run.
 - F355-3-3: The registry specification states that the check of a pull request runs `checkPluginRepository` of the plugin API release of each listed core on the plugin releases that it installs (registry item G61), so a plugin repository needs no core release to check its exposed names.
 - F355-3-5: Core runs the census check of the events kit release `soksak-kit-events-0.0.1.tgz`, and `@soksak/plugin-api` no longer ships the census check, the census rules or `ajv`. Red: `the census check and the event scripts run the census check of the events kit release` and `the plugin API ships no census check or census rules` failed. Green: they pass, and `make parity-check` passes with 1136 recorded tests.
