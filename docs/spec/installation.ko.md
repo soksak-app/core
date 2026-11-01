@@ -25,7 +25,7 @@ Version은 숫자 부분으로 된 `x.y.z`이며 앞자리 0을 쓰지 않고, �
 
 ## Plugin release
 
-Plugin release는 `sok plugin pack`이 쓰는, plugin 파일을 담은 파일 `<id>-<version>.tgz`다. 그 `package.json`은 다음을 선언한다.
+Plugin release는 plugin에 대해 `pnpm pack`이 쓰는 파일인 `<id>-<version>.tgz`다. 이것은 gzip tar이며, entry는 `package/package.json`과 `package.json`의 `files`가 적는 각 파일의 `package/<path>`다. 모든 entry가 `package/`로 시작하지 않는 release는 `<release>: entry <path> is outside package/`로 거부한다. 그 `package.json`은 다음을 선언한다.
 
 | 필드 | 뜻 |
 | --- | --- |

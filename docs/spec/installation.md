@@ -25,7 +25,7 @@ The version of `@soksak/plugin-api` identifies the core manifest and installatio
 
 ## Plugin release
 
-A plugin release is the file `<id>-<version>.tgz` of the plugin's files that `sok plugin pack` writes. Its `package.json` declares:
+A plugin release is the file `<id>-<version>.tgz`, the file that `pnpm pack` writes for the plugin: a gzip tar whose entries are `package/package.json` and `package/<path>` for each file that `files` of `package.json` lists. A release whose entries do not all start with `package/` is refused with `<release>: entry <path> is outside package/`. Its `package.json` declares:
 
 | Field | Meaning |
 | --- | --- |
