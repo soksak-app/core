@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F364: The plugins require `^0.0.28`, and the registry index lists core 0.0.28 and them.
 - F363: The release candidate is 0.0.28.
 - F362: A section view runs the commands that it registered itself, so a click on a row of the files tree selects it without a files tab. Red: the registry chose only tab surfaces. Green: it chooses the calling surface when that surface registered the command.
 - F361: The sidecars publish files 0.0.10 and VT 0.0.19, terminal 0.0.27 requires VT `^0.0.19`, and the registry index lists them.
