@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F355-4-3: `scripts/test/checklist.test.mjs`의 닫힌 항목 case는 `Closed:` 사유를 적는 records kit 0.0.3의 메시지를 기대한다. Red: 세 case가 0.0.3 pin에서 실패했다. Green: 통과한다.
 - F355-4-2: native process identity library는 sidecar의 공통 기능이므로 core에 남는다. plugins 명세가 그것을 적고, F355-4-1이 만든 kit repository는 archive되었으며, core는 term `kit`이 도구를 가리키고 checklist reader가 사유가 있는 `Closed:`를 받는 records kit release 0.0.3을 pin한다. Red: `the records kit release that core pins defines the kit term`가 release 0.0.2에서 실패했다. Green: 통과한다.
 - F355-4-1-2: process identity kit `soksak-app/kit-process-identity-darwin`은 library, per-test runner를 쓰는 test, private API inventory 행, 명세를 담고, 그 release run이 `v0.0.1`을 게시했다.
 - F355-4-1-1: core는 term 목록이 `kit`을 정의하는 records kit release 0.0.2를 pin한다. Red: `the records kit release that core pins defines the kit term`가 release 0.0.1에서 실패했다. Green: 통과한다.
