@@ -8048,6 +8048,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F354",
+    implementation: [{ file: "apps/wailsv3/runtime/index.js", symbol: "a modal document has no status watch route" }],
+    tests: [
+      { file: "apps/wailsv3/test/runtime.test.mjs", id: "the exposure port of a modal document has a changed that refuses a value for the missing watch route" },
+      { file: "apps/tauriv2/test/runtime.test.mjs", id: "the exposure port of a modal document has a changed that refuses a value for the missing watch route" },
+    ],
+    expected: "The exposure port of a modal document refuses a watched value for the missing watch route.",
+    levels: ["unit"],
+  },
+  {
     id: "F351",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "async function documentReplies(client, window)" },

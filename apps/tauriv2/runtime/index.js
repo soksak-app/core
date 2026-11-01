@@ -330,6 +330,11 @@ export const page = (() => {
         if (e.payload.surface === undefined || e.payload.surface === surface) fn(e.payload);
       }),
       reply: (id, payload) => call("exposureReply", { id, ...payload }),
+      // A modal document reports its state through the modal answer channel and has no status watch route
+      // (docs/spec/exposure.md#modal-documents), so a watched value is refused with that reason.
+      changed: (name) => {
+        throw new Error(`status ${name} of document ${surface} cannot be sent: a modal document has no status watch route`);
+      },
       // A reply that the host refuses is stored as an error record of this document, as report stores one.
       report: (text) => calls.record("error", "page.record.error", { where: "exposure", text }),
     },

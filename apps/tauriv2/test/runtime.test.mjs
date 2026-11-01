@@ -396,3 +396,23 @@ test("a call of the main page that carries out an operation sends its identifier
     delete globalThis.location;
   }
 });
+
+// A modal document reports its state through the modal answer channel and has no status watch route (docs/spec/exposure.md#modal-documents),
+// so the changed of its exposure port refuses a value with that reason, and createExpose accepts the port at the start of the document (F354).
+test("the exposure port of a modal document has a changed that refuses a value for the missing watch route", async () => {
+  globalThis.window = { __TAURI__: {
+    core: { invoke: async (command, args) => { if (command === "log" && args.request.action === "policy-read") return Promise.resolve(policyRead); return null; } },
+    event: { listen: async () => () => {} },
+    webview: { getCurrentWebview: () => ({ label: "picker" }) },
+  } };
+  globalThis.location = { search: "?id=picker" };
+  try {
+    const { page } = await import("../runtime/index.js?test=modal-changed");
+    assert.equal(typeof page.exposure.changed, "function");
+    assert.throws(() => page.exposure.changed("probe.state", 1, 1),
+      /^Error: status probe\.state of document picker cannot be sent: a modal document has no status watch route$/);
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+  }
+});

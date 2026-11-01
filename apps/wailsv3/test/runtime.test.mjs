@@ -182,3 +182,22 @@ test("Wails runtime import failure is shared and is not retried", { timeout: 5_0
     delete globalThis.location;
   }
 });
+
+// A modal document reports its state through the modal answer channel and has no status watch route (docs/spec/exposure.md#modal-documents),
+// so the changed of its exposure port refuses a value with that reason, and createExpose accepts the port at the start of the document (F354).
+test("the exposure port of a modal document has a changed that refuses a value for the missing watch route", async () => {
+  globalThis.window = { __soksakNative: {
+    call: async (method, args) => { if (method === "Log" && args[0].action === "policy-read") return Promise.resolve(policyRead); return null; },
+    on: () => () => {},
+  } };
+  globalThis.location = { search: "?id=picker" };
+  try {
+    const { page } = await import("../runtime/index.js?test=modal-changed");
+    assert.equal(typeof page.exposure.changed, "function");
+    assert.throws(() => page.exposure.changed("probe.state", 1, 1),
+      /^Error: status probe\.state of document picker cannot be sent: a modal document has no status watch route$/);
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+  }
+});

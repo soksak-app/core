@@ -151,6 +151,8 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 네이티브 모달 문서는 렌더, 배치, 테마 변경마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고한다. 메인 페이지는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document}`다. `document`는 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, 대화상자 scrim에 사용하는 `body::before`의 계산된 배경색, 문서가 첫 내용 요청의 응답을 처리했는지(적용한 변경보다 오래되어 버린 경우도 포함), CSS 픽셀 단위 요소 사각형.
 
+모달 문서에는 status watch 경로가 없다. 메인 페이지는 status watch를 surface에만 전달한다. 그래서 모달 문서의 exposure port는 watch된 값을 `status <name> of document <id> cannot be sent: a modal document has no status watch route`로 거부한다. 따라서 page API는 문서 시작에서 그 port를 받아들이고, 값은 보고 없이 문서를 떠나지 않는다.
+
 네이티브 메뉴 모달에서 Escape는 키 `core.modal.dismiss`로 응답하며, 이 키는 메뉴를 닫는 선언된 명령의 이름이다. 응답 값은 비어 있다. 메인 페이지는 그 명령을 registry로 실행하며, 네이티브 뷰는 명령을 스스로 실행하지 않는다.
 
 모달 문서의 응답은 그 모달이 열린 모달일 때만 메인 페이지에 닿는다. host는 모달 id와 instance가 열린 모달의 것이 아닌 응답을 버리고 `host.overlay.dropped` `{id, instance, key, open}`을 기록한다. 메인 페이지는 보이지 않는 모달이나 받는 곳이 없는 모달의 응답을 버리고 `page.overlay.dropped` `{id, shown, key}`를 기록한다. 닫히는 모달도 마지막 상태 보고를 보내므로 버림은 오류가 아니라 `info` event이며, 기록 없이 버리는 응답은 없다.
