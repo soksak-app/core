@@ -19,7 +19,7 @@ function run(t) {
 import { Session } from ${JSON.stringify(app)};
 test("probe waits past its limit", { timeout: 300 }, async () => {
   const client = { watch: () => new Promise(() => {}), request: async () => ({ value: 1 }) };
-  const session = new Session({ name: "probe" }, client);
+  const session = new Session({ name: "probe", configDir: ${JSON.stringify(dir)} }, client);
   await session.get("core.project");
   await session.until("probe.document", () => false, "the probe document did not start");
 });

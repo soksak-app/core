@@ -8034,6 +8034,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F351",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "async function documentReplies(client, window)" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/unresponsive.test.mjs", id: "a document that does not reply to a request and to the probe after it makes the later checks of its application fail at once" },
+    ],
+    expected: "An application that does not reply to a request and to one probe fails every later request and check at once with the record.",
+    levels: ["unit"],
+  },
+  {
     id: "F350",
     implementation: [
       { file: "scripts/e2e-run.mjs", symbol: "async function runCommand(item, interrupted)" },

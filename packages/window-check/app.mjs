@@ -156,6 +156,27 @@ function lock() {
  * Verifies that the process of endpoint.json is the executable of this repository, so that the check does not test an
  * application of another checkout or an earlier build.
  */
+/** The record of an application whose document stopped replying, in its configuration folder (F351). */
+const unresponsivePath = (configDir) => join(configDir, "unresponsive.json");
+
+/** The error of an application that has a record of a document that stopped replying, or null without the record. */
+function unresponsiveError(app, consequence = "this request is not sent") {
+  const path = unresponsivePath(app.configDir);
+  if (!existsSync(path)) return null;
+  const record = JSON.parse(readFileSync(path, "utf8"));
+  return new Error(`${app.name} stopped replying in the check "${record.check}" at ${record.request}, so ${consequence}; ${record.error}`);
+}
+
+/** Whether the document of the window answers one status request; a reply in any form, also an error, shows that it runs. */
+async function documentReplies(client, window) {
+  try {
+    await client.request("status.get", { window, name: "core.page.error" });
+    return true;
+  } catch (error) {
+    return !(error instanceof EndpointError && /did not reply within/.test(error.message));
+  }
+}
+
 export async function open(t, app) {
   if (!requiredApps(process.env).includes(app.name)) return null;
   if (!existsSync(app.binary)) {
@@ -164,6 +185,9 @@ export async function open(t, app) {
         "or select another one with SOKSAK_APP.",
     );
   }
+  // An application whose document stopped replying in an earlier check of this configuration fails the check at once (F351).
+  const stopped = unresponsiveError(app, "this check does not run");
+  if (stopped) throw stopped;
   lock();
   const releaseSlot = await acquireWindowCheckSlot(app.name);
   let client;
@@ -180,6 +204,8 @@ export async function open(t, app) {
     );
   }
   const session = new Session(app, client);
+  // The record of an application that stops replying names the check (F351).
+  session.check = t.name;
   // Check-specific cleanups and released presses run before the pasteboard restoration. Input-source restoration is
   // inserted at the start of this list and runs after the pasteboard restoration.
   const pasteboard = readPasteboard();
@@ -444,6 +470,9 @@ export class Session {
 
   request(method, params = {}, { timeout = REQUEST } = {}) {
     const what = `${this.app.name} ${method} ${params.name ?? ""}`.trimEnd();
+    // A request to an application that stopped replying, such as a cleanup of the same check, fails at once (F351).
+    const stopped = unresponsiveError(this.app);
+    if (stopped) return Promise.reject(stopped);
     this.step(`${method} ${params.name ?? ""}`.trimEnd());
     // When the host does not answer, the check records at that moment the threads of this host and of its page process
     // in the logs of the configuration folder (F69).
@@ -466,6 +495,13 @@ export class Session {
             error.message += `; the host's threads at that moment: ${await sample()}`;
           } catch (failure) {
             error.message += `; sampling the host failed: ${failure.message}`;
+          }
+          // A document that does not reply to one more request either has stopped, so the later checks of the application fail at
+          // once with this record instead of each waiting for its own timeouts (F351).
+          if (!(await documentReplies(this.client, this.window))) {
+            error.message += `; ${this.app.name} does not reply to a probe either, so its later checks fail at once`;
+            writeFileSync(unresponsivePath(this.app.configDir),
+              `${JSON.stringify({ check: this.check ?? null, request: what, error: error.message })}\n`);
           }
         }
       }

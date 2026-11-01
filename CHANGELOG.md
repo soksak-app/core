@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F351: A window check whose application does not reply to a request and to one probe after it records that in `unresponsive.json` of the configuration folder, and every later request and check of that application fails at once with the check, the request and the stall dumps, instead of each waiting for its own timeouts.
 - F350: A `make e2e` run that SIGTERM, SIGINT or SIGHUP interrupts ends its running step, runs its cleanup steps and fails with `interrupted by <signal>`, so the applications and the persistent services of the run no longer remain after an interrupt.
 - F347-1: The sidebars that the plane draws take the space of the layout that the plane holds for their section surface ids; a project close, which turns the project state to the library before it clears the plane, no longer makes each draw throw `sidebar left draws sections without a shown space` and keep the main page busy without replying.
 - F348: The main page forwards no request to a surface that a drawing or a place left out and pushes no event to its view until the commit releases it, so a project close no longer logs `exposure settled failed: … surface "<tab>" is not shown` for a watch that moved to a view that the host had closed, and a section view whose page starts after its section left the drawing no longer receives a `core.sidebars` value without its section.

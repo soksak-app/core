@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { Session } from "../app.mjs";
@@ -53,7 +56,9 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 /** A host that rejects press and release while AppKit reports a button. */
 const heldRefuses = (params, buttons) => ((params.phase === "down" || params.phase === "up") && buttons.mask !== 0 ? 1007 : null);
 
-const app = { name: "fixture" };
+// The configuration folder of the fixture holds no record of an application that stopped replying.
+const app = { name: "fixture", configDir: mkdtempSync(join(tmpdir(), "soksak-pointer-presses-")) };
+process.once("exit", () => rmSync(app.configDir, { recursive: true, force: true }));
 const open = (s) => [...(s.presses?.values() ?? [])];
 
 test("a check session releases every press it left open", async () => {
