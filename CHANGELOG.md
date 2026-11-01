@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F360: The plugins publish browser 0.0.12, editor 0.0.12, files 0.0.13, hwp 0.0.10 and terminal 0.0.26 with `engines.soksak` `^0.0.27`, and the registry index lists core 0.0.27 with them.
 - F359: Every declared workspace version is the release candidate 0.0.27, and the latest published release is 0.0.26, so the release carries F355-3, F355-4 and F357.
 - F357: The cleanup of the runner test with a large process table ends the group of its test process through `killGroup`, which treats the EPERM refusal of a group that holds only zombies as an ended group; it accepted only `ESRCH` and `ENOENT` and failed one core run with `kill EPERM`. Red: `the cleanup of a recorded group ends a group that macOS refuses with EPERM because only zombies remain` failed. Green: it passes. F355 is complete.
 - F355-4-3: The closed-item cases of `scripts/test/checklist.test.mjs` expect the message of the records kit 0.0.3, which names the `Closed:` reason. Red: the three cases failed on the pin of 0.0.3. Green: they pass.
