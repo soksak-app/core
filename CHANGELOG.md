@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F365: The main page knows the plugin of a section surface, so the commands and statuses that a section view registers apply and a click on a row of the files tree selects it. Red: `surfacePlugin` returned null for a section surface. Green: it returns the plugin of the section.
 - F364: The plugins require `^0.0.28`, and the registry index lists core 0.0.28 and them.
 - F363: The release candidate is 0.0.28.
 - F362: A section view runs the commands that it registered itself, so a click on a row of the files tree selects it without a files tab. Red: the registry chose only tab surfaces. Green: it chooses the calling surface when that surface registered the command.

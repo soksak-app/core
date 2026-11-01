@@ -85,5 +85,15 @@ export function section(id) {
 /** Whether a section is registered. The section of a plugin that is not loaded remains in the set but is not registered (docs/spec/plugins.md). */
 export const hasSection = (id) => registeredSections.some((s) => s.id === id);
 
+/**
+ * The plugin of a section surface `<space id>/<sidebar id>/<section id>` (docs/spec/plugins.md#sections), or null for a tab surface
+ * and for a section that is not registered.
+ */
+export function sectionSurfacePlugin(surface) {
+  const parts = surface.split("/");
+  if (parts.length !== 3) return null;
+  return hasSection(parts[2]) ? section(parts[2]).plugin : null;
+}
+
 /** Section name. The section of a plugin that is not loaded is shown as its id and the Korean text for "not loaded" in parentheses. */
 export const sectionNames = (ids) => ids.map((id) => (hasSection(id) ? section(id).name : `${id} (불러오지 않음)`));

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F365: main page는 section surface의 plugin을 알므로, section view가 등록한 명령과 status가 적용되고 files tree의 행 click이 그 행을 고른다. Red: `surfacePlugin`이 section surface에 null을 돌려주었다. Green: section의 plugin을 돌려준다.
 - F364: plugin은 `^0.0.28`을 요구하고, registry index가 core 0.0.28과 그것들을 올린다.
 - F363: release candidate는 0.0.28이다.
 - F362: section view는 자기가 등록한 명령을 실행하므로, files tab 없이도 files tree의 행 click이 그 행을 고른다. Red: registry가 tab surface만 골랐다. Green: 호출한 surface가 명령을 등록했으면 그 surface를 고른다.

@@ -35,7 +35,7 @@ import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
 import { filePlace, modalState, onFilesDropped, onModalState, onWindowResponder } from "./host.js";
-import { plugin } from "./registry.js";
+import { plugin, sectionSurfacePlugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
 import { retainedSurfaceEntries, surfaceKindOf } from "./surface-listing.js";
 import { liveMounts, onMountedChange, surfaceLeftOut } from "./surface-modules.js";
@@ -145,8 +145,10 @@ const planeOrigin = () => {
 
 const shift = (rect, origin) => ({ x: rect.x + origin.x, y: rect.y + origin.y, w: rect.w, h: rect.h });
 
-/** Finds the plugin of a surface among the tabs of the active space and the tabs of the stored spaces. */
+/** Finds the plugin of a surface: the plugin of its section, or the plugin of a tab of the active space or of a stored space. */
 function surfacePlugin(surface) {
+  const owner = sectionSurfacePlugin(surface);
+  if (owner !== null) return owner;
   // default: there is no card before the plane is created.
   for (const card of currentGrid()?.cards ?? []) {
     const tab = tabsOf(card).find((t) => t.id === surface);

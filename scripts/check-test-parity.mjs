@@ -8046,6 +8046,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F365",
+    implementation: [
+      { file: "packages/workbench/registry.js", symbol: "export function sectionSurfacePlugin(surface)" },
+      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-plugins.test.mjs", id: "a section surface id names the plugin of its registered section" },
+    ],
+    expected: "The main page finds the plugin of a section surface from its registered section, so the registrations of a section view apply.",
+    levels: ["unit"],
+  },
+  {
     id: "F362",
     implementation: [
       { file: "packages/workbench/exposure.js", symbol: "runOwned(name, params, owner, cids, surface, caller)" },
