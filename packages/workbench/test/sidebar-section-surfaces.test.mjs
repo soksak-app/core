@@ -32,9 +32,7 @@ mock.module("../surface-modules.js", { namedExports: {
   disposeSurface: (surfaceId) => { disposed.push(surfaceId); return Promise.resolve(); },
 } });
 mock.module("../host.js", { namedExports: { report: () => {} } });
-// The shown space qualifies each section surface id (docs/spec/plugins.md#sections); a test changes it to show another space.
-let shownSpace = "spc-aaaaaa";
-mock.module("../projects.js", { namedExports: { shownSpaceId: () => shownSpace } });
+
 
 const { registry } = await import("../exposure.js");
 const { registerSection } = await import("../registry.js");
@@ -65,7 +63,7 @@ test("each section body is the slot of a view surface named <space id>/<sidebar 
   mounts.length = 0;
   const container = sidebar();
   try {
-    drawSet(container, "c1:left", list, { card: "c1", surface: "t1", orientation: "vertical" });
+    drawSet(container, "c1:left", list, { space: "spc-aaaaaa", card: "c1", surface: "t1", orientation: "vertical" });
     await settle();
     const bodies = [...container.querySelectorAll(".set__body")];
     assert.deepEqual(bodies.map((body) => body.dataset.nativeSurfaceId), ["spc-aaaaaa/c1:left/probe.tree", "spc-aaaaaa/c1:left/probe.marks"]);
@@ -84,11 +82,9 @@ test("the same window sidebar section of two spaces gives two section surfaces w
   mounts.length = 0;
   const container = sidebar();
   try {
-    shownSpace = "spc-aaaaaa";
-    drawSet(container, "left", list, { orientation: "vertical", window: true });
+    drawSet(container, "left", list, { space: "spc-aaaaaa", orientation: "vertical", window: true });
     await settle();
-    shownSpace = "spc-bbbbbb";
-    drawSet(container, "left", list, { orientation: "vertical", window: true });
+    drawSet(container, "left", list, { space: "spc-bbbbbb", orientation: "vertical", window: true });
     await settle();
     assert.deepEqual(mounts.map((item) => item.surface.surfaceId), [
       "spc-aaaaaa/left/probe.tree", "spc-aaaaaa/left/probe.marks", "spc-bbbbbb/left/probe.tree", "spc-bbbbbb/left/probe.marks",
@@ -96,19 +92,16 @@ test("the same window sidebar section of two spaces gives two section surfaces w
   } finally {
     clearSet(container);
     container.remove();
-    shownSpace = "spc-aaaaaa";
   }
 });
 
-test("a sidebar draws no section without a shown space", () => {
+test("a sidebar draws no section without the space of its layout", () => {
   const container = sidebar();
   try {
-    shownSpace = null;
     assert.throws(() => drawSet(container, "left", list, { orientation: "vertical", window: true }),
-      /sidebar left draws sections without a shown space/);
+      /sidebar left draws sections without the space of its layout/);
   } finally {
     container.remove();
-    shownSpace = "spc-aaaaaa";
   }
 });
 
@@ -116,7 +109,7 @@ test("a window sidebar section starts with card null", async () => {
   mounts.length = 0;
   const container = sidebar();
   try {
-    drawSet(container, "left", list, { card: null, surface: null, orientation: "vertical", window: true, plugin: null, side: "left" });
+    drawSet(container, "left", list, { space: "spc-aaaaaa", card: null, surface: null, orientation: "vertical", window: true, plugin: null, side: "left" });
     await settle();
     assert.deepEqual(mounts.map(({ surface }) => surface.section), [
       { id: "probe.tree", sidebar: "left", card: null }, { id: "probe.marks", sidebar: "left", card: null }]);
@@ -128,8 +121,8 @@ test("folding and an unselected tab hide a section surface without releasing it"
   const listed = sidebar();
   const tabbed = sidebar();
   try {
-    drawSet(listed, "c2:left", list, { card: "c2", surface: "t2", orientation: "vertical" });
-    drawSet(tabbed, "c2:right", tabs, { card: "c2", surface: "t2", orientation: "vertical" });
+    drawSet(listed, "c2:left", list, { space: "spc-aaaaaa", card: "c2", surface: "t2", orientation: "vertical" });
+    drawSet(tabbed, "c2:right", tabs, { space: "spc-aaaaaa", card: "c2", surface: "t2", orientation: "vertical" });
     await settle();
     foldSection("c2:left", "probe.tree");
     selectSection("c2:right", "probe.marks");
@@ -147,9 +140,9 @@ test("a change of the active tab keeps the section surfaces and core.sidebars re
   mounts.length = 0; disposed.length = 0;
   const container = sidebar();
   try {
-    drawSet(container, "c3:left", list, { card: "c3", surface: "t1", orientation: "vertical" });
+    drawSet(container, "c3:left", list, { space: "spc-aaaaaa", card: "c3", surface: "t1", orientation: "vertical" });
     await settle();
-    drawSet(container, "c3:left", list, { card: "c3", surface: "t2", orientation: "vertical" });
+    drawSet(container, "c3:left", list, { space: "spc-aaaaaa", card: "c3", surface: "t2", orientation: "vertical" });
     await settle();
     assert.equal(mounts.length, 2, "a change of the followed tab must not mount the sections again");
     assert.deepEqual(disposed, []);
@@ -164,7 +157,7 @@ test("a change of the active tab keeps the section surfaces and core.sidebars re
 test("a drawn set records its section surfaces as shown, and clearing it leaves their release to the commit", async () => {
   disposed.length = 0;
   const container = sidebar();
-  drawSet(container, "c4:left", list, { card: "c4", surface: null, orientation: "vertical" });
+  drawSet(container, "c4:left", list, { space: "spc-aaaaaa", card: "c4", surface: null, orientation: "vertical" });
   await settle();
   assert.deepEqual(shownSectionSurfaces().filter((id) => id.startsWith("spc-aaaaaa/c4:")), ["spc-aaaaaa/c4:left/probe.tree", "spc-aaaaaa/c4:left/probe.marks"]);
   const bodies = [...container.querySelectorAll(".set__body")];
@@ -180,7 +173,7 @@ test("a drawn set records its section surfaces as shown, and clearing it leaves 
 test("a section has its declared height and a fill section shares the remaining height", async () => {
   const container = sidebar();
   try {
-    drawSet(container, "c5:left", list, { card: "c5", surface: null, orientation: "vertical" });
+    drawSet(container, "c5:left", list, { space: "spc-aaaaaa", card: "c5", surface: null, orientation: "vertical" });
     await settle();
     const [tree, marks] = container.querySelectorAll(".set__section");
     assert.equal(tree.dataset.height, "fill");
@@ -194,7 +187,7 @@ test("section layout rejects an absent or invalid orientation explicitly", () =>
   const set = { id: "shared-set", title: "Shared", layout: "list", sections: [] };
   try {
     for (const orientation of [undefined, null, "diagonal"]) {
-      assert.throws(() => drawSet(container, "invalid-mode", set, { card: "card", surface: null, orientation }),
+      assert.throws(() => drawSet(container, "invalid-mode", set, { space: "spc-aaaaaa", card: "card", surface: null, orientation }),
         /orientation must be horizontal or vertical/);
     }
   } finally { clearSet(container); container.remove(); }

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F347-1: The sidebars that the plane draws take the space of the layout that the plane holds for their section surface ids; a project close, which turns the project state to the library before it clears the plane, no longer makes each draw throw `sidebar left draws sections without a shown space` and keep the main page busy without replying.
 - F348: The main page forwards no request to a surface that a drawing or a place left out and pushes no event to its view until the commit releases it, so a project close no longer logs `exposure settled failed: … surface "<tab>" is not shown` for a watch that moved to a view that the host had closed, and a section view whose page starts after its section left the drawing no longer receives a `core.sidebars` value without its section.
 - F347: A section surface id is `<space>/<sidebar>/<section>`, so two windows that show the same window sidebar section no longer give their surfaces one id, which made a sidecar refuse a send with `surface left/files.tree belongs to another window`; the hosts accept only this form, and the listing of the tab sessions refuses a stored file of another name by name instead of skipping it. Remove the files `tab-sessions/left%2F*.json`, `tab-sessions/right%2F*.json` and `tab-sessions/*%3A*%2F*.json` of an earlier release once.
 - F346: The quit step of `make e2e` waits until no process holds the configuration lock, so an application that a check relaunched is no longer reported as a remaining process while it exits.

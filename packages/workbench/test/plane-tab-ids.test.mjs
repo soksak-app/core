@@ -23,7 +23,6 @@ test("a new tab avoids the ids of held surfaces, stored tabs and tabs issued bef
     placePluginPlaceholder: () => {}, surfaceForTab: () => null,
   } });
   t.mock.module("../projects.js", { exports: {
-    shownSpaceId: () => "spc-aaaaaa",
     initialProjectContextReady: () => true,
     initialProjectContextFailed: () => false,
     waitForInitialProjectContext: () => Promise.resolve(),

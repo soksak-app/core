@@ -120,8 +120,6 @@ function spaceCards() {
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
 export const local = () => projects.filter((p) => owned.has(p.id));
 export const inLibrary = () => browsing;
-/** The space that the window shows, which qualifies the section surface ids (docs/spec/plugins.md#sections); null in the library. */
-export const shownSpaceId = () => (browsing ? null : active()?.activeSpaceId ?? null);
 export const isOpen = (id) => openProjects.has(id) || owned.has(id);
 /**
  * Finishes the transitions that change the plane (opening the library, activating a project) in the order received.
@@ -228,7 +226,7 @@ export function begin(snapshot) {
   begun = opened.id;
   // The work area screen gives the plane its size, so the screen changes first and then the plane is drawn. A plane drawn without a size is drawn again on the next frame.
   changed();
-  listener.load(layout);
+  listener.load(layout, opened.activeSpaceId);
   const recreated = opened.spaces.find((s) => s.id === opened.activeSpaceId);
   const previousRecreated = recreated.layout;
   recreated.layout = listener.save("recreate");
@@ -444,7 +442,7 @@ async function showProject(id, openedProject = null, stagedOwner = false) {
   history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(id)}`);
   changed();
   savedLayout = "";
-  listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout);
+  listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout, project.activeSpaceId);
   changed();
   // Replace the start-document preview synchronously before waking mounts that could declare native composition.
   // `presented` also waits for those declarations, so it cannot be the context barrier.
@@ -552,7 +550,7 @@ export const move = (id, delta) => store.move(id, delta);
 
 function restore(path) {
   const p = active();
-  listener.load(p.spaces.find((s) => s.id === p.activeSpaceId).layout);
+  listener.load(p.spaces.find((s) => s.id === p.activeSpaceId).layout, p.activeSpaceId);
   changed();
   keep(path);
 }

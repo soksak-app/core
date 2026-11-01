@@ -65,7 +65,6 @@ test("a background session opens only for a tab without a mounted surface and en
   let projectContextFailed = false;
   let projectContext = new Promise((resolve) => { commitProjectContext = resolve; });
   t.mock.module("../projects.js", { exports: {
-    shownSpaceId: () => "spc-aaaaaa",
     initialProjectContextReady: () => projectContextReady,
     initialProjectContextFailed: () => projectContextFailed,
     waitForInitialProjectContext: () => projectContext,
@@ -98,7 +97,7 @@ test("a background session opens only for a tab without a mounted surface and en
   const opens = (tab) => sends.filter((s) => s.surface === tab && s.body.operation === "open").length;
   try {
     plane.onLayout((made, draw) => draw());
-    plane.adopt(plane.fresh());
+    plane.adopt(plane.fresh(), "spc-aaaaaa");
     const [shown, hidden] = plane.currentGrid().card("main").data.tabs.map((tab) => tab.id);
     assert.ok(mounted.has(shown), "the first draw did not mount the shown tab");
     assert.equal(sends.length, 0, "the preview opened a background session before the project context was committed");
@@ -133,7 +132,7 @@ test("a background session opens only for a tab without a mounted surface and en
     const failedContextPlane = await import("../plane.js?failed-initial-project-context");
     failedContextPlane.onLayout((made, draw) => draw());
     const beforeFailedContext = sends.length;
-    failedContextPlane.adopt(failedContextPlane.fresh());
+    failedContextPlane.adopt(failedContextPlane.fresh(), "spc-aaaaaa");
     assert.equal(sends.length, beforeFailedContext, "a preview opened a background session while failed initialization was still pending");
     projectContextFailed = true;
     rejectProjectContext(new Error("initial project context failed"));

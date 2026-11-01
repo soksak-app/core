@@ -62,7 +62,7 @@ test("closing the picker writes picker.close with the reason of the close", { ti
   try {
     let held = null;
     plane.onLayout((made, draw) => { held = { made, draw }; });
-    plane.adopt(plane.fresh());
+    plane.adopt(plane.fresh(), "spc-aaaaaa");
     held.draw();
     plane.openCardTabs("main");
     assert.equal(plane.pickerState().open, true, "the tab list of the card did not open");

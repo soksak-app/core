@@ -86,7 +86,7 @@ test("a placeholder whose install state cannot be read is an error shown once, a
     let held = null;
     plane.onLayout((made, draw) => { held = draw; });
     const drawHeld = () => { const draw = held; held = null; draw(); };
-    plane.adopt(plane.fresh());
+    plane.adopt(plane.fresh(), "spc-aaaaaa");
     drawHeld();
     // The first tab is active, so its placeholder is drawn and the tab of the registered plugin is not.
     const tabs = plane.currentGrid().card("main").data.tabs;

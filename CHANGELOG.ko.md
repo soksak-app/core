@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F347-1: plane이 그리는 사이드바는 section surface id에 plane이 가진 layout의 space를 쓴다. plane을 비우기 전에 project 상태를 library로 바꾸는 project close가 더는 매 그리기마다 `sidebar left draws sections without a shown space`를 던지며 main page를 응답 없이 붙잡지 않는다.
 - F348: main page는 drawing이나 place가 빼 버린 surface로 요청을 보내지 않고, commit이 그것을 해제할 때까지 그 view에 event를 보내지 않는다. 그래서 project close가 host가 닫은 view로 옮겨 간 watch 때문에 `exposure settled failed: … surface "<tab>" is not shown`을 더는 기록하지 않고, 섹션이 그리기에서 빠진 뒤 page가 시작한 section view가 자기 섹션이 없는 `core.sidebars` 값을 더는 받지 않는다.
 - F347: section surface id는 `<space>/<sidebar>/<section>`이다. 그래서 같은 창 사이드바 섹션을 보여 주는 두 창이 더는 두 surface에 id 하나를 주지 않는다. 그 id 하나 때문에 sidecar가 `surface left/files.tree belongs to another window`로 보내기를 거부했다. host는 이 형식만 받아들이며, tab session 목록은 다른 이름의 저장된 file을 건너뛰지 않고 이름으로 거부한다. 이전 release의 file `tab-sessions/left%2F*.json`, `tab-sessions/right%2F*.json`, `tab-sessions/*%3A*%2F*.json`은 한 번 지운다.
 - F346: `make e2e`의 quit step은 설정 잠금을 쥔 프로세스가 없어질 때까지 기다리므로, check가 다시 시작한 애플리케이션이 끝나는 동안 남은 프로세스로 보고되지 않는다.

@@ -62,7 +62,6 @@ test("a held tab is neither mounted nor given a background session until its det
     surfaceForTab: (tab) => surfaceOf(tab.id),
   } });
   t.mock.module("../projects.js", { exports: {
-    shownSpaceId: () => "spc-aaaaaa",
     initialProjectContextReady: () => true,
     initialProjectContextFailed: () => false,
     waitForInitialProjectContext: () => Promise.resolve(),
@@ -91,7 +90,7 @@ test("a held tab is neither mounted nor given a background session until its det
     const fresh = plane.fresh();
     const [shown, hidden] = fresh.state.cards[0].data.tabs.map((tab) => tab.id);
     waits.holdImageDetachSurfaces([shown, hidden]);
-    plane.adopt(fresh);
+    plane.adopt(fresh, "spc-aaaaaa");
     await new Promise((resolve) => setImmediate(resolve));
     const slot = document.querySelector('[data-card-id="main"] .slot');
     assert.equal(mounted.has(shown), false, "a tab whose detach is pending was mounted");

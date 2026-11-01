@@ -92,7 +92,7 @@ test("a restored view tab starts with its stored origin on the first build of th
     const card = kept.state.cards.find((entry) => entry.id === "main");
     card.data.tabs = [{ id: "built-view", plugin: viewId, title: "v", params: {}, origin: { directory: "/b" } }];
     card.data.activeId = "built-view";
-    env.plane.adopt(kept);
+    env.plane.adopt(kept, "spc-aaaaaa");
     assert.deepEqual(env.tabOrigins.tabOrigin("built-view"), { directory: "/b" }, "the first build did not restore the stored origin");
     assert.equal(env.tabOrigins.viewRefusal("built-view"), null);
     assert.deepEqual(env.reports, [], "the first build wrote a refusal for a valid origin");
@@ -106,7 +106,7 @@ test("closing the last tab of a fixed card opens a tab that records a null origi
     { plugin: plainId, title: "only" },
   ] }] });
   try {
-    env.plane.adopt(env.plane.fresh());
+    env.plane.adopt(env.plane.fresh(), "spc-aaaaaa");
     const card = env.plane.currentGrid().card("main");
     const only = card.data.tabs[0];
     assert.equal(card.data.tabs.length, 1, "the fixture does not start with one tab");
@@ -133,7 +133,7 @@ test("a restored view tab starts with its stored origin and is not refused (F238
       { id: "restored-view", plugin: viewId, title: "v", params: {}, origin: { directory: "/a" } },
     ];
     card.data.activeId = "restored-view";
-    env.plane.adopt(kept);
+    env.plane.adopt(kept, "spc-aaaaaa");
     assert.deepEqual(env.tabOrigins.tabOrigin("restored-view"), { directory: "/a" },
       "the restored view tab did not start with its stored origin");
     assert.equal(env.tabOrigins.viewRefusal("restored-view"), null);
@@ -155,7 +155,7 @@ test("a refused view tab is written to the application log and shown on its tab 
       { id: "plain-tab", plugin: plainId, title: "p", params: {} },
     ];
     card.data.activeId = "refused-view";
-    env.plane.adopt(kept);
+    env.plane.adopt(kept, "spc-aaaaaa");
     const text = MISSING.replace("%ID%", "refused-view");
     // The log holds the refusal once from the layout read and once from the tab error path (reportError writes its own line).
     assert.deepEqual(env.reports, [text, `tab error refused-view: ${text}`], "the refused view tab was not written to the application log");

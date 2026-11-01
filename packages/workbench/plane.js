@@ -117,6 +117,9 @@ const pickerEl = document.getElementById("picker");
 let windowSidebars = {};
 
 let grid, view, focusedId;
+// The space of the layout that the plane holds, which qualifies the section surface ids of its sidebars (docs/spec/plugins.md#sections);
+// null while the plane holds no layout. The project state can change before the plane changes, so the ids follow the plane.
+let heldSpace = null;
 // The number in a tab title. It is a display name and not an identifier, so a counter produces it.
 let named = 0;
 
@@ -259,7 +262,7 @@ function updateCard(el, card, rect) {
       const owner = kind === null ? { card: null, surface: null }
         : { card: focusedId, surface: activeTab(grid.card(focusedId)).id };
       // The content of an ordinary sidebar has no card-surface link and no rail.
-      drawSet(holder, card.id, set, { ...owner, orientation: "vertical", window: true, plugin: kind, side });
+      drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: "vertical", window: true, plugin: kind, side });
     } else {
       clearSet(holder);
       holder.replaceChildren();
@@ -1051,7 +1054,7 @@ function drawCardSidebars(el, card, rect) {
     el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${deviceGridSize(state.shownSize, devicePixelRatio)}px`);
     // default: a sidebar section of a card with no tabs has no surface context (null) — it is the same context as the left window sidebar.
     const surface = activeTab(card) === null || activeTab(card) === undefined ? null : activeTab(card).id;
-    drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface, orientation: side === "top" || side === "bottom" ? "horizontal" : "vertical" });
+    drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface, space: heldSpace, orientation: side === "top" || side === "bottom" ? "horizontal" : "vertical" });
   }
   return spaceFoldText(presentation);
 }
@@ -1601,7 +1604,9 @@ export const capture = (path = null) => {
 };
 
 /** Applies one stored set of state to the plane. */
-export function adopt(kept) {
+export function adopt(kept, space) {
+  if (typeof space !== "string" || !space) throw new TypeError(`adopt requires the id of the space of the layout, not ${space}`);
+  heldSpace = space;
   if (!grid) return build(kept);
   const restored = restoreWindowState(kept);
   logRefusals(recordStoredOrigins(kept));
@@ -1627,6 +1632,7 @@ export const fresh = () => ({
 });
 
 export function clear() {
+  heldSpace = null;
   view?.destroy();
   view = null;
   grid = null;

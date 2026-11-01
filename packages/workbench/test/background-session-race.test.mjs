@@ -69,7 +69,7 @@ test("a background session whose tab closes before its subscription finished end
   const plane = await import("../plane.js");
   try {
     plane.onLayout((made, draw) => draw());
-    plane.adopt(plane.fresh());
+    plane.adopt(plane.fresh(), "spc-aaaaaa");
     const hidden = plane.currentGrid().card("main").data.tabs[1].id;
     assert.ok(listeners.has(hidden), "the tab without a surface got no background session");
     // The tab closes while the subscription of its listener has not finished.

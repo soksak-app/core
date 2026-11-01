@@ -98,7 +98,7 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
     for (const tab of kept.state.cards.find((card) => card.id === "main").data.tabs) {
       tab.params = tab.title === "bad" ? mismatched : { path: "ok" };
     }
-    plane.adopt(kept);
+    plane.adopt(kept, "spc-aaaaaa");
     drawHeld();
     // The first tab is active, so its placeholder is drawn. The stored params of the tab are kept as they were stored.
     const tabs = plane.currentGrid().card("main").data.tabs;

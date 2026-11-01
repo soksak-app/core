@@ -64,7 +64,7 @@ test("a frame factor change prepares the row of the next draw and writes the fac
   const drawnFactor = () => root.style.getPropertyValue("--frame-text");
   try {
     // The first drawing is not prepared (same as index.html).
-    plane.adopt(plane.fresh());
+    plane.adopt(plane.fresh(), "spc-aaaaaa");
     let held = null;
     plane.onLayout((made, draw, seated, titlebar) => { held = { made, draw, seated, titlebar }; });
     const before = drawnFactor();

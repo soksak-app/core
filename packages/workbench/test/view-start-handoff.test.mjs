@@ -126,7 +126,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
 
     let draw;
     plane.onLayout((_made, next) => { draw = next; });
-    plane.adopt(plane.fresh());
+    plane.adopt(plane.fresh(), "spc-aaaaaa");
     draw();
 
     await compositor.publish();

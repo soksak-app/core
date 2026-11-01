@@ -66,7 +66,7 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
     // The receiver keeps the drawing function and does not draw immediately. This is the same as a page that waits for the native preparation.
     let held = null;
     plane.onLayout((made, draw) => { held = { made, draw }; });
-    plane.adopt(plane.fresh());
+    plane.adopt(plane.fresh(), "spc-aaaaaa");
     held.draw();
     // The drawing of a live card mounts the surface of its tab.
     const mainTab = plane.currentGrid().card("main").data.activeId;

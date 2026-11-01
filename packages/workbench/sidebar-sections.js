@@ -9,7 +9,6 @@ import { icon } from "./icons.js";
 import { hasSection, section } from "./registry.js";
 import { hideSectionSurface, showSectionSurface } from "./section-surfaces.js";
 import { mountSurface } from "./surface-modules.js";
-import { shownSpaceId } from "./projects.js";
 
 /* Selected tab and collapsed sections for each sidebar id. */
 const choices = new Map();
@@ -125,8 +124,8 @@ function apply(record) {
  */
 export function drawSet(container, sidebar, set, context) {
   if (context.orientation !== "horizontal" && context.orientation !== "vertical") throw new Error("section orientation must be horizontal or vertical");
-  const space = shownSpaceId();
-  if (space === null) throw new Error(`sidebar ${sidebar} draws sections without a shown space`);
+  const { space } = context;
+  if (typeof space !== "string" || !space) throw new Error(`sidebar ${sidebar} draws sections without the space of its layout`);
   sweep();
   if (set.layout !== "list" && set.layout !== "tabs") throw new Error(`set ${set.id} layout must be list or tabs`);
   // The sections of a plugin that is not loaded remain in the set but are not drawn (docs/spec/plugins.md).

@@ -8034,6 +8034,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F347-1",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "export function adopt(kept, space)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-sidebar-space.test.mjs", id: "a sidebar draws the section surface ids of the space of the held layout while the project state shows the library" },
+    ],
+    expected: "The sidebars that the plane draws take the space of the held layout, also while the project state shows the library.",
+    levels: ["unit"],
+  },
+  {
     id: "F348",
     implementation: [
       { file: "packages/workbench/surface-modules.js", symbol: "export function surfaceLeftOut(surfaceId)" },

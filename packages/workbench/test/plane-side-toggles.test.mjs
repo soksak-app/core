@@ -37,8 +37,6 @@ test("a draw keeps the pressed card header fold control in the document", { time
   const reports = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
-  // The shown space qualifies the section surface ids (docs/spec/plugins.md#sections).
-  t.mock.module("../projects.js", { exports: { ...(await import("../projects.js")), shownSpaceId: () => "spc-aaaaaa" } });
   t.mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
     surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
@@ -73,7 +71,7 @@ test("a draw keeps the pressed card header fold control in the document", { time
     let held = null;
     plane.onLayout((made, draw) => { held = draw; });
     const drawHeld = () => { const draw = held; held = null; draw(); };
-    plane.adopt(plane.fresh());
+    plane.adopt(plane.fresh(), "spc-aaaaaa");
     drawHeld();
     for (const side of ["top", "left"]) {
       plane.assignSidebar("main", side, setId);

@@ -81,7 +81,7 @@ test("the placeholder reasons that are designed states write no error", { timeou
     let held = null;
     plane.onLayout((made, draw) => { held = draw; });
     const drawHeld = () => { const draw = held; held = null; draw(); };
-    plane.adopt(plane.fresh());
+    plane.adopt(plane.fresh(), "spc-aaaaaa");
     drawHeld();
     const cases = [
       { reason: "missing", set: () => { state.hosted = true; state.rows = []; } },
