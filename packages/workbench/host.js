@@ -237,6 +237,8 @@ export function surfaceContextRuntime(surface, declarations = {}) {
   let removeExposurePort = null;
   const port = {
     register: (kind, name) => registry.registered({ surface: surfaceId, kind, name }),
+    // A surface module in this document gives each value of a watched status to the registry (docs/spec/exposure.md#relay).
+    changed: (name, value, version) => registry.changed({ surface: surfaceId, name, value, version }),
     onRequest: (fn) => {
       removeExposurePort = registerSurfacePort(surfaceId, fn);
       return removeExposurePort;

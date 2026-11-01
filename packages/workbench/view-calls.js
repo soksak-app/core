@@ -196,6 +196,15 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
         }
         return runtime.exposure.registered(payload);
       }
+      // A value of a watched status of the view page (docs/spec/exposure.md#relay).
+      if (fields.name === "changed") {
+        const payload = objectOf(fields.name, fields.payload);
+        if (typeof payload.name !== "string" || payload.name === "" || !("value" in payload)
+          || !Number.isSafeInteger(payload.version) || payload.version < 1) {
+          throw new TypeError(`view call ${fields.name} requires a non-empty name, a value and a positive integer version`);
+        }
+        return runtime.exposure.changed(payload);
+      }
       if (REGION_HOST_CALLS.has(fields.name)) {
         throw new Error(`view call ${command} ${fields.name} is not served: a view operates its regions through its composition`);
       }

@@ -92,7 +92,7 @@ export function createRegistry({ call = null, report = null } = {}) {
   });
   /* Registrations of surfaces whose owner plugin is not known yet. revisit applies them when the layout that holds the surface is loaded. */
   const pending = new Map();
-  /* Surface statuses being watched: for each watch key, the followed surface, the requested surface and the last version. */
+  /* Surface statuses being watched: for each watch key, the followed surface, the requested surface and the last delivered version. */
   const following = new Map();
   let options = {
     surfacePlugin: () => null, preferred: () => [], registrationChanged: () => {}, unloaded: () => false,
@@ -166,32 +166,28 @@ export function createRegistry({ call = null, report = null } = {}) {
   }
 
   /**
-   * Follows the changes of a surface status. It repeats status.next and calls exposureChanged on every
-   * answer. The host puts no wait time on status.next.
-   * It stops when the watch ends or the forwarding fails (for example when the surface disappeared).
+   * Delivers a value that a surface sent for a watched status (docs/spec/exposure.md#relay) to every watch of that surface and name
+   * whose last version is older. The host may reorder the calls that carry the values, so an older version is not delivered after a
+   * newer one, and a value can arrive after its watch ended; the trace records each value that no watch takes, with its reason.
    */
-  async function follow(key, name, watch) {
-    while (following.get(key) === watch) {
-      let answer;
-      try {
-        answer = await forward(watch.surface, "status.next", { name, version: watch.version });
-      } catch (error) {
-        // The host fails a pending status.next with 1003 when its surface closes; that ends the watch as stated.
-        // Any other failure is reported and also ends the watch, so it is not retried silently.
-        if (error?.code === EXPOSURE_ERRORS.gone) {
-          trace("surface.watch", { phase: "ended", reason: "surface closed", name, surface: watch.surface });
-        } else {
-          // default: a failure that is not an Error carries its value as the text.
-          report(new Error(`status ${name} watch failed on surface ${watch.surface}: ${errorText(error)}`, { cause: error }));
-        }
-        break;
+  function deliver({ surface, name, value, version }) {
+    let watched = false;
+    let delivered = false;
+    let newest = 0;
+    for (const watch of following.values()) {
+      if (watch.surface !== surface || watch.name !== name) continue;
+      watched = true;
+      if (version <= watch.version) {
+        newest = Math.max(newest, watch.version);
+        continue;
       }
-      if (following.get(key) !== watch || answer?.closed) break;
-      watch.version = answer.version;
-      if (watch.external) changed(name, answer.value, watch.requested);
-      for (const listener of watch.local) listener(answer.value, watch.surface);
+      delivered = true;
+      watch.version = version;
+      if (watch.external) changed(name, value, watch.requested);
+      for (const listener of watch.local) listener(value, watch.surface);
     }
-    if (following.get(key) === watch) following.delete(key);
+    if (!watched) trace("surface.change.dropped", { surface, name, version, reason: "no watch" });
+    else if (!delivered) trace("surface.change.dropped", { surface, name, version, reason: `older than version ${newest}` });
   }
 
   /** Ends the watch of the surface when no other watch follows the same surface. */
@@ -247,11 +243,14 @@ export function createRegistry({ call = null, report = null } = {}) {
     const found = kind && typeof name === "string" ? declared.get(declarationKey(kind, name)) : undefined;
     // For a name that a state module registered, this document answers a request that names no surface (docs/spec/exposure.md#choosing-a-surface).
     const page = found && params.surface === undefined ? pageOf(kind, name) : null;
+    // The entries of this document send a watched value as (name, value, version); the host takes the value of a watch that names
+    // no surface.
+    const local = (entryName, value) => changed(entryName, value);
     if (page) {
-      const answering = () => page.entries.answer(method, params, changed);
+      const answering = () => page.entries.answer(method, params, local);
       return method === "command.run" ? bounded(name, found, answering) : answering();
     }
-    if (!found || !surfaceName(name)) return core.answer(method, params, changed);
+    if (!found || !surfaceName(name)) return core.answer(method, params, local);
     const requested = params.surface;
     const key = watchKey(name, requested);
     if (method === "status.unwatch") {
@@ -269,14 +268,17 @@ export function createRegistry({ call = null, report = null } = {}) {
       return null;
     }
     const surface = pick(kind, name, requested);
-    const result = await forward(surface, method, method === "status.watch" ? { name } : params);
-    if (method === "status.watch") {
-      // The document of a surface follows one value per name, so each watch receives from version 0.
-      const watch = { surface, requested, name, version: 0, external: true, local: new Set() };
-      following.set(key, watch);
-      follow(key, name, watch);
+    if (method !== "status.watch") return forward(surface, method, params);
+    // The watch exists before the surface answers, because the surface sends the current value as it starts the watch. Each watch
+    // receives from version 0, so a watch of a name that the surface already follows receives the current value again.
+    const watch = { surface, requested, name, version: 0, external: true, local: new Set() };
+    following.set(key, watch);
+    try {
+      return await forward(surface, method, { name });
+    } catch (error) {
+      if (following.get(key) === watch) following.delete(key);
+      throw error;
     }
-    return result;
   }
 
   /** List in the declaration format. registered is added to each entry. */
@@ -366,7 +368,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     watch = { surface, requested: surface, name, version: 0, external: false, local: new Set([observer.listener]) };
     following.set(key, watch);
     observer.watch = watch;
-    forward(surface, "status.watch", { name }).then(() => follow(key, name, watch), (error) => {
+    forward(surface, "status.watch", { name }).catch((error) => {
       if (following.get(key) === watch) following.delete(key);
       observeFailed(name, surface)(error);
     });
@@ -572,6 +574,9 @@ export function createRegistry({ call = null, report = null } = {}) {
     /** Ids of the surfaces that registered this entry, in registration order. */
     // default: an entry that no surface registered has no registrants.
     registrants: (kind, name) => [...(surfaces.get(declarationKey(kind, name))?.keys() ?? [])],
+
+    /** Delivers a value that a surface sent for a watched status: {surface, name, value, version} (docs/spec/exposure.md#relay). */
+    changed: deliver,
 
     /** Removes all registrations, pending registrations and watches when a surface is closed. */
     unregisterSurface(surface) {

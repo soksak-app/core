@@ -356,11 +356,13 @@ export function createViewBridge({ handler, report }) {
   // The port has no unregister. The registrations of a view end with the view: the host removes them when the surface closes
   // (exposure-registered with closed, docs/spec/exposure.md#relay) and when the view process ends (docs/spec/native-surfaces.md,
   // process end). The spec defines no call that removes a registration while the view stays open, and the allowed calls of a view
-  // are registered (view exposure) and exposureReply (plugin host calls) in docs/spec/native-surfaces.md. So the dispose of a view exposure ends only
-  // the local request listener, bindings and declarations.
+  // are registered and changed (view exposure) and exposureReply (plugin host calls) in docs/spec/native-surfaces.md. So the dispose of a view
+  // exposure ends only the local request listener, bindings and declarations. Each value of a watched status goes to the page as
+  // changed {name, value, version} (docs/spec/exposure.md#relay).
   const exposure = {
     register: (kind, name) => calls.request("runtime.native.call", { name: "registered", payload: { kind, name } }),
     reply: (id, payload) => calls.request("runtime.native.call", { name: "exposureReply", payload: { id, ...payload } }),
+    changed: (name, value, version) => calls.request("runtime.native.call", { name: "changed", payload: { name, value, version } }),
   };
   channel.onMessage((message) => {
     if (typeof message.event === "string") {
@@ -432,6 +434,7 @@ export function createViewBridge({ handler, report }) {
     const expose = createExpose({
       register: exposure.register,
       reply: exposure.reply,
+      changed: exposure.changed,
       report: (text) => runtime.error("core surface entries", text),
       onRequest: async (answer) => {
         onCoreExposure = answer;

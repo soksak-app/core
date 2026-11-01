@@ -205,33 +205,29 @@ test("a dom entry resolves one element, or one of many by index, and acts on it"
   assert.equal(entries.registered("dom", "probe.input"), false, "a removed element is no longer registered");
 });
 
-test("a watched status reports each changed value once and ends with unwatch", async () => {
+test("a watched status sends its current value and each change with its version and ends with unwatch", async () => {
   const entries = exposureEntries(declarationMap(exposes()));
   let value = ["a"];
   let emit = null;
   let stopped = 0;
   entries.status("probe.lines", () => value, (fn) => { emit = fn; return () => { stopped++; }; });
   const changes = [];
-  const changed = (name, v) => changes.push([name, v]);
+  const changed = (name, v, version) => changes.push([name, v, version]);
   assert.deepEqual(await entries.answer("status.get", { name: "probe.lines" }), ["a"]);
   assert.equal(await entries.answer("status.watch", { name: "probe.lines" }, changed), null);
+  assert.deepEqual(changes.splice(0), [["probe.lines", ["a"], 1]], "a watch sends the current value");
   assert.equal(await entries.answer("status.watch", { name: "probe.lines" }, changed), null, "a second watch is the same watch");
-  assert.deepEqual(await entries.answer("status.next", { name: "probe.lines", version: 0 }), { version: 1, value: ["a"] });
-  // status.next always carries version. A missing version is not treated as 0.
-  assert.equal((await replyPayload(() => entries.answer("status.next", { name: "probe.lines" }))).error?.code,
-    EXPOSURE_ERRORS.invalidParams);
-  const next = entries.answer("status.next", { name: "probe.lines", version: 1 });
+  assert.deepEqual(changes.splice(0), [["probe.lines", ["a"], 1]], "a second watch sends the current value again with its version");
   emit(["a"]);
   value = ["a", "b"];
   emit(value);
-  assert.deepEqual(await next, { version: 2, value: ["a", "b"] });
-  assert.deepEqual(changes, [["probe.lines", ["a"]], ["probe.lines", ["a", "b"]]]);
-  const pending = entries.answer("status.next", { name: "probe.lines", version: 2 });
+  assert.deepEqual(changes.splice(0), [["probe.lines", ["a", "b"], 2]], "only a different value is sent, with the next version");
+  assert.equal((await replyPayload(() => entries.answer("status.next", { name: "probe.lines", version: 2 }))).error?.code,
+    EXPOSURE_ERRORS.unknownMethod, "status.next is not a method");
   await entries.answer("status.unwatch", { name: "probe.lines" });
-  assert.deepEqual(await pending, { closed: true });
   assert.equal(stopped, 1);
   emit(["c"]);
-  assert.equal(changes.length, 2, "an unwatched status reports nothing");
+  assert.deepEqual(changes, [], "an unwatched status sends nothing");
 });
 
 test("a surface page registers declared names once through its port and answers forwarded requests", async () => {
@@ -242,6 +238,7 @@ test("a surface page registers declared names once through its port and answers 
     register: async (kind, name) => { registered.push([kind, name]); },
     onRequest: async (fn) => { request = fn; },
     reply: (id, payload) => { replies.push([id, payload]); },
+    changed: async (name) => { throw new Error(`unexpected change of ${name}`); },
     report: async (message) => { throw new Error(`unexpected report: ${message}`); },
   };
   let loads = 0;
@@ -279,6 +276,7 @@ test("a dom entry of many elements takes a provider of the current elements, whi
     register: async (kind, name) => { registered.push([kind, name]); },
     onRequest: async (fn) => { request = fn; },
     reply: (id, payload) => { replies.push([id, payload]); },
+    changed: async (name) => { throw new Error(`unexpected change of ${name}`); },
     report: async (message) => { throw new Error(`unexpected report: ${message}`); },
   };
   const expose = createExpose(port, async () => exposes());
@@ -322,6 +320,7 @@ test("a rejected stale exposure reply is reported instead of becoming an unhandl
     register: async () => {},
     onRequest: async (fn) => { request = fn; },
     reply: async () => { throw new Error("exposure reply 11928 has no matching request"); },
+    changed: async (name) => { throw new Error(`unexpected change of ${name}`); },
     report: async (message) => { reports.push(message); },
   };
   const expose = createExpose(port, async () => exposes());
@@ -336,12 +335,38 @@ test("a port without report is refused when the exposure is created, because a f
   assert.throws(() => createExpose(port, async () => exposes()), /createExpose requires the port report function/);
 });
 
+test("a port without changed is refused when the exposure is created, because a watched value has no other way out", () => {
+  const port = { register: async () => {}, onRequest: async () => {}, reply: async () => {}, report: async () => {} };
+  assert.throws(() => createExpose(port, async () => exposes()), /createExpose requires the port changed function/);
+});
+
+test("a forwarded status watch sends the values through the port changed", async () => {
+  const changes = [];
+  let request = null;
+  let emit = null;
+  const port = {
+    register: async () => {},
+    onRequest: async (fn) => { request = fn; },
+    reply: async () => {},
+    changed: async (name, value, version) => { changes.push([name, value, version]); },
+    report: async (message) => { throw new Error(`unexpected report: ${message}`); },
+  };
+  const expose = createExpose(port, async () => exposes());
+  await expose.status("probe.lines", () => ["a"], (fn) => { emit = fn; return () => {}; });
+  request({ id: 1, method: "status.watch", params: { name: "probe.lines" } });
+  await new Promise((resolve) => setImmediate(resolve));
+  emit(["a", "b"]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(changes, [["probe.lines", ["a"], 1], ["probe.lines", ["a", "b"], 2]]);
+});
+
 test("a report that fails is given with both errors to reportError, which dispatches the page error event", async (t) => {
   let request;
   const port = {
     register: async () => {},
     onRequest: async (fn) => { request = fn; },
     reply: async () => { throw new Error("the host refused the reply"); },
+    changed: async (name) => { throw new Error(`unexpected change of ${name}`); },
     report: async () => { throw new Error("the report channel is closed"); },
   };
   const reported = [];

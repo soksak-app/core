@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F342-1: surface status watch는 event 구독이다. surface page는 watch된 status의 현재 값과 그 뒤의 다른 값을 `changed {name, value, version}`으로 보내고(view는 view call `runtime.native.call` `changed`로), main page는 각 값을 version이 더 오래된 watch에 전달하며, 어느 watch도 받지 않은 값은 `page.trace.surface.change.dropped`로 trace한다. 시간 제한 없이 기다려서 main page의 reload를 시작하지 못하게 하던 forward `status.next`는 없앤다.
 - F341: view surface spec은 감시하는 status를 등록한 surface가 없는 동안 `runtime.status.watch`가 `null`을 전달한다고 적는다.
 - F340: tauriv2 host는 Wails host처럼 view 시작 값의 null `diagnostics`와 `section`을 missing으로 거부하지 않고 유지한다.
 - F338: 앱은 section만 선언한 plugin의 section surface를 그리고, memory saver와 hidden view 준비의 background 경로는 tab에만 적용된다(`keepsBackground`).

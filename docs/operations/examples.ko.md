@@ -274,7 +274,7 @@ Activated view-focus 경로는 이전 전면 process를 저장하고 cleanup에�
 
 사람이 조작하는 창 검사는 `e2e/person/`에 있으며 사람이 기계 앞에 있는 동안 `make e2e-person`으로만 실행한다. 기본 실행은 이를 포함하지 않는다. 디버그 화면의 저장 패널 같은 네이티브 패널은 검사의 네이티브 입력이 지목하는 key window가 아니므로, 검사는 선언된 명령으로 패널을 열고 사람을 기다린다. 안내는 실행의 진단에 있다.
 
-`host.window.reload`는 페이지를 다시 읽기 전에 메인 WebContent process를 종료한다. 종료된 process가 남긴 페이지 호출은 host에서 계속 끝나고, 새 페이지가 [시작 문서](../spec/native-host.ko.md#page-시작)를 요청하면 host는 이전 페이지가 전달한 `status.next` 요청을 끝낸다. Wails v3는 binding call을 요청 취소와 분리해(`context.WithoutCancel`) 실행하므로, 전달할 수 없는 답마다 `Unable to write json payload. Please report this to the Wails team! error=request has been stopped`를 한 줄씩 기록한다. window check에서는 reload마다 대체된 페이지의 `status.next` 전달 하나에 한 줄씩 세 줄이 나온다. 이 줄은 더 이상 없는 페이지에 대한 답이며, 잃어버린 답이 아니다.
+`host.window.reload`는 페이지를 다시 읽기 전에 메인 WebContent process를 종료한다. 준비된 페이지는 보낸 호출이 모두 답을 받은 뒤에만 스스로 다시 읽고([page 다시 읽기](../spec/native-host.ko.md#page-다시-읽기)), 시간 제한 없이 기다리는 forward는 없으므로, 준비된 페이지의 reload는 실행 중인 호출을 남기지 않는다. 준비를 알리지 않은 페이지의 reload처럼 종료된 process가 남긴 페이지 호출은 host에서 계속 끝난다. Wails v3는 binding call을 요청 취소와 분리해(`context.WithoutCancel`) 실행하므로, 전달할 수 없는 답마다 `Unable to write json payload. Please report this to the Wails team! error=request has been stopped`를 한 줄씩 기록한다. 이 줄은 더 이상 없는 페이지에 대한 답이며, 잃어버린 답이 아니다.
 
 `sok capture --window main --config-dir DIR`은 실행 중인 진단 빌드의 창을 포커스 없이 정지 PNG로 쓰고 경로를 담은 결과를 출력한다. 개발 중 결과를 눈으로 확인할 때 쓴다. 확인한 뒤 출력된 `still-*` 디렉터리를 지우며, 수치 검사는 녹화 프레임을 쓴다.
 

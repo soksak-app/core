@@ -60,7 +60,11 @@ function setup(t, { surface = true, params = { path: "sample.txt" } } = {}) {
     assert.equal(payload.error, undefined, `${name}: ${JSON.stringify(payload.error)}`);
     return payload.result;
   };
-  return { view, bridge, request, registrations, posted };
+  // The values that the view sent for a watched status, as {value, version}, in order.
+  const changes = (name) => posted.filter((message) => message.command === "runtime.native.call"
+    && message.params.name === "changed" && message.params.payload.name === name)
+    .map((message) => ({ value: message.params.payload.value, version: message.params.payload.version }));
+  return { view, bridge, request, registrations, posted, changes };
 }
 
 test("the bridge registers the actual view document without plugin exposure setup", { timeout: 5000 }, async (t) => {
@@ -105,7 +109,7 @@ test("the document observer rejects missing or malformed view start params", { t
 });
 
 test("view input records its actual document events and core requests have one owner", { timeout: 5000 }, async (t) => {
-  const { view, bridge, registrations, request } = setup(t);
+  const { view, bridge, registrations, request, changes } = setup(t);
   const pluginRequests = [];
   await bridge.runtime.native.on("exposure-request", (value) => pluginRequests.push(value));
   await turn();
@@ -117,14 +121,13 @@ test("view input records its actual document events and core requests have one o
   assert.equal(events.length, 32);
   assert.deepEqual(events[0], { sequence: 3, type: "pointerdown", trusted: false, x: 2, y: 19,
     key: null, modifiers: ["shift", "command"] });
-  const next = await request("status.next", "core.surface.input", { version: 0 });
-  assert.deepEqual(next.value, events);
+  assert.deepEqual(changes("core.surface.input").at(-1).value, events, "the last change sent the value that the read returns");
   assert.deepEqual(pluginRequests, [], "the plugin exposure listener answered a core document request");
   await request("status.unwatch", "core.surface.input");
 });
 
 test("the document audit includes separate binders and open shadow roots and releases disposed bindings", { timeout: 5000 }, async (t) => {
-  const { view, registrations, request } = setup(t);
+  const { view, registrations, request, changes } = setup(t);
   const first = createBinder(async () => {}, { check() {} });
   const second = createBinder(async () => {}, { check() {} });
   t.after(() => { first.dispose(); second.dispose(); });
@@ -137,8 +140,8 @@ test("the document audit includes separate binders and open shadow roots and rel
   assert.deepEqual((await request("status.get", "core.surface.document")).unbound, []);
   await request("status.watch", "core.surface.document");
   second.dispose();
-  const next = await request("status.next", "core.surface.document", { version: 0 });
-  assert.deepEqual(next.value.unbound, [{ tag: "button", expose: "probe.shadow", command: null, text: "Shadow" }]);
+  await turn();
+  assert.deepEqual(changes("core.surface.document").at(-1).value.unbound, [{ tag: "button", expose: "probe.shadow", command: null, text: "Shadow" }]);
   assert.deepEqual(first.audit(view.document.body), [], "the document audit changed an individual binder's contract");
   await request("status.unwatch", "core.surface.document");
 });
@@ -150,7 +153,7 @@ test("a view bridge without a surface registers no surface document entries", { 
 });
 
 test("document watchers observe delegated shadow controls and mutations and close after unwatch", { timeout: 5000 }, async (t) => {
-  const { view, request } = setup(t);
+  const { view, request, changes } = setup(t);
   await turn();
   const host = view.document.body.appendChild(view.document.createElement("section"));
   await turn();
@@ -162,19 +165,25 @@ test("document watchers observe delegated shadow controls and mutations and clos
   const binder = createBinder(async () => {}, { check() {} });
   t.after(() => binder.dispose());
   await request("status.watch", "core.surface.document");
-  let version = (await request("status.next", "core.surface.document", { version: 0 })).version;
+  const first = changes("core.surface.document").at(-1);
   binder.mark(shadow.querySelector("button"), "probe.press");
   binder.delegate(shadow);
-  let update = await request("status.next", "core.surface.document", { version });
-  version = update.version;
+  await turn();
+  let update = changes("core.surface.document").at(-1);
+  assert.ok(update.version > first.version, "the delegation sent a newer version");
   assert.equal(update.value.unbound.some(({ expose }) => expose === "probe.late"), false);
   shadow.querySelector("button").removeAttribute("data-expose");
   await turn();
-  update = await request("status.next", "core.surface.document", { version });
+  await turn();
+  update = changes("core.surface.document").at(-1);
   assert.equal(update.value.unbound.some(({ command, expose }) => command === "probe.press" && expose === null), true);
   binder.dispose();
   await request("status.unwatch", "core.surface.document");
-  assert.deepEqual(await request("status.next", "core.surface.document", { version: update.version }), { closed: true });
+  const sent = changes("core.surface.document").length;
+  shadow.querySelector("button").setAttribute("data-expose", "probe.again");
+  await turn();
+  await turn();
+  assert.equal(changes("core.surface.document").length, sent, "an unwatched document status sends no change");
 });
 
 

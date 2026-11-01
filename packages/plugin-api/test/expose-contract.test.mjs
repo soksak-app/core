@@ -9,7 +9,7 @@ import { createExpose } from "../index.js";
 
 const CONTRACT = JSON.parse(readFileSync(new URL("../contract/expose.json", import.meta.url), "utf8"));
 const EXPECTED_IDS = [
-  "expose.status.get-watch-and-next-in-order",
+  "expose.status.get-watch-and-changes-in-order",
   "expose.status.refuses-undeclared-and-duplicate",
   "expose.dom.act-rect-and-refusals",
   "expose.dispose.ends-registrations-and-requests",
@@ -30,6 +30,7 @@ async function runCase(testCase) {
     const { document } = window;
     const registered = [];
     const replies = [];
+    const changed = [];
     const effects = [];
     let request = null;
     for (const element of document.querySelectorAll("[id]")) {
@@ -56,6 +57,10 @@ async function runCase(testCase) {
       // The unregister of the surface port: the page registration ends, which the case records as an unregister.
       unregister() {
         registered.push({ kind: "unregister" });
+        return Promise.resolve();
+      },
+      changed(name, value, version) {
+        changed.push({ name, value: structuredClone(value), version });
         return Promise.resolve();
       },
       report() {},
@@ -117,6 +122,7 @@ async function runCase(testCase) {
       outputs.push({
         registered: registered.splice(0),
         replies: replies.splice(0),
+        changed: changed.splice(0),
         effects: effects.splice(0),
         result: result ?? null,
         throws,

@@ -1371,7 +1371,7 @@ export function validateExposureFile(file) {
 
 /** The entry kinds that the request methods handle. */
 export const METHOD_KINDS = Object.freeze({
-  "status.get": "status", "status.watch": "status", "status.unwatch": "status", "status.next": "status",
+  "status.get": "status", "status.watch": "status", "status.unwatch": "status",
   "command.run": "command", "dom.rect": "dom", "dom.act": "dom",
 });
 
@@ -1517,9 +1517,9 @@ export function actOn(element, { action, value, event }) {
 /**
  * The entries registered in one document. A name that the declarations (the result of declarationMap) do not contain cannot be registered.
  *
- * A status watch is delivered in two ways. changed(value) of watch is
- * called each time the value changes, and status.next answers with {version, value} when a value
- * newer than the version of the request exists. When the watch ends, a waiting status.next answers with {closed: true}.
+ * A status watch is an event subscription: status.watch sends the current value through changed(name, value, version) of the
+ * request, and each later different value is sent with the next version until status.unwatch. A repeated status.watch sends the
+ * current value again with its version, so a new subscriber of the same watch receives it (docs/spec/exposure.md#relay).
  */
 export function exposureEntries(declared) {
   const statuses = new Map();
@@ -1552,21 +1552,22 @@ export function exposureEntries(declared) {
 
   function stop(entry) {
     entry.watching = false;
+    entry.changed = null;
+    // The next watch sends the value it reads, also when that value equals the last value of this watch.
+    entry.text = undefined;
     const stopper = entry.stop;
     entry.stop = null;
     if (typeof stopper === "function") stopper();
-    for (const resolve of entry.waiters.splice(0)) resolve({ closed: true });
   }
 
-  function update(entry, value, changed) {
+  function update(entry, value) {
     if (!entry.watching) return;
     const text = JSON.stringify(jsonStatusValue(entry.name, value));
     if (text === entry.text) return;
     entry.text = text;
     entry.value = value;
     entry.version++;
-    for (const resolve of entry.waiters.splice(0)) resolve({ version: entry.version, value: entry.value });
-    changed(entry.value);
+    entry.changed(entry.name, entry.value, entry.version);
   }
 
   return {
@@ -1605,7 +1606,7 @@ export function exposureEntries(declared) {
       if (typeof read !== "function" || typeof subscribe !== "function") {
         throw new Error(`status ${name} requires read and subscribe functions`);
       }
-      statuses.set(name, { name, read, subscribe, watching: false, stop: null, text: undefined, value: null, version: 0, waiters: [] });
+      statuses.set(name, { name, read, subscribe, watching: false, stop: null, changed: null, text: undefined, value: null, version: 0 });
     },
 
     command(name, run) {
@@ -1652,9 +1653,14 @@ export function exposureEntries(declared) {
       if (method === "status.get") return jsonStatusValue(name, await status(name).read());
       if (method === "status.watch") {
         const entry = status(name);
-        if (entry.watching) return null;
+        entry.changed = changed;
+        if (entry.watching) {
+          // A watch whose first value is still being read sends it when the read ends.
+          if (entry.version > 0) changed(name, entry.value, entry.version);
+          return null;
+        }
         entry.watching = true;
-        const listen = (value) => update(entry, value, (v) => changed(name, v));
+        const listen = (value) => update(entry, value);
         entry.stop = entry.subscribe(listen);
         listen(await entry.read());
         return null;
@@ -1663,15 +1669,6 @@ export function exposureEntries(declared) {
         const entry = statuses.get(name);
         if (entry) stop(entry);
         return null;
-      }
-      if (method === "status.next") {
-        const entry = status(name);
-        if (!entry.watching) return { closed: true };
-        if (!Number.isInteger(params.version)) {
-          throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `status.next for ${name} requires an integer version`);
-        }
-        if (entry.version > params.version) return { version: entry.version, value: entry.value };
-        return new Promise((resolve) => entry.waiters.push(resolve));
       }
       if (method === "command.run") {
         const run = commands.get(name);
@@ -1746,13 +1743,30 @@ export async function replyPayload(work) {
  * and the returned promise is rejected when the name is not declared. A request that the main page forwards is
  * answered with the entries registered in this document.
  *
- * A watch is delivered through the path that the main page determines. The main page forwards status.watch and then
- * forwards status.next {name, version} repeatedly; this document answers with {version, value} when a value
- * newer than version exists.
+ * A watch is an event subscription: after a forwarded status.watch, this document sends the current value and each later different
+ * value with its version through port.changed(name, value, version) until the forwarded status.unwatch.
  */
 export function createExpose(port, load) {
   // A reply that the host refuses is reported through port.report, so a port without it would leave that failure nowhere.
   if (typeof port?.report !== "function") throw new TypeError("createExpose requires the port report function");
+  // The values of a watched status leave this document only through port.changed.
+  if (typeof port.changed !== "function") throw new TypeError("createExpose requires the port changed function");
+  // A failure that port.report cannot carry is given with both texts to reportError, which dispatches the error event of the page
+  // that the page error path records.
+  const reportFailure = async (text) => {
+    try {
+      await port.report(text);
+    } catch (failure) {
+      // default: a rejection that is not an Error carries its value as the failure text.
+      globalThis.reportError(new Error(`${text}; report failed: ${String(failure?.message ?? failure)}`));
+    }
+  };
+  // A change that the port refuses is reported; the next change still carries a newer version.
+  const changed = (name, value, version) => {
+    Promise.resolve().then(() => port.changed(name, value, version)).catch((error) =>
+      // default: a rejection that is not an Error carries its value as the diagnostic reason.
+      reportFailure(`exposure change ${name} version ${version}: ${String(error?.message ?? error)}`));
+  };
   let entries = null;
   let loaded = null;
   // The remover of the request listener that the port returns. Dispose calls it, so no request is answered after dispose.
@@ -1772,22 +1786,14 @@ export function createExpose(port, load) {
       const made = exposureEntries(declared);
       loaded = made;
       stopRequests = await port.onRequest(({ id, method, params }) => {
-        replyPayload(() => made.answer(method, params)).then(async (payload) => {
+        replyPayload(() => made.answer(method, params, changed)).then(async (payload) => {
           try {
             await port.reply(id, payload);
           } catch (error) {
             // The host may have abandoned the request while the page was answering. The rejected reply is reported through
             // port.report; the host still owns the request and response decision.
             // default: a rejection that is not an Error carries its value as the diagnostic reason.
-            const text = `exposure reply ${id}: ${String(error?.message ?? error)}`;
-            try {
-              await port.report(text);
-            } catch (failure) {
-              // A report that fails leaves no channel of the port, so the failure is given with both texts to reportError, which
-              // dispatches the error event of the page that the page error path records.
-              // default: a rejection that is not an Error carries its value as the failure text.
-              globalThis.reportError(new Error(`${text}; report failed: ${String(failure?.message ?? failure)}`));
-            }
+            await reportFailure(`exposure reply ${id}: ${String(error?.message ?? error)}`);
           }
         });
       });

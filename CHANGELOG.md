@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F342-1: A surface status watch is an event subscription: the surface page sends the current value and each later different value of a watched status as `changed {name, value, version}` (a view through the view call `runtime.native.call` `changed`), the main page delivers each to the watches whose version is older and traces each value that no watch takes as `page.trace.surface.change.dropped`, and the forward `status.next`, which waited without a time limit and kept a reload of the main page from starting, is removed.
 - F341: The view surface specification states that `runtime.status.watch` delivers `null` while no surface registers the watched status.
 - F340: The tauriv2 host keeps a null `diagnostics` and `section` of the view start values, as the Wails host does, instead of refusing them as missing.
 - F338: The application draws the section surfaces of a plugin that declares only sections, and the background path of the memory saver and of hidden view preparation applies only to tabs (`keepsBackground`).

@@ -1,9 +1,9 @@
 {
   "surface": "packages/plugin-api/index.js#createExpose",
-  "description": "Ordered steps of the exposure registration of a surface page: the status and dom registrations the page makes, the requests the host forwards (status.get, status.watch, status.next, status.unwatch, dom.act, dom.rect), and the replies the page sends. A step is one of status (register a status with a read and a subscribe function), dom (register a dom name for the element that the selector finds), request (a host request {id, method, params}), or set (the status value changes and its subscribers are called with it). Each step lists what it produces: registered is the port registrations in order, replies is the replies sent in order, effects is the clicks the page elements received in order, result is the value of the step's registration, and throws is the text of the error the step raises, or null. The declarations are the bundle that load returns. Each reply is {id, payload} with payload {result} or {error: {code, message}}. A step with dispose ends the page registration (createExpose dispose): it runs the dispose of the page and records the unregister of the port as {kind: \"unregister\"} in registered, and a request after it is not answered. A bind step with paramsFromValue: true takes the params of each run from the value of the element at that run, so the element gets no data-params; an inspect step reports the data-params attribute of its selector as result (null when it has none), and a click step with value sets the value of the element before it clicks.",
+  "description": "Ordered steps of the exposure registration of a surface page: the status and dom registrations the page makes, the requests the host forwards (status.get, status.watch, status.unwatch, dom.act, dom.rect), and the replies the page sends. A step is one of status (register a status with a read and a subscribe function), dom (register a dom name for the element that the selector finds), request (a host request {id, method, params}), or set (the status value changes and its subscribers are called with it). Each step lists what it produces: registered is the port registrations in order, replies is the replies sent in order, changed is the port changed calls {name, value, version} in order: a status.watch sends the current value with its version, and each later different value while the watch lasts sends the value with the next version, effects is the clicks the page elements received in order, result is the value of the step's registration, and throws is the text of the error the step raises, or null. The declarations are the bundle that load returns. Each reply is {id, payload} with payload {result} or {error: {code, message}}. A step with dispose ends the page registration (createExpose dispose): it runs the dispose of the page and records the unregister of the port as {kind: \"unregister\"} in registered, and a request after it is not answered. A bind step with paramsFromValue: true takes the params of each run from the value of the element at that run, so the element gets no data-params; an inspect step reports the data-params attribute of its selector as result (null when it has none), and a click step with value sets the value of the element before it clicks.",
   "cases": [
     {
-      "id": "expose.status.get-watch-and-next-in-order",
+      "id": "expose.status.get-watch-and-changes-in-order",
       "initial": 3,
       "declarations": {
         "status": [
@@ -29,6 +29,7 @@
               }
             ],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -52,6 +53,7 @@
                 }
               }
             ],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -75,31 +77,11 @@
                 }
               }
             ],
-            "effects": [],
-            "result": null,
-            "throws": null
-          }
-        },
-        {
-          "request": {
-            "id": 3,
-            "method": "status.next",
-            "params": {
-              "name": "demo.count",
-              "version": 0
-            }
-          },
-          "output": {
-            "registered": [],
-            "replies": [
+            "changed": [
               {
-                "id": 3,
-                "payload": {
-                  "result": {
-                    "version": 1,
-                    "value": 3
-                  }
-                }
+                "name": "demo.count",
+                "value": 3,
+                "version": 1
               }
             ],
             "effects": [],
@@ -109,16 +91,29 @@
         },
         {
           "request": {
-            "id": 4,
-            "method": "status.next",
+            "id": 3,
+            "method": "status.watch",
             "params": {
-              "name": "demo.count",
-              "version": 1
+              "name": "demo.count"
             }
           },
           "output": {
             "registered": [],
-            "replies": [],
+            "replies": [
+              {
+                "id": 3,
+                "payload": {
+                  "result": null
+                }
+              }
+            ],
+            "changed": [
+              {
+                "name": "demo.count",
+                "value": 3,
+                "version": 1
+              }
+            ],
             "effects": [],
             "result": null,
             "throws": null
@@ -128,15 +123,12 @@
           "set": 4,
           "output": {
             "registered": [],
-            "replies": [
+            "replies": [],
+            "changed": [
               {
-                "id": 4,
-                "payload": {
-                  "result": {
-                    "version": 2,
-                    "value": 4
-                  }
-                }
+                "name": "demo.count",
+                "value": 4,
+                "version": 2
               }
             ],
             "effects": [],
@@ -145,8 +137,19 @@
           }
         },
         {
+          "set": 4,
+          "output": {
+            "registered": [],
+            "replies": [],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
           "request": {
-            "id": 5,
+            "id": 4,
             "method": "status.unwatch",
             "params": {
               "name": "demo.count"
@@ -156,12 +159,24 @@
             "registered": [],
             "replies": [
               {
-                "id": 5,
+                "id": 4,
                 "payload": {
                   "result": null
                 }
               }
             ],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "set": 5,
+          "output": {
+            "registered": [],
+            "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -169,7 +184,7 @@
         },
         {
           "request": {
-            "id": 6,
+            "id": 5,
             "method": "status.next",
             "params": {
               "name": "demo.count",
@@ -180,14 +195,43 @@
             "registered": [],
             "replies": [
               {
-                "id": 6,
+                "id": 5,
                 "payload": {
-                  "result": {
-                    "closed": true
+                  "error": {
+                    "code": -32601,
+                    "message": "unknown method status.next"
                   }
                 }
               }
             ],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "request": {
+            "id": 6,
+            "method": "status.get",
+            "params": {
+              "name": "demo.absent"
+            }
+          },
+          "output": {
+            "registered": [],
+            "replies": [
+              {
+                "id": 6,
+                "payload": {
+                  "error": {
+                    "code": 1001,
+                    "message": "unknown status demo.absent"
+                  }
+                }
+              }
+            ],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -196,32 +240,6 @@
         {
           "request": {
             "id": 7,
-            "method": "status.get",
-            "params": {
-              "name": "demo.absent"
-            }
-          },
-          "output": {
-            "registered": [],
-            "effects": [],
-            "result": null,
-            "throws": null,
-            "replies": [
-              {
-                "id": 7,
-                "payload": {
-                  "error": {
-                    "code": 1001,
-                    "message": "unknown status demo.absent"
-                  }
-                }
-              }
-            ]
-          }
-        },
-        {
-          "request": {
-            "id": 8,
             "method": "status.foo",
             "params": {
               "name": "demo.count"
@@ -229,12 +247,9 @@
           },
           "output": {
             "registered": [],
-            "effects": [],
-            "result": null,
-            "throws": null,
             "replies": [
               {
-                "id": 8,
+                "id": 7,
                 "payload": {
                   "error": {
                     "code": -32601,
@@ -242,7 +257,11 @@
                   }
                 }
               }
-            ]
+            ],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
           }
         }
       ]
@@ -269,6 +288,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": "status demo.absent is not declared"
@@ -286,6 +306,7 @@
               }
             ],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -298,6 +319,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": "status demo.count is already registered"
@@ -338,6 +360,7 @@
               }
             ],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -362,6 +385,7 @@
                 }
               }
             ],
+            "changed": [],
             "effects": [
               "click save"
             ],
@@ -379,9 +403,6 @@
           },
           "output": {
             "registered": [],
-            "effects": [],
-            "result": null,
-            "throws": null,
             "replies": [
               {
                 "id": 2,
@@ -395,7 +416,11 @@
                   }
                 }
               }
-            ]
+            ],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
           }
         },
         {
@@ -409,9 +434,6 @@
           },
           "output": {
             "registered": [],
-            "effects": [],
-            "result": null,
-            "throws": null,
             "replies": [
               {
                 "id": 3,
@@ -422,7 +444,11 @@
                   }
                 }
               }
-            ]
+            ],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
           }
         },
         {
@@ -437,9 +463,6 @@
           },
           "output": {
             "registered": [],
-            "effects": [],
-            "result": null,
-            "throws": null,
             "replies": [
               {
                 "id": 4,
@@ -450,7 +473,11 @@
                   }
                 }
               }
-            ]
+            ],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
           }
         },
         {
@@ -464,9 +491,6 @@
           },
           "output": {
             "registered": [],
-            "effects": [],
-            "result": null,
-            "throws": null,
             "replies": [
               {
                 "id": 5,
@@ -477,7 +501,11 @@
                   }
                 }
               }
-            ]
+            ],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
           }
         },
         {
@@ -492,9 +520,6 @@
           },
           "output": {
             "registered": [],
-            "effects": [],
-            "result": null,
-            "throws": null,
             "replies": [
               {
                 "id": 6,
@@ -505,7 +530,11 @@
                   }
                 }
               }
-            ]
+            ],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
           }
         },
         {
@@ -516,6 +545,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": "dom demo.save is already registered"
@@ -531,9 +561,6 @@
           },
           "output": {
             "registered": [],
-            "effects": [],
-            "result": null,
-            "throws": null,
             "replies": [
               {
                 "id": 7,
@@ -544,7 +571,11 @@
                   }
                 }
               }
-            ]
+            ],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
           }
         }
       ]
@@ -576,6 +607,7 @@
               }
             ],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -599,6 +631,7 @@
                 }
               }
             ],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -613,6 +646,7 @@
               }
             ],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -629,6 +663,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -660,6 +695,7 @@
               }
             ],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -672,6 +708,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": "exposure is disposed"
@@ -688,6 +725,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -730,6 +768,7 @@
               }
             ],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -746,6 +785,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -758,6 +798,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [
               "click save",
               "run demo.save {\"id\":\"a\"}"
@@ -775,6 +816,7 @@
               }
             ],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -787,6 +829,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [
               "click save"
             ],
@@ -822,6 +865,7 @@
               }
             ],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": "exposure is disposed"
@@ -838,6 +882,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -880,6 +925,7 @@
               }
             ],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -894,6 +940,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -906,6 +953,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [],
             "result": null,
             "throws": null
@@ -919,6 +967,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [
               "click field",
               "run demo.set {\"value\":\"first\"}"
@@ -935,6 +984,7 @@
           "output": {
             "registered": [],
             "replies": [],
+            "changed": [],
             "effects": [
               "click field",
               "run demo.set {\"value\":\"second\"}"

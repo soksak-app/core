@@ -165,6 +165,7 @@ test("the page expose binds only commands declared for the page and runs registe
   const handlers = [];
   const port = {
     onRequest: async (fn) => handlers.push(fn), reply() {}, register: async () => {},
+    changed: async (name) => { throw new Error(`unexpected change of ${name}`); },
     report: async (message) => { throw new Error(`unexpected report: ${message}`); },
   };
   const declared = declarationMap({

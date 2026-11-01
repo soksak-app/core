@@ -419,42 +419,35 @@ test("run executes a core command locally with schema checks", async () => {
   await assert.rejects(made.run("core.fixture.missing", {}), { code: EXPOSURE_ERRORS.unknownName });
 });
 
-test("a watched surface status follows status.next replies until unwatch", async () => {
-  let release = null;
-  const host = fakeHost(({ method, params }) => {
-    if (method !== "status.next") return { result: null };
-    if (params.version === 0) return { result: { version: 1, value: ["a"] } };
-    if (params.version === 1) return { result: { version: 2, value: ["b"] } };
-    return new Promise((resolve) => { release = resolve; });
-  });
+test("a watched surface status receives the values that the surface sends, and no forward waits for a change", async () => {
+  const host = fakeHost(({ method }) => (method === "status.next" ? new Promise(() => {}) : { result: null }));
   const made = coreRegistry(host);
   made.configure({ surfacePlugin: () => "probe" });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
   assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "probe.lines" } }), { result: null });
   assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "probe.lines" } }), { result: null });
   await new Promise((resolve) => setImmediate(resolve));
+  const forwarded = (method) => host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === method);
+  assert.deepEqual(forwarded("status.next"), [], "a watch sends no request that waits for a change");
+  assert.equal(forwarded("status.watch").length, 1, "a second watch is not forwarded");
+  made.changed({ surface: "tab-a", name: "probe.lines", value: ["a"], version: 1 });
+  made.changed({ surface: "tab-a", name: "probe.lines", value: ["b"], version: 2 });
+  made.changed({ surface: "tab-a", name: "probe.lines", value: ["stale"], version: 1 });
+  made.changed({ surface: "tab-b", name: "probe.lines", value: ["other"], version: 3 });
   const changes = () => host.calls.filter(([name]) => name === "exposureChanged").map(([, arg]) => arg);
   assert.deepEqual(changes(), [
     { name: "probe.lines", value: ["a"] },
     { name: "probe.lines", value: ["b"] },
-  ]);
-  const forwarded = (method) => host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === method);
-  assert.equal(forwarded("status.watch").length, 1, "a second watch is not forwarded");
-  assert.deepEqual(forwarded("status.next").map(([, arg]) => arg.params.version), [0, 1, 2]);
+  ], "each newer value of the watched surface is sent once, and an older version or another surface is not");
   assert.deepEqual(await made.handle({ method: "status.unwatch", params: { name: "probe.lines" } }), { result: null });
   assert.equal(forwarded("status.unwatch").length, 1);
-  release({ result: { version: 3, value: ["c"] } });
-  await new Promise((resolve) => setImmediate(resolve));
+  made.changed({ surface: "tab-a", name: "probe.lines", value: ["c"], version: 3 });
   assert.equal(changes().length, 2, "a value after unwatch is not sent");
 });
 
 test("a status change that the host refuses is reported with the status name", async () => {
   const reported = [];
-  const host = fakeHost(({ method, params }) => {
-    if (method !== "status.next") return { result: null };
-    if (params.version === 0) return { result: { version: 1, value: null } };
-    return new Promise(() => {});
-  });
+  const host = fakeHost(() => ({ result: null }));
   const refusing = {
     calls: host.calls,
     call: (name, arg) => name === "exposureChanged"
@@ -465,6 +458,7 @@ test("a status change that the host refuses is reported with the status name", a
   made.configure({ surfacePlugin: () => "probe" });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
   assert.deepEqual(await made.handle({ method: "status.watch", params: { name: "probe.lines" } }), { result: null });
+  made.changed({ surface: "tab-a", name: "probe.lines", value: null, version: 1 });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(reported, ["status probe.lines change was refused: argument request.value is missing"]);
   assert.throws(() => createRegistry({ call: refusing.call }), /a registry with a host call needs report\(error\)/);
@@ -483,19 +477,18 @@ test("without a host the registry answers in the page and cannot forward", async
   assert.deepEqual(await made.handle({ method: "status.get", params: { name: "core.fixture.count" } }), { result: 1 });
 });
 
-test("a failed status.next ends the watch", async () => {
-  const host = fakeHost(({ method }) => (method === "status.next"
+test("a status watch that the surface refuses is not kept, so the next watch is forwarded again", async () => {
+  const host = fakeHost(({ method }) => (method === "status.watch"
     ? { error: { code: EXPOSURE_ERRORS.gone, message: "gone" } } : { result: null }));
   const made = coreRegistry(host);
   made.configure({ surfacePlugin: () => "probe" });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
-  await made.handle({ method: "status.watch", params: { name: "probe.lines" } });
-  await new Promise((resolve) => setImmediate(resolve));
-  const next = () => host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.next").length;
-  assert.equal(next(), 1);
+  assert.equal((await made.handle({ method: "status.watch", params: { name: "probe.lines" } })).error.code, EXPOSURE_ERRORS.gone);
+  made.changed({ surface: "tab-a", name: "probe.lines", value: ["a"], version: 1 });
+  assert.deepEqual(host.calls.filter(([name]) => name === "exposureChanged"), [], "a refused watch delivers no value");
   await made.handle({ method: "status.watch", params: { name: "probe.lines" } });
   assert.equal(host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.watch").length, 2,
-    "a new watch starts after the previous one ended");
+    "a new watch is forwarded after the refused one");
 });
 
 test("a request to an unloaded surface fails with tab <id> is unloaded", async () => {
@@ -507,13 +500,7 @@ test("a request to an unloaded surface fails with tab <id> is unloaded", async (
 });
 
 test("surface pages register core surface entries, and requests can name the surface", async () => {
-  const host = fakeHost(({ surface, method, params }) => {
-    if (method === "status.get") return { result: `${params.name}@${surface}` };
-    if (method === "status.next") {
-      return params.version === 0 ? { result: { version: 1, value: surface } } : new Promise(() => {});
-    }
-    return { result: null };
-  });
+  const host = fakeHost(({ surface, method, params }) => (method === "status.get" ? { result: `${params.name}@${surface}` } : { result: null }));
   const made = coreRegistry(host);
   const plugins = { "tab-a": "probe", "tab-b": "probe" };
   made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null, preferred: () => ["tab-a"] });
@@ -533,7 +520,7 @@ test("surface pages register core surface entries, and requests can name the sur
 
   await made.handle({ method: "status.watch", params: { name: "core.surface.document", surface: "tab-b" } });
   await made.handle({ method: "status.watch", params: { name: "core.surface.document" } });
-  await new Promise((resolve) => setImmediate(resolve));
+  for (const surface of ["tab-b", "tab-a"]) made.changed({ surface, name: "core.surface.document", value: surface, version: 1 });
   assert.deepEqual(host.calls.filter(([name]) => name === "exposureChanged").map(([, arg]) => arg), [
     { name: "core.surface.document", surface: "tab-b", value: "tab-b" },
     { name: "core.surface.document", value: "tab-a" },
@@ -577,14 +564,14 @@ test("a handled settling failure is reported and does not reject the state-chang
 });
 
 test("observe follows a surface status in the page, switches surfaces on registration, and stops on dispose", async () => {
-  const pending = [];
+  // A surface sends its current value as it starts a watch, as the page of a surface does through changed.
+  let made = null;
   const host = fakeHost(({ surface, method, params }) => {
     if (method === "status.get") return { result: [`${surface} now`] };
-    if (method !== "status.next") return { result: null };
-    if (params.version === 0) return { result: { version: 1, value: [`${surface} first`] } };
-    return new Promise((resolve) => pending.push(resolve));
+    if (method === "status.watch") queueMicrotask(() => made.changed({ surface, name: params.name, value: [`${surface} first`], version: 1 }));
+    return { result: null };
   });
-  const made = coreRegistry(host);
+  made = coreRegistry(host);
   made.configure({ surfacePlugin: () => "probe", preferred: () => [] });
   const seen = [];
   const stop = made.observe("probe.lines", "tab-b", (value, surface) => seen.push([surface, value]));
@@ -712,14 +699,38 @@ test("a plugin state registers entries in the page that answer before surfaces a
   made.plugin("probe").clear();
 });
 
-test("a status watch that fails for a reason other than the closed surface reports the error", async () => {
+test("an observation whose watch the surface refuses reports the error with its surface", async () => {
   const reported = [];
-  const host = fakeHost(({ method }) => (method === "status.next"
+  const host = fakeHost(({ method }) => (method === "status.watch"
     ? { error: { code: EXPOSURE_ERRORS.failed, message: "reader crashed" } } : { result: null }));
-  const made = coreRegistry(host, (error) => reported.push(error.message));
+  const made = createRegistry({ call: host.call, report: (error) => { throw error; } });
+  made.declare("core", coreExposes());
+  made.declare("probe", probeExposes());
+  made.configure({ surfacePlugin: () => "probe", preferred: () => [], failed: (error) => reported.push(error.message) });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  made.observe("probe.lines", "tab-a", () => {});
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(reported, ["probe.lines on tab-a: reader crashed"], "the refused watch was not reported with its surface");
+});
+
+test("a value that no watch takes is recorded in the trace with its reason", async (t) => {
+  const traced = [];
+  const performance = await import("../performance.js");
+  t.mock.module("../performance.js", { exports: { ...performance, trace: (name, fields) => { traced.push([name, fields]); } } });
+  const { createRegistry: createTracedRegistry } = await import("../exposure.js?dropped-change");
+  const host = fakeHost(() => ({ result: null }));
+  const made = createTracedRegistry({ call: host.call, report: (error) => { throw error; } });
+  made.declare("core", coreExposes());
+  made.declare("probe", probeExposes());
   made.configure({ surfacePlugin: () => "probe" });
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  made.changed({ surface: "tab-a", name: "probe.lines", value: ["early"], version: 1 });
   await made.handle({ method: "status.watch", params: { name: "probe.lines" } });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(reported, ["status probe.lines watch failed on surface tab-a: reader crashed (code -32000)"], "the failed watch was not reported with its surface and code");
+  made.changed({ surface: "tab-a", name: "probe.lines", value: ["b"], version: 2 });
+  made.changed({ surface: "tab-a", name: "probe.lines", value: ["a"], version: 1 });
+  const dropped = traced.filter(([name]) => name === "surface.change.dropped").map(([, fields]) => fields);
+  assert.deepEqual(dropped, [
+    { surface: "tab-a", name: "probe.lines", version: 1, reason: "no watch" },
+    { surface: "tab-a", name: "probe.lines", version: 1, reason: "older than version 2" },
+  ]);
 });

@@ -18,7 +18,7 @@ const HELD = new Set(["probe left/files.tree", "probe tab-a"]);
 
 function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
   const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [],
-    reports: [], log: [], textSize: [], settings: [], registered: [], errors: [], failed: [], events: [], composition: [], data: [] };
+    reports: [], log: [], textSize: [], settings: [], registered: [], changed: [], errors: [], failed: [], events: [], composition: [], data: [] };
   // The project data of each project and key; a key that holds no value reads its default.
   const stored = new Map();
   const item = (plugin, index) => Object.freeze({ plugin, index, item: { name: plugin }, module: `/modules/@scope/plugin-${plugin}/ui/${plugin}.js`,
@@ -93,6 +93,7 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
       },
       exposure: {
         registered: async ({ kind, name }) => { ran.registered.push({ kind, name }); return null; },
+        changed: (payload) => { ran.changed.push(payload); return null; },
       },
       holdsSurface: (plugin, surface) => HELD.has(`${plugin} ${surface}`),
       data: {
@@ -576,6 +577,24 @@ test("a registered call without its kind or name is refused and records nothing"
   await assert.rejects(answerViewCall({ id: 2, command: "runtime.native.call", params: { name: "registered", payload: { kind: "", name: "probe.state" } } }, options), /requires a non-empty kind/);
   await assert.rejects(answerViewCall({ id: 3, command: "runtime.native.call", params: { name: "registered", payload: { kind: "status" } } }, options), /requires a non-empty name/);
   assert.deepEqual(ran.registered, []);
+});
+
+test("a changed call of the view gives the value of its watched status to the page and replies null", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.native.call",
+    params: { name: "changed", payload: { name: "probe.state", value: null, version: 1 } } }, options), null);
+  assert.deepEqual(ran.changed, [{ name: "probe.state", value: null, version: 1 }]);
+  assert.deepEqual(ran.native.filter(({ name }) => name === "changed"), [], "the change was forwarded to the host call route");
+});
+
+test("a changed call without its name, value or a positive integer version is refused and delivers nothing", async () => {
+  const { ran, options } = fakes();
+  const refused = /view call changed requires a non-empty name, a value and a positive integer version/;
+  for (const [id, payload] of [[1, { value: 1, version: 1 }], [2, { name: "probe.state", version: 1 }],
+    [3, { name: "probe.state", value: 1, version: 0 }], [4, { name: "probe.state", value: 1, version: 1.5 }]]) {
+    await assert.rejects(answerViewCall({ id, command: "runtime.native.call", params: { name: "changed", payload } }, options), refused);
+  }
+  assert.deepEqual(ran.changed, []);
 });
 
 test("a registered call of a plugin command is refused, because a view registers its commands with runtime.command.register", async () => {

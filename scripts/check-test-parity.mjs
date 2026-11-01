@@ -4450,7 +4450,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "export function exposureEntries" },
       { file: "packages/plugin-api/index.js", symbol: "export async function replyPayload" },
-      { file: "packages/workbench/exposure.js", symbol: "async function follow(key, name, watch)" },
+      { file: "packages/workbench/exposure.js", symbol: "function reattach(observer)" },
       { file: "packages/workbench/surface-modules.js", symbol: "view call ${event.id} reply" },
       { file: "packages/workbench/page-log.js", symbol: "function consoleText" },
       { file: "scripts/test-command.mjs", symbol: "export function combineFailures" },
@@ -4463,7 +4463,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/exposure.test.mjs", id: "a dom request refuses an index that is not a non-negative integer instead of reading it as the first element" },
       { file: "packages/plugin-api/test/exposure.test.mjs", id: "an undefined status value or command result is refused with an error that names it, and null is the no-value" },
       { file: "packages/workbench/test/surface-view.test.mjs", id: "a view reply the host refuses is reported through the page error path" },
-      { file: "packages/workbench/test/exposure.test.mjs", id: "a status watch that fails for a reason other than the closed surface reports the error" },
+      { file: "packages/workbench/test/exposure.test.mjs", id: "an observation whose watch the surface refuses reports the error with its surface" },
       { file: "packages/workbench/test/plugin-operations.test.mjs", id: "a host call that rejects with a value that is not an Error is reported with its text" },
       { file: "packages/workbench/test/page-log.test.mjs", id: "a console argument that JSON cannot serialize is recorded as a marker with its reason, not as [object Object]" },
       { file: "scripts/test/test-command.test.mjs", id: "keeps a process error and a cleanup error together when both occur" },
@@ -8013,6 +8013,24 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/memory-saver-declaration.test.mjs", id: "only a tab of a plugin with background keeps its session through the background path" },
     ],
     expected: "A plugin with only sections draws its section surfaces natively, and only a tab of a plugin with background takes the background path.",
+    levels: ["unit"],
+  },
+  {
+    id: "F342-1",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function createExpose(port, load)" },
+      { file: "packages/plugin-api/view.js", symbol: "changed: (name, value, version) =>" },
+      { file: "packages/workbench/exposure.js", symbol: "function deliver({ surface, name, value, version })" },
+      { file: "packages/workbench/view-calls.js", symbol: "if (fields.name === \"changed\")" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/exposure.test.mjs", id: "a watched surface status receives the values that the surface sends, and no forward waits for a change" },
+      { file: "packages/workbench/test/exposure.test.mjs", id: "a value that no watch takes is recorded in the trace with its reason" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a changed call of the view gives the value of its watched status to the page and replies null" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a watched status sends its current value and each change with its version and ends with unwatch" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a forwarded status watch sends the values through the port changed" },
+    ],
+    expected: "A surface status watch is an event subscription: the surface sends each value with its version through changed, and no forward waits for a change.",
     levels: ["unit"],
   },
   {

@@ -41,6 +41,7 @@ async function runCase(testCase) {
       registered.push({ kind, name });
       return Promise.resolve();
     },
+    changed() {},
     report() {},
   };
   const expose = createExpose(port, () => structuredClone(testCase.declarations));

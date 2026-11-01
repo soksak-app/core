@@ -575,6 +575,11 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
           await scoped.native.call("exposureRegister", { kind, name });
           return null;
         },
+        // A value of a watched status of the view goes to the watches of this surface (docs/spec/exposure.md#relay).
+        changed: ({ name, value, version }) => {
+          registry.changed({ surface: surface.surfaceId, name, value, version });
+          return null;
+        },
       },
     },
     // The composition of the view runs the page operations of its surface: the revision of the
