@@ -22,7 +22,7 @@
     },
     {
       "term": "release",
-      "definition": "The file that a registry lists: the pnpm pack file of a plugin, <scope>-<name>-<version>.tgz, <file name>-<version>-<platform>.tar.gz of a sidecar, or soksak-<version>-<platform>-<host>.zip of an application bundle.",
+      "definition": "The file that a registry lists: the pnpm pack file of a plugin, <scope>-<name>-<version>.tgz, the npm pack file of a sidecar, <file name>-<version>-<platform>.tgz, or soksak-<version>-<platform>-<host>.zip of an application bundle.",
       "rejected": [
         "plugin package archive",
         "plugin archive",

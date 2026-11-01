@@ -15,9 +15,11 @@ use crate::install::{
     self, INSTALL_FORMAT, INSTALLED, Index, InstalledPlugin, InstalledSidecar, InstalledState,
     Need, Release, SelectedSidecar, Selection,
 };
+use crate::output::{current_platform, print_json, replace_file};
 use crate::platform;
-use crate::registry::{PLUGIN_ROOT, check_release_modules, read_release, release_files};
-use crate::release::{current_platform, print_json, replace_file};
+use crate::registry::{
+    PACKAGE_ROOT, check_release_modules, check_sidecar_release, read_release, release_files,
+};
 use crate::{Error, Options, config_dir_of};
 
 /// The file in the configuration folder that holds the address of the registry index that installation reads.
@@ -504,16 +506,16 @@ pub(crate) fn write_installed(config_dir: &Path, state: &InstalledState) -> Resu
 }
 
 /// Unpacks a tar.gz release into a temporary folder next to target, then renames it to target. It accepts only regular files and folders and rejects absolute paths and
-/// `..`. When root is not empty, every entry must be inside the folder root, which is removed from the installed paths: a plugin release
-/// holds its files under `package/` (docs/spec/installation.md#plugin-release), and a sidecar release at its top.
-fn extract(data: &[u8], target: &Path, root: &str) -> Result<(), String> {
+/// `..`. Every entry must be inside PACKAGE_ROOT, which is removed from the installed paths: a plugin and a sidecar release hold
+/// their files under `package/` (docs/spec/installation.md#plugin-release).
+fn extract(data: &[u8], target: &Path) -> Result<(), String> {
     create_parent(target)?;
     let name = target
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| format!("{} has no name", target.display()))?;
     let temp = target.with_file_name(format!(".{name}.{}", std::process::id()));
-    let result = extract_into(data, &temp, root).and_then(|()| {
+    let result = extract_into(data, &temp).and_then(|()| {
         std::fs::rename(&temp, target)
             .map_err(|error| crate::files::file_error(target.display(), &error))
     });
@@ -522,7 +524,7 @@ fn extract(data: &[u8], target: &Path, root: &str) -> Result<(), String> {
     })
 }
 
-fn extract_into(data: &[u8], temp: &Path, root: &str) -> Result<(), String> {
+fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
     std::fs::create_dir_all(temp)
         .map_err(|error| crate::files::file_error(temp.display(), &error))?;
     let mut reader = tar::Archive::new(flate2::read::GzDecoder::new(data));
@@ -536,15 +538,12 @@ fn extract_into(data: &[u8], temp: &Path, root: &str) -> Result<(), String> {
             return Err(format!("release entry {raw} leaves the folder"));
         }
         let kind = entry.header().entry_type();
-        if !root.is_empty() && kind.is_dir() && name == root.trim_end_matches('/') {
+        if kind.is_dir() && name == PACKAGE_ROOT.trim_end_matches('/') {
             continue;
         }
-        let name = if root.is_empty() {
-            name
-        } else {
-            name.strip_prefix(root)
-                .ok_or_else(|| format!("entry {raw} is outside {root}"))?
-        };
+        let name = name
+            .strip_prefix(PACKAGE_ROOT)
+            .ok_or_else(|| format!("entry {raw} is outside {PACKAGE_ROOT}"))?;
         let path = temp.join(name);
         if kind.is_dir() {
             std::fs::create_dir_all(&path)
@@ -582,7 +581,8 @@ fn install_release(at: &str, release: &Release, target: &Path) -> Result<(), Str
         Err(error) => return Err(crate::files::file_error(at, &error)),
     }
     let data = read_release(at, release)?;
-    extract(&data, target, "").map_err(|error| format!("{at}: {error}"))
+    check_sidecar_release(&data).map_err(|error| format!("{at}: {error}"))?;
+    extract(&data, target).map_err(|error| format!("{at}: {error}"))
 }
 
 /// The output of a plugin installation. The structure is written as it is, so the key order is the declaration order and the bytes match the Go implementation.
@@ -654,7 +654,7 @@ pub fn install_plugin(
             continue;
         };
         let plugin = &state.plugins[changed];
-        extract(data, &config_dir.join(&plugin.path), PLUGIN_ROOT)
+        extract(data, &config_dir.join(&plugin.path))
             .map_err(|error| format!("plugin {changed} {} package: {error}", plugin.version))?;
     }
     drop_unnamed_sidecars(&mut state);

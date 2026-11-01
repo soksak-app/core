@@ -493,10 +493,6 @@ fn installation_keeps_one_sidecar_version_that_satisfies_every_installed_plugin(
 #[test]
 fn releases_and_installation_paths_follow_the_declared_names() {
     assert_eq!(
-        install::sidecar_release_name("@scope/sidecar-worker", "0.1.1", "darwin-arm64").as_deref(),
-        Ok("scope-sidecar-worker-0.1.1-darwin-arm64.tar.gz")
-    );
-    assert_eq!(
         install::plugin_install_path("probe", "0.2.0").as_deref(),
         Ok("plugins/probe/0.2.0")
     );
@@ -505,7 +501,7 @@ fn releases_and_installation_paths_follow_the_declared_names() {
         Ok("sidecars/scope-sidecar-worker/0.1.1/darwin-arm64")
     );
     rejects(
-        install::sidecar_release_name("@scope/sidecar-worker", "0.1.1", "solaris-sparc"),
+        install::sidecar_install_path("@scope/sidecar-worker", "0.1.1", "solaris-sparc"),
         "unknown platform solaris-sparc",
     );
     rejects(

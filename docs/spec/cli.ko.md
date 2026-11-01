@@ -32,7 +32,6 @@
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | 설치된 plugin을 바꾼다([설치](installation.ko.md)) |
 | `sok plugin list` | 설치된 plugin을 나열한다 |
 | `sok registry use <index>` | 설치가 읽는 registry index를 정한다 |
-| `sok sidecar release <directory> <output directory> [--platform <platform>]` | Sidecar release를 쓰고 `SHA256SUMS`를 갱신한다 |
 | `sok registry build <directory>` | Registry를 검증하고 그 `index.json`을 쓴다 |
 
 선언된 command 이름에는 점이 있으므로(`core.card.split`, `terminal.input`) 위의 명령 단어와 겹치지 않는다.
@@ -55,7 +54,7 @@
 
 ## Event log
 
-`sok`을 실행할 때마다 명령이 대상으로 삼는 설정 디렉터리에 자신의 event 파일 `logs/sok-<boot>.jsonl`을 쓴다. 대상은 명령을 해석하기 전에, 인자 `--` 앞에서만 읽는 `--config-dir`의 값이거나 애플리케이션의 기본 디렉터리다. `sidecar release`처럼 설정을 읽지 않는 명령도 기본 디렉터리에 기록한다. 파일은 층 `sok`으로 [event 계약](logging.ko.md)을 따르고, boot 식별자는 시작 시각(초)과 프로세스 식별자다. 도구는 `logs/`(mode 0700)와 파일(mode 0600, 새로 만듦)이 없으면 만든다. 파일은 level `error`, `warn`, `info`를 담고, level `debug`와 `trace`의 event(상태 0으로 끝나는 명령의 `sok.command`)는 `logs/sok-<boot>.debug.jsonl`에 있다. 도구는 이 파일을 첫 event와 함께 만들고 `log.open`으로 시작한다. 한 번의 실행이 저장하는 것은 다음과 같다.
+`sok`을 실행할 때마다 명령이 대상으로 삼는 설정 디렉터리에 자신의 event 파일 `logs/sok-<boot>.jsonl`을 쓴다. 대상은 명령을 해석하기 전에, 인자 `--` 앞에서만 읽는 `--config-dir`의 값이거나 애플리케이션의 기본 디렉터리다. `registry build`처럼 설정을 읽지 않는 명령도 기본 디렉터리에 기록한다. 파일은 층 `sok`으로 [event 계약](logging.ko.md)을 따르고, boot 식별자는 시작 시각(초)과 프로세스 식별자다. 도구는 `logs/`(mode 0700)와 파일(mode 0600, 새로 만듦)이 없으면 만든다. 파일은 level `error`, `warn`, `info`를 담고, level `debug`와 `trace`의 event(상태 0으로 끝나는 명령의 `sok.command`)는 `logs/sok-<boot>.debug.jsonl`에 있다. 도구는 이 파일을 첫 event와 함께 만들고 `log.open`으로 시작한다. 한 번의 실행이 저장하는 것은 다음과 같다.
 
 - 첫 줄 `log.open`.
 - 명령이 끝날 때 한 번 `sok.command`: 명령 단어(`name`), 공백으로 이은 인자(`args`), 실행의 마이크로초, `ok`, 종료 상태(`status`), 상태가 0이 아니면 표준 오류의 첫 줄(`error`). `args`와 `error`는 문자 경계에서 1024바이트로 자르고, 둘 중 하나라도 잘렸으면 event에 `truncated: true`가 붙는다. level은 `debug`이고, 상태가 0이 아니면 `warn`이다.
@@ -69,7 +68,6 @@ Go 도구의 모든 goroutine은 `Go`(`src/routine.go`)로, Rust 도구의 모�
 이 명령들은 파일을 쓰며 실행 중인 애플리케이션이 필요 없다.
 
 
-`sok sidecar release <directory> <output directory> [--platform <platform>]`는 sidecar 폴더의 `package.json`과 `sidecar.json`을 읽고, `package.json`에 `name`, `version`, 그리고 `sidecar.json`과 `sidecar.json`의 `executable`을 나열한 `files`가 있는지, 그리고 `sidecar.json`이 `replay`를 선언하면 `replay.executable`이 있고 `files`에 나열되어 있는지 검사하며(`replay.executable`이 없거나 `files`가 나열하지 않은 파일이면 그 파일 이름을 담은 오류로 명령이 실패한다), [release](installation.ko.md#sidecar-release) `<file name>-<version>-<platform>.tar.gz`를 쓴다. `--platform`이 다른 플랫폼을 지정하지 않으면 플랫폼은 `sok`이 실행되는 플랫폼이다. `sok`은 파일 내용을 보지 않으므로, 다른 플랫폼을 지정하면 그 플랫폼용으로 build한 파일에 이름을 붙이는 것이다. 그다음 출력 폴더에 `SHA256SUMS`를 쓴다. Release마다 `<sha256>  <release name>` 한 줄이며 release 이름 순서이고, 같은 이름의 release 줄은 바꾼다. Release를 쓰기 전에 `SHA256SUMS`를 읽으므로, 형식이 틀린 파일이면 아무것도 쓰지 않고 실패한다. 출력은 `{ name, version, platform, release, sha256 }`이다.
 
 두 release는 gzip으로 압축한 tar 파일이다. `package.json`과 `files`의 모든 경로를 폴더 기준 상대 경로로 담으며, 폴더는 그 아래 파일까지 담는다. 항목은 경로 순서이고, 수정 시각 0, 소유자 0, mode 0644를 가지며 실행 bit가 있는 파일은 0755다. 나열한 경로가 없거나, 폴더 밖으로 나가거나, symbolic link이거나 그것을 담거나, 일반 파일도 폴더도 아닌 파일이면 명령은 실패하고 아무것도 쓰지 않는다. 두 구현은 같은 항목을 쓰지만 gzip stream이 다르므로, release의 `sha256`은 그것을 쓴 `sok`이 출력한 값이다.
 

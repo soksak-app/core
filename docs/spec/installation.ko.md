@@ -42,7 +42,7 @@ plugin 저장소는 한 core release의 `@soksak/plugin-api`로 빌드한다. �
 
 ## Sidecar release
 
-Sidecar version은 플랫폼마다 release 하나 `<file name>-<version>-<platform>.tar.gz`로 release된다. Sidecar `@scope/name`의 file name은 `scope-name`이고, scope가 없는 이름은 그대로 쓴다. 플랫폼은 `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64`, `windows-x64` 중 하나다. Installer는 sidecar release를 풀고 실행하기 전에 registry 항목의 `sha256`으로만 검사한다. 제3자의 것을 포함해 sidecar는 애플리케이션이 서명이나 다른 방법으로 검토하지 않는다.
+Sidecar version은 플랫폼마다 release 하나 `<file name>-<version>-<platform>.tgz`로 release된다. 이것은 build한 sidecar 폴더에 대해 `npm pack`이 쓰는 파일이며, entry가 `package/package.json`과 `package.json`의 `files`가 적는 각 파일의 `package/<path>`이고 파일마다 mode를 담은 gzip tar다. `pnpm pack`은 파일의 실행 비트를 보존하지 않으므로 sidecar release는 `npm pack`으로 쓴다. 모든 entry가 `package/`로 시작하지 않는 release는 `<release>: entry <path> is outside package/`로 거부하고, `sidecar.json`이 지정한 `executable`이나 `replay.executable`을 담지 않은 release는 `<release>: sidecar.json: <field> <path> is not in the release`로 거부한다. Sidecar `@scope/name`의 file name은 `scope-name`이고, scope가 없는 이름은 그대로 쓴다. 플랫폼은 `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64`, `windows-x64` 중 하나다. 이 검사 밖에서 installer는 sidecar release를 풀고 실행하기 전에 registry 항목의 `sha256`으로만 검사한다. 제3자의 것을 포함해 sidecar는 애플리케이션이 서명이나 다른 방법으로 검토하지 않는다.
 
 ## Registry index
 

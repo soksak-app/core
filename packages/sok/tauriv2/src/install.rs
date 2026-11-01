@@ -385,19 +385,6 @@ pub(crate) fn check_platform(platform: &str) -> Result<(), String> {
     }
 }
 
-/// The file name of a sidecar release.
-pub fn sidecar_release_name(name: &str, version: &str, platform: &str) -> Result<String, String> {
-    check_version(
-        &format!("sidecar {name} version"),
-        Some(&Value::from(version)),
-    )?;
-    check_platform(platform)?;
-    Ok(format!(
-        "{}-{version}-{platform}.tar.gz",
-        sidecar_file_name(name)?
-    ))
-}
-
 /// The folder in the configuration folder that unpacks one plugin version.
 pub fn plugin_install_path(id: &str, version: &str) -> Result<String, String> {
     if !is_identifier(id) {

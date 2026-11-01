@@ -318,7 +318,7 @@ pub(crate) fn run_app(
         relaunch_app(&options, &|bundle, arguments, activate| {
             platform.open_application(bundle, arguments, activate)
         })?;
-        crate::release::print_json(
+        crate::output::print_json(
             stdout,
             &serde_json::json!({"target": options.target.display().to_string()}),
         )?;
@@ -334,7 +334,7 @@ pub(crate) fn run_app(
     replace_app(&options, &|bundle, arguments| {
         platform.open_application(bundle, arguments, true)
     })?;
-    crate::release::print_json(
+    crate::output::print_json(
         stdout,
         &serde_json::json!({"target": options.target.display().to_string()}),
     )?;

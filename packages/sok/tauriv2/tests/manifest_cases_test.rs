@@ -8,8 +8,8 @@ use serde_json::{Value, json};
 
 #[path = "support/folder.rs"]
 mod folder;
-#[path = "support/plugin_release.rs"]
-mod plugin_release;
+#[path = "support/package_release.rs"]
+mod package_release;
 
 use folder::Folder;
 
@@ -101,7 +101,7 @@ fn plugin_install_replays_the_manifest_cases() {
             write_tree(dir.path(), &[(file.as_str(), "")]);
         }
         let out = Folder::new("manifest-release");
-        let release = plugin_release::pack(dir.path(), out.path());
+        let release = package_release::pack(dir.path(), out.path());
         let index = index_for_release(
             Path::new(release["release"].as_str().unwrap()),
             release["sha256"].as_str().unwrap(),

@@ -50,9 +50,9 @@ func readEntries(dir, kind string, validate func(any) error, fileName func(map[s
 	return entries, nil
 }
 
-// pluginRoot is the folder of every entry of a plugin release, the layout that `pnpm pack` writes
+// packageRoot is the folder of every entry of a plugin or sidecar release, the layout that `npm pack` writes
 // (docs/spec/installation.md#plugin-release).
-const pluginRoot = "package/"
+const packageRoot = "package/"
 
 // binarySegment is the path segment that the binary store of a page reserves. The host answers that path before it
 // looks up a file, so a plugin release cannot hold a file under it (docs/spec/native-surfaces.md).
@@ -76,31 +76,41 @@ func manifestModules(manifest map[string]any) [][2]string {
 	return modules
 }
 
-// checkReleaseModules checks the files of a plugin release against its plugin.json: no file is under a binarySegment
-// folder, and every module that plugin.json loads is a file of the release.
-func checkReleaseModules(data []byte, manifest map[string]any) error {
+// releasePaths are the paths of the files of a release under packageRoot, without that folder. extract refuses an entry
+// outside it.
+func releasePaths(data []byte) (map[string]bool, error) {
 	zipped, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	reader := tar.NewReader(zipped)
 	paths := map[string]bool{}
 	for {
 		header, err := reader.Next()
 		if err == io.EOF {
-			break
+			return paths, nil
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
-		name, ok := strings.CutPrefix(header.Name, pluginRoot)
-		if !ok {
-			continue
+		if name, ok := strings.CutPrefix(header.Name, packageRoot); ok {
+			paths[name] = true
 		}
+	}
+}
+
+// checkReleaseModules checks the files of a plugin release against its plugin.json: no file is under a binarySegment
+// folder, and every module that plugin.json loads is a file of the release.
+func checkReleaseModules(data []byte, manifest map[string]any) error {
+	paths, err := releasePaths(data)
+	if err != nil {
+		return err
+	}
+	names := slices.Sorted(maps.Keys(paths))
+	for _, name := range names {
 		if slices.Contains(strings.Split(name, "/"), binarySegment) {
 			return fmt.Errorf("plugin release holds %s: the %s path is reserved for the binary store", name, binarySegment)
 		}
-		paths[name] = true
 	}
 	for _, module := range manifestModules(manifest) {
 		if !paths[module[1]] {
@@ -110,8 +120,43 @@ func checkReleaseModules(data []byte, manifest map[string]any) error {
 	return nil
 }
 
-// releaseFiles reads the content of the files of a plugin release that are listed in names, each from
-// `package/<name>`.
+// checkSidecarRelease checks the files of a sidecar release against its sidecar.json: the executable and the replay
+// executable that it names are files of the release (docs/spec/installation.md#sidecar-release).
+func checkSidecarRelease(data []byte) error {
+	files, err := releaseFiles(data, "sidecar.json")
+	if err != nil {
+		return err
+	}
+	var declaration struct {
+		Executable any `json:"executable"`
+		Replay     *struct {
+			Executable any `json:"executable"`
+		} `json:"replay"`
+	}
+	if err := json.Unmarshal(files["sidecar.json"], &declaration); err != nil {
+		return fmt.Errorf("sidecar.json is not valid JSON: %w", err)
+	}
+	paths, err := releasePaths(data)
+	if err != nil {
+		return err
+	}
+	declared := [][2]any{{"executable", declaration.Executable}}
+	if declaration.Replay != nil {
+		declared = append(declared, [2]any{"replay.executable", declaration.Replay.Executable})
+	}
+	for _, item := range declared {
+		path, ok := item[1].(string)
+		if !ok {
+			return fmt.Errorf("sidecar.json: %s must be a path", item[0])
+		}
+		if !paths[path] {
+			return fmt.Errorf("sidecar.json: %s %s is not in the release", item[0], path)
+		}
+	}
+	return nil
+}
+
+// releaseFiles reads the content of the files of a release that are listed in names, each from `package/<name>`.
 func releaseFiles(data []byte, names ...string) (map[string][]byte, error) {
 	zipped, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
@@ -127,7 +172,7 @@ func releaseFiles(data []byte, names ...string) (map[string][]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		name, ok := strings.CutPrefix(header.Name, pluginRoot)
+		name, ok := strings.CutPrefix(header.Name, packageRoot)
 		if ok && slices.Contains(names, name) {
 			if found[name], err = io.ReadAll(reader); err != nil {
 				return nil, err

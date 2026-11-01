@@ -18,6 +18,48 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/tests/support"
 )
 
+// writeTree writes the content of each path. A name that ends with * gets the executable bit.
+func writeTree(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
+	for name, content := range files {
+		mode := os.FileMode(0o644)
+		if strings.HasSuffix(name, "*") {
+			name, mode = strings.TrimSuffix(name, "*"), 0o755
+		}
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func pluginTree(t *testing.T) string {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+			"files": ["plugin.json", "ui"]}`,
+		"plugin.json":   `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
+		"ui/b.js":       "b",
+		"ui/a/run.sh*":  "run",
+		"test/skip.mjs": "not listed",
+	})
+	return dir
+}
+
+func sidecarTree(t *testing.T, version string) string {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"package.json":       `{"name": "@scope/sidecar-worker", "version": "` + version + `", "files": ["sidecar.json", "build/worker"]}`,
+		"sidecar.json":       `{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe"}`,
+		"build/worker*":      "binary " + version,
+		"build/intermediate": "not listed",
+	})
+	return dir
+}
+
 // pluginVersions builds a registry from one packed release for each version of the plugin probe and a release of
 // sidecar 0.1.0, and returns the path of index.json after the build.
 func pluginVersions(t *testing.T, versions ...string) string {
@@ -42,11 +84,11 @@ func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
 			"plugin.json": `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
 			"ui/b.js":     "b " + version,
 		})
-		result := support.PackPlugin(t, dir, releases)
+		result := support.PackRelease(t, dir, releases)
 		entries = append(entries, `{"version": "`+version+`", "release": {"url": "file://`+result["release"]+`", "sha256": "`+result["sha256"]+`"},
 			"engines": {"soksak": "^`+core+`"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}`)
 	}
-	sidecar := runJSON(t, "sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
+	sidecar := support.PackRelease(t, sidecarTree(t, "0.1.0"), releases)
 	registry := t.TempDir()
 	writeTree(t, registry, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
@@ -257,6 +299,34 @@ func TestPluginInstallRefusesAReleaseWithoutTheViewPage(t *testing.T) {
 	}
 	if _, code, stderr := installRelease(t, probeEntries(viewManifest, support.ReleaseEntry{Name: "package/ui/page.html", Content: "<!doctype html>", Mode: 0o644})); code != 0 || stderr != "" {
 		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+}
+
+// contract: cli.plugin.install-requires-sidecar-executable
+// A sidecar release is the npm pack file of the sidecar folder (docs/spec/installation.md#sidecar-release), so the
+// installer refuses a release that does not hold the executable that its sidecar.json names (F355-5).
+func TestPluginInstallRefusesASidecarReleaseWithoutItsExecutable(t *testing.T) {
+	platform := mustPlatform(t)
+	registryDir := filepath.Dir(pluginVersions(t, "0.2.0"))
+	release := filepath.Join(registryDir, "sidecar.tgz")
+	sum := support.WriteRelease(t, release, []support.ReleaseEntry{
+		{Name: "package/package.json", Content: `{"name": "@scope/sidecar-worker", "version": "0.1.0", "files": ["sidecar.json", "build/worker"]}`, Mode: 0o644},
+		{Name: "package/sidecar.json", Content: `{"executable": "build/worker", "displayName": "soksak://sidecar/probe", "protocol": 1}`, Mode: 0o644},
+	})
+	entry := filepath.Join(registryDir, "sidecars/scope-sidecar-worker.json")
+	text := readText(t, entry)
+	replaceIn(t, entry, strings.Split(strings.Split(text, `"url": "file://`)[1], `"`)[0], release, 1)
+	replaceIn(t, entry, strings.Split(strings.Split(text, `"sha256": "`)[1], `"`)[0], sum, 1)
+	runJSON(t, "registry", "build", registryDir)
+	config := t.TempDir()
+	runJSON(t, "registry", "use", filepath.Join(registryDir, "index.json"), "--config-dir", config)
+	code, _, stderr := run("plugin", "install", "probe", "--config-dir", config)
+	want := "sok: sidecar @scope/sidecar-worker 0.1.0 " + platform + ": sidecar.json: executable build/worker is not in the release\n"
+	if code != 1 || stderr != want {
+		t.Fatalf("code %d stderr %q, want %q", code, stderr, want)
+	}
+	if exists(filepath.Join(config, "plugins/installed.json")) {
+		t.Fatal("a refused sidecar release changed the installation")
 	}
 }
 
@@ -608,7 +678,7 @@ func dependencyRegistry(t *testing.T, versions ...dependent) string {
 				"files": ["plugin.json"]}`,
 			"plugin.json": jsonText(t, entry{"id": item.id, "name": "Probe", "description": "Sample.", "contributes": entry{"lib.point": []any{entry{"range": "^1.0.0", "module": "ui/b.js"}}}, "dependencies": item.dependencies}),
 		})
-		result := support.PackPlugin(t, dir, releases)
+		result := support.PackRelease(t, dir, releases)
 		sidecars := map[string]string{}
 		for name, rng := range item.dependencies {
 			if strings.HasPrefix(name, "@scope/sidecar-") {
@@ -623,7 +693,7 @@ func dependencyRegistry(t *testing.T, versions ...dependent) string {
 		plugins[item.id]["versions"] = append(plugins[item.id]["versions"].([]any), entry{"version": item.version,
 			"release": entry{"url": "file://" + result["release"], "sha256": result["sha256"]}, "engines": entry{"soksak": "^0.0.2"}, "sidecars": sidecars})
 	}
-	sidecar := runJSON(t, "sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
+	sidecar := support.PackRelease(t, sidecarTree(t, "0.1.0"), releases)
 	worker := entry{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": []any{entry{"version": "0.1.0",
 		"protocol": 1, "releases": entry{platform: entry{"url": "file://" + sidecar["release"], "sha256": sidecar["sha256"]}}}}}
 	revoked := entry{"plugins": []any{}, "sidecars": []any{}}
@@ -894,7 +964,7 @@ func mismatchedIndex(t *testing.T) string {
 		"plugin.json":  `{"id": "other", "name": "Other", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}`,
 	})
 	releases := t.TempDir()
-	result := support.PackPlugin(t, dir, releases)
+	result := support.PackRelease(t, dir, releases)
 	index := t.TempDir()
 	writeTree(t, index, map[string]string{
 		"index.json": `{"format": 1, "plugins": [{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",

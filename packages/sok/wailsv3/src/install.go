@@ -432,21 +432,6 @@ func checkPlatform(platform string) error {
 	return nil
 }
 
-// SidecarReleaseName is the file name of a sidecar release.
-func SidecarReleaseName(name, version, platform string) (string, error) {
-	if err := checkVersion("sidecar "+name+" version", version); err != nil {
-		return "", err
-	}
-	if err := checkPlatform(platform); err != nil {
-		return "", err
-	}
-	file, err := SidecarFileName(name)
-	if err != nil {
-		return "", err
-	}
-	return file + "-" + version + "-" + platform + ".tar.gz", nil
-}
-
 // PluginInstallPath is the folder inside the configuration directory into which one plugin version is extracted.
 func PluginInstallPath(id, version string) (string, error) {
 	if !isIdentifier(id) {

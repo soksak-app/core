@@ -9,8 +9,8 @@ use sha2::{Digest, Sha256};
 
 #[path = "support/folder.rs"]
 mod folder;
-#[path = "support/plugin_release.rs"]
-mod plugin_release;
+#[path = "support/package_release.rs"]
+mod package_release;
 
 use folder::Folder;
 
@@ -99,7 +99,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
                 ("ui/b.js", &content),
             ],
         );
-        let result = plugin_release::pack(dir.path(), releases.path());
+        let result = package_release::pack(dir.path(), releases.path());
         entries.push(format!(
             r#"{{"version": "{version}", "release": {{"url": "file://{}", "sha256": "{}"}},
             "engines": {{"soksak": "^{core}"}}, "sidecars": {{"@scope/sidecar-worker": "^0.1.0"}}}}"#,
@@ -123,14 +123,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
             ("build/worker*", "binary 0.1.0"),
         ],
     );
-    let released = run_json(&[
-        "sidecar",
-        "release",
-        sidecar.text(),
-        releases.text(),
-        "--platform",
-        &platform,
-    ]);
+    let released = package_release::pack(sidecar.path(), releases.path());
     let dir = Folder::new("plugins");
     let plugin_entry = format!(
         r#"{{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
@@ -332,7 +325,7 @@ fn install_release(
     items: Vec<(String, Vec<u8>, u32)>,
 ) -> (Folder, i32, String) {
     let release = registry.dir.path().join("custom.tgz");
-    plugin_release::entries(&release, items);
+    package_release::entries(&release, items);
     let sum: String = Sha256::digest(std::fs::read(&release).unwrap())
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -439,6 +432,70 @@ fn plugin_install_refuses_a_release_without_the_view_page() {
         ),
     );
     assert_eq!((code, stderr.as_str()), (0, ""));
+}
+
+// contract: cli.plugin.install-requires-sidecar-executable
+// A sidecar release is the npm pack file of the sidecar folder (docs/spec/installation.md#sidecar-release), so the installer
+// refuses a release that does not hold the executable that its sidecar.json names (F355-5).
+#[test]
+fn plugin_install_refuses_a_sidecar_release_without_its_executable() {
+    let platform = soksak_sok::current_platform().expect("platform");
+    let registry = plugin_versions_for("0.0.2", &["0.2.0"]);
+    let release = registry.dir.path().join("sidecar.tgz");
+    package_release::entries(
+        &release,
+        [
+            ("package/package.json".to_string(), br#"{"name": "@scope/sidecar-worker", "version": "0.1.0", "files": ["sidecar.json", "build/worker"]}"#.to_vec(), 0o644),
+            ("package/sidecar.json".to_string(), br#"{"executable": "build/worker", "displayName": "soksak://sidecar/probe", "protocol": 1}"#.to_vec(), 0o644),
+        ],
+    );
+    let sum: String = Sha256::digest(std::fs::read(&release).unwrap())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let entry = registry
+        .dir
+        .path()
+        .join("sidecars/scope-sidecar-worker.json");
+    let text = read_text(&entry);
+    let url = text
+        .split(r#""url": "file://"#)
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap()
+        .to_string();
+    replace_in(&entry, &url, &release.display().to_string());
+    let old = text
+        .split(r#""sha256": ""#)
+        .nth(1)
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap()
+        .to_string();
+    replace_in(&entry, &old, &sum);
+    run_json(&["registry", "build", registry.dir.text()]);
+    let config = Folder::new("plugins");
+    run_json(&[
+        "registry",
+        "use",
+        &registry.index(),
+        "--config-dir",
+        config.text(),
+    ]);
+    let (code, _, stderr) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr),
+        (
+            1,
+            format!(
+                "sok: sidecar @scope/sidecar-worker 0.1.0 {platform}: sidecar.json: executable build/worker is not in the release\n"
+            )
+        )
+    );
+    assert!(!config.path().join("plugins/installed.json").exists());
 }
 
 // contract: cli.plugin.install-refuses-binary-path
@@ -919,7 +976,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
             dir.path(),
             &[("package.json", &package), ("plugin.json", &manifest)],
         );
-        let result = plugin_release::pack(dir.path(), releases.path());
+        let result = package_release::pack(dir.path(), releases.path());
         let sidecars: serde_json::Map<String, Value> = dependencies
             .into_iter()
             .filter(|(name, _)| name.starts_with("@scope/sidecar-"))
@@ -949,14 +1006,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
             ("build/worker*", "binary 0.1.0"),
         ],
     );
-    let released = run_json(&[
-        "sidecar",
-        "release",
-        sidecar.text(),
-        releases.text(),
-        "--platform",
-        &platform,
-    ]);
+    let released = package_release::pack(sidecar.path(), releases.path());
     let worker = json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
         "versions": [{"version": "0.1.0", "protocol": 1, "releases": {platform.as_str():
         {"url": format!("file://{}", released["release"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
@@ -1305,7 +1355,7 @@ fn mismatched_index() -> Registry {
             ),
         ],
     );
-    let result = plugin_release::pack(dir.path(), releases.path());
+    let result = package_release::pack(dir.path(), releases.path());
     let index = Folder::new("plugins");
     let plugin = json!({"id": "probe", "package": "@scope/plugin-probe", "name": "Probe",
         "description": "검사용 plugin.", "license": "MIT", "repository": "https://example.invalid/probe",

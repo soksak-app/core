@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 
 use crate::Error;
 use crate::install::{self, Index, PluginVersion, RegistryPlugin, Release};
-use crate::release::{hex, print_json, read_json_file, replace_file};
+use crate::output::{hex, print_json, read_json_file, replace_file};
 
 type Validate = fn(&Value) -> Result<(), String>;
 type FileName = fn(&Value) -> Result<String, String>;
@@ -55,8 +55,9 @@ fn read_entries(
     Ok(entries)
 }
 
-/// The folder of every entry of a plugin release, the layout that `pnpm pack` writes (docs/spec/installation.md#plugin-release).
-pub(crate) const PLUGIN_ROOT: &str = "package/";
+/// The folder of every entry of a plugin or sidecar release, the layout that `npm pack` writes
+/// (docs/spec/installation.md#plugin-release).
+pub(crate) const PACKAGE_ROOT: &str = "package/";
 
 /// The path segment that the binary store of a page reserves. The host answers that path before it looks up a file, so a
 /// plugin release cannot hold a file under it (docs/spec/native-surfaces.md).
@@ -80,9 +81,8 @@ pub(crate) fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
     modules
 }
 
-/// Checks the files of a plugin release against its plugin.json: no file is under a BINARY_SEGMENT folder, and every module
-/// that plugin.json loads is a file of the release.
-pub(crate) fn check_release_modules(data: &[u8], manifest: &Value) -> Result<(), String> {
+/// The paths of the files of a release under PACKAGE_ROOT, without that folder. extract refuses an entry outside it.
+fn release_paths(data: &[u8]) -> Result<std::collections::BTreeSet<String>, String> {
     let mut reader = tar::Archive::new(flate2::read::GzDecoder::new(data));
     let mut paths = std::collections::BTreeSet::new();
     for entry in reader.entries().map_err(|error| error.to_string())? {
@@ -92,15 +92,24 @@ pub(crate) fn check_release_modules(data: &[u8], manifest: &Value) -> Result<(),
             .map_err(|error| error.to_string())?
             .display()
             .to_string();
-        let Some(name) = path.strip_prefix(PLUGIN_ROOT) else {
-            continue;
-        };
-        if name.split('/').any(|segment| segment == BINARY_SEGMENT) {
-            return Err(format!(
-                "plugin release holds {name}: the {BINARY_SEGMENT} path is reserved for the binary store"
-            ));
+        if let Some(name) = path.strip_prefix(PACKAGE_ROOT) {
+            paths.insert(name.to_string());
         }
-        paths.insert(name.to_string());
+    }
+    Ok(paths)
+}
+
+/// Checks the files of a plugin release against its plugin.json: no file is under a BINARY_SEGMENT folder, and every module
+/// that plugin.json loads is a file of the release.
+pub(crate) fn check_release_modules(data: &[u8], manifest: &Value) -> Result<(), String> {
+    let paths = release_paths(data)?;
+    if let Some(name) = paths
+        .iter()
+        .find(|name| name.split('/').any(|segment| segment == BINARY_SEGMENT))
+    {
+        return Err(format!(
+            "plugin release holds {name}: the {BINARY_SEGMENT} path is reserved for the binary store"
+        ));
     }
     for (what, module) in manifest_modules(manifest) {
         if !paths.contains(&module) {
@@ -112,7 +121,29 @@ pub(crate) fn check_release_modules(data: &[u8], manifest: &Value) -> Result<(),
     Ok(())
 }
 
-/// Reads the contents of the files of a plugin release that are listed in names, each from `package/<name>`.
+/// Checks the files of a sidecar release against its sidecar.json: the executable and the replay executable that it names
+/// are files of the release (docs/spec/installation.md#sidecar-release).
+pub(crate) fn check_sidecar_release(data: &[u8]) -> Result<(), String> {
+    let files = release_files(data, &["sidecar.json"])?;
+    let declaration: Value = serde_json::from_slice(&files["sidecar.json"])
+        .map_err(|error| format!("sidecar.json is not valid JSON: {error}"))?;
+    let paths = release_paths(data)?;
+    let mut declared = vec![("executable", &declaration["executable"])];
+    if declaration.get("replay").is_some() {
+        declared.push(("replay.executable", &declaration["replay"]["executable"]));
+    }
+    for (what, value) in declared {
+        let path = value
+            .as_str()
+            .ok_or_else(|| format!("sidecar.json: {what} must be a path"))?;
+        if !paths.contains(path) {
+            return Err(format!("sidecar.json: {what} {path} is not in the release"));
+        }
+    }
+    Ok(())
+}
+
+/// Reads the contents of the files of a release that are listed in names, each from `package/<name>`.
 pub(crate) fn release_files(
     data: &[u8],
     names: &[&str],
@@ -126,7 +157,7 @@ pub(crate) fn release_files(
             .map_err(|error| error.to_string())?
             .display()
             .to_string();
-        let Some(name) = path.strip_prefix(PLUGIN_ROOT) else {
+        let Some(name) = path.strip_prefix(PACKAGE_ROOT) else {
             continue;
         };
         if names.contains(&name) {

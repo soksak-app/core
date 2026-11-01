@@ -331,16 +331,13 @@ func TestInstallationKeepsOneSidecarVersionThatSatisfiesEveryInstalledPlugin(t *
 
 // contract: install.names.releases-and-paths
 func TestReleasesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
-	if name, err := sok.SidecarReleaseName("@scope/sidecar-worker", "0.1.1", "darwin-arm64"); err != nil || name != "scope-sidecar-worker-0.1.1-darwin-arm64.tar.gz" {
-		t.Fatal(name, err)
-	}
 	if path, err := sok.PluginInstallPath("probe", "0.2.0"); err != nil || path != "plugins/probe/0.2.0" {
 		t.Fatal(path, err)
 	}
 	if path, err := sok.SidecarInstallPath("@scope/sidecar-worker", "0.1.1", "darwin-arm64"); err != nil || path != "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64" {
 		t.Fatal(path, err)
 	}
-	_, err := sok.SidecarReleaseName("@scope/sidecar-worker", "0.1.1", "solaris-sparc")
+	_, err := sok.SidecarInstallPath("@scope/sidecar-worker", "0.1.1", "solaris-sparc")
 	rejects(t, err, "unknown platform solaris-sparc")
 	_, err = sok.PluginInstallPath("../x", "0.2.0")
 	rejects(t, err, "invalid plugin id ../x")

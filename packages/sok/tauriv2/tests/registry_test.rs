@@ -7,8 +7,8 @@ use serde_json::{Value, json};
 
 #[path = "support/folder.rs"]
 mod folder;
-#[path = "support/plugin_release.rs"]
-mod plugin_release;
+#[path = "support/package_release.rs"]
+mod package_release;
 
 use folder::Folder;
 
@@ -86,18 +86,10 @@ fn registry_tree() -> Registry {
         ],
     );
     let mut results = vec![];
-    let packed = plugin_release::pack(plugin.path(), releases.path());
-    let (code, stdout, stderr) = run(&[
-        "sidecar",
-        "release",
-        sidecar.text(),
-        releases.text(),
-        "--platform",
-        &platform,
-    ]);
-    assert_eq!(code, 0, "{stderr}");
-    let released: Value = serde_json::from_str(&stdout).unwrap();
-    for result in [packed, released] {
+    for result in [
+        package_release::pack(plugin.path(), releases.path()),
+        package_release::pack(sidecar.path(), releases.path()),
+    ] {
         results.push((
             result["release"].as_str().unwrap().to_string(),
             result["sha256"].as_str().unwrap().to_string(),
@@ -253,7 +245,7 @@ fn dependency_tree(plugins: Plugins) -> (Folder, Folder) {
             source.path(),
             &[("package.json", &package), ("plugin.json", &manifest)],
         );
-        let result = plugin_release::pack(source.path(), releases.path());
+        let result = package_release::pack(source.path(), releases.path());
         let sidecars: serde_json::Map<String, Value> = dependencies
             .into_iter()
             .filter(|(name, _)| name.starts_with("@scope/sidecar-"))
@@ -282,16 +274,7 @@ fn dependency_tree(plugins: Plugins) -> (Folder, Folder) {
             ("build/worker*", "binary 0.1.0"),
         ],
     );
-    let (code, stdout, stderr) = run(&[
-        "sidecar",
-        "release",
-        sidecar.text(),
-        releases.text(),
-        "--platform",
-        &platform,
-    ]);
-    assert_eq!(code, 0, "{stderr}");
-    let released: Value = serde_json::from_str(&stdout).unwrap();
+    let released = package_release::pack(sidecar.path(), releases.path());
     let worker = json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
         "versions": [{"version": "0.1.0", "protocol": 1, "releases": {platform.as_str():
         {"url": format!("file://{}", released["release"].as_str().unwrap()), "sha256": released["sha256"]}}}]});

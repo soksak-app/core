@@ -23,16 +23,8 @@ func registryTree(t *testing.T) (dir, pluginSum, sidecarSum string) {
 		t.Fatal(err)
 	}
 	releases := t.TempDir()
-	results := map[string]map[string]string{"plugin": support.PackPlugin(t, pluginTree(t), releases)}
-	code, stdout, stderr := run("sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
-	if code != 0 {
-		t.Fatalf("sidecar: code %d stderr %q", code, stderr)
-	}
-	var sidecar map[string]string
-	if err := json.Unmarshal([]byte(stdout), &sidecar); err != nil {
-		t.Fatal(err)
-	}
-	results["sidecar"] = sidecar
+	results := map[string]map[string]string{"plugin": support.PackRelease(t, pluginTree(t), releases)}
+	results["sidecar"] = support.PackRelease(t, sidecarTree(t, "0.1.0"), releases)
 	dir = t.TempDir()
 	writeTree(t, dir, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",

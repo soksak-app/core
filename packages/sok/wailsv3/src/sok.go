@@ -42,8 +42,6 @@ commands:
                             starts the application bundle TARGET again in the background after the process PID ended
   process wait PID --timeout-ms MILLISECONDS
                             waits for the operating system to report that PID ended
-  sidecar release DIRECTORY OUTPUT [--platform P]
-                            writes the sidecar release into OUTPUT and updates SHA256SUMS
   registry build DIRECTORY  checks a registry and writes its index.json
   registry use INDEX        sets the registry index that installation reads
   plugin install|update|remove|enable|disable ID
@@ -557,8 +555,8 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	if len(a.positionals) > 0 && a.positionals[0] == "registry" {
 		return runRegistry(a, stdout)
 	}
-	if len(a.positionals) > 0 && (a.positionals[0] == "plugin" || a.positionals[0] == "sidecar") {
-		return runFiles(a, stdout)
+	if len(a.positionals) == 1 && a.positionals[0] == "plugin" {
+		return usage("plugin action is required")
 	}
 	if len(a.positionals) > 0 && a.positionals[0] == "debug" {
 		return runDebug(a, stdout, stderr, options)
@@ -626,36 +624,4 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	}
 	_, err = stdout.Write(out)
 	return err
-}
-
-// runFiles runs the plugin and sidecar commands that write files without a running application.
-func runFiles(a arguments, stdout io.Writer) error {
-	action, err := a.positional(1, a.positionals[0]+" action")
-	if err != nil {
-		return err
-	}
-	command := a.positionals[0] + " " + action
-	if command != "sidecar release" {
-		return usage("unknown command: %s", command)
-	}
-	dir, err := a.positional(2, "directory")
-	if err != nil {
-		return err
-	}
-	out, err := a.positional(3, "output directory")
-	if err != nil {
-		return err
-	}
-	if len(a.positionals) > 4 {
-		return usage("unexpected argument %s", a.positionals[4])
-	}
-	platform, given := a.values["platform"]
-	if !given {
-		if platform, err = CurrentPlatform(); err != nil {
-			return err
-		}
-	} else if err := checkPlatform(platform); err != nil {
-		return usage("--platform: %s", err)
-	}
-	return runRelease(dir, out, platform, stdout)
 }

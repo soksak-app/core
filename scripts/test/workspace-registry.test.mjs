@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-import { checkDeclaration, checkPluginId, installFolders, packPlugin, pluginEntry, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
+import { checkDeclaration, checkPluginId, currentPlatform, installFolders, packPlugin, pluginEntry, releaseSidecar, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
 
 const SHA = "a".repeat(64);
 
@@ -89,6 +89,25 @@ test("a plugin is packed by the make pack target of its repository, which receiv
   assert.deepEqual(pack, { release, sha256: createHash("sha256").update("undefined undefined").digest("hex") });
   // A release that the folder already holds is not a new release of this run.
   assert.throws(() => packPlugin(repository, out), /make pack of .* wrote 0 new files into .*; expected 1/);
+});
+
+test("a sidecar is released by the make release target of its repository, which receives only the output folder", { timeout: 30000 }, (t) => {
+  const repository = mkdtempSync(join(tmpdir(), "workspace-release-"));
+  const out = mkdtempSync(join(tmpdir(), "workspace-releases-"));
+  t.after(() => { rmSync(repository, { recursive: true, force: true }); rmSync(out, { recursive: true, force: true }); });
+  // The release is the npm pack file of the built sidecar folder (docs/spec/installation.md#sidecar-release), so the target
+  // needs no sok executable; it writes a release that names the origin of the variable.
+  writeFileSync(join(repository, "Makefile"), 'release:\n\t@printf "%s" "$(origin SOK)" > "$(OUT)/worker-0.0.1.tgz"\n');
+  const release = releaseSidecar(repository, out);
+  assert.deepEqual(release, { release: join(out, "worker-0.0.1.tgz"), platform: currentPlatform(),
+    sha256: createHash("sha256").update("undefined").digest("hex") });
+  assert.throws(() => releaseSidecar(repository, out), /make release of .* wrote 0 new files into .*; expected 1/);
+});
+
+test("the platform key of the workspace registry is the operating system and the architecture of the process", { timeout: 1000 }, () => {
+  assert.equal(currentPlatform("darwin", "arm64"), "darwin-arm64");
+  assert.equal(currentPlatform("win32", "x64"), "windows-x64");
+  assert.throws(() => currentPlatform("sunos", "x64"), /no sidecar platform for sunos-x64/);
 });
 
 test("the installation stage runs make install once in every declared repository", { timeout: 1000 }, () => {

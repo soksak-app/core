@@ -71,7 +71,7 @@ func TestPluginInstallReplaysTheManifestCases(t *testing.T) {
 					writeTree(t, dir, map[string]string{file: ""})
 				}
 			}
-			release := support.PackPlugin(t, dir, t.TempDir())
+			release := support.PackRelease(t, dir, t.TempDir())
 			config := t.TempDir()
 			runJSON(t, "registry", "use", indexForRelease(t, release["release"], release["sha256"]), "--config-dir", config)
 			code, _, stderr := run("plugin", "install", "probe", "--config-dir", config)

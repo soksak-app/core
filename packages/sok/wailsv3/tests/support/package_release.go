@@ -1,8 +1,9 @@
 package support
 
-// Writes a plugin release in the layout that `pnpm pack` writes (docs/spec/installation.md#plugin-release): a gzip tar
-// with `package/package.json` and `package/<path>` for each file that `files` of `package.json` lists, named
-// `<scope>-<name>-<version>.tgz` for the package `@<scope>/<name>`.
+// Writes a release in the layout that `npm pack` writes (docs/spec/installation.md#plugin-release): a gzip tar with
+// `package/package.json` and `package/<path>` for each file that `files` of `package.json` lists, with the mode of each
+// file, named `<scope>-<name>-<version>.tgz` for the package `@<scope>/<name>`. A plugin and a sidecar release have this
+// layout.
 
 import (
 	"archive/tar"
@@ -25,8 +26,8 @@ type ReleaseEntry struct {
 	Mode    int64
 }
 
-// PackPlugin writes the release of the plugin in dir into out and returns {release, sha256}.
-func PackPlugin(t *testing.T, dir, out string) map[string]string {
+// PackRelease writes the release of the plugin or sidecar folder dir into out and returns {release, sha256}.
+func PackRelease(t *testing.T, dir, out string) map[string]string {
 	t.Helper()
 	text, err := os.ReadFile(filepath.Join(dir, "package.json"))
 	if err != nil {

@@ -1,6 +1,6 @@
-//! Writes a plugin release in the layout that `pnpm pack` writes (docs/spec/installation.md#plugin-release): a gzip tar with
-//! `package/package.json` and `package/<path>` for each file that `files` of `package.json` lists, named
-//! `<scope>-<name>-<version>.tgz` for the package `@<scope>/<name>`.
+//! Writes a release in the layout that `npm pack` writes (docs/spec/installation.md#plugin-release): a gzip tar with
+//! `package/package.json` and `package/<path>` for each file that `files` of `package.json` lists, with the mode of each
+//! file, named `<scope>-<name>-<version>.tgz` for the package `@<scope>/<name>`. A plugin and a sidecar release have this layout.
 
 use std::path::{Path, PathBuf};
 
@@ -23,7 +23,7 @@ fn files_under(root: &Path, path: &Path, found: &mut Vec<PathBuf>) {
     }
 }
 
-/// Writes the release of the plugin in dir into out and returns {release, sha256}.
+/// Writes the release of the plugin or sidecar folder dir into out and returns {release, sha256}.
 pub fn pack(dir: &Path, out: &Path) -> Value {
     let read = |name: &str| -> Value {
         let text = std::fs::read_to_string(dir.join(name))

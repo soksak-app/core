@@ -26,6 +26,7 @@ pub mod log_policy;
 pub mod log_query;
 mod logged;
 mod manifest;
+mod output;
 mod ownership;
 mod path;
 #[path = "platform/platform.rs"]
@@ -34,13 +35,12 @@ pub mod plugin_catalog;
 pub mod plugins;
 mod process;
 mod registry;
-mod release;
 pub mod replay;
 pub mod replay_inputs;
 pub mod routine;
 pub mod version;
 pub use logged::{Command, logged, run_logged, start_tool_event_log};
-pub use release::current_platform;
+pub use output::current_platform;
 pub use routine::PANIC_STATUS;
 
 use endpoint::{Client, Failure};
@@ -69,8 +69,6 @@ commands:
                             starts the application bundle TARGET again in the background after the process PID ended
   process wait PID --timeout-ms MILLISECONDS
                             waits for the operating system to report that PID ended
-  sidecar release DIRECTORY OUTPUT [--platform P]
-                            writes the sidecar release into OUTPUT and updates SHA256SUMS
   registry build DIRECTORY  checks a registry and writes its index.json
   registry use INDEX        sets the registry index that installation reads
   plugin install|update|remove|enable|disable ID
@@ -802,11 +800,8 @@ fn execute(
     if a.positionals.first().map(String::as_str) == Some("registry") {
         return registry::run_registry(&a.positionals, stdout);
     }
-    if matches!(
-        a.positionals.first().map(String::as_str),
-        Some("plugin" | "sidecar")
-    ) {
-        return release::run_files(&a.positionals, &a.values, stdout);
+    if first_two == (Some("plugin"), None) {
+        return Err(Error::Usage("plugin action is required".into()));
     }
     if a.positionals.first().map(String::as_str) == Some("debug") {
         return debug::run_debug(&a, stdout, stderr, options);

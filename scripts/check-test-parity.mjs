@@ -8030,6 +8030,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F355-5",
+    implementation: [
+      { file: "packages/sok/tauriv2/src/registry.rs", symbol: "pub(crate) fn check_sidecar_release" },
+      { file: "packages/sok/wailsv3/src/registry.go", symbol: "func checkSidecarRelease" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function releaseSidecar(" },
+    ],
+    tests: [
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_sidecar_release_without_its_executable" },
+      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesASidecarReleaseWithoutItsExecutable" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "a sidecar is released by the make release target of its repository, which receives only the output folder" },
+    ],
+    expected: "sok plugin install extracts a sidecar release from package/ and refuses one without the executable of its sidecar.json; the workspace registry runs make release of a sidecar repository.",
+    levels: ["unit"],
+  },
+  {
     id: "F355-2",
     implementation: [
       { file: "packages/sok/tauriv2/src/registry.rs", symbol: "pub(crate) fn check_release_modules" },

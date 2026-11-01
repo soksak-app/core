@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The workspace registry (docs/spec/plugins.md#repositories). Packs the plugin repositories that scripts/workspace-registry.json declares as folders
-// relative to the core checkout with their `make pack`, builds every declared sidecar from its repository and releases them
-// for the current platform, then writes the registry files from the result and creates index.json with `sok registry build`
+// relative to the core checkout with their `make pack`, releases every declared sidecar for the current platform with the
+// `make release` of its repository, then writes the registry files from the result and creates index.json with `sok registry build`
 // (docs/spec/cli.md). Builds and window checks install plugins from this registry. It uses no network.
 //
 //   node scripts/workspace-registry.mjs --sok <sok executable> --out <registry folder>
@@ -91,7 +91,7 @@ export function pluginEntry(manifest, pkg, pack, sidecars) {
   };
 }
 
-/** The registry entry of one sidecar. release is the output of `sok sidecar release`. */
+/** The registry entry of one sidecar. release is the result of releaseSidecar. */
 export function sidecarEntry(pkg, declaration, release) {
   return {
     name: pkg.name, repository: repositoryText(pkg.repository),
@@ -107,20 +107,44 @@ function sok(binary, args) {
 }
 
 /**
- * `make pack OUT=<folder>` of the plugin repository writes its release, the pnpm pack file of the plugin
- * (docs/spec/installation.md#plugin-release), into the folder, so a repository builds what its release needs before it packs.
- * Returns the release that the target added and its sha256; a target that adds no file or more than one file is an error.
+ * Runs `make <target> OUT=<folder>` of a repository, which writes one release into the folder, and returns the release that
+ * the target added and its sha256; a target that adds no file or more than one file is an error.
  */
-export function packPlugin(repository, out) {
+function repositoryRelease(repository, target, out) {
   // make -C runs the target in the repository, so the path that it receives is absolute.
   out = resolve(out);
   mkdirSync(out, { recursive: true });
   const before = new Set(readdirSync(out));
-  execFileSync("make", ["-C", repository, "pack", `OUT=${out}`], { stdio: ["ignore", "inherit", "inherit"] });
+  execFileSync("make", ["-C", repository, target, `OUT=${out}`], { stdio: ["ignore", "inherit", "inherit"] });
   const added = readdirSync(out).filter((name) => !before.has(name));
-  if (added.length !== 1) throw new Error(`make pack of ${repository} wrote ${added.length} new files into ${out}; expected 1`);
+  if (added.length !== 1) throw new Error(`make ${target} of ${repository} wrote ${added.length} new files into ${out}; expected 1`);
   const release = join(out, added[0]);
   return { release, sha256: createHash("sha256").update(readFileSync(release)).digest("hex") };
+}
+
+/**
+ * `make pack OUT=<folder>` of the plugin repository writes its release, the pnpm pack file of the plugin
+ * (docs/spec/installation.md#plugin-release), into the folder, so a repository builds what its release needs before it packs.
+ */
+export function packPlugin(repository, out) {
+  return repositoryRelease(repository, "pack", out);
+}
+
+/** The sidecar platform key (docs/spec/installation.md#sidecar-release) of an operating system and an architecture of Node. */
+export function currentPlatform(os = process.platform, arch = process.arch) {
+  const key = `${os === "win32" ? "windows" : os}-${arch}`;
+  if (!["darwin", "linux", "windows"].some((name) => key === `${name}-arm64` || key === `${name}-x64`)) {
+    throw new Error(`no sidecar platform for ${os}-${arch}`);
+  }
+  return key;
+}
+
+/**
+ * `make release OUT=<folder>` of the sidecar repository builds the sidecar and writes its release of the current platform, the
+ * npm pack file of the built sidecar folder (docs/spec/installation.md#sidecar-release), into the folder.
+ */
+export function releaseSidecar(repository, out) {
+  return { ...repositoryRelease(repository, "release", out), platform: currentPlatform() };
 }
 
 /** Writes the pnpm pack file of the plugin folder dir into out (docs/spec/installation.md#plugin-release) and returns it and its sha256. */
@@ -148,11 +172,6 @@ export function installWorkspace(root = ROOT) {
   for (const dir of installFolders(declaration, (relative) => repositoryFolder(relative, commonDir))) {
     execFileSync("make", ["-C", dir, "install"], { stdio: ["ignore", "inherit", "inherit"] });
   }
-}
-
-/** `make build` of the sidecar repository writes the executable that sidecar.json points to. */
-function buildSidecar(repository) {
-  execFileSync("make", ["-C", repository, "build"], { stdio: ["ignore", "inherit", "inherit"] });
 }
 
 function write(path, value) {
@@ -201,14 +220,9 @@ export function buildWorkspaceRegistry(binary, out, root = ROOT) {
     write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack, new Set(declared.keys())));
     manifests.push(manifest);
   }
-  const built = new Set();
   for (const name of sidecarReleases([...declared.keys()], manifests, plugins)) {
     const { repository, sidecar } = declared.get(name);
-    if (!built.has(repository)) {
-      buildSidecar(repository);
-      built.add(repository);
-    }
-    const release = sok(binary, ["sidecar", "release", sidecar, releases]);
+    const release = releaseSidecar(repository, releases);
     const file = name.startsWith("@") ? name.slice(1).replace("/", "-") : name;
     write(join(out, "sidecars", `${file}.json`),
       sidecarEntry(read(pathToFileURL(join(sidecar, "package.json"))), read(pathToFileURL(join(sidecar, "sidecar.json"))), release));
