@@ -284,10 +284,20 @@ fn valid_identifier(text: &str) -> bool {
         && chars.all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-'))
 }
 
-/// Whether id is a section surface id `<sidebar>/<section>` (docs/spec/plugins.md#sections): the sidebar is left, right, or
-/// `<card>:<side>` with a card id of the tab form, and the section is `<plugin>.<name>`.
+/// Whether id is a section surface id `<space>/<sidebar>/<section>` (docs/spec/plugins.md#sections): the space is `spc-`
+/// followed by six characters of a-z and 2-7, the sidebar is left, right, or `<card>:<side>` with a card id of the tab form,
+/// and the section is `<plugin>.<name>`.
 fn valid_section_surface(id: &str) -> bool {
-    let Some((sidebar, section)) = id.split_once('/') else {
+    let Some((space, rest)) = id.split_once('/') else {
+        return false;
+    };
+    let space_ok = space.strip_prefix("spc-").is_some_and(|code| {
+        code.len() == 6
+            && code
+                .bytes()
+                .all(|c| c.is_ascii_lowercase() || (b'2'..=b'7').contains(&c))
+    });
+    let Some((sidebar, section)) = rest.split_once('/') else {
         return false;
     };
     let sidebar_ok = match sidebar.split_once(':') {
@@ -299,7 +309,7 @@ fn valid_section_surface(id: &str) -> bool {
     let section_ok = section
         .split_once('.')
         .is_some_and(|(plugin, name)| valid_identifier(plugin) && valid_identifier(name));
-    sidebar_ok && section_ok
+    space_ok && sidebar_ok && section_ok
 }
 
 /// Whether tab is a session id: a tab id or a section surface id.
@@ -421,14 +431,20 @@ fn list_tab_sessions(directory: &Path) -> Result<Value, String> {
             .map_err(|e| format!("{}: {e}", folder.display()))?
             .is_file();
         let name = entry.file_name();
-        if let Some(tab) = name
-            .to_str()
-            .and_then(|name| name.strip_suffix(".json"))
-            .and_then(tab_session_id)
-            && is_file
-        {
-            tabs.push(tab);
+        // A file without the .json extension is a write in progress of write, which removes it.
+        let Some(stem) = name.to_str().and_then(|name| name.strip_suffix(".json")) else {
+            continue;
+        };
+        if !is_file {
+            continue;
         }
+        let Some(tab) = tab_session_id(stem) else {
+            return Err(format!(
+                "tab-sessions/{} does not name a tab id or a section surface id",
+                name.to_string_lossy()
+            ));
+        };
+        tabs.push(tab);
     }
     tabs.sort();
     Ok(json!(tabs))

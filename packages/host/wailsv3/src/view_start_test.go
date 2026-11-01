@@ -269,7 +269,7 @@ func checkViewSurface(t *testing.T, surface string) error {
 // contract: view.start-values.keeps-null-members
 func TestSyncRequestDecoderKeepsTheNullStartValues(t *testing.T) {
 	request, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"declarations":[{"commands":[]}],
-		"surfaces":[{"id":"left/probe.tree","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"probe",
+		"surfaces":[{"id":"spc-aaaaaa/left/probe.tree","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"probe",
 		"composition":{"kind":"view","page":"tree.html"},
 		"start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null}}]}`))
 	if err != nil {
@@ -304,7 +304,7 @@ func TestSyncRequestRefusesASectionOfAnotherForm(t *testing.T) {
 		{"section object", `{"id":"probe.tree","sidebar":"left","card":null}`, ""},
 		{"card sidebar section", `{"id":"probe.dom","sidebar":"c3:right","card":"c3"}`, ""},
 		{"section of another type", `[]`, malformed},
-		{"text section", `"left/probe.tree"`, malformed},
+		{"text section", `"spc-aaaaaa/left/probe.tree"`, malformed},
 		{"missing card", `{"id":"probe.tree","sidebar":"left"}`, malformed},
 		{"null id", `{"id":null,"sidebar":"left","card":null}`, malformed},
 		{"empty id", `{"id":"","sidebar":"left","card":null}`, malformed},

@@ -337,10 +337,10 @@ func checkTabStateEntry(tab string, entry Record) error {
 // section surface (docs/spec/projects.md#persistence).
 const tabSessionFormat = 1
 
-// sectionSurfaceID is the form of a section surface id <sidebar>/<section> (docs/spec/plugins.md#sections): the sidebar is
-// left, right, or <card>:<side> with a card id of the tab form, and the section is <plugin>.<name>, each an identifier that
-// starts with a lowercase letter.
-var sectionSurfaceID = regexp.MustCompile(`^(?:left|right|[a-z0-9-]+:(?:top|bottom|left|right))/[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$`)
+// sectionSurfaceID is the form of a section surface id <space>/<sidebar>/<section> (docs/spec/plugins.md#sections): the space
+// is spc- followed by six characters of a-z and 2-7, the sidebar is left, right, or <card>:<side> with a card id of the tab
+// form, and the section is <plugin>.<name>, each an identifier that starts with a lowercase letter.
+var sectionSurfaceID = regexp.MustCompile(`^spc-[a-z2-7]{6}/(?:left|right|[a-z0-9-]+:(?:top|bottom|left|right))/[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$`)
 
 // validTabSession reports whether tab is a session id: a tab id or a section surface id.
 func validTabSession(tab string) bool {
@@ -433,13 +433,16 @@ func listTabSessions(directory string) (any, error) {
 	}
 	tabs := []string{}
 	for _, file := range files {
+		// A file without the .json extension is a write in progress of writeJSON, which removes it.
 		name, ok := strings.CutSuffix(file.Name(), ".json")
 		if !ok || file.IsDir() {
 			continue
 		}
-		if tab, err := url.QueryUnescape(name); err == nil && validTabSession(tab) && tabSessionName(tab) == name {
-			tabs = append(tabs, tab)
+		tab, err := url.QueryUnescape(name)
+		if err != nil || !validTabSession(tab) || tabSessionName(tab) != name {
+			return nil, fmt.Errorf("tab-sessions/%s does not name a tab id or a section surface id", file.Name())
 		}
+		tabs = append(tabs, tab)
 	}
 	sort.Strings(tabs)
 	return tabs, nil

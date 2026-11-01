@@ -1,5 +1,5 @@
 // Checks that each drawn sidebar section is a section surface of its plugin (docs/spec/plugins.md#sections): its body is the
-// slot of a view surface with the id <sidebar id>/<section id>, the surface lives while the section is in its set, folding or
+// slot of a view surface with the id <space id>/<sidebar id>/<section id>, the surface lives while the section is in its set, folding or
 // an unselected tab hides it without a release, and core.sidebars reports its surface id and the surface it follows.
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
@@ -32,6 +32,9 @@ mock.module("../surface-modules.js", { namedExports: {
   disposeSurface: (surfaceId) => { disposed.push(surfaceId); return Promise.resolve(); },
 } });
 mock.module("../host.js", { namedExports: { report: () => {} } });
+// The shown space qualifies each section surface id (docs/spec/plugins.md#sections); a test changes it to show another space.
+let shownSpace = "spc-aaaaaa";
+mock.module("../projects.js", { namedExports: { shownSpaceId: () => shownSpace } });
 
 const { registry } = await import("../exposure.js");
 const { registerSection } = await import("../registry.js");
@@ -58,22 +61,55 @@ function sidebar() {
   return container;
 }
 
-test("each section body is the slot of a view surface named <sidebar id>/<section id>", async () => {
+test("each section body is the slot of a view surface named <space id>/<sidebar id>/<section id>", async () => {
   mounts.length = 0;
   const container = sidebar();
   try {
     drawSet(container, "c1:left", list, { card: "c1", surface: "t1", orientation: "vertical" });
     await settle();
     const bodies = [...container.querySelectorAll(".set__body")];
-    assert.deepEqual(bodies.map((body) => body.dataset.nativeSurfaceId), ["c1:left/probe.tree", "c1:left/probe.marks"]);
+    assert.deepEqual(bodies.map((body) => body.dataset.nativeSurfaceId), ["spc-aaaaaa/c1:left/probe.tree", "spc-aaaaaa/c1:left/probe.marks"]);
     assert.deepEqual(bodies.map((body) => body.dataset.nativePlugin), ["probe", "probe"]);
     assert.ok(bodies.every((body) => body.dataset.nativeSurface !== undefined), "a section body must be a native surface slot");
     assert.deepEqual(mounts.map(({ surface }) => [surface.surfaceId, surface.section]), [
-      ["c1:left/probe.tree", { id: "probe.tree", sidebar: "c1:left", card: "c1" }],
-      ["c1:left/probe.marks", { id: "probe.marks", sidebar: "c1:left", card: "c1" }],
+      ["spc-aaaaaa/c1:left/probe.tree", { id: "probe.tree", sidebar: "c1:left", card: "c1" }],
+      ["spc-aaaaaa/c1:left/probe.marks", { id: "probe.marks", sidebar: "c1:left", card: "c1" }],
     ]);
     assert.ok(mounts.every(({ slot, surface }) => slots.get(slot) === surface), "the slot must carry the mounted descriptor");
   } finally { clearSet(container); container.remove(); }
+});
+
+test("the same window sidebar section of two spaces gives two section surfaces with their own ids", async () => {
+  // Every project window has the sidebar left, so only the space tells the two surfaces apart.
+  mounts.length = 0;
+  const container = sidebar();
+  try {
+    shownSpace = "spc-aaaaaa";
+    drawSet(container, "left", list, { orientation: "vertical", window: true });
+    await settle();
+    shownSpace = "spc-bbbbbb";
+    drawSet(container, "left", list, { orientation: "vertical", window: true });
+    await settle();
+    assert.deepEqual(mounts.map((item) => item.surface.surfaceId), [
+      "spc-aaaaaa/left/probe.tree", "spc-aaaaaa/left/probe.marks", "spc-bbbbbb/left/probe.tree", "spc-bbbbbb/left/probe.marks",
+    ]);
+  } finally {
+    clearSet(container);
+    container.remove();
+    shownSpace = "spc-aaaaaa";
+  }
+});
+
+test("a sidebar draws no section without a shown space", () => {
+  const container = sidebar();
+  try {
+    shownSpace = null;
+    assert.throws(() => drawSet(container, "left", list, { orientation: "vertical", window: true }),
+      /sidebar left draws sections without a shown space/);
+  } finally {
+    container.remove();
+    shownSpace = "spc-aaaaaa";
+  }
 });
 
 test("a window sidebar section starts with card null", async () => {
@@ -100,9 +136,9 @@ test("folding and an unselected tab hide a section surface without releasing it"
     await settle();
     assert.deepEqual(disposed, [], "a hidden section surface must stay mounted");
     assert.equal(mounts.length, 4, "every section of both sets must mount once");
-    const tree = listed.querySelector('[data-native-surface-id="c2:left/probe.tree"]');
+    const tree = listed.querySelector('[data-native-surface-id="spc-aaaaaa/c2:left/probe.tree"]');
     assert.ok(tree.closest("[hidden]") || tree.hidden || tree.closest('[data-folded="true"]'), "a folded section body must be hidden");
-    const unselected = tabbed.querySelector('[data-native-surface-id="c2:right/probe.tree"]');
+    const unselected = tabbed.querySelector('[data-native-surface-id="spc-aaaaaa/c2:right/probe.tree"]');
     assert.ok(unselected.closest("[hidden]"), "the section of an unselected tab must be hidden");
   } finally { clearSet(listed); clearSet(tabbed); listed.remove(); tabbed.remove(); }
 });
@@ -119,8 +155,8 @@ test("a change of the active tab keeps the section surfaces and core.sidebars re
     assert.deepEqual(disposed, []);
     const state = sidebarsState().find((entry) => entry.sidebar === "c3:left");
     assert.deepEqual(state.sections.map(({ id, surfaceId, surface }) => ({ id, surfaceId, surface })), [
-      { id: "probe.tree", surfaceId: "c3:left/probe.tree", surface: "t2" },
-      { id: "probe.marks", surfaceId: "c3:left/probe.marks", surface: "t2" },
+      { id: "probe.tree", surfaceId: "spc-aaaaaa/c3:left/probe.tree", surface: "t2" },
+      { id: "probe.marks", surfaceId: "spc-aaaaaa/c3:left/probe.marks", surface: "t2" },
     ]);
   } finally { clearSet(container); container.remove(); }
 });
@@ -130,12 +166,12 @@ test("a drawn set records its section surfaces as shown, and clearing it leaves 
   const container = sidebar();
   drawSet(container, "c4:left", list, { card: "c4", surface: null, orientation: "vertical" });
   await settle();
-  assert.deepEqual(shownSectionSurfaces().filter((id) => id.startsWith("c4:")), ["c4:left/probe.tree", "c4:left/probe.marks"]);
+  assert.deepEqual(shownSectionSurfaces().filter((id) => id.startsWith("spc-aaaaaa/c4:")), ["spc-aaaaaa/c4:left/probe.tree", "spc-aaaaaa/c4:left/probe.marks"]);
   const bodies = [...container.querySelectorAll(".set__body")];
   clearSet(container);
   container.remove();
   await settle();
-  assert.deepEqual(shownSectionSurfaces().filter((id) => id.startsWith("c4:")), []);
+  assert.deepEqual(shownSectionSurfaces().filter((id) => id.startsWith("spc-aaaaaa/c4:")), []);
   assert.ok(bodies.every((body) => !slots.has(body)), "a cleared section body must hold no surface descriptor");
   // A commit that no longer holds the surface releases it, as it releases the surface of a closed tab (docs/spec/plugins.md#sections).
   assert.deepEqual(disposed, []);

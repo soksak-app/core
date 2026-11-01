@@ -502,8 +502,14 @@ fn tab_session_names_a_section_surface_file() {
     let store = Workspace::new(config.path().into());
     for (tab, file) in [
         ("tab-a", "tab-a.json"),
-        ("left/probe.tree", "left%2Fprobe.tree.json"),
-        ("c3:right/probe.dom", "c3%3Aright%2Fprobe.dom.json"),
+        (
+            "spc-aaaaaa/left/probe.tree",
+            "spc-aaaaaa%2Fleft%2Fprobe.tree.json",
+        ),
+        (
+            "spc-aaaaaa/c3:right/probe.dom",
+            "spc-aaaaaa%2Fc3%3Aright%2Fprobe.dom.json",
+        ),
     ] {
         apply(
             &store,
@@ -520,19 +526,52 @@ fn tab_session_names_a_section_surface_file() {
     }
     assert_eq!(
         apply(&store, json!({"kind":"tabSessions"})),
-        json!(["c3:right/probe.dom", "left/probe.tree", "tab-a"])
+        json!([
+            "spc-aaaaaa/c3:right/probe.dom",
+            "spc-aaaaaa/left/probe.tree",
+            "tab-a"
+        ])
     );
     for tab in [
-        "left/Probe.tree",
-        "probe.tree",
-        "left/probe.tree/x",
-        "c3:middle/probe.tree",
+        "spc-aaaaaa/left/Probe.tree",
+        "spc-aaaaaa/probe.tree",
+        "spc-aaaaaa/left/probe.tree/x",
+        "spc-aaaaaa/c3:middle/probe.tree",
+        "left/probe.tree",
+        "c3:right/probe.dom",
+        "spc-aaaaa/left/probe.tree",
+        "spc-aaaaa1/left/probe.tree",
+        "prj-aaaaaa/left/probe.tree",
     ] {
         let error = store
             .apply(serde_json::from_value(json!({"kind":"tabSession", "tab":tab})).unwrap())
             .unwrap_err();
         assert_eq!(error, format!("invalid tab session tab: {tab}"));
     }
+}
+
+// A stored session file whose name is not a session id, such as a file of the earlier section id form, is refused by name.
+// contract: workspace.tab-session.list-refuses-other-name
+#[test]
+fn tab_session_list_refuses_a_file_of_another_name() {
+    let config = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    let folder = config.path().join("tab-sessions");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join(".tmp123"), "{}").unwrap();
+    assert_eq!(apply(&store, json!({"kind":"tabSessions"})), json!([]));
+    fs::write(
+        folder.join("left%2Fprobe.tree.json"),
+        r#"{"format":1,"regions":{}}"#,
+    )
+    .unwrap();
+    let error = store
+        .apply(serde_json::from_value(json!({"kind":"tabSessions"})).unwrap())
+        .unwrap_err();
+    assert_eq!(
+        error,
+        "tab-sessions/left%2Fprobe.tree.json does not name a tab id or a section surface id"
+    );
 }
 
 // contract: workspace.tab-session.rejects-other-format, workspace.tab-session.rejects-invalid-request

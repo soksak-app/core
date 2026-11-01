@@ -14,7 +14,7 @@ const SHORTCUTS = [
 ];
 
 // The surfaces of the probe plugin that the window holds; a surface that is not listed belongs to no plugin of the window.
-const HELD = new Set(["probe left/files.tree", "probe tab-a"]);
+const HELD = new Set(["probe spc-aaaaaa/left/files.tree", "probe tab-a"]);
 
 function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
   const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [],
@@ -132,12 +132,12 @@ function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
 test("a status watch with a surface follows the status on that surface of the view's plugin", async () => {
   const { ran, options } = fakes();
   assert.equal(await answerViewCall({ id: 1, command: "runtime.status.watch", params: { name: "probe.lines" } }, options), null);
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.status.watch", params: { name: "probe.lines", surface: "left/files.tree" } }, options), null);
-  assert.equal(await answerViewCall({ id: 3, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "left/files.tree" } }, options), null);
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.status.watch", params: { name: "probe.lines", surface: "spc-aaaaaa/left/files.tree" } }, options), null);
+  assert.equal(await answerViewCall({ id: 3, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "spc-aaaaaa/left/files.tree" } }, options), null);
   assert.deepEqual(ran.subscribed, [
     { statusWatch: "probe.lines" },
-    { statusWatch: "probe.lines", surface: "left/files.tree" },
-    { statusUnwatch: "probe.lines", surface: "left/files.tree" },
+    { statusWatch: "probe.lines", surface: "spc-aaaaaa/left/files.tree" },
+    { statusUnwatch: "probe.lines", surface: "spc-aaaaaa/left/files.tree" },
   ]);
 });
 

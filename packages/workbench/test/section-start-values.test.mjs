@@ -10,7 +10,7 @@ globalThis.document = dom.window.document;
 
 const { viewStartValues } = await import("../surface-modules.js");
 
-const section = { composition: { kind: "view", page: "ui/tree.html" }, surfaceId: "left/probe.tree", pluginId: "probe",
+const section = { composition: { kind: "view", page: "ui/tree.html" }, surfaceId: "spc-aaaaaa/left/probe.tree", pluginId: "probe",
   declarations: {}, sidecars: [], diagnostics: null, unload: false, params: null,
   section: { id: "probe.tree", sidebar: "left", card: null } };
 

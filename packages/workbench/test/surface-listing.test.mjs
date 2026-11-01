@@ -32,14 +32,14 @@ test("the retained entries reject a mount list or a seated set of another type",
 });
 
 test("a section surface is listed with kind section and its sidebar, and a tab surface with kind tab", () => {
-  assert.deepEqual(surfaceKindOf({ surfaceId: "c3:right/probe.dom", section: { id: "probe.dom", sidebar: "c3:right", card: "c3" } }),
+  assert.deepEqual(surfaceKindOf({ surfaceId: "spc-aaaaaa/c3:right/probe.dom", section: { id: "probe.dom", sidebar: "c3:right", card: "c3" } }),
     { kind: "section", sidebar: "c3:right" });
   assert.deepEqual(surfaceKindOf({ surfaceId: "tab-a", section: null }), { kind: "tab", sidebar: null });
   assert.deepEqual(surfaceKindOf({ surfaceId: "tab-b" }), { kind: "tab", sidebar: null });
 });
 
 test("a retained section view keeps its kind and sidebar", () => {
-  const mounts = [{ surface: "left/probe.tree", plugin: "probe", exposes: [], composition: "view",
+  const mounts = [{ surface: "spc-aaaaaa/left/probe.tree", plugin: "probe", exposes: [], composition: "view",
     status: { phase: "ready", error: null }, state: "loaded", kind: "section", sidebar: "left" }];
   const [entry] = retainedSurfaceEntries(mounts, new Set());
   assert.equal(entry.kind, "section");

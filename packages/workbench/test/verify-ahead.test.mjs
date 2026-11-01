@@ -66,7 +66,7 @@ async function verifyAhead(t, extra, guessed) {
 
 test("V7c compares the predicted card surfaces and does not count a section surface that the drawing added", async (t) => {
   // A section surface is measured after the drawing (docs/spec/native-surfaces.md#section-seats), so the prediction never holds it.
-  const row = await verifyAhead(t, '<div class="set__body slot" data-native-surface="view" data-native-surface-id="left/probe.tree"></div>', ["probe"]);
+  const row = await verifyAhead(t, '<div class="set__body slot" data-native-surface="view" data-native-surface-id="spc-aaaaaa/left/probe.tree"></div>', ["probe"]);
   assert.equal(row.ok, true, row.note);
 });
 

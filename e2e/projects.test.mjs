@@ -508,8 +508,10 @@ for (const app of Object.values(APPS)) {
       const left = sidebars.find((item) => item.sidebar === "left");
       return ["files.tree", "files.bookmarks"].map((id) => left?.sections.find((item) => item.id === id));
     };
+    // A section surface id is qualified by the shown space (docs/spec/plugins.md#sections), which is known after the open.
+    let filesIds = [];
     const filesSurfaces = (surfaces) => surfaces.filter((item) => item.kind === "section" && item.sidebar === "left"
-      && ["left/files.tree", "left/files.bookmarks"].includes(item.surface));
+      && filesIds.includes(item.surface));
     for (const item of await s.get("core.projects")) await s.run("core.project.close", { id: item.id });
     assert.equal(await s.get("core.project"), null, "the check did not start from the library");
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
@@ -519,14 +521,16 @@ for (const app of Object.values(APPS)) {
       "the window did not report the opened project");
     await s.until("core.sidebars", (sidebars) => filesSections(sidebars).every((section) => section?.mounted && section.phase === "ready"),
       "the Files section views of the opened project were not mounted and ready");
-    for (const surface of ["left/files.tree", "left/files.bookmarks"]) {
+    const space = (await s.get("core.project")).activeSpaceId;
+    filesIds = [`${space}/left/files.tree`, `${space}/left/files.bookmarks`];
+    for (const surface of filesIds) {
       await s.until("core.surface.document", (doc) => doc !== null && doc.readyState === "complete" && doc.themed,
         `${surface} did not finish its document`, { surface });
     }
     const sectionSurfacesBefore = filesSurfaces(await s.get("core.surfaces"));
-    assert.deepEqual(sectionSurfacesBefore.map((item) => item.surface).sort(), ["left/files.bookmarks", "left/files.tree"],
+    assert.deepEqual(sectionSurfacesBefore.map((item) => item.surface).sort(), [...filesIds].sort(),
       "the opened project did not register its two Files section surfaces");
-    assert.equal(await s.run("files.bookmarks.add", { path: file }, "left/files.tree"), null);
+    assert.equal(await s.run("files.bookmarks.add", { path: file }, filesIds[0]), null);
     await s.run("core.project.close", { id: opened.id });
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
       `the window still reports the closed project ${await project()}`);

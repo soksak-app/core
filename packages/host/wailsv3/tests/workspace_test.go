@@ -504,8 +504,8 @@ func TestTabSessionNamesASectionSurfaceFile(t *testing.T) {
 	regions := host.Record{"page": map[string]any{"session": "AAAA"}}
 	for _, c := range []struct{ tab, file string }{
 		{"tab-a", "tab-a.json"},
-		{"left/probe.tree", "left%2Fprobe.tree.json"},
-		{"c3:right/probe.dom", "c3%3Aright%2Fprobe.dom.json"},
+		{"spc-aaaaaa/left/probe.tree", "spc-aaaaaa%2Fleft%2Fprobe.tree.json"},
+		{"spc-aaaaaa/c3:right/probe.dom", "spc-aaaaaa%2Fc3%3Aright%2Fprobe.dom.json"},
 	} {
 		if _, err := store.Apply(host.WorkspaceRequest{Kind: "tabSessionPut", Tab: c.tab, Regions: regions}); err != nil {
 			t.Fatalf("put of %s: %v", c.tab, err)
@@ -519,13 +519,38 @@ func TestTabSessionNamesASectionSurfaceFile(t *testing.T) {
 		}
 	}
 	listed, err := store.Apply(host.WorkspaceRequest{Kind: "tabSessions"})
-	if err != nil || !slices.Equal(listed.([]string), []string{"c3:right/probe.dom", "left/probe.tree", "tab-a"}) {
+	if err != nil || !slices.Equal(listed.([]string), []string{"spc-aaaaaa/c3:right/probe.dom", "spc-aaaaaa/left/probe.tree", "tab-a"}) {
 		t.Fatalf("the listing is %v (%v)", listed, err)
 	}
-	for _, tab := range []string{"left/Probe.tree", "probe.tree", "left/probe.tree/x", "c3:middle/probe.tree"} {
+	for _, tab := range []string{"spc-aaaaaa/left/Probe.tree", "spc-aaaaaa/probe.tree", "spc-aaaaaa/left/probe.tree/x", "spc-aaaaaa/c3:middle/probe.tree",
+		"left/probe.tree", "c3:right/probe.dom", "spc-aaaaa/left/probe.tree", "spc-aaaaa1/left/probe.tree", "prj-aaaaaa/left/probe.tree"} {
 		if _, err := store.Apply(host.WorkspaceRequest{Kind: "tabSession", Tab: tab}); err == nil || err.Error() != "invalid tab session tab: "+tab {
 			t.Fatalf("a read of %q returned %v, want the invalid tab error", tab, err)
 		}
+	}
+}
+
+// A stored session file whose name is not a session id, such as a file of the earlier section id form, is refused by name.
+// contract: workspace.tab-session.list-refuses-other-name
+func TestTabSessionListRefusesAFileOfAnotherName(t *testing.T) {
+	config := t.TempDir()
+	store := host.NewWorkspace(config)
+	folder := filepath.Join(config, "tab-sessions")
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, ".settings-123"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if listed, err := store.Apply(host.WorkspaceRequest{Kind: "tabSessions"}); err != nil || len(listed.([]string)) != 0 {
+		t.Fatalf("a folder with only a write in progress lists %v (%v), want []", listed, err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "left%2Fprobe.tree.json"), []byte(`{"format":1,"regions":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := store.Apply(host.WorkspaceRequest{Kind: "tabSessions"})
+	if err == nil || err.Error() != "tab-sessions/left%2Fprobe.tree.json does not name a tab id or a section surface id" {
+		t.Fatalf("the listing returned %v, want the refusal of the file", err)
 	}
 }
 

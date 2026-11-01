@@ -41,12 +41,14 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
 
     // The Files tree section view lists the folder after its refresh. files.open on that section surface runs core.file.open.
-    await s.run("files.refresh", {}, "left/files.tree");
+    // A section surface id is qualified by the shown space (docs/spec/plugins.md#sections).
+    const tree = `${(await s.get("core.project")).activeSpaceId}/left/files.tree`;
+    await s.run("files.refresh", {}, tree);
     await s.until("core.sidebars", (sidebars) => {
       const section = sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
       return section?.mounted && section.phase === "ready";
     }, "the Files tree section view was not mounted and ready");
-    assert.equal(await s.run("files.open", { path }, "left/files.tree"), null);
+    assert.equal(await s.run("files.open", { path }, tree), null);
     // The editor reports ready after it read the file; a surface error ends the wait with its text.
     const editor = await s.until("core.surfaces", (all) => all.some((x) => x.visible && x.plugin === "editor"
       && x.status.phase !== "loading"), "files.open on the selected file opened no editor tab");

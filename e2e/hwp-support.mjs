@@ -41,12 +41,14 @@ export async function openHwp(s) {
   copyFileSync(FIXTURE, file);
   s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
   // The Files tree section view lists the folder after its refresh; files.open on the tree surface runs core.file.open for the file.
-  await s.run("files.refresh", {}, "left/files.tree");
+  // A section surface id is qualified by the shown space (docs/spec/plugins.md#sections).
+  const tree = `${(await s.get("core.project")).activeSpaceId}/left/files.tree`;
+  await s.run("files.refresh", {}, tree);
   await s.until("core.sidebars", (sidebars) => {
     const section = sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
     return section?.mounted && section.phase === "ready";
   }, "the Files tree section view was not mounted and ready");
-  assert.equal(await s.run("files.open", { path }, "left/files.tree"), null);
+  assert.equal(await s.run("files.open", { path }, tree), null);
   // The cleanup closes the tab from the moment it exists, so a start that stops leaves no tab for the next check.
   const surfaces = await s.until("core.surfaces", (all) => all.some((x) => x.visible && x.plugin === "hwp"),
     "files.open on the hwp file opened no hwp tab");

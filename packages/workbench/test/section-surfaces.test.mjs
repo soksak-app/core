@@ -5,22 +5,26 @@ import test from "node:test";
 import { shownSectionSurfaces, showSectionSurface, hideSectionSurface, storedSurfaceKept } from "../section-surfaces.js";
 
 test("the shown section surfaces are the ones that a drawn sidebar holds", () => {
-  showSectionSurface("left/probe.tree");
-  showSectionSurface("c1:right/probe.dom");
-  showSectionSurface("left/probe.tree");
-  hideSectionSurface("c1:right/probe.dom");
-  assert.deepEqual(shownSectionSurfaces(), ["left/probe.tree"]);
-  hideSectionSurface("left/probe.tree");
+  showSectionSurface("spc-aaaaaa/left/probe.tree");
+  showSectionSurface("spc-aaaaaa/card-1:right/probe.dom");
+  showSectionSurface("spc-aaaaaa/left/probe.tree");
+  hideSectionSurface("spc-aaaaaa/card-1:right/probe.dom");
+  assert.deepEqual(shownSectionSurfaces(), ["spc-aaaaaa/left/probe.tree"]);
+  hideSectionSurface("spc-aaaaaa/left/probe.tree");
   assert.deepEqual(shownSectionSurfaces(), []);
 });
 
-test("a load keeps the entries of layout tabs, window sidebar sections and sections of cards of a layout", () => {
-  const kept = storedSurfaceKept(new Set(["tab-a"]), new Set(["c1", "c2"]));
+test("a load keeps the entries of layout tabs and of the sections of a space of a layout, keyed by that space", () => {
+  // A section surface id is <space>/<sidebar>/<section> (docs/spec/plugins.md#sections): window sidebars repeat in every window and
+  // card ids restart in each space, so the space makes the id name one surface.
+  const kept = storedSurfaceKept(new Set(["tab-a"]), new Map([["spc-aaaaaa", new Set(["card-1", "card-2"])], ["spc-bbbbbb", new Set(["card-1"])]]));
   assert.equal(kept("tab-a"), true);
   assert.equal(kept("tab-gone"), false);
-  assert.equal(kept("left/probe.tree"), true);
-  assert.equal(kept("right/probe.dom"), true);
-  assert.equal(kept("c1:top/probe.marks"), true);
-  assert.equal(kept("c9:left/probe.tree"), false, "a section of a closed card is dropped");
-  assert.equal(kept("middle/probe.tree"), false, "a sidebar that is neither a window sidebar nor a card sidebar is dropped");
+  assert.equal(kept("spc-aaaaaa/left/probe.tree"), true);
+  assert.equal(kept("spc-bbbbbb/right/probe.dom"), true);
+  assert.equal(kept("spc-aaaaaa/card-2:top/probe.marks"), true);
+  assert.equal(kept("spc-bbbbbb/card-2:top/probe.marks"), false, "a card of another space does not keep the section");
+  assert.equal(kept("spc-cccccc/left/probe.tree"), false, "a section of a removed space is dropped");
+  assert.equal(kept("spc-aaaaaa/middle/probe.tree"), false, "a sidebar that is neither a window sidebar nor a card sidebar is dropped");
+  assert.equal(kept("left/probe.tree"), false, "an id without a space is dropped");
 });

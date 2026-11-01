@@ -209,22 +209,22 @@ test("a status watch with a surface follows the status on that surface, keyed by
     return () => { off.push(key); observed.delete(key); };
   };
   const subs = createViewSubscriptions({ native: null, sidecar: null, status: observe, push: async (event, data) => { pushed.push({ event, data }); }, report: () => {} });
-  assert.equal(await subs.statusWatch("probe.lines", "left/files.tree"), null);
+  assert.equal(await subs.statusWatch("probe.lines", "spc-aaaaaa/left/files.tree"), null);
   assert.equal(await subs.statusWatch("probe.lines", "tab-a"), null);
   assert.equal(await subs.statusWatch("probe.lines", "tab-a"), null, "a second watch of the same name and surface registers nothing");
-  assert.deepEqual(observations, ["probe.lines left/files.tree", "probe.lines tab-a"]);
-  observed.get("probe.lines left/files.tree")(["section"], "left/files.tree");
+  assert.deepEqual(observations, ["probe.lines spc-aaaaaa/left/files.tree", "probe.lines tab-a"]);
+  observed.get("probe.lines spc-aaaaaa/left/files.tree")(["section"], "spc-aaaaaa/left/files.tree");
   observed.get("probe.lines tab-a")(["tab"], "tab-a");
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(pushed, [
-    { event: "status", data: { name: "probe.lines", surface: "left/files.tree", value: ["section"] } },
+    { event: "status", data: { name: "probe.lines", surface: "spc-aaaaaa/left/files.tree", value: ["section"] } },
     { event: "status", data: { name: "probe.lines", surface: "tab-a", value: ["tab"] } },
   ]);
-  assert.equal(await subs.statusUnwatch("probe.lines", "left/files.tree"), null);
-  assert.deepEqual(off, ["probe.lines left/files.tree"], "an unwatch ends only the watch of its surface");
+  assert.equal(await subs.statusUnwatch("probe.lines", "spc-aaaaaa/left/files.tree"), null);
+  assert.deepEqual(off, ["probe.lines spc-aaaaaa/left/files.tree"], "an unwatch ends only the watch of its surface");
   assert.equal(observed.has("probe.lines tab-a"), true);
   await subs.close();
-  assert.deepEqual(off, ["probe.lines left/files.tree", "probe.lines tab-a"]);
+  assert.deepEqual(off, ["probe.lines spc-aaaaaa/left/files.tree", "probe.lines tab-a"]);
 });
 
 test("a status watch that the page refuses registers nothing and rejects with the refusal", async () => {

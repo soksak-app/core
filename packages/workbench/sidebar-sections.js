@@ -1,7 +1,7 @@
 // Draws the sections of the set that a sidebar shows (docs/spec/plugins.md#sections).
 //
 // Each section is a section surface: a view of its plugin whose slot is the body of the section, with the surface id
-// <sidebar id>/<section id>. The sidebar draws only the frame (headers, tabs, heights); the plugin draws the body.
+// <space id>/<sidebar id>/<section id>. The sidebar draws only the frame (headers, tabs, heights); the plugin draws the body.
 // This module holds the tab selection and the section collapse for each sidebar.
 import { bind } from "./commands.js";
 import { clearSlotSurface, setSlotSurface } from "./compositor.js";
@@ -9,6 +9,7 @@ import { icon } from "./icons.js";
 import { hasSection, section } from "./registry.js";
 import { hideSectionSurface, showSectionSurface } from "./section-surfaces.js";
 import { mountSurface } from "./surface-modules.js";
+import { shownSpaceId } from "./projects.js";
 
 /* Selected tab and collapsed sections for each sidebar id. */
 const choices = new Map();
@@ -28,8 +29,11 @@ function choiceOf(sidebar) {
   return choices.get(sidebar);
 }
 
-/** The surface id of a section in a sidebar (docs/spec/plugins.md#sections). */
-export const sectionSurfaceId = (sidebar, sectionId) => `${sidebar}/${sectionId}`;
+/**
+ * The surface id of a section in a sidebar of a space (docs/spec/plugins.md#sections). The sidebar ids repeat in every window
+ * and the card ids in every space, so the space makes the id name one surface of the host.
+ */
+export const sectionSurfaceId = (space, sidebar, sectionId) => `${space}/${sidebar}/${sectionId}`;
 
 /** Mounts the view of a section once; a hidden section keeps its surface, which the compositor places invisible. */
 function mount(entry) {
@@ -121,6 +125,8 @@ function apply(record) {
  */
 export function drawSet(container, sidebar, set, context) {
   if (context.orientation !== "horizontal" && context.orientation !== "vertical") throw new Error("section orientation must be horizontal or vertical");
+  const space = shownSpaceId();
+  if (space === null) throw new Error(`sidebar ${sidebar} draws sections without a shown space`);
   sweep();
   if (set.layout !== "list" && set.layout !== "tabs") throw new Error(`set ${set.id} layout must be list or tabs`);
   // The sections of a plugin that is not loaded remain in the set but are not drawn (docs/spec/plugins.md).
@@ -130,7 +136,7 @@ export function drawSet(container, sidebar, set, context) {
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
   // Neither the orientation nor the followed surface is part of the key: a change of either keeps the section surfaces, and the
   // section views read the change from core.sidebars (docs/spec/plugins.md#sections).
-  const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.window === true]);
+  const key = JSON.stringify([space, sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.window === true]);
   let record = drawn.get(container);
   if (record?.key !== key) {
     if (record) clearSet(container);
@@ -160,7 +166,7 @@ export function drawSet(container, sidebar, set, context) {
       // (docs/spec/plugins.md#sections).
       element.dataset.height = String(section.height);
       if (section.height !== "fill") element.style.setProperty("--section-height", `${section.height}px`);
-      const surfaceId = sectionSurfaceId(sidebar, section.id);
+      const surfaceId = sectionSurfaceId(space, sidebar, section.id);
       // default: a window sidebar has no card (docs/spec/native-surfaces.md#view-surfaces).
       const start = { id: section.id, sidebar, card: context.card ?? null };
       const entry = { section, element, header: null, tab: null, body: document.createElement("div"),

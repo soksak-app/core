@@ -8034,6 +8034,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F347",
+    implementation: [
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export const sectionSurfaceId = (space, sidebar, sectionId) =>" },
+      { file: "packages/workbench/section-surfaces.js", symbol: "export function storedSurfaceKept(tabIds, spaceCards)" },
+      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func listTabSessions(directory string) (any, error)" },
+      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "fn valid_section_surface(id: &str) -> bool" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "the same window sidebar section of two spaces gives two section surfaces with their own ids" },
+      { file: "packages/workbench/test/section-surfaces.test.mjs", id: "a load keeps the entries of layout tabs and of the sections of a space of a layout, keyed by that space" },
+      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestTabSessionListRefusesAFileOfAnotherName" },
+      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "tab_session_list_refuses_a_file_of_another_name" },
+    ],
+    expected: "A section surface id is <space>/<sidebar>/<section>, so it names one surface of the host, and a stored session file of another name is refused by name.",
+    levels: ["unit"],
+  },
+  {
     id: "F346",
     implementation: [
       { file: "scripts/e2e-run.mjs", symbol: "async function lockReleased(configDir)" },
@@ -8126,7 +8143,7 @@ const FEATURE_LINKS = [
   {
     id: "F339",
     implementation: [{ file: "packages/workbench/sidebar-sections.js", symbol: "const attempt = entry.mount = {};" }],
-    tests: [{ file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "each section body is the slot of a view surface named <sidebar id>/<section id>" }],
+    tests: [{ file: "packages/workbench/test/sidebar-section-surfaces.test.mjs", id: "each section body is the slot of a view surface named <space id>/<sidebar id>/<section id>" }],
     expected: "The first state that a section mount reports before mountSurface returns belongs to that mount attempt.",
     levels: ["unit"],
   },

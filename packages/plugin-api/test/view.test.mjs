@@ -307,18 +307,18 @@ test("runtime.status.watch with a surface follows the status on that surface, an
   const { posted, host } = setup(t);
   const seen = [];
   const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
-  const stopSection = runtime.status.watch("probe.lines", (value) => seen.push(["section", value]), { surface: "left/files.tree" });
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.status.watch", params: { name: "probe.lines", surface: "left/files.tree" } });
+  const stopSection = runtime.status.watch("probe.lines", (value) => seen.push(["section", value]), { surface: "spc-aaaaaa/left/files.tree" });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.status.watch", params: { name: "probe.lines", surface: "spc-aaaaaa/left/files.tree" } });
   host({ sok: 1, id: 1, result: null });
   runtime.status.watch("probe.lines", (value) => seen.push(["tab", value]), { surface: "tab-a" });
   assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.status.watch", params: { name: "probe.lines", surface: "tab-a" } });
   host({ sok: 1, id: 2, result: null });
-  host({ sok: 1, event: "status", data: { name: "probe.lines", surface: "left/files.tree", value: ["a"] } });
+  host({ sok: 1, event: "status", data: { name: "probe.lines", surface: "spc-aaaaaa/left/files.tree", value: ["a"] } });
   host({ sok: 1, event: "status", data: { name: "probe.lines", surface: "tab-a", value: ["b"] } });
   host({ sok: 1, event: "status", data: { name: "probe.lines", value: ["c"] } });
   assert.deepEqual(seen, [["section", ["a"]], ["tab", ["b"]]]);
   stopSection();
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 3, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "left/files.tree" } });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 3, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "spc-aaaaaa/left/files.tree" } });
 });
 
 test("runtime.data.get and runtime.data.set send the key, and the value for a set, as view calls", async (t) => {

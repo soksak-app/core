@@ -38,12 +38,14 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
     const note = `${folder}/note.txt`;
 
+    // A section surface id is qualified by the shown space (docs/spec/plugins.md#sections).
+    const space = (await s.get("core.project")).activeSpaceId;
     await s.until("core.sidebars", (sidebars) => FILES_SECTIONS.every((id) => {
       const section = sectionOf(sidebars, "left", id);
-      return section?.mounted === true && section.phase === "ready" && section.error === null && section.surfaceId === `left/${id}`;
+      return section?.mounted === true && section.phase === "ready" && section.error === null && section.surfaceId === `${space}/left/${id}`;
     }), "the files sections of the left sidebar did not mount and report ready");
     const surfaces = await s.get("core.surfaces");
-    const surfaceIds = FILES_SECTIONS.map((id) => `left/${id}`);
+    const surfaceIds = FILES_SECTIONS.map((id) => `${space}/left/${id}`);
     for (const surface of surfaceIds) {
       const entry = sectionSurface(surfaces, surface);
       assert.ok(entry, `core.surfaces does not list the section surface ${surface}`);
@@ -53,10 +55,10 @@ for (const app of Object.values(APPS)) {
     await documentsReady(s, surfaceIds);
 
     // The tree section lists the project folder after files.refresh, which the tree surface runs and answers with null.
-    assert.equal(await s.run("files.refresh", {}, "left/files.tree"), null);
+    assert.equal(await s.run("files.refresh", {}, surfaceIds[0]), null);
     // A bookmark that the tree surface adds is removed through the bookmarks surface.
-    assert.equal(await s.run("files.bookmarks.add", { path: note }, "left/files.tree"), null);
-    assert.equal(await s.run("files.bookmarks.remove", { path: note }, "left/files.bookmarks"), null);
+    assert.equal(await s.run("files.bookmarks.add", { path: note }, surfaceIds[0]), null);
+    assert.equal(await s.run("files.bookmarks.remove", { path: note }, surfaceIds[1]), null);
   });
 }
 
@@ -66,7 +68,8 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await s.until("core.project", (value) => value?.root, "the fixture project was not shown");
     await terminalCardSidebar(s, { sections: ["files.tree"] });
-    const surfaceIds = ["left/files.tree", "terminal:left/files.tree"];
+    const space = (await s.get("core.project")).activeSpaceId;
+    const surfaceIds = [`${space}/left/files.tree`, `${space}/terminal:left/files.tree`];
     await s.until("core.sidebars", (sidebars) => sectionOf(sidebars, "left", "files.tree")?.mounted === true
       && sectionOf(sidebars, "terminal:left", "files.tree")?.mounted === true
       && sectionOf(sidebars, "left", "files.tree")?.phase === "ready" && sectionOf(sidebars, "terminal:left", "files.tree")?.phase === "ready",
@@ -127,9 +130,10 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
     await s.until("core.sidebars", (sidebars) => sectionOf(sidebars, "left", "files.tree")?.phase === "ready",
       "the files tree section view was not ready before the open");
-    await s.run("files.refresh", {}, "left/files.tree");
+    const tree = `${project.activeSpaceId}/left/files.tree`;
+    await s.run("files.refresh", {}, tree);
     // files.open answers null when no plugin opens the file: the tree view shows the failure, so the error display stays empty.
-    assert.equal(await s.run("files.open", { path: `${folder}/note.zzz` }, "left/files.tree"), null);
+    assert.equal(await s.run("files.open", { path: `${folder}/note.zzz` }, tree), null);
     assert.equal(await s.get("core.page.error"), null, "the failure to open a file reached the error display");
   });
 }

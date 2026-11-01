@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F347: section surface id는 `<space>/<sidebar>/<section>`이다. 그래서 같은 창 사이드바 섹션을 보여 주는 두 창이 더는 두 surface에 id 하나를 주지 않는다. 그 id 하나 때문에 sidecar가 `surface left/files.tree belongs to another window`로 보내기를 거부했다. host는 이 형식만 받아들이며, tab session 목록은 다른 이름의 저장된 file을 건너뛰지 않고 이름으로 거부한다. 이전 release의 file `tab-sessions/left%2F*.json`, `tab-sessions/right%2F*.json`, `tab-sessions/*%3A*%2F*.json`은 한 번 지운다.
 - F346: `make e2e`의 quit step은 설정 잠금을 쥔 프로세스가 없어질 때까지 기다리므로, check가 다시 시작한 애플리케이션이 끝나는 동안 남은 프로세스로 보고되지 않는다.
 - F345: page 검증 V7c는 예측한 card surface만 그리기와 비교하므로, 그리기 뒤의 commit이 재는 section surface를 그리기가 더해도 실패하지 않는다. V7a와 V7c는 누락하거나 사라진 것으로 센 surface의 id를 적는다.
 - F343-1: 이미 보이는 surface에 놓인 view는 첫 frame부터 불투명 backing을 그리지 않는다. `sp_surface_place_view`가 숨긴 surface를 보일 때만 설정되던 투명 backing을 설정하므로, section view는 page가 그리기 전에 WebKit의 흰 기본 backing을 보이지 않는다.

@@ -27,7 +27,7 @@ mod declaration_table {
             "settled": true,
             "titlebar": 40.0,
             "declarations": [{"commands": []}],
-            "surfaces": [{"id":"left/probe.tree","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
+            "surfaces": [{"id":"spc-aaaaaa/left/probe.tree","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
                           "plugin":"probe","composition":{"kind":"view","page":"tree.html"},
                           "start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,
                                    "diagnostics":null,"section":null}}]

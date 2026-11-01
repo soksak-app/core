@@ -442,17 +442,17 @@ test("a refused session history keeps the restore open, and the later mount stil
 
 test("a section surface is observed with the tabs and listed with kind section", async () => {
   const { saver } = harness();
-  saver.observe(new Set(["a"]), [{ id: "a", plugin: "p", kind: "tab" }, { id: "left/probe.tree", plugin: "probe", kind: "section" }]);
+  saver.observe(new Set(["a"]), [{ id: "a", plugin: "p", kind: "tab" }, { id: "spc-aaaaaa/left/probe.tree", plugin: "probe", kind: "section" }]);
   assert.deepEqual(saver.status().tabs.map(({ tab, kind, state }) => ({ tab, kind, state })), [
     { tab: "a", kind: "tab", state: "loaded" },
-    { tab: "left/probe.tree", kind: "section", state: "loaded" },
+    { tab: "spc-aaaaaa/left/probe.tree", kind: "section", state: "loaded" },
   ]);
 });
 
 test("the tab commands refuse a section surface id, so only the memory saver unloads a section", async () => {
   const { saver } = harness();
-  saver.observe(new Set(), [{ id: "a", plugin: "p", kind: "tab" }, { id: "left/probe.tree", plugin: "probe", kind: "section" }]);
+  saver.observe(new Set(), [{ id: "a", plugin: "p", kind: "tab" }, { id: "spc-aaaaaa/left/probe.tree", plugin: "probe", kind: "section" }]);
   assert.equal(saver.tab("a"), "a");
-  assert.throws(() => saver.tab("left/probe.tree"), /^Error: left\/probe.tree is a section surface, not a tab$/);
+  assert.throws(() => saver.tab("spc-aaaaaa/left/probe.tree"), /^Error: spc-aaaaaa\/left\/probe.tree is a section surface, not a tab$/);
   assert.throws(() => saver.tab("missing"), /unknown tab "missing"/);
 });

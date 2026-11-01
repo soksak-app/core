@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F347: A section surface id is `<space>/<sidebar>/<section>`, so two windows that show the same window sidebar section no longer give their surfaces one id, which made a sidecar refuse a send with `surface left/files.tree belongs to another window`; the hosts accept only this form, and the listing of the tab sessions refuses a stored file of another name by name instead of skipping it. Remove the files `tab-sessions/left%2F*.json`, `tab-sessions/right%2F*.json` and `tab-sessions/*%3A*%2F*.json` of an earlier release once.
 - F346: The quit step of `make e2e` waits until no process holds the configuration lock, so an application that a check relaunched is no longer reported as a remaining process while it exits.
 - F345: The page verification V7c compares only the predicted card surfaces with the drawing, so a section surface that a drawing adds, which the commit after the drawing measures, no longer fails it; V7a and V7c name the ids of the surfaces that they count as missing or gone.
 - F343-1: A view placed in a surface that is already shown paints no opaque backing from its first frame; `sp_surface_place_view` sets the transparent backing that only the reveal of a hidden surface set, so a section view no longer shows the white default backing of WebKit before its page draws.

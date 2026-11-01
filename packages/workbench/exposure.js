@@ -35,7 +35,7 @@ const ownerOf = (name) => name.slice(0, name.indexOf("."));
 const surfaceName = (name) => ownerOf(name) !== "core" || surfaceDocumentEntry(name);
 
 /**
- * Whether a surface id names a section surface, `<sidebar id>/<section id>` (docs/spec/plugins.md#sections). A tab id has no "/",
+ * Whether a surface id names a section surface, `<space id>/<sidebar id>/<section id>` (docs/spec/plugins.md#sections). A tab id has no "/",
  * so the form tells the two kinds apart.
  */
 export function isSectionSurface(surface) {

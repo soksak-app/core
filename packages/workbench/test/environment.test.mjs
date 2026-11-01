@@ -66,10 +66,10 @@ test("the environment registers card plugins, sections, and sidebar defaults fro
   assert.equal(registry.section("side.count").plugin, "side");
   // A section registers the builder of its section surface, which carries its composition, unload and start value section.
   const start = { id: "side.count", sidebar: "left", card: null };
-  const counted = registry.section("side.count").surface("left/side.count", start);
+  const counted = registry.section("side.count").surface("spc-aaaaaa/left/side.count", start);
   assert.deepEqual([counted.composition, counted.surfaceId, counted.pluginId, counted.unload, counted.params, counted.section],
-    [{ kind: "view", page: "ui/count.html" }, "left/side.count", "side", { format: 1, maxBytes: 4096 }, null, start]);
-  assert.equal(registry.section("side.list").surface("left/side.list", start).unload, false, "a section without unload is never unloaded");
+    [{ kind: "view", page: "ui/count.html" }, "spc-aaaaaa/left/side.count", "side", { format: 1, maxBytes: 4096 }, null, start]);
+  assert.equal(registry.section("side.list").surface("spc-aaaaaa/left/side.list", start).unload, false, "a section without unload is never unloaded");
   assert.deepEqual(settings.defaults.sets, files["/environment.json"].sidebars.sets);
   assert.deepEqual(settings.defaults.links, files["/environment.json"].sidebars.links);
   assert.equal(settings.value("card.cursor.shape"), "beam");

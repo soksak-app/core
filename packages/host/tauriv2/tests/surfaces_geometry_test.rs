@@ -450,7 +450,7 @@ fn sync_request_check_refuses_a_view_section_of_another_form() {
     );
     for section in [
         serde_json::json!([]),
-        serde_json::json!("left/probe.tree"),
+        serde_json::json!("spc-aaaaaa/left/probe.tree"),
         serde_json::json!({"id": "probe.tree", "sidebar": "left"}),
         serde_json::json!({"id": "", "sidebar": "left", "card": null}),
         serde_json::json!({"id": "probe.tree", "sidebar": "", "card": null}),

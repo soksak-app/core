@@ -387,7 +387,7 @@
     },
     {
       "term": "section surface",
-      "definition": "The view surface of one sidebar section, with the surface id <sidebar id>/<section id>, which the sidebar places in the body of the section (docs/spec/plugins.md#sections).",
+      "definition": "The view surface of one sidebar section, with the surface id <space id>/<sidebar id>/<section id>, which the sidebar places in the body of the section (docs/spec/plugins.md#sections).",
       "rejected": [],
       "allowed": []
     },

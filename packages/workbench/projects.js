@@ -112,13 +112,16 @@ export function layoutSurfaces() {
 }
 
 /** The ids of the cards of the layouts of all spaces of all projects, which the stored section surface entries name. */
-function layoutCards() {
-  return new Set(projects.flatMap((project) => project.spaces.flatMap((space) => space.layout.state.cards.map((card) => card.id))));
+/** The card ids of the layout of each space of every project, by space id. */
+function spaceCards() {
+  return new Map(projects.flatMap((project) => project.spaces.map((space) => [space.id, new Set(space.layout.state.cards.map((card) => card.id))])));
 }
 // default: a window without an active project (the library) has null.
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
 export const local = () => projects.filter((p) => owned.has(p.id));
 export const inLibrary = () => browsing;
+/** The space that the window shows, which qualifies the section surface ids (docs/spec/plugins.md#sections); null in the library. */
+export const shownSpaceId = () => (browsing ? null : active()?.activeSpaceId ?? null);
 export const isOpen = (id) => openProjects.has(id) || owned.has(id);
 /**
  * Finishes the transitions that change the plane (opening the library, activating a project) in the order received.
@@ -272,7 +275,7 @@ async function initialiseWindow(storage, unloadOf) {
   // A stored layout that cannot be read leaves the tab ids unknown, so the store keeps every entry and the error is
   // shown; opening that project reports the same layout again.
   try {
-    const kept = storedSurfaceKept(new Set(layoutSurfaces().map((item) => item.surface)), layoutCards());
+    const kept = storedSurfaceKept(new Set(layoutSurfaces().map((item) => item.surface)), spaceCards());
     await Promise.all([tabStates.reconcile(kept), tabSessions.reconcile(kept)]);
   } catch (error) {
     failed(error);

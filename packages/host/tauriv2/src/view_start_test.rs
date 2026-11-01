@@ -66,7 +66,7 @@ fn the_start_values_script_refuses_a_section_of_another_form() {
     let text = r#"surface "probe-surface": view start section is not {id, sidebar, card}"#;
     for section in [
         json!([]),
-        json!("left/probe.tree"),
+        json!("spc-aaaaaa/left/probe.tree"),
         json!({"id": "probe.tree", "sidebar": "left"}),
         json!({"id": "", "sidebar": "left", "card": null}),
         json!({"id": "probe.tree", "sidebar": "left", "card": ""}),

@@ -27,7 +27,7 @@ test("a section surface mounts with an origin that records no directory", { time
   } });
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?section-mount");
   const pluginId = "fixture-section-plugin";
-  const surfaceId = "left/fixture-section-plugin.tree";
+  const surfaceId = "spc-aaaaaa/left/fixture-section-plugin.tree";
   registerPlugin({ id: pluginId, surface: () => null });
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/tree.html" }, params: null, diagnostics: null, unload: false,

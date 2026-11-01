@@ -62,6 +62,7 @@ test("a held tab is neither mounted nor given a background session until its det
     surfaceForTab: (tab) => surfaceOf(tab.id),
   } });
   t.mock.module("../projects.js", { exports: {
+    shownSpaceId: () => "spc-aaaaaa",
     initialProjectContextReady: () => true,
     initialProjectContextFailed: () => false,
     waitForInitialProjectContext: () => Promise.resolve(),

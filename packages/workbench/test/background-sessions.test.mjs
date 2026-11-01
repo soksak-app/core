@@ -65,6 +65,7 @@ test("a background session opens only for a tab without a mounted surface and en
   let projectContextFailed = false;
   let projectContext = new Promise((resolve) => { commitProjectContext = resolve; });
   t.mock.module("../projects.js", { exports: {
+    shownSpaceId: () => "spc-aaaaaa",
     initialProjectContextReady: () => projectContextReady,
     initialProjectContextFailed: () => projectContextFailed,
     waitForInitialProjectContext: () => projectContext,
