@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F357: The cleanup of the runner test with a large process table ends the group of its test process through `killGroup`, which treats the EPERM refusal of a group that holds only zombies as an ended group; it accepted only `ESRCH` and `ENOENT` and failed one core run with `kill EPERM`. Red: `the cleanup of a recorded group ends a group that macOS refuses with EPERM because only zombies remain` failed. Green: it passes. F355 is complete.
 - F355-4-3: The closed-item cases of `scripts/test/checklist.test.mjs` expect the message of the records kit 0.0.3, which names the `Closed:` reason. Red: the three cases failed on the pin of 0.0.3. Green: they pass.
 - F355-4-2: The native process identity library stays in core, because it is common functionality of the sidecars; the plugins specification states it, the kit repository that F355-4-1 created is archived, and core pins the records kit release 0.0.3, whose term `kit` names a tool and whose checklist reader accepts `Closed:` with a reason. Red: `the records kit release that core pins defines the kit term` failed on the release 0.0.2. Green: it passes.
 - F355-4-1-2: The process identity kit `soksak-app/kit-process-identity-darwin` holds the library, its tests with a per-test runner, its private API inventory row and its specification, and its release run published `v0.0.1`.

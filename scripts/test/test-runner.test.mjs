@@ -176,6 +176,26 @@ test("a test file that leaves a timer open after its tests pass is ended at its 
   }
 });
 
+/**
+ * Ends the group whose leader wrote its pid to pidFile through killGroup, which treats the EPERM refusal of a group that holds only zombies
+ * as an ended group; a file that was never written means the group never started.
+ */
+function endRecordedGroup(pidFile, send) {
+  let pgid;
+  try { pgid = Number(readFileSync(pidFile, "utf8")); } catch (error) { if (error.code === "ENOENT") return; throw error; }
+  killGroup(pgid, send);
+}
+
+test("the cleanup of a recorded group ends a group that macOS refuses with EPERM because only zombies remain", { timeout: 5000 }, (t) => {
+  const folder = mkdtempSync(join(tmpdir(), "runner-recorded-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const pidFile = join(folder, "pid");
+  // A group id that no process uses, so the process table lists no running member of it.
+  writeFileSync(pidFile, "999999");
+  const refuse = () => { throw Object.assign(new Error("kill EPERM"), { code: "EPERM" }); };
+  assert.doesNotThrow(() => endRecordedGroup(pidFile, refuse));
+});
+
 test("a group at its limit is ended and its leftovers named while other processes make the process table larger than a read buffer", { timeout: 20000 }, async (t) => {
   // Three processes outside the group of the test carry arguments of 450 KB each, so the commands of all processes exceed the 1 MiB
   // output buffer of execFileSync; the names of the leftovers come only from the members of the group. The cleanup ends them and the
@@ -185,7 +205,7 @@ test("a group at its limit is ended and its leftovers named while other processe
   const large = Array.from({ length: 3 }, () => spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "x".repeat(450 * 1024)], { stdio: "ignore" }));
   t.after(() => {
     for (const child of large) child.kill("SIGKILL");
-    try { process.kill(-Number(readFileSync(pidFile, "utf8")), "SIGKILL"); } catch (error) { if (error.code !== "ESRCH" && error.code !== "ENOENT") throw error; }
+    endRecordedGroup(pidFile);
     rmSync(folder, { recursive: true, force: true });
   });
   const source = `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" }); setInterval(() => {}, 1000);`;
