@@ -6,6 +6,7 @@
 
 - F374-4-2: `sidecarListen`과 `viewSidecarRoute`의 route 요청은 각 host의 argument decoder가 검사하는 typed struct이므로, 형식을 벗어난 요청은 모든 binding이 쓰는 argument 문장으로 거부된다. Wails test owner는 `DeliverSidecarMessage`로 sidecar 메시지를 받고, event class 표는 `host.view.sidecar.discard`를 담고, `documents.view`의 결과를 검사하며, workbench view test는 generation마다의 route 호출을 검사한다.
 - F373-1: sidebar section의 끈 높이 조회 두 곳은 끌지 않은 section이 선언된 높이를 가지는 이유를 적는다.
+- F374-5-1-5: `packages/plugin-api/contract/screen-hash.json`의 case `screen.apply.full-two-rows`는 변경 case가 따르는 결과를 주는 전체 형식을 적용하고, 두 hash case가 변경 전과 뒤 화면의 hash를 주며, apply 메시지는 다른 게시된 메시지처럼 `frame: null`을 담는다. 그래서 소비자는 게시된 입력으로 변경 형식에 이른다.
 - F374-5-1-4: screen 메시지 절은 client가 영속 surface에 다시 연결한 뒤의 첫 화면을 전체 형식에 넣는다. 다시 연결한 client는 그 surface의 화면을 가지지 않기 때문이다.
 - F374-5-1-3: `packages/plugin-api/contract/screen-hash.json`의 case는 `previous`와 `message`를 가진 `apply` step으로 `applyScreenMessage`를 부르고, 그 출력은 `applied`나 오류이며, 두 case가 이전 결과와 함께 변경 형식을 준다. 그래서 소비자는 게시된 case로 변경 형식의 test API를 만든다.
 - F374-5-1-2: `docs/spec/cases/log-contract/replay/screen-message.json`의 변경 연속은 VT engine이 true color로 바꾸는 indexed 색 4 대신 true color `#040404`를 쓰고, `docs/spec/persistent-services.md`는 전체 형식을 가진 화면, 크기, 바뀐 행으로, `number`를 준비한 메시지의 수로 적는다.

@@ -59,8 +59,11 @@ const EXPECTED_IDS = [
   "screen.hash.blank-caret-8x4.sha256",
   "screen.hash.blank-two-cell-cursor.sha256",
   "screen.hash.linked-word.sha256",
+  "screen.apply.full-two-rows",
   "screen.apply.change-one-row",
   "screen.apply.refuses-unfollowed-change",
+  "screen.hash.two-rows.sha256",
+  "screen.hash.two-rows-changed.sha256",
 ];
 
 const MESSAGE_HASH_PAIRS = [

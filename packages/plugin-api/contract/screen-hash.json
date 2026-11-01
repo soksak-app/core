@@ -4541,6 +4541,107 @@
       ]
     },
     {
+      "id": "screen.apply.full-two-rows",
+      "steps": [
+        {
+          "apply": {
+            "previous": null,
+            "message": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "number": 1,
+              "base": true,
+              "rows": 2,
+              "cols": 2,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "frame": null,
+              "cells": [
+                {
+                  "grapheme": "a",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "b",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "c",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "d",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "applied": {
+              "sequence": 2,
+              "segment": "b1",
+              "number": 1,
+              "screen": {
+                "rows": 2,
+                "cols": 2,
+                "cursor": {
+                  "row": 0,
+                  "col": 0,
+                  "visible": true
+                },
+                "cells": [
+                  {
+                    "grapheme": "a",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "b",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "c",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  },
+                  {
+                    "grapheme": "d",
+                    "width": 1,
+                    "fg": null,
+                    "bg": null,
+                    "attributes": 0
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "screen.apply.change-one-row",
       "steps": [
         {
@@ -4603,6 +4704,7 @@
                 "col": 1,
                 "visible": true
               },
+              "frame": null,
               "changed": [
                 {
                   "row": 1,
@@ -4738,6 +4840,7 @@
                 "col": 1,
                 "visible": true
               },
+              "frame": null,
               "changed": [
                 {
                   "row": 1,
@@ -4763,6 +4866,108 @@
           },
           "output": {
             "error": "screen message: a change of previous 3 does not follow number 1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.two-rows.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 2,
+              "cols": 2,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "a",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "b",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "c",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "d",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "f7a3d4c9b83a851223d1ec63dad4640d28cc144f4f0db9bee2535502143b271c"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.two-rows-changed.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 2,
+              "cols": 2,
+              "cursor": {
+                "row": 1,
+                "col": 1,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "a",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "b",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "x",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "y",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "eff5bc86c51afcb702454d0c5cd4795bde946f584a21105745cb35bc20e53138"
           }
         }
       ]
