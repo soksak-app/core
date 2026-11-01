@@ -35,10 +35,10 @@ test("folding, selecting and sizing a section lay out the plane again", { timeou
     await installCoreExposure({
       library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
     });
-    await registry.run("core.sidebar.section.fold", { sidebar: "left", section: "files.bookmarks" });
-    await registry.run("core.sidebar.section.select", { sidebar: "rail", section: "files.tree" });
-    await registry.run("core.sidebar.section.size", { sidebar: "left", section: "files.bookmarks", height: 200 });
-    assert.deepEqual(events, ["fold left files.bookmarks", "settle", "select rail files.tree", "settle", "size left files.bookmarks 200", "settle"],
+    await registry.run("core.sidebar.section.fold", { sidebar: "left", section: "fixture.marks" });
+    await registry.run("core.sidebar.section.select", { sidebar: "rail", section: "fixture.tree" });
+    await registry.run("core.sidebar.section.size", { sidebar: "left", section: "fixture.marks", height: 200 });
+    assert.deepEqual(events, ["fold left fixture.marks", "settle", "select rail fixture.tree", "settle", "size left fixture.marks 200", "settle"],
       "a section choice did not lay out the plane again");
   } finally {
     dom.window.close();
