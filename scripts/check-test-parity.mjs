@@ -8034,6 +8034,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F346",
+    implementation: [
+      { file: "scripts/e2e-run.mjs", symbol: "async function lockReleased(configDir)" },
+    ],
+    tests: [
+      { file: "scripts/test/e2e-run.test.mjs", id: "a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one" },
+    ],
+    expected: "The quit step of the end-to-end run waits until no process holds the configuration lock.",
+    levels: ["unit"],
+  },
+  {
     id: "F345",
     implementation: [
       { file: "packages/workbench/verify.js", symbol: "const predicted = (id) =>" },

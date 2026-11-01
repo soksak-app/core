@@ -157,9 +157,29 @@ async function quitApplication(item, children, since, write) {
   } finally {
     bound.clear();
   }
-  if (end.code === 0) return;
-  for (const line of crashReports(item.app, since)) write(`crash ${line}`);
-  throw new Error(`the application ended with ${describeExit(end)}`);
+  if (end.code !== 0) {
+    for (const line of crashReports(item.app, since)) write(`crash ${line}`);
+    throw new Error(`the application ended with ${describeExit(end)}`);
+  }
+  await lockReleased(item.configDir);
+}
+
+/**
+ * Waits until no process holds `<config-dir>/process.lock` (docs/spec/endpoint.md). The started process is not always the owner:
+ * diagnostics.host.relaunch replaces it with a new process. lockf(1) takes the flock(2) lock that the host holds for its life, and
+ * the kernel wakes it when the owner exits, so the wait needs no polling.
+ */
+async function lockReleased(configDir) {
+  const lock = join(configDir, 'process.lock');
+  if (!existsSync(lock)) return;
+  const child = spawn('lockf', ['-s', '-t', String(QUIT_LIMIT_MS / 1000), lock, 'true'], { stdio: 'ignore' });
+  const end = await Promise.race([
+    exited(child),
+    once(child, 'error').then(([error]) => { throw new Error(`cannot start lockf: ${error.message}`); }),
+  ]);
+  if (end.code !== 0) {
+    throw new Error(`the process that holds ${lock} did not exit in ${QUIT_LIMIT_MS / 1000}s after host.quit (lockf ${describeExit(end)})`);
+  }
 }
 
 function checkRemaining(item) {

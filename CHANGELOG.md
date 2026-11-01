@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F346: The quit step of `make e2e` waits until no process holds the configuration lock, so an application that a check relaunched is no longer reported as a remaining process while it exits.
 - F345: The page verification V7c compares only the predicted card surfaces with the drawing, so a section surface that a drawing adds, which the commit after the drawing measures, no longer fails it; V7a and V7c name the ids of the surfaces that they count as missing or gone.
 - F343-1: A view placed in a surface that is already shown paints no opaque backing from its first frame; `sp_surface_place_view` sets the transparent backing that only the reveal of a hidden surface set, so a section view no longer shows the white default backing of WebKit before its page draws.
 - F344: A view's `runtime.status.unwatch` ends the view's own watch also after its surface closed; it was refused with `view call runtime.status.unwatch surface <surface> is not a surface of <plugin>`, which wrote an application error each time a section view unwatched a closed tab.

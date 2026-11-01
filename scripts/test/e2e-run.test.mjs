@@ -115,6 +115,21 @@ test("a quit step requests host.quit and ends when the application exits", { tim
   assert.equal(fake.requests[0].params.name, "host.quit");
 });
 
+test("a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one", { timeout: 10000 }, async (t) => {
+  // diagnostics.host.relaunch replaces the started application with a new process, which owns process.lock (docs/spec/endpoint.md).
+  const started = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+  await new Promise((resolve) => started.once("exit", resolve));
+  const fake = await startFakeEndpoint({ "command.run": () => null });
+  t.after(() => fake.close());
+  const holder = spawn("lockf", [join(fake.configDir, "process.lock"), process.execPath, "-e", "process.stdout.write('held'); setTimeout(() => {}, 400)"]);
+  t.after(() => holder.kill());
+  await new Promise((resolve) => holder.stdout.once("data", resolve));
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", app: "app", configDir: fake.configDir }],
+    { write: () => {}, children: new Map([["app", started]]) });
+  assert.deepEqual(failures, []);
+  assert.notEqual(holder.exitCode, null, "the quit step ended while the process that holds process.lock was running");
+});
+
 test("a quit step without a started application is skipped", { timeout: 5000 }, async () => {
   const { lines, write } = recorder();
   assert.deepEqual(await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", app: "app", configDir: "/none" }], { write }), []);

@@ -117,7 +117,7 @@ E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSA
 2. 그 root에 registry 인증서를 만들고(`make e2e-registry-tls`), workspace registry의 플러그인을 그 root의 `soksak-check-wailsv3`와 `soksak-check-tauriv2`에 설치한다(`make install-plugins`).
 3. 두 애플리케이션을 그 root의 `--config-dir`과 `--registry-ca`로 시작하고, 출력을 `<root>/<app>.out`에 쓰고, 각 `endpoint.json`을 file watch로 최대 60초 기다린다.
 4. tier의 창 검사(`node scripts/node-tests.mjs --script <script>`)를 실행하고(이 실행이 run을 audit한다), 이어서 tier의 native end-to-end target을 실행한다.
-5. 시작한 각 애플리케이션을 선언된 `host.quit` 명령으로 끝내고 종료를 최대 60초 기다린다. 다른 상태로 끝난 애플리케이션은 그 step을 실패시키고, 실행 시작 이후 그 애플리케이션이 남긴 시스템 crash report를 fault와 함께 출력한다(`scripts/crash-fault.mjs`).
+5. 시작한 각 애플리케이션을 선언된 `host.quit` 명령으로 끝내고 종료를 최대 60초 기다린다. 다른 상태로 끝난 애플리케이션은 그 step을 실패시키고, 실행 시작 이후 그 애플리케이션이 남긴 시스템 crash report를 fault와 함께 출력한다(`scripts/crash-fault.mjs`). 이어서 그 step은 같은 제한 안에서 `<config-dir>/process.lock`을 쥔 프로세스가 없어질 때까지 기다린다([endpoint](../spec/endpoint.ko.md)). `diagnostics.host.relaunch`는 시작한 애플리케이션을 실행이 시작하지 않은 새 프로세스로 바꾸기 때문이다. `lockf(1)`가 잠금을 얻고, 소유자가 끝나면 돌아온다.
 6. command가 root나 애플리케이션 bundle을 가리키는 프로세스가 남아 있으면 실패한다.
 
 각 step은 `running`을 출력하고, 이어서 경과 시간과 함께 `passed` 또는 `failed`를 출력한다. 준비가 실패하면 검사를 건너뛰고 끝의 step을 실행한다. 검사가 실패해도 다른 검사는 건너뛰지 않는다. 통과한 실행은 root를 지우고, 실패한 실행은 애플리케이션 log와 함께 root를 남기고 그 경로를 출력한다. 실패한 실행은 각 애플리케이션의 `services` 폴더를 지워서, `host.quit` 없이 끝난 host의 persistent service가 끝나게 한다([persistent service](../spec/persistent-services.ko.md)). 그래서 모든 실행은 새 root에서 시작하고, 같은 source를 두 번 실행해도 결과가 같다. `make e2e WHEN_IDLE=<seconds>`는 사람이 그 시간 동안 입력하지 않은 뒤에만 각 창 검사 파일을 시작한다.
