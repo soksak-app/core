@@ -117,6 +117,7 @@ function apply(record) {
     }
     // An integer height is the height of the open section; fill sections share the height left after the other sections. A dragged
     // height replaces the declared one (docs/spec/plugins.md#sections).
+    // default: a section that was not dragged has its declared height.
     const height = choice.sizes.get(id) ?? entry.section.height;
     entry.element.dataset.height = String(height);
     if (height === "fill") entry.element.style.removeProperty("--section-height");
@@ -134,6 +135,7 @@ function apply(record) {
 
 /** The section that the divider between above and below sizes: below when it has an integer height, otherwise above. */
 function dividedSection(choice, above, below) {
+  // default: a section that was not dragged has its declared height.
   return Number.isInteger(choice.sizes.get(below.section.id) ?? below.section.height) ? below : above;
 }
 
