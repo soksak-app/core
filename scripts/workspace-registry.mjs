@@ -130,21 +130,16 @@ export function packPlugin(repository, out) {
   return repositoryRelease(repository, "pack", out);
 }
 
-/** The sidecar platform key (docs/spec/installation.md#sidecar-release) of an operating system and an architecture of Node. */
-export function currentPlatform(os = process.platform, arch = process.arch) {
-  const key = `${os === "win32" ? "windows" : os}-${arch}`;
-  if (!["darwin", "linux", "windows"].some((name) => key === `${name}-arm64` || key === `${name}-x64`)) {
-    throw new Error(`no sidecar platform for ${os}-${arch}`);
-  }
-  return key;
-}
-
 /**
  * `make release OUT=<folder>` of the sidecar repository builds the sidecar and writes its release of the current platform, the
- * npm pack file of the built sidecar folder (docs/spec/installation.md#sidecar-release), into the folder.
+ * npm pack file of the built sidecar folder named `<file name>-<version>-<platform>.tgz`
+ * (docs/spec/installation.md#sidecar-release), into the folder. The platform of the entry is the platform of that name.
  */
 export function releaseSidecar(repository, out) {
-  return { ...repositoryRelease(repository, "release", out), platform: currentPlatform() };
+  const release = repositoryRelease(repository, "release", out);
+  const platform = /-((?:darwin|linux|windows)-(?:arm64|x64))\.tgz$/.exec(release.release)?.[1];
+  if (!platform) throw new Error(`make release of ${repository} wrote ${release.release}, whose name ends with no <os>-<arch>.tgz`);
+  return { ...release, platform };
 }
 
 /** Writes the pnpm pack file of the plugin folder dir into out (docs/spec/installation.md#plugin-release) and returns it and its sha256. */

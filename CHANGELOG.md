@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F355-5-1: The workspace registry takes the platform of a sidecar release from the `<os>-<arch>` that ends its name, because platform detection belongs under `platform/<os>/`.
 - F355-6: Every declared workspace version is the release candidate 0.0.26, and the latest published release is 0.0.25, because the published 0.0.25 was built before F355-2 and does not install the `pnpm pack` and `npm pack` releases.
 - F355-5: A sidecar release is the `npm pack` file of the built sidecar folder. `sok plugin install` extracts it from `package/` and refuses a release that does not hold the `executable` or `replay.executable` of its `sidecar.json`; `sok sidecar release` is removed, and the workspace registry runs `make release OUT=<folder>` of a sidecar repository.
 - F355-2: A plugin release is the `pnpm pack` file of the plugin. `sok plugin install` extracts it from `package/`, refuses an entry outside `package/`, a release without the surface module or the view page of `plugin.json` and a file under `.binary`, and checks `plugin.json` with the reader before it compares the plugin id. `sok plugin pack` and its `--diagnostics` are removed; a plugin lists `diagnostics.json` and its module in `files`, and only a diagnostic build reads them. The workspace registry runs `make pack OUT=<folder>` of a plugin repository without `SOK` and `PACK_FLAGS`.

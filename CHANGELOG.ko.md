@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F355-5-1: workspace registry는 sidecar release의 platform을 이름 끝의 `<os>-<arch>`에서 읽는다. platform 판별은 `platform/<os>/` 아래에 있어야 하기 때문이다.
 - F355-6: 선언된 모든 workspace version은 release candidate 0.0.26이고 최신 게시 release는 0.0.25다. 게시된 0.0.25는 F355-2 이전에 build되어 `pnpm pack`과 `npm pack` release를 설치하지 못하기 때문이다.
 - F355-5: sidecar release는 build한 sidecar 폴더의 `npm pack` 파일이다. `sok plugin install`은 이를 `package/`에서 풀고, `sidecar.json`의 `executable`이나 `replay.executable`을 담지 않은 release를 거부한다. `sok sidecar release`는 지웠고, workspace registry는 sidecar 저장소의 `make release OUT=<folder>`를 실행한다.
 - F355-2: plugin release는 plugin의 `pnpm pack` 파일이다. `sok plugin install`은 이를 `package/`에서 풀고, `package/` 밖의 entry, `plugin.json`의 surface module이나 view page가 없는 release, `.binary` 아래의 파일을 거부하며, plugin id를 비교하기 전에 reader로 `plugin.json`을 검사한다. `sok plugin pack`과 그 `--diagnostics`는 지웠다. plugin은 `diagnostics.json`과 그 module을 `files`에 나열하고, 진단 build만 이를 읽는다. workspace registry는 plugin 저장소의 `make pack OUT=<folder>`를 `SOK`와 `PACK_FLAGS` 없이 실행한다.
