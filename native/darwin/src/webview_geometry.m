@@ -54,14 +54,6 @@ static void configureWebViewTransparency(WKWebView *view) {
     view.layer.backgroundColor = NSColor.clearColor.CGColor;
 }
 
-static void reconfigureSurfaceWebviews(NSView *root) {
-    if ([root isKindOfClass:SPSurfaceHost.class]) {
-        SPSurfaceHost *host = (SPSurfaceHost *)root;
-        if (host.webview) configureWebViewTransparency(host.webview);
-    }
-    for (NSView *child in root.subviews) reconfigureSurfaceWebviews(child);
-}
-
 // The only native drag target of a window. It receives files dragged from another application and reports them to the host
 // with the drop point, and the host sends them to the page. The native view is placed above the DOM, so the page decides how to handle a
 // dropped file from the DOM element at that point. It accepts only file URLs and returns no view in the hit test, so pointers and other drags go to the view below.
@@ -634,10 +626,6 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
             }
             objc_setAssociatedObject(surface, &hiddenResponderKey, nil, OBJC_ASSOCIATION_RETAIN);
         }
-        NSView *coordinates = host.superview;
-        if ([coordinates isKindOfClass:SPSurfaceCoordinates.class]) {
-            reconfigureSurfaceWebviews(coordinates);
-        }
         // A hidden surface can miss frame/backing notifications. Reapply the view and native regions after revealing the host;
         // the view is a sibling of the native plane and may have been placed while the host was hidden.
         notifyScale(host);
@@ -722,6 +710,8 @@ bool sp_surface_place_view(void *surfaceHandle, void *viewHandle) {
     NSView *view = (NSView *)viewHandle;
     view.frame = host.bounds;
     view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    // The view draws no opaque backing from its first frame, also in a surface that is already shown.
+    configureWebViewTransparency((WKWebView *)view);
     host.webview = (WKWebView *)view;
     [host addSubview:view positioned:NSWindowBelow relativeTo:host.nativePlane];
     return true;

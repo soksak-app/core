@@ -50,6 +50,17 @@ int main(void) { @autoreleasepool {
     check(main.underPageBackgroundColor.alphaComponent == 0 && ![[main valueForKey:@"drawsBackground"] boolValue],
         "the app DOM webview does not paint an opaque backing over native regions");
     check(webviews(window.contentView) == 1, "three surfaces use one app DOM webview");
+    // A view placed in a surface that is already shown draws no opaque backing from its first frame; the reveal of a hidden
+    // surface is not the only place that sets the backing.
+    WKWebView *placed = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 100, 40)];
+    check(sp_surface_place_view(surfaces[0], placed), "a view is placed in a shown surface");
+    check(placed.underPageBackgroundColor.alphaComponent == 0 && ![[placed valueForKey:@"drawsBackground"] boolValue]
+            && placed.layer != nil && !placed.layer.opaque,
+        [[NSString stringWithFormat:@"a view placed in a shown surface paints no opaque backing (draws %@, under-page alpha %@)",
+            [placed valueForKey:@"drawsBackground"], @(placed.underPageBackgroundColor.alphaComponent)] UTF8String]);
+    sp_surface_unplace_view(placed);
+    [placed removeFromSuperview];
+    [placed release];
     char *factsJSON = sp_window_facts(window);
     NSDictionary *facts = [NSJSONSerialization JSONObjectWithData:
         [NSData dataWithBytes:factsJSON length:strlen(factsJSON)] options:0 error:nil];

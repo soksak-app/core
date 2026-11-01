@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F343-1: 이미 보이는 surface에 놓인 view는 첫 frame부터 불투명 backing을 그리지 않는다. `sp_surface_place_view`가 숨긴 surface를 보일 때만 설정되던 투명 backing을 설정하므로, section view는 page가 그리기 전에 WebKit의 흰 기본 backing을 보이지 않는다.
 - F344: view의 `runtime.status.unwatch`는 surface가 닫힌 뒤에도 view 자신의 watch를 끝낸다. 이전에는 `view call runtime.status.unwatch surface <surface> is not a surface of <plugin>`으로 거부되어, section view가 닫힌 tab을 unwatch할 때마다 application error를 기록했다.
 - F342-2: main page의 모든 forward 요청은 method와 관계없이 10초 또는 선언된 `timeout`의 시간 제한을 갖는다. host는 더 이상 `status.next`를 제한에서 빼지 않으며, contract case `exposure.timeout.every-forward-bounded`가 그것을 적는다.
 - F342-1: surface status watch는 event 구독이다. surface page는 watch된 status의 현재 값과 그 뒤의 다른 값을 `changed {name, value, version}`으로 보내고(view는 view call `runtime.native.call` `changed`로), main page는 각 값을 version이 더 오래된 watch에 전달하며, 어느 watch도 받지 않은 값은 `page.trace.surface.change.dropped`로 trace한다. 시간 제한 없이 기다려서 main page의 reload를 시작하지 못하게 하던 forward `status.next`는 없앤다.

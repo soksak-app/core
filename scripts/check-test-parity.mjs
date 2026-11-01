@@ -8034,6 +8034,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F343-1",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "bool sp_surface_place_view(void *surfaceHandle, void *viewHandle)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_host_test.m", id: "a view placed in a shown surface paints no opaque backing" },
+    ],
+    expected: "A view placed in a shown surface paints no opaque backing from its first frame.",
+    levels: ["unit"],
+  },
+  {
     id: "F344",
     implementation: [
       { file: "packages/workbench/view-calls.js", symbol: "function statusWatchOf(command, params, plugin, holdsSurface)" },

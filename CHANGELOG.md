@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F343-1: A view placed in a surface that is already shown paints no opaque backing from its first frame; `sp_surface_place_view` sets the transparent backing that only the reveal of a hidden surface set, so a section view no longer shows the white default backing of WebKit before its page draws.
 - F344: A view's `runtime.status.unwatch` ends the view's own watch also after its surface closed; it was refused with `view call runtime.status.unwatch surface <surface> is not a surface of <plugin>`, which wrote an application error each time a section view unwatched a closed tab.
 - F342-2: Every forwarded request of the main page has a time limit, 10 s or its declared `timeout`, whatever its method; the hosts no longer exempt `status.next` from the limit, and the contract case `exposure.timeout.every-forward-bounded` states it.
 - F342-1: A surface status watch is an event subscription: the surface page sends the current value and each later different value of a watched status as `changed {name, value, version}` (a view through the view call `runtime.native.call` `changed`), the main page delivers each to the watches whose version is older and traces each value that no watch takes as `page.trace.surface.change.dropped`, and the forward `status.next`, which waited without a time limit and kept a reload of the main page from starting, is removed.
