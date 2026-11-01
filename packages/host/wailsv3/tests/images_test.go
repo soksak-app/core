@@ -66,12 +66,11 @@ func newFakeImageOwner(root string) *fakeImageOwner {
 
 func (o *fakeImageOwner) ProjectRoot() string { return o.root }
 
-func (o *fakeImageOwner) Emit(name string, data ...any) {
-	if name != "sidecar-message" || len(data) != 1 {
-		return
-	}
+func (o *fakeImageOwner) Emit(string, ...any) {}
+
+func (o *fakeImageOwner) DeliverSidecarMessage(message host.SidecarMessage) {
 	o.mu.Lock()
-	o.events = append(o.events, data[0].(host.SidecarMessage))
+	o.events = append(o.events, message)
 	o.mu.Unlock()
 	o.seen <- struct{}{}
 }

@@ -111,6 +111,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.view.killed" => Some(Class::Lifecycle),
         "host.view.reply" => Some(Class::Call),
         "host.view.reply.dispatch" => Some(Class::Call),
+        "host.view.sidecar.discard" => Some(Class::Call),
         "host.window.event" => Some(Class::Lifecycle),
         "host.workspace.settings" => Some(Class::Lifecycle),
         "log.closed" => Some(Class::Lifecycle),

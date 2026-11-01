@@ -49,13 +49,12 @@ func (o *fakeOwner) ProjectRoot() string { return o.root }
 func (o *fakeOwner) Emit(name string, data ...any) {
 	if name == "sidecar-failure" && len(data) == 1 {
 		o.failures <- data[0]
-		return
 	}
-	if name != "sidecar-message" || len(data) != 1 {
-		return
-	}
+}
+
+func (o *fakeOwner) DeliverSidecarMessage(message host.SidecarMessage) {
 	o.mu.Lock()
-	o.events = append(o.events, data[0].(host.SidecarMessage))
+	o.events = append(o.events, message)
 	o.mu.Unlock()
 	o.seen <- struct{}{}
 }

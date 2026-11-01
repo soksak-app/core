@@ -572,8 +572,7 @@ func (s *Surfaces) postSidecarMessage(sidecar, id, text string, views []sidecarR
 			})
 			continue
 		}
-		channel, _ := s.documents.view(view.surface)
-		if channel.document == "" {
+		if channel, ok := s.documents.view(view.surface); !ok || channel.document == "" {
 			LogError("view sidecar route", fmt.Errorf("%s: no ready document", view.surface))
 			continue
 		}

@@ -277,7 +277,7 @@ func (h *Host) SidecarListen(ctx context.Context, reqJSON json.RawMessage) error
 	if err != nil {
 		return err
 	}
-	s.sidecarRoutes.listen(req.sidecar, req.id, req.on)
+	s.sidecarRoutes.listen(req.Sidecar, req.ID, req.On)
 	return nil
 }
 
@@ -292,7 +292,7 @@ func (h *Host) ViewSidecarRoute(ctx context.Context, reqJSON json.RawMessage) er
 	if err != nil {
 		return err
 	}
-	s.sidecarRoutes.routeView(req.surface, req.generation, req.sidecar, req.id, req.on)
+	s.sidecarRoutes.routeView(req.Surface, req.Generation, req.Sidecar, req.ID, req.On)
 	return nil
 }
 

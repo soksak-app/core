@@ -69,6 +69,7 @@ var eventClasses = map[string]Class{
 	"host.view.killed":                       ClassLifecycle,
 	"host.view.reply":                        ClassCall,
 	"host.view.reply.dispatch":               ClassCall,
+	"host.view.sidecar.discard":              ClassCall,
 	"host.window.event":                      ClassLifecycle,
 	"host.workspace.settings":                ClassLifecycle,
 	"log.closed":                             ClassLifecycle,

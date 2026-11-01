@@ -17,8 +17,9 @@ func TestARouteCallOutsideItsFormIsRefusedWithTheFieldItLacks(t *testing.T) {
 	cases := map[string]string{
 		`{"sidecar":"probe","id":"tab-a","on":true}`: "",
 		`{"sidecar":"","id":"tab-a","on":true}`:      "sidecarListen requires a non-empty sidecar",
-		`{"sidecar":"probe","on":true}`:              "sidecarListen requires a non-empty id",
-		`{"sidecar":"probe","id":"tab-a","on":1}`:    "sidecarListen requires on as a boolean",
+		`{"sidecar":"probe","on":true}`:              "argument request.id is missing",
+		`{"sidecar":"probe","id":"tab-a","on":1}`:    "argument request.on must be a boolean, not a number",
+		`true`: "argument request must be an object, not a boolean",
 	}
 	for text, want := range cases {
 		if got := listen(text); got != want {
@@ -37,6 +38,7 @@ func TestARouteCallOutsideItsFormIsRefusedWithTheFieldItLacks(t *testing.T) {
 		`{"surface":"tab-a","generation":0,"sidecar":"probe","id":"tab-a","on":true}`:                "viewSidecarRoute has no source generation",
 		`{"surface":"tab-a","generation":9007199254740992,"sidecar":"probe","id":"tab-a","on":true}`: "viewSidecarRoute source generation exceeds the JavaScript safe integer limit",
 		`{"surface":"tab-a","generation":3,"sidecar":"probe","id":"","on":true}`:                     "viewSidecarRoute requires a non-empty id",
+		`{"surface":"tab-a","generation":3,"sidecar":"probe","id":"tab-a"}`:                          "argument request.on is missing",
 	}
 	for text, want := range routeCases {
 		if got := route(text); got != want {

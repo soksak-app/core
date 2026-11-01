@@ -1285,17 +1285,12 @@ test("a view process end cancels its pending work across restart and accepts new
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
   const nativeListeners = sourceListenerMap();
-  const sidecarListeners = [];
   const replies = [];
   const calls = [];
   const emitted = [];
-  const reported = [];
   let resolveOldSend;
   let oldSendStarted;
   const oldSendStartedPromise = new Promise((resolve) => { oldSendStarted = resolve; });
-  let resolveOldEventStarted;
-  const oldEventStartedPromise = new Promise((resolve) => { resolveOldEventStarted = resolve; });
-  let oldEventReject;
   let newDocumentReady = false;
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
@@ -1312,13 +1307,6 @@ test("a view process end cancels its pending work across restart and accepts new
           },
           call: async (name, payload) => {
             calls.push({ name, payload });
-            if (name === "viewEvent" && payload.data.body.id === "old") {
-              resolveOldEventStarted();
-              return new Promise((_resolve, reject) => { oldEventReject = reject; });
-            }
-            if (name === "viewEvent" && payload.data.body.id === "live-refusal") {
-              throw new Error("current view document refused the event");
-            }
             if (name === "viewReply") {
               replies.push(payload);
               if (payload.id === 11 && newDocumentReady) calls.push({ name: "staleReplyReachedReplacement", payload });
@@ -1334,11 +1322,6 @@ test("a view process end cancels its pending work across restart and accepts new
             }
             return null;
           },
-          on: async (id, listener) => {
-            const entry = { id, listener, active: true };
-            sidecarListeners.push(entry);
-            return () => { entry.active = false; };
-          },
           onFailure: async () => () => {},
         }),
       };
@@ -1346,10 +1329,6 @@ test("a view process end cancels its pending work across restart and accepts new
   } });
   const actualPageLog = await import("../page-log.js");
   t.mock.module("../page-log.js", { exports: { ...actualPageLog, emitEvent: (level, event, fields) => emitted.push({ level, event, fields }) } });
-  const previousError = globalThis.ErrorEvent;
-  const previousDispatch = globalThis.dispatchEvent;
-  globalThis.ErrorEvent = dom.window.ErrorEvent;
-  globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-process-end-pending-work");
   const pluginId = "fixture-view-process-generation";
   const surfaceId = "fixture-view-process-generation-surface";
@@ -1357,6 +1336,8 @@ test("a view process end cancels its pending work across restart and accepts new
   registerPlugin({ id: pluginId, surface: () => null });
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] },
     sidecars: ["fixture-sidecar"], composition: { kind: "view", page: "ui/page.html" } };
+  const routes = () => calls.filter(({ name }) => name === "viewSidecarRoute")
+    .map(({ payload }) => ({ generation: payload.generation, sidecar: payload.sidecar, id: payload.id, on: payload.on }));
   const settle = async (condition) => {
     for (let turn = 0; turn < 100 && !condition(); turn += 1) await new Promise((resolve) => setTimeout(resolve, 5));
     assert.ok(condition(), "the view-process operation settled");
@@ -1367,61 +1348,40 @@ test("a view process end cancels its pending work across restart and accepts new
     await mountSurface(document.querySelector("#slot"), surface);
     const call = nativeListeners.get("view-call");
     call({ generation: 1, id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
-    await settle(() => sidecarListeners.length === 1);
+    await settle(() => replies.some(({ id }) => id === 10));
     call({ generation: 1, id: 11, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { id: "old" } } });
     await oldSendStartedPromise;
-    sidecarListeners[0].listener({ id: "old" });
-    await oldEventStartedPromise;
     const ended = nativeListeners.get("view-process-ended");
     assert.equal(typeof ended, "function", "the mounted surface listens for host view-process end");
     assert.equal(endSourceOrigin(pluginId, surfaceId, 1), true, "the old source was not retired before its process-ended event");
     ended({ surface: surfaceId, generation: 1 });
     assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source generation did not register after the old process ended");
 
-    // A restarted document sends a new subscription before the old handler settles.
+    // A restarted document sends a new subscription before the old call settles.
     call({ surface: surfaceId, generation: 2, id: 12, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
     await settle(() => replies.some(({ id }) => id === 12));
     newDocumentReady = true;
     resolveOldSend(null);
-    oldEventReject(new Error(`surface ${surfaceId} has no ready document`));
     await new Promise((resolve) => setImmediate(resolve));
-    sidecarListeners[0].listener({ id: "late-old" });
-    await new Promise((resolve) => setImmediate(resolve));
-
-    const currentListener = sidecarListeners.at(-1);
-    currentListener.listener({ id: "new" });
-    await settle(() => calls.some(({ name, payload }) => name === "viewEvent" && payload.data.body.id === "new"));
-    currentListener.listener({ id: "live-refusal" });
-    await settle(() => reported.length > 0);
-    const sentSidecarMessages = calls.filter(({ name }) => name === "viewEvent")
-      .map(({ payload }) => ({ generation: payload.generation, id: payload.data.body.id }));
 
     assert.deepEqual({
       staleReplies: replies.filter(({ id }) => id === 11),
       staleReplyReachedReplacement: calls.some(({ name }) => name === "staleReplyReachedReplacement"),
-      oldListenerActive: sidecarListeners[0].active,
-      newListenerActive: sidecarListeners.at(-1).active,
       oldCallCancellation: emitted.filter(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11)
         .map(({ fields }) => ({ generation: fields.generation, id: fields.id })),
-      oldEventCanceled: emitted.some(({ event, fields }) => event === "page.view.event.cancel" && fields.event === "sidecar.message"),
-      sidecarEventCancellationCount: emitted.filter(({ event, fields }) => event === "page.view.event.cancel" && fields.event === "sidecar.message").length,
-      reports: reported,
-      newEventDelivered: calls.some(({ name, payload }) => name === "viewEvent" && payload.data.body.id === "new"),
-      sentSidecarMessages,
-      lateOldEventDelivered: calls.some(({ name, payload }) => name === "viewEvent" && payload.data.body.id === "late-old"),
+      routes: routes(),
+      relayedEvents: calls.filter(({ name }) => name === "viewEvent").length,
     }, {
-      staleReplies: [], staleReplyReachedReplacement: false, oldListenerActive: false, newListenerActive: true,
-      oldCallCancellation: [{ generation: 1, id: 11 }], oldEventCanceled: true,
-      sidecarEventCancellationCount: 2,
-      reports: ["view event sidecar.message: current view document refused the event"], newEventDelivered: true,
-      sentSidecarMessages: [
-        { generation: 1, id: "old" }, { generation: 2, id: "new" }, { generation: 2, id: "live-refusal" },
+      staleReplies: [], staleReplyReachedReplacement: false,
+      oldCallCancellation: [{ generation: 1, id: 11 }],
+      routes: [
+        { generation: 1, sidecar: "fixture-sidecar", id: "probe", on: true },
+        { generation: 1, sidecar: "fixture-sidecar", id: "probe", on: false },
+        { generation: 2, sidecar: "fixture-sidecar", id: "probe", on: true },
       ],
-      lateOldEventDelivered: false,
+      relayedEvents: 0,
     });
   } finally {
-    globalThis.dispatchEvent = previousDispatch;
-    globalThis.ErrorEvent = previousError;
     await disposeSurface(surfaceId);
     dom.window.close();
   }
@@ -1553,20 +1513,19 @@ test("a view reply the host refuses is reported through the page error path", { 
   }
 });
 
-test("closing a view cancels a pending call reply and event delivery", { timeout: 20000 }, async (t) => {
+test("closing a view cancels a pending call reply and removes its sidecar route", { timeout: 20000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
   const listeners = sourceListenerMap();
-  const sidecarListeners = new Map();
   const emitted = [];
   const reported = [];
+  const routes = [];
   let resolveSend;
   let sendStarted;
   const sendStartedPromise = new Promise((resolve) => { sendStarted = resolve; });
-  let rejectEvent;
   let ended = false;
   const staleHostCalls = [];
   const actualHost = await import("../host.js");
@@ -1580,8 +1539,8 @@ test("closing a view cancels a pending call reply and event delivery", { timeout
         native: { ...runtime.native, on: async (name, listener) => {
           listeners.set(name, listener);
           return () => {};
-        }, call: async (name) => {
-          if (name === "viewEvent") return new Promise((_resolve, reject) => { rejectEvent = reject; });
+        }, call: async (name, payload) => {
+          if (name === "viewSidecarRoute") routes.push({ generation: payload.generation, id: payload.id, on: payload.on });
           if (name === "viewReply" && ended) {
             staleHostCalls.push(name);
             throw new Error(`surface ${surface.surfaceId} has no ready document`);
@@ -1592,10 +1551,6 @@ test("closing a view cancels a pending call reply and event delivery", { timeout
           send: async () => {
             sendStarted();
             return new Promise((resolve) => { resolveSend = resolve; });
-          },
-          on: async (id, listener) => {
-            sidecarListeners.set(id, listener);
-            return () => sidecarListeners.delete(id);
           },
           onFailure: async () => () => {},
         }),
@@ -1622,12 +1577,10 @@ test("closing a view cancels a pending call reply and event delivery", { timeout
     const call = listeners.get("view-call");
     call({ generation: 1, id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
     await new Promise((resolve) => setImmediate(resolve));
-    sidecarListeners.get("probe")({ n: 1 });
     call({ generation: 1, id: 11, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { n: 2 } } });
     await sendStartedPromise;
     await disposeSurface(surfaceId);
     ended = true;
-    rejectEvent(new Error(`surface ${surfaceId} has no ready document`));
     resolveSend(null);
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual({
@@ -1635,8 +1588,11 @@ test("closing a view cancels a pending call reply and event delivery", { timeout
       reported,
       callCancellation: emitted.filter(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11)
         .map(({ fields }) => ({ generation: fields.generation, id: fields.id })),
-      eventCanceled: emitted.some(({ event, fields }) => event === "page.view.event.cancel" && fields.event === "sidecar.message"),
-    }, { staleHostCalls: [], reported: [], callCancellation: [{ generation: 1, id: 11 }], eventCanceled: true });
+      routes,
+    }, {
+      staleHostCalls: [], reported: [], callCancellation: [{ generation: 1, id: 11 }],
+      routes: [{ generation: 1, id: "probe", on: true }, { generation: 1, id: "probe", on: false }],
+    });
   } finally {
     globalThis.dispatchEvent = previousDispatch;
     globalThis.ErrorEvent = previousError;

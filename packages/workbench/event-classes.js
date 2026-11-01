@@ -56,6 +56,7 @@ const EXACT = new Map([
   ["host.view.killed", "lifecycle"],
   ["host.view.reply", "call"],
   ["host.view.reply.dispatch", "call"],
+  ["host.view.sidecar.discard", "call"],
   ["host.window.event", "lifecycle"],
   ["host.workspace.settings", "lifecycle"],
   ["log.closed", "lifecycle"],

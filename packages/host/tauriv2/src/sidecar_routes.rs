@@ -3,6 +3,7 @@
 // source generations. The host delivers a message only to those receivers, so a message to a view does not pass through the
 // main page.
 
+use serde::Deserialize;
 use serde_json::Value;
 use serde_json::value::RawValue;
 use std::collections::HashMap;
@@ -110,21 +111,15 @@ pub(crate) fn view_message(id: &str, body: &RawValue) -> String {
     )
 }
 
-fn text_field(value: &Value, call: &str, field: &str) -> Result<String, String> {
-    match value.get(field) {
-        Some(Value::String(text)) if !text.is_empty() => Ok(text.clone()),
-        _ => Err(format!("{call} requires a non-empty {field}")),
+fn non_empty(text: &str, call: &str, field: &str) -> Result<(), String> {
+    if text.is_empty() {
+        return Err(format!("{call} requires a non-empty {field}"));
     }
+    Ok(())
 }
 
-fn on_field(value: &Value, call: &str) -> Result<bool, String> {
-    match value.get("on") {
-        Some(Value::Bool(on)) => Ok(*on),
-        _ => Err(format!("{call} requires on as a boolean")),
-    }
-}
-
-/// The call sidecarListen {sidecar, id, on} of the main page.
+/// The call sidecarListen {sidecar, id, on} of the main page; the argument decoder checks its form.
+#[derive(Deserialize)]
 pub(crate) struct SidecarListenRequest {
     pub sidecar: String,
     pub id: String,
@@ -132,17 +127,17 @@ pub(crate) struct SidecarListenRequest {
 }
 
 impl SidecarListenRequest {
-    pub(crate) fn from_value(value: Value) -> Result<Self, String> {
+    /// Refuses an empty sidecar or id.
+    pub(crate) fn check(self) -> Result<Self, String> {
         const CALL: &str = "sidecarListen";
-        Ok(Self {
-            sidecar: text_field(&value, CALL, "sidecar")?,
-            id: text_field(&value, CALL, "id")?,
-            on: on_field(&value, CALL)?,
-        })
+        non_empty(&self.sidecar, CALL, "sidecar")?;
+        non_empty(&self.id, CALL, "id")?;
+        Ok(self)
     }
 }
 
-/// The call viewSidecarRoute {surface, generation, sidecar, id, on} of the main page.
+/// The call viewSidecarRoute {surface, generation, sidecar, id, on} of the main page; the argument decoder checks its form.
+#[derive(Deserialize)]
 pub(crate) struct ViewSidecarRouteRequest {
     pub surface: String,
     pub generation: u64,
@@ -152,21 +147,17 @@ pub(crate) struct ViewSidecarRouteRequest {
 }
 
 impl ViewSidecarRouteRequest {
-    pub(crate) fn from_value(value: Value) -> Result<Self, String> {
+    /// Refuses an empty surface, sidecar or id and a generation outside the source generations.
+    pub(crate) fn check(self) -> Result<Self, String> {
         const CALL: &str = "viewSidecarRoute";
-        let surface = text_field(&value, CALL, "surface")?;
-        let generation = match value.get("generation").and_then(Value::as_u64) {
-            Some(0) | None => return Err(format!("{CALL} has no source generation")),
-            Some(generation) => generation,
-        };
-        crate::source_origins::validate_view_source_generation_limit(generation, CALL)?;
-        Ok(Self {
-            surface,
-            generation,
-            sidecar: text_field(&value, CALL, "sidecar")?,
-            id: text_field(&value, CALL, "id")?,
-            on: on_field(&value, CALL)?,
-        })
+        non_empty(&self.surface, CALL, "surface")?;
+        if self.generation == 0 {
+            return Err(format!("{CALL} has no source generation"));
+        }
+        crate::source_origins::validate_view_source_generation_limit(self.generation, CALL)?;
+        non_empty(&self.sidecar, CALL, "sidecar")?;
+        non_empty(&self.id, CALL, "id")?;
+        Ok(self)
     }
 }
 

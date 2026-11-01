@@ -615,12 +615,15 @@ async fn view_event(webview: Webview, request: Argument<documents::ViewEventRequ
 /// Sets whether the main page receives the messages of a pair of a sidecar and a session id
 /// (docs/spec/native-surfaces.md#view-surfaces).
 #[tauri::command]
-async fn sidecar_listen(webview: Webview, request: Argument<serde_json::Value>) -> Result<(), String> {
+async fn sidecar_listen(
+    webview: Webview,
+    request: Argument<crate::sidecar_routes::SidecarListenRequest>,
+) -> Result<(), String> {
     let Argument(request) = request;
     blocking(move || {
         let window = webview.window();
         crate::exposure::authorize_main_caller(webview.label(), window.label(), "sidecar listen")?;
-        let request = crate::sidecar_routes::SidecarListenRequest::from_value(request)?;
+        let request = request.check()?;
         crate::windows::window_data(&window)?
             .sidecar_routes
             .listen(&request.sidecar, &request.id, request.on);
@@ -632,12 +635,15 @@ async fn sidecar_listen(webview: Webview, request: Argument<serde_json::Value>) 
 /// Adds or removes a view as a receiver of the messages of a pair of a sidecar and a session id
 /// (docs/spec/native-surfaces.md#view-surfaces).
 #[tauri::command]
-async fn view_sidecar_route(webview: Webview, request: Argument<serde_json::Value>) -> Result<(), String> {
+async fn view_sidecar_route(
+    webview: Webview,
+    request: Argument<crate::sidecar_routes::ViewSidecarRouteRequest>,
+) -> Result<(), String> {
     let Argument(request) = request;
     blocking(move || {
         let window = webview.window();
         crate::exposure::authorize_main_caller(webview.label(), window.label(), "view sidecar route")?;
-        let request = crate::sidecar_routes::ViewSidecarRouteRequest::from_value(request)?;
+        let request = request.check()?;
         crate::windows::window_data(&window)?.sidecar_routes.route_view(
             &request.surface,
             request.generation,

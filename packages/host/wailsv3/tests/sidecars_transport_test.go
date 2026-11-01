@@ -37,11 +37,9 @@ type harnessOwner struct {
 }
 
 func (o *harnessOwner) ProjectRoot() string { return o.root }
-func (o *harnessOwner) Emit(name string, data ...any) {
-	if name == "sidecar-message" && len(data) == 1 {
-		o.seen <- data[0].(SidecarMessage)
-	}
-}
+func (o *harnessOwner) Emit(string, ...any) {}
+
+func (o *harnessOwner) DeliverSidecarMessage(message SidecarMessage) { o.seen <- message }
 
 // harnessDeclarations is the declaration of one persistent sidecar installed in folder.
 func harnessDeclarations(folder string) []SidecarDeclaration {
@@ -1446,13 +1444,12 @@ type failureOwner struct {
 
 func (o *failureOwner) ProjectRoot() string { return o.root }
 func (o *failureOwner) Emit(name string, data ...any) {
-	switch name {
-	case "sidecar-message":
-		o.seen <- data[0].(SidecarMessage)
-	case "sidecar-failure":
+	if name == "sidecar-failure" {
 		o.failures <- data[0].(host.SidecarFailure)
 	}
 }
+
+func (o *failureOwner) DeliverSidecarMessage(message SidecarMessage) { o.seen <- message }
 
 // serveOneBadLine replies to hello on one connection, receives one request line, and then writes payload. When the host closes the connection, it
 // closes closed. If the host closes before payload is fully written, the write error is the expected result.

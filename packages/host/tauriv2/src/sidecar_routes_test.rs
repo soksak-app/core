@@ -1,11 +1,16 @@
 use super::{SidecarListenRequest, SidecarRoutes, ViewSidecarRouteRequest, view_message};
+use crate::arguments::decode;
 use serde_json::value::RawValue;
 use serde_json::{Value, json};
 
 // contract: sidecar.route.calls
 #[test]
 fn a_route_call_outside_its_form_is_refused_with_the_field_it_lacks() {
-    let listen = |value: Value| SidecarListenRequest::from_value(value).map(|_| ());
+    let listen = |value: Value| {
+        decode::<SidecarListenRequest>("request", &value)
+            .and_then(SidecarListenRequest::check)
+            .map(|_| ())
+    };
     assert_eq!(
         listen(json!({"sidecar": "probe", "id": "tab-a", "on": true})),
         Ok(())
@@ -16,13 +21,21 @@ fn a_route_call_outside_its_form_is_refused_with_the_field_it_lacks() {
     );
     assert_eq!(
         listen(json!({"sidecar": "probe", "on": true})),
-        Err("sidecarListen requires a non-empty id".to_string())
+        Err("argument request.id is missing".to_string())
     );
     assert_eq!(
         listen(json!({"sidecar": "probe", "id": "tab-a", "on": 1})),
-        Err("sidecarListen requires on as a boolean".to_string())
+        Err("argument request.on must be a boolean, not a number".to_string())
     );
-    let route = |value: Value| ViewSidecarRouteRequest::from_value(value).map(|_| ());
+    assert_eq!(
+        listen(json!(true)),
+        Err("argument request must be an object, not a boolean".to_string())
+    );
+    let route = |value: Value| {
+        decode::<ViewSidecarRouteRequest>("request", &value)
+            .and_then(ViewSidecarRouteRequest::check)
+            .map(|_| ())
+    };
     assert_eq!(
         route(
             json!({"surface": "tab-a", "generation": 3, "sidecar": "probe", "id": "tab-a", "on": false})
@@ -55,6 +68,10 @@ fn a_route_call_outside_its_form_is_refused_with_the_field_it_lacks() {
             json!({"surface": "tab-a", "generation": 3, "sidecar": "probe", "id": "", "on": true})
         ),
         Err("viewSidecarRoute requires a non-empty id".to_string())
+    );
+    assert_eq!(
+        route(json!({"surface": "tab-a", "generation": 3, "sidecar": "probe", "id": "tab-a"})),
+        Err("argument request.on is missing".to_string())
     );
 }
 

@@ -106,85 +106,63 @@ func viewSidecarMessage(id string, body json.RawMessage) []byte {
 	return append(message, "}}"...)
 }
 
-// routeFields returns the members of a call; a value that is not an object has none, so the first field that the call requires is
-// refused, as in the Tauri host.
-func routeFields(raw json.RawMessage) map[string]json.RawMessage {
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(raw, &fields) != nil {
-		return nil
+func nonEmpty(call, field, text string) error {
+	if text == "" {
+		return fmt.Errorf("%s requires a non-empty %s", call, field)
 	}
-	return fields
+	return nil
 }
 
-func routeText(call string, fields map[string]json.RawMessage, name string) (string, error) {
-	var text string
-	if err := json.Unmarshal(fields[name], &text); err != nil || text == "" {
-		return "", fmt.Errorf("%s requires a non-empty %s", call, name)
-	}
-	return text, nil
+// SidecarListenRequest is the call sidecarListen {sidecar, id, on} of the main page; the argument decoder checks its form.
+type SidecarListenRequest struct {
+	Sidecar string `json:"sidecar"`
+	ID      string `json:"id"`
+	On      bool   `json:"on"`
 }
 
-func routeOn(call string, fields map[string]json.RawMessage) (bool, error) {
-	var on bool
-	if raw, ok := fields["on"]; !ok || json.Unmarshal(raw, &on) != nil {
-		return false, fmt.Errorf("%s requires on as a boolean", call)
-	}
-	return on, nil
-}
-
-// sidecarListenRequest is the call sidecarListen {sidecar, id, on} of the main page.
-type sidecarListenRequest struct {
-	sidecar, id string
-	on          bool
-}
-
-func sidecarListenRequestFrom(raw json.RawMessage) (sidecarListenRequest, error) {
+func sidecarListenRequestFrom(raw json.RawMessage) (SidecarListenRequest, error) {
 	const call = "sidecarListen"
-	fields := routeFields(raw)
-	var req sidecarListenRequest
-	var err error
-	if req.sidecar, err = routeText(call, fields, "sidecar"); err != nil {
-		return sidecarListenRequest{}, err
+	req, err := argument[SidecarListenRequest]("request", raw)
+	if err != nil {
+		return SidecarListenRequest{}, err
 	}
-	if req.id, err = routeText(call, fields, "id"); err != nil {
-		return sidecarListenRequest{}, err
-	}
-	if req.on, err = routeOn(call, fields); err != nil {
-		return sidecarListenRequest{}, err
+	for _, field := range []struct{ name, text string }{{"sidecar", req.Sidecar}, {"id", req.ID}} {
+		if err := nonEmpty(call, field.name, field.text); err != nil {
+			return SidecarListenRequest{}, err
+		}
 	}
 	return req, nil
 }
 
-// viewSidecarRouteRequest is the call viewSidecarRoute {surface, generation, sidecar, id, on} of the main page.
-type viewSidecarRouteRequest struct {
-	surface     string
-	generation  uint64
-	sidecar, id string
-	on          bool
+// ViewSidecarRouteRequest is the call viewSidecarRoute {surface, generation, sidecar, id, on} of the main page; the argument decoder
+// checks its form.
+type ViewSidecarRouteRequest struct {
+	Surface    string `json:"surface"`
+	Generation uint64 `json:"generation"`
+	Sidecar    string `json:"sidecar"`
+	ID         string `json:"id"`
+	On         bool   `json:"on"`
 }
 
-func viewSidecarRouteRequestFrom(raw json.RawMessage) (viewSidecarRouteRequest, error) {
+func viewSidecarRouteRequestFrom(raw json.RawMessage) (ViewSidecarRouteRequest, error) {
 	const call = "viewSidecarRoute"
-	fields := routeFields(raw)
-	var req viewSidecarRouteRequest
-	var err error
-	if req.surface, err = routeText(call, fields, "surface"); err != nil {
-		return viewSidecarRouteRequest{}, err
+	req, err := argument[ViewSidecarRouteRequest]("request", raw)
+	if err != nil {
+		return ViewSidecarRouteRequest{}, err
 	}
-	if json.Unmarshal(fields["generation"], &req.generation) != nil || req.generation == 0 {
-		return viewSidecarRouteRequest{}, fmt.Errorf("%s has no source generation", call)
+	if err := nonEmpty(call, "surface", req.Surface); err != nil {
+		return ViewSidecarRouteRequest{}, err
 	}
-	if req.generation > maxSourceGeneration {
-		return viewSidecarRouteRequest{}, fmt.Errorf("%s source generation exceeds the JavaScript safe integer limit", call)
+	if req.Generation == 0 {
+		return ViewSidecarRouteRequest{}, fmt.Errorf("%s has no source generation", call)
 	}
-	if req.sidecar, err = routeText(call, fields, "sidecar"); err != nil {
-		return viewSidecarRouteRequest{}, err
+	if req.Generation > maxSourceGeneration {
+		return ViewSidecarRouteRequest{}, fmt.Errorf("%s source generation exceeds the JavaScript safe integer limit", call)
 	}
-	if req.id, err = routeText(call, fields, "id"); err != nil {
-		return viewSidecarRouteRequest{}, err
-	}
-	if req.on, err = routeOn(call, fields); err != nil {
-		return viewSidecarRouteRequest{}, err
+	for _, field := range []struct{ name, text string }{{"sidecar", req.Sidecar}, {"id", req.ID}} {
+		if err := nonEmpty(call, field.name, field.text); err != nil {
+			return ViewSidecarRouteRequest{}, err
+		}
 	}
 	return req, nil
 }
