@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F355-3-3: registry 명세는 pull request 검사가 각 listed core의 plugin API release의 `checkPluginRepository`를 그것이 설치하는 plugin release에 실행한다고 적는다(registry 항목 G61). 그래서 plugin repository는 exposed 이름을 검사하려고 core release를 필요로 하지 않는다.
 - F355-3-5: core는 events kit release `soksak-kit-events-0.0.1.tgz`의 census 검사를 실행하고, `@soksak/plugin-api`는 census 검사, census 규칙, `ajv`를 더 이상 담지 않는다. Red: `the census check and the event scripts run the census check of the events kit release`와 `the plugin API ships no census check or census rules`가 실패했다. Green: 통과하고, `make parity-check`가 기록된 test 1136개로 통과한다.
 - F355-3-2: core는 records kit release `soksak-kit-records-0.0.1.tgz`의 commit message 검사, record 검사, release gate를 실행하고, `@soksak/plugin-api`는 그것과 checklist reader, term 목록을 더 이상 담지 않는다. term 목록은 records kit의 `terms.json`이다. Red: `the hooks, the record targets and the release gate run the commands of the records kit release`, `the plugin API ships no record check, release gate, checklist reader or term list`, `a push to main releases the declared version after the checks and the gate succeed`, `corePackageNames includes a kit release that a core manifest declares, and no other declared name`가 실패했다. Green: 통과하고, `make boundaries`가 선언된 records kit을 받아들이며, `make parity-check`가 기록된 test 1137개로 통과한다.
 - F355-5-1: workspace registry는 sidecar release의 platform을 이름 끝의 `<os>-<arch>`에서 읽는다. platform 판별은 `platform/<os>/` 아래에 있어야 하기 때문이다.
