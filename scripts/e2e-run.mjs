@@ -10,12 +10,13 @@
 // with the failed step that skipped it.
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, watch } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { connect } from '@soksak/client';
+import { untilFolderState } from '@soksak/window-check/folder-wait.mjs';
 import { crashFault } from './crash-fault.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -115,8 +116,9 @@ async function runCommand(item, interrupted) {
 }
 
 /**
- * Starts an application and resolves when its configuration folder holds endpoint.json. The folder is watched for the file
- * (fs.watch), and the file is looked for once after the watch starts, so a file written before the watch is found too.
+ * Starts an application and resolves when its configuration folder holds endpoint.json. The folder is read once its change watch is
+ * active and again at each change (untilFolderState), so a file written before the watch became active is found too. The wait ends
+ * with an error when the application cannot start or exits first.
  */
 async function startApplication(item, children) {
   mkdirSync(item.configDir, { recursive: true });
@@ -124,23 +126,11 @@ async function startApplication(item, children) {
   const output = openSync(item.output, 'a');
   const child = spawn(item.argv[0], item.argv.slice(1), { cwd: ROOT, stdio: ['ignore', output, output] });
   children.set(item.app, child);
-  const watcher = watch(item.configDir);
-  const bound = limit(START_LIMIT_MS, `the application wrote no endpoint.json in ${START_LIMIT_MS / 1000}s`);
-  try {
-    await Promise.race([
-      new Promise((resolve) => {
-        watcher.on('change', () => { if (existsSync(endpoint)) resolve(); });
-        if (existsSync(endpoint)) resolve();
-      }),
-      once(watcher, 'error').then(([error]) => { throw new Error(`cannot watch ${item.configDir}: ${error.message}`); }),
-      once(child, 'error').then(([error]) => { throw new Error(`cannot start ${item.argv[0]}: ${error.message}`); }),
-      exited(child).then((end) => { throw new Error(`the application exited with ${describeExit(end)} before it wrote endpoint.json`); }),
-      bound.promise,
-    ]);
-  } finally {
-    bound.clear();
-    watcher.close();
-  }
+  const ended = new AbortController();
+  child.once('error', (error) => ended.abort(new Error(`cannot start ${item.argv[0]}: ${error.message}`)));
+  exited(child).then((end) => ended.abort(new Error(`the application exited with ${describeExit(end)} before it wrote endpoint.json`)));
+  await untilFolderState(item.configDir, () => (existsSync(endpoint) ? true : undefined), START_LIMIT_MS,
+    () => new Error(`the application wrote no endpoint.json in ${START_LIMIT_MS / 1000}s`), ended.signal);
 }
 
 /** The crash reports of the application that the system wrote since `since` (ms), each with the fault that names its address. */

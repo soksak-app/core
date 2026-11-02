@@ -2,7 +2,8 @@
 // configuration root for each run, the report of each step, and the failure on a process that remains after the applications quit.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import fs, { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -97,12 +98,34 @@ test("a start step ends when the application writes endpoint.json and fails when
   const { lines, write } = recorder();
   const started = { name: "start app", phase: "prepare", kind: "start", app: "app", argv: node(writes), configDir, output: join(configDir, "app.out") };
   const children = new Map();
+  t.after(() => children.get("app")?.kill());
   assert.deepEqual(await runPlan([started], { write, children }), []);
-  children.get("app").kill();
   const exits = { ...started, configDir: workspace(t), argv: node("process.exit(4)") };
   const failures = await runPlan([exits], { write });
   assert.deepEqual(failures, ["start app: the application exited with code 4 before it wrote endpoint.json"]);
   assert.ok(lines.some((line) => line.startsWith("failed start app ")), lines.join("\n"));
+});
+
+test("a start step ends when endpoint.json is written before the watch of the folder is active", { timeout: 10000 }, async (t) => {
+  // A node:fs watch of a folder returns before the FSEvents stream of macOS is active and reports nothing that changed before; at a high
+  // load that time exceeds the 200 ms after which the application writes the file. The fault injection gives every node:fs watch that
+  // time (no notification in the first 400 ms), so a start step that relies on a notification of the write never ends.
+  const real = fs.watch;
+  t.mock.method(fs, "watch", (path, ...rest) => {
+    const watcher = real(path, ...rest);
+    const activeAt = Date.now() + 400;
+    const emit = watcher.emit.bind(watcher);
+    watcher.emit = (name, ...event) => (name === "change" && Date.now() < activeAt ? false : emit(name, ...event));
+    return watcher;
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  const configDir = workspace(t);
+  const writes = `setTimeout(() => require("fs").writeFileSync(${JSON.stringify(join(configDir, "endpoint.json"))}, "{}"), 200); setInterval(() => {}, 1000)`;
+  const children = new Map();
+  t.after(() => children.get("app")?.kill());
+  const started = { name: "start app", phase: "prepare", kind: "start", app: "app", argv: node(writes), configDir, output: join(configDir, "app.out") };
+  assert.deepEqual(await runPlan([started], { write: () => {}, children }), []);
 });
 
 test("a quit step requests host.quit and ends when the application exits", { timeout: 10000 }, async (t) => {

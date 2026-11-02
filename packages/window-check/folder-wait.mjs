@@ -20,9 +20,10 @@ import { subscribe } from "@parcel/watcher";
  * Resolves with the first value other than undefined that `read()` returns. `read` runs once after the watch of `folder`
  * (recursive) is active and again at each change; an error that `read` throws or that the watch reports rejects the
  * wait. At the deadline `timeout` (ms) `read` runs once more, and the wait rejects with the error that `expired()` returns
- * when it returns undefined. The watch ends before the wait settles, and an error of its end rejects the wait.
+ * when it returns undefined. An abort of `signal` rejects the wait with its reason, as a process whose state the wait
+ * awaits that ends first. The watch ends before the wait settles, and an error of its end rejects the wait.
  */
-export function untilFolderState(folder, read, timeout, expired) {
+export function untilFolderState(folder, read, timeout, expired, signal) {
   return new Promise((resolve, reject) => {
     let active = false;
     let finished = false;
@@ -49,6 +50,7 @@ export function untilFolderState(folder, read, timeout, expired) {
     // The deadline bounds the wait, and the result is judged by the state that `read` returns at it: at a high load the
     // watch can become active or deliver a change after the deadline, so the state is read once more there.
     const timer = setTimeout(() => check(true), timeout);
+    signal?.addEventListener("abort", () => finish(() => reject(signal.reason)), { once: true });
     const subscribed = subscribe(folder, (error) => (error ? finish(() => reject(error)) : check()));
     subscribed.then(() => {
       active = true;

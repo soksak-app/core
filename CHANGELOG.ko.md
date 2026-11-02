@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F380: `make e2e`의 시작 단계는 `@parcel/watcher` watch가 활성화된 뒤와 변경마다 설정 폴더를 읽어, watch가 시작되기 전에 쓰인 `endpoint.json`을 찾는다. 애플리케이션이 먼저 끝나면 오류로 끝나고, test는 가짜 애플리케이션을 `t.after`에서 끝낸다.
 - F335-6: `document_processes_test`의 stall 기록은 sample한 process마다 열린 파일과, 열린 Metal compiler cache 파일을 쥔 모든 process를 남기고 그 process들도 sample한다.
 - F335-5: `document_processes_test`의 stall 기록은 load가 끝나지 않은 region마다 WebContent process를 sample해서, main thread 호출 안에서 log가 멈춘 process가 그 호출을 보이게 한다.
 - F335-4: `document_processes_test`의 stall 기록은 provisional process의 sample 대신 test 시작 이후 test, network, WebContent process의 WebKit log를 써서, 기다리는 navigation 단계를 밝힌다.

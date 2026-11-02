@@ -8408,6 +8408,17 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F380",
+    implementation: [
+      { file: "scripts/e2e-run.mjs", symbol: "async function startApplication(item, children) {" },
+    ],
+    tests: [
+      { file: "scripts/test/e2e-run.test.mjs", id: "a start step ends when endpoint.json is written before the watch of the folder is active" },
+    ],
+    expected: "The start step of make e2e reads the configuration folder once its watch is active and at each change, so it finds an endpoint.json written before the watch started.",
+    levels: ["unit"],
+  },
+  {
     id: "F381",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "bool sp_window_on_screen(void *handle) {" },
