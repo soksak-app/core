@@ -53,6 +53,8 @@ pub(crate) struct WindowData {
     pub streams: crate::documents::Streams,
     /// The image regions of surface pages.
     pub images: crate::images::Images,
+    /// Orders the drawing messages to the suppliers of image regions (composition::send_image_drawing).
+    pub drawing: Mutex<()>,
     /// The current view-source incarnations and the greatest generation issued in this window.
     pub view_source_origins: ViewSourceOrigins,
     /// The receivers of the sidecar messages of each pair of a sidecar and a session id (docs/spec/native-surfaces.md#view-surfaces).
@@ -730,6 +732,22 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         owner,
         Box::new(move || {
             crate::window_events::record_window_event(occluded.label(), "occlusion_changed");
+            // An occluded or minimized window draws no image region (docs/spec/native-surfaces.md#image-regions).
+            match window_data(&occluded) {
+                Ok(data) => {
+                    if let Err(error) = crate::composition::read_on_screen(&occluded, &data.images)
+                    {
+                        log_error("window on screen", error);
+                    }
+                }
+                Err(error) => log_error("window on screen", error),
+            }
+            let drawing = occluded.clone();
+            std::thread::spawn(move || {
+                if let Err(error) = crate::composition::send_image_drawing(&drawing) {
+                    log_error("image drawing", error);
+                }
+            });
             crate::exposure::window_changed(&occluded)
         }),
     )?;

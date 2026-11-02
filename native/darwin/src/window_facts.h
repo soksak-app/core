@@ -74,6 +74,11 @@ bool sp_dock_select(const char *title);
 
 void sp_facts_free(char *text);
 
+// Returns whether some part of the window is visible on screen: AppKit reports neither a window that other windows
+// cover completely nor a minimized or hidden window as visible (NSWindowOcclusionStateVisible). An image region draws
+// only while this is true (docs/spec/native-surfaces.md#image-regions). Returns false when there is no window.
+bool sp_window_on_screen(void *window);
+
 // Calls changed on the main thread each time the occlusion state of the window changes
 // (NSWindowDidChangeOcclusionStateNotification). The observation ends when the window is released. An
 // existing observation of the window is replaced. Returns false when there is no window.

@@ -125,7 +125,7 @@ fn host_declarations() -> Value {
                     "process": {"type": "integer"}, "blurred": {"type": "boolean"}}}},
                 "regions": {"type": "array", "items": {"type": "object", "properties": {
                     "surface": {"type": "string"}, "name": {"type": "string"}, "frame": rect,
-                    "visible": {"type": "boolean"}, "focused": {"type": "boolean"},
+                    "visible": {"type": "boolean"}, "drawing": {"type": "boolean"}, "focused": {"type": "boolean"},
                     "presented": {"type": ["object", "null"], "properties": {
                         "sequence": {"type": "integer"}, "generation": {"type": "integer"}, "raster": {"type": "integer"},
                         "width": {"type": "integer"}, "height": {"type": "integer"}, "scale": {"type": "number"}}},
@@ -1784,6 +1784,13 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
                 }
                 _ => Value::Null,
             };
+            // drawing is the drawing state that the host last sent the supplier
+            // (docs/spec/native-surfaces.md#image-regions).
+            region["drawing"] = Value::Bool(
+                context
+                    .images
+                    .sent_drawing(&(surface.clone(), name.clone())),
+            );
             region["surface"] = Value::String(surface);
             region["name"] = Value::String(name);
             regions.push(region);

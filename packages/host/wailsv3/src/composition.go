@@ -48,6 +48,11 @@ func (s *Surfaces) releaseImageConfigurations(configurations []pendingConfigure)
 }
 
 func (s *Surfaces) sendImageConfigurations(configurations []pendingConfigure) error {
+	// A supplier learns that a region draws before it receives the raster to draw (docs/spec/native-surfaces.md#image-regions).
+	if err := s.sendImageDrawing(); err != nil {
+		s.releaseImageConfigurations(configurations)
+		return err
+	}
 	for index, pending := range configurations {
 		configuration := pending.configuration
 		body, err := json.Marshal(map[string]any{"image": map[string]any{"configure": configuration}})
@@ -61,6 +66,33 @@ func (s *Surfaces) sendImageConfigurations(configurations []pendingConfigure) er
 		}
 		s.observeRaster(pending.key, "sent", "sidecar", configuration.Width, configuration.Height, configuration.Scale)
 	}
+	return nil
+}
+
+// sendImageDrawing sends each drawing state that changed since it was last sent to the supplier of its region
+// (docs/spec/native-surfaces.md#image-regions). drawingMu keeps the messages in the order of the changes.
+func (s *Surfaces) sendImageDrawing() error {
+	s.drawingMu.Lock()
+	defer s.drawingMu.Unlock()
+	for _, change := range s.images.DrawingChanges() {
+		body, err := json.Marshal(map[string]any{"image": map[string]any{"drawing": change}})
+		if err != nil {
+			return err
+		}
+		if err := s.sidecars.Send(change.Owner, change.Sidecar, change.Key.Surface, body); err != nil {
+			return fmt.Errorf("image %q drawing: %w", change.Name, err)
+		}
+	}
+	return nil
+}
+
+// readOnScreen records whether the window is neither occluded nor minimized. Call it on the UI thread.
+func (s *Surfaces) readOnScreen() error {
+	onScreen, err := system.WindowOnScreen(s.window.NativeWindow())
+	if err != nil {
+		return err
+	}
+	s.images.SetOnScreen(onScreen)
 	return nil
 }
 

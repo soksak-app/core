@@ -655,6 +655,10 @@ pub fn window_facts(_window: Handle) -> Result<Value, String> {
     missing("window state")
 }
 
+pub fn window_on_screen(_window: Handle) -> Result<bool, String> {
+    missing("window on screen")
+}
+
 pub fn process_footprint(_pid: u32) -> Result<ProcessFootprint, String> {
     missing("process footprint")
 }

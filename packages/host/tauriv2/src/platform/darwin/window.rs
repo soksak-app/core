@@ -82,6 +82,17 @@ pub fn fullscreen(window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), S
     }
 }
 
+/// Whether some part of the window is visible on screen (NSWindowOcclusionStateVisible).
+pub fn on_screen(window: Handle) -> Result<bool, String> {
+    unsafe extern "C" {
+        fn sp_window_on_screen(window: *mut c_void) -> bool;
+    }
+    if window == 0 {
+        return Err("window on screen: the window is gone".into());
+    }
+    Ok(unsafe { sp_window_on_screen(window as *mut c_void) })
+}
+
 /// Calls changed whenever the occlusion state of the window changes (NSWindowDidChangeOcclusionStateNotification).
 pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
     unsafe extern "C" {

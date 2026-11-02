@@ -19,11 +19,44 @@ fn release_image_configurations(images: &Images, configurations: &[(Key, Configu
     }
 }
 
+/// Sends each drawing state that changed since it was last sent to the supplier of its region
+/// (docs/spec/native-surfaces.md#image-regions). The lock of the window keeps the messages in the order of the changes.
+pub(crate) fn send_image_drawing(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    // default: a thread that stopped while holding the lock sent whole messages only, and that stop was already reported
+    // as a panic report.
+    let _order = data.drawing.lock().unwrap_or_else(PoisonError::into_inner);
+    for change in data.images.drawing_changes() {
+        serde_json::value::to_raw_value(&serde_json::json!({ "image": { "drawing": change } }))
+            .map_err(|e| e.to_string())
+            .and_then(|body| {
+                window
+                    .state::<WindowSidecars>()
+                    .send(window, &change.sidecar, &change.key.0, &body)
+            })
+            .map_err(|error| format!("image {:?} drawing: {error}", change.name))?;
+    }
+    Ok(())
+}
+
+/// Records whether the window is neither occluded nor minimized. Call it on the main thread.
+pub(crate) fn read_on_screen(window: &Window, images: &Images) -> Result<(), String> {
+    let platform = platform::current()?;
+    images.set_on_screen(platform.window_on_screen(crate::windows::native_owner(window)?)?);
+    Ok(())
+}
+
 fn send_image_configurations(
     window: &Window,
     configurations: Vec<(Key, Configure)>,
 ) -> Result<(), String> {
     let data = window_data(window)?;
+    // A supplier learns that a region draws before it receives the raster to draw
+    // (docs/spec/native-surfaces.md#image-regions).
+    if let Err(error) = send_image_drawing(window) {
+        release_image_configurations(&data.images, &configurations);
+        return Err(error);
+    }
     for (index, (key, configuration)) in configurations.iter().enumerate() {
         let sent = serde_json::value::to_raw_value(&serde_json::json!({
             "image": { "configure": configuration }

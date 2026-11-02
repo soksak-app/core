@@ -420,6 +420,8 @@ var nativeViews = map[uint64]*nativeWebview{}
 var nativeSerial uint64
 
 type Surfaces struct {
+	// drawingMu orders the drawing messages to the suppliers of image regions (sendImageDrawing).
+	drawingMu sync.Mutex
 	// prepareNative registers the main web view and prepares the window. It is decided when the window is created.
 	prepareNative func()
 	window        *application.WebviewWindow

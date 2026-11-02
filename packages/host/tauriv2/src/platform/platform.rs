@@ -394,6 +394,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Returns the frame, the active state, the window buttons and the webviews of the window as JSON. The format is
     /// the same as sp_window_facts of native/darwin/src/window_facts.h. Call it on the main thread.
     fn window_facts(&self, window: Handle) -> Result<Value, String>;
+    /// Returns whether some part of the window is visible on screen, the same as sp_window_on_screen of
+    /// native/darwin/src/window_facts.h. Call it on the main thread.
+    fn window_on_screen(&self, window: Handle) -> Result<bool, String>;
     /// Reads the AppKit backing color space and ICC fingerprint for one diagnostic query.
     #[cfg(feature = "diagnostics")]
     fn window_color_space(&self, window: Handle) -> Result<Value, String>;

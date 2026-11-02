@@ -66,6 +66,9 @@ func (implementation) WindowControls(unsafe.Pointer) (platform.Rect, error) {
 func (implementation) WindowFacts(unsafe.Pointer) (string, error) {
 	return "", unsupported("window state")
 }
+func (implementation) WindowOnScreen(unsafe.Pointer) (bool, error) {
+	return false, unsupported("window on screen")
+}
 func (implementation) WindowColorSpace(unsafe.Pointer) (string, error) {
 	return "", unsupported("window color space")
 }

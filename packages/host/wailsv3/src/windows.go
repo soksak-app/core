@@ -416,6 +416,17 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	// Tells the connections that watch host.window about changes of the window position, size, key state and occlusion state. Wails sends the occlusion
 	// state change of macOS as WindowShow (visible) and WindowHide (completely covered).
 	changed := func(*application.WindowEvent) {
+		// An occluded or minimized window draws no image region (docs/spec/native-surfaces.md#image-regions).
+		application.InvokeSync(func() {
+			if err := s.readOnScreen(); err != nil {
+				LogError("window on screen", err)
+			}
+		})
+		routine.Go("image-drawing", func() {
+			if err := s.sendImageDrawing(); err != nil {
+				LogError("image drawing", err)
+			}
+		})
 		s.windowChanged()
 		routine.Go("windows-changed", h.windowsChanged)
 	}

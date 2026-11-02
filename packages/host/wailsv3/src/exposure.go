@@ -79,7 +79,8 @@ var hostStatus = map[string]hostEntry{
 			}}},
 			"regions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"surface": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
-				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "focused": map[string]any{"type": "boolean"},
+				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "drawing": map[string]any{"type": "boolean"},
+				"focused": map[string]any{"type": "boolean"},
 				"presented": map[string]any{"type": []any{"object", "null"}, "properties": map[string]any{
 					"sequence": map[string]any{"type": "integer"}, "generation": map[string]any{"type": "integer"}, "raster": map[string]any{"type": "integer"},
 					"width": map[string]any{"type": "integer"}, "height": map[string]any{"type": "integer"}, "scale": map[string]any{"type": "number"},
@@ -1239,6 +1240,7 @@ type WindowRegion struct {
 	Name      string `json:"name"`
 	Frame     frame  `json:"frame"`
 	Visible   bool   `json:"visible"`
+	Drawing   bool   `json:"drawing"`
 	Focused   bool   `json:"focused"`
 	Presented *struct {
 		Width      int     `json:"width"`
@@ -1404,6 +1406,8 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 			} else {
 				region.Presented = nil
 			}
+			// drawing is the drawing state that the host last sent the supplier (docs/spec/native-surfaces.md#image-regions).
+			region.Drawing = s.images.SentDrawing(key)
 			regions = append(regions, region)
 		}
 		return system.WindowFacts(window)

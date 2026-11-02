@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F381-1: host는 각 image region의 공급자에게 region이 그리는지 보낸다. region을 붙이기 전과 변화마다 AppKit 가림 상태를 읽고, 그리는 region만 설정하고 기다리며, 보낸 상태를 `host.window`의 regions에 `drawing`으로 보고한다.
 - F358: child test process를 실행하는 Tauri host test는 실패한 child의 상태와 출력에 error 출력도 함께 보고하므로, child의 panic 문장이 실패에 남는다.
 - F321-4: 사이드카가 더 이상 선언되지 않은 실행 중인 상주 서비스는 `host.sidecars`에 `installed` `null`로 보고되고, 그 교체는 시작 없이 서비스를 끝내며, 그 서비스에 보낸 표면에 선언되지 않은 오류의 연결 알림을 보내고, 실패한 재시작 대신 `service <running> ended; the sidecar is not declared`를 기록한다. plugin 화면은 그것을 `→ 선언 없음`과 세션 <n>개를 끝내고 종료로 보이고, outdated 사이드카의 동작 이름은 명세대로 세션 <n>개를 끝내고 적용이다. Red: 계약 case `sidecars-transport.replace.ends-a-service-of-an-undeclared-sidecar`의 Go와 Rust test는 `installed` `""`를 받았고, plugin 화면 test는 `→ null`과 터미널 <n>개를 보였다. Green: 통과한다.
 - F333: contract case `workspace.folder.replaced-directory-changes-identity`는 바뀌지 않은 디렉터리가 identity를 유지하고 같은 root의 다른 디렉터리가 다른 identity를 가지는지 검사한다.

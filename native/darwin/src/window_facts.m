@@ -405,6 +405,12 @@ bool sp_dock_select(const char *title) {
 
 static const char occlusionObserverKey;
 
+bool sp_window_on_screen(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the window state requires the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    return window && (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
+}
+
 bool sp_window_observe_occlusion(void *handle, void (^changed)(void)) {
     NSCAssert(NSThread.isMainThread, @"occlusion observation requires the UI thread");
     NSWindow *window = (NSWindow *)handle;

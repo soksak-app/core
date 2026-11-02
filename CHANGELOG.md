@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F381-1: The host sends the supplier of each image region whether the region draws: it reads the AppKit occlusion state before it attaches a region and at each change, configures and waits only for regions that draw, and reports the state it sent as `drawing` in the regions of `host.window`.
 - F358: The Tauri host tests that run a child test process report the error output of a failed child with its status and output, so the panic text of the child is in the failure.
 - F321-4: A running persistent service whose sidecar is no longer declared is reported in `host.sidecars` with `installed` `null`, and its replacement ends it without a start, sends the surfaces that sent to it the connection notice of the undeclared error and logs `service <running> ended; the sidecar is not declared` instead of a failed restart; the plugin screen shows it as `→ 선언 없음` with 세션 <n>개를 끝내고 종료, and the action of an outdated sidecar is named 세션 <n>개를 끝내고 적용 as the specification states. Red: the Go and Rust tests of the contract case `sidecars-transport.replace.ends-a-service-of-an-undeclared-sidecar` received `installed` `""`, and the plugin screen test showed `→ null` and 터미널 <n>개. Green: they pass.
 - F333: The contract case `workspace.folder.replaced-directory-changes-identity` checks that an unchanged directory keeps its identity and another directory at the same root has another identity.

@@ -93,6 +93,9 @@ struct Inner {
     states: HashMap<Key, RasterState>,
     generations: HashMap<String, u64>,
     surface_visibility: HashMap<String, bool>,
+    /// Whether the window is occluded or minimized; the host reads it from AppKit before it attaches a region and at each
+    /// change (docs/spec/native-surfaces.md#image-regions).
+    off_screen: bool,
     /// The last (generation, raster) that a detached image region used. A region attached again in the same generation
     /// counts from the next raster, because the sidecar treats a configuration whose (generation, raster) did not grow
     /// as an old configuration and ignores it. It is cleared when the generation of the surface changes.
@@ -110,6 +113,17 @@ struct Inner {
 }
 
 impl Inner {
+    /// Whether a region is drawing: it is attached and visible, its outer surface is visible and the window is neither
+    /// occluded nor minimized.
+    fn drawing(&self, key: &Key, state: &RasterState) -> bool {
+        // default: the address of a region that is not registered is 0, the same as a region that is not attached.
+        let attached = self.handles.get(key).copied().unwrap_or_default() != 0;
+        // default: a surface that did not report hiding is visible (it is written to surface_visibility only when it is
+        // hidden).
+        let outer = self.surface_visibility.get(&key.0).copied().unwrap_or(true);
+        attached && state.visible && outer && !self.off_screen
+    }
+
     /// Clears the raster record of the regions detached from a surface. When the generation of the surface changes, the
     /// new generation is larger than the previous configuration, so the record is not needed.
     fn forget_detached_rasters(&mut self, surface: &str) {
@@ -138,6 +152,8 @@ impl Inner {
             if key.0 == surface {
                 state.generation = generation;
                 state.configured = false;
+                // The drawing state names the generation, so the new generation is sent again.
+                state.drawing_sent = None;
                 state.presentation_error = None;
                 state.last_sequence = 0;
                 state.presented_raster = 0;
@@ -161,6 +177,8 @@ struct RasterState {
     presented_raster: u64,
     presented_sequence: i32,
     presentation_error: Option<String>,
+    /// The drawing state last returned by drawing_changes, or None before one was returned.
+    drawing_sent: Option<bool>,
 }
 
 /// The raster, its size and the sequence number to which a frame that a supplier sent belongs.
@@ -192,6 +210,65 @@ pub struct Configure {
     pub scale: f64,
     #[serde(skip)]
     pub sidecar: String,
+}
+
+/// The drawing state of an image region to send to its supplier (docs/spec/native-surfaces.md#image-regions).
+#[derive(Clone, Debug, Serialize)]
+pub struct Drawing {
+    pub name: String,
+    pub generation: u64,
+    pub drawing: bool,
+    #[serde(skip)]
+    pub key: Key,
+    #[serde(skip)]
+    pub sidecar: String,
+}
+
+impl Images {
+    /// Records whether the window is neither occluded nor minimized.
+    pub fn set_on_screen(&self, on_screen: bool) {
+        let mut inner = self.lock();
+        if inner.off_screen == on_screen {
+            inner.off_screen = !on_screen;
+            self.changed();
+        }
+    }
+
+    /// Returns the drawing state of each attached region whose state was not sent yet or changed since it was sent,
+    /// sorted by surface and name, and records it as sent.
+    pub fn drawing_changes(&self) -> Vec<Drawing> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let mut changes = Vec::new();
+        let keys: Vec<Key> = inner.states.keys().cloned().collect();
+        for key in keys {
+            let Some(sidecar) = inner.sidecars.get(&key).cloned() else {
+                continue;
+            };
+            // default: the address of a region that is not registered is 0, the same as a region that is not attached.
+            if inner.handles.get(&key).copied().unwrap_or_default() == 0 {
+                continue;
+            }
+            let drawing = inner.drawing(&key, &inner.states[&key]);
+            let state = inner
+                .states
+                .get_mut(&key)
+                .expect("the key was read from the states");
+            if state.drawing_sent == Some(drawing) {
+                continue;
+            }
+            state.drawing_sent = Some(drawing);
+            changes.push(Drawing {
+                name: key.1.clone(),
+                generation: state.generation,
+                drawing,
+                key,
+                sidecar,
+            });
+        }
+        changes.sort_by(|a, b| a.key.cmp(&b.key));
+        changes
+    }
 }
 
 #[cfg(feature = "diagnostics")]
@@ -567,20 +644,10 @@ impl Images {
             .states
             .iter()
             .filter_map(|(key, state)| {
-                if !belongs(&inner, key) {
+                if !belongs(&inner, key) || !inner.drawing(key, state) {
                     return None;
                 }
-                let outer = inner
-                    .surface_visibility
-                    .get(&key.0)
-                    .copied()
-                    // default: a surface that did not report hiding is visible (it is written to surface_visibility
-                    // only when it is hidden).
-                    .unwrap_or(true);
-                // default: the address of a region that is not registered is 0, the same as a region that is not
-                // attached.
-                let handle = inner.handles.get(key).copied().unwrap_or_default();
-                (state.visible && outer && handle != 0).then(|| (key.clone(), handle))
+                Some((key.clone(), inner.handles[key]))
             })
             .collect()
     }
@@ -606,6 +673,8 @@ impl Images {
             state.last_sequence = 0;
             state.presented_sequence = 0;
             state.presentation_error = None;
+            // The service of the new connection has no drawing state either.
+            state.drawing_sent = None;
             invalidated += 1;
         }
         if invalidated > 0 {
@@ -623,14 +692,8 @@ impl Images {
         scale: f64,
         visible: bool,
     ) -> Result<Option<Configure>, String> {
-        let mut inner = self.lock();
-        let surface_visible = inner
-            .surface_visibility
-            .get(&key.0)
-            .copied()
-            // default: a surface that did not report hiding is visible (it is written to surface_visibility only when
-            // it is hidden).
-            .unwrap_or(true);
+        let mut guard = self.lock();
+        let inner = &mut *guard;
         // default: the address of a region that is not registered is 0, the same as a region that is not attached.
         if inner.handles.get(key).copied().unwrap_or_default() == 0 {
             return Err(format!("image {:?} is not attached", key.1));
@@ -663,9 +726,10 @@ impl Images {
             state.presentation_error = None;
             self.changed();
         }
-        if !visible || !surface_visible || state.configured {
+        if state.configured || !inner.drawing(key, &inner.states[key]) {
             return Ok(None);
         }
+        let state = inner.states.get_mut(key).expect("the state was read above");
         state.configured = true;
         Ok(Some(Configure {
             name: key.1.clone(),
@@ -750,7 +814,7 @@ impl Images {
     }
 
     /// Checks that the frame is still the current raster just before it is presented on the main thread.
-    fn frame_status(
+    pub fn frame_status(
         &self,
         key: &Key,
         generation: u64,
@@ -841,17 +905,7 @@ impl Images {
 
     fn current_presented_locked(inner: &Inner) -> bool {
         inner.states.iter().all(|(key, state)| {
-            let surface_visible = inner
-                .surface_visibility
-                .get(&key.0)
-                .copied()
-                // default: a surface that did not report hiding is visible (it is written to surface_visibility only
-                // when it is hidden).
-                .unwrap_or(true);
-            // default: the address of a region that is not registered is 0, the same as a region that is not attached.
-            inner.handles.get(key).copied().unwrap_or_default() == 0
-                || !state.visible
-                || !surface_visible
+            !inner.drawing(key, state)
                 || state.raster == 0
                 || (state.last_sequence > 0
                     && state.presented_raster == state.raster
@@ -861,17 +915,7 @@ impl Images {
 
     fn current_raster_snapshot_installed_locked(inner: &Inner) -> bool {
         inner.states.iter().all(|(key, state)| {
-            let surface_visible = inner
-                .surface_visibility
-                .get(&key.0)
-                .copied()
-                // default: a surface that did not report hiding is visible (it is written to surface_visibility only
-                // when it is hidden).
-                .unwrap_or(true);
-            // default: the address of a region that is not registered is 0, the same as a region that is not attached.
-            inner.handles.get(key).copied().unwrap_or_default() == 0
-                || !state.visible
-                || !surface_visible
+            !inner.drawing(key, state)
                 || state.raster == 0
                 || (state.presented_raster == state.raster && state.presented_sequence > 0)
         })
@@ -887,18 +931,10 @@ impl Images {
             .iter()
             .filter_map(|(key, state)| {
                 let known = inner.surface_visibility.get(&key.0).copied();
-                // default: the address of a region that is not registered is 0, the same as a region that is not
-                // attached.
-                let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
                 let presented = state.last_sequence > 0
                     && state.presented_raster == state.raster
                     && state.presented_sequence == state.last_sequence;
-                if !attached
-                    || !state.visible
-                    || known == Some(false)
-                    || state.raster == 0
-                    || presented
-                {
+                if !inner.drawing(key, state) || state.raster == 0 || presented {
                     return None;
                 }
                 let surface = if known.is_some() {
@@ -942,6 +978,14 @@ impl Images {
                 sequence: state.presented_sequence,
             },
         )
+    }
+
+    /// Returns the drawing state last sent to the supplier of a region; it is false before one was sent.
+    pub fn sent_drawing(&self, key: &Key) -> bool {
+        self.lock()
+            .states
+            .get(key)
+            .is_some_and(|state| state.drawing_sent == Some(true))
     }
 
     /// Waits until all visible image regions present the current raster or the time limit ends.
@@ -1161,7 +1205,15 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
 
     // The name is taken first. The lock is not held while waiting for native work.
     data.images.reserve(&key, "", sidecar)?;
-    let handle = match create(webview, &window, &key, platform) {
+    // The window state is read before the region counts as attached, so its first drawing state is exact
+    // (docs/spec/native-surfaces.md#image-regions).
+    let screen_window = window.clone();
+    let screen_data = data.clone();
+    let handle = match on_main(&window, move || {
+        crate::composition::read_on_screen(&screen_window, &screen_data.images)
+    })
+    .and_then(|()| create(webview, &window, &key, platform))
+    {
         Ok(handle) => handle,
         Err(error) => {
             if let Err(e) = data.images.remove(&key) {
@@ -1195,7 +1247,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
         ));
     }
     exposure::window_changed(&window);
-    Ok(())
+    crate::composition::send_image_drawing(&window)
 }
 
 /// Makes the image region the first responder and sends the focus event.

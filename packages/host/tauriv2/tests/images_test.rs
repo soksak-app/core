@@ -6,7 +6,7 @@ mod folder;
 use serde_json::json;
 use soksak_host_tauriv2::application_log::start_standard_error;
 use soksak_host_tauriv2::images::{
-    Configure, Decision, Images, Key, after_present, decide, handle_envelope,
+    Configure, Decision, Drawing, Images, Key, after_present, decide, handle_envelope,
     handle_envelope_with_recovery,
 };
 use std::sync::{Arc, Mutex};
@@ -1450,5 +1450,193 @@ fn image_frame_nonce_cause_is_recorded() {
         "child ended with {:?}: {}",
         output.status,
         String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// Attaches one image region of sidecar-a and returns its key.
+fn attached_drawing_image(images: &Images, surface: &str) -> Key {
+    let key: Key = (surface.to_string(), "view".to_string());
+    images
+        .reserve(&key, "owner-a", "sidecar-a")
+        .expect("reserve image");
+    assert!(images.set(&key, 100), "attach image");
+    key
+}
+
+/// Gives each drawing change as name=value.
+fn drawing_values(changes: Vec<Drawing>) -> Vec<String> {
+    changes
+        .into_iter()
+        .map(|change| format!("{}={}", change.name, change.drawing))
+        .collect()
+}
+
+/// One step of the drawing test: its name, the change it makes and the drawing changes it expects.
+type DrawingStep<'a> = (&'static str, Box<dyn Fn() + 'a>, Vec<&'static str>);
+
+// contract: image.drawing.sent-at-attach-and-on-change
+#[test]
+fn drawing_state_is_sent_at_attach_and_on_change() {
+    let images = Images::default();
+    let key = attached_drawing_image(&images, "tab-1");
+    let steps: Vec<DrawingStep> = vec![
+        (
+            "attachment before placement",
+            Box::new(|| {}),
+            vec!["view=false"],
+        ),
+        (
+            "placed visible",
+            Box::new(|| images.set_visible(&key, true).unwrap()),
+            vec!["view=true"],
+        ),
+        ("unchanged", Box::new(|| {}), vec![]),
+        (
+            "hidden surface",
+            Box::new(|| images.set_surface_visible(&key.0, false)),
+            vec!["view=false"],
+        ),
+        (
+            "hidden region while the surface is hidden",
+            Box::new(|| images.set_visible(&key, false).unwrap()),
+            vec![],
+        ),
+        (
+            "shown surface while the region is hidden",
+            Box::new(|| images.set_surface_visible(&key.0, true)),
+            vec![],
+        ),
+        (
+            "shown region",
+            Box::new(|| images.set_visible(&key, true).unwrap()),
+            vec!["view=true"],
+        ),
+        (
+            "occluded window",
+            Box::new(|| images.set_on_screen(false)),
+            vec!["view=false"],
+        ),
+        (
+            "hidden surface while occluded",
+            Box::new(|| images.set_surface_visible(&key.0, false)),
+            vec![],
+        ),
+        (
+            "window on screen while the surface is hidden",
+            Box::new(|| images.set_on_screen(true)),
+            vec![],
+        ),
+        (
+            "shown surface",
+            Box::new(|| images.set_surface_visible(&key.0, true)),
+            vec!["view=true"],
+        ),
+    ];
+    for (name, change, want) in steps {
+        change();
+        assert_eq!(drawing_values(images.drawing_changes()), want, "{name}");
+    }
+}
+
+// contract: image.drawing.configures-only-drawing-regions
+#[test]
+fn only_a_drawing_region_is_configured_and_awaited() {
+    let images = Images::default();
+    let key = attached_drawing_image(&images, "tab-1");
+    images.set_surface_visible(&key.0, false);
+    assert!(
+        images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .unwrap()
+            .is_none(),
+        "a region of a hidden surface was configured"
+    );
+    images.set_surface_visible(&key.0, true);
+    images.set_on_screen(false);
+    assert!(
+        images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .unwrap()
+            .is_none(),
+        "a region of an occluded window was configured"
+    );
+    assert!(
+        images.current_presented(),
+        "the presentation wait waits for a region that is not drawing"
+    );
+    images.set_on_screen(true);
+    images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("configure a drawing region");
+    assert!(
+        !images.current_presented(),
+        "the presentation wait does not wait for a region that started drawing"
+    );
+}
+
+// contract: image.drawing.answers-transfers-while-not-drawing
+#[test]
+fn a_transfer_accepted_before_the_region_stopped_drawing_is_answered() {
+    let images = Images::default();
+    let key = attached_drawing_image(&images, "tab-1");
+    let configuration = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("configure image");
+    let accepted = decide(
+        &configured_envelope(&configuration, 1),
+        "sidecar-a",
+        &key.0,
+        &images,
+    );
+    assert!(
+        matches!(accepted, Decision::Present { .. }),
+        "the frame was not accepted: {accepted:?}"
+    );
+    images.set_visible(&key, false).unwrap();
+    images.set_on_screen(false);
+    assert_eq!(
+        images.frame_status(&key, configuration.generation, configuration.raster, 1),
+        Ok(()),
+        "a frame accepted while drawing is refused after the region stopped drawing"
+    );
+}
+
+// contract: image.drawing.reads-occlusion-at-attach
+#[test]
+fn a_region_attached_in_a_covered_window_is_not_drawing() {
+    let images = Images::default();
+    // The host reads the window state before it attaches the region; no window event follows for a window that was
+    // covered at creation.
+    images.set_on_screen(false);
+    let key = attached_drawing_image(&images, "tab-1");
+    images.set_visible(&key, true).unwrap();
+    assert_eq!(
+        drawing_values(images.drawing_changes()),
+        vec!["view=false"],
+        "the first drawing state of a region in a covered window"
+    );
+}
+
+// contract: image.drawing.sent-at-attach-and-on-change
+#[test]
+fn sent_drawing_is_the_state_last_sent_to_the_supplier() {
+    let images = Images::default();
+    let key = attached_drawing_image(&images, "tab-1");
+    images.set_visible(&key, true).unwrap();
+    assert!(
+        !images.sent_drawing(&key),
+        "a drawing state that was never sent is reported as drawing"
+    );
+    images.drawing_changes();
+    assert!(
+        images.sent_drawing(&key),
+        "the sent drawing state is not reported"
+    );
+    images.set_surface_visible(&key.0, false);
+    assert!(
+        images.sent_drawing(&key),
+        "a change that was not sent yet is reported as sent"
     );
 }

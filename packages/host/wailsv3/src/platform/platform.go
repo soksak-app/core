@@ -325,6 +325,9 @@ type Platform interface {
 	// WindowFacts returns the frame, the active state, the window buttons and the web views of the window as JSON. The form is
 	// the same as sp_window_facts of native/darwin/src/window_facts.h. Call it on the UI thread.
 	WindowFacts(window unsafe.Pointer) (string, error)
+	// WindowOnScreen returns whether some part of the window is visible on screen, the same as sp_window_on_screen of
+	// native/darwin/src/window_facts.h. Call it on the UI thread.
+	WindowOnScreen(window unsafe.Pointer) (bool, error)
 	// WindowColorSpace returns the current AppKit backing color space and ICC profile fingerprint as JSON.
 	// Call it on the UI thread for a one-shot diagnostic query.
 	WindowColorSpace(window unsafe.Pointer) (string, error)

@@ -935,18 +935,29 @@ func (s *Surfaces) attachCheckedImage(key ImageKey, req ImageRequest) error {
 		return err
 	}
 	// When the surface was removed during creation, the created image region is closed. Registration and closing run on the UI thread.
+	// The window state is read before the region counts as attached, so its first drawing state is exact
+	// (docs/spec/native-surfaces.md#image-regions).
 	var registered bool
+	var screenErr error
 	application.InvokeSync(func() {
+		if screenErr = s.readOnScreen(); screenErr != nil {
+			return
+		}
 		registered = s.images.Set(key, handle)
 		if !registered {
 			system.CloseImage(handle)
 		}
 	})
+	if screenErr != nil {
+		s.images.Remove(key)
+		application.InvokeSync(func() { system.CloseImage(handle) })
+		return screenErr
+	}
 	if !registered {
 		return fmt.Errorf("surface %q closed while its image was created", key.Surface)
 	}
 	s.windowChanged()
-	return nil
+	return s.sendImageDrawing()
 }
 
 // withImage runs run on the UI thread for an open image region.

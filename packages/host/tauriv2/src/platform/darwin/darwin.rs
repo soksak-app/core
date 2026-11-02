@@ -202,6 +202,9 @@ impl Platform for Darwin {
     fn window_facts(&self, window: Handle) -> Result<Value, String> {
         window::facts(window)
     }
+    fn window_on_screen(&self, window: Handle) -> Result<bool, String> {
+        window::on_screen(window)
+    }
 
     #[cfg(feature = "diagnostics")]
     fn window_color_space(&self, window: Handle) -> Result<Value, String> {

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1415,5 +1416,139 @@ func TestAFrameOfASidecarThatNoPluginDeclaresIsInvalidated(t *testing.T) {
 	}
 	if strings.Contains(written(), " error ") {
 		t.Fatalf("an ended sidecar produced an error line:\n%s", written())
+	}
+}
+
+// attachedDrawingImage attaches one image region of sidecar-a and returns its key.
+func attachedDrawingImage(t *testing.T, images *host.Images, surface string) host.ImageKey {
+	t.Helper()
+	key := host.ImageKey{Surface: surface, Name: "view"}
+	var handle int
+	if err := images.Reserve(key, &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatalf("attach image: %v", err)
+	}
+	return key
+}
+
+// drawingValues gives each drawing change as name=value.
+func drawingValues(changes []host.ImageDrawing) []string {
+	values := []string{}
+	for _, change := range changes {
+		values = append(values, fmt.Sprintf("%s=%v", change.Name, change.Drawing))
+	}
+	return values
+}
+
+// contract: image.drawing.sent-at-attach-and-on-change
+func TestDrawingStateIsSentAtAttachAndOnChange(t *testing.T) {
+	images := host.NewImages()
+	key := attachedDrawingImage(t, images, "tab-1")
+	steps := []struct {
+		name   string
+		change func()
+		want   []string
+	}{
+		{"attachment before placement", func() {}, []string{"view=false"}},
+		{"placed visible", func() {
+			if err := images.SetVisible(key, true); err != nil {
+				t.Fatal(err)
+			}
+		}, []string{"view=true"}},
+		{"unchanged", func() {}, []string{}},
+		{"hidden surface", func() { images.SetSurfaceVisible(key.Surface, false) }, []string{"view=false"}},
+		{"hidden region while the surface is hidden", func() {
+			if err := images.SetVisible(key, false); err != nil {
+				t.Fatal(err)
+			}
+		}, []string{}},
+		{"shown surface while the region is hidden", func() { images.SetSurfaceVisible(key.Surface, true) }, []string{}},
+		{"shown region", func() {
+			if err := images.SetVisible(key, true); err != nil {
+				t.Fatal(err)
+			}
+		}, []string{"view=true"}},
+		{"occluded window", func() { images.SetOnScreen(false) }, []string{"view=false"}},
+		{"hidden surface while occluded", func() { images.SetSurfaceVisible(key.Surface, false) }, []string{}},
+		{"window on screen while the surface is hidden", func() { images.SetOnScreen(true) }, []string{}},
+		{"shown surface", func() { images.SetSurfaceVisible(key.Surface, true) }, []string{"view=true"}},
+	}
+	for _, step := range steps {
+		step.change()
+		if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, step.want) {
+			t.Fatalf("%s: drawing changes %v, want %v", step.name, got, step.want)
+		}
+	}
+}
+
+// contract: image.drawing.configures-only-drawing-regions
+func TestOnlyADrawingRegionIsConfiguredAndAwaited(t *testing.T) {
+	images := host.NewImages()
+	key := attachedDrawingImage(t, images, "tab-1")
+	images.SetSurfaceVisible(key.Surface, false)
+	if configuration, err := images.ConfigureRaster(key, 800, 600, 2, true); err != nil || configuration != nil {
+		t.Fatalf("a region of a hidden surface was configured: %+v %v", configuration, err)
+	}
+	images.SetSurfaceVisible(key.Surface, true)
+	images.SetOnScreen(false)
+	if configuration, err := images.ConfigureRaster(key, 800, 600, 2, true); err != nil || configuration != nil {
+		t.Fatalf("a region of an occluded window was configured: %+v %v", configuration, err)
+	}
+	if !images.CurrentPresented() {
+		t.Fatal("the presentation wait waits for a region that is not drawing")
+	}
+	images.SetOnScreen(true)
+	configureImage(t, images, key, 800, 600, 2)
+	if images.CurrentPresented() {
+		t.Fatal("the presentation wait does not wait for a region that started drawing")
+	}
+}
+
+// contract: image.drawing.answers-transfers-while-not-drawing
+func TestATransferAcceptedBeforeTheRegionStoppedDrawingIsAnswered(t *testing.T) {
+	images := host.NewImages()
+	key := attachedDrawingImage(t, images, "tab-1")
+	configuration := configureImage(t, images, key, 800, 600, 2)
+	if reason := images.AuthorizeFrame(key, "sidecar-a", configuration.Generation, configuration.Raster, 800, 600, 2, 1); reason != "" {
+		t.Fatalf("authorize frame: %q", reason)
+	}
+	if err := images.SetVisible(key, false); err != nil {
+		t.Fatal(err)
+	}
+	if reason := images.FrameStatus(key, configuration.Generation, configuration.Raster, 1); reason != "" {
+		t.Fatalf("a frame accepted while drawing is refused after the region stopped drawing: %q", reason)
+	}
+}
+
+// contract: image.drawing.reads-occlusion-at-attach
+func TestARegionAttachedInACoveredWindowIsNotDrawing(t *testing.T) {
+	images := host.NewImages()
+	// The host reads the window state before it attaches the region; no window event follows for a window that was covered at creation.
+	images.SetOnScreen(false)
+	key := attachedDrawingImage(t, images, "tab-1")
+	if err := images.SetVisible(key, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, []string{"view=false"}) {
+		t.Fatalf("the first drawing state of a region in a covered window is %v", got)
+	}
+}
+
+// contract: image.drawing.sent-at-attach-and-on-change
+func TestSentDrawingIsTheStateLastSentToTheSupplier(t *testing.T) {
+	images := host.NewImages()
+	key := attachedDrawingImage(t, images, "tab-1")
+	if err := images.SetVisible(key, true); err != nil {
+		t.Fatal(err)
+	}
+	if images.SentDrawing(key) {
+		t.Fatal("a drawing state that was never sent is reported as drawing")
+	}
+	images.DrawingChanges()
+	if !images.SentDrawing(key) {
+		t.Fatal("the sent drawing state is not reported")
+	}
+	images.SetSurfaceVisible(key.Surface, false)
+	if !images.SentDrawing(key) {
+		t.Fatal("a change that was not sent yet is reported as sent")
 	}
 }

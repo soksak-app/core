@@ -30,6 +30,7 @@ static bool main_windowSetTitlebarHeight(void *window, double height, char **fai
 }
 static void main_windowControls(void *window, double *out) { wailsRunOnMain(^{ windowControls(window, out); }); }
 static char *main_sp_window_facts(void *window) { return ON_MAIN(char *, sp_window_facts(window)); }
+static bool main_sp_window_on_screen(void *window) { return ON_MAIN(bool, sp_window_on_screen(window)); }
 static char *main_sp_window_color_space_facts(void *window) { return ON_MAIN(char *, sp_window_color_space_facts(window)); }
 static char *main_sp_window_hit(void *window, double x, double y) { return ON_MAIN(char *, sp_window_hit(window, x, y)); }
 static bool main_sp_window_move(void *window, double x, double y) { return ON_MAIN(bool, sp_window_move(window, x, y)); }
@@ -142,6 +143,13 @@ func facts(text *C.char, what string) (string, error) {
 
 func (implementation) WindowFacts(window unsafe.Pointer) (string, error) {
 	return facts(C.main_sp_window_facts(window), "window state")
+}
+
+func (implementation) WindowOnScreen(window unsafe.Pointer) (bool, error) {
+	if window == nil {
+		return false, errors.New("window on screen: the window is gone")
+	}
+	return bool(C.main_sp_window_on_screen(window)), nil
 }
 
 func (implementation) WindowColorSpace(window unsafe.Pointer) (string, error) {

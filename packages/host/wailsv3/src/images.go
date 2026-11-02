@@ -91,6 +91,9 @@ type Images struct {
 	states         map[ImageKey]*ImageRasterState
 	generations    map[string]uint64
 	surfaceVisible map[string]bool
+	// onScreen is whether the window is neither occluded nor minimized; the host reads it from AppKit before it attaches a region and at
+	// each change (docs/spec/native-surfaces.md#image-regions).
+	onScreen bool
 	// The generation and the raster that a detached image region used last. A region attached again in the same generation counts from the next raster, because the sidecar
 	// ignores a configuration whose (generation, raster) did not increase as a past configuration. It is cleared when the generation of the surface changes.
 	detachedRasters map[ImageKey][2]uint64
@@ -109,6 +112,9 @@ type ImageRasterState struct {
 	PresentedRaster    uint64
 	PresentedSequence  int
 	PresentationError  string
+	// Drawing is the drawing state last returned by DrawingChanges, and DrawingSent whether one was returned.
+	Drawing     bool
+	DrawingSent bool
 }
 
 // ImageConfigure is the new raster configuration to send to the authorized sidecar.
@@ -123,6 +129,61 @@ type ImageConfigure struct {
 	Owner      SidecarOwner `json:"-"`
 }
 
+// ImageDrawing is the drawing state of an image region to send to its supplier (docs/spec/native-surfaces.md#image-regions).
+type ImageDrawing struct {
+	Name       string       `json:"name"`
+	Generation uint64       `json:"generation"`
+	Drawing    bool         `json:"drawing"`
+	Key        ImageKey     `json:"-"`
+	Sidecar    string       `json:"-"`
+	Owner      SidecarOwner `json:"-"`
+}
+
+// SetOnScreen records whether the window is neither occluded nor minimized.
+func (i *Images) SetOnScreen(onScreen bool) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.onScreen != onScreen {
+		i.onScreen = onScreen
+		i.changedLocked()
+	}
+}
+
+// drawingLocked reports whether a region is drawing: it is attached and visible, its outer surface is visible and the window is neither
+// occluded nor minimized. Call it while holding i.mu.
+func (i *Images) drawingLocked(key ImageKey, state *ImageRasterState) bool {
+	outer, known := i.surfaceVisible[key.Surface]
+	return i.handles[key] != nil && state.Visible && (!known || outer) && i.onScreen
+}
+
+// DrawingChanges returns the drawing state of each attached region whose state was not sent yet or changed since it was sent, sorted by
+// surface and name, and records it as sent.
+func (i *Images) DrawingChanges() []ImageDrawing {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	changes := []ImageDrawing{}
+	for key, state := range i.states {
+		owner := i.owners[key]
+		if owner == nil || i.handles[key] == nil {
+			continue
+		}
+		drawing := i.drawingLocked(key, state)
+		if state.DrawingSent && state.Drawing == drawing {
+			continue
+		}
+		state.Drawing, state.DrawingSent = drawing, true
+		changes = append(changes, ImageDrawing{Name: key.Name, Generation: state.Generation, Drawing: drawing, Key: key,
+			Sidecar: owner.SidecarName, Owner: owner.SidecarOwner})
+	}
+	sort.Slice(changes, func(a, b int) bool {
+		if changes[a].Key.Surface != changes[b].Key.Surface {
+			return changes[a].Key.Surface < changes[b].Key.Surface
+		}
+		return changes[a].Key.Name < changes[b].Key.Name
+	})
+	return changes
+}
+
 func NewImages() *Images {
 	return &Images{
 		handles:         map[ImageKey]unsafe.Pointer{},
@@ -130,6 +191,7 @@ func NewImages() *Images {
 		states:          map[ImageKey]*ImageRasterState{},
 		generations:     map[string]uint64{},
 		surfaceVisible:  map[string]bool{},
+		onScreen:        true,
 		detachedRasters: map[ImageKey][2]uint64{},
 		changed:         make(chan struct{}),
 	}
@@ -153,6 +215,8 @@ func (i *Images) BeginGeneration(surface string) uint64 {
 		if key.Surface == surface {
 			state.Generation = i.nextGeneration
 			state.Configured = false
+			// The drawing state names the generation, so the new generation is sent again.
+			state.DrawingSent = false
 			state.PresentationError = ""
 			state.LastSequence = 0
 			state.PresentedRaster = 0
@@ -363,8 +427,7 @@ func (i *Images) visibleWhere(belongs func(ImageKey) bool) map[ImageKey]unsafe.P
 		if !belongs(key) {
 			continue
 		}
-		outer, known := i.surfaceVisible[key.Surface]
-		if state.Visible && (!known || outer) && i.handles[key] != nil {
+		if i.drawingLocked(key, state) {
 			visible[key] = i.handles[key]
 		}
 	}
@@ -391,6 +454,8 @@ func (i *Images) InvalidateSidecar(sidecar string) int {
 		state.LastSequence = 0
 		state.PresentedSequence = 0
 		state.PresentationError = ""
+		// The service of the new connection has no drawing state either.
+		state.DrawingSent = false
 		invalidated++
 	}
 	if invalidated > 0 {
@@ -424,8 +489,7 @@ func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64,
 		state.PresentationError = ""
 		i.changedLocked()
 	}
-	surfaceVisible, known := i.surfaceVisible[key.Surface]
-	if !visible || (known && !surfaceVisible) || state.Configured {
+	if !i.drawingLocked(key, state) || state.Configured {
 		return nil, nil
 	}
 	state.Configured = true
@@ -500,6 +564,14 @@ func (i *Images) PresentedFrame(key ImageKey) (PresentedFrame, bool) {
 	return PresentedFrame{Generation: state.Generation, Raster: state.PresentedRaster, Sequence: state.PresentedSequence}, true
 }
 
+// SentDrawing returns the drawing state last sent to the supplier of a region; it is false before one was sent.
+func (i *Images) SentDrawing(key ImageKey) bool {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	return state != nil && state.DrawingSent && state.Drawing
+}
+
 // MarkPresentationFailed records the native presentation failure of the current raster.
 func (i *Images) MarkPresentationFailed(key ImageKey, generation, raster uint64, sequence int, reason string) {
 	i.mu.Lock()
@@ -513,11 +585,10 @@ func (i *Images) MarkPresentationFailed(key ImageKey, generation, raster uint64,
 	i.changedLocked()
 }
 
-// currentPresentedLocked returns whether every visible valid image region displayed the current raster.
+// currentPresentedLocked returns whether every drawing image region displayed the current raster.
 func (i *Images) currentPresentedLocked() bool {
 	for key, state := range i.states {
-		surfaceVisible, known := i.surfaceVisible[key.Surface]
-		if i.handles[key] != nil && state.Visible && (!known || surfaceVisible) && state.Raster > 0 &&
+		if i.drawingLocked(key, state) && state.Raster > 0 &&
 			(state.LastSequence <= 0 || state.PresentedRaster != state.Raster || state.PresentedSequence != state.LastSequence) {
 			return false
 		}
@@ -525,11 +596,10 @@ func (i *Images) currentPresentedLocked() bool {
 	return true
 }
 
-// currentRasterSnapshotInstalledLocked reports whether every visible valid image region has a presented frame of its current raster.
+// currentRasterSnapshotInstalledLocked reports whether every drawing image region has a presented frame of its current raster.
 func (i *Images) currentRasterSnapshotInstalledLocked() bool {
 	for key, state := range i.states {
-		surfaceVisible, known := i.surfaceVisible[key.Surface]
-		if i.handles[key] != nil && state.Visible && (!known || surfaceVisible) && state.Raster > 0 &&
+		if i.drawingLocked(key, state) && state.Raster > 0 &&
 			(state.PresentedRaster != state.Raster || state.PresentedSequence <= 0) {
 			return false
 		}
@@ -544,8 +614,8 @@ func (i *Images) PendingRasters() string {
 	defer i.mu.Unlock()
 	var pending []string
 	for key, state := range i.states {
-		surfaceVisible, known := i.surfaceVisible[key.Surface]
-		if i.handles[key] == nil || !state.Visible || (known && !surfaceVisible) || state.Raster == 0 {
+		_, known := i.surfaceVisible[key.Surface]
+		if !i.drawingLocked(key, state) || state.Raster == 0 {
 			continue
 		}
 		if state.LastSequence > 0 && state.PresentedRaster == state.Raster && state.PresentedSequence == state.LastSequence {

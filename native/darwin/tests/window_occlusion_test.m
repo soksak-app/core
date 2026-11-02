@@ -100,6 +100,7 @@ int main(void) { @autoreleasepool {
     afterActivityState(surface);
     check([visibility(main) isEqualToString:@"visible"], @"the uncovered document is visible");
     check([visibility(surface) isEqualToString:@"visible"], @"the uncovered surface document is visible");
+    check(sp_window_on_screen(window), @"the uncovered window is on screen");
 
     // AppKit moves a window with a title bar out of the Dock and menu bar areas, so the occluding window covers the
     // real window position.
@@ -112,6 +113,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the covering window did not occlude the main window (window %@ on %@ level %ld, cover %@ on %@ level %ld visible %d)",
             NSStringFromRect(window.frame), NSStringFromRect(window.screen.frame), (long)window.level,
             NSStringFromRect(cover.frame), NSStringFromRect(cover.screen.frame), (long)cover.level, cover.isVisible]);
+    check(!sp_window_on_screen(window), @"the covered window is not on screen");
     afterActivityState(main);
     afterActivityState(surface);
     NSString *covered = visibility(main);
@@ -125,6 +127,12 @@ int main(void) { @autoreleasepool {
 
     check(!NSApp.isActive, @"application stays inactive");
     [cover close];
+    until(^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; }, @"the window was not visible after the cover closed");
+    check(sp_window_on_screen(window), @"the window is on screen again after the cover closed");
+    [window orderOut:nil];
+    until(^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) == 0; }, @"the ordered-out window stayed visible");
+    check(!sp_window_on_screen(window), @"the ordered-out window is not on screen");
+    check(!sp_window_on_screen(NULL), @"no window is not on screen");
     [window close];
     return failures ? 1 : 0;
 }}

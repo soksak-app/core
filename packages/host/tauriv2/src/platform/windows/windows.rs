@@ -100,6 +100,9 @@ impl Platform for Windows {
     fn window_facts(&self, window: Handle) -> Result<Value, String> {
         unsupported::window_facts(window)
     }
+    fn window_on_screen(&self, window: Handle) -> Result<bool, String> {
+        unsupported::window_on_screen(window)
+    }
     fn process_footprint(&self, pid: u32) -> Result<ProcessFootprint, String> {
         unsupported::process_footprint(pid)
     }
