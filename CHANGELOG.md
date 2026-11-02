@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F379: Core 0.0.30, VT 0.0.20 and the plugins for core 0.0.30 are published and listed in the registry.
 - F377: The bounded command test judges its success case by the code of the child under the largest test limit, and the event watchdog tests watch the output file and block the child on a FIFO instead of watching folders, which FSEvents reports only from the start of its stream.
 - F378: The release candidate is 0.0.30.
 - F375: The Wails host refuses a view generation above the JavaScript safe integer limit with the text of the Tauri host, and the host contract states it. Red: two Go tests failed with the earlier text. Green: they pass.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F379: core 0.0.30, VT 0.0.20과 core 0.0.30을 위한 plugin이 게시되었고 registry에 나열된다.
 - F377: bounded command test는 성공 사례를 가장 큰 test limit 아래에서 child의 code로 판정하고, event watchdog test는 folder를 감시하는 대신 output file을 감시하고 child를 FIFO에서 기다리게 한다. FSEvents는 stream이 시작된 뒤의 변경만 알린다.
 - F378: release candidate는 0.0.30이다.
 - F375: Wails host는 JavaScript safe integer 한도를 넘는 view generation을 Tauri host의 문장으로 거부하고, host contract가 그 문장을 적는다. Red: Go test 두 개가 이전 문장으로 실패했다. Green: 이들이 통과한다.
