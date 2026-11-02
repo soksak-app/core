@@ -168,11 +168,16 @@ static NSString *regionState(WKWebView *view, NSDictionary *state) {
 // --stall-record-after=<seconds> sets it, so a run checks the record without a stall.
 static NSTimeInterval stallRecordAfter = 30;
 
-// The number of region lines that the stall records wrote.
+// The number of region lines that the stall records wrote, and the number of WebKit log lines that they wrote.
 static int stallRecordRegions = 0;
+static int stallRecordWebKitLines = 0;
 
-// Writes the output of a command of the system into the output of the test.
-static void writeCommand(NSString *path, NSArray<NSString *> *arguments) {
+// The time at which the test started; the stall record writes the WebKit log from this time.
+static NSDate *testStart;
+
+// Writes the output of a command of the system into the output of the test. Returns the output, or nil when the command
+// cannot start.
+static NSString *writeCommand(NSString *path, NSArray<NSString *> *arguments) {
     NSTask *task = [[NSTask new] autorelease];
     task.executableURL = [NSURL fileURLWithPath:path];
     task.arguments = arguments;
@@ -182,20 +187,22 @@ static void writeCommand(NSString *path, NSArray<NSString *> *arguments) {
     NSError *error = nil;
     if (![task launchAndReturnError:&error]) {
         printf("stall record: %s cannot start: %s\n", path.UTF8String, error.localizedDescription.UTF8String);
-        return;
+        return nil;
     }
     NSData *output = [pipe.fileHandleForReading readDataToEndOfFile];
     [task waitUntilExit];
     printf("stall record: %s %s exit %d\n%.*s\n", path.UTF8String, [arguments componentsJoinedByString:@" "].UTF8String,
         task.terminationStatus, (int)output.length, (const char *)output.bytes);
+    return [[[NSString alloc] initWithData:output encoding:NSUTF8StringEncoding] autorelease] ?: @"";
 }
 
 // Writes what each region waits for when its load has not ended: its committed and provisional WebContent process, the
-// network process, the process counts of the pool, the state of each process, and a sample of each provisional process of a
-// region that is still loading (F335-2).
+// network process, the process counts of the pool, the state of each process, and the WebKit log of the test process, the
+// network process and the WebContent processes since the test started. WebKit writes each step of a navigation (its load
+// request, its policy decision and the services that the decision waits for) to that log with the page and navigation
+// identifiers, so the log names the last step that a region that does not load reached (F335-2).
 static void writeStallRecord(const Region *regions, int count) {
     NSMutableArray<NSString *> *pids = [NSMutableArray array];
-    NSMutableArray<NSNumber *> *provisionals = [NSMutableArray array];
     for (int i = 0; i < count; i++) {
         WKWebView *view = (WKWebView *)regions[i].document;
         if (!view) continue;
@@ -212,11 +219,18 @@ static void writeStallRecord(const Region *regions, int count) {
         for (NSNumber *pid in @[ @(view._webProcessIdentifier), @(view._provisionalWebProcessIdentifier), @(view._networkProcessIdentifier) ]) {
             if (pid.intValue > 0 && ![pids containsObject:pid.stringValue]) [pids addObject:pid.stringValue];
         }
-        if (!ended && view._provisionalWebProcessIdentifier > 0) [provisionals addObject:@(view._provisionalWebProcessIdentifier)];
     }
     if (pids.count > 0) writeCommand(@"/bin/ps", @[ @"-o", @"pid,ppid,stat,etime,time,command", @"-p", [pids componentsJoinedByString:@","] ]);
     writeCommand(@"/bin/ps", @[ @"-axo", @"pid,ppid,stat,etime,command" ]);
-    for (NSNumber *pid in provisionals) writeCommand(@"/usr/bin/sample", @[ pid.stringValue, @"1" ]);
+    NSMutableArray<NSString *> *processes = [NSMutableArray arrayWithObject:[NSString stringWithFormat:@"processID == %d", getpid()]];
+    for (NSString *pid in pids) [processes addObject:[NSString stringWithFormat:@"processID == %@", pid]];
+    NSDateFormatter *format = [[NSDateFormatter new] autorelease];
+    format.dateFormat = @"yyyy-MM-dd HH:mm:ss";
+    NSString *predicate = [NSString stringWithFormat:@"subsystem == \"com.apple.WebKit\" AND (%@)", [processes componentsJoinedByString:@" OR "]];
+    NSString *log = writeCommand(@"/usr/bin/log", @[ @"show", @"--info", @"--style", @"compact", @"--start", [format stringFromDate:testStart], @"--predicate", predicate ]);
+    for (NSString *line in [log componentsSeparatedByString:@"\n"]) {
+        if ([line containsString:@"[com.apple.WebKit:"]) stallRecordWebKitLines++;
+    }
     fflush(stdout);
 }
 
@@ -331,6 +345,7 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
 }
 
 int main(int argc, char **argv) { @autoreleasepool {
+    testStart = [[NSDate date] retain];
     for (int i = 1; i < argc; i++) {
         double seconds = 0;
         if (sscanf(argv[i], "--stall-record-after=%lf", &seconds) == 1 && seconds >= 0) {
@@ -366,7 +381,10 @@ int main(int argc, char **argv) { @autoreleasepool {
         store);
 
     // A run with --stall-record-after=0 writes the stall record of each scenario before its loads end.
-    if (stallRecordAfter == 0) check(stallRecordRegions == 8, [NSString stringWithFormat:@"the stall records name the 8 regions of both scenarios (named %d)", stallRecordRegions]);
+    if (stallRecordAfter == 0) {
+        check(stallRecordRegions == 8, [NSString stringWithFormat:@"the stall records name the 8 regions of both scenarios (named %d)", stallRecordRegions]);
+        check(stallRecordWebKitLines > 0, [NSString stringWithFormat:@"the stall records write the WebKit log of the loads (%d lines)", stallRecordWebKitLines]);
+    }
 
     nw_listener_cancel(listenerA);
     nw_listener_cancel(listenerB);
