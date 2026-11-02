@@ -24,6 +24,15 @@ bool sp_region_raster(void *region, double *out);
 // raster size.
 bool sp_region_surface_placed(void *region);
 
+// Reports a surface that a region in the lease mode stops holding, by the identity of the frame that the surface carried.
+typedef void (*sp_region_released)(void *context, uint64_t generation, uint64_t raster, int sequence);
+
+// Puts the region in the lease presentation mode (docs/spec/native-surfaces.md#image-regions): its image layer presents the
+// accepted IOSurface itself instead of a host-owned copy, and released reports each surface that the region stops holding,
+// once, when a later accepted frame replaces it in a committed swap or the region closes. A region that is never put in the
+// lease mode presents host-owned copies. Called once, after sp_region_create and before the first frame.
+void sp_region_lease(void *region, sp_region_released released, void *context);
+
 // Shows an external IOSurface. token_id is the global ID of the IOSurface, nonce is 16 bytes of data for the nonce
 // comparison, width and height are the size in device pixels, and scale is the scale at which the image was made
 // (used as contentsScale). The accepted snapshot retains its generic source identity. That identity does not report

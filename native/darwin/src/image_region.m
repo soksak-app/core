@@ -51,7 +51,9 @@ static void failFrameIdentitySession(NSString *message) {
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
-@property(assign) IOSurfaceRef presented;  // The immutable presentation copy that the host owns and the layer shows.
+@property(assign) IOSurfaceRef presented;  // The surface that the layer shows: the host-owned copy, or in the lease mode the held surface of the supplier.
+@property sp_region_released released;      // Set in the lease mode; reports each held surface that the region stops holding.
+@property void *releasedContext;
 @property(assign) IOSurfaceRef spare;      // The earlier presentation copy, reused for the next frame when the compositor released it.
 @property size_t presentedWidth;
 @property size_t presentedHeight;
@@ -1408,6 +1410,23 @@ static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, c
     return copy;
 }
 
+// Returns the accepted surface retained for the lease mode after the check of its declared color space, which the copy mode
+// makes in copyPresentation, or NULL when the declaration cannot be decoded.
+static IOSurfaceRef leasePresentation(IOSurfaceRef surface, char *declaredColorSpaceName, size_t nameCapacity) {
+    CFPropertyListRef colorProperties = IOSurfaceCopyValue(surface, kIOSurfaceColorSpace);
+    if (colorProperties) {
+        CGColorSpaceRef colors = CGColorSpaceCreateWithPropertyList(colorProperties);
+        CFRelease(colorProperties);
+        if (!colors) return NULL;
+        CFStringRef name = CGColorSpaceGetName(colors);
+        if (declaredColorSpaceName && nameCapacity &&
+            (!name || !CFStringGetCString(name, declaredColorSpaceName, nameCapacity, kCFStringEncodingUTF8)))
+            declaredColorSpaceName[0] = '\0';
+        CGColorSpaceRelease(colors);
+    }
+    return (IOSurfaceRef)CFRetain(surface);
+}
+
 // The image of a presentation copy for the diagnostics that read source bytes and color space: its bytes with the declared
 // color space, or DeviceRGB when it declares none. The caller releases it.
 static CGImageRef copyPresentationImage(IOSurfaceRef surface) {
@@ -1490,6 +1509,13 @@ bool sp_region_surface_placed(void *handle) {
     return nativePlane && NSWidth(nativePlane.bounds) > 0 && NSHeight(nativePlane.bounds) > 0;
 }
 
+void sp_region_lease(void *handle, sp_region_released released, void *context) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    SPImageRegion *view = (SPImageRegion *)handle;
+    view.released = released;
+    view.releasedContext = context;
+}
+
 bool sp_region_present(void *handle, unsigned int token_id, const unsigned char *nonce, double width, double height,
     double scale, uint64_t generation, uint64_t raster, int sequence) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
@@ -1566,7 +1592,9 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     }
 
     char declaredColorSpaceName[256] = {0};
-    IOSurfaceRef presentation = copyPresentation(view, surface, declaredColorSpaceName, sizeof(declaredColorSpaceName));
+    // In the lease mode the layer presents the retained surface of the supplier; otherwise a host-owned copy.
+    IOSurfaceRef presentation = view.released ? leasePresentation(surface, declaredColorSpaceName, sizeof(declaredColorSpaceName))
+        : copyPresentation(view, surface, declaredColorSpaceName, sizeof(declaredColorSpaceName));
     CFRelease(surface);
     if (!presentation) {
         [view reject:@"presentFailed"];
@@ -1666,10 +1694,13 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         if (identityFailure) failFrameIdentitySession(identityFailure);
     }
 
-    // The previous presentation is replaced only after all validation and copying are done. The layer never points at
-    // the IOSurface that the provider rewrites; the presentation copy remains the unmodified source while displayContents
-    // may carry the opt-in diagnostic QR. The previous copy becomes the spare of the next frame.
+    // The previous presentation is replaced only after all validation and copying are done. In the copy mode the layer never
+    // points at the IOSurface that the provider rewrites; the presentation copy remains the unmodified source while
+    // displayContents may carry the opt-in diagnostic QR, and the previous copy becomes the spare of the next frame. In the
+    // lease mode the previous surface is released to its supplier after the swap.
     IOSurfaceRef previous = view.presented;
+    uint64_t previousGeneration = view.presentedGeneration, previousRaster = view.presentedRaster;
+    int previousSequence = view.presentedSequence;
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     [view applyInsetsInTransaction];
@@ -1712,7 +1743,11 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     if (sourceBytes) CFRelease(sourceBytes);
     if (taggedSnapshot) CGImageRelease(taggedSnapshot);
     if (snapshot) CGImageRelease(snapshot);
-    if (previous) {
+    if (previous && view.released) {
+        // The lease of the replaced surface ends with the committed swap; a surface sent again while held is not released.
+        if (previous != presentation) view.released(view.releasedContext, previousGeneration, previousRaster, previousSequence);
+        CFRelease(previous);
+    } else if (previous) {
         if (view.spare) CFRelease(view.spare);
         view.spare = previous;
     }
@@ -1792,6 +1827,18 @@ void sp_region_close(void *handle) {
     }
     view.closed = YES;
     view.event = NULL;
+    if (view.released && view.presented) {
+        // Closing ends the lease of the presented surface: the layer stops presenting it in a committed transaction.
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        view.imageLayer.contents = nil;
+        [CATransaction commit];
+        IOSurfaceRef held = view.presented;
+        view.presented = NULL;
+        view.released(view.releasedContext, view.presentedGeneration, view.presentedRaster, view.presentedSequence);
+        CFRelease(held);
+    }
+    view.released = NULL;
     NSView *clipView = view.superview;  // The clip view that sp_region_create made.
     [view removeFromSuperview];
     [clipView removeFromSuperview];     // Does not leave an empty clip view on the surface.

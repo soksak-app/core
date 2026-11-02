@@ -3934,6 +3934,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F386-2",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "void sp_region_lease(void *handle, sp_region_released released, void *context) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_lease_test.m", id: "a later frame releases exactly the surface that it replaced" },
+    ],
+    expected: "A region in the lease mode presents the surface of its supplier and reports each surface that it stops holding.",
+    levels: ["unit"],
+  },
+  {
     id: "F386-1",
     implementation: [
       { file: "native/darwin/Makefile", symbol: "iosurface_use_count_test" },
