@@ -76,7 +76,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   lane("candidate registry proof check", "js-ts", ["scripts/check-candidate-registry.mjs"], ["scripts/test/candidate-registry.test.mjs"]),
-  lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
+  lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs", "scripts/test/record-references.test.mjs"]),
   lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
   lane("soksak utility scripts", "js-ts", [
@@ -3931,6 +3931,17 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "transcript_lines_reach_the_application_log" },
     ],
     expected: "Both hosts write the lines of the diagnostic transcript of a window to the application log.",
+    levels: ["unit"],
+  },
+  {
+    id: "F390",
+    implementation: [
+      { file: "docs/spec/native-surfaces.md", symbol: "**Callback boundaries**" },
+    ],
+    tests: [
+      { file: "scripts/test/record-references.test.mjs", id: "records cite no other application as a precedent or a reference" },
+    ],
+    expected: "Records cite no other application as a precedent, a reference or a comparison.",
     levels: ["unit"],
   },
   {
