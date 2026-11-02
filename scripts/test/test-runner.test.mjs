@@ -335,9 +335,10 @@ function slowStart(folder) {
 const eventLine = (type, name) => `require("node:fs").writeSync(2, ${JSON.stringify(`${EVENT_PREFIX}${JSON.stringify({ type, name })}\n`)});`;
 // Resolves when the output file of a test in the folder of the run holds `text`. The runner handles the event of a line before it
 // appends the line to the output file, so a change of the file is the event source of a handled event. The runner creates the file
-// while `runTests` is called, so the file exists here. The watch is of the file, not of its folder: libuv watches a file with kqueue,
-// whose registration is applied in the next poll of this loop, before the runner receives the output that it appends; a folder is
-// watched with FSEvents, which starts its stream on another thread and does not report a change made before the stream started.
+// while `runTests` is called, so the file exists here. The watch is of the file, not of its folder: a folder is watched with FSEvents,
+// which starts its stream on another thread and does not report a change made before the stream started. libuv watches a file with
+// kqueue and registers it in the next poll, so an append by a callback of the current poll is not reported; the runner appends only in
+// the output callbacks of a poll, so a check in the check phase after the current poll and the watch from the next poll see every append.
 function untilOutput(path, text) {
   return new Promise((resolve, reject) => {
     const check = () => {
@@ -349,6 +350,7 @@ function untilOutput(path, text) {
     };
     const watcher = watch(path, check);
     check();
+    setImmediate(check);
   });
 }
 
