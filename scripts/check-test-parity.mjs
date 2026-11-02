@@ -8059,6 +8059,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F375",
+    implementation: [
+      { file: "packages/host/wailsv3/src/documents.go", symbol: "func validateViewGeneration(where string, generation uint64) error" },
+      { file: "packages/host/wailsv3/src/source_origins.go", symbol: "func (o *sourceOrigins) create(surface string) (uint64, error)" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestSourceOriginsDoesNotIssueAnUnsafeGeneration" },
+      { file: "packages/host/wailsv3/src/source_origins_test.go", id: "TestAViewMessageAboveTheSafeIntegerLimitIsRefused" },
+      { file: "packages/host/tauriv2/src/source_origins_test.rs", id: "issuing_a_generation_past_the_javascript_safe_integer_limit_changes_no_state" },
+    ],
+    expected: "Both hosts refuse a view generation above the JavaScript safe integer limit with the text that the host contract states.",
+    levels: ["unit"],
+  },
+  {
     id: "F374-4",
     implementation: [
       { file: "packages/host/tauriv2/src/sidecar_routes.rs", symbol: "pub(crate) struct SidecarRoutes" },
