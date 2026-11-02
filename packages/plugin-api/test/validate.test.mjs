@@ -108,13 +108,14 @@ test("a manifest is rejected for each invalid field", () => {
 test("surface composition declarations are complete and fail closed", () => {
   const documentRegion = { name: "page", kind: "document", input: "native" };
   const imageRegion = {
-    name: "view", kind: "image", sidecar: "@scope/sidecar-worker", input: "dom",
+    name: "view", kind: "image", sidecar: "@scope/sidecar-worker", present: "copy", input: "dom",
   };
   const hybrid = (regions = [documentRegion], overlays = []) => ({
     ...card, surface: { composition: { kind: "view", page: "ui/page.html", regions, overlays } },
   });
   assert.equal(validateManifest(hybrid()).surface.composition.kind, "view");
   assert.equal(validateManifest(hybrid([imageRegion])).surface.composition.regions[0].sidecar, "@scope/sidecar-worker");
+  assert.equal(validateManifest(hybrid([{ ...imageRegion, present: "lease" }])).surface.composition.regions[0].present, "lease");
 
   const cases = [
     [{ ...card, surface: { ...card.surface, composition: { kind: "other" } } }, /composition kind must be view/],
@@ -124,6 +125,9 @@ test("surface composition declarations are complete and fail closed", () => {
     [hybrid([{ ...documentRegion, input: "dom" }]), /document input must be native/],
     [hybrid([{ ...imageRegion, input: "native" }]), /image input must be dom/],
     [hybrid([{ ...imageRegion, sidecar: "@scope/sidecar-other" }]), /sidecar must be declared/],
+    [hybrid([{ ...imageRegion, present: undefined }]), /image present must be copy or lease/],
+    [hybrid([{ ...imageRegion, present: "move" }]), /image present must be copy or lease/],
+    [hybrid([{ ...documentRegion, present: "lease" }]), /unknown field present/],
     [hybrid([{ ...imageRegion, fallback: "--surface" }]), /unknown field fallback/],
     [hybrid([{ ...documentRegion, extra: true }]), /unknown field extra/],
     [hybrid([documentRegion, { ...documentRegion }]), /duplicate name page/],
@@ -136,7 +140,7 @@ test("surface composition declarations are complete and fail closed", () => {
 test("a view composition declares its page and no module", () => {
   const view = (composition, extra = {}) => ({ ...card, surface: { composition, ...extra } });
   const documentRegion = { name: "page", kind: "document", input: "native" };
-  const imageRegion = { name: "view", kind: "image", sidecar: "@scope/sidecar-worker", input: "dom" };
+  const imageRegion = { name: "view", kind: "image", sidecar: "@scope/sidecar-worker", present: "copy", input: "dom" };
   assert.deepEqual(validateManifest(view({ kind: "view", page: "ui/page.html" })).surface.composition,
     { kind: "view", page: "ui/page.html" });
   assert.equal(validateManifest(view({ kind: "view", page: "page.html", regions: [documentRegion], overlays: ["menu"] })).surface.composition.overlays[0], "menu");

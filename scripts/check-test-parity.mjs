@@ -3934,6 +3934,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F386-4",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "image present must be copy or lease" },
+      { file: "packages/sok/wailsv3/src/manifest.go", symbol: "image present must be copy or lease" },
+      { file: "packages/sok/tauriv2/src/manifest.rs", symbol: "image present must be copy or lease" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/validate.test.mjs", id: "surface composition declarations are complete and fail closed" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "surface.region-image-present-missing" },
+    ],
+    expected: "Every manifest reader refuses an image region whose present is not copy or lease.",
+    levels: ["unit"],
+  },
+  {
     id: "F386-3",
     implementation: [
       { file: "packages/host/wailsv3/src/images.go", symbol: "func LeasedReply(name string, generation, raster uint64, sequence int) map[string]interface{} {" },

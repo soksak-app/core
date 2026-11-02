@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F386-4: plugin API와 `sok` manifest reader는 image 영역에 `present`(`copy` 또는 `lease`)를 요구한다.
 - F386-3: 두 호스트는 image 영역에 `present`를 요구하고, `lease` 방식 영역의 frame에 `leased`로 응답하며, 영역이 surface를 더 쥐지 않게 되면 공급자에게 `released`를 보낸다.
 - F386-2: native 그림 영역은 `lease` 방식에서 공급자의 surface를 보이고, 더 쥐지 않게 된 각 surface를 알린다.
 - F386-1: spec이 그림 영역의 표시 방식 `copy`와 `lease`를 정의하고, `iosurface_use_count_test`가 `lease` 방식이 기대는 in use 표시를 잰다.

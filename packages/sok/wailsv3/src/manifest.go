@@ -1232,7 +1232,7 @@ func checkRegions(where string, regions, overlays []any, sidecars []string) erro
 				return fmt.Errorf("%s: document input must be native", regionWhere)
 			}
 		case "image":
-			if err := only(regionWhere, region, "name", "kind", "sidecar", "input"); err != nil {
+			if err := only(regionWhere, region, "name", "kind", "sidecar", "present", "input"); err != nil {
 				return err
 			}
 			if region["input"] != "dom" {
@@ -1241,6 +1241,10 @@ func checkRegions(where string, regions, overlays []any, sidecars []string) erro
 			sidecar, isSidecar := region["sidecar"].(string)
 			if !isSidecar || !slices.Contains(sidecars, sidecar) {
 				return fmt.Errorf("%s: sidecar must be declared by the plugin", regionWhere)
+			}
+			// The presentation mode has no default (docs/spec/native-surfaces.md#image-regions).
+			if present := region["present"]; present != "copy" && present != "lease" {
+				return fmt.Errorf("%s: image present must be copy or lease", regionWhere)
 			}
 		default:
 			return fmt.Errorf("%s: kind must be document or image", regionWhere)

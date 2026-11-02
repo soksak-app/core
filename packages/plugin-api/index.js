@@ -492,10 +492,14 @@ function checkRegions(where, regions, overlays, sidecars) {
       continue;
     }
     if (region.kind === "image") {
-      only(regionWhere, region, ["name", "kind", "sidecar", "input"]);
+      only(regionWhere, region, ["name", "kind", "sidecar", "present", "input"]);
       if (region.input !== "dom") throw new Error(`${regionWhere}: image input must be dom`);
       if (typeof region.sidecar !== "string" || !sidecars.includes(region.sidecar)) {
         throw new Error(`${regionWhere}: sidecar must be declared by the plugin`);
+      }
+      // The presentation mode has no default (docs/spec/native-surfaces.md#image-regions).
+      if (region.present !== "copy" && region.present !== "lease") {
+        throw new Error(`${regionWhere}: image present must be copy or lease`);
       }
       continue;
     }

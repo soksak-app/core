@@ -715,7 +715,11 @@ fn check_regions(
                 }
             }
             Some("image") => {
-                only(&region_where, region, &["name", "kind", "sidecar", "input"])?;
+                only(
+                    &region_where,
+                    region,
+                    &["name", "kind", "sidecar", "present", "input"],
+                )?;
                 if region.get("input").and_then(Value::as_str) != Some("dom") {
                     return Err(format!("{region_where}: image input must be dom"));
                 }
@@ -723,6 +727,15 @@ fn check_regions(
                 if !sidecar.is_some_and(|s| sidecars.contains(&s)) {
                     return Err(format!(
                         "{region_where}: sidecar must be declared by the plugin"
+                    ));
+                }
+                // The presentation mode has no default (docs/spec/native-surfaces.md#image-regions).
+                if !matches!(
+                    region.get("present").and_then(Value::as_str),
+                    Some("copy" | "lease")
+                ) {
+                    return Err(format!(
+                        "{region_where}: image present must be copy or lease"
                     ));
                 }
             }

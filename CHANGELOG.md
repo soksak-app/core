@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F386-4: The plugin API and `sok` manifest readers require `present`, `copy` or `lease`, on an image region.
 - F386-3: Both hosts require `present` on an image region, answer `leased` for a frame of a region in the `lease` mode, and send `released` to its supplier when the region stops holding a surface.
 - F386-2: The native image region presents the surface of its supplier in the `lease` mode and reports each surface that it stops holding.
 - F386-1: The specifications define the presentation mode of an image region, `copy` or `lease`, and `iosurface_use_count_test` measures the in-use mark that the `lease` mode relies on.
