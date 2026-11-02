@@ -8408,6 +8408,21 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F381",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "bool sp_window_on_screen(void *handle) {" },
+      { file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) DrawingChanges() []ImageDrawing {" },
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn drawing_changes(&self) -> Vec<Drawing> {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_occlusion_test.m", id: "the covered window is not on screen" },
+      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestDrawingStateIsSentAtAttachAndOnChange" },
+      { file: "packages/host/tauriv2/tests/images_test.rs", id: "drawing_state_is_sent_at_attach_and_on_change" },
+    ],
+    expected: "The host reads whether a window is on screen from AppKit, sends the supplier of each image region its drawing state at the attachment and at each change, and configures and waits only for regions that draw.",
+    levels: ["native", "unit"],
+  },
+  {
     id: "F321-4",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) endUndeclaredReplacement(" },
