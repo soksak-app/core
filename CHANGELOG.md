@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F318, F319: After their hosted repeats, three hosted CI runs of the full suites passed both tests, so the two failures are closed as not reproduced.
 - F376, F377-1: Three full runs of the scripts tests passed, one at load average 25 or more, so the two failures are closed as not reproduced, and F377 is complete.
 - F390: Records cite no other application as a precedent, a reference or a comparison, and a tracked test refuses such citations.
 - F386-5: The release candidate is 0.0.32, which carries the lease presentation mode of F386, and the latest published release is v0.0.31.
