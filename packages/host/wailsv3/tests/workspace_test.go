@@ -228,6 +228,40 @@ func TestFolderIdentity(t *testing.T) {
 	}
 }
 
+// contract: workspace.folder.replaced-directory-changes-identity
+func TestReplacedDirectoryIdentity(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "project")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	first, err := host.ResolveProjectFolder(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := host.ResolveProjectFolder(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Identity != again.Identity {
+		t.Fatalf("an unchanged directory changed its identity: %s %s", first.Identity, again.Identity)
+	}
+	// The earlier directory stays under another name, so the system cannot give its inode to the new one.
+	if err := os.Rename(root, filepath.Join(parent, "earlier")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	replaced, err := host.ResolveProjectFolder(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replaced.Root != first.Root || replaced.Identity == first.Identity {
+		t.Fatalf("a copy at the same root kept the identity of the earlier directory: %v %v", first, replaced)
+	}
+}
+
 // readJSON reads the JSON object of path into into.
 func readJSON(t *testing.T, path string, into *host.Record) error {
 	t.Helper()

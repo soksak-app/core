@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F333: The contract case `workspace.folder.replaced-directory-changes-identity` checks that an unchanged directory keeps its identity and another directory at the same root has another identity.
 - F299: The runner reads the process table at the end of a test only when the group of the test still has a process, and reads it once for the descendants and the names of the leftovers.
 - F377-2: When the runner ends the group of a test, it also stops, names and ends the descendants of the group that run in a group of their own.
 - F379: Core 0.0.30, VT 0.0.20 and the plugins for core 0.0.30 are published and listed in the registry.

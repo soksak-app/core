@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F333: contract case `workspace.folder.replaced-directory-changes-identity`는 바뀌지 않은 디렉터리가 identity를 유지하고 같은 root의 다른 디렉터리가 다른 identity를 가지는지 검사한다.
 - F299: runner는 test의 group에 process가 남았을 때만 test 끝에 process 표를 읽고, 자손과 leftover 이름을 위해 한 번만 읽는다.
 - F377-2: runner는 test의 group을 끝낼 때 자기 group에서 도는 그 group의 자손도 멈추고, 이름을 적고, 끝낸다.
 - F379: core 0.0.30, VT 0.0.20과 core 0.0.30을 위한 plugin이 게시되었고 registry에 나열된다.

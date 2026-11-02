@@ -136,6 +136,29 @@ fn directory_aliases_have_one_identity() {
     assert!(folder(file.to_str().unwrap(), root.path()).is_err());
 }
 
+// contract: workspace.folder.replaced-directory-changes-identity
+#[test]
+fn a_directory_replaced_at_its_root_has_another_identity() {
+    let parent = folder::Folder::new();
+    let root = parent.path().join("project");
+    fs::create_dir(&root).unwrap();
+    let first = folder(root.to_str().unwrap(), parent.path()).unwrap();
+    let again = folder(root.to_str().unwrap(), parent.path()).unwrap();
+    assert_eq!(
+        first.identity, again.identity,
+        "an unchanged directory changed its identity"
+    );
+    // The earlier directory stays under another name, so the system cannot give its inode to the new one.
+    fs::rename(&root, parent.path().join("earlier")).unwrap();
+    fs::create_dir(&root).unwrap();
+    let replaced = folder(root.to_str().unwrap(), parent.path()).unwrap();
+    assert_eq!(replaced.root, first.root);
+    assert_ne!(
+        replaced.identity, first.identity,
+        "a copy at the same root kept the identity of the earlier directory"
+    );
+}
+
 // contract: workspace.config-dir.creates-requested-path, workspace.config-dir.rejects-empty-path, workspace.config-dir.rejects-path-under-file
 #[test]
 fn config_directory_is_created_and_canonical() {
