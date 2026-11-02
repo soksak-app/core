@@ -35,6 +35,11 @@
 @interface WKProcessPool (SPPrivate)
 // WKProcessPoolPrivate.h: makes the WebContent processes of the pool collect JavaScript objects (for tests).
 - (void)_garbageCollectJavaScriptObjectsForTesting;
+// WKProcessPoolPrivate.h: the WebContent processes of the pool, with and without the prewarmed process, and those that
+// hold a page.
+- (size_t)_webProcessCount;
+- (size_t)_webProcessCountIgnoringPrewarmed;
+- (size_t)_webPageContentProcessCount;
 @end
 #pragma clang diagnostic pop
 
@@ -64,6 +69,10 @@ typedef NS_ENUM(NSInteger, SPProcessTerminationReason) {
 
 @interface WKWebView (SPPrivate)
 @property(nonatomic, readonly) pid_t _webProcessIdentifier;
+// WKWebViewPrivate.h: the WebContent process of the navigation that has not committed yet, and the network process of the
+// view; each is 0 while it does not exist.
+@property(nonatomic, readonly) pid_t _provisionalWebProcessIdentifier;
+@property(nonatomic, readonly) pid_t _networkProcessIdentifier;
 // WKWebViewPrivate.h: terminates the current WebContent process so that a reload starts a new process.
 - (void)_killWebContentProcessAndResetState;
 // WKWebViewPrivate.h

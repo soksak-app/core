@@ -317,6 +317,7 @@ NATIVE_TESTS = observe_test \
   document_menu_key_equivalent_test \
   document_throttle_test \
   document_processes_test \
+  document_processes_test,--stall-record-after=0 \
   document_caches_test \
   document_backforward_test \
   document_form_state_test \

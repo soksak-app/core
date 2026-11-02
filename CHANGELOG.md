@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F335-3: `document_processes_test` writes a stall record when the loads of a scenario have not ended after 30 seconds: the committed, provisional and network process of each region, the process counts of the pool, the `ps` state of the processes and a sample of each provisional process of a region that still loads.
 - F381-3: The Tauri host starts the thread that sends the drawing state after an occlusion change through `routine::spawn_named`, so the panic hook records a panic of that thread with its name.
 - F381-2: VT 0.0.22 draws nothing for a terminal whose image region is not drawing, and terminal 0.0.32 requires it; the registry lists both.
 - F381-1: The host sends the supplier of each image region whether the region draws: it reads the AppKit occlusion state before it attaches a region and at each change, configures and waits only for regions that draw, and reports the state it sent as `drawing` in the regions of `host.window`.

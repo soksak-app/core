@@ -130,8 +130,10 @@ static void changed(void *context, const char *text) {
     }
     // The WebContent process of each state names whether a region that does not load has a process and whether it is a
     // process of an earlier scenario (F335-2).
-    pid_t process = region->document ? ((WKWebView *)region->document)._webProcessIdentifier : 0;
-    printf("region %s process %d state event: %s\n", region->address.UTF8String, process, text);
+    WKWebView *view = (WKWebView *)region->document;
+    pid_t process = view ? view._webProcessIdentifier : 0;
+    pid_t provisional = view ? view._provisionalWebProcessIdentifier : 0;
+    printf("region %s process %d provisional %d state event: %s\n", region->address.UTF8String, process, provisional, text);
     fflush(stdout);
     [region->state release];
     region->state = [state retain];
@@ -160,6 +162,62 @@ static NSString *regionState(WKWebView *view, NSDictionary *state) {
     return [NSString stringWithFormat:@"_webProcessIdentifier %d, loading %@, title \"%@\", URL \"%@\", navigation error \"%@\"",
         view._webProcessIdentifier, view.loading ? @"YES" : @"NO", view.title ?: @"", view.URL.absoluteString ?: @"",
         (!error || error == NSNull.null) ? @"none" : error];
+}
+
+// The seconds after which a scenario whose loads have not ended writes the stall record once. The argument
+// --stall-record-after=<seconds> sets it, so a run checks the record without a stall.
+static NSTimeInterval stallRecordAfter = 30;
+
+// The number of region lines that the stall records wrote.
+static int stallRecordRegions = 0;
+
+// Writes the output of a command of the system into the output of the test.
+static void writeCommand(NSString *path, NSArray<NSString *> *arguments) {
+    NSTask *task = [[NSTask new] autorelease];
+    task.executableURL = [NSURL fileURLWithPath:path];
+    task.arguments = arguments;
+    NSPipe *pipe = [NSPipe pipe];
+    task.standardOutput = pipe;
+    task.standardError = pipe;
+    NSError *error = nil;
+    if (![task launchAndReturnError:&error]) {
+        printf("stall record: %s cannot start: %s\n", path.UTF8String, error.localizedDescription.UTF8String);
+        return;
+    }
+    NSData *output = [pipe.fileHandleForReading readDataToEndOfFile];
+    [task waitUntilExit];
+    printf("stall record: %s %s exit %d\n%.*s\n", path.UTF8String, [arguments componentsJoinedByString:@" "].UTF8String,
+        task.terminationStatus, (int)output.length, (const char *)output.bytes);
+}
+
+// Writes what each region waits for when its load has not ended: its committed and provisional WebContent process, the
+// network process, the process counts of the pool, the state of each process, and a sample of each provisional process of a
+// region that is still loading (F335-2).
+static void writeStallRecord(const Region *regions, int count) {
+    NSMutableArray<NSString *> *pids = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *provisionals = [NSMutableArray array];
+    for (int i = 0; i < count; i++) {
+        WKWebView *view = (WKWebView *)regions[i].document;
+        if (!view) continue;
+        // The pool counts the WebContent processes; the declaration is deprecated because a second pool has no effect.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        WKProcessPool *pool = view.configuration.processPool;
+#pragma clang diagnostic pop
+        BOOL ended = regionsLoadEnded(&regions[i], 1);
+        printf("stall record: region %d %s ended %d process %d provisional %d network %d pool processes %zu without prewarmed %zu with pages %zu\n",
+            i + 1, regions[i].address.UTF8String, ended, view._webProcessIdentifier, view._provisionalWebProcessIdentifier,
+            view._networkProcessIdentifier, pool._webProcessCount, pool._webProcessCountIgnoringPrewarmed, pool._webPageContentProcessCount);
+        stallRecordRegions++;
+        for (NSNumber *pid in @[ @(view._webProcessIdentifier), @(view._provisionalWebProcessIdentifier), @(view._networkProcessIdentifier) ]) {
+            if (pid.intValue > 0 && ![pids containsObject:pid.stringValue]) [pids addObject:pid.stringValue];
+        }
+        if (!ended && view._provisionalWebProcessIdentifier > 0) [provisionals addObject:@(view._provisionalWebProcessIdentifier)];
+    }
+    if (pids.count > 0) writeCommand(@"/bin/ps", @[ @"-o", @"pid,ppid,stat,etime,time,command", @"-p", [pids componentsJoinedByString:@","] ]);
+    writeCommand(@"/bin/ps", @[ @"-axo", @"pid,ppid,stat,etime,command" ]);
+    for (NSNumber *pid in provisionals) writeCommand(@"/usr/bin/sample", @[ pid.stringValue, @"1" ]);
+    fflush(stdout);
 }
 
 // Runs one scenario: four regions in one window, loaded with the addresses, then their processes and footprints.
@@ -197,8 +255,14 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
 
     // Each region reports its state through changed when a navigation finishes or fails (document_view.m, webView:
     // didFinishNavigation: and fail:) and when its loading or title changes. The wait is bounded by the per-test limit of
-    // the runner.
+    // the runner. A wait longer than stallRecordAfter writes the stall record once; it does not end the wait.
+    NSDate *stallAt = [NSDate dateWithTimeIntervalSinceNow:stallRecordAfter];
+    BOOL stallRecorded = NO;
     while (!regionsLoadEnded(regions, 4)) {
+        if (!stallRecorded && stallAt.timeIntervalSinceNow <= 0) {
+            writeStallRecord(regions, 4);
+            stallRecorded = YES;
+        }
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
     for (int i = 0; i < 4; i++) {
@@ -266,7 +330,16 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
     }
 }
 
-int main(void) { @autoreleasepool {
+int main(int argc, char **argv) { @autoreleasepool {
+    for (int i = 1; i < argc; i++) {
+        double seconds = 0;
+        if (sscanf(argv[i], "--stall-record-after=%lf", &seconds) == 1 && seconds >= 0) {
+            stallRecordAfter = seconds;
+        } else {
+            fprintf(stderr, "FAIL: unknown argument %s\n", argv[i]);
+            return 2;
+        }
+    }
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -291,6 +364,9 @@ int main(void) { @autoreleasepool {
         @[ [originA stringByAppendingString:@"/region-1"], [originA stringByAppendingString:@"/region-2"],
            [originA stringByAppendingString:@"/region-3"], [originA stringByAppendingString:@"/region-4"] ],
         store);
+
+    // A run with --stall-record-after=0 writes the stall record of each scenario before its loads end.
+    if (stallRecordAfter == 0) check(stallRecordRegions == 8, [NSString stringWithFormat:@"the stall records name the 8 regions of both scenarios (named %d)", stallRecordRegions]);
 
     nw_listener_cancel(listenerA);
     nw_listener_cancel(listenerB);
