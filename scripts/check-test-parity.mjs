@@ -3934,6 +3934,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F384",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "globalThis.soksakSnapshot = () => {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_view_test.m", id: "each element keeps its node identity across snapshots and no two elements share one" },
+    ],
+    expected: "Each element of an elements snapshot carries an identity that stays while the element exists.",
+    levels: ["unit"],
+  },
+  {
     id: "F335-8",
     implementation: [
       { file: "packages/host/wailsv3/src/host.go", symbol: "OnShutdown: func() {" },

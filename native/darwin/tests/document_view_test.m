@@ -520,6 +520,17 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSDictionary *second = messagesOf(@"elements", @"snapshot", 0)[1];
         check([second[@"seq"] isEqual:@2] && [second[@"total"] isEqual:@(7 + 100)],
             [NSString stringWithFormat:@"the released snapshot holds every change: seq %@ total %@", second[@"seq"], second[@"total"]]);
+        // Each element carries the identity `node`, which stays while the element exists, so an element of both snapshots has the
+        // same identity in both, and no two elements of a snapshot share one.
+        NSMutableSet *identities = [NSMutableSet set];
+        for (NSDictionary *node in second[@"nodes"]) if ([node[@"node"] isKindOfClass:NSNumber.class]) [identities addObject:node[@"node"]];
+        BOOL kept = YES;
+        for (NSUInteger i = 0; i < 7; i++) kept = kept && [snapshot[@"nodes"][i][@"node"] isKindOfClass:NSNumber.class]
+            && [snapshot[@"nodes"][i][@"node"] isEqual:second[@"nodes"][i][@"node"]];
+        check(kept && identities.count == [second[@"nodes"] count],
+            [NSString stringWithFormat:@"each element keeps its node identity across snapshots and no two elements share one: first %@, second %@, %lu distinct of %lu",
+                [[snapshot[@"nodes"] subarrayWithRange:NSMakeRange(0, 7)] valueForKey:@"node"], [[second[@"nodes"] subarrayWithRange:NSMakeRange(0, 7)] valueForKey:@"node"],
+                (unsigned long)identities.count, (unsigned long)[second[@"nodes"] count]]);
         check(sp_document_stream_ack(document, 2), @"the snapshot 2 is acknowledged");
         check(messagesOf(@"elements", @"snapshot", 0).count == 2, @"an acknowledgement without a change sends no snapshot");
 
