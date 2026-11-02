@@ -27,6 +27,24 @@ test("a Go package lists its tests and each test runs in the folder of its packa
   assert.deepEqual(tests.map((item) => [item.testName, auditStatus(results.get(item.name))]).sort(), [["TestFails", "fail"], ["TestPasses", "pass"], ["TestSkips", "skip"]]);
 });
 
+test("a discovered Go test has the deadline of its limit", async () => {
+  const root = folder();
+  writeFileSync(join(root, "go.mod"), "module deadline\n\ngo 1.21\n");
+  writeFileSync(join(root, "a_test.go"), [
+    "package deadline", "", 'import ("testing"; "time")', "",
+    "func TestDeadline(t *testing.T) {",
+    "\tdeadline, ok := t.Deadline()",
+    '\tif !ok { t.Fatal("the test has no deadline") }',
+    '\tif left := time.Until(deadline); left > 20*time.Second || left < 15*time.Second { t.Fatalf("the deadline is %s away, not the limit of 20s", left) }',
+    "}", "",
+  ].join("\n"));
+  const { tests, failures } = await discoverGo({ patterns: ["./..."], cwd: root, buildDir: join(root, "bin"), id: "go", write() {}, concurrency: 1, timeoutMs: 20000 });
+  assert.deepEqual(failures, []);
+  const { results } = await runTests({ tests, concurrency: 1, write() {} });
+  const result = results.get(tests[0].name);
+  assert.equal(result.status, "pass", result.output);
+});
+
 test("a Go test over its limit prints the stacks of its goroutines before its group is ended", async () => {
   const root = folder();
   writeFileSync(join(root, "go.mod"), "module hangs\n\ngo 1.21\n");

@@ -32,6 +32,7 @@ case "$*" in
   "test -c"*) out=""; while [ $# -gt 0 ]; do if [ "$1" = "-o" ]; then out="$2"; fi; shift; done
     cat > "$out" <<'BINARY'
 #!/bin/sh
+printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'binary-args'))}
 case "$1" in -test.list*) printf 'TestAlpha\\nTestBeta\\nBenchmarkGamma\\n'; exit 0 ;; esac
 name=$(printf '%s' "$2" | tr -d '^$')
 case "$name" in TestBeta) trap 'printf "goroutine 1 [sleep]:\\n"; exit 2' QUIT; sleep 8 & wait $! ;; esac
@@ -79,6 +80,13 @@ test('make go-repeat passes the build tags to the list and the test build and se
   const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n');
   assert.ok(calls.some((call) => /^list -tags diagnostics /.test(call)), JSON.stringify(calls));
   assert.ok(calls.some((call) => /^test -c .*-tags diagnostics/.test(call)), JSON.stringify(calls));
+});
+
+test('make go-repeat gives each test the deadline of its limit', (t) => {
+  const { stdout, stderr, status, directory } = makeGo(t, 'run', ['go-repeat', 'PACKAGE=./fixture', 'COUNT=1', 'TEST=TestAlpha', 'TEST_TIMEOUT=7']);
+  assert.equal(status, 0, stdout + stderr);
+  const runs = readFileSync(join(directory, 'binary-args'), 'utf8').trim().split('\n').filter((line) => line.startsWith('-test.run'));
+  assert.ok(runs.length === 1 && runs[0].split(' ').includes('-test.timeout=7000ms'), `the test binary did not receive the deadline of its limit: ${JSON.stringify(runs)}`);
 });
 
 test('make go-repeat fails a package whose test files are not built', (t) => {

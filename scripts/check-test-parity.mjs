@@ -8572,6 +8572,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F311-1",
+    implementation: [
+      { file: "scripts/test-discovery.mjs", symbol: "export async function discoverGo(" },
+      { file: "scripts/go-tests.mjs", symbol: "export async function runGoTests(" },
+    ],
+    tests: [
+      { file: "scripts/test/test-discovery.test.mjs", id: "a discovered Go test has the deadline of its limit" },
+      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat gives each test the deadline of its limit" },
+    ],
+    expected: "Each Go test that the runners start has the deadline of its limit.",
+    levels: ["unit"],
+  },
+  {
     id: "F311",
     implementation: [{ file: "packages/host/wailsv3/src/application_log.go", symbol: "func StartStandardError(" }],
     tests: [{ file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestStartStandardErrorWritesAFatalErrorToTheCrashFileAndEndsTheProcessWithTheSystemCrash" }],

@@ -24,7 +24,8 @@ export const GO_STACK_SIGNAL = 'SIGQUIT';
 
 /**
  * The tests of the Go packages that match `patterns` (relative to `cwd`). `tags` is a build tag list and `ldflags` the link
- * flags; `buildDir` receives the test binaries. Returns `{tests, failures}`: `tests` are runner items with `testName` (the
+ * flags; `buildDir` receives the test binaries. Each test runs with `-test.timeout` of `timeoutMs`, so `t.Deadline` reports
+ * its limit. Returns `{tests, failures}`: `tests` are runner items with `testName` (the
  * name `go test -json` gives) and `failures` name the packages whose build failed.
  */
 export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, write, concurrency, timeoutMs }) {
@@ -52,7 +53,7 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
     const names = await execFileAsync(binary, ['-test.list', '.'], { cwd: pkg.dir, maxBuffer: 1 << 24 });
     for (const testName of names.stdout.split('\n').filter((line) => /^(Test|Example)/.test(line))) {
       tests.push({ name: `${id} ${pkg.importPath}.${testName}`, run: id, testName, owner: relative(realpathSync(cwd), pkg.dir), command: binary,
-        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v'], cwd: pkg.dir, timeoutMs, stackSignal: GO_STACK_SIGNAL });
+        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v', `-test.timeout=${timeoutMs}ms`], cwd: pkg.dir, timeoutMs, stackSignal: GO_STACK_SIGNAL });
     }
   }
   return { tests, failures };

@@ -1,6 +1,7 @@
 // Runs the tests of the Go packages of a pattern one at a time, each as a process of its own with its own limit, through the test
 // runner (docs/operations/examples.md#test-runner). Each package with test files is compiled once with `go test -c`; each test runs
-// as the test binary with `-test.run ^<name>$` in the package folder, as go test runs it. A test that does not end is killed at its
+// as the test binary with `-test.run ^<name>$` and `-test.timeout` of its limit in the package folder, as go test runs it, so
+// `t.Deadline` reports the limit. A test that does not end is killed at its
 // limit and reported with its name and elapsed time, after SIGQUIT has made it print the stacks of its goroutines, and the next test
 // still runs. A package of the pattern with no test files does
 // not decide the run; the run fails when no package has test files or no test matches. The build reads the environment of the
@@ -64,7 +65,7 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
     for (const item of listed) occurrences.set(item.name, (occurrences.get(item.name) ?? 0) + 1);
     const tests = listed.map((item) => ({
       name: occurrences.get(item.name) > 1 ? `${item.importPath} ${item.name}` : item.name,
-      command: item.binary, args: ['-test.run', `^${item.name}$`, '-test.v', '-test.count=1'], cwd: item.cwd,
+      command: item.binary, args: ['-test.run', `^${item.name}$`, '-test.v', '-test.count=1', `-test.timeout=${timeoutMs}ms`], cwd: item.cwd,
       passedAs: item.name, timeoutMs, stackSignal: GO_STACK_SIGNAL,
     }));
     for (let run = 1; run <= count; run += 1) {
