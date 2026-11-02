@@ -169,9 +169,6 @@ impl Platform for Windows {
     fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String> {
         unsupported::set_alpha(view, alpha)
     }
-    fn kill_web_content_process(&self, view: Handle) -> Result<(), String> {
-        unsupported::kill_web_content_process(view)
-    }
     fn sample_threads(&self, path: &std::path::Path) -> Result<(), String> {
         unsupported::sample_threads(path)
     }

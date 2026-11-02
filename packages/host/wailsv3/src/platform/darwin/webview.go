@@ -17,7 +17,6 @@ extern void sp_surface_set_window_overlays(void *mainWebview, const double *rect
 
 // The native calls of this file run on the main thread (main_thread.h).
 static void *main_sp_window_main_webview(void *window) { return ON_MAIN(void *, sp_window_main_webview(window)); }
-static bool main_sp_webview_kill_content_process(void *view) { return ON_MAIN(bool, sp_webview_kill_content_process(view)); }
 static bool main_sp_webview_collect_garbage(void *view) { return ON_MAIN(bool, sp_webview_collect_garbage(view)); }
 static void main_webviewGetFrame(void *view, double *out) { wailsRunOnMain(^{ webviewGetFrame(view, out); }); }
 static void *main_sp_surface_create(void *main) { return ON_MAIN(void *, sp_surface_create(main)); }
@@ -243,13 +242,6 @@ func (implementation) MainWebview(window unsafe.Pointer) (unsafe.Pointer, error)
 		return nil, fmt.Errorf("the window has no registered app DOM webview")
 	}
 	return main, nil
-}
-
-func (implementation) KillWebContentProcess(view unsafe.Pointer) error {
-	if bool(C.main_sp_webview_kill_content_process(view)) {
-		return nil
-	}
-	return fmt.Errorf("the WebContent process cannot be terminated")
 }
 
 func (implementation) CollectGarbage(view unsafe.Pointer) error {

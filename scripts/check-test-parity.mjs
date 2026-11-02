@@ -3934,6 +3934,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F335-8",
+    implementation: [
+      { file: "packages/host/wailsv3/src/host.go", symbol: "OnShutdown: func() {" },
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "tauri::WindowEvent::CloseRequested { .. } =>" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/application_end_processes_test.m", id: "the native library offers no operation that kills a WebContent process" },
+      { file: "native/darwin/tests/application_end_processes_test.m", id: "the WebContent process %d ends after its application ends" },
+    ],
+    expected: "An application that ends through its termination command leaves no WebContent process, and no host kills a WebContent process.",
+    levels: ["unit"],
+  },
+  {
     id: "F145.10.2",
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_webview_log_process_end" },

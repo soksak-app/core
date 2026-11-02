@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F335-8: host는 애플리케이션 종료 때 창마다 WebContent process를 죽이지 않는다. WebKit은 애플리케이션 프로세스가 끝날 때 그 WebContent process를 끝내며, `application_end_processes_test`가 종료 명령으로 끝나는 애플리케이션이 process를 남기지 않는지와 native library에 kill 동작이 없는지 검사한다.
 - F380: `make e2e`의 시작 단계는 `@parcel/watcher` watch가 활성화된 뒤와 변경마다 설정 폴더를 읽어, watch가 시작되기 전에 쓰인 `endpoint.json`을 찾는다. 애플리케이션이 먼저 끝나면 오류로 끝나고, test는 가짜 애플리케이션을 `t.after`에서 끝낸다.
 - F335-6: `document_processes_test`의 stall 기록은 sample한 process마다 열린 파일과, 열린 Metal compiler cache 파일을 쥔 모든 process를 남기고 그 process들도 sample한다.
 - F335-5: `document_processes_test`의 stall 기록은 load가 끝나지 않은 region마다 WebContent process를 sample해서, main thread 호출 안에서 log가 멈춘 process가 그 호출을 보이게 한다.

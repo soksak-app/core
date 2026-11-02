@@ -29,8 +29,6 @@ void webviewSetFrame(void *webview, double x, double y, double width, double hei
 void webviewGetFrame(void *webview, double *rect);
 void webviewSetSurfaceHidden(void *webview, bool hidden);
 void webviewSetSurfaceAlpha(void *webview, double alpha);
-// Terminates the current WebContent process. Called so that quitting the application leaves no WebKit child process.
-bool sp_webview_kill_content_process(void *webview);
 // Records that the WebContent process of a web view ended as `error native <kind>: web content process terminated: <address>`.
 // Called from the process termination notification of the navigation delegate of web views that the framework did not create (surface, modal).
 void sp_webview_log_process_end(void *webview, const char *kind);

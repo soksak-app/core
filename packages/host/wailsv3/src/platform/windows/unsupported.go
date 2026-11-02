@@ -90,9 +90,6 @@ func (implementation) FileDrop(unsafe.Pointer, func(string)) error {
 func (implementation) MainWebview(unsafe.Pointer) (unsafe.Pointer, error) {
 	return nil, unsupported("main webview identity")
 }
-func (implementation) KillWebContentProcess(unsafe.Pointer) error {
-	return unsupported("WebContent process termination")
-}
 func (implementation) SampleThreads(string) error {
 	return unsupported("thread sampling")
 }

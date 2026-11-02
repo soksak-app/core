@@ -161,10 +161,6 @@ pub fn set_alpha(_view: &PlatformWebview, _alpha: f64) -> Result<(), String> {
     missing("webview alpha")
 }
 
-pub fn kill_web_content_process(_view: Handle) -> Result<(), String> {
-    missing("WebContent process termination")
-}
-
 pub fn sample_threads(_path: &std::path::Path) -> Result<(), String> {
     missing("thread sampling")
 }

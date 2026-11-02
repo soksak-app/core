@@ -103,8 +103,9 @@ int main(void) { @autoreleasepool {
     SPLoaded *first = load(view, @"<p id='first'>first</p>");
 
     NSString *ended = capturedRecords(^{
-        check(sp_webview_kill_content_process(view),
-              @"the WebContent process termination operation is available");
+        // The end of the WebContent process is injected through WebKit, so the check observes the record of an end that the
+        // application did not request.
+        [view _killWebContentProcessAndResetState];
         until(^BOOL { return first.terminated; });
     });
     check([ended containsString:@" error native surface webview: web content process terminated: about:blank"],

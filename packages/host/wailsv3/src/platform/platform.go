@@ -343,9 +343,6 @@ type Platform interface {
 	// (page coordinates). Call it on the UI thread.
 	FileDrop(main unsafe.Pointer, dropped func(json string)) error
 	MainWebview(window unsafe.Pointer) (unsafe.Pointer, error)
-	// KillWebContentProcess ends the current WebContent process. The application termination calls it so that WebKit child processes are not left
-	// behind.
-	KillWebContentProcess(view unsafe.Pointer) error
 	// SampleThreads writes the stacks of the threads of this process, sampled for one second, into the file path. The watch of
 	// the main thread calls it for a stall (docs/spec/logging.md, stalls).
 	SampleThreads(path string) error

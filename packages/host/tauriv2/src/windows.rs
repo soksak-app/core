@@ -786,16 +786,6 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             // removed from the list.
             context.closing.store(true, Ordering::Relaxed);
             context.documents.views().forget_all();
-            // While the application quits, the web process of the window is killed: AppKit keeps XPC services alive
-            // longer than their client, so the WebContent process would outlive the application
-            // (docs/spec/hosts.md#process-lifecycle).
-            // The termination takes the handle of the main webview and runs outside `with_webview`
-            // (docs/spec/hosts.md#process-lifecycle).
-            if host.state::<Windows>().quit.active()
-                && let Err(error) = platform.kill_web_content_process(main)
-            {
-                log_error("web content kill", error);
-            }
         }
         tauri::WindowEvent::Destroyed => {
             context.documents.views().forget_all();

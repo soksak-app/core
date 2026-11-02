@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F335-8: The hosts no longer kill the WebContent process of each window at application termination; WebKit ends the WebContent processes of an application when its process ends, and `application_end_processes_test` checks that an application ending through its termination command leaves none and that the native library offers no kill operation.
 - F380: The start step of `make e2e` reads the configuration folder once its `@parcel/watcher` watch is active and at each change, so it finds an `endpoint.json` written before the watch started; it ends with an error when the application exits first, and the tests end their fake applications in `t.after`.
 - F335-6: The stall record of `document_processes_test` lists the open files of each sampled process and every process that holds an open Metal compiler cache file, and samples those processes.
 - F335-5: The stall record of `document_processes_test` samples the WebContent process of each region whose load has not ended, so a process whose log stops inside a main-thread call shows that call.

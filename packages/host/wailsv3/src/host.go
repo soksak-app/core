@@ -202,25 +202,6 @@ func Run(assets fs.FS, options Options) error {
 		OnShutdown: func() {
 			RecordAppEvent("exit")
 			EmitClosed("exit", nil)
-			// Kills the web processes of all windows before exit. AppKit keeps XPC services alive
-			// longer than their clients (V5-105), so unless they are killed, the WebContent, GPU and Networking processes
-			// remain after the application exits and occupy memory.
-			host.mu.Lock()
-			shutdown := make([]*application.WebviewWindow, 0, len(host.windows))
-			for _, s := range host.windows {
-				shutdown = append(shutdown, s.window)
-			}
-			host.mu.Unlock()
-			for _, win := range shutdown {
-				window := win
-				application.InvokeSync(func() {
-					if main, err := system.MainWebview(window.NativeWindow()); err == nil {
-						if err := system.KillWebContentProcess(main); err != nil {
-							LogError("web content kill", err)
-						}
-					}
-				})
-			}
 			// An application update or a relaunch keeps the persistent services running for the application that starts next.
 			update := host.takeUpdate()
 			if update != nil {
