@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F394: The registry specification names the release files that plugins and sidecars publish.
 - F393: The workspace registry declares the plugin `term`.
 - F392: The workspace registry declares the sidecar `@soksak/sidecar-alacritty`.
 - F391: A sidecar may serve its screens only through `screen.read`, and a page writes a frame record for each reply it applies.

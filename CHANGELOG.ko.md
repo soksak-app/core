@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F394: registry 명세는 plugin과 sidecar가 게시하는 release 파일 이름을 적는다.
 - F393: workspace registry가 plugin `term`을 선언한다.
 - F392: workspace registry가 sidecar `@soksak/sidecar-alacritty`를 선언한다.
 - F391: 사이드카는 화면을 `screen.read`로만 제공할 수 있고, 페이지는 적용한 응답마다 frame 기록을 쓴다.
