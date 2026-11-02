@@ -62,7 +62,6 @@
 #import <WebKit/WebKit.h>
 #import <libproc.h>
 #import <sys/sysctl.h>
-#import <signal.h>
 #import <errno.h>
 #import <string.h>
 #import <stdlib.h>
@@ -260,9 +259,11 @@ static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
         // The window server delivers the occlusion state of a window as an application event, so the pump dequeues and
         // sends events; a run of the run loop alone leaves occlusionState and the visibility of each page at the state
         // of the window's creation.
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-            inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
+        @autoreleasepool {
+            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
+                inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (event) [NSApp sendEvent:event];
+        }
     }
     return done();
 }
@@ -276,18 +277,17 @@ static void waitUntil(double t) {
 static void failStep(NSString *step, NSString *reason, pid_t process) {
     fprintf(stderr, "FAIL: step %s: %s\n", step.UTF8String, reason.UTF8String);
     fprintf(stderr, "  state: pid=%d\n", process);
-    if (process != 0) kill(process, SIGKILL);
+    // The WebContent process of the view ends with the process of the benchmark.
     exit(1);
 }
 
-// Ends a WebContent process and waits until it is gone. Returns NO when the process cannot be ended.
-static BOOL endProcess(pid_t process, NSString *step) {
-    if (kill(process, SIGKILL) != 0 && errno != ESRCH) {
-        fprintf(stderr, "FAIL: step %s: the WebContent process %d cannot be ended: %s\n", step.UTF8String, process, strerror(errno));
-        return NO;
-    }
-    if (!pumpUntil(10, ^BOOL { return kill(process, 0) != 0; })) {
-        fprintf(stderr, "FAIL: step %s: the WebContent process %d remains after 10 seconds\n", step.UTF8String, process);
+// Waits until the WebContent process of a closed view has ended. Returns NO when it remains 30 seconds after the close.
+static BOOL untilProcessEnds(pid_t process, NSString *step) {
+    if (!pumpUntil(30, ^BOOL {
+            struct proc_bsdinfo info;
+            return proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+        })) {
+        fprintf(stderr, "FAIL: step %s: the WebContent process %d remains 30 seconds after its view closed\n", step.UTF8String, process);
         return NO;
     }
     return YES;
@@ -562,6 +562,9 @@ typedef struct {
 static OpenView openVariant(const Variant *spec, NSWindow *window, NSView *content, NSURL *address,
     WKWebsiteDataStore *persistentStore, NSString *documentDirectory, NSString *step) {
     OpenView opened = { nil, nil, NULL, NULL, NO };
+    // The objects of the creation are made in their own pool and the view keeps only its own references, so the close of the
+    // view releases it and its page.
+    @autoreleasepool {
     if (spec->documentBrowserCache) {
         WKContextSetCacheModel(NULL, kWKCacheModelDocumentBrowser);
         if (WKContextGetCacheModel(NULL) != kWKCacheModelDocumentBrowser) failStep(step, @"the cache model is not DocumentBrowser", 0);
@@ -569,7 +572,7 @@ static OpenView openVariant(const Variant *spec, NSWindow *window, NSView *conte
     }
     CGRect frame = NSMakeRect(kMarginLeft, kWindowHeight - kMarginTop - kRegionHeight, kRegionWidth, kRegionHeight);
     if (!spec->region) {
-        opened.view = [[[WKWebView alloc] initWithFrame:frame configuration:plainConfiguration(spec, persistentStore)] autorelease];
+        opened.view = [[WKWebView alloc] initWithFrame:frame configuration:plainConfiguration(spec, persistentStore)];
         [content addSubview:opened.view];
         if (spec->appearance) opened.view.appearance = content.effectiveAppearance;
         if (spec->pageZoom) opened.view.pageZoom = 1;
@@ -577,7 +580,7 @@ static OpenView openVariant(const Variant *spec, NSWindow *window, NSView *conte
         [opened.view loadRequest:[NSURLRequest requestWithURL:address]];
     } else {
         // The surface is the main web view of the application: the document region is placed inside it.
-        opened.mainView = [[[WKWebView alloc] initWithFrame:content.bounds] autorelease];
+        opened.mainView = [[WKWebView alloc] initWithFrame:content.bounds];
         opened.mainView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         [content addSubview:opened.mainView];
         opened.surface = sp_surface_create(opened.mainView);
@@ -598,25 +601,34 @@ static OpenView openVariant(const Variant *spec, NSWindow *window, NSView *conte
             failStep(step, @"the document refuses the address", opened.view._webProcessIdentifier);
         }
     }
+    }
     return opened;
 }
 
-// Closes the view and its surface, and ends their WebContent processes. The processes are read before the views close.
-// WebKit keeps an idle WebContent process after its last view closes, so the benchmark ends each process it started.
+// Closes the view and its surface and waits until their WebContent processes end, as WebKit ends a process that serves no
+// page. The processes are read before the views close.
 static void closeOpenView(OpenView *opened, NSString *step) {
     pid_t process = opened->view._webProcessIdentifier;
     pid_t mainProcess = opened->mainView ? opened->mainView._webProcessIdentifier : 0;
-    if (opened->document) {
-        sp_document_close(opened->document);
-    } else {
-        [opened->view removeFromSuperview];
+    @autoreleasepool {
+        if (opened->document) {
+            sp_document_close(opened->document);
+        } else {
+            [opened->view removeFromSuperview];
+            [opened->view release];
+        }
+        if (opened->surface) {
+            sp_surface_close(opened->surface);
+            [opened->mainView removeFromSuperview];
+            [opened->mainView release];
+        }
+        opened->view = nil;
+        opened->mainView = nil;
+        opened->document = NULL;
+        opened->surface = NULL;
     }
-    if (opened->surface) {
-        sp_surface_close(opened->surface);
-        [opened->mainView removeFromSuperview];
-    }
-    if (!endProcess(process, step)) exit(1);
-    if (mainProcess != 0 && mainProcess != process && !endProcess(mainProcess, step)) exit(1);
+    if (!untilProcessEnds(process, step)) exit(1);
+    if (mainProcess != 0 && mainProcess != process && !untilProcessEnds(mainProcess, step)) exit(1);
     if (opened->cacheModelSet) {
         WKContextSetCacheModel(NULL, kWKCacheModelPrimaryWebBrowser);
         if (WKContextGetCacheModel(NULL) != kWKCacheModelPrimaryWebBrowser) failStep(step, @"the cache model is not PrimaryWebBrowser", 0);

@@ -15,8 +15,6 @@
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
-#import <signal.h>
-#import <errno.h>
 #import <stdlib.h>
 #import <string.h>
 #import <sys/sysctl.h>
@@ -54,9 +52,11 @@ static void check(BOOL condition, NSString *message) {
 static void pump(NSTimeInterval seconds) {
     NSDate *end = [NSDate dateWithTimeIntervalSinceNow:seconds];
     do {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-            inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
+        @autoreleasepool {
+            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
+                inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (event) [NSApp sendEvent:event];
+        }
     } while ([end timeIntervalSinceNow] > 0);
 }
 
@@ -75,23 +75,29 @@ static long physicalFootprint(pid_t pid) {
 
 static void changed(void *context, const char *text) {}
 
-// Ends the WebContent processes of the current scenario and closes its document region, surface and window.
+// Closes the document region, surface and window of the current scenario.
 static void closeScenario(void) {
     if (document) sp_document_close(document);
     document = NULL;
     if (surface) sp_surface_close(surface);
     surface = NULL;
-    for (NSNumber *pid in processes) {
-        pid_t process = pid.intValue;
-        if (kill(process, SIGKILL) != 0 && errno != ESRCH) {
-            fprintf(stderr, "FAIL: cannot end process %d: %s\n", process, strerror(errno));
-            failures++;
-        }
-    }
-    [processes removeAllObjects];
     if (window) [window close];
     window = nil;
     view = nil;
+}
+
+// Checks that each WebContent process of the scenario ends after the scenario closed its views and its pool ended, as
+// WebKit ends a process that serves no page, and forgets the processes.
+static void checkScenarioProcessesEnd(void) {
+    for (NSNumber *pid in processes) {
+        NSDate *start = [NSDate date];
+        BOOL ended = pumpUntil(30, ^BOOL {
+            struct proc_bsdinfo info;
+            return proc_pidinfo(pid.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+        });
+        check(ended, [NSString stringWithFormat:@"the WebContent process %d ends after its scenario closes (%.3f s)", pid.intValue, -start.timeIntervalSinceNow]);
+    }
+    [processes removeAllObjects];
 }
 
 // Runs `sudo -n /usr/bin/memory_pressure -S -l <level>` and waits for its end. Returns YES when it exits with status 0.
@@ -362,7 +368,10 @@ int main(void) { @autoreleasepool {
 
     listener = serve();
 
-    // Document region of the test frame.
+    // Each scenario runs in its own pool, as each turn of the run loop of the applications does, so its closed views keep no
+    // autoreleased reference after it. Document region of the test frame.
+    Drop region;
+    @autoreleasepool {
     WKWebView *main = makeWindow();
     surface = sp_surface_create(main);
     if (!surface) fail(@"surface", @"a logical surface is not created for the document");
@@ -374,13 +383,19 @@ int main(void) { @autoreleasepool {
     if (!document) fail(@"document", @"a document view is not created inside the surface");
     view = (WKWebView *)document;
     sp_document_place(document, 10, 20, 30, 40, true);
-    Drop region = runScenario(@"region");
+    region = runScenario(@"region");
     closeScenario();
+    }
+    checkScenarioProcessesEnd();
 
     // Plain web view of the same frame and the default configuration.
+    Drop plain;
+    @autoreleasepool {
     view = makeWindow();
-    Drop plain = runScenario(@"plain");
+    plain = runScenario(@"plain");
     closeScenario();
+    }
+    checkScenarioProcessesEnd();
 
     long regionDrop = region.before - region.after;
     long plainDrop = plain.before - plain.after;

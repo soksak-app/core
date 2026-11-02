@@ -6,8 +6,6 @@
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
-#import <signal.h>
-#import <errno.h>
 #import <string.h>
 #import "support/temporary_folder.h"
 #import "document_view.h"
@@ -37,7 +35,9 @@ static double nowSeconds(void) {
 static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        @autoreleasepool {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        }
     }
     return done();
 }
@@ -57,7 +57,8 @@ static void changed(void *context, const char *text) {
     latest = [[NSJSONSerialization JSONObjectWithData:data options:0 error:nil] retain];
 }
 
-// The WebContent processes that the document region used, in the order they were first seen. They end at cleanup.
+// The WebContent processes that the document region used, in the order they were first seen. They end when the document
+// closes.
 static NSMutableArray<NSNumber *> *processes;
 static NSString *storeDirectory;
 static WKWebView *view;
@@ -66,12 +67,11 @@ static void *surface;
 static NSWindow *window;
 static nw_listener_t listener;
 
-// Ends the processes of the region and removes its store, then exits with status 1.
+// Closes the document, whose WebContent processes end with the process of the test, then exits with status 1; the store
+// is removed at exit.
 static void cleanupAndExit(void) {
-    for (NSNumber *pid in processes) {
-        pid_t process = pid.intValue;
-        if (kill(process, SIGKILL) != 0 && errno != ESRCH) fprintf(stderr, "  cannot end process %d: %s\n", process, strerror(errno));
-    }
+    if (document) sp_document_close(document);
+    document = NULL;
     exit(1);
 }
 
@@ -208,6 +208,9 @@ int main(void) { @autoreleasepool {
     fprintf(stdout, "page 1 image bytes: %lu\n", (unsigned long)imageBody(1).length);
     fflush(stdout);
 
+    // The steps run in their own pool, as each turn of the run loop of the applications does, so the closed document keeps no
+    // autoreleased reference after it.
+    @autoreleasepool {
     window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
@@ -274,23 +277,24 @@ int main(void) { @autoreleasepool {
             at60 / 1024, at20 / 1024, ratio]);
     check(!NSApp.isActive, @"the application stays inactive");
 
-    // Cleanup: the document, its surface and window, the server, the store, and every WebContent process that the region used.
+    // Cleanup: the document, its surface and window, and the server; the store is removed at exit.
     sp_document_close(document);
-    for (NSNumber *pid in processes) {
-        pid_t process = pid.intValue;
-        if (kill(process, SIGKILL) != 0 && errno != ESRCH) {
-            fprintf(stderr, "FAIL: the WebContent process %d cannot be ended: %s\n", process, strerror(errno));
-            failures++;
-        }
-        if (!pumpUntil(10, ^BOOL { return kill(process, 0) != 0; })) {
-            fprintf(stderr, "FAIL: the WebContent process %d remains after 10 seconds\n", process);
-            failures++;
-        }
-    }
-    fprintf(stdout, "closed document processes: %s\n", [processes componentsJoinedByString:@" "].UTF8String);
+    document = NULL;
+    view = nil;
     sp_surface_close(surface);
     [window close];
     [window release];
+    }
+    // The close of the document is the end of its page, so WebKit ends every WebContent process that the region used.
+    fprintf(stdout, "closed document processes: %s\n", [processes componentsJoinedByString:@" "].UTF8String);
+    for (NSNumber *pid in processes) {
+        NSDate *start = [NSDate date];
+        BOOL ended = pumpUntil(30, ^BOOL {
+            struct proc_bsdinfo info;
+            return proc_pidinfo(pid.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+        });
+        check(ended, [NSString stringWithFormat:@"the WebContent process %d ends after the document closes (%.3f s)", pid.intValue, -start.timeIntervalSinceNow]);
+    }
     nw_listener_cancel(listener);
     printf("%s\n", failures ? "FAIL: document_caches_test" : "PASS: document_caches_test");
     return failures ? 1 : 0;

@@ -4,8 +4,7 @@
 // starts the next variant. The benchmark prints the numbers and asserts nothing.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
-#import <signal.h>
-#import <errno.h>
+#import <libproc.h>
 #import <string.h>
 #import <sys/types.h>
 #import "private/webkit.h"
@@ -51,7 +50,9 @@ static double nowSeconds(void) {
 static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        @autoreleasepool {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        }
     }
     return done();
 }
@@ -61,7 +62,7 @@ static void failStep(NSString *step, NSString *reason, WKWebView *view) {
     pid_t process = view ? view._webProcessIdentifier : 0;
     fprintf(stderr, "FAIL: step %s: %s\n", step.UTF8String, reason.UTF8String);
     fprintf(stderr, "  state: pid=%d\n", process);
-    if (process != 0) kill(process, SIGKILL);
+    // The WebContent process of the view ends with the process of the benchmark.
     exit(1);
 }
 
@@ -182,14 +183,14 @@ static long measureVariant(NSView *content, const Variant *variant, int sample) 
             failStep(step, @"footprint did not report the row Owned physical footprint (unmapped) (graphics)", view);
         }
 
-        // The view ends with this pool. The WebContent process of the view is ended here, because WebKit keeps an idle process.
+        // The view ends with this pool, and WebKit then ends its WebContent process, which serves no other page.
         [view removeFromSuperview];
-        if (kill(process, SIGKILL) != 0 && errno != ESRCH) {
-            failStep(step, [NSString stringWithFormat:@"the WebContent process %d cannot be ended: %s", process, strerror(errno)], nil);
-        }
     }
-    if (!pumpUntil(10, ^BOOL { return kill(process, 0) != 0; })) {
-        fprintf(stderr, "FAIL: step %s: the WebContent process %d remains after 10 seconds\n", step.UTF8String, process);
+    if (!pumpUntil(30, ^BOOL {
+            struct proc_bsdinfo info;
+            return proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+        })) {
+        fprintf(stderr, "FAIL: step %s: the WebContent process %d remains 30 seconds after its view closed\n", step.UTF8String, process);
         exit(1);
     }
     fprintf(stdout, "end %s sample %d elapsed %.3f s\n", variant->name, sample, nowSeconds() - started);

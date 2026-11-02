@@ -8,8 +8,7 @@
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
-#import <errno.h>
-#import <signal.h>
+#import <libproc.h>
 #import <string.h>
 #import "support/temporary_folder.h"
 #import "document_view.h"
@@ -32,7 +31,9 @@ static void check(BOOL condition, NSString *message) {
 static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        @autoreleasepool {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        }
     }
     return done();
 }
@@ -52,7 +53,9 @@ static void changed(void *context, const char *text) {
 static void failStep(NSString *step, NSString *reason) {
     fprintf(stderr, "FAIL: step %s: %s (title=%s loading=%s url=%s)\n", step.UTF8String, reason.UTF8String,
         [latest[@"title"] description].UTF8String, [latest[@"loading"] description].UTF8String, [latest[@"url"] description].UTF8String);
-    for (NSNumber *pid in processes) kill(pid.intValue, SIGKILL);
+    // The close of the document ends its page; its WebContent processes end with the process of the test.
+    if (document) sp_document_close(document);
+    document = NULL;
     exit(1);
 }
 
@@ -159,6 +162,9 @@ int main(void) { @autoreleasepool {
     NSString *page1 = [base stringByAppendingString:@"page/1"];
     NSString *page2 = [base stringByAppendingString:@"page/2"];
 
+    // The steps run in their own pool, as each turn of the run loop of the applications does, so the closed document keeps no
+    // autoreleased reference after it.
+    @autoreleasepool {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
@@ -248,15 +254,22 @@ int main(void) { @autoreleasepool {
     check(!NSApp.isActive, @"the application stays inactive");
 
     sp_document_close(document);
-    for (NSNumber *pid in processes) {
-        if (kill(pid.intValue, SIGKILL) != 0 && errno != ESRCH) {
-            fprintf(stderr, "FAIL: the WebContent process %d cannot be ended: %s\n", pid.intValue, strerror(errno));
-            failures++;
-        }
-    }
+    document = NULL;
+    view = nil;
     sp_surface_close(surface);
     [window close];
     [window release];
+    }
+    // The close of the document is the end of its page, so WebKit ends each WebContent process that served the document,
+    // the processes of the back-forward cache included.
+    for (NSNumber *pid in processes) {
+        NSDate *start = [NSDate date];
+        BOOL ended = pumpUntil(30, ^BOOL {
+            struct proc_bsdinfo info;
+            return proc_pidinfo(pid.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+        });
+        check(ended, [NSString stringWithFormat:@"the WebContent process %d ends after the document closes (%.3f s)", pid.intValue, -start.timeIntervalSinceNow]);
+    }
     nw_listener_cancel(listener);
     printf("%s\n", failures ? "FAIL: document_backforward_test" : "PASS: document_backforward_test");
     return failures ? 1 : 0;

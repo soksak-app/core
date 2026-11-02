@@ -6,8 +6,6 @@
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
-#import <signal.h>
-#import <errno.h>
 #import <string.h>
 #import <sys/types.h>
 #import "support/temporary_folder.h"
@@ -52,7 +50,9 @@ static double nowSeconds(void) {
 static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        @autoreleasepool {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        }
     }
     return done();
 }
@@ -163,6 +163,10 @@ int main(void) { @autoreleasepool {
     nw_listener_t listener = serve();
     NSString *base = [NSString stringWithFormat:@"http://127.0.0.1:%d/", nw_listener_get_port(listener)];
 
+    // The steps run in their own pool, as each turn of the run loop of the applications does, so the closed document keeps no
+    // autoreleased reference after it.
+    pid_t process = 0;
+    @autoreleasepool {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
@@ -226,23 +230,22 @@ int main(void) { @autoreleasepool {
     fprintf(stdout, "report_bytes_per_change=%.1f\n", bytesPerChange);
     fprintf(stdout, "reports_per_change=%.3f\n", reportsPerChange);
 
-    // Every object that the benchmark started ends here: the document view, its WebContent process, the surface, the window,
-    // the server and the store.
-    pid_t process = view._webProcessIdentifier;
+    // Every object that the benchmark started ends here: the document view, the surface, the window, the server and the
+    // store; WebKit then ends the WebContent process of the closed document.
+    process = view._webProcessIdentifier;
     sp_document_close(document);
-    // WebKit keeps an idle WebContent process after its last view closes, so the benchmark ends the process it started.
-    if (kill(process, SIGKILL) != 0 && errno != ESRCH) {
-        fprintf(stderr, "FAIL: the WebContent process %d cannot be ended: %s\n", process, strerror(errno));
-        return 1;
-    }
-    if (!pumpUntil(10, ^BOOL { return kill(process, 0) != 0; })) {
-        fprintf(stderr, "FAIL: the WebContent process %d of the closed document remains after 10 seconds\n", process);
-        return 1;
-    }
-    fprintf(stdout, "closed document process %d ended\n", process);
     sp_surface_close(surface);
     [window close];
     [window release];
+    }
+    if (!pumpUntil(30, ^BOOL {
+            struct proc_bsdinfo info;
+            return proc_pidinfo(process, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+        })) {
+        fprintf(stderr, "FAIL: the WebContent process %d of the closed document remains 30 seconds after the close\n", process);
+        return 1;
+    }
+    fprintf(stdout, "closed document process %d ended\n", process);
     nw_listener_cancel(listener);
     fprintf(stdout, "end benchmark elapsed %.3f s\n", nowSeconds() - started);
     fflush(stdout);
