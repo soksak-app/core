@@ -177,6 +177,9 @@ static int stallRecordWebKitLines = 0;
 static int stallRecordSampleTargets = 0;
 static int stallRecordSamples = 0;
 
+// The number of sampled processes whose open files the stall records listed.
+static int stallRecordFileListings = 0;
+
 // The time at which the test started; the stall record writes the WebKit log from this time.
 static NSDate *testStart;
 
@@ -207,7 +210,10 @@ static NSString *writeCommand(NSString *path, NSArray<NSString *> *arguments) {
 // request, its policy decision and the services that the decision waits for) to that log with the page and navigation
 // identifiers, so the log names the last step that a region that does not load reached. The record also samples the
 // committed and provisional WebContent process of each region that has not ended its load, or of every region when all is
-// set: a WebContent process whose log ends inside a call of the main thread shows that call in its stack (F335-2).
+// set: a WebContent process whose log ends inside a call of the main thread shows that call in its stack (F335-2). The main
+// thread of a region that did not load waited in flock of a Metal compiler cache file, so the record lists the open files of
+// each sampled process and, for each open Metal cache file, every process that has the file open with its lock, and samples
+// those processes too.
 static void writeStallRecord(const Region *regions, int count, BOOL all) {
     NSMutableArray<NSNumber *> *samples = [NSMutableArray array];
     NSMutableArray<NSString *> *pids = [NSMutableArray array];
@@ -243,6 +249,27 @@ static void writeStallRecord(const Region *regions, int count, BOOL all) {
     NSString *log = writeCommand(@"/usr/bin/log", @[ @"show", @"--info", @"--style", @"compact", @"--start", [format stringFromDate:testStart], @"--predicate", predicate ]);
     for (NSString *line in [log componentsSeparatedByString:@"\n"]) {
         if ([line containsString:@"[com.apple.WebKit:"]) stallRecordWebKitLines++;
+    }
+    NSMutableArray<NSString *> *metalFiles = [NSMutableArray array];
+    for (NSNumber *pid in samples) {
+        NSString *files = writeCommand(@"/usr/sbin/lsof", @[ @"-n", @"-P", @"-p", pid.stringValue ]);
+        if ([files containsString:@" txt "]) stallRecordFileListings++;
+        for (NSString *line in [files componentsSeparatedByString:@"\n"]) {
+            NSRange path = [line rangeOfString:@" /"];
+            if (path.location == NSNotFound || ![line containsString:@"com.apple.metal"]) continue;
+            NSString *file = [line substringFromIndex:path.location + 1];
+            if (![metalFiles containsObject:file]) [metalFiles addObject:file];
+        }
+    }
+    for (NSString *file in metalFiles) {
+        NSString *holders = writeCommand(@"/usr/sbin/lsof", @[ @"-n", @"-P", file ]);
+        for (NSString *line in [holders componentsSeparatedByString:@"\n"]) {
+            NSArray<NSString *> *fields = [line componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+            fields = [fields filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"length > 0"]];
+            if (fields.count < 2 || [fields[1] intValue] <= 0) continue;
+            NSNumber *holder = @([fields[1] intValue]);
+            if (![samples containsObject:holder]) [samples addObject:holder];
+        }
     }
     stallRecordSampleTargets += (int)samples.count;
     for (NSNumber *pid in samples) {
@@ -406,6 +433,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(stallRecordRegions == 16, [NSString stringWithFormat:@"the 4 stall records of both scenarios name 16 regions (named %d)", stallRecordRegions]);
         check(stallRecordSampleTargets >= 8 && stallRecordSamples == stallRecordSampleTargets,
             [NSString stringWithFormat:@"the stall records sample the WebContent processes of the regions (%d of %d sampled)", stallRecordSamples, stallRecordSampleTargets]);
+        check(stallRecordFileListings >= 8, [NSString stringWithFormat:@"the stall records list the open files of the sampled processes (%d listed)", stallRecordFileListings]);
         check(stallRecordWebKitLines > 0, [NSString stringWithFormat:@"the stall records write the WebKit log of the loads (%d lines)", stallRecordWebKitLines]);
     }
 

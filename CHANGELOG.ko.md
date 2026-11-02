@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F335-6: `document_processes_test`의 stall 기록은 sample한 process마다 열린 파일과, 열린 Metal compiler cache 파일을 쥔 모든 process를 남기고 그 process들도 sample한다.
 - F335-5: `document_processes_test`의 stall 기록은 load가 끝나지 않은 region마다 WebContent process를 sample해서, main thread 호출 안에서 log가 멈춘 process가 그 호출을 보이게 한다.
 - F335-4: `document_processes_test`의 stall 기록은 provisional process의 sample 대신 test 시작 이후 test, network, WebContent process의 WebKit log를 써서, 기다리는 navigation 단계를 밝힌다.
 - F335-3: `document_processes_test`는 scenario의 load가 30초 뒤에도 끝나지 않으면 stall 기록을 쓴다. region마다 commit된 process, provisional process, network process, pool의 process 수, process들의 `ps` 상태, 아직 로드 중인 region의 provisional process sample을 남긴다.
