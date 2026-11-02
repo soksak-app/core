@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F325-3: The Tauri host tests of the release checks took 583 s and 482 s with line tables as debug information, against 689 s before; the release run took 13 minutes 23 seconds.
 - F311-1: The Go test runners pass `-test.timeout` of each test's limit, so `t.Deadline` reports it and a wait for a crash report that the system does not save fails with its message.
 - F335: `document_processes_test` is the benchmark `make -C native/darwin benchmark-document-processes`; it measures process counts and footprints and is no part of the unit suite. F335-9: the document tests and benchmarks end their WebContent processes through the close of their views instead of `SIGKILL`.
 - F335-10: A stall of `document_processes_test` closes the regions whose load ended after 30 seconds and records whether the waiting region continues after their WebContent processes end; `--unanswered-region=N` holds the request of a region at the test server and checks that path.

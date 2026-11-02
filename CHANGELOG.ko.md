@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F325-3: debug 정보를 line table로 둔 release 검사의 Tauri host test는 이전 689초에 대해 583초와 482초가 걸렸고, release run은 13분 23초가 걸렸다.
 - F311-1: Go test runner는 각 test의 제한을 `-test.timeout`으로 넘기므로 `t.Deadline`이 그 제한을 보고하고, system이 저장하지 않는 crash report를 기다리는 대기는 자기 메시지로 실패한다.
 - F335: `document_processes_test`는 benchmark `make -C native/darwin benchmark-document-processes`다. process 수와 footprint를 측정하며 unit suite에 속하지 않는다. F335-9: document test와 benchmark는 WebContent process를 `SIGKILL` 대신 view를 닫아 끝낸다.
 - F335-10: `document_processes_test`의 멈춤은 30초 뒤 load를 끝낸 region을 닫고, 그 WebContent process가 끝난 뒤 기다리는 region이 진행하는지 기록한다. `--unanswered-region=N`은 test server에서 region의 요청을 붙잡아 그 경로를 검사한다.
