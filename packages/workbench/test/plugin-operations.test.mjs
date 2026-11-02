@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { createPluginOperations, pluginRows } from "../plugin-operations.js";
 
 const loaded = [
-  { id: "term", name: "터미널", description: "터미널 표면.", version: "0.1.0", dependencies: {} },
+  { id: "tty", name: "터미널", description: "터미널 표면.", version: "0.1.0", dependencies: {} },
   { id: "notes", name: "노트", description: "노트 목록.", version: "1.0.0", dependencies: {} },
   { id: "gone", name: "지운 것", description: "지운 플러그인.", version: "1.0.0", dependencies: {} },
 ];
@@ -14,12 +14,12 @@ const entry = (id, name, versions) => ({ id, package: `plugin-${id}`, name, desc
 const state = {
   core: "0.0.24",
   registry: "file:///registry/index.json",
-  index: { plugins: [entry("term", "Terminal", ["0.1.0", "0.10.0", "0.9.0"]), entry("db", "DB", ["2.0.0"]), entry("off", "Off", ["1.0.0"])],
+  index: { plugins: [entry("tty", "Terminal", ["0.1.0", "0.10.0", "0.9.0"]), entry("db", "DB", ["2.0.0"]), entry("off", "Off", ["1.0.0"])],
     revoked: { plugins: [], sidecars: [], core: [] } },
   installed: {
     format: 2,
     plugins: {
-      term: { version: "0.1.0", enabled: true, sidecars: {} },
+      tty: { version: "0.1.0", enabled: true, sidecars: {} },
       notes: { version: "1.1.0", enabled: true, sidecars: {} },
       off: { version: "1.0.0", enabled: false, sidecars: {} },
       fresh: { version: "0.1.0", enabled: true, sidecars: {} },
@@ -39,11 +39,11 @@ test("plugin rows report loaded surface compositions before any tab is open", { 
     { id: "fresh", composition: null },
     { id: "notes", composition: null },
     { id: "off", composition: null },
-    { id: "term", composition: "view" },
+    { id: "tty", composition: "view" },
   ], "the plugin status omits the surface kind of a view without a tab");
   assert.deepEqual(compositions(pluginRows(units, null, new Set())), [
     { id: "notes", composition: null },
-    { id: "term", composition: "view" },
+    { id: "tty", composition: "view" },
   ], "a window without a native host must report the same loaded declaration");
 });
 
@@ -54,7 +54,7 @@ test("plugin rows join loaded, installed and registry plugins by id with their s
     { id: "gone", name: "지운 것", description: "지운 플러그인.", state: "reload", composition: null, installed: null, latest: null, incompatible: false, sidecars: [] },
     { id: "notes", name: "노트", description: "노트 목록.", state: "reload", composition: null, installed: { version: "1.1.0", enabled: true }, latest: null, incompatible: false, sidecars: [] },
     { id: "off", name: "Off", description: "Off 설명.", state: "disabled", composition: null, installed: { version: "1.0.0", enabled: false }, latest: "1.0.0", incompatible: false, sidecars: [] },
-    { id: "term", name: "터미널", description: "터미널 표면.", state: "loaded", composition: null, installed: { version: "0.1.0", enabled: true }, latest: "0.10.0", incompatible: false, sidecars: [] },
+    { id: "tty", name: "터미널", description: "터미널 표면.", state: "loaded", composition: null, installed: { version: "0.1.0", enabled: true }, latest: "0.10.0", incompatible: false, sidecars: [] },
   ]);
 });
 
@@ -84,21 +84,21 @@ test("a plugin whose every registry version is revoked is not offered, and an in
   const withdrawn = {
     registry: "file:///registry/index.json",
     index: {
-      plugins: [entry("appview", "AppView", ["0.0.2"]), entry("term", "Terminal", ["0.1.0", "0.10.0"])],
-      revoked: { plugins: [{ id: "appview", version: "0.0.2", reason: "fixture" }, { id: "term", version: "0.10.0", reason: "fixture" }], sidecars: [], core: [] },
+      plugins: [entry("appview", "AppView", ["0.0.2"]), entry("tty", "Terminal", ["0.1.0", "0.10.0"])],
+      revoked: { plugins: [{ id: "appview", version: "0.0.2", reason: "fixture" }, { id: "tty", version: "0.10.0", reason: "fixture" }], sidecars: [], core: [] },
     },
     installed: { format: 2, plugins: { appview: { version: "0.0.2", enabled: true, sidecars: {} } }, sidecars: {} },
   };
   // The installed row keeps its version and has no latest version, so the update action is not offered for it.
-  assert.deepEqual(pluginRows([], withdrawn, new Set()).map((row) => [row.id, row.state, row.latest]), [["appview", "reload", null], ["term", "available", "0.1.0"]]);
+  assert.deepEqual(pluginRows([], withdrawn, new Set()).map((row) => [row.id, row.state, row.latest]), [["appview", "reload", null], ["tty", "available", "0.1.0"]]);
   // Without an installed version, the plugin with only revoked versions has no row.
   const uninstalled = { ...withdrawn, installed: { ...withdrawn.installed, plugins: {} } };
-  assert.deepEqual(pluginRows([], uninstalled, new Set()).map((row) => row.id), ["term"]);
+  assert.deepEqual(pluginRows([], uninstalled, new Set()).map((row) => row.id), ["tty"]);
 });
 
 test("an installed plugin that the window refused has the state refused and does not wait for a page reload", async () => {
   assert.equal(pluginRows(loaded, state, new Set(["fresh"])).find((row) => row.id === "fresh").state, "refused");
-  const refusedOnly = { ...state, installed: { ...state.installed, plugins: { term: state.installed.plugins.term, fresh: state.installed.plugins.fresh } } };
+  const refusedOnly = { ...state, installed: { ...state.installed, plugins: { tty: state.installed.plugins.tty, fresh: state.installed.plugins.fresh } } };
   const operations = createPluginOperations({ host: fakeHost({ pluginsState: [refusedOnly] }), loaded: () => [loaded[0]],
     refused: () => new Set(["fresh"]), changed: () => {} });
   await operations.refresh();
@@ -106,8 +106,8 @@ test("an installed plugin that the window refused has the state refused and does
 });
 
 test("a loaded plugin that was disabled after the window loaded waits for a page reload", () => {
-  const disabled = { ...state, installed: { ...state.installed, plugins: { term: { version: "0.1.0", enabled: false, sidecars: {} } } } };
-  assert.equal(pluginRows([loaded[0]], disabled, new Set()).find((row) => row.id === "term").state, "reload");
+  const disabled = { ...state, installed: { ...state.installed, plugins: { tty: { version: "0.1.0", enabled: false, sidecars: {} } } } };
+  assert.equal(pluginRows([loaded[0]], disabled, new Set()).find((row) => row.id === "tty").state, "reload");
 });
 
 test("a row names its sidecars from the installed entry, else the registry version that installation selects, else the manifest", () => {
@@ -121,24 +121,24 @@ test("a row names its sidecars from the installed entry, else the registry versi
     ] }], revoked: { plugins: [], sidecars: [], core: [] } },
     installed: {
       format: 2,
-      plugins: { term: { version: "0.1.0", enabled: true, sidecars: { [probe]: "^0.1.0" } } },
+      plugins: { tty: { version: "0.1.0", enabled: true, sidecars: { [probe]: "^0.1.0" } } },
       sidecars: { [probe]: { version: "0.1.2", path: "/config/sidecars/scope-sidecar-probe/0.1.2/darwin-arm64" } },
     },
   };
-  const term = { ...loaded[0], dependencies: { [probe]: "^0.1.0" } };
-  const rows = pluginRows([term], withSidecars, new Set());
-  assert.deepEqual(rows.find((row) => row.id === "term").sidecars, [{ name: probe, range: "^0.1.0", version: "0.1.2" }]);
+  const tty = { ...loaded[0], dependencies: { [probe]: "^0.1.0" } };
+  const rows = pluginRows([tty], withSidecars, new Set());
+  assert.deepEqual(rows.find((row) => row.id === "tty").sidecars, [{ name: probe, range: "^0.1.0", version: "0.1.2" }]);
   assert.deepEqual(rows.find((row) => row.id === "db").sidecars,
     [{ name: "@a/b", range: "1.0.0", version: null }, { name: "@x/db", range: "^1.0.0", version: null }]);
   // Without a host, it uses the dependencies of the loaded manifest.
-  assert.deepEqual(pluginRows([term], null, new Set())[0].sidecars, [{ name: probe, range: "^0.1.0", version: null }]);
+  assert.deepEqual(pluginRows([tty], null, new Set())[0].sidecars, [{ name: probe, range: "^0.1.0", version: null }]);
 });
 
 test("without a host only the loaded plugins are listed, all loaded, and operations fail", async () => {
   let changes = 0;
   const operations = createPluginOperations({ host: null, loaded: () => loaded, refused: () => new Set(), changed: () => { changes++; } });
   await operations.refresh();
-  assert.deepEqual(operations.status().plugins.map((row) => [row.id, row.state]), [["gone", "loaded"], ["notes", "loaded"], ["term", "loaded"]]);
+  assert.deepEqual(operations.status().plugins.map((row) => [row.id, row.state]), [["gone", "loaded"], ["notes", "loaded"], ["tty", "loaded"]]);
   await assert.rejects(operations.run("install", "db"), /plugin operations need a native host/);
   assert.equal(changes, 0);
 });
@@ -146,7 +146,7 @@ test("without a host only the loaded plugins are listed, all loaded, and operati
 test("status reports the installed plugins that the registry lists in a newer version", async () => {
   const operations = createPluginOperations({ host: fakeHost({ pluginsState: [state] }), loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await operations.refresh();
-  assert.deepEqual(operations.status().updates, [{ id: "term", installed: "0.1.0", latest: "0.10.0" }]);
+  assert.deepEqual(operations.status().updates, [{ id: "tty", installed: "0.1.0", latest: "0.10.0" }]);
 });
 
 /** A host that records the calls and gives the set replies. */
@@ -190,7 +190,7 @@ test("an unreadable registry index keeps the installed rows and an unreadable st
   await operations.refresh();
   assert.equal(operations.status().error, "/registry/index.json: no such file");
   assert.deepEqual(operations.failure(), { kind: "index", message: "/registry/index.json: no such file" });
-  assert.deepEqual(operations.status().plugins.map((row) => row.id), ["fresh", "gone", "notes", "off", "term"]);
+  assert.deepEqual(operations.status().plugins.map((row) => row.id), ["fresh", "gone", "notes", "off", "tty"]);
   await operations.refresh();
   assert.deepEqual(operations.failure(), { kind: "state", message: "installed.json is not valid JSON" });
   assert.deepEqual(operations.status().plugins, []);
@@ -457,22 +457,22 @@ test("without a host the outdated sidecars are empty and replacing fails", async
 
 test("update-all updates the plugins of updates one after the other and stops at the first failure", async () => {
   const outdated = { ...state, installed: { ...state.installed, plugins: {
-    term: { version: "0.1.0", enabled: true, sidecars: {} }, db: { version: "1.0.0", enabled: true, sidecars: {} },
+    tty: { version: "0.1.0", enabled: true, sidecars: {} }, db: { version: "1.0.0", enabled: true, sidecars: {} },
   } } };
   const host = fakeHost({
     pluginsState: [outdated, outdated, outdated, outdated],
-    pluginsRun: [{}, new Error("plugin term cannot be updated")],
+    pluginsRun: [{}, new Error("plugin tty cannot be updated")],
   });
   const operations = createPluginOperations({ host, loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await operations.refresh();
-  assert.deepEqual(operations.status().updates.map((update) => update.id), ["db", "term"]);
-  await assert.rejects(operations.updateAll(), /plugin term cannot be updated/);
+  assert.deepEqual(operations.status().updates.map((update) => update.id), ["db", "tty"]);
+  await assert.rejects(operations.updateAll(), /plugin tty cannot be updated/);
   assert.deepEqual(host.calls, [
     ["pluginsState"], ["pluginsRun", { action: "update", plugin: "db" }], ["pluginsState"],
-    ["pluginsRun", { action: "update", plugin: "term" }], ["pluginsState"],
+    ["pluginsRun", { action: "update", plugin: "tty" }], ["pluginsState"],
   ]);
   // Without an update the command does nothing and asks the host for nothing.
-  const newest = { ...state, installed: { ...state.installed, plugins: { term: { version: "0.10.0", enabled: true, sidecars: {} } } } };
+  const newest = { ...state, installed: { ...state.installed, plugins: { tty: { version: "0.10.0", enabled: true, sidecars: {} } } } };
   const current = fakeHost({ pluginsState: [newest] });
   const quiet = createPluginOperations({ host: current, loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await quiet.refresh();

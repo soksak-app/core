@@ -23,12 +23,12 @@ test("the update list shows the core update first with its release link, its act
     available: { version: "0.0.9", release: "https://github.com/soksak-app/core/releases/tag/v0.0.9" },
     operation: null, error: null,
     incompatible: [
-      { id: "term", installed: "0.2.0", range: "^0.0.8", compatible: "0.3.0" },
+      { id: "tty", installed: "0.2.0", range: "^0.0.8", compatible: "0.3.0" },
       { id: "notes", installed: "1.0.0", range: "^0.0.8", compatible: null },
     ],
   };
   const status = { registry: "file:///registry/index.json", error: null, reload: false, outdated: [], plugins: [],
-    updates: [{ id: "term", installed: "0.1.0", latest: "0.2.0" }], operation: null };
+    updates: [{ id: "tty", installed: "0.1.0", latest: "0.2.0" }], operation: null };
   const operations = { hosted: true, status: () => status, failure: () => null, refresh: async () => {}, refreshOutdated: async () => {} };
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: operations, onPluginOperations: () => {}, appUpdate: { status: () => app, refresh: async () => {} },
@@ -51,7 +51,7 @@ test("the update list shows the core update first with its release link, its act
     // A plugin that the candidate does not contain is listed under the row with its newest version that does.
     const incompatible = [...row().querySelectorAll('[data-expose="core.library.app.incompatible"]')].map((item) => item.textContent);
     assert.deepEqual(incompatible, [
-      "term 0.2.0 (^0.0.8): 0.0.9에 맞는 최신 버전 0.3.0",
+      "tty 0.2.0 (^0.0.8): 0.0.9에 맞는 최신 버전 0.3.0",
       "notes 1.0.0 (^0.0.8): 0.0.9에 맞는 버전 없음",
     ]);
 

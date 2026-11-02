@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F393: workspace registry가 plugin `term`을 선언한다.
 - F392: workspace registry가 sidecar `@soksak/sidecar-alacritty`를 선언한다.
 - F391: 사이드카는 화면을 `screen.read`로만 제공할 수 있고, 페이지는 적용한 응답마다 frame 기록을 쓴다.
 - F318, F319: hosted repeat 뒤 전체 suite의 hosted CI run 세 번이 두 test를 통과했으므로, 두 실패를 not reproduced로 닫는다.

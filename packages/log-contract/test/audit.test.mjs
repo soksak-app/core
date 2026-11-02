@@ -653,7 +653,7 @@ test("the chain of an operation of the page is complete when its call and the ho
     },
     chains: { plugin: ["page.plugin.operation", "page.call", "host.binding.call"] },
   };
-  const start = (seq, cid) => line(seq, "page.plugin.operation", { action: "install", plugin: "term" }, { cids: [cid], layer: "page", class: "call" });
+  const start = (seq, cid) => line(seq, "page.plugin.operation", { action: "install", plugin: "tty" }, { cids: [cid], layer: "page", class: "call" });
   const call = (seq, cid) => line(seq, "page.call", { name: "pluginsRun" }, { cids: [cid], layer: "page", level: "debug", class: "call" });
   const binding = (seq, cid) => line(seq, "host.binding.call", { name: "plugins_run" }, { cids: [cid], level: "debug", class: "call" });
   const debugOpen = (seq) => line(seq, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });

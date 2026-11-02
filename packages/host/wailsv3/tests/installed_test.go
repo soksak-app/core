@@ -35,16 +35,16 @@ func installedFixture(t *testing.T) string {
 	config := t.TempDir()
 	writeInstalled(t, config, map[string]string{
 		"plugins/installed.json": `{"format": 3, "plugins": {
-			"term": {"version": "0.1.0", "path": "plugins/term/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+			"tty": {"version": "0.1.0", "path": "plugins/tty/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
 			"alpha": {"version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
 			"off": {"version": "1.0.0", "path": "plugins/off/1.0.0", "enabled": false, "sidecars": {}}},
 			"sidecars": {"@scope/sidecar-worker": {"version": "0.1.2", "path": "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64"}}}`,
-		"plugins/term/0.1.0/package.json":                               `{"name": "@scope/plugin-term"}`,
+		"plugins/tty/0.1.0/package.json":                                `{"name": "@scope/plugin-tty"}`,
 		"plugins/alpha/1.0.0/package.json":                              `{"name": "plugin-alpha"}`,
 		"plugins/off/1.0.0/package.json":                                `{"name": "plugin-off"}`,
-		"plugins/term/0.1.0/plugin.json":                                `{"id": "term", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
-		"plugins/term/0.1.0/ui/term.js":                                 "export const term = 1;",
-		"plugins/term/0.1.0/diagnostics.json":                           "{\n  \"module\": \"ui/d.js\",\n  \"exposes\": {}\n}\n",
+		"plugins/tty/0.1.0/plugin.json":                                 `{"id": "tty", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
+		"plugins/tty/0.1.0/ui/tty.js":                                   "export const tty = 1;",
+		"plugins/tty/0.1.0/diagnostics.json":                            "{\n  \"module\": \"ui/d.js\",\n  \"exposes\": {}\n}\n",
 		"plugins/alpha/1.0.0/plugin.json":                               `{"id": "alpha"}`,
 		"plugins/off/1.0.0/plugin.json":                                 `{"id": "off"}`,
 		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe"}`,
@@ -55,11 +55,11 @@ func installedFixture(t *testing.T) string {
 // contract: installed.document.lists-enabled-plugins
 func TestInstalledPluginsDocumentListsEnabledPluginsById(t *testing.T) {
 	config := installedFixture(t)
-	release := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}`
+	release := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}`
 	if got := string(host.InstalledPluginsDocument(config, false)); got != release {
 		t.Fatalf("release document %s", got)
 	}
-	diagnostic := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}`
+	diagnostic := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}`
 	if got := string(host.InstalledPluginsDocument(config, true)); got != diagnostic {
 		t.Fatalf("diagnostic document %s", got)
 	}
@@ -74,7 +74,7 @@ func TestInstalledPluginsDocumentDeclaresTheMessageFormOfEachSidecar(t *testing.
 	writeInstalled(t, config, map[string]string{
 		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe", "message": {"form": "json-object", "operationField": "operation"}, "hostReadOperations": ["list"]}`,
 	})
-	want := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}`
+	want := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}`
 	if got := string(host.InstalledPluginsDocument(config, false)); got != want {
 		t.Fatalf("document %s", got)
 	}
@@ -142,11 +142,11 @@ func TestInstalledPackageJSONInvalidTextNamesOnlyTheFile(t *testing.T) {
 // contract: installed.document.reports-errors
 func TestInstalledPluginsDocumentReportsAnInvalidState(t *testing.T) {
 	config := installedFixture(t)
-	writeInstalled(t, config, map[string]string{"plugins/term/0.1.0/diagnostics.json": "{"})
-	if got := string(host.InstalledPluginsDocument(config, true)); got != `{"error":"`+filepath.Join(config, "plugins/term/0.1.0/diagnostics.json")+` is not valid JSON"}` {
+	writeInstalled(t, config, map[string]string{"plugins/tty/0.1.0/diagnostics.json": "{"})
+	if got := string(host.InstalledPluginsDocument(config, true)); got != `{"error":"`+filepath.Join(config, "plugins/tty/0.1.0/diagnostics.json")+` is not valid JSON"}` {
 		t.Fatalf("diagnostics error %s", got)
 	}
-	writeInstalled(t, config, map[string]string{"plugins/term/0.1.0/diagnostics.json": "{}", "plugins/alpha/1.0.0/plugin.json": "{"})
+	writeInstalled(t, config, map[string]string{"plugins/tty/0.1.0/diagnostics.json": "{}", "plugins/alpha/1.0.0/plugin.json": "{"})
 	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")+` is not valid JSON"}` {
 		t.Fatalf("manifest error %s", got)
 	}
@@ -172,10 +172,10 @@ func TestInstalledAssetsServeTheFilesOfEnabledPackages(t *testing.T) {
 		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
 		return recorder.Code, recorder.Body.String(), recorder.Header().Get("Content-Type")
 	}
-	if code, body, kind := get("/modules/@scope/plugin-term/ui/term.js"); code != 200 || body != "export const term = 1;" || kind != "text/javascript" {
+	if code, body, kind := get("/modules/@scope/plugin-tty/ui/tty.js"); code != 200 || body != "export const tty = 1;" || kind != "text/javascript" {
 		t.Fatalf("installed module %d %q %q", code, body, kind)
 	}
-	for _, path := range []string{"/modules/@scope/plugin-term/ui/missing.js", "/modules/@scope/plugin-term/ui/../plugin.json", "/modules/plugin-alpha//plugin.json"} {
+	for _, path := range []string{"/modules/@scope/plugin-tty/ui/missing.js", "/modules/@scope/plugin-tty/ui/../plugin.json", "/modules/plugin-alpha//plugin.json"} {
 		if code, _, _ := get(path); code != 404 {
 			t.Fatalf("%s answered %d", path, code)
 		}
@@ -211,7 +211,7 @@ func sharedFixture(t *testing.T) string {
 	config := installedFixture(t)
 	writeInstalled(t, config, map[string]string{
 		"plugins/alpha/1.0.0/plugin.json": `{"id": "alpha", "extends": {"language": {"version": "1.0.0", "schema": {},
-			"modules": {"@codemirror/state": "ui/state.js", "gone": "ui/gone.js", "outside": "../../term/0.1.0/ui/term.js"}}}}`,
+			"modules": {"@codemirror/state": "ui/state.js", "gone": "ui/gone.js", "outside": "../../tty/0.1.0/ui/tty.js"}}}}`,
 		"plugins/alpha/1.0.0/ui/state.js": "export const state = 1;",
 		"plugins/off/1.0.0/plugin.json":   `{"id": "off", "extends": {"language": {"version": "1.0.0", "schema": {}, "modules": {"x": "ui/x.js"}}}}`,
 		"plugins/off/1.0.0/ui/x.js":       "export const x = 1;",
@@ -251,7 +251,7 @@ func TestInstalledAssetsServeTheSharedModulesOfExtensionPoints(t *testing.T) {
 func TestAnUnreadableInstallationStartsTheSidecarsWithoutDeclarations(t *testing.T) {
 	cases := map[string]map[string]string{
 		"an earlier installed.json form": {"plugins/installed.json": `{"format": 2, "plugins": {}}`},
-		"an invalid plugin.json":         {"plugins/term/0.1.0/plugin.json": "{"},
+		"an invalid plugin.json":         {"plugins/tty/0.1.0/plugin.json": "{"},
 	}
 	for name, files := range cases {
 		config := installedFixture(t)
@@ -300,7 +300,7 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 		string(declarations[0].Data) != `{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe"}` {
 		t.Fatalf("declarations %+v", declarations)
 	}
-	if !reflect.DeepEqual(declarations[0].Dependents, []string{"term"}) {
+	if !reflect.DeepEqual(declarations[0].Dependents, []string{"tty"}) {
 		t.Fatalf("dependents %v, want the plugin that lists the sidecar", declarations[0].Dependents)
 	}
 	if err := os.Remove(filepath.Join(folder, "sidecar.json")); err != nil {
@@ -311,8 +311,8 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 	if err := installedSendError(t, config, "@scope/sidecar-worker"); !strings.HasPrefix(err, "sidecar @scope/sidecar-worker: "+missing+": ") {
 		t.Fatalf("missing sidecar.json: %s", err)
 	}
-	writeInstalled(t, config, map[string]string{"plugins/term/0.1.0/plugin.json": `{"id": "term", "dependencies": {"@scope/sidecar-other": "^0.1.0"}}`})
-	manifest := filepath.Join(config, "plugins/term/0.1.0/plugin.json")
+	writeInstalled(t, config, map[string]string{"plugins/tty/0.1.0/plugin.json": `{"id": "tty", "dependencies": {"@scope/sidecar-other": "^0.1.0"}}`})
+	manifest := filepath.Join(config, "plugins/tty/0.1.0/plugin.json")
 	if err := installedSendError(t, config, "@scope/sidecar-other"); err != "sidecar @scope/sidecar-other: "+manifest+": sidecar @scope/sidecar-other has no installed version" {
 		t.Fatalf("unknown sidecar: %s", err)
 	}
@@ -327,7 +327,7 @@ func TestInstalledSidecarsListEveryDependentPlugin(t *testing.T) {
 	// A second enabled plugin that lists the same sidecar is one more dependent of the one declaration.
 	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": `{"id": "alpha", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`})
 	declarations, err := host.InstalledSidecars(config)
-	if err != nil || len(declarations) != 1 || !reflect.DeepEqual(declarations[0].Dependents, []string{"alpha", "term"}) {
+	if err != nil || len(declarations) != 1 || !reflect.DeepEqual(declarations[0].Dependents, []string{"alpha", "tty"}) {
 		t.Fatalf("shared sidecar declarations %+v, %v", declarations, err)
 	}
 }
@@ -337,7 +337,7 @@ func TestInstalledSidecarsLeaveOutThePackagesOfInstalledPlugins(t *testing.T) {
 	config := installedFixture(t)
 	// The packages of an enabled and a disabled plugin are plugin dependencies, not sidecars.
 	writeInstalled(t, config, map[string]string{
-		"plugins/term/0.1.0/plugin.json": `{"id": "term", "dependencies": {"@scope/sidecar-worker": "^0.1.0", "plugin-alpha": "^1.0.0", "plugin-off": "^1.0.0"}}`,
+		"plugins/tty/0.1.0/plugin.json": `{"id": "tty", "dependencies": {"@scope/sidecar-worker": "^0.1.0", "plugin-alpha": "^1.0.0", "plugin-off": "^1.0.0"}}`,
 	})
 	declarations, err := host.InstalledSidecars(config)
 	if err != nil {

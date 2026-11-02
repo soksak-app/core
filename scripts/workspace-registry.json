@@ -4,7 +4,8 @@
     { "repository": "../plugins/editor", "id": "editor" },
     { "repository": "../plugins/files", "id": "files" },
     { "repository": "../plugins/hwp", "id": "hwp" },
-    { "repository": "../plugins/terminal", "id": "terminal" }
+    { "repository": "../plugins/terminal", "id": "terminal" },
+    { "repository": "../plugins/term", "id": "term" }
   ],
   "sidecars": [
     { "repository": "../sidecars/files", "folder": "." },

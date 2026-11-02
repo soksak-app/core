@@ -28,12 +28,12 @@ test("the plugin page of the library lists each plugin with its description, ver
     outdated: [{ sidecar: "@fixture/sidecar-removed", running: "0.0.5", installed: null, sessions: 1 },
       { sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2 }],
     // The plugins that the registry lists in a newer version.
-    updates: [{ id: "term", installed: "0.1.0", latest: "0.2.0" }],
+    updates: [{ id: "tty", installed: "0.1.0", latest: "0.2.0" }],
     operation: { action: "install", plugin: "db", state: "running", error: null },
     plugins: [
       { id: "db", name: "DB", description: "데이터베이스 표면.", state: "available", installed: null, latest: "2.0.0",
         sidecars: [{ name: "@x/db", range: "^1.0.0", version: null }] },
-      { id: "term", name: "터미널", description: "명령을 실행하는 표면.", state: "loaded", installed: { version: "0.1.0", enabled: true },
+      { id: "tty", name: "터미널", description: "명령을 실행하는 표면.", state: "loaded", installed: { version: "0.1.0", enabled: true },
         latest: "0.2.0", sidecars: [{ name: "@scope/sidecar-probe", range: "^0.1.0", version: "0.1.2" }] },
       // The window kept its page when the plugin changed, so the card offers to apply the change. The registry lists no
       // version of it whose range contains the running core.
@@ -84,12 +84,12 @@ test("the plugin page of the library lists each plugin with its description, ver
     ]]);
     // The update list names each update and offers one action that updates all of them.
     const updateRows = [...root.querySelectorAll('[data-expose="core.library.plugins.updates"]')];
-    assert.deepEqual(updateRows.map((row) => row.textContent), ["term: 0.1.0 → 0.2.0"]);
+    assert.deepEqual(updateRows.map((row) => row.textContent), ["tty: 0.1.0 → 0.2.0"]);
     const updateAll = root.querySelector('[data-expose="core.library.plugins.update-all"]');
     assert.deepEqual([updateAll.textContent, updateAll.dataset.command], ["모두 업데이트", "core.plugins.update-all"]);
-    assert.deepEqual(library.state().plugins.shown, ["db", "term", "kept", "lone", "plain"]);
+    assert.deepEqual(library.state().plugins.shown, ["db", "tty", "kept", "lone", "plain"]);
     assert.deepEqual(library.state().plugins.actions.map(({ plugin, action, disabled }) => `${plugin} ${action} ${disabled}`), [
-      "db install true", "term update true", "term disable true", "term remove true", "kept apply true", "kept disable true", "kept remove true",
+      "db install true", "tty update true", "tty disable true", "tty remove true", "kept apply true", "kept disable true", "kept remove true",
       "plain enable true", "plain remove true",
     ]);
     const card = (id) => root.querySelector(`.library-plugin[data-plugin-id="${id}"]`);
@@ -101,20 +101,20 @@ test("the plugin page of the library lists each plugin with its description, ver
     assert.equal(text("db", "versions"), "최신 버전 2.0.0");
     assert.equal(text("db", "sidecars"), "사이드카 @x/db ^1.0.0");
     assert.equal(text("db", "operation"), "db install 진행 중");
-    assert.equal(text("term", "state"), "사용 중");
-    assert.equal(text("term", "versions"), "설치된 버전 0.1.0 · 최신 버전 0.2.0");
-    assert.equal(text("term", "sidecars"), "사이드카 @scope/sidecar-probe 0.1.2");
-    assert.equal(text("term", "operation"), null, "the operation line shows on a card of another plugin");
+    assert.equal(text("tty", "state"), "사용 중");
+    assert.equal(text("tty", "versions"), "설치된 버전 0.1.0 · 최신 버전 0.2.0");
+    assert.equal(text("tty", "sidecars"), "사이드카 @scope/sidecar-probe 0.1.2");
+    assert.equal(text("tty", "operation"), null, "the operation line shows on a card of another plugin");
     assert.equal(text("plain", "about"), null, "a plugin without a description shows an empty description");
     assert.equal(text("plain", "sidecars"), "사이드카 없음");
     const actions = (id) => [...card(id).querySelectorAll('[data-expose="core.library.plugins.action"]')]
       .map((button) => [button.textContent, button.dataset.command, button.dataset.params, button.disabled]);
     // While an operation runs, the operation buttons of all cards are disabled.
     assert.deepEqual(actions("db"), [["설치", "core.plugins.install", JSON.stringify({ plugin: "db" }), true]]);
-    assert.deepEqual(actions("term"), [
-      ["업데이트", "core.plugins.update", JSON.stringify({ plugin: "term" }), true],
-      ["사용 안 함", "core.plugins.disable", JSON.stringify({ plugin: "term" }), true],
-      ["제거", "core.plugins.remove", JSON.stringify({ plugin: "term" }), true],
+    assert.deepEqual(actions("tty"), [
+      ["업데이트", "core.plugins.update", JSON.stringify({ plugin: "tty" }), true],
+      ["사용 안 함", "core.plugins.disable", JSON.stringify({ plugin: "tty" }), true],
+      ["제거", "core.plugins.remove", JSON.stringify({ plugin: "tty" }), true],
     ]);
     assert.deepEqual(actions("plain").map(([label]) => label), ["사용", "제거"]);
     assert.equal(text("kept", "state"), "창을 다시 불러오면 적용");
@@ -132,7 +132,7 @@ test("the plugin page of the library lists each plugin with its description, ver
     const search = root.querySelector('[data-expose="core.library.plugins.search"]');
     assert.deepEqual([search.dataset.command, search.dataset.value], ["core.library.plugins.search", "query"]);
     library.actions.searchPlugins("명령");
-    assert.deepEqual([library.state().plugins.query, library.state().plugins.shown], ["명령", ["term"]]);
+    assert.deepEqual([library.state().plugins.query, library.state().plugins.shown], ["명령", ["tty"]]);
     library.actions.searchPlugins("없는플러그인");
     assert.deepEqual(library.state().plugins.shown, []);
     assert.equal(root.querySelector(".library-plugins-none")?.textContent, "찾는 플러그인이 없습니다.");
@@ -141,7 +141,7 @@ test("the plugin page of the library lists each plugin with its description, ver
     // Without a host there are no operation buttons.
     operations.hosted = false;
     library.render();
-    assert.deepEqual(actions("term"), []);
+    assert.deepEqual(actions("tty"), []);
 
     library.actions.page("projects");
     assert.deepEqual(library.state().plugins, { query: "", shown: [], actions: [] });

@@ -26,7 +26,7 @@ fn write_installed(config: &Path, files: &[(&str, &str)]) {
 fn installed_fixture() -> folder::Folder {
     let config = folder::Folder::new();
     let state = r#"{"format": 3, "plugins": {
-        "term": {"version": "0.1.0", "path": "plugins/term/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+        "tty": {"version": "0.1.0", "path": "plugins/tty/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
         "alpha": {"version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
         "off": {"version": "1.0.0", "path": "plugins/off/1.0.0", "enabled": false, "sidecars": {}}},
         "sidecars": {"@scope/sidecar-worker": {"version": "0.1.2", "path": "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64"}}}"#;
@@ -35,8 +35,8 @@ fn installed_fixture() -> folder::Folder {
         &[
             ("plugins/installed.json", state),
             (
-                "plugins/term/0.1.0/package.json",
-                r#"{"name": "@scope/plugin-term"}"#,
+                "plugins/tty/0.1.0/package.json",
+                r#"{"name": "@scope/plugin-tty"}"#,
             ),
             (
                 "plugins/alpha/1.0.0/package.json",
@@ -47,12 +47,12 @@ fn installed_fixture() -> folder::Folder {
                 r#"{"name": "plugin-off"}"#,
             ),
             (
-                "plugins/term/0.1.0/plugin.json",
-                r#"{"id": "term", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
+                "plugins/tty/0.1.0/plugin.json",
+                r#"{"id": "tty", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
             ),
-            ("plugins/term/0.1.0/ui/term.js", "export const term = 1;"),
+            ("plugins/tty/0.1.0/ui/tty.js", "export const tty = 1;"),
             (
-                "plugins/term/0.1.0/diagnostics.json",
+                "plugins/tty/0.1.0/diagnostics.json",
                 "{\n  \"module\": \"ui/d.js\",\n  \"exposes\": {}\n}\n",
             ),
             ("plugins/alpha/1.0.0/plugin.json", r#"{"id": "alpha"}"#),
@@ -74,12 +74,12 @@ fn text(data: Vec<u8>) -> String {
 #[test]
 fn installed_plugins_document_lists_enabled_plugins_by_id() {
     let config = installed_fixture();
-    let release = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}"#;
+    let release = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}"#;
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
         release
     );
-    let diagnostic = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#;
+    let diagnostic = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#;
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), true)),
         diagnostic
@@ -104,7 +104,7 @@ fn installed_plugins_document_declares_the_message_form_and_host_operations_of_e
     );
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
-        r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}"#
+        r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}"#
     );
 }
 
@@ -162,9 +162,9 @@ fn installed_plugins_document_reports_an_invalid_state() {
     let config = installed_fixture();
     write_installed(
         config.path(),
-        &[("plugins/term/0.1.0/diagnostics.json", "{")],
+        &[("plugins/tty/0.1.0/diagnostics.json", "{")],
     );
-    let file = config.path().join("plugins/term/0.1.0/diagnostics.json");
+    let file = config.path().join("plugins/tty/0.1.0/diagnostics.json");
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), true)),
         format!(r#"{{"error":"{} is not valid JSON"}}"#, file.display())
@@ -172,7 +172,7 @@ fn installed_plugins_document_reports_an_invalid_state() {
     write_installed(
         config.path(),
         &[
-            ("plugins/term/0.1.0/diagnostics.json", "{}"),
+            ("plugins/tty/0.1.0/diagnostics.json", "{}"),
             ("plugins/alpha/1.0.0/plugin.json", "{"),
         ],
     );
@@ -288,12 +288,12 @@ fn installed_assets_serve_the_files_of_enabled_packages() {
     );
     directory.set(config.path().to_path_buf()).unwrap();
     assert_eq!(
-        get("/modules/@scope/plugin-term/ui/term.js").as_deref(),
-        Some("export const term = 1;")
+        get("/modules/@scope/plugin-tty/ui/tty.js").as_deref(),
+        Some("export const tty = 1;")
     );
     for path in [
-        "/modules/@scope/plugin-term/ui/missing.js",
-        "/modules/@scope/plugin-term/ui/../plugin.json",
+        "/modules/@scope/plugin-tty/ui/missing.js",
+        "/modules/@scope/plugin-tty/ui/../plugin.json",
         "/modules/plugin-alpha//plugin.json",
     ] {
         assert_eq!(
@@ -346,7 +346,7 @@ fn shared_fixture() -> folder::Folder {
             (
                 "plugins/alpha/1.0.0/plugin.json",
                 r#"{"id": "alpha", "extends": {"language": {"version": "1.0.0", "schema": {},
-                "modules": {"@codemirror/state": "ui/state.js", "gone": "ui/gone.js", "outside": "../../term/0.1.0/ui/term.js"}}}}"#,
+                "modules": {"@codemirror/state": "ui/state.js", "gone": "ui/gone.js", "outside": "../../tty/0.1.0/ui/tty.js"}}}}"#,
             ),
             ("plugins/alpha/1.0.0/ui/state.js", "export const state = 1;"),
             (
@@ -471,11 +471,11 @@ fn installed_sidecars_resolve_the_installed_version_folders() {
     write_installed(
         config.path(),
         &[(
-            "plugins/term/0.1.0/plugin.json",
-            r#"{"id": "term", "dependencies": {"@scope/sidecar-other": "^0.1.0"}}"#,
+            "plugins/tty/0.1.0/plugin.json",
+            r#"{"id": "tty", "dependencies": {"@scope/sidecar-other": "^0.1.0"}}"#,
         )],
     );
-    let manifest = config.path().join("plugins/term/0.1.0/plugin.json");
+    let manifest = config.path().join("plugins/tty/0.1.0/plugin.json");
     assert_eq!(
         send_error(config.path(), "@scope/sidecar-other"),
         format!(
@@ -502,7 +502,7 @@ fn an_unreadable_installation_starts_the_sidecars_without_declarations() {
         ),
         (
             "an invalid plugin.json",
-            "plugins/term/0.1.0/plugin.json",
+            "plugins/tty/0.1.0/plugin.json",
             "{",
         ),
     ] {
@@ -530,8 +530,8 @@ fn installed_sidecars_leave_out_the_packages_of_installed_plugins() {
     write_installed(
         config.path(),
         &[(
-            "plugins/term/0.1.0/plugin.json",
-            r#"{"id": "term", "dependencies": {"@scope/sidecar-worker": "^0.1.0", "plugin-alpha": "^1.0.0", "plugin-off": "^1.0.0"}}"#,
+            "plugins/tty/0.1.0/plugin.json",
+            r#"{"id": "tty", "dependencies": {"@scope/sidecar-worker": "^0.1.0", "plugin-alpha": "^1.0.0", "plugin-off": "^1.0.0"}}"#,
         )],
     );
     let declarations = installed::installed_sidecars(config.path()).unwrap();
@@ -553,7 +553,7 @@ fn installed_sidecars_list_every_dependent_plugin() {
     );
     let declarations = installed::installed_sidecars(config.path()).unwrap();
     assert_eq!(declarations.len(), 1);
-    assert_eq!(declarations[0].dependents, ["alpha", "term"]);
+    assert_eq!(declarations[0].dependents, ["alpha", "tty"]);
 }
 
 // contract: document.plugin.folder

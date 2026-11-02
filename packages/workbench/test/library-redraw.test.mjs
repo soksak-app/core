@@ -68,7 +68,7 @@ test("a plugin page render keeps the controls of unchanged plugin cards in the d
   } } });
   t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
   const status = { registry: "file:///registry/index.json", error: null, restart: false, operation: null, outdated: [], updates: [], plugins: [
-    { id: "term", name: "터미널", description: "", state: "loaded", installed: { version: "0.1.0", enabled: true }, latest: "0.1.0", sidecars: [] },
+    { id: "tty", name: "터미널", description: "", state: "loaded", installed: { version: "0.1.0", enabled: true }, latest: "0.1.0", sidecars: [] },
   ] };
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: { hosted: true, status: () => status, failure: () => null, refresh: async () => {}, refreshOutdated: async () => {} },

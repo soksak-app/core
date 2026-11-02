@@ -28,14 +28,14 @@ const events = () => calls.filter(([name]) => name === "log").flatMap(([, payloa
 
 test("an operation starts with an identifier of the page and the first event of its chain carries it", async () => {
   calls.length = 0;
-  const first = beginOperation("page.plugin.operation", { action: "install", plugin: "term" });
-  const second = beginOperation("page.plugin.operation", { action: "remove", plugin: "term" });
+  const first = beginOperation("page.plugin.operation", { action: "install", plugin: "tty" });
+  const second = beginOperation("page.plugin.operation", { action: "remove", plugin: "tty" });
   await settled();
   assert.match(first[0], /^p[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d+$/);
   assert.notEqual(first[0], second[0]);
   assert.deepEqual(events().map(({ level, event, fields, cids }) => [level, event, fields, cids]), [
-    ["info", "page.plugin.operation", { action: "install", plugin: "term" }, first],
-    ["info", "page.plugin.operation", { action: "remove", plugin: "term" }, second],
+    ["info", "page.plugin.operation", { action: "install", plugin: "tty" }, first],
+    ["info", "page.plugin.operation", { action: "remove", plugin: "tty" }, second],
   ]);
 });
 
@@ -45,12 +45,12 @@ test("a call that continues an operation passes its identifiers to the transport
   const wrapped = settlingCalls(async (name, arg, options) => { sent.push([name, arg, options]); if (name === "bad") throw new Error("refused"); });
   const seen = [];
   observeHostCalls((call) => seen.push(call));
-  await wrapped.callContinuing(["p1.1"], "pluginsRun", { action: "install", plugin: "term" });
+  await wrapped.callContinuing(["p1.1"], "pluginsRun", { action: "install", plugin: "tty" });
   await assert.rejects(wrapped.callContinuing(["p1.2"], "bad"), /refused/);
   await wrapped.call("plain", 1);
   observeHostCalls(null);
   assert.deepEqual(sent, [
-    ["pluginsRun", { action: "install", plugin: "term" }, { cids: ["p1.1"] }],
+    ["pluginsRun", { action: "install", plugin: "tty" }, { cids: ["p1.1"] }],
     ["bad", undefined, { cids: ["p1.2"] }],
     ["plain", 1, { cids: undefined }],
   ]);
@@ -62,12 +62,12 @@ test("a plugin operation is stored first and carried out with the same identifie
   calls.length = 0;
   const host = { calls: [], async call(name, arg, options) { host.calls.push([name, arg, options]); return name === "pluginsState" ? { installed: { plugins: {}, sidecars: {} }, index: null, registry: null } : undefined; } };
   const operations = createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
-  await operations.run("install", "term");
+  await operations.run("install", "tty");
   await settled();
   const [operation] = events().filter(({ event }) => event === "page.plugin.operation");
-  assert.deepEqual(operation.fields, { action: "install", plugin: "term" });
+  assert.deepEqual(operation.fields, { action: "install", plugin: "tty" });
   const run = host.calls.find(([name]) => name === "pluginsRun");
-  assert.deepEqual(run, ["pluginsRun", { action: "install", plugin: "term" }, { cids: operation.cids }]);
+  assert.deepEqual(run, ["pluginsRun", { action: "install", plugin: "tty" }, { cids: operation.cids }]);
 });
 
 test("the application update passes one identifier to its stage and its apply", async () => {

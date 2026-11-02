@@ -31,7 +31,7 @@ Core, each plugin and each sidecar are separate git repositories in sibling fold
 | --- | --- | --- |
 | `core` | The layout library, workbench, plugin-api, client, command line, hosts, applications, specifications and window checks | `soksak-app/core` |
 | `../registry` | The public registry: one file per entry, its checks and its publication ([public registry](registry.md)) | `soksak-app/registry` |
-| `../plugins/<id>` | One plugin: `plugin.json`, its pages, its `package.json` with `engines.soksak`, and its tests. The plugins are `browser`, `editor`, `files`, `hwp` and `terminal`; `shell` has a repository but is not declared | `soksak-app/plugin-<id>`; `shell` is not published |
+| `../plugins/<id>` | One plugin: `plugin.json`, its pages, its `package.json` with `engines.soksak`, and its tests. The plugins are `browser`, `editor`, `files`, `hwp`, `terminal` and `term`, whose image region presents the frames of `@soksak/sidecar-alacritty` in the lease mode; `shell` has a repository but is not declared | `soksak-app/plugin-<id>`; `shell` is not published |
 | `../sidecars/vt` | The terminal engine, declared with folder `vt-alacritty`: the crates `vt-core` and `vt-alacritty`, and the sidecar `@soksak/sidecar-vt-alacritty` in `vt-alacritty` | `soksak-app/sidecar-vt` |
 | `../sidecars/alacritty` | The GPU terminal engine, declared with folder `alacritty`: the crates `alacritty-core` and `alacritty`, and the sidecar `@soksak/sidecar-alacritty` in `alacritty`, which presents its frames in the lease mode and answers screens on request | `soksak-app/sidecar-alacritty` |
 | `../sidecars/files` | The sidecar `@soksak/sidecar-files`, declared with folder `.` | `soksak-app/sidecar-files` |
