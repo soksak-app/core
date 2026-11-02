@@ -3934,6 +3934,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F377",
+    implementation: [
+      { file: "scripts/test/soksak-scripts.test.mjs", symbol: "bounded command propagates success and reports its deadline" },
+    ],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "bounded command propagates success and reports its deadline" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a test file whose test events keep arriving is not ended at the event limit, though it runs longer than the limit" },
+    ],
+    expected: "The scripts tests judge their results by the events and states of the run, not by a deadline that the load of the machine reaches.",
+    levels: ["unit"],
+  },
+  {
     id: "F390",
     implementation: [
       { file: "docs/spec/native-surfaces.md", symbol: "**Callback boundaries**" },

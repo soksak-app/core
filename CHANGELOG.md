@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F376, F377-1: Three full runs of the scripts tests passed, one at load average 25 or more, so the two failures are closed as not reproduced, and F377 is complete.
 - F390: Records cite no other application as a precedent, a reference or a comparison, and a tracked test refuses such citations.
 - F386-5: The release candidate is 0.0.32, which carries the lease presentation mode of F386, and the latest published release is v0.0.31.
 - F386-6: The lease rule states that the window server clears the in-use mark of a replaced surface at the latest once a later surface is presented, which the hosted CI machine showed.
