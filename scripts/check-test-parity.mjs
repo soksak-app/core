@@ -3934,6 +3934,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F386",
+    implementation: [
+      { file: "docs/spec/native-surfaces.md", symbol: "**Image lease**" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_lease_test.m", id: "a later frame releases exactly the surface that it replaced" },
+    ],
+    expected: "An image region declares its presentation mode, and in the lease mode the host presents the supplier's IOSurface without a copy and reports each surface that it releases.",
+    levels: ["unit"],
+  },
+  {
     id: "F388",
     implementation: [
       { file: "package.json", symbol: "soksak-kit-records-0.0.6.tgz" },
