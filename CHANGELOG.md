@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F385: The release candidate is 0.0.31.
 - F384: Each element of an `elements` snapshot carries `node`, an identity that stays while the element exists, so a section can key a DOM row by its element.
 - F325-3: The Tauri host tests of the release checks took 583 s and 482 s with line tables as debug information, against 689 s before; the release run took 13 minutes 23 seconds.
 - F311-1: The Go test runners pass `-test.timeout` of each test's limit, so `t.Deadline` reports it and a wait for a crash report that the system does not save fails with its message.
