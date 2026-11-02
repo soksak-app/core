@@ -33,7 +33,7 @@ Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별�
 | `../registry` | 공개 registry: 항목마다 파일 하나, 그 검사와 게시([공개 registry](registry.ko.md)) | `soksak-app/registry` |
 | `../plugins/<id>` | Plugin 하나: `plugin.json`, page, `engines.soksak`을 가진 `package.json`, test. Plugin은 `browser`, `editor`, `files`, `hwp`, `terminal`, `term`이다. `shell`은 repository가 있으나 선언하지 않는다 | `soksak-app/plugin-<id>`. `shell`은 게시하지 않는다 |
 | `../sidecars/vt` | Terminal engine. folder `vt-alacritty`로 선언한다: crate `vt-core`, `vt-alacritty`, 그리고 `vt-alacritty`의 sidecar `@soksak/sidecar-vt-alacritty` | `soksak-app/sidecar-vt` |
-| `../sidecars/alacritty` | GPU terminal engine. folder `alacritty`로 선언한다: crate `alacritty-core`, `alacritty`, 그리고 `alacritty`의 sidecar `@soksak/sidecar-alacritty`. 이 sidecar는 frame을 lease 방식으로 보이고 screen은 요청할 때 답한다 | `soksak-app/sidecar-alacritty` |
+| `../sidecars/alacritty` | 바뀐 행만 다시 그리는 terminal engine. folder `alacritty`로 선언한다: crate `alacritty-core`, `alacritty`, 그리고 `alacritty`의 sidecar `@soksak/sidecar-alacritty`. 이 sidecar는 frame을 lease 방식으로 보이고 screen은 요청할 때 답한다 | `soksak-app/sidecar-alacritty` |
 | `../sidecars/files` | Sidecar `@soksak/sidecar-files`. folder `.`로 선언한다 | `soksak-app/sidecar-files` |
 | `../sidecars/shell` | Sidecar `@soksak/sidecar-shell`. repository가 있으나 선언하지 않는다 | `shell`은 게시하지 않는다 |
 

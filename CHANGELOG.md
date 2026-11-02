@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F393-2: The repositories table describes the sidecar `alacritty` by its current drawing.
 - F393-1: The plugin list of the repositories table names only plugins.
 - F394: The registry specification names the release files that plugins and sidecars publish.
 - F393: The workspace registry declares the plugin `term`.
