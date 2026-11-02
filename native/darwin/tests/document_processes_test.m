@@ -172,6 +172,11 @@ static NSTimeInterval stallRecordAfter = 30;
 static int stallRecordRegions = 0;
 static int stallRecordWebKitLines = 0;
 
+// The number of WebContent processes that the stall records had to sample and the number of samples that ended with
+// status 0.
+static int stallRecordSampleTargets = 0;
+static int stallRecordSamples = 0;
+
 // The time at which the test started; the stall record writes the WebKit log from this time.
 static NSDate *testStart;
 
@@ -200,8 +205,11 @@ static NSString *writeCommand(NSString *path, NSArray<NSString *> *arguments) {
 // network process, the process counts of the pool, the state of each process, and the WebKit log of the test process, the
 // network process and the WebContent processes since the test started. WebKit writes each step of a navigation (its load
 // request, its policy decision and the services that the decision waits for) to that log with the page and navigation
-// identifiers, so the log names the last step that a region that does not load reached (F335-2).
-static void writeStallRecord(const Region *regions, int count) {
+// identifiers, so the log names the last step that a region that does not load reached. The record also samples the
+// committed and provisional WebContent process of each region that has not ended its load, or of every region when all is
+// set: a WebContent process whose log ends inside a call of the main thread shows that call in its stack (F335-2).
+static void writeStallRecord(const Region *regions, int count, BOOL all) {
+    NSMutableArray<NSNumber *> *samples = [NSMutableArray array];
     NSMutableArray<NSString *> *pids = [NSMutableArray array];
     for (int i = 0; i < count; i++) {
         WKWebView *view = (WKWebView *)regions[i].document;
@@ -212,6 +220,11 @@ static void writeStallRecord(const Region *regions, int count) {
         WKProcessPool *pool = view.configuration.processPool;
 #pragma clang diagnostic pop
         BOOL ended = regionsLoadEnded(&regions[i], 1);
+        if (!ended || all) {
+            for (NSNumber *pid in @[ @(view._webProcessIdentifier), @(view._provisionalWebProcessIdentifier) ]) {
+                if (pid.intValue > 0 && ![samples containsObject:pid]) [samples addObject:pid];
+            }
+        }
         printf("stall record: region %d %s ended %d process %d provisional %d network %d pool processes %zu without prewarmed %zu with pages %zu\n",
             i + 1, regions[i].address.UTF8String, ended, view._webProcessIdentifier, view._provisionalWebProcessIdentifier,
             view._networkProcessIdentifier, pool._webProcessCount, pool._webProcessCountIgnoringPrewarmed, pool._webPageContentProcessCount);
@@ -230,6 +243,11 @@ static void writeStallRecord(const Region *regions, int count) {
     NSString *log = writeCommand(@"/usr/bin/log", @[ @"show", @"--info", @"--style", @"compact", @"--start", [format stringFromDate:testStart], @"--predicate", predicate ]);
     for (NSString *line in [log componentsSeparatedByString:@"\n"]) {
         if ([line containsString:@"[com.apple.WebKit:"]) stallRecordWebKitLines++;
+    }
+    stallRecordSampleTargets += (int)samples.count;
+    for (NSNumber *pid in samples) {
+        NSString *sample = writeCommand(@"/usr/bin/sample", @[ pid.stringValue, @"1" ]);
+        if ([sample containsString:@"Call graph:"]) stallRecordSamples++;
     }
     fflush(stdout);
 }
@@ -274,7 +292,7 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
     BOOL stallRecorded = NO;
     while (!regionsLoadEnded(regions, 4)) {
         if (!stallRecorded && stallAt.timeIntervalSinceNow <= 0) {
-            writeStallRecord(regions, 4);
+            writeStallRecord(regions, 4, NO);
             stallRecorded = YES;
         }
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
@@ -293,6 +311,9 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
     }
     // The state of the last loads settles before the processes are read.
     pumpUntil(0.5, ^BOOL { return NO; });
+    // A run with --stall-record-after=0 also writes the record after the loads end, so it samples the WebContent process of
+    // every region.
+    if (stallRecordAfter == 0) writeStallRecord(regions, 4, YES);
 
     NSMutableArray<NSNumber *> *processes = [NSMutableArray array];
     for (int i = 0; i < 4; i++) {
@@ -380,9 +401,11 @@ int main(int argc, char **argv) { @autoreleasepool {
            [originA stringByAppendingString:@"/region-3"], [originA stringByAppendingString:@"/region-4"] ],
         store);
 
-    // A run with --stall-record-after=0 writes the stall record of each scenario before its loads end.
+    // A run with --stall-record-after=0 writes the stall record of each scenario before its loads end and after they end.
     if (stallRecordAfter == 0) {
-        check(stallRecordRegions == 8, [NSString stringWithFormat:@"the stall records name the 8 regions of both scenarios (named %d)", stallRecordRegions]);
+        check(stallRecordRegions == 16, [NSString stringWithFormat:@"the 4 stall records of both scenarios name 16 regions (named %d)", stallRecordRegions]);
+        check(stallRecordSampleTargets >= 8 && stallRecordSamples == stallRecordSampleTargets,
+            [NSString stringWithFormat:@"the stall records sample the WebContent processes of the regions (%d of %d sampled)", stallRecordSamples, stallRecordSampleTargets]);
         check(stallRecordWebKitLines > 0, [NSString stringWithFormat:@"the stall records write the WebKit log of the loads (%d lines)", stallRecordWebKitLines]);
     }
 

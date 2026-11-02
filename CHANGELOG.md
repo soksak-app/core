@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F335-5: The stall record of `document_processes_test` samples the WebContent process of each region whose load has not ended, so a process whose log stops inside a main-thread call shows that call.
 - F335-4: The stall record of `document_processes_test` writes the WebKit log of the test, network and WebContent processes since the test started instead of a sample of the provisional process, so it names the step of each navigation that waits.
 - F335-3: `document_processes_test` writes a stall record when the loads of a scenario have not ended after 30 seconds: the committed, provisional and network process of each region, the process counts of the pool, the `ps` state of the processes and a sample of each provisional process of a region that still loads.
 - F381-3: The Tauri host starts the thread that sends the drawing state after an occlusion change through `routine::spawn_named`, so the panic hook records a panic of that thread with its name.
