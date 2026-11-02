@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F386-5: The release candidate is 0.0.32, which carries the lease presentation mode of F386, and the latest published release is v0.0.31.
 - F386-6: The lease rule states that the window server clears the in-use mark of a replaced surface at the latest once a later surface is presented, which the hosted CI machine showed.
 - F386-7: The image attach of both hosts reads the presentation mode from the region check, so no default mode remains.
 - F388: Core pins the records kit 0.0.6, whose term list defines `presentation mode` and `lease`.

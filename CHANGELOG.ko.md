@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F386-5: release 후보는 F386의 lease 표시 방식을 담은 0.0.32이고, 최신 게시 release는 v0.0.31이다.
 - F386-6: lease 규칙은 window server가 늦어도 이후 surface가 표시되면 대신된 surface의 in use 표시를 지운다고 적는다. hosted CI 기계가 그것을 보였다.
 - F386-7: 두 호스트의 image attach는 영역 검사에서 표시 방식을 읽으므로 기본 방식이 남지 않는다.
 - F388: core는 term 목록이 `presentation mode`와 `lease`를 정의하는 records kit 0.0.6을 고정한다.
