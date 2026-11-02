@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F299: The runner reads the process table at the end of a test only when the group of the test still has a process, and reads it once for the descendants and the names of the leftovers.
 - F377-2: When the runner ends the group of a test, it also stops, names and ends the descendants of the group that run in a group of their own.
 - F379: Core 0.0.30, VT 0.0.20 and the plugins for core 0.0.30 are published and listed in the registry.
 - F377: The bounded command test judges its success case by the code of the child under the largest test limit, and the event watchdog tests watch the output file and block the child on a FIFO instead of watching folders, which FSEvents reports only from the start of its stream.

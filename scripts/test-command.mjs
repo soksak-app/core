@@ -60,6 +60,19 @@ export function groupMembers(pgid) {
   return members;
 }
 
+/** The processes of the system as pid, parent, group and state. Only numbers and states are read, so the output stays small. */
+export function processTable() {
+  const table = childProcess.execFileSync('ps', ['-A', '-o', 'pid=,ppid=,pgid=,stat='], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  return table.split('\n').filter((line) => line.trim() !== '').map((line) => {
+    const fields = line.trim().split(/\s+/);
+    const row = { pid: Number(fields[0]), ppid: Number(fields[1]), pgid: Number(fields[2]), state: fields[3] };
+    if (fields.length !== 4 || !Number.isInteger(row.pid) || !Number.isInteger(row.ppid) || !Number.isInteger(row.pgid)) {
+      throw new Error(`ps returned an unreadable process line: ${JSON.stringify(line)}`);
+    }
+    return row;
+  });
+}
+
 // ps(1) state: the first character is the run state, and the characters after it are flags. Z is a zombie, which has ended and waits to be
 // reaped. The flag E marks a process that is trying to exit, which has also ended its work.
 export function hasEnded(state) {

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F299: runner는 test의 group에 process가 남았을 때만 test 끝에 process 표를 읽고, 자손과 leftover 이름을 위해 한 번만 읽는다.
 - F377-2: runner는 test의 group을 끝낼 때 자기 group에서 도는 그 group의 자손도 멈추고, 이름을 적고, 끝낸다.
 - F379: core 0.0.30, VT 0.0.20과 core 0.0.30을 위한 plugin이 게시되었고 registry에 나열된다.
 - F377: bounded command test는 성공 사례를 가장 큰 test limit 아래에서 child의 code로 판정하고, event watchdog test는 folder를 감시하는 대신 output file을 감시하고 child를 FIFO에서 기다리게 한다. FSEvents는 stream이 시작된 뒤의 변경만 알린다.

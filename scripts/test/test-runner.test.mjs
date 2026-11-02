@@ -319,6 +319,20 @@ test("a refused group signal whose only member is exiting ends without error", (
   }
 });
 
+test("a test process that exits and leaves no process in its group is ended without a read of the process table", async (t) => {
+  // The group of the test process holds no process after its exit, so there is nothing to stop, name or end, and a read of the table of
+  // every process of the system would only add its time to each test.
+  const reads = [];
+  const original = childProcess.execFileSync;
+  t.mock.method(childProcess, "execFileSync", (file, args, options) => {
+    if (file === "ps") reads.push(args.join(" "));
+    return original(file, args, options);
+  });
+  const { results } = await run([node("quick", "process.exit(0)")], { concurrency: 1 });
+  assert.equal(results.get("quick").status, "pass", results.get("quick").detail);
+  assert.deepEqual(reads, [], "the end of an empty group read the process table");
+});
+
 test("a test file whose tests each pass within their own limits is not ended by the runner, though the tests together take longer", async () => {
   // Each test takes 600 ms under its own limit of 5000 ms, so the file takes about 1.2 s in total. The item declares no limit of its own.
   const directory = mkdtempSync(join(tmpdir(), "runner-file-"));

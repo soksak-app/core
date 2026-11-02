@@ -8059,6 +8059,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F299",
+    implementation: [
+      { file: "scripts/test-runner.mjs", symbol: "function endGroup(pgid, leader)" },
+      { file: "scripts/test-command.mjs", symbol: "export function processTable()" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a test process that exits and leaves no process in its group is ended without a read of the process table" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a group at its limit is ended with the descendants that run in a group of their own, and the timeout names them" },
+    ],
+    expected: "The runner reads the process table at the end of a test only for a group that still has a process, and ends the descendants of the group that run in another group.",
+    levels: ["unit"],
+  },
+  {
     id: "F375",
     implementation: [
       { file: "packages/host/wailsv3/src/documents.go", symbol: "func validateViewGeneration(where string, generation uint64) error" },
