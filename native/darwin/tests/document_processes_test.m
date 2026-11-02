@@ -25,7 +25,9 @@ static void check(BOOL condition, NSString *message) {
 static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        @autoreleasepool {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        }
     }
     return done();
 }
@@ -278,7 +280,7 @@ static void writeStallRecord(const Region *regions, int count, BOOL all) {
 }
 
 // Runs one scenario: four regions in one window, loaded with the addresses, then their processes and footprints.
-static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString *store) {
+static NSArray<NSNumber *> *runScenario(NSString *name, NSArray<NSString *> *addresses, NSString *store) {
     printf("scenario %s: %lu regions\n", name.UTF8String, (unsigned long)addresses.count);
     fflush(stdout);
     NSWindow *window = [[[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
@@ -320,7 +322,9 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
             writeStallRecord(regions, 4, NO);
             stallRecorded = YES;
         }
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        @autoreleasepool {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        }
     }
     for (int i = 0; i < 4; i++) {
         WKWebView *view = (WKWebView *)regions[i].document;
@@ -380,6 +384,22 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
     }
     sp_surface_close(surface);
     [window close];
+    return processes;
+}
+
+// Waits until each WebContent process of a scenario has ended. The scenario closed its regions through sp_document_close,
+// the close of the applications, and its autoreleased references ended with its pool, so WebKit ends each process that
+// serves no page; a process that stays is a region that its close did not end.
+static void checkProcessesEnd(NSArray<NSNumber *> *processes) {
+    for (NSNumber *process in processes) {
+        pid_t pid = process.intValue;
+        NSDate *start = [NSDate date];
+        BOOL ended = pumpUntil(30, ^BOOL {
+            struct proc_bsdinfo info;
+            return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
+        });
+        check(ended, [NSString stringWithFormat:@"the WebContent process %d ends after its regions close (%.3f s)", pid, -start.timeIntervalSinceNow]);
+    }
 }
 
 int main(int argc, char **argv) { @autoreleasepool {
@@ -409,14 +429,25 @@ int main(int argc, char **argv) { @autoreleasepool {
     NSString *root = temporaryFolder(@"soksak-document-processes-");
     NSString *store = [root stringByAppendingPathComponent:@"document-data"];
 
-    runScenario(@"two origins",
-        @[ [originA stringByAppendingString:@"/region-1"], [originA stringByAppendingString:@"/region-2"],
-           [originB stringByAppendingString:@"/region-3"], [originB stringByAppendingString:@"/region-4"] ],
-        store);
-    runScenario(@"one origin",
-        @[ [originA stringByAppendingString:@"/region-1"], [originA stringByAppendingString:@"/region-2"],
-           [originA stringByAppendingString:@"/region-3"], [originA stringByAppendingString:@"/region-4"] ],
-        store);
+    // Each scenario runs in its own pool, as each turn of the run loop of the applications does, so its closed regions keep no
+    // autoreleased reference after it.
+    NSArray<NSNumber *> *processes = nil;
+    @autoreleasepool {
+        processes = [runScenario(@"two origins",
+            @[ [originA stringByAppendingString:@"/region-1"], [originA stringByAppendingString:@"/region-2"],
+               [originB stringByAppendingString:@"/region-3"], [originB stringByAppendingString:@"/region-4"] ],
+            store) retain];
+    }
+    checkProcessesEnd(processes);
+    [processes release];
+    @autoreleasepool {
+        processes = [runScenario(@"one origin",
+            @[ [originA stringByAppendingString:@"/region-1"], [originA stringByAppendingString:@"/region-2"],
+               [originA stringByAppendingString:@"/region-3"], [originA stringByAppendingString:@"/region-4"] ],
+            store) retain];
+    }
+    checkProcessesEnd(processes);
+    [processes release];
 
     // A run with --stall-record-after=0 writes the stall record of each scenario before its loads end and after they end.
     if (stallRecordAfter == 0) {

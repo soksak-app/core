@@ -1,7 +1,7 @@
 // Checks that a document region keeps its surface while it observes it (docs/spec/native-surfaces.md#document-regions): a
 // document observes the appearance of its surface, so a surface that the host closes before the document stays alive until
 // the document closes, the close of the document removes its observation from a live surface, and the surface is released
-// after the document closed.
+// after the document closed. The document itself is released when it closes, so its web view closes its page.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
@@ -36,6 +36,21 @@ static BOOL surfaceReleased;
 
 static char kSurfaceReleaseMarker;
 
+// A marker that the document holds as an associated object, so its release marks the release of the document.
+static BOOL documentReleased;
+
+@interface DocumentReleaseMarker : NSObject
+@end
+
+@implementation DocumentReleaseMarker
+- (void)dealloc {
+    documentReleased = YES;
+    [super dealloc];
+}
+@end
+
+static char kDocumentReleaseMarker;
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -66,6 +81,11 @@ int main(void) { @autoreleasepool {
         objc_setAssociatedObject((id)surface, &kSurfaceReleaseMarker, marker, OBJC_ASSOCIATION_RETAIN);
         [marker release];
         document = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, changed, NULL);
+        if (document) {
+            DocumentReleaseMarker *documentMarker = [DocumentReleaseMarker new];
+            objc_setAssociatedObject((id)document, &kDocumentReleaseMarker, documentMarker, OBJC_ASSOCIATION_RETAIN);
+            [documentMarker release];
+        }
     }
     check(document != NULL, @"a document region is created on the surface");
     if (!document) return 1;
@@ -85,6 +105,14 @@ int main(void) { @autoreleasepool {
         sp_document_close(document);
     }
     check(surfaceReleased, @"the surface is released after its document closed");
+    // WebKit can release the last references of a closed web view on a later turn of the main run loop.
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
+    while (!documentReleased && deadline.timeIntervalSinceNow > 0) {
+        @autoreleasepool {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        }
+    }
+    check(documentReleased, @"the document is released after it closes, so its web view closes its page");
 
     [window close];
     [window release];
