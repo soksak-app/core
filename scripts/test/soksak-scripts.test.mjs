@@ -60,21 +60,24 @@ function diagnosticApi(program, onClose = () => {}) {
 const TREE_AUDIT_LIMIT_MS = 30000;
 
 test("bounded command propagates success and reports its deadline", { timeout: 5000 }, async () => {
+  // The child ends with its own code after 1200 ms, and the deadline is the largest test limit, so the result is the code of the
+  // child and not the time that the machine takes to start it.
   const quick = await run(node, [
     join(packageRoot, "scripts/bounded.mjs"),
-    "1000",
+    "600000",
     node,
     "-e",
-    "process.exit(0)",
+    "setTimeout(() => process.exit(0), 1200)",
   ]);
   assert.equal(quick.code, 0, quick.stderr);
 
+  // The child never ends, so only the deadline ends the run.
   const timedOut = await run(node, [
     join(packageRoot, "scripts/bounded.mjs"),
     "30",
     node,
     "-e",
-    "setTimeout(() => {}, 1000)",
+    "setInterval(() => {}, 1000)",
   ]);
   assert.equal(timedOut.code, 124, timedOut.stderr);
 });

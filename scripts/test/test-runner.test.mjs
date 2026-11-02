@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import childProcess, { spawn, spawnSync } from "node:child_process";
+import childProcess, { execFileSync, spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 
 import { EVENT_PREFIX } from "../test-event-reporter.mjs";
@@ -333,7 +334,10 @@ function slowStart(folder) {
 // macOS is asynchronous and a process that blocks after it would keep the line.
 const eventLine = (type, name) => `require("node:fs").writeSync(2, ${JSON.stringify(`${EVENT_PREFIX}${JSON.stringify({ type, name })}\n`)});`;
 // Resolves when the output file of a test in the folder of the run holds `text`. The runner handles the event of a line before it
-// appends the line to the output file, so a change of the folder is the event source of a handled event.
+// appends the line to the output file, so a change of the file is the event source of a handled event. The runner creates the file
+// while `runTests` is called, so the file exists here. The watch is of the file, not of its folder: libuv watches a file with kqueue,
+// whose registration is applied in the next poll of this loop, before the runner receives the output that it appends; a folder is
+// watched with FSEvents, which starts its stream on another thread and does not report a change made before the stream started.
 function untilOutput(path, text) {
   return new Promise((resolve, reject) => {
     const check = () => {
@@ -343,7 +347,7 @@ function untilOutput(path, text) {
         if (error.code !== "ENOENT") { watcher.close(); reject(error); }
       }
     };
-    const watcher = watch(dirname(path), check);
+    const watcher = watch(path, check);
     check();
   });
 }
@@ -396,20 +400,18 @@ test("a test file that does not exit after its tests ended fails at the exit lim
 });
 
 test("a test file whose test events keep arriving is not ended at the event limit, though it runs longer than the limit", async (t) => {
-  // The process writes the event of step n after the file go-<n - 1> appears, and exits after step 5. The clock moves by 299 ms after
-  // each event, 1495 ms in all, so the events of the process do not stop for the limit of 300 ms.
+  // The process writes the event of step n and then reads the FIFO `go`, which blocks until the test opens it for writing and closes it;
+  // it exits after step 5. The clock moves by 299 ms after each event, 1495 ms in all, so the events of the process do not stop for the
+  // limit of 300 ms.
   const folder = mkdtempSync(join(tmpdir(), "runner-events-"));
+  const go = join(folder, "go");
+  execFileSync("mkfifo", [go]);
   const source = [
-    'const { existsSync, watch, writeSync } = require("node:fs");',
-    `const folder = ${JSON.stringify(folder)};`,
-    'let step = 0;',
-    'const next = () => {',
-    '  step += 1;',
-    '  if (step > 5) { watcher.close(); return; }',
+    'const { readFileSync, writeSync } = require("node:fs");',
+    'for (let step = 1; step <= 5; step++) {',
     `  writeSync(2, ${JSON.stringify(EVENT_PREFIX)} + JSON.stringify({ type: "test:pass", name: "step " + step }) + "\\n");`,
-    '};',
-    'const watcher = watch(folder, () => { if (existsSync(`${folder}/go-${step}`)) next(); });',
-    'next();',
+    `  readFileSync(${JSON.stringify(go)});`,
+    '}',
   ].join("\n");
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
@@ -418,7 +420,7 @@ test("a test file whose test events keep arriving is not ended at the event limi
     for (let step = 1; step <= 5; step++) {
       await untilOutput(join(folder, "run", "001-events.log"), `"name":"step ${step}"`);
       t.mock.timers.tick(299);
-      writeFileSync(join(folder, `go-${step}`), "");
+      await writeFile(go, "");
     }
     const result = (await outcome).results.get("events");
     assert.equal(result.status, "pass", result.detail);

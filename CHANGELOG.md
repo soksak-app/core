@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F377: The bounded command test judges its success case by the code of the child under the largest test limit, and the event watchdog tests watch the output file and block the child on a FIFO instead of watching folders, which FSEvents reports only from the start of its stream.
 - F378: The release candidate is 0.0.30.
 - F375: The Wails host refuses a view generation above the JavaScript safe integer limit with the text of the Tauri host, and the host contract states it. Red: two Go tests failed with the earlier text. Green: they pass.
 - F374-6-1: The view start values carry `levels`, the stored level of each event class of the host writer, and `runtime.log.levels.on` delivers each change of the page policy as `log.levels` with the class levels, so a view page reads `runtime.log.levels()` to skip building the data of a record that the policy would not store. Red: the start value tests of both hosts, the level test of both hosts, two workbench tests and the view bridge test failed. Green: the same tests and the structure checks pass.

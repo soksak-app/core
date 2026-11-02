@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F377: bounded command test는 성공 사례를 가장 큰 test limit 아래에서 child의 code로 판정하고, event watchdog test는 folder를 감시하는 대신 output file을 감시하고 child를 FIFO에서 기다리게 한다. FSEvents는 stream이 시작된 뒤의 변경만 알린다.
 - F378: release candidate는 0.0.30이다.
 - F375: Wails host는 JavaScript safe integer 한도를 넘는 view generation을 Tauri host의 문장으로 거부하고, host contract가 그 문장을 적는다. Red: Go test 두 개가 이전 문장으로 실패했다. Green: 이들이 통과한다.
 - F374-6-1: view 시작 값은 host writer의 각 event class 저장 level인 `levels`를 담고, `runtime.log.levels.on`은 page policy의 각 변경을 class level을 담은 `log.levels`로 전달한다. 그래서 view page는 `runtime.log.levels()`를 읽어 policy가 저장하지 않을 record의 데이터를 만들지 않는다. Red: 두 host의 시작 값 test, 두 host의 level test, workbench test 두 개, view bridge test가 실패했다. Green: 같은 test와 구조 검사가 통과한다.
