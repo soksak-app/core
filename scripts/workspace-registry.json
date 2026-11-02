@@ -8,7 +8,8 @@
   ],
   "sidecars": [
     { "repository": "../sidecars/files", "folder": "." },
-    { "repository": "../sidecars/vt", "folder": "vt-alacritty" }
+    { "repository": "../sidecars/vt", "folder": "vt-alacritty" },
+    { "repository": "../sidecars/alacritty", "folder": "alacritty" }
   ],
   "packs": [
     {

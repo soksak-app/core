@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F392: The workspace registry declares the sidecar `@soksak/sidecar-alacritty`.
 - F391: A sidecar may serve its screens only through `screen.read`, and a page writes a frame record for each reply it applies.
 - F318, F319: After their hosted repeats, three hosted CI runs of the full suites passed both tests, so the two failures are closed as not reproduced.
 - F376, F377-1: Three full runs of the scripts tests passed, one at load average 25 or more, so the two failures are closed as not reproduced, and F377 is complete.
