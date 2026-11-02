@@ -89,13 +89,13 @@ fn host_declarations() -> Value {
                 "scale": {"type": "number"}}}},
         }, {
             "name": "host.sidecars",
-            "description": "The surfaces whose closed the host has sent and the sidecar has not answered, sorted by sidecar and surface, and the persistent sidecars whose service runs another version than the installed one, sorted by sidecar, with the running version (null when the service sent none), the installed version and the number of open surfaces of the service: {closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}.",
+            "description": "The surfaces whose closed the host has sent and the sidecar has not answered, sorted by sidecar and surface, and the persistent sidecars whose service runs another version than the installed one, sorted by sidecar, with the running version (null when the service sent none), the installed version (null when the sidecar is no longer declared) and the number of open surfaces of the service: {closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}.",
             "schema": {"type": "object", "properties": {
                 "closing": {"type": "array", "items": {"type": "object", "properties": {
                     "sidecar": {"type": "string"}, "surface": {"type": "string"}}}},
                 "outdated": {"type": "array", "items": {"type": "object", "properties": {
                     "sidecar": {"type": "string"}, "running": {"type": ["string", "null"]},
-                    "installed": {"type": "string"}, "sessions": {"type": "integer"}}}}}},
+                    "installed": {"type": ["string", "null"]}, "sessions": {"type": "integer"}}}}}},
         }, {
             "name": "host.window",
             "description": "Window frame and system pointer location in screen coordinates, content size, backing scale, the maximum refresh rate of its screen (null when the window is on no screen), maximized, key and application active state, whether other windows cover the whole window, child window count, the WebContent process of the app page (0 before it starts), whether the application is quitting, window buttons, webview frames, native surfaces, document regions, image regions, and the open native modal.",

@@ -173,8 +173,8 @@ fn a_poisoned_declaration_lock_still_answers_the_sidecar_queries() {
     let sidecars = Sidecars::<TestOwner>::new(&[], folder.path().to_path_buf()).unwrap();
     poison_declarations(&sidecars.core.declarations);
     assert_eq!(
-        sidecars.core.version("missing"),
-        "",
+        sidecars.core.installed("missing"),
+        None,
         "the version was not read while the declaration lock was poisoned"
     );
     assert!(
@@ -487,17 +487,17 @@ fn declaration_notifies_each_outdated_version_change() {
         counted.fetch_add(1, Ordering::SeqCst);
     });
     // A declaration whose sidecar.json does not parse refuses the sidecar: the running service stays and is reported
-    // without an installed version, and the change is notified once.
+    // with no installed version, and the change is notified once.
     declaration.data = b"{".to_vec();
     sidecars.declare(&[declaration]).unwrap();
     assert_eq!(calls.load(Ordering::SeqCst), 1);
-    assert_eq!(before.outdated[0].installed, "0.0.7");
+    assert_eq!(before.outdated[0].installed.as_deref(), Some("0.0.7"));
     assert_eq!(
         sidecars.status().outdated,
         vec![super::OutdatedSidecar {
             sidecar: "fixture-service".into(),
             running: Some("0.0.6".into()),
-            installed: String::new(),
+            installed: None,
             sessions: 1,
         }]
     );

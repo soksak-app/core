@@ -124,14 +124,14 @@ var hostStatus = map[string]hostEntry{
 		}}},
 	},
 	"host.sidecars": {
-		Description: "The surfaces whose closed the host has sent and the sidecar has not answered, sorted by sidecar and surface, and the persistent sidecars whose service runs another version than the installed one, sorted by sidecar, with the running version (null when the service sent none), the installed version and the number of open surfaces of the service: {closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}.",
+		Description: "The surfaces whose closed the host has sent and the sidecar has not answered, sorted by sidecar and surface, and the persistent sidecars whose service runs another version than the installed one, sorted by sidecar, with the running version (null when the service sent none), the installed version (null when the sidecar is no longer declared) and the number of open surfaces of the service: {closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"closing": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"sidecar": map[string]any{"type": "string"}, "surface": map[string]any{"type": "string"},
 			}}},
 			"outdated": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"sidecar": map[string]any{"type": "string"}, "running": map[string]any{"type": []any{"string", "null"}},
-				"installed": map[string]any{"type": "string"}, "sessions": map[string]any{"type": "integer"},
+				"installed": map[string]any{"type": []any{"string", "null"}}, "sessions": map[string]any{"type": "integer"},
 			}}},
 		}},
 	},

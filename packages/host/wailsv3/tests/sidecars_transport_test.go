@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -1923,8 +1924,8 @@ func TestPersistentServiceOfAnotherVersionIsReportedOutdated(t *testing.T) {
 		version *string
 		want    []host.OutdatedSidecar
 	}{
-		{"another version", &old, []host.OutdatedSidecar{{Sidecar: "fixture-service", Running: &old, Installed: "0.0.7", Sessions: 1}}},
-		{"no version", nil, []host.OutdatedSidecar{{Sidecar: "fixture-service", Running: nil, Installed: "0.0.7", Sessions: 1}}},
+		{"another version", &old, []host.OutdatedSidecar{{Sidecar: "fixture-service", Running: &old, Installed: text("0.0.7"), Sessions: 1}}},
+		{"no version", nil, []host.OutdatedSidecar{{Sidecar: "fixture-service", Running: nil, Installed: text("0.0.7"), Sessions: 1}}},
 		{"the installed version", text("0.0.7"), []host.OutdatedSidecar{}},
 	}
 	for _, item := range cases {
@@ -2243,7 +2244,7 @@ func TestAnOutdatedServiceIsReplaced(t *testing.T) {
 		t.Fatal(err)
 	}
 	receiveSidecarMessage(t, owner.seen)
-	if got := sidecars.Outdated(); len(got) != 1 || got[0].Installed != "0.0.7" || got[0].Running == nil || *got[0].Running != "0.0.6" {
+	if got := sidecars.Outdated(); len(got) != 1 || got[0].Installed == nil || *got[0].Installed != "0.0.7" || got[0].Running == nil || *got[0].Running != "0.0.6" {
 		t.Fatalf("outdated before the replacement: %+v", got)
 	}
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err != nil {
@@ -2285,6 +2286,52 @@ func TestAServiceThatIsNotOutdatedIsNotReplaced(t *testing.T) {
 	}
 	if got := service.received(); !slices.Equal(got, []string{"hello", ""}) {
 		t.Fatalf("the service received %v after the refused replacements", got)
+	}
+}
+
+// contract: sidecars-transport.replace.ends-a-service-of-an-undeclared-sidecar
+func TestAServiceOfAnUndeclaredSidecarIsEnded(t *testing.T) {
+	logged := recordText(captureLog(t))
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
+	sidecars := replaceSidecars(t, root, service)
+	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	if err := sidecars.Declare(nil); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := json.Marshal(sidecars.Outdated())
+	if want := `[{"sidecar":"fixture-service","running":"0.0.7","installed":null,"sessions":1}]`; string(got) != want {
+		t.Fatalf("outdated of the undeclared sidecar = %s, want %s", got, want)
+	}
+	if err := sidecars.Replace(context.Background(), "fixture-service"); err != nil {
+		t.Fatal(err)
+	}
+	notice := receiveSidecarMessage(t, owner.seen)
+	var event map[string]any
+	if err := json.Unmarshal(notice.Body, &event); err != nil || event["event"] != "connection" || event["connected"] != false {
+		t.Fatalf("the notice after the end is %s (%v)", notice.Body, err)
+	}
+	if reason, _ := event["reason"].(string); !strings.Contains(reason, "sidecar fixture-service is not declared") {
+		t.Fatalf("the notice reason is %q", reason)
+	}
+	if got := sidecars.Outdated(); len(got) != 0 {
+		t.Fatalf("outdated after the end: %+v", got)
+	}
+	if got := service.received(); !slices.Equal(got, []string{"hello", "", "close-owner", "shutdown"}) {
+		t.Fatalf("the service received %v", got)
+	}
+	if _, err := os.Stat(filepath.Join(service.folder, "installed.pid")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the host started an executable for the undeclared sidecar: %v", err)
+	}
+	if want := "sidecar fixture-service: service 0.0.7 ended; the sidecar is not declared"; !strings.Contains(logged.String(), want) {
+		t.Fatalf("the log has no %q: %q", want, logged.String())
+	}
+	if strings.Contains(logged.String(), "restart failed") {
+		t.Fatalf("the end of the undeclared service was logged as a failed restart: %q", logged.String())
 	}
 }
 

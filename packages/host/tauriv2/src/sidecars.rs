@@ -216,9 +216,8 @@ fn status_locked<O>(core: &Core<O>, state: &State<O>) -> SidecarStatus {
         .iter()
         .filter_map(|(name, process)| {
             let connection = process.persistent.as_ref()?;
-            // default: an undeclared sidecar has no installed version.
-            let installed = declarations.versions.get(name).cloned().unwrap_or_default();
-            if connection.version.as_ref() == Some(&installed) {
+            let installed = declarations.installed(name);
+            if installed.is_some() && connection.version == installed {
                 return None;
             }
             Some(OutdatedSidecar {
@@ -335,7 +334,8 @@ fn detach_stdio<O>(state: &mut State<O>, name: &str) -> bool {
 /// service that sent no version is of an earlier version.
 fn is_outdated<O>(core: &Core<O>, name: &str, process: &Process) -> bool {
     process.persistent.as_ref().is_some_and(|connection| {
-        connection.version.as_deref() != Some(core.version(name).as_str())
+        let installed = core.installed(name);
+        installed.is_none() || connection.version != installed
     })
 }
 
@@ -942,7 +942,8 @@ struct PersistentConnection {
 /// The versions of a persistent service that is being replaced.
 struct Replacement {
     running: Option<String>,
-    installed: String,
+    /// None when the sidecar is not declared: the replacement ends the service and starts nothing.
+    installed: Option<String>,
     /// The process of the service endpoint, which ends before the installed service starts.
     pid: u32,
     /// How long the host waits for that process to end.
@@ -1051,19 +1052,24 @@ struct Declarations {
     refused: HashMap<String, String>,
 }
 
+impl Declarations {
+    /// The version that installed.json records for the declared sidecar name, or None when it is not declared.
+    fn installed(&self, name: &str) -> Option<String> {
+        self.declared
+            .contains_key(name)
+            .then(|| self.versions.get(name).cloned().unwrap_or_default()) // default: installed.json records a version for each declared sidecar
+    }
+}
+
 impl<O> Core<O> {
-    /// The version that installed.json records for the declared sidecar name, or an empty text for an undeclared one.
-    fn version(&self, name: &str) -> String {
+    /// The version that installed.json records for the declared sidecar name, or None when it is not declared.
+    fn installed(&self, name: &str) -> Option<String> {
         self.declarations
             .read()
             // default: a lock that a panicking thread poisoned still holds the sidecar declarations, which are only
             // read; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
-            .versions
-            .get(name)
-            .cloned()
-            // default: an undeclared sidecar has no installed version, and no service version equals the empty text.
-            .unwrap_or_default()
+            .installed(name)
     }
 
     /// The executable and the persistence of the declared sidecar name.
@@ -1140,7 +1146,8 @@ pub struct SidecarDeclaration {
 pub struct OutdatedSidecar {
     pub sidecar: String,
     pub running: Option<String>,
-    pub installed: String,
+    /// None when the sidecar is no longer declared.
+    pub installed: Option<String>,
     pub sessions: usize,
 }
 
@@ -1979,7 +1986,7 @@ impl<O: Owner> Sidecars<O> {
                 name.to_string(),
                 Replacement {
                     running,
-                    installed: self.core.version(name),
+                    installed: self.core.installed(name),
                     pid: service_pid,
                     timeout: self.stop_timeout,
                 },
@@ -3443,6 +3450,47 @@ fn await_replaced_service<O: Owner>(core: &Arc<Core<O>>, name: &str) {
         .remove(name);
 }
 
+/// Ends the replacement of the service of a sidecar that is not declared: it starts no executable, tells the surfaces
+/// that sent to the sidecar the error of a send to it, and returns true (docs/spec/persistent-services.md#updates). It
+/// returns false for any other loss.
+fn end_undeclared_replacement<O: Owner>(core: &Arc<Core<O>>, name: &str) -> bool {
+    let replaced = {
+        // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call amends; the
+        // panic hook records the panic.
+        let mut state = core.state.lock().unwrap_or_else(PoisonError::into_inner);
+        if !state
+            .replacing
+            .get(name)
+            .is_some_and(|replaced| replaced.installed.is_none())
+        {
+            return false;
+        }
+        let replaced = state.replacing.remove(name);
+        publish_status(&state);
+        replaced
+    };
+    let running = replaced
+        .and_then(|replaced| replaced.running)
+        .unwrap_or_else(|| "none".to_string()); // default: a service that sent no version has none to name
+    crate::application_log::log_info(
+        &format!("sidecar {name}"),
+        format!("service {running} ended; the sidecar is not declared"),
+    );
+    notify_connection(core, name, Err(core.undeclared(name)));
+    let changed = core
+        .state
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .closing_changed
+        .clone();
+    if let Some(changed) = changed {
+        changed();
+    }
+    true
+}
+
 /// Connects a lost persistent connection again and notifies the owning surfaces of the result (V5-106). It does nothing
 /// when another path already started it again or the channel is terminating. It tries once for one connection loss: a
 /// failure is reported as a notification, and the next send passes through the same path again. However, the first
@@ -3452,6 +3500,9 @@ fn await_replaced_service<O: Owner>(core: &Arc<Core<O>>, name: &str) {
 /// does not replace the endpoint.
 fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
     await_replaced_service(core, name);
+    if end_undeclared_replacement(core, name) {
+        return;
+    }
     // One disconnect counts at most one failure of the restart limit, whichever attempt below finds it.
     let lost = Revival::default();
     let mut outcome = revive_attempt(core, name, &lost);
@@ -3496,7 +3547,11 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
             let running = replaced.running.as_deref().unwrap_or("none"); // default: a service that sent no version has none to name
             crate::application_log::log_info(
                 &format!("sidecar {name}"),
-                format!("service {running} replaced by {}", replaced.installed),
+                format!(
+                    "service {running} replaced by {}",
+                    // default: a replacement of an undeclared sidecar ends in end_undeclared_replacement and starts nothing.
+                    replaced.installed.as_deref().unwrap_or("none")
+                ),
             );
             let state = core
                 .state

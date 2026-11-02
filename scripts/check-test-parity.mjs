@@ -8404,8 +8404,23 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
       { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "declaration_notifies_each_outdated_version_change" },
     ],
-    expected: "A declaration whose sidecar.json does not parse succeeds on both hosts, notifies host.sidecars once and leaves the running service reported with an empty installed version.",
+    expected: "A declaration whose sidecar.json does not parse succeeds on both hosts, notifies host.sidecars once and leaves the running service reported with a null installed version.",
     levels: ["native"],
+  },
+  {
+    id: "F321-4",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) endUndeclaredReplacement(" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn end_undeclared_replacement<" },
+      { file: "packages/workbench/library.js", symbol: "const declared = item.installed !== null;" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestAServiceOfAnUndeclaredSidecarIsEnded" },
+      { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_service_of_an_undeclared_sidecar_is_ended" },
+      { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
+    ],
+    expected: "A running persistent service whose sidecar is no longer declared is reported with a null installed version, its replacement ends it without a start and tells its surfaces the undeclared error, and the plugin screen shows it as 선언 없음 with the action that ends it.",
+    levels: ["native", "unit"],
   },
   {
     id: "F321-2",

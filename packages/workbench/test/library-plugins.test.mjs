@@ -24,7 +24,9 @@ test("the plugin page of the library lists each plugin with its description, ver
   const status = {
     core: "0.0.24", registry: "file:///registry/index.json", error: null, reload: false,
     // A persistent service that runs another version than the installed one, with the sessions that its replacement ends.
-    outdated: [{ sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2 }],
+    // A service whose sidecar is no longer declared has no installed version; its action ends it.
+    outdated: [{ sidecar: "@fixture/sidecar-removed", running: "0.0.5", installed: null, sessions: 1 },
+      { sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2 }],
     // The plugins that the registry lists in a newer version.
     updates: [{ id: "term", installed: "0.1.0", latest: "0.2.0" }],
     operation: { action: "install", plugin: "db", state: "running", error: null },
@@ -74,7 +76,10 @@ test("the plugin page of the library lists each plugin with its description, ver
     const outdatedRows = [...root.querySelectorAll('[data-expose="core.library.plugins.outdated"]')];
     assert.deepEqual(outdatedRows.map((row) => [row.querySelector("p").textContent, row.querySelector("button").textContent,
       row.querySelector("button").dataset.command, row.querySelector("button").dataset.params]), [[
-      "@fixture/sidecar-service: 0.0.3 → 0.0.7", "터미널 2개를 끝내고 적용", "core.plugins.replace",
+      "@fixture/sidecar-removed: 0.0.5 → 선언 없음", "세션 1개를 끝내고 종료", "core.plugins.replace",
+      JSON.stringify({ sidecar: "@fixture/sidecar-removed" }),
+    ], [
+      "@fixture/sidecar-service: 0.0.3 → 0.0.7", "세션 2개를 끝내고 적용", "core.plugins.replace",
       JSON.stringify({ sidecar: "@fixture/sidecar-service" }),
     ]]);
     // The update list names each update and offers one action that updates all of them.

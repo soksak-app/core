@@ -2285,7 +2285,7 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
             vec![OutdatedSidecar {
                 sidecar: ECHO.to_string(),
                 running: Some("0.0.6".to_string()),
-                installed: "0.0.7".to_string(),
+                installed: Some("0.0.7".to_string()),
                 sessions: 1,
             }],
         ),
@@ -2294,7 +2294,7 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
             vec![OutdatedSidecar {
                 sidecar: ECHO.to_string(),
                 running: None,
-                installed: "0.0.7".to_string(),
+                installed: Some("0.0.7".to_string()),
                 sessions: 1,
             }],
         ),
@@ -2621,7 +2621,7 @@ fn an_outdated_service_is_replaced() {
         vec![OutdatedSidecar {
             sidecar: ECHO.to_string(),
             running: Some("0.0.6".to_string()),
-            installed: "0.0.7".to_string(),
+            installed: Some("0.0.7".to_string()),
             sessions: 1,
         }]
     );
@@ -2667,6 +2667,56 @@ fn a_service_that_is_not_outdated_is_not_replaced() {
     let error = sidecars.replace(ECHO).unwrap_err();
     assert!(error.contains(ECHO), "{error}");
     assert_eq!(*service.operations.lock().unwrap(), ["hello", ""]);
+    sidecars.stop();
+}
+
+// contract: sidecars-transport.replace.ends-a-service-of-an-undeclared-sidecar
+#[test]
+fn a_service_of_an_undeclared_sidecar_is_ended() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.7",
+        "0.0.7",
+        Duration::ZERO,
+        0,
+    );
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let (owner, events) = owner("replace", "/projects/replace");
+    sidecars
+        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv_timeout(STALL).unwrap();
+    sidecars.declare(&[]).unwrap();
+    assert_eq!(
+        serde_json::to_string(&sidecars.outdated()).unwrap(),
+        format!(r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1}}]"#)
+    );
+    sidecars.replace(ECHO).unwrap();
+    let notice = events.recv_timeout(STALL).unwrap();
+    assert_eq!(notice.surface, "surface-1");
+    let event: serde_json::Value = serde_json::from_str(notice.body.get()).unwrap();
+    assert_eq!(
+        (event["event"].as_str(), event["connected"].as_bool()),
+        (Some("connection"), Some(false)),
+        "{event}"
+    );
+    let reason = event["reason"].as_str().unwrap_or_default(); // default: a notice without a reason fails below
+    assert!(
+        reason.contains(&format!("sidecar {ECHO} is not declared")),
+        "{reason}"
+    );
+    assert!(sidecars.outdated().is_empty());
+    assert_eq!(
+        *service.operations.lock().unwrap(),
+        ["hello", "", "close-owner", "shutdown"]
+    );
+    assert!(
+        !service.installed_pid_path.exists(),
+        "the host started an executable for the undeclared sidecar"
+    );
     sidecars.stop();
 }
 

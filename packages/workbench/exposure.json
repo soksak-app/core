@@ -965,7 +965,10 @@
                     ]
                   },
                   "installed": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "sessions": {
                     "type": "number"

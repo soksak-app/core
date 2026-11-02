@@ -347,7 +347,8 @@ export function createLibrary(root, rendered = () => {}) {
     } else {
       updateList.key = null;
     }
-    // An outdated persistent service stays until its sessions end; the action ends them and replaces the service.
+    // An outdated persistent service stays until its sessions end; the action ends them and replaces the service, or ends it
+    // when its sidecar is no longer declared (docs/spec/persistent-services.md#updates).
     if (pluginOperations.hosted) {
       for (const item of status.outdated) {
         const key = JSON.stringify(item);
@@ -357,8 +358,9 @@ export function createLibrary(root, rendered = () => {}) {
         node.dataset.expose = 'core.library.plugins.outdated'; node.dataset.sidecar = item.sidecar;
         // A service that sent no version is of an earlier version.
         const running = item.running === null ? '이전 버전' : item.running;
-        node.append(element('p', 'library-outdated__text', `${item.sidecar}: ${running} → ${item.installed}`));
-        const button = element('button', 'ui-button', `터미널 ${item.sessions}개를 끝내고 적용`); button.type = 'button';
+        const declared = item.installed !== null;
+        node.append(element('p', 'library-outdated__text', `${item.sidecar}: ${running} → ${declared ? item.installed : '선언 없음'}`));
+        const button = element('button', 'ui-button', `세션 ${item.sessions}개를 끝내고 ${declared ? '적용' : '종료'}`); button.type = 'button';
         button.dataset.expose = 'core.library.plugins.replace';
         mark(button, 'core.plugins.replace', { sidecar: item.sidecar });
         node.append(button);

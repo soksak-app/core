@@ -363,11 +363,11 @@ type SidecarDeclaration struct {
 
 // OutdatedSidecar is a persistent sidecar whose running service has another version than the installed one
 // (docs/spec/persistent-services.md#updates). Running is nil when the service sent no version; Sessions counts the open
-// surfaces of the application that have sent to the service.
+// surfaces of the application that have sent to the service. Installed is nil when the sidecar is no longer declared.
 type OutdatedSidecar struct {
 	Sidecar   string  `json:"sidecar"`
 	Running   *string `json:"running"`
-	Installed string  `json:"installed"`
+	Installed *string `json:"installed"`
 	Sessions  int     `json:"sessions"`
 }
 
@@ -987,8 +987,8 @@ func (c *Sidecars) outdatedLocked() []OutdatedSidecar {
 	defer c.declarations.RUnlock()
 	list := []OutdatedSidecar{}
 	for name, process := range c.running {
-		installed := c.versions[name]
-		if !process.persistent || (process.version != nil && *process.version == installed) {
+		installed := c.installedLocked(name)
+		if !process.persistent || (process.version != nil && installed != nil && *process.version == *installed) {
 			continue
 		}
 		sessions := 0
@@ -1015,15 +1015,26 @@ func (c *Sidecars) outdated(process *sidecar) bool {
 		return false
 	}
 	c.declarations.RLock()
-	installed := c.versions[process.name]
+	installed := c.installedLocked(process.name)
 	c.declarations.RUnlock()
-	return process.version == nil || *process.version != installed
+	return process.version == nil || installed == nil || *process.version != *installed
+}
+
+// installedLocked is the version that installed.json records for the declared sidecar name, or nil when the sidecar
+// is not declared. Call it with c.declarations held.
+func (c *Sidecars) installedLocked(name string) *string {
+	if _, declared := c.declared[name]; !declared {
+		return nil
+	}
+	version := c.versions[name]
+	return &version
 }
 
 // replacement is the versions of a persistent service that is being replaced.
 type replacement struct {
-	running   *string
-	installed string
+	running *string
+	// installed is nil when the sidecar is not declared: the replacement ends the service and starts nothing.
+	installed *string
 	// pid is the process of the service endpoint, which ends before the installed service starts.
 	pid int
 }
@@ -1044,7 +1055,7 @@ func (c *Sidecars) Replace(ctx context.Context, name string) error {
 		return fmt.Errorf("sidecar %s: a replacement is running", name)
 	}
 	c.declarations.RLock()
-	installed := c.versions[name]
+	installed := c.installedLocked(name)
 	c.declarations.RUnlock()
 	c.replacing[name] = replacement{running: process.version, installed: installed, pid: process.servicePID}
 	c.mu.Unlock()
@@ -2366,6 +2377,9 @@ func logUnfinishedLine(sidecar string, unfinished int) {
 // a failure is reported by a notification, and the next send passes through the same path again.
 func (c *Sidecars) revivePersistent(name, loss string) {
 	c.awaitReplacedService(name)
+	if c.endUndeclaredReplacement(name) {
+		return
+	}
 	// One disconnect counts at most one failure of the restart limit, whichever attempt below finds it.
 	lost := &revival{}
 	announced, failure := c.reviveAttempt(name, lost)
@@ -2397,7 +2411,7 @@ func (c *Sidecars) revivePersistent(name, loss string) {
 		if replaced.running != nil {
 			running = *replaced.running
 		}
-		LogInfo("sidecar "+name, fmt.Sprintf("service %s replaced by %s", running, replaced.installed))
+		LogInfo("sidecar "+name, fmt.Sprintf("service %s replaced by %s", running, *replaced.installed))
 		c.notifyConnection(name, nil)
 		c.mu.Lock()
 		c.closingChanged()
@@ -2408,6 +2422,29 @@ func (c *Sidecars) revivePersistent(name, loss string) {
 		LogError("sidecar "+name, "connection lost; restarted ("+loss+")")
 		c.notifyConnection(name, nil)
 	}
+}
+
+// endUndeclaredReplacement ends the replacement of the service of a sidecar that is not declared: it starts no
+// executable, tells the surfaces that sent to the sidecar the error of a send to it, and reports true
+// (docs/spec/persistent-services.md#updates). It reports false for any other loss.
+func (c *Sidecars) endUndeclaredReplacement(name string) bool {
+	c.mu.Lock()
+	replaced, replacing := c.replacing[name]
+	if !replacing || replaced.installed != nil {
+		c.mu.Unlock()
+		return false
+	}
+	delete(c.replacing, name)
+	c.closingChanged()
+	c.mu.Unlock()
+	running := "none"
+	if replaced.running != nil {
+		running = *replaced.running
+	}
+	LogInfo("sidecar "+name, fmt.Sprintf("service %s ended; the sidecar is not declared", running))
+	c.notifyConnection(name, c.undeclared(name))
+	c.closingInvalidated()
+	return true
 }
 
 // awaitReplacedService waits until the process of the service that Replace closed has ended, so the installed service

@@ -120,14 +120,14 @@ func TestDeclarationNotifiesEachOutdatedVersionChange(t *testing.T) {
 	calls := 0
 	c.ClosingChanged = func(SidecarStatus) { calls++ }
 	// A declaration whose sidecar.json does not parse refuses the sidecar: the running service stays and is reported
-	// without an installed version, and the change is notified once.
+	// with no installed version, and the change is notified once.
 	declaration.Data = []byte("{")
 	if err := c.Declare([]SidecarDeclaration{declaration}); err != nil {
 		t.Fatal(err)
 	}
 	after := c.Status()
-	if calls != 1 || before.Outdated[0].Installed != "0.0.7" || len(after.Outdated) != 1 || after.Outdated[0].Sidecar != "fixture-service" ||
-		after.Outdated[0].Running == nil || *after.Outdated[0].Running != "0.0.6" || after.Outdated[0].Installed != "" || after.Outdated[0].Sessions != 1 {
+	if calls != 1 || before.Outdated[0].Installed == nil || *before.Outdated[0].Installed != "0.0.7" || len(after.Outdated) != 1 || after.Outdated[0].Sidecar != "fixture-service" ||
+		after.Outdated[0].Running == nil || *after.Outdated[0].Running != "0.0.6" || after.Outdated[0].Installed != nil || after.Outdated[0].Sessions != 1 {
 		t.Fatalf("refused declaration: notifications %d, status %+v, before %+v", calls, after, before)
 	}
 }
