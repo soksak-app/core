@@ -7,7 +7,7 @@
 - F391: 사이드카는 화면을 `screen.read`로만 제공할 수 있고, 페이지는 적용한 응답마다 frame 기록을 쓴다.
 - F318, F319: hosted repeat 뒤 전체 suite의 hosted CI run 세 번이 두 test를 통과했으므로, 두 실패를 not reproduced로 닫는다.
 - F376, F377-1: scripts test 전체 실행 세 번이 통과했고 그중 하나는 load average 25 이상이었으므로, 두 실패를 not reproduced로 닫고 F377을 완료한다.
-- F390: record는 다른 애플리케이션을 선례, 참고, 비교로 인용하지 않고, tracked test가 그런 인용을 거절한다.
+- F390: V5-113 항목과 그 changelog, V5-70 항목, native surfaces 명세의 callback boundaries가 이 저장소의 사실을 적는다.
 - F386-5: release 후보는 F386의 lease 표시 방식을 담은 0.0.32이고, 최신 게시 release는 v0.0.31이다.
 - F386-6: lease 규칙은 window server가 늦어도 이후 surface가 표시되면 대신된 surface의 in use 표시를 지운다고 적는다. hosted CI 기계가 그것을 보였다.
 - F386-7: 두 호스트의 image attach는 영역 검사에서 표시 방식을 읽으므로 기본 방식이 남지 않는다.

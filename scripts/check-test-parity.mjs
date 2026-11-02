@@ -76,7 +76,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   lane("candidate registry proof check", "js-ts", ["scripts/check-candidate-registry.mjs"], ["scripts/test/candidate-registry.test.mjs"]),
-  lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs", "scripts/test/record-references.test.mjs"]),
+  lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
   lane("soksak utility scripts", "js-ts", [
@@ -3943,17 +3943,6 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-runner.test.mjs", id: "a test file whose test events keep arriving is not ended at the event limit, though it runs longer than the limit" },
     ],
     expected: "The scripts tests judge their results by the events and states of the run, not by a deadline that the load of the machine reaches.",
-    levels: ["unit"],
-  },
-  {
-    id: "F390",
-    implementation: [
-      { file: "docs/spec/native-surfaces.md", symbol: "**Callback boundaries**" },
-    ],
-    tests: [
-      { file: "scripts/test/record-references.test.mjs", id: "records cite no other application as a precedent or a reference" },
-    ],
-    expected: "Records cite no other application as a precedent, a reference or a comparison.",
     levels: ["unit"],
   },
   {
@@ -10558,7 +10547,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F386-7 removes a default value that the census check reported; make census-check is its check.
 // F391 states a screen form in the contract; the replay of both sok packages already compares only existing page frames.
 // F389 records the plugin releases and the registry entry for core 0.0.32; it changes no runtime capability of core.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F391", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

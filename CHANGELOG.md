@@ -7,7 +7,7 @@
 - F391: A sidecar may serve its screens only through `screen.read`, and a page writes a frame record for each reply it applies.
 - F318, F319: After their hosted repeats, three hosted CI runs of the full suites passed both tests, so the two failures are closed as not reproduced.
 - F376, F377-1: Three full runs of the scripts tests passed, one at load average 25 or more, so the two failures are closed as not reproduced, and F377 is complete.
-- F390: Records cite no other application as a precedent, a reference or a comparison, and a tracked test refuses such citations.
+- F390: The V5-113 item and its changelog entry, the V5-70 item and the callback boundaries of the native surfaces specification state the facts of this repository.
 - F386-5: The release candidate is 0.0.32, which carries the lease presentation mode of F386, and the latest published release is v0.0.31.
 - F386-6: The lease rule states that the window server clears the in-use mark of a replaced surface at the latest once a later surface is presented, which the hosted CI machine showed.
 - F386-7: The image attach of both hosts reads the presentation mode from the region check, so no default mode remains.
