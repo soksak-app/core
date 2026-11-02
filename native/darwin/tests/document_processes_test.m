@@ -52,6 +52,15 @@ static NSString *networkError(nw_error_t error) {
 // The number of connections that the test servers accepted, which names each connection in the records.
 static int connectionCount;
 
+// With --unanswered-region=N the servers hold the request of region N of the first scenario without an answer, so the
+// region waits as a stalled region does and the test checks the stall path: the closing of the regions whose load ended
+// and its record. heldConnections keeps the held connections until the scenario ends.
+static int unansweredRegion;
+static BOOL holdRequests;
+static NSMutableArray *heldConnections;
+static int stallClosedRegions;
+static int stallWaitingRegions;
+
 // An HTTP server on the loopback address that answers every request with the page and closes each connection. Each
 // connection writes a record when it is accepted, when its request arrives and when its answer is sent, so a region that
 // does not load shows whether its request reached the server.
@@ -86,6 +95,20 @@ static nw_listener_t serve(void) {
                 }
                 nw_connection_cancel(connection);
                 return;
+            }
+            if (holdRequests) {
+                const void *buffer = NULL;
+                size_t length = 0;
+                dispatch_data_t map = dispatch_data_create_map(content, &buffer, &length);
+                NSString *request = [[[NSString alloc] initWithBytes:buffer length:length encoding:NSUTF8StringEncoding] autorelease];
+                dispatch_release(map);
+                NSString *held = [NSString stringWithFormat:@" /region-%d ", unansweredRegion];
+                if ([[request componentsSeparatedByString:@"\r\n"].firstObject containsString:held]) {
+                    printf("server connection %d holds the request of region %d without an answer\n", number, unansweredRegion);
+                    fflush(stdout);
+                    [heldConnections addObject:(id)connection];
+                    return;
+                }
             }
             NSData *bytes = [kPage dataUsingEncoding:NSUTF8StringEncoding];
             NSString *head = [NSString stringWithFormat:@"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n"
@@ -143,16 +166,63 @@ static void changed(void *context, const char *text) {
 // (the state carries the error) or when the page is not loading and has its title. The state events also report the
 // changes of the loading and title properties, and a page that is not loading can report an empty title before its title
 // is set, so the title is part of the end.
+static BOOL regionLoadEnded(const Region *region) {
+    NSDictionary *state = region->state;
+    if (!state) return NO;
+    id error = state[@"error"];
+    if (error && error != NSNull.null) return YES;
+    return ![state[@"loading"] boolValue] && [state[@"title"] isEqual:@"Region"];
+}
+
 static BOOL regionsLoadEnded(const Region *regions, int count) {
     for (int i = 0; i < count; i++) {
-        if (!regions[i].document) continue;
-        NSDictionary *state = regions[i].state;
-        if (!state) return NO;
-        id error = state[@"error"];
-        if (error && error != NSNull.null) continue;
-        if ([state[@"loading"] boolValue] || ![state[@"title"] isEqual:@"Region"]) return NO;
+        if (regions[i].document && !regionLoadEnded(&regions[i])) return NO;
     }
     return YES;
+}
+
+// The wait after which a scenario whose loads have not ended is a stall. The stall closes the regions whose load ended, so
+// the record shows whether the region that waits continues after their WebContent processes end; the scenario then fails.
+// A run with --unanswered-region sets 10 seconds, because WebKit ends a request without an answer after about 30 seconds.
+static NSTimeInterval stallSeconds = 30;
+
+// Closes the regions whose load ended, waits up to 30 seconds until their WebContent processes end and then up to
+// stallSeconds until the other regions end their loads, and writes each result as a stall record line. A region that loads
+// after the processes ended waited for a resource that those processes held; a region that still waits holds the resource
+// itself or waits for another process.
+static void closeEndedRegions(Region *regions, int count) {
+    NSMutableArray<NSNumber *> *ended = [NSMutableArray array];
+    for (int i = 0; i < count; i++) {
+        if (!regions[i].document || !regionLoadEnded(&regions[i])) continue;
+        pid_t process = ((WKWebView *)regions[i].document)._webProcessIdentifier;
+        printf("stall record: region %d ended its load in process %d and closes\n", i + 1, process);
+        stallClosedRegions++;
+        if (process > 0 && ![ended containsObject:@(process)]) [ended addObject:@(process)];
+        @autoreleasepool {
+            sp_document_close(regions[i].document);
+        }
+        regions[i].document = NULL;
+    }
+    NSDate *start = [NSDate date];
+    BOOL processesEnded = pumpUntil(30, ^BOOL {
+        for (NSNumber *process in ended) {
+            struct proc_bsdinfo info;
+            if (proc_pidinfo(process.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) == (int)sizeof info) return NO;
+        }
+        return YES;
+    });
+    printf("stall record: the processes %s of the closed regions %s after %.3f s\n", [ended componentsJoinedByString:@","].UTF8String,
+        processesEnded ? "ended" : "remain", [NSDate.date timeIntervalSinceDate:start]);
+    start = [NSDate date];
+    pumpUntil(stallSeconds, ^BOOL { return regionsLoadEnded(regions, count); });
+    for (int i = 0; i < count; i++) {
+        if (!regions[i].document) continue;
+        if (!regionLoadEnded(&regions[i])) stallWaitingRegions++;
+        printf("stall record: region %d %s %.3f s after the processes of the closed regions %s\n", i + 1,
+            regionLoadEnded(&regions[i]) ? "ended its load" : "still waits", [NSDate.date timeIntervalSinceDate:start],
+            processesEnded ? "ended" : "remained");
+    }
+    fflush(stdout);
 }
 
 // The state of the region that a failure names: its WebContent process, loading state, title, address and the error of
@@ -297,7 +367,8 @@ static NSArray<NSNumber *> *runScenario(NSString *name, NSArray<NSString *> *add
     webviewSetSurfaceHidden(surface, false);
 
     Region regions[4];
-    for (int i = 0; i < 4; i++) {
+    // Each region is created in its own pool, so the region keeps only its own references and its close releases it.
+    for (int i = 0; i < 4; i++) @autoreleasepool {
         regions[i].address = addresses[i];
         regions[i].state = nil;
         regions[i].document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, changed, &regions[i]);
@@ -316,11 +387,18 @@ static NSArray<NSNumber *> *runScenario(NSString *name, NSArray<NSString *> *add
     // didFinishNavigation: and fail:) and when its loading or title changes. The wait is bounded by the per-test limit of
     // the runner. A wait longer than stallRecordAfter writes the stall record once; it does not end the wait.
     NSDate *stallAt = [NSDate dateWithTimeIntervalSinceNow:stallRecordAfter];
+    NSDate *closeAt = [NSDate dateWithTimeIntervalSinceNow:stallSeconds];
     BOOL stallRecorded = NO;
     while (!regionsLoadEnded(regions, 4)) {
         if (!stallRecorded && stallAt.timeIntervalSinceNow <= 0) {
             writeStallRecord(regions, 4, NO);
             stallRecorded = YES;
+        }
+        if (closeAt.timeIntervalSinceNow <= 0) {
+            // A region whose request the server holds is the stall that the run asked for.
+            if (!holdRequests) check(NO, [NSString stringWithFormat:@"the loads of scenario %@ end within %.0f seconds", name, stallSeconds]);
+            closeEndedRegions(regions, 4);
+            break;
         }
         @autoreleasepool {
             [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
@@ -334,6 +412,7 @@ static NSArray<NSNumber *> *runScenario(NSString *name, NSArray<NSString *> *add
             check(NO, [NSString stringWithFormat:@"region %d navigation fails: %@; state: %@", i + 1, error, regionState(view, regions[i].state)]);
             continue;
         }
+        if (holdRequests && i + 1 == unansweredRegion) continue;
         BOOL loaded = ![regions[i].state[@"loading"] boolValue] && [regions[i].state[@"title"] isEqual:@"Region"];
         check(loaded, loaded ? [NSString stringWithFormat:@"region %d loads its page", i + 1]
             : [NSString stringWithFormat:@"region %d loads its page with the title Region; state: %@", i + 1, regionState(view, regions[i].state)]);
@@ -373,10 +452,11 @@ static NSArray<NSNumber *> *runScenario(NSString *name, NSArray<NSString *> *add
     }
     fflush(stdout);
 
-    // Every object of the scenario ends here: the regions, the surface and the window. WebKit ends or keeps the WebContent
-    // processes of the closed regions itself; the test sends them no signal, because a process ended while it writes the
-    // Metal compiler cache of the WebContent processes leaves that cache to the next processes in a state in which their
-    // main thread waits in flock of the cache (F335-7).
+    // Every object of the scenario ends here: the regions, the surface and the window. WebKit ends the WebContent processes
+    // of the closed regions, and main checks that they end.
+    holdRequests = NO;
+    for (id connection in heldConnections) nw_connection_cancel((nw_connection_t)connection);
+    [heldConnections removeAllObjects];
     for (int i = 0; i < 4; i++) {
         if (regions[i].document) sp_document_close(regions[i].document);
         [regions[i].state release];
@@ -406,8 +486,14 @@ int main(int argc, char **argv) { @autoreleasepool {
     testStart = [[NSDate date] retain];
     for (int i = 1; i < argc; i++) {
         double seconds = 0;
+        int region = 0;
         if (sscanf(argv[i], "--stall-record-after=%lf", &seconds) == 1 && seconds >= 0) {
             stallRecordAfter = seconds;
+        } else if (sscanf(argv[i], "--unanswered-region=%d", &region) == 1 && region >= 1 && region <= 4) {
+            // The held region is the stall; the record of the full stall is not written, so the run stays within its limit.
+            unansweredRegion = region;
+            stallRecordAfter = 1e9;
+            stallSeconds = 10;
         } else {
             fprintf(stderr, "FAIL: unknown argument %s\n", argv[i]);
             return 2;
@@ -432,6 +518,8 @@ int main(int argc, char **argv) { @autoreleasepool {
     // Each scenario runs in its own pool, as each turn of the run loop of the applications does, so its closed regions keep no
     // autoreleased reference after it.
     NSArray<NSNumber *> *processes = nil;
+    heldConnections = [[NSMutableArray alloc] init];
+    holdRequests = unansweredRegion > 0;
     @autoreleasepool {
         processes = [runScenario(@"two origins",
             @[ [originA stringByAppendingString:@"/region-1"], [originA stringByAppendingString:@"/region-2"],
@@ -456,6 +544,12 @@ int main(int argc, char **argv) { @autoreleasepool {
             [NSString stringWithFormat:@"the stall records sample the WebContent processes of the regions (%d of %d sampled)", stallRecordSamples, stallRecordSampleTargets]);
         check(stallRecordFileListings >= 8, [NSString stringWithFormat:@"the stall records list the open files of the sampled processes (%d listed)", stallRecordFileListings]);
         check(stallRecordWebKitLines > 0, [NSString stringWithFormat:@"the stall records write the WebKit log of the loads (%d lines)", stallRecordWebKitLines]);
+    }
+
+    if (unansweredRegion) {
+        check(stallClosedRegions == 3 && stallWaitingRegions == 1, [NSString stringWithFormat:
+            @"the stall closes the 3 regions whose load ended and records that region %d still waits after their processes end (closed %d, waiting %d)",
+            unansweredRegion, stallClosedRegions, stallWaitingRegions]);
     }
 
     nw_listener_cancel(listenerA);
