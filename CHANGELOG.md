@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F393-1: The plugin list of the repositories table names only plugins.
 - F394: The registry specification names the release files that plugins and sidecars publish.
 - F393: The workspace registry declares the plugin `term`.
 - F392: The workspace registry declares the sidecar `@soksak/sidecar-alacritty`.
