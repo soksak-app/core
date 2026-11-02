@@ -36,8 +36,8 @@ importers:
         specifier: https://github.com/soksak-app/kit-events/releases/download/v0.0.1/soksak-kit-events-0.0.1.tgz
         version: https://github.com/soksak-app/kit-events/releases/download/v0.0.1/soksak-kit-events-0.0.1.tgz
       '@soksak/kit-records':
-        specifier: https://github.com/soksak-app/kit-records/releases/download/v0.0.3/soksak-kit-records-0.0.3.tgz
-        version: https://github.com/soksak-app/kit-records/releases/download/v0.0.3/soksak-kit-records-0.0.3.tgz
+        specifier: https://github.com/soksak-app/kit-records/releases/download/v0.0.6/soksak-kit-records-0.0.6.tgz
+        version: https://github.com/soksak-app/kit-records/releases/download/v0.0.6/soksak-kit-records-0.0.6.tgz
       acorn:
         specifier: 8.18.0
         version: 8.18.0
@@ -232,9 +232,9 @@ packages:
     version: 0.0.1
     hasBin: true
 
-  '@soksak/kit-records@https://github.com/soksak-app/kit-records/releases/download/v0.0.3/soksak-kit-records-0.0.3.tgz':
-    resolution: {integrity: sha512-kIEt12pSgyOS2qJBSjiuQ9oxGDcn+OHwsmpUBiMJUfu35/gz+/5VhJ88UHwQ1f36tgOIak71KaHF8HeWkzJEeg==, tarball: https://github.com/soksak-app/kit-records/releases/download/v0.0.3/soksak-kit-records-0.0.3.tgz}
-    version: 0.0.3
+  '@soksak/kit-records@https://github.com/soksak-app/kit-records/releases/download/v0.0.6/soksak-kit-records-0.0.6.tgz':
+    resolution: {integrity: sha512-7i9MbnZmtOPbFyWnecNuyB3N1fManPb+E8n93vxs/uQ9T2Eqvb22NttrLzFDCPhfor70Hf2kTrO/ttgBBzR4nA==, tarball: https://github.com/soksak-app/kit-records/releases/download/v0.0.6/soksak-kit-records-0.0.6.tgz}
+    version: 0.0.6
     hasBin: true
 
   '@typescript/typescript-aix-ppc64@7.0.2':
@@ -577,7 +577,7 @@ snapshots:
     dependencies:
       ajv: 8.20.0
 
-  '@soksak/kit-records@https://github.com/soksak-app/kit-records/releases/download/v0.0.3/soksak-kit-records-0.0.3.tgz': {}
+  '@soksak/kit-records@https://github.com/soksak-app/kit-records/releases/download/v0.0.6/soksak-kit-records-0.0.6.tgz': {}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true

@@ -3934,6 +3934,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F388",
+    implementation: [
+      { file: "package.json", symbol: "soksak-kit-records-0.0.6.tgz" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "the records kit release that core pins defines the presentation mode terms" },
+    ],
+    expected: "The records kit release that core pins defines the presentation mode terms.",
+    levels: ["unit"],
+  },
+  {
     id: "F386-4",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "image present must be copy or lease" },

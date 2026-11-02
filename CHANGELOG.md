@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F388: Core pins the records kit 0.0.6, whose term list defines `presentation mode` and `lease`.
 - F386-4: The plugin API and `sok` manifest readers require `present`, `copy` or `lease`, on an image region.
 - F386-3: Both hosts require `present` on an image region, answer `leased` for a frame of a region in the `lease` mode, and send `released` to its supplier when the region stops holding a surface.
 - F386-2: The native image region presents the surface of its supplier in the `lease` mode and reports each surface that it stops holding.

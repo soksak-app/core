@@ -330,6 +330,13 @@ test('the records kit release that core pins defines the kit term', () => {
   assert.doesNotMatch(kit.definition, /static library|link/, 'the kit term names a library that core owns');
 });
 
+test('the records kit release that core pins defines the presentation mode terms', () => {
+  const { terms } = JSON.parse(readFileSync(fileURLToPath(import.meta.resolve('@soksak/kit-records/terms.json')), 'utf8'));
+  for (const term of ['presentation mode', 'lease']) {
+    assert.ok(terms.some((entry) => entry.term === term), `the term list of the pinned records kit has no entry for ${term}`);
+  }
+});
+
 test('the hooks, the record targets and the release gate run the commands of the records kit release', () => {
   const { devDependencies } = JSON.parse(read('package.json'));
   assert.match(devDependencies['@soksak/kit-records'] ?? '', /^https:\/\/github\.com\/soksak-app\/kit-records\/releases\/download\/v\d+\.\d+\.\d+\/soksak-kit-records-\d+\.\d+\.\d+\.tgz$/,
