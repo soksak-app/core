@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F387: Core 0.0.31 installs browser 0.0.16, editor 0.0.17, files 0.0.17, hwp 0.0.14 and terminal 0.0.33.
 - F385: The release candidate is 0.0.31.
 - F384: Each element of an `elements` snapshot carries `node`, an identity that stays while the element exists, so a section can key a DOM row by its element.
 - F325-3: The Tauri host tests of the release checks took 583 s and 482 s with line tables as debug information, against 689 s before; the release run took 13 minutes 23 seconds.

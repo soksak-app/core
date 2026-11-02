@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F387: core 0.0.31은 browser 0.0.16, editor 0.0.17, files 0.0.17, hwp 0.0.14, terminal 0.0.33을 설치한다.
 - F385: release candidate는 0.0.31이다.
 - F384: `elements` 스냅샷의 각 요소는 요소가 있는 동안 유지되는 identity `node`를 가지므로, section은 DOM row를 그 요소로 key할 수 있다.
 - F325-3: debug 정보를 line table로 둔 release 검사의 Tauri host test는 이전 689초에 대해 583초와 482초가 걸렸고, release run은 13분 23초가 걸렸다.
