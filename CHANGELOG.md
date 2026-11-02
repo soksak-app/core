@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F381-3: The Tauri host starts the thread that sends the drawing state after an occlusion change through `routine::spawn_named`, so the panic hook records a panic of that thread with its name.
 - F381-2: VT 0.0.22 draws nothing for a terminal whose image region is not drawing, and terminal 0.0.32 requires it; the registry lists both.
 - F381-1: The host sends the supplier of each image region whether the region draws: it reads the AppKit occlusion state before it attaches a region and at each change, configures and waits only for regions that draw, and reports the state it sent as `drawing` in the regions of `host.window`.
 - F358: The Tauri host tests that run a child test process report the error output of a failed child with its status and output, so the panic text of the child is in the failure.

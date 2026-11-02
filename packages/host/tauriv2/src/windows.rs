@@ -743,7 +743,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                 Err(error) => log_error("window on screen", error),
             }
             let drawing = occluded.clone();
-            std::thread::spawn(move || {
+            crate::routine::spawn_named("image-drawing", move || {
                 if let Err(error) = crate::composition::send_image_drawing(&drawing) {
                     log_error("image drawing", error);
                 }

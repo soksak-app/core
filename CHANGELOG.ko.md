@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F381-3: Tauri host는 가림 변화 뒤 drawing 상태를 보내는 thread를 `routine::spawn_named`로 시작하므로, panic hook이 그 thread의 panic을 이름과 함께 기록한다.
 - F381-2: VT 0.0.22는 image region이 그리지 않는 terminal에 아무것도 그리지 않고, terminal 0.0.32가 그것을 요구하며, registry가 둘을 올린다.
 - F381-1: host는 각 image region의 공급자에게 region이 그리는지 보낸다. region을 붙이기 전과 변화마다 AppKit 가림 상태를 읽고, 그리는 region만 설정하고 기다리며, 보낸 상태를 `host.window`의 regions에 `drawing`으로 보고한다.
 - F358: child test process를 실행하는 Tauri host test는 실패한 child의 상태와 출력에 error 출력도 함께 보고하므로, child의 panic 문장이 실패에 남는다.
