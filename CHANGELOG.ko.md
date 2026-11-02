@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F375: Wails host는 JavaScript safe integer 한도를 넘는 view generation을 Tauri host의 문장으로 거부하고, host contract가 그 문장을 적는다. Red: Go test 두 개가 이전 문장으로 실패했다. Green: 이들이 통과한다.
 - F374-6-1: view 시작 값은 host writer의 각 event class 저장 level인 `levels`를 담고, `runtime.log.levels.on`은 page policy의 각 변경을 class level을 담은 `log.levels`로 전달한다. 그래서 view page는 `runtime.log.levels()`를 읽어 policy가 저장하지 않을 record의 데이터를 만들지 않는다. Red: 두 host의 시작 값 test, 두 host의 level test, workbench test 두 개, view bridge test가 실패했다. Green: 같은 test와 구조 검사가 통과한다.
 - F374-4-2: `sidecarListen`과 `viewSidecarRoute`의 route 요청은 각 host의 argument decoder가 검사하는 typed struct이므로, 형식을 벗어난 요청은 모든 binding이 쓰는 argument 문장으로 거부된다. Wails test owner는 `DeliverSidecarMessage`로 sidecar 메시지를 받고, event class 표는 `host.view.sidecar.discard`를 담고, `documents.view`의 결과를 검사하며, workbench view test는 generation마다의 route 호출을 검사한다.
 - F373-1: sidebar section의 끈 높이 조회 두 곳은 끌지 않은 section이 선언된 높이를 가지는 이유를 적는다.

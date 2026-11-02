@@ -9,11 +9,25 @@ import (
 func TestSourceOriginsDoesNotIssueAnUnsafeGeneration(t *testing.T) {
 	origins := &sourceOrigins{floor: 1<<53 - 1, views: map[string]uint64{}}
 	before := origins.snapshot()
-	if generation, err := origins.create("probe"); err == nil || generation != 0 || err.Error() != "source generation exceeds JavaScript safe integer maximum 9007199254740991" {
+	if generation, err := origins.create("probe"); err == nil || generation != 0 || err.Error() != "view source generation exceeds the JavaScript safe integer limit" {
 		t.Fatalf("generation at the JavaScript safe-integer limit returned %d, %v", generation, err)
 	}
 	if after := origins.snapshot(); !reflect.DeepEqual(after, before) {
 		t.Fatalf("source state changed after generation exhaustion: before=%+v after=%+v", before, after)
+	}
+}
+
+// A view reply, event and request whose generation is above the JavaScript safe integer limit is refused with the text of both hosts.
+// contract: view.source-generation
+func TestAViewMessageAboveTheSafeIntegerLimitIsRefused(t *testing.T) {
+	for _, where := range []string{"view request", "view reply", "view event"} {
+		want := where + " source generation exceeds the JavaScript safe integer limit"
+		if err := validateViewGeneration(where, 9_007_199_254_740_992); err == nil || err.Error() != want {
+			t.Fatalf("%s above the limit: %v, want %s", where, err, want)
+		}
+		if err := validateViewGeneration(where, 9_007_199_254_740_991); err != nil {
+			t.Fatalf("%s at the limit: %v", where, err)
+		}
 	}
 }
 

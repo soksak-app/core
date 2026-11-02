@@ -2121,7 +2121,7 @@ func validateViewGeneration(where string, generation uint64) error {
 		return fmt.Errorf("%s has no source generation", where)
 	}
 	if generation > maxSourceGeneration {
-		return fmt.Errorf("%s source generation %d exceeds JavaScript safe integer maximum %d", where, generation, maxSourceGeneration)
+		return fmt.Errorf("%s source generation exceeds the JavaScript safe integer limit", where)
 	}
 	return nil
 }

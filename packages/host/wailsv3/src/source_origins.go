@@ -1,7 +1,7 @@
 package host
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 )
 
@@ -37,7 +37,7 @@ func (o *sourceOrigins) create(surface string) (uint64, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.floor >= maxSourceGeneration {
-		return 0, fmt.Errorf("source generation exceeds JavaScript safe integer maximum %d", maxSourceGeneration)
+		return 0, errors.New("view source generation exceeds the JavaScript safe integer limit")
 	}
 	o.floor++
 	generation := o.floor

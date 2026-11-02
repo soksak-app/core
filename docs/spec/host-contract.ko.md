@@ -288,9 +288,9 @@ fn invalid_json_closes_connection() {
 | `view.origin.retired-malformed-envelope-is-reported` | 종료된 view origin의 잘못된 message envelope는 원래 이유를 보존한 channel 오류로 보고된다. | both |
 | `view.call.reply-generation-scoped-cleanup` | 이전 view generation의 늦은 reply는 같은 call id를 가진 교체 generation의 pending-call 기록을 제거하지 않는다. | both |
 | `sidecars.stop.stdin-eof-cancels-late-image` | stdio sidecar의 입력이 닫힌 뒤 이를 중지하면 늦은 image transfer를 닫힌 surface에 전달하지 않고 취소한다. | both |
-| `view.source-generation` | View request, reply, event 직렬화는 JavaScript safe integer 한도를 넘는 generation을 거부한다. 이전 generation의 request와 event는 게시 없이 취소하고, 이전 acknowledgement는 게시하지 않으며 이전 pull은 취소한다. 최대 safe generation은 허용된다. | both |
+| `view.source-generation` | View request, reply, event 직렬화는 JavaScript safe integer 한도를 넘는 generation을 `<subject> source generation exceeds the JavaScript safe integer limit`로 거부한다. subject는 `view request`, `view reply`, `view event`다. 이전 generation의 request와 event는 게시 없이 취소하고, 이전 acknowledgement는 게시하지 않으며 이전 pull은 취소한다. 최대 safe generation은 허용된다. | both |
 | `view.source-registration-precedes-provider-messages` | View source-registration event는 첫 status-watch 등록보다 먼저 전달되며, 둘은 같은 source generation을 가진다. | both |
-| `source-origin.generation.javascript-safe-integer-limit` | Source-origin allocator는 JavaScript safe integer 한도를 넘는 generation 발급을 거부하며 floor나 등록된 source 상태를 바꾸지 않는다. | both |
+| `source-origin.generation.javascript-safe-integer-limit` | Source-origin allocator는 JavaScript safe integer 한도를 넘는 generation 발급을 `view source generation exceeds the JavaScript safe integer limit`로 거부하며 floor나 등록된 source 상태를 바꾸지 않는다. | both |
 | `source-origin.atomic-snapshot-keeps-floor-and-only-current-sources` | view source-origin snapshot은 현재 source identity만 포함하며 source를 retire하거나 교체한 뒤에도 generation floor를 유지한다. | both |
 | `view.process-end-precedes-replacement-registration` | 실패한 view의 process-ended event는 대체 view가 source-registration event를 보내기 전에 전달된다. | both |
 | `view.call.forward` | 멤버 `cids`(식별자 목록)를 가진 call 요청은 event에 멤버 `cids`를 싣는다. 한 줄에 담을 수 없는 목록은 애플리케이션 로그에 쓰고 어떤 page에도 전달하지 않는다.  view가 `sok-view`로 보낸 call 요청 `{sok: 1, id, command, params}`은 view의 surface와 plugin을 담은 `view-call {surface, plugin, id, command, params}` event가 된다. `id`가 정수가 아니거나 `command`가 비어 있는 요청은 application log에 쓰고 어떤 page에도 전달하지 않는다. | both |

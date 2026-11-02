@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F375: The Wails host refuses a view generation above the JavaScript safe integer limit with the text of the Tauri host, and the host contract states it. Red: two Go tests failed with the earlier text. Green: they pass.
 - F374-6-1: The view start values carry `levels`, the stored level of each event class of the host writer, and `runtime.log.levels.on` delivers each change of the page policy as `log.levels` with the class levels, so a view page reads `runtime.log.levels()` to skip building the data of a record that the policy would not store. Red: the start value tests of both hosts, the level test of both hosts, two workbench tests and the view bridge test failed. Green: the same tests and the structure checks pass.
 - F374-4-2: The route requests of `sidecarListen` and `viewSidecarRoute` are typed structs that the argument decoder of each host checks, so a request outside its form is refused with the argument sentence that every binding uses; the Wails test owners take sidecar messages through `DeliverSidecarMessage`, the event class tables carry `host.view.sidecar.discard`, the result of `documents.view` is checked, and the workbench view tests assert the route calls of each generation.
 - F373-1: The two dragged-height lookups of the sidebar sections state why a section that was not dragged has its declared height.
