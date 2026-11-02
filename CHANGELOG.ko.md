@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F386-1: spec이 그림 영역의 표시 방식 `copy`와 `lease`를 정의하고, `iosurface_use_count_test`가 `lease` 방식이 기대는 in use 표시를 잰다.
 - F387: core 0.0.31은 browser 0.0.16, editor 0.0.17, files 0.0.17, hwp 0.0.14, terminal 0.0.33을 설치한다.
 - F385: release candidate는 0.0.31이다.
 - F384: `elements` 스냅샷의 각 요소는 요소가 있는 동안 유지되는 identity `node`를 가지므로, section은 DOM row를 그 요소로 key할 수 있다.

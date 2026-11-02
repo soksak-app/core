@@ -3934,6 +3934,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F386-1",
+    implementation: [
+      { file: "native/darwin/Makefile", symbol: "iosurface_use_count_test" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/iosurface_use_count_test.m", id: "the window server clears the mark after another surface replaces it" },
+    ],
+    expected: "The window server marks a presented IOSurface in use and clears the mark after another surface replaces it; the host lookup does not mark it.",
+    levels: ["unit"],
+  },
+  {
     id: "F384",
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "globalThis.soksakSnapshot = () => {" },

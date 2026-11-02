@@ -81,7 +81,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 
 `surface.drop`이 있으면 파일이 표면에 놓였을 때 페이지가 그 표면에서 실행할 `exposes`의 명령을 가리키며, `{urls}`에 놓인 파일 URL을 담는다([네이티브 표면](native-surfaces.ko.md#네이티브-뷰-위의-입력)).
 
-`surface.composition`은 `{ "kind": "view", "page": "<path>" }` 선언이며 `regions`와 `overlays`를 추가로 가질 수 있다([view 표면](#view-표면)). 그림 영역은 `dependencies`에 이미 나열한 사이드카를 지정한다. manifest 선언은 호스트에 전달하는 권한 데이터다. 페이지 코드는 선언에 없는 영역, 공급자, 입력 소유자, 쌓임 항목을 추가할 수 없다. `kind: "hybrid"`와 `kind: "dom"`은 제거되었다. reader는 두 종류를 plugin과 필드 `surface.composition`을 밝힌 오류로 거부하며, `surface.module`은 `plugin <id>: surface module is removed; a surface is a view`로 거부한다.
+`surface.composition`은 `{ "kind": "view", "page": "<path>" }` 선언이며 `regions`와 `overlays`를 추가로 가질 수 있다([view 표면](#view-표면)). 그림 영역은 `dependencies`에 이미 나열한 사이드카를 지정하고 표시 방식 `present`를 `copy`나 `lease`로 선언한다([그림 영역](native-surfaces.ko.md#그림-영역)). manifest 선언은 호스트에 전달하는 권한 데이터다. 페이지 코드는 선언에 없는 영역, 공급자, 입력 소유자, 쌓임 항목을 추가할 수 없다. `kind: "hybrid"`와 `kind: "dom"`은 제거되었다. reader는 두 종류를 plugin과 필드 `surface.composition`을 밝힌 오류로 거부하며, `surface.module`은 `plugin <id>: surface module is removed; a surface is a view`로 거부한다.
 
 ## 기본 사이드바 세트
 

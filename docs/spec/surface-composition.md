@@ -57,6 +57,7 @@ A `view` composition declares its page, and it declares its native regions and o
           "name": "view",
           "kind": "image",
           "sidecar": "@scope/sidecar-probe",
+          "present": "copy",
           "input": "dom"
         }
       ],
@@ -66,7 +67,7 @@ A `view` composition declares its page, and it declares its native regions and o
 }
 ```
 
-Region names are unique and match `^[a-z0-9][a-z0-9-]{0,63}$`. Region order in the array is back to front. A document region has `kind: "document"` and `input: "native"`. An image region has `kind: "image"`, names one sidecar already listed by the plugin, and has `input: "dom"`. `overlays` is an array of unique names that use the same name syntax. Unknown kinds, fields, input owners, undeclared sidecars, duplicate names, and overlays that duplicate region names are errors.
+Region names are unique and match `^[a-z0-9][a-z0-9-]{0,63}$`. Region order in the array is back to front. A document region has `kind: "document"` and `input: "native"`. An image region has `kind: "image"`, names one sidecar already listed by the plugin, declares `present` as `copy` or `lease` ([presentation mode](native-surfaces.md#image-regions)), and has `input: "dom"`. `overlays` is an array of unique names that use the same name syntax. Unknown kinds, fields, input owners, undeclared sidecars, duplicate names, and overlays that duplicate region names are errors.
 
 The workbench includes the validated declaration in every outer-surface synchronization. A host stores that declaration on the `SurfaceHost` before it accepts a page request. The host rejects a request whose caller, name, kind, supplier, generation, or operation is not declared. Calling a lower-level bridge directly does not bypass this check.
 
@@ -109,15 +110,15 @@ Reloading the app DOM replaces every mounted plugin document in that window. The
 
 Continuous layout commits only a complete native frame. The host keeps the previous complete frame visible while a newer composition or raster is pending; it never commits a new region geometry with an older raster, clips the old raster into the new geometry, or exposes a platform-default background. A visible image region's composition revision, raster revision, exact dimensions, and presented snapshot must all belong to the prepared layout before the host commits it. Before the first valid snapshot, the image layer stays transparent so the application's surface background remains visible. After input settles, `host.window.presented` also verifies that each image region whose own placement and `SurfaceHost` are visible has presented the exact current raster and that the resulting native transaction has reached the display. Hiding or showing the outer surface updates that requirement without changing the region raster revision. The command fails on timeout instead of accepting a missing or failed presentation. Empty native pixels, stale raster content, exposing a platform-default background, and allowing native content outside `SurfaceHost` are failures.
 
-A settled `SurfaceHost` commit has the same completion boundary: a settled surface placement is not complete until every visible image region in that composition has consumed and presented its exact current raster. Returning from a page without native regions, such as the project library, to a view surface with native regions must not expose the restored DOM page as complete while any visible native image region is still pending. Tests must verify this boundary by navigating away from a surface with multiple visible native regions and asserting every region's frame and presented raster immediately after return, without an additional presentation command.
+A settled `SurfaceHost` commit has the same completion boundary: a settled surface placement is not complete until every visible image region in that composition has accepted (`consumed` or `leased`) and presented its exact current raster. Returning from a page without native regions, such as the project library, to a view surface with native regions must not expose the restored DOM page as complete while any visible native image region is still pending. Tests must verify this boundary by navigating away from a surface with multiple visible native regions and asserting every region's frame and presented raster immediately after return, without an additional presentation command.
 
 ## Image transfer
 
 An image supplier receives host `configure` events containing the attachment generation, raster revision, exact pixel width, exact pixel height, and scale. The supplier coalesces pending configurations to the newest revision.
 
-For each frame, the supplier writes a transfer image and sends `{name, generation, raster, sequence, token, width, height, scale}`. It must not modify or reuse that transfer image until the host replies `consumed` or rejects it. Sequences increase within one generation and raster revision.
+For each frame, the supplier writes a transfer image and sends `{name, generation, raster, sequence, token, width, height, scale}`. In the `copy` mode it must not modify or reuse that transfer image until the host replies `consumed` or rejects it; in the `lease` mode it follows the [image lease](native-surfaces.md#image-regions). Sequences increase within one generation and raster revision.
 
-The host verifies the caller, declaration, supplier, generation, raster revision, sequence, token authorization, actual image dimensions, expected native dimensions, and scale. Nonce authentication releases its copied IOSurface property after comparison on both accepted and refused paths, following the Core Foundation Copy ownership rule. It copies valid pixels into host-owned immutable presentation storage, swaps that snapshot into the image layer, and then replies `consumed`. A native presentation layer never points at storage the supplier may overwrite. Invalid or stale frames do not replace the previous valid snapshot.
+The host verifies the caller, declaration, supplier, generation, raster revision, sequence, token authorization, actual image dimensions, expected native dimensions, and scale. Nonce authentication releases its copied IOSurface property after comparison on both accepted and refused paths, following the Core Foundation Copy ownership rule. In the `copy` mode it copies valid pixels into host-owned immutable presentation storage, swaps that snapshot into the image layer, and then replies `consumed`, and the native presentation layer never points at storage the supplier may overwrite. In the `lease` mode it swaps the retained transfer IOSurface into the image layer and replies `leased`. Invalid or stale frames do not replace the previous valid snapshot.
 
 ## Input and stacking
 

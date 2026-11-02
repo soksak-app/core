@@ -343,6 +343,7 @@ NATIVE_TESTS = observe_test \
   image_nonce_ownership_test \
   image_region_test \
   image_region_decoration_test \
+  iosurface_use_count_test \
   ime_reference_state_test \
   ime_source_restore_test \
   ime_wire_document_test \
