@@ -10,7 +10,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { sampleProcess } from '@soksak/window-check/stall-sample.mjs';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
-import { groupMembers, runningMembers } from './test-command.mjs';
+import { groupMembers, hasEnded, runningMembers } from './test-command.mjs';
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
@@ -64,8 +64,8 @@ function validate(options) {
  * The processes of the group of a test that still run, except `leader`, as `pid <n> <command>` names. A test process that ends while a
  * process it started keeps running (an open timer, a listener, a child) leaves that process in the group, so the group names it.
  */
-function leftoverNames(pgid, leader) {
-  const members = runningMembers(pgid).filter((member) => member.pid !== leader);
+function leftoverNames(pgid, leader, escaped = []) {
+  const members = [...runningMembers(pgid).filter((member) => member.pid !== leader), ...escaped.map((pid) => ({ pid }))];
   if (members.length === 0) return [];
   // Only the members are read: the commands of every process of the system can exceed the output buffer of execFileSync. ps exits
   // with 1 when no listed process remains, which leaves the members unnamed.
@@ -114,17 +114,70 @@ export function killGroup(pgid, send = sendToGroup) {
   signalGroup(pgid, 'SIGKILL', send);
 }
 
+/** The processes of the system as pid, parent, group and state. Only numbers and states are read, so the output stays small. */
+function processTable() {
+  const listed = spawnSync('ps', ['-A', '-o', 'pid=,ppid=,pgid=,stat='], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  if (listed.error) throw new Error(`ps of the process table: ${listed.error.message}`);
+  if (listed.status !== 0) throw new Error(`ps of the process table exited with ${listed.status}: ${listed.stderr.trim()}`);
+  return listed.stdout.split('\n').filter((line) => line.trim() !== '').map((line) => {
+    const [pid, ppid, pgid, state] = line.trim().split(/\s+/);
+    const row = { pid: Number(pid), ppid: Number(ppid), pgid: Number(pgid), state };
+    if (!Number.isInteger(row.pid) || !Number.isInteger(row.ppid) || !Number.isInteger(row.pgid) || state === undefined) {
+      throw new Error(`ps returned an unreadable process line: ${JSON.stringify(line)}`);
+    }
+    return row;
+  });
+}
+
+/**
+ * Stops the running descendants of the members of group pgid that run in another group, and adds each to `stopped`. A test process can
+ * start a process in a group of its own, as `runTests` does for each test, and ending the group alone leaves that process with parent 1.
+ * A descendant is found through its parent, so the members are stopped first and the descendants are stopped before the parents end;
+ * the table is read again until a read finds no running descendant that is not stopped, so a descendant cannot start another unseen.
+ */
+function stopEscapedDescendants(pgid, stopped) {
+  for (;;) {
+    const table = processTable();
+    const tree = new Set(table.filter((row) => row.pgid === pgid).map((row) => row.pid));
+    const fresh = [];
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const row of table) {
+        if (tree.has(row.pid) || !tree.has(row.ppid)) continue;
+        tree.add(row.pid);
+        grew = true;
+        if (row.pgid !== pgid && !hasEnded(row.state) && !stopped.has(row.pid)) fresh.push(row.pid);
+      }
+    }
+    if (fresh.length === 0) return;
+    for (const pid of fresh) {
+      try { process.kill(pid, 'SIGSTOP'); } catch (error) { if (error.code !== 'ESRCH') throw error; continue; }
+      stopped.add(pid);
+    }
+  }
+}
+
 /**
  * Ends the group of a test in the order stop, list, kill: the stop comes first, so no process of the group runs while the process table is
- * read, which takes seconds under load. It returns the leftovers except `leader`. The kill follows the list even when the list fails, so
- * a failed list never leaves the group stopped; the error of the list is thrown after the kill, and a failed kill names it too.
+ * read, which takes seconds under load. The descendants that run in another group are stopped, named and ended with the group. It returns
+ * the leftovers except `leader`. The kill follows the list even when the list fails, so a failed list never leaves the group stopped; the
+ * error of the list is thrown after the kill, and a failed kill names it too.
  */
 function endGroup(pgid, leader) {
   stopGroup(pgid);
   let leftovers;
   let listError = null;
-  try { leftovers = leftoverNames(pgid, leader); } catch (error) { listError = error; }
-  try { killGroup(pgid); } catch (error) {
+  const escaped = new Set();
+  try {
+    stopEscapedDescendants(pgid, escaped);
+    leftovers = leftoverNames(pgid, leader, [...escaped]);
+  } catch (error) { listError = error; }
+  try {
+    killGroup(pgid);
+    for (const pid of escaped) {
+      try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    }
+  } catch (error) {
     if (listError) error.message = `${error.message}; the list before the kill failed: ${listError.message}`;
     throw error;
   }

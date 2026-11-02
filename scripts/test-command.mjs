@@ -62,7 +62,7 @@ export function groupMembers(pgid) {
 
 // ps(1) state: the first character is the run state, and the characters after it are flags. Z is a zombie, which has ended and waits to be
 // reaped. The flag E marks a process that is trying to exit, which has also ended its work.
-function hasEnded(state) {
+export function hasEnded(state) {
   return state.startsWith('Z') || state.slice(1).includes('E');
 }
 

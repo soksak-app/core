@@ -216,6 +216,23 @@ test("a group at its limit is ended and its leftovers named while other processe
   assert.match(result.detail, /^exceeded 2\.000s and was killed; left running: pid \d+ .*setInterval/, result.detail);
 });
 
+test("a group at its limit is ended with the descendants that run in a group of their own, and the timeout names them", { timeout: 20000 }, async (t) => {
+  // The test process starts a child in a new process group, as `runTests` does for each test it runs, and then waits. Ending the group of
+  // the test process alone would leave that child with parent 1.
+  const folder = mkdtempSync(join(tmpdir(), "runner-escaped-"));
+  const pidFile = join(folder, "pid");
+  t.after(() => {
+    endRecordedGroup(pidFile);
+    rmSync(folder, { recursive: true, force: true });
+  });
+  const source = `const child = require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "escaped"], { detached: true, stdio: "ignore" }); require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(child.pid)); setInterval(() => {}, 1000);`;
+  const { results } = await run([{ ...node("escapes", source), timeoutMs: 2000 }], { concurrency: 1 });
+  const result = results.get("escapes");
+  assert.equal(result.status, "timeout", result.detail);
+  const escaped = readFileSync(pidFile, "utf8");
+  assert.match(result.detail, new RegExp(`^exceeded 2\\.000s and was killed; left running: .*pid ${escaped} .*escaped`), result.detail);
+});
+
 test("a process that outlives its test process is ended at that exit, and the failure names it", async () => {
   // The child inherits the output pipes, so the output closes only when the child ends. The child is unreferenced, so the test process
   // exits with 0 while the child runs.
