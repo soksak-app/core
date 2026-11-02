@@ -281,7 +281,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	if err != nil {
 		return err
 	}
-	if err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
+	if _, err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
 		return err
 	}
 	if err := s.documents.Reserve(key); err != nil {
@@ -645,7 +645,7 @@ func (s *Surfaces) subscribeDocument(viewID uint64, req DocumentRequest) (uint64
 	if err := checkStream(req.Stream); err != nil {
 		return 0, err
 	}
-	if err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
+	if _, err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
 		return 0, err
 	}
 	var handle uint64
@@ -675,7 +675,7 @@ func (s *Surfaces) unsubscribeDocument(viewID uint64, req DocumentRequest) error
 	if req.Handle == nil {
 		return fmt.Errorf("document stream unsubscribe requires a handle")
 	}
-	if err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
+	if _, err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
 		return err
 	}
 	application.InvokeSync(func() {
@@ -700,7 +700,7 @@ func (s *Surfaces) withDocument(viewID uint64, req DocumentRequest, run func(han
 	if err != nil {
 		return err
 	}
-	if err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
+	if _, err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
 		return err
 	}
 	// The lookup and the use run as one task of the UI thread. Closing also happens on the UI thread together with unregistering, so
@@ -912,10 +912,11 @@ func (s *Surfaces) attachCheckedImage(key ImageKey, req ImageRequest) error {
 	if err := s.pendingImageDetachError(key.Surface); err != nil {
 		return err
 	}
-	if err := s.requireRegion(key.Surface, key.Name, "image", req.Sidecar); err != nil {
+	present, err := s.requireRegion(key.Surface, key.Name, "image", req.Sidecar)
+	if err != nil {
 		return err
 	}
-	lease := s.regionPresent(key.Surface, key.Name) == "lease"
+	lease := present == "lease"
 	if err := s.images.Reserve(key, &ImageOwner{SidecarName: req.Sidecar, SidecarOwner: s, Lease: lease}); err != nil {
 		return err
 	}
@@ -933,7 +934,6 @@ func (s *Surfaces) attachCheckedImage(key ImageKey, req ImageRequest) error {
 		}
 	}
 	var handle unsafe.Pointer
-	var err error
 	application.InvokeSync(func() {
 		view := s.views[key.Surface]
 		if view == nil || view.handle == nil {
@@ -980,7 +980,7 @@ func (s *Surfaces) withImage(viewID uint64, req ImageRequest, run func(handle un
 	if err != nil {
 		return err
 	}
-	if err := s.requireRegion(key.Surface, key.Name, "image", ""); err != nil {
+	if _, err := s.requireRegion(key.Surface, key.Name, "image", ""); err != nil {
 		return err
 	}
 	// The lookup and the use run as one task of the UI thread. Closing also happens on the UI thread together with unregistering, so

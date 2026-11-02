@@ -280,38 +280,28 @@ func validateRegions(composition SurfaceComposition) error {
 	return nil
 }
 
-// regionPresent returns the declared presentation mode of the image region name of surface, or "" when none is declared.
-func (s *Surfaces) regionPresent(surface, name string) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, region := range s.compositions[surface].Regions {
-		if region.Name == name {
-			return region.Present
-		}
-	}
-	return ""
-}
-
-func (s *Surfaces) requireRegion(surface, name, kind, sidecar string) error {
+// requireRegion checks that surface declares the region name of kind, and for an image region the sidecar, and returns the
+// declared presentation mode of the region, which is empty for a document region.
+func (s *Surfaces) requireRegion(surface, name, kind, sidecar string) (string, error) {
 	s.mu.Lock()
 	composition, ok := s.compositions[surface]
 	s.mu.Unlock()
 	if !ok {
-		return fmt.Errorf("surface %q has no composition declaration", surface)
+		return "", fmt.Errorf("surface %q has no composition declaration", surface)
 	}
 	for _, region := range composition.Regions {
 		if region.Name != name {
 			continue
 		}
 		if region.Kind != kind {
-			return fmt.Errorf("region %q is declared as %s, not %s", name, region.Kind, kind)
+			return "", fmt.Errorf("region %q is declared as %s, not %s", name, region.Kind, kind)
 		}
 		if kind == "image" && sidecar != "" && region.Sidecar != sidecar {
-			return fmt.Errorf("image %q is not declared for sidecar %q", name, sidecar)
+			return "", fmt.Errorf("image %q is not declared for sidecar %q", name, sidecar)
 		}
-		return nil
+		return region.Present, nil
 	}
-	return fmt.Errorf("region %q is not declared by surface %q", name, surface)
+	return "", fmt.Errorf("region %q is not declared by surface %q", name, surface)
 }
 
 type SyncRequest struct {

@@ -20,7 +20,7 @@ use crate::application_log::{log_error, log_failure};
 use crate::exposure::{self, on_main};
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
-use crate::surfaces::{region_present, require_region, surface_handle};
+use crate::surfaces::{require_region, surface_handle};
 use crate::windows::{emit_window, window_data};
 
 fn image_event_payload(surface: &str, name: &str, event: serde_json::Value) -> serde_json::Value {
@@ -1244,11 +1244,11 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
         return Err("cannot get window data".to_string());
     };
     data.images.pending_detach_error(&key.0)?;
-    require_region(&data.compositions, &key.0, &key.1, "image", Some(sidecar))?;
+    let present = require_region(&data.compositions, &key.0, &key.1, "image", Some(sidecar))?;
 
     // The name is taken first. The lock is not held while waiting for native work.
     data.images.reserve(&key, "", sidecar)?;
-    let lease = region_present(&data.compositions, &key.0, &key.1) == "lease";
+    let lease = present == "lease";
     if lease {
         data.images.lease(&key);
     }

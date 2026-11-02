@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F386-7: 두 호스트의 image attach는 영역 검사에서 표시 방식을 읽으므로 기본 방식이 남지 않는다.
 - F388: core는 term 목록이 `presentation mode`와 `lease`를 정의하는 records kit 0.0.6을 고정한다.
 - F386-4: plugin API와 `sok` manifest reader는 image 영역에 `present`(`copy` 또는 `lease`)를 요구한다.
 - F386-3: 두 호스트는 image 영역에 `present`를 요구하고, `lease` 방식 영역의 frame에 `leased`로 응답하며, 영역이 surface를 더 쥐지 않게 되면 공급자에게 `released`를 보낸다.

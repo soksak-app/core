@@ -399,33 +399,15 @@ fn validate_regions(composition: &SurfaceComposition) -> Result<(), String> {
     Ok(())
 }
 
-/// Returns the declared presentation mode of the image region name of surface, or an empty string when none is declared.
-pub(crate) fn region_present(
-    compositions: &Mutex<HashMap<String, SurfaceComposition>>,
-    surface: &str,
-    name: &str,
-) -> String {
-    // default: a lock that a panicking thread poisoned still holds the composition declarations, which are only read;
-    // the panic hook records the panic.
-    let all = compositions.lock().unwrap_or_else(PoisonError::into_inner);
-    all.get(surface)
-        .and_then(|composition| {
-            composition
-                .regions
-                .iter()
-                .find(|region| region.name == name)
-        })
-        .map(|region| region.present.clone())
-        .unwrap_or_default()
-}
-
+/// Checks that surface declares the region name of kind, and for an image region the sidecar, and returns the declared
+/// presentation mode of the region, which is empty for a document region.
 pub(crate) fn require_region(
     compositions: &Mutex<HashMap<String, SurfaceComposition>>,
     surface: &str,
     name: &str,
     kind: &str,
     sidecar: Option<&str>,
-) -> Result<(), String> {
+) -> Result<String, String> {
     // default: a lock that a panicking thread poisoned still holds the composition declarations, which are only read;
     // the panic hook records the panic.
     let all = compositions.lock().unwrap_or_else(PoisonError::into_inner);
@@ -450,7 +432,7 @@ pub(crate) fn require_region(
             "image {name:?} is not declared for sidecar {sidecar:?}"
         ));
     }
-    Ok(())
+    Ok(region.present.clone())
 }
 
 /// Removes declarations owned by the page that is being replaced.
