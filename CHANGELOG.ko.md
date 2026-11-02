@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F391: 사이드카는 화면을 `screen.read`로만 제공할 수 있고, 페이지는 적용한 응답마다 frame 기록을 쓴다.
 - F318, F319: hosted repeat 뒤 전체 suite의 hosted CI run 세 번이 두 test를 통과했으므로, 두 실패를 not reproduced로 닫는다.
 - F376, F377-1: scripts test 전체 실행 세 번이 통과했고 그중 하나는 load average 25 이상이었으므로, 두 실패를 not reproduced로 닫고 F377을 완료한다.
 - F390: record는 다른 애플리케이션을 선례, 참고, 비교로 인용하지 않고, tracked test가 그런 인용을 거절한다.

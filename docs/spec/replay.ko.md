@@ -19,7 +19,7 @@
 
 선택, viewport 스크롤, theme은 [보기 상태](#보기-상태)에서 정의한다. `hex`는 발생한 바이트 전체의 소문자 16진 글이다. 입력 event는 text 같은 파생 사본을 갖지 않는다. `sequence`는 session마다 1부터 세는 정수이며 종류에 관계없이 재생 입력마다 1씩 늘므로 session의 순번에는 빈틈이 없고, 재생은 `sequence` 순서로 입력을 적용한다. 쓰기를 일으키는 키 입력은 `cids`도 가진다([logging](logging.ko.md#event)).
 
-*frame 기록*은 class가 `frame`인 event로서 `session`, `fields.sequence`, `fields.rows`, `fields.cols`, `fields.hash`를 가진다. `sequence`는 화면이 포함하는 마지막 재생 입력의 순번이고, `hash`는 그 입력 뒤 화면의 [화면 hash](#화면-hash)다. sidecar는 만든 화면마다 층 `sidecar`의 frame 기록 하나를 쓴다. page는 받아서 그린 화면 메시지마다 frame 기록 하나를 쓴다. page의 plugin이 `runtime.log`로 쓰므로([plugin logging](plugins.ko.md#logging)) 층은 `plugin`이고, 화면을 그리지 않는 core의 page는 쓰지 않는다. 기록은 sidecar에서 받은 화면의 `sequence`, `rows`, `cols`와 받은 격자의 hash를 담는다. hash는 메시지의 칸에서([보기 상태](#보기-상태), page) 계산하며 메시지가 싣는 hash에서 옮기지 않는다. page는 sidecar가 만든 화면만 그리므로 page의 frame 기록마다 `session`과 `sequence`가 같은 sidecar의 frame 기록이 있다.
+*frame 기록*은 class가 `frame`인 event로서 `session`, `fields.sequence`, `fields.rows`, `fields.cols`, `fields.hash`를 가진다. `sequence`는 화면이 포함하는 마지막 재생 입력의 순번이고, `hash`는 그 입력 뒤 화면의 [화면 hash](#화면-hash)다. sidecar는 만든 화면마다 층 `sidecar`의 frame 기록 하나를 쓴다. page는 적용한 화면 메시지와 `screen.read` 응답마다 frame 기록 하나를 쓴다. page의 plugin이 `runtime.log`로 쓰므로([plugin logging](plugins.ko.md#logging)) 층은 `plugin`이고, 화면을 그리지 않는 core의 page는 쓰지 않는다. 기록은 sidecar에서 받은 화면의 `sequence`, `rows`, `cols`와 받은 격자의 hash를 담는다. hash는 메시지의 칸에서([보기 상태](#보기-상태), page) 계산하며 메시지가 싣는 hash에서 옮기지 않는다. page는 sidecar가 만든 화면만 그리므로 page의 frame 기록마다 `session`과 `sequence`가 같은 sidecar의 frame 기록이 있다.
 
 ## Segment
 
