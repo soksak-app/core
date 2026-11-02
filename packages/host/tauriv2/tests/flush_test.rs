@@ -121,9 +121,10 @@ fn a_buffered_close_is_recorded() {
         .unwrap();
     assert!(
         output.status.success(),
-        "child ended with {:?}, output {:?}",
+        "child ended with {:?}, output {:?}, error output {:?}",
         output.status,
-        String::from_utf8_lossy(&output.stdout)
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
     let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),

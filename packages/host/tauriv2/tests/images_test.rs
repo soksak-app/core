@@ -422,9 +422,10 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
         .unwrap();
     assert!(
         output.status.success(),
-        "child ended with {:?}, output {:?}",
+        "child ended with {:?}, output {:?}, error output {:?}",
         output.status,
-        String::from_utf8_lossy(&output.stdout)
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
     // The wait ended with its own failure, so the event log holds log.open and the run record and nothing else but the registrations of the native observers.
     // The registrations of the native observers are the events `native.observe.registered`; they are not part of the wait. The native
@@ -1225,9 +1226,10 @@ fn image_frame_refusals_are_recorded() {
         .unwrap();
     assert!(
         output.status.success(),
-        "child ended with {:?}, output {:?}",
+        "child ended with {:?}, output {:?}, error output {:?}",
         output.status,
-        String::from_utf8_lossy(&output.stdout)
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     // The harness writes `test <name> ... ` before the test runs, so the line starts after it.
