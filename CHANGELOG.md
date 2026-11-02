@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F386-3: Both hosts require `present` on an image region, answer `leased` for a frame of a region in the `lease` mode, and send `released` to its supplier when the region stops holding a surface.
 - F386-2: The native image region presents the surface of its supplier in the `lease` mode and reports each surface that it stops holding.
 - F386-1: The specifications define the presentation mode of an image region, `copy` or `lease`, and `iosurface_use_count_test` measures the in-use mark that the `lease` mode relies on.
 - F387: Core 0.0.31 installs browser 0.0.16, editor 0.0.17, files 0.0.17, hwp 0.0.14 and terminal 0.0.33.

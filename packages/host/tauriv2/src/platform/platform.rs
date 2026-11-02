@@ -132,6 +132,10 @@ pub type Handle = usize;
 /// Ends a view join without its presentation. join_view returns it.
 pub type ViewAbandon = Box<dyn FnOnce() -> Result<(), String> + Send>;
 
+/// Receives the generation, raster and sequence of each surface that an image region in the lease mode stops holding;
+/// None keeps the copy mode.
+pub type ImageReleased = Option<Box<dyn Fn(u64, u64, i32)>>;
+
 /// A rectangle in the order x, y, width, height.
 pub type Frame = (f64, f64, f64, f64);
 
@@ -570,12 +574,15 @@ pub trait Platform: CoreRootHost + Send + Sync {
 
     /// Creates an external image display region inside the surface webview surface. name is the region name. event
     /// receives keyboard, IME and input events as a JSON string ({key, insert, compose, focus, size, error}) on the
-    /// main thread. Call it on the main thread.
+    /// main thread. A released receiver puts the region in the lease mode and receives, on the main thread, the generation,
+    /// raster and sequence of each surface that the region stops holding; None keeps the copy mode. Call it on the main
+    /// thread.
     fn create_image(
         &self,
         surface: Handle,
         name: &str,
         event: Box<dyn Fn(String)>,
+        released: ImageReleased,
     ) -> Result<Handle, String>;
     /// Sets the image region with the CSS pixel insets of the surface viewport. Call it on the main thread.
     fn place_image(&self, image: Handle, insets: Insets, visible: bool) -> Result<(), String>;

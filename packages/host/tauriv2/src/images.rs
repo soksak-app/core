@@ -8,18 +8,19 @@
 //! Commands run outside the main thread and native work runs on the main thread. A cleanup that started on the main
 //! thread is not awaited.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use tauri::Webview;
+use tauri::{Manager, Webview};
 
 use crate::application_log::{log_error, log_failure};
 use crate::exposure::{self, on_main};
 use crate::platform::{self, Handle};
-use crate::surfaces::{require_region, surface_handle};
+use crate::sidecars::WindowSidecars;
+use crate::surfaces::{region_present, require_region, surface_handle};
 use crate::windows::{emit_window, window_data};
 
 fn image_event_payload(surface: &str, name: &str, event: serde_json::Value) -> serde_json::Value {
@@ -90,6 +91,8 @@ struct Inner {
     handles: HashMap<Key, Handle>,
     owners: HashMap<Key, String>,
     sidecars: HashMap<Key, String>, // sidecar name of each image
+    /// The images whose regions present in the lease mode, which answers leased and released instead of consumed.
+    leases: HashSet<Key>,
     states: HashMap<Key, RasterState>,
     generations: HashMap<String, u64>,
     surface_visibility: HashMap<String, bool>,
@@ -136,6 +139,7 @@ impl Inner {
         let handle = self.handles.remove(key)?;
         self.owners.remove(key);
         self.sidecars.remove(key);
+        self.leases.remove(key);
         if let Some(state) = self.states.remove(key) {
             self.detached_rasters
                 .insert(key.clone(), (state.generation, state.raster));
@@ -516,6 +520,16 @@ impl Images {
         );
         self.changed();
         Ok(())
+    }
+
+    /// Records that the region of the taken name presents in the lease mode.
+    pub fn lease(&self, key: &Key) {
+        self.lock().leases.insert(key.clone());
+    }
+
+    /// Whether the region of key presents in the lease mode.
+    pub fn leased(&self, key: &Key) -> bool {
+        self.lock().leases.contains(key)
     }
 
     /// Writes the address of the created image region to the taken name.
@@ -1084,14 +1098,43 @@ fn create(
     _webview: &Webview,
     window: &tauri::Window,
     key: &Key,
+    sidecar: &str,
+    lease: bool,
     platform: &'static dyn platform::Platform,
 ) -> Result<Handle, String> {
     let surface = surface_handle(window, &key.0)?;
     let (surface_id, name) = key.clone();
     let host = window.clone();
     let event_name = name.clone();
+    // A region in the lease mode tells its supplier each surface that it stops holding
+    // (docs/spec/native-surfaces.md#image-regions). The native region reports it on the main thread, and the message is
+    // sent from a blocking thread so the main thread does not wait for the sidecar connection.
+    let (released_window, released_sidecar, (released_surface, released_name)) =
+        (window.clone(), sidecar.to_string(), key.clone());
 
     on_main(window, move || {
+        let released: platform::ImageReleased = lease.then(|| {
+            Box::new(move |generation: u64, raster: u64, sequence: i32| {
+                let (window, sidecar, surface, name) = (
+                    released_window.clone(),
+                    released_sidecar.clone(),
+                    released_surface.clone(),
+                    released_name.clone(),
+                );
+                tauri::async_runtime::spawn_blocking(move || {
+                    let sent = serde_json::value::to_raw_value(&released_reply(
+                        &name, generation, raster, sequence,
+                    ))
+                    .map_err(|e| e.to_string())
+                    .and_then(|body| {
+                        window
+                            .state::<WindowSidecars>()
+                            .send(&window, &sidecar, &surface, &body)
+                    });
+                    log_failure(&format!("image {name} released"), sent);
+                });
+            }) as Box<dyn Fn(u64, u64, i32)>
+        });
         let event = Box::new(move |json: String| {
             // Native input is sent only to the owning surface. A parse or send failure is not hidden.
             let event_surface = surface_id.clone();
@@ -1144,7 +1187,7 @@ fn create(
             })();
             log_failure("image event", result);
         });
-        let handle = platform.create_image(surface, &name, event)?;
+        let handle = platform.create_image(surface, &name, event, released)?;
         Ok(handle)
     })
 }
@@ -1205,6 +1248,10 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
 
     // The name is taken first. The lock is not held while waiting for native work.
     data.images.reserve(&key, "", sidecar)?;
+    let lease = region_present(&data.compositions, &key.0, &key.1) == "lease";
+    if lease {
+        data.images.lease(&key);
+    }
     // The window state is read before the region counts as attached, so its first drawing state is exact
     // (docs/spec/native-surfaces.md#image-regions).
     let screen_window = window.clone();
@@ -1212,7 +1259,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     let handle = match on_main(&window, move || {
         crate::composition::read_on_screen(&screen_window, &screen_data.images)
     })
-    .and_then(|()| create(webview, &window, &key, platform))
+    .and_then(|()| create(webview, &window, &key, sidecar, lease, platform))
     {
         Ok(handle) => handle,
         Err(error) => {
@@ -1521,6 +1568,30 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
     }
 }
 
+/// The answer to a frame that a region in the lease mode presents: the host holds its IOSurface.
+pub fn leased_reply(name: &str, generation: u64, raster: u64, sequence: i32) -> serde_json::Value {
+    serde_json::json!({
+        "image": {
+            "leased": { "name": name, "generation": generation, "raster": raster, "sequence": sequence }
+        }
+    })
+}
+
+/// The message to the supplier of a region in the lease mode when the region stops holding the surface of the frame
+/// (docs/spec/sidecars.md#image-envelope).
+pub fn released_reply(
+    name: &str,
+    generation: u64,
+    raster: u64,
+    sequence: i32,
+) -> serde_json::Value {
+    serde_json::json!({
+        "image": {
+            "released": { "name": name, "generation": generation, "raster": raster, "sequence": sequence }
+        }
+    })
+}
+
 /// Creates the response after an image is presented.
 /// It returns the consumed response when it was presented, and the reason as an error when it failed.
 pub fn after_present(
@@ -1747,7 +1818,11 @@ where
                                     ),
                                 );
                             }
-                            after_present(Ok(()), &name, generation, raster, sequence)
+                            if images.leased(&key) {
+                                leased_reply(&name, generation, raster, sequence)
+                            } else {
+                                after_present(Ok(()), &name, generation, raster, sequence)
+                            }
                         }
                         Some(reason) => {
                             after_present(Err(reason), &name, generation, raster, sequence)

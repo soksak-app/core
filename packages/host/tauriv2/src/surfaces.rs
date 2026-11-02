@@ -292,6 +292,9 @@ pub(crate) struct SurfaceRegion {
     pub(crate) kind: String,
     #[serde(default)]
     pub(crate) sidecar: String,
+    /// The presentation mode of an image region, copy or lease (docs/spec/native-surfaces.md#image-regions).
+    #[serde(default)]
+    pub(crate) present: String,
     pub(crate) input: String,
 }
 
@@ -362,20 +365,29 @@ fn validate_regions(composition: &SurfaceComposition) -> Result<(), String> {
             ));
         }
         match region.kind.as_str() {
-            "document" if region.input == "native" && region.sidecar.is_empty() => {}
+            "document"
+                if region.input == "native"
+                    && region.sidecar.is_empty()
+                    && region.present.is_empty() => {}
             "document" => {
                 return Err(format!(
                     "document region {:?} must own native input",
                     region.name
                 ));
             }
-            "image" if region.input == "dom" && !region.sidecar.is_empty() => {}
-            "image" => {
+            "image" if region.input != "dom" || region.sidecar.is_empty() => {
                 return Err(format!(
                     "image region {:?} requires DOM input and a sidecar",
                     region.name
                 ));
             }
+            "image" if !matches!(region.present.as_str(), "copy" | "lease") => {
+                return Err(format!(
+                    "image region {:?} declares present copy or lease",
+                    region.name
+                ));
+            }
+            "image" => {}
             _ => return Err(format!("unknown region kind {:?}", region.kind)),
         }
     }
@@ -385,6 +397,26 @@ fn validate_regions(composition: &SurfaceComposition) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Returns the declared presentation mode of the image region name of surface, or an empty string when none is declared.
+pub(crate) fn region_present(
+    compositions: &Mutex<HashMap<String, SurfaceComposition>>,
+    surface: &str,
+    name: &str,
+) -> String {
+    // default: a lock that a panicking thread poisoned still holds the composition declarations, which are only read;
+    // the panic hook records the panic.
+    let all = compositions.lock().unwrap_or_else(PoisonError::into_inner);
+    all.get(surface)
+        .and_then(|composition| {
+            composition
+                .regions
+                .iter()
+                .find(|region| region.name == name)
+        })
+        .map(|region| region.present.clone())
+        .unwrap_or_default()
 }
 
 pub(crate) fn require_region(

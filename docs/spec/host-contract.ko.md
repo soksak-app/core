@@ -308,6 +308,7 @@ fn invalid_json_closes_connection() {
 | `view.process-ended.forgets-regions` | view의 process가 끝나면 호스트는 그 표면의 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내므로, 페이지는 새 view가 영역을 다시 붙일 때까지 그 표면의 영역을 잊는다. | both |
 | `view.create-loads-page` | view surface는 첫 sync에서 view 구성(`isView` 설정)으로 web view를 folder와 plugin을 surface의 것으로 하여 만들고, `soksak://<plugin>/<page>`를 load한다. | both |
 | `view.composition.page-and-regions` | 호스트는 surface의 합성 선언을 검증한다. `page`가 plugin의 하나의 `.html` 파일이고 `regions`와 `overlays`가 선택적인 `view` 합성은 받아들이고, `page`가 없는 `view`, plugin 밖의 `page`, 접미사가 `.html`이 아니거나 `.binary` 폴더 안의 `page`, `surface.module`과 `hybrid` 합성은 거절한다. | both |
+| `view.composition.image-region-declares-present` | image 영역은 `present`를 `copy` 또는 `lease`로 선언한다. 호스트는 `present`가 없거나 다른 값인 image 영역을 `image region "<name>" declares present copy or lease` 오류로 거절하고, `present`를 선언한 document 영역은 native input을 갖지 않는 영역으로 거절한다. | both |
 | `view.placement.requires-current-page-declaration` | 현재 page가 composition declaration을 등록하지 않은 view의 sync request는 `surface "<id>" has no composition declaration in the current page`로 거부한다. 현재 page의 일치하는 declaration은 허용하고 다른 declaration은 거부한다. | both |
 | `view.placement.retires-declarations-on-page-reload` | Page를 reload하면 이전 page의 view composition 및 plugin declaration을 지워 이후 sync request의 권한으로 사용할 수 없게 한다. | both |
 | `view.composition.dom-removed` | 제거된 `dom` 합성 kind는 `plugin <plugin> surface composition: kind dom is removed; the composition takes kind view`로, 제거된 `hybrid` kind는 `kind hybrid is removed; the composition takes kind view`로 거절된다. | both |
@@ -509,6 +510,8 @@ fn invalid_json_closes_connection() {
 | `images.envelope.ignores-body-without-image` | image 필드가 없는 JSON 본문은 이미지 봉투가 아니다. | both |
 | `images.envelope.ignores-invalid-json` | JSON이 아닌 본문은 이미지 봉투가 아니다. | both |
 | `images.ack.consumed-carries-frame-identity` | 표시에 성공하면 consumed와 프레임의 name, generation, raster, sequence로 응답한다. | both |
+| `images.ack.leased-carries-frame-identity` | lease 방식 영역의 표시에 성공하면 leased와 프레임의 name, generation, raster, sequence로 응답한다. | both |
+| `images.lease.released-carries-frame-identity` | lease 방식 영역이 surface를 더 쥐지 않게 되면, 호스트는 그 surface가 담았던 프레임의 name, generation, raster, sequence와 함께 released를 공급자에게 보낸다. | both |
 | `images.ack.failure-carries-error-and-frame-identity` | 표시에 실패하면 오류와 프레임의 name, generation, raster, sequence로 응답한다. | both |
 | `images.transfer.rejects-duplicate-sequence` | 현재 raster에서 같은 sequence를 반복하면 stale로 응답한다. | both |
 | `images.transfer.reconfigure-advances-raster` | 새 크기를 구성하면 더 큰 raster 번호를 반환한다. | both |

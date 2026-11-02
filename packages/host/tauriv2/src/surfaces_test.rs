@@ -937,3 +937,40 @@ mod placement_snapshot {
         assert!(placements.is_empty());
     }
 }
+
+// contract: view.composition.image-region-declares-present
+#[test]
+fn an_image_region_declares_its_presentation_mode() {
+    use super::{SurfaceComposition, validate_composition};
+    let compose = |region: serde_json::Value| {
+        let composition: SurfaceComposition = serde_json::from_value(
+            serde_json::json!({"kind": "view", "page": "ui/page.html", "regions": [region], "overlays": []}),
+        )
+        .expect("the composition fixture is valid");
+        validate_composition("probe", &composition)
+    };
+    for present in ["copy", "lease"] {
+        assert_eq!(
+            compose(
+                serde_json::json!({"name": "view", "kind": "image", "sidecar": "probe", "present": present, "input": "dom"})
+            ),
+            Ok(()),
+            "image region with present {present}"
+        );
+    }
+    for region in [
+        serde_json::json!({"name": "view", "kind": "image", "sidecar": "probe", "input": "dom"}),
+        serde_json::json!({"name": "view", "kind": "image", "sidecar": "probe", "present": "move", "input": "dom"}),
+    ] {
+        assert_eq!(
+            compose(region),
+            Err(r#"image region "view" declares present copy or lease"#.to_string())
+        );
+    }
+    assert_eq!(
+        compose(
+            serde_json::json!({"name": "page", "kind": "document", "present": "lease", "input": "native"})
+        ),
+        Err(r#"document region "page" must own native input"#.to_string())
+    );
+}

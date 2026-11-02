@@ -270,6 +270,24 @@ func TestSuccessfulPresentIsReleased(t *testing.T) {
 	}
 }
 
+// contract: images.ack.leased-carries-frame-identity
+func TestLeasedPresentIsAnsweredLeased(t *testing.T) {
+	response := host.LeasedReply("view", 7, 3, 1)
+	want := map[string]any{"image": map[string]any{"leased": map[string]any{"name": "view", "generation": uint64(7), "raster": uint64(3), "sequence": 1}}}
+	if !reflect.DeepEqual(response, want) {
+		t.Fatalf("leased answer: %v", response)
+	}
+}
+
+// contract: images.lease.released-carries-frame-identity
+func TestReleasedSurfaceIsAnsweredReleased(t *testing.T) {
+	response := host.ReleasedReply("view", 7, 3, 2)
+	want := map[string]any{"image": map[string]any{"released": map[string]any{"name": "view", "generation": uint64(7), "raster": uint64(3), "sequence": 2}}}
+	if !reflect.DeepEqual(response, want) {
+		t.Fatalf("released answer: %v", response)
+	}
+}
+
 // contract: images.transfer.rejects-duplicate-sequence, images.transfer.reconfigure-advances-raster, images.transfer.rejects-stale-raster, images.transfer.configure-stamps-current-generation, images.transfer.generation-advances, images.transfer.rejects-old-generation-after-reattach
 func TestOnlyTheCurrentGenerationRasterAndSequenceCanBePresented(t *testing.T) {
 	images := host.NewImages()

@@ -562,7 +562,7 @@ func (implementation) InstallDock(func()) error {
 	return unsupported("Dock menu")
 }
 
-func (implementation) CreateImage(unsafe.Pointer, string, func(string)) (unsafe.Pointer, error) {
+func (implementation) CreateImage(unsafe.Pointer, string, func(string), func(uint64, uint64, int)) (unsafe.Pointer, error) {
 	return nil, unsupported("image view")
 }
 

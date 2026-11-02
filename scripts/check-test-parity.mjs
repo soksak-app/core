@@ -3934,6 +3934,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F386-3",
+    implementation: [
+      { file: "packages/host/wailsv3/src/images.go", symbol: "func LeasedReply(name string, generation, raster uint64, sequence int) map[string]interface{} {" },
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "pub fn leased_reply(name: &str, generation: u64, raster: u64, sequence: i32) -> serde_json::Value {" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestImageRegionDeclaresItsPresentationMode" },
+      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "an_image_region_declares_its_presentation_mode" },
+    ],
+    expected: "Both hosts require present on an image region, answer leased in the lease mode, and send released when a region stops holding a surface.",
+    levels: ["unit"],
+  },
+  {
     id: "F386-2",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "void sp_region_lease(void *handle, sp_region_released released, void *context) {" },

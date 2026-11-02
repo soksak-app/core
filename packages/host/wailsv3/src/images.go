@@ -73,6 +73,8 @@ func ImageCallError(call string, err error) error {
 type ImageOwner struct {
 	SidecarName  string
 	SidecarOwner SidecarOwner
+	// Lease is whether the region presents in the lease mode, which answers leased and released instead of consumed.
+	Lease bool
 }
 
 type imageDetachTarget struct {
@@ -886,6 +888,21 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	}
 }
 
+// LeasedReply is the answer to a frame that a region in the lease mode presents: the host holds its IOSurface.
+func LeasedReply(name string, generation, raster uint64, sequence int) map[string]interface{} {
+	return map[string]interface{}{"image": map[string]interface{}{
+		"leased": map[string]interface{}{"name": name, "generation": generation, "raster": raster, "sequence": sequence},
+	}}
+}
+
+// ReleasedReply is the message to the supplier of a region in the lease mode when the region stops holding the surface
+// of the frame (docs/spec/sidecars.md#image-envelope).
+func ReleasedReply(name string, generation, raster uint64, sequence int) map[string]interface{} {
+	return map[string]interface{}{"image": map[string]interface{}{
+		"released": map[string]interface{}{"name": name, "generation": generation, "raster": raster, "sequence": sequence},
+	}}
+}
+
 // AfterPresent builds the reply after the image is displayed.
 // It returns a consumed reply when ok is true, and returns reason as an error when it is false.
 func AfterPresent(ok bool, reason, name string, generation, raster uint64, sequence int) map[string]interface{} {
@@ -1047,6 +1064,9 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 					surface, d.Name, d.Generation, d.Raster, d.Sequence, images.FrameState(key)))
 			}
 			response := AfterPresent(true, "", d.Name, d.Generation, d.Raster, d.Sequence)
+			if owner, err := images.GetOwner(key); err == nil && owner.Lease {
+				response = LeasedReply(d.Name, d.Generation, d.Raster, d.Sequence)
+			}
 			logAnswerError("image response "+d.Name, sendResponse(d.Name, response))
 		}
 		return true

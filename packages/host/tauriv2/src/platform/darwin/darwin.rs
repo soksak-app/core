@@ -21,7 +21,7 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
-    ImagePresentation, Insets, Key, Listener, PersistentStream, Platform, Pointer,
+    ImagePresentation, ImageReleased, Insets, Key, Listener, PersistentStream, Platform, Pointer,
     ProcessFootprint, Raster, WindowBuilder, WindowOverlay,
 };
 
@@ -440,8 +440,9 @@ impl Platform for Darwin {
         surface: Handle,
         name: &str,
         event: Box<dyn Fn(String)>,
+        released: ImageReleased,
     ) -> Result<Handle, String> {
-        image::create(surface, name, event)
+        image::create(surface, name, event, released)
     }
     fn place_image(&self, image: Handle, insets: Insets, visible: bool) -> Result<(), String> {
         image::place(

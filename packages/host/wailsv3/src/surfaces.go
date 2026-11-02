@@ -195,6 +195,8 @@ type SurfaceRegion struct {
 	Name    string `json:"name"`
 	Kind    string `json:"kind"`
 	Sidecar string `json:"sidecar,omitempty"`
+	// Present is the presentation mode of an image region, copy or lease (docs/spec/native-surfaces.md#image-regions).
+	Present string `json:"present,omitempty"`
 	Input   string `json:"input"`
 }
 
@@ -255,12 +257,15 @@ func validateRegions(composition SurfaceComposition) error {
 		seen[region.Name] = true
 		switch region.Kind {
 		case "document":
-			if region.Input != "native" || region.Sidecar != "" {
+			if region.Input != "native" || region.Sidecar != "" || region.Present != "" {
 				return fmt.Errorf("document region %q must own native input", region.Name)
 			}
 		case "image":
 			if region.Input != "dom" || region.Sidecar == "" {
 				return fmt.Errorf("image region %q requires DOM input and a sidecar", region.Name)
+			}
+			if region.Present != "copy" && region.Present != "lease" {
+				return fmt.Errorf("image region %q declares present copy or lease", region.Name)
 			}
 		default:
 			return fmt.Errorf("unknown region kind %q", region.Kind)
@@ -273,6 +278,18 @@ func validateRegions(composition SurfaceComposition) error {
 		seen[overlay] = true
 	}
 	return nil
+}
+
+// regionPresent returns the declared presentation mode of the image region name of surface, or "" when none is declared.
+func (s *Surfaces) regionPresent(surface, name string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, region := range s.compositions[surface].Regions {
+		if region.Name == name {
+			return region.Present
+		}
+	}
+	return ""
 }
 
 func (s *Surfaces) requireRegion(surface, name, kind, sidecar string) error {

@@ -306,6 +306,7 @@ Items:
 | `view.process-ended.forgets-regions` | When the process of a view ends, the host closes the regions of its surface and then sends the window event `view-process-ended {surface}`, so the page forgets the regions of that surface until the new view attaches them again. | both |
 | `view.create-loads-page` | A view surface creates its web view with the view configuration (`isView` set) for the folder and the plugin of its surface, and loads `soksak://<plugin>/<page>` into it at its first sync. | both |
 | `view.composition.page-and-regions` | The host validates the composition declaration of a surface: a `view` composition whose `page` is one `.html` file of the plugin, with optional `regions` and `overlays`, is accepted; a `view` without a `page`, a `page` outside the plugin, a `page` whose suffix is not `.html` or that sits in a `.binary` folder, and a `surface.module` or a `hybrid` composition is refused. | both |
+| `view.composition.image-region-declares-present` | An image region declares `present` as `copy` or `lease`; the host rejects an image region without `present` or with another value with the error `image region "<name>" declares present copy or lease`, and rejects a document region that declares `present` as a region that does not own native input. | both |
 | `view.placement.requires-current-page-declaration` | A sync request for a view without a composition declaration from the current page is refused with `surface "<id>" has no composition declaration in the current page`; the matching current-page declaration is accepted, and a different declaration is refused. | both |
 | `view.placement.retires-declarations-on-page-reload` | Reloading the page clears the prior page's view composition and plugin declarations, so they cannot authorize a later sync request. | both |
 | `view.composition.dom-removed` | The removed `dom` composition kind is refused with `plugin <plugin> surface composition: kind dom is removed; the composition takes kind view`, and the removed `hybrid` kind with `kind hybrid is removed; the composition takes kind view`. | both |
@@ -506,6 +507,8 @@ Items:
 | `images.envelope.ignores-body-without-image` | A JSON body without an image field is not an image envelope. | both |
 | `images.envelope.ignores-invalid-json` | A body that is not JSON is not an image envelope. | both |
 | `images.ack.consumed-carries-frame-identity` | A successful presentation is acknowledged with consumed and the frame name, generation, raster, and sequence. | both |
+| `images.ack.leased-carries-frame-identity` | A successful presentation of a region in the lease mode is acknowledged with leased and the frame name, generation, raster, and sequence. | both |
+| `images.lease.released-carries-frame-identity` | When a region in the lease mode stops holding a surface, the host sends its supplier released with the name, generation, raster, and sequence of the frame that the surface carried. | both |
 | `images.ack.failure-carries-error-and-frame-identity` | A failed presentation is answered with the error and the frame name, generation, raster, and sequence. | both |
 | `images.transfer.rejects-duplicate-sequence` | Repeating a sequence on the current raster is answered with stale. | both |
 | `images.transfer.reconfigure-advances-raster` | Configuring a new size returns a larger raster number. | both |

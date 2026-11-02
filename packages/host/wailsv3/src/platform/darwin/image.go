@@ -18,8 +18,19 @@ static void imageChangedBridge(void *context, const char *json) {
     wailsRunOnWorker(^{ goImageChanged(context, (char *)json); });
 }
 
-static void *imageCreate(void *surface, const char *name, uintptr_t context) {
-    return ON_MAIN(void *, sp_region_create(surface, name, imageChangedBridge, (void *)context));
+extern void goImageReleased(void *context, uint64_t generation, uint64_t raster, int sequence);
+
+static void imageReleasedBridge(void *context, uint64_t generation, uint64_t raster, int sequence) {
+    wailsRunOnWorker(^{ goImageReleased(context, generation, raster, sequence); });
+}
+
+// A nonzero lease puts the region in the lease mode with that receiver of its released surfaces.
+static void *imageCreate(void *surface, const char *name, uintptr_t context, uintptr_t lease) {
+    return ON_MAIN(void *, ({
+        void *region = sp_region_create(surface, name, imageChangedBridge, (void *)context);
+        if (region && lease) sp_region_lease(region, imageReleasedBridge, (void *)lease);
+        region;
+    }));
 }
 static void main_sp_region_place(void *region, double left, double top, double right, double bottom, bool visible) {
     wailsRunOnMain(^{ sp_region_place(region, left, top, right, bottom, visible); });
@@ -47,8 +58,16 @@ import (
 	"unsafe"
 )
 
-// images are the event receiver handles of each image region handle. They are read and changed only in main-thread steps.
+// images are the event receiver handles of each image region handle, and leases the receivers of the released surfaces of
+// each region in the lease mode. They are read and changed only in main-thread steps.
 var images = map[unsafe.Pointer]cgo.Handle{}
+var leases = map[unsafe.Pointer]cgo.Handle{}
+
+//export goImageReleased
+func goImageReleased(context unsafe.Pointer, generation, raster C.uint64_t, sequence C.int) {
+	released := cgo.Handle(uintptr(context)).Value().(func(uint64, uint64, int))
+	released(uint64(generation), uint64(raster), int(sequence))
+}
 
 //export goImageChanged
 func goImageChanged(context unsafe.Pointer, json *C.char) {
@@ -56,16 +75,27 @@ func goImageChanged(context unsafe.Pointer, json *C.char) {
 	changed(C.GoString(json))
 }
 
-func (implementation) CreateImage(surface unsafe.Pointer, name string, changed func(event string)) (unsafe.Pointer, error) {
+func (implementation) CreateImage(surface unsafe.Pointer, name string, changed func(event string),
+	released func(generation, raster uint64, sequence int)) (unsafe.Pointer, error) {
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
 	receiver := cgo.NewHandle(changed)
-	image := C.imageCreate(surface, cname, C.uintptr_t(receiver))
+	var lease cgo.Handle
+	if released != nil {
+		lease = cgo.NewHandle(released)
+	}
+	image := C.imageCreate(surface, cname, C.uintptr_t(receiver), C.uintptr_t(lease))
 	if image == nil {
 		receiver.Delete()
+		if lease != 0 {
+			lease.Delete()
+		}
 		return nil, errors.New("cannot create an image region in this surface")
 	}
 	images[image] = receiver
+	if lease != 0 {
+		leases[image] = lease
+	}
 	return image, nil
 }
 
@@ -112,10 +142,15 @@ func (implementation) TextImage(image unsafe.Pointer, utf8 string) {
 }
 
 func (implementation) CloseImage(image unsafe.Pointer) {
+	// Closing releases the presented surface of a region in the lease mode through its receiver before it returns.
 	C.main_sp_region_close(image)
 	if receiver, ok := images[image]; ok {
 		receiver.Delete()
 		delete(images, image)
+	}
+	if lease, ok := leases[image]; ok {
+		lease.Delete()
+		delete(leases, image)
 	}
 }
 

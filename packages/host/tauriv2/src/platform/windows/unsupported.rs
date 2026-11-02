@@ -9,8 +9,8 @@ use tauri::webview::PlatformWebview;
 
 use super::super::{
     ClipboardValue, Connection, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
-    ImagePresentation, Insets, Key, Listener, PersistentStream, Pointer, ProcessFootprint, Raster,
-    WindowBuilder, WindowOverlay,
+    ImagePresentation, ImageReleased, Insets, Key, Listener, PersistentStream, Pointer,
+    ProcessFootprint, Raster, WindowBuilder, WindowOverlay,
 };
 
 /// Returns an error that contains operation in its name.
@@ -692,6 +692,7 @@ pub fn create_image(
     _surface: Handle,
     _name: &str,
     _event: Box<dyn Fn(String)>,
+    _released: ImageReleased,
 ) -> Result<Handle, String> {
     missing("image view")
 }

@@ -482,6 +482,28 @@ func TestViewCompositionDeclaresPageWithOptionalRegions(t *testing.T) {
 	}
 }
 
+// contract: view.composition.image-region-declares-present
+func TestImageRegionDeclaresItsPresentationMode(t *testing.T) {
+	compose := func(region SurfaceRegion) error {
+		return validateComposition("probe", SurfaceComposition{Kind: "view", Page: "ui/page.html", Regions: []SurfaceRegion{region}, Overlays: []string{}})
+	}
+	for _, present := range []string{"copy", "lease"} {
+		if err := compose(SurfaceRegion{Name: "view", Kind: "image", Sidecar: "probe", Present: present, Input: "dom"}); err != nil {
+			t.Fatalf("image region with present %s: %v", present, err)
+		}
+	}
+	for _, present := range []string{"", "move"} {
+		err := compose(SurfaceRegion{Name: "view", Kind: "image", Sidecar: "probe", Present: present, Input: "dom"})
+		if err == nil || err.Error() != `image region "view" declares present copy or lease` {
+			t.Fatalf("image region with present %q: %v", present, err)
+		}
+	}
+	err := compose(SurfaceRegion{Name: "page", Kind: "document", Present: "lease", Input: "native"})
+	if err == nil || err.Error() != `document region "page" must own native input` {
+		t.Fatalf("document region with present: %v", err)
+	}
+}
+
 // channelPlatform is the platform of the view channel tests. It keeps the receiver of the sok-view messages of each document and
 // records each message that the host posts to a document.
 type channelPlatform struct {

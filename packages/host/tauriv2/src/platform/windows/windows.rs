@@ -16,8 +16,8 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     ClipboardValue, Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame,
-    Handle, Hit, ImagePresentation, Insets, Key, Listener, PersistentStream, Platform, Pointer,
-    ProcessFootprint, Raster, WindowBuilder, WindowOverlay,
+    Handle, Hit, ImagePresentation, ImageReleased, Insets, Key, Listener, PersistentStream,
+    Platform, Pointer, ProcessFootprint, Raster, WindowBuilder, WindowOverlay,
 };
 
 #[path = "identity.rs"]
@@ -313,8 +313,9 @@ impl Platform for Windows {
         surface: Handle,
         name: &str,
         event: Box<dyn Fn(String)>,
+        released: ImageReleased,
     ) -> Result<Handle, String> {
-        unsupported::create_image(surface, name, event)
+        unsupported::create_image(surface, name, event, released)
     }
     fn place_image(&self, image: Handle, insets: Insets, visible: bool) -> Result<(), String> {
         unsupported::place_image(image, insets, visible)

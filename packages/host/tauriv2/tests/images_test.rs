@@ -7,7 +7,7 @@ use serde_json::json;
 use soksak_host_tauriv2::application_log::start_standard_error;
 use soksak_host_tauriv2::images::{
     Configure, Decision, Drawing, Images, Key, after_present, decide, handle_envelope,
-    handle_envelope_with_recovery,
+    handle_envelope_with_recovery, leased_reply, released_reply,
 };
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -202,6 +202,24 @@ fn successful_present_is_consumed() {
     assert_eq!(response["image"]["consumed"]["generation"], 7);
     assert_eq!(response["image"]["consumed"]["raster"], 3);
     assert_eq!(response["image"]["consumed"]["sequence"], 1);
+}
+
+// contract: images.ack.leased-carries-frame-identity
+#[test]
+fn leased_present_is_answered_leased() {
+    assert_eq!(
+        leased_reply("view", 7, 3, 1),
+        serde_json::json!({"image": {"leased": {"name": "view", "generation": 7, "raster": 3, "sequence": 1}}})
+    );
+}
+
+// contract: images.lease.released-carries-frame-identity
+#[test]
+fn released_surface_is_answered_released() {
+    assert_eq!(
+        released_reply("view", 7, 3, 2),
+        serde_json::json!({"image": {"released": {"name": "view", "generation": 7, "raster": 3, "sequence": 2}}})
+    );
 }
 
 // contract: images.transfer.rejects-duplicate-sequence, images.transfer.reconfigure-advances-raster, images.transfer.rejects-stale-raster, images.transfer.configure-stamps-current-generation, images.transfer.generation-advances, images.transfer.rejects-old-generation-after-reattach

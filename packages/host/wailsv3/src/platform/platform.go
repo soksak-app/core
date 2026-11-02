@@ -475,8 +475,9 @@ type Platform interface {
 
 	// CreateImage creates an external picture display region inside the surface web view surface. event receives
 	// keyboard, IME and input events as a JSON string ({key, insert, compose, focus, size, error})
-	// on the main thread.
-	CreateImage(surface unsafe.Pointer, name string, event func(json string)) (unsafe.Pointer, error)
+	// on the main thread. A non-nil released puts the region in the lease mode and receives, on a worker, the frame identity of
+	// each surface that the region stops holding; a nil released keeps the copy mode.
+	CreateImage(surface unsafe.Pointer, name string, event func(json string), released func(generation, raster uint64, sequence int)) (unsafe.Pointer, error)
 	// PlaceImage sets the image region with the CSS pixel margins of the surface viewport.
 	PlaceImage(image unsafe.Pointer, left, top, right, bottom float64, visible bool)
 	// RasterImage returns the device pixel size of the applied image region and the ratio of device pixels per CSS pixel.

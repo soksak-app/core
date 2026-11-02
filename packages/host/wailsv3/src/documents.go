@@ -915,8 +915,22 @@ func (s *Surfaces) attachCheckedImage(key ImageKey, req ImageRequest) error {
 	if err := s.requireRegion(key.Surface, key.Name, "image", req.Sidecar); err != nil {
 		return err
 	}
-	if err := s.images.Reserve(key, &ImageOwner{SidecarName: req.Sidecar, SidecarOwner: s}); err != nil {
+	lease := s.regionPresent(key.Surface, key.Name) == "lease"
+	if err := s.images.Reserve(key, &ImageOwner{SidecarName: req.Sidecar, SidecarOwner: s, Lease: lease}); err != nil {
 		return err
+	}
+	// A region in the lease mode tells its supplier each surface that it stops holding (docs/spec/native-surfaces.md#image-regions).
+	var released func(generation, raster uint64, sequence int)
+	if lease {
+		released = func(generation, raster uint64, sequence int) {
+			body, err := json.Marshal(ReleasedReply(key.Name, generation, raster, sequence))
+			if err == nil {
+				err = s.sidecars.Send(s, req.Sidecar, key.Surface, body)
+			}
+			if err != nil {
+				LogError(fmt.Sprintf("image %s released", key.Name), err)
+			}
+		}
 	}
 	var handle unsafe.Pointer
 	var err error
@@ -928,7 +942,7 @@ func (s *Surfaces) attachCheckedImage(key ImageKey, req ImageRequest) error {
 		}
 		handle, err = system.CreateImage(view.handle, key.Name, func(event string) {
 			s.imageChanged(key, event)
-		})
+		}, released)
 	})
 	if err != nil {
 		s.images.Remove(key)

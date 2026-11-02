@@ -2,9 +2,10 @@
 
 use std::ffi::{CStr, CString, c_char, c_void};
 
-use super::super::{Handle, ImagePresentation, Raster};
+use super::super::{Handle, ImagePresentation, ImageReleased, Raster};
 
 type ImageEvent = extern "C" fn(*mut c_void, *const c_char);
+type ReleasedCallback = extern "C" fn(*mut c_void, u64, u64, i32);
 
 unsafe extern "C" {
     fn sp_region_create(
@@ -13,6 +14,7 @@ unsafe extern "C" {
         event: ImageEvent,
         context: *mut c_void,
     ) -> *mut c_void;
+    fn sp_region_lease(region: *mut c_void, released: ReleasedCallback, context: *mut c_void);
     fn sp_region_place(
         region: *mut c_void,
         left: f64,
@@ -43,12 +45,21 @@ unsafe extern "C" {
     fn sp_region_close(region: *mut c_void);
 }
 
-/// The event receiver of each image region handle. It is used only on the main thread.
+/// The event receiver of each image region handle, and the receiver of the released surfaces of each region in the lease
+/// mode. They are used only on the main thread.
 struct Receiver(Box<dyn Fn(String)>);
+struct Released(Box<dyn Fn(u64, u64, i32)>);
 
 thread_local! {
     static RECEIVERS: std::cell::RefCell<std::collections::HashMap<Handle, *mut Receiver>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+    static LEASES: std::cell::RefCell<std::collections::HashMap<Handle, *mut Released>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+extern "C" fn released_callback(context: *mut c_void, generation: u64, raster: u64, sequence: i32) {
+    let released = unsafe { &*(context as *const Released) };
+    (released.0)(generation, raster, sequence);
 }
 
 extern "C" fn event_callback(context: *mut c_void, json: *const c_char) {
@@ -60,7 +71,12 @@ extern "C" fn event_callback(context: *mut c_void, json: *const c_char) {
 }
 
 /// Creates an image region over the surface webview. Call it on the main thread.
-pub fn create(surface: Handle, name: &str, receive: Box<dyn Fn(String)>) -> Result<Handle, String> {
+pub fn create(
+    surface: Handle,
+    name: &str,
+    receive: Box<dyn Fn(String)>,
+    released: ImageReleased,
+) -> Result<Handle, String> {
     let name = CString::new(name).map_err(|e| e.to_string())?;
     let receiver = Box::into_raw(Box::new(Receiver(receive)));
     let image = unsafe {
@@ -77,6 +93,11 @@ pub fn create(surface: Handle, name: &str, receive: Box<dyn Fn(String)>) -> Resu
     }
     let handle = image as Handle;
     RECEIVERS.with(|all| all.borrow_mut().insert(handle, receiver));
+    if let Some(released) = released {
+        let released = Box::into_raw(Box::new(Released(released)));
+        unsafe { sp_region_lease(image, released_callback, released as *mut c_void) };
+        LEASES.with(|all| all.borrow_mut().insert(handle, released));
+    }
     Ok(handle)
 }
 
@@ -169,8 +190,12 @@ pub fn text(image: Handle, utf8: &str) -> Result<(), String> {
 
 /// Removes and releases the region.
 pub fn close(image: Handle) {
+    // Closing releases the presented surface of a region in the lease mode through its receiver before it returns.
     unsafe { sp_region_close(image as *mut c_void) };
     if let Some(receiver) = RECEIVERS.with(|all| all.borrow_mut().remove(&image)) {
         drop(unsafe { Box::from_raw(receiver) });
+    }
+    if let Some(released) = LEASES.with(|all| all.borrow_mut().remove(&image)) {
+        drop(unsafe { Box::from_raw(released) });
     }
 }
