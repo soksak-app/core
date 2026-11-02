@@ -3945,6 +3945,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F386-6",
+    implementation: [
+      { file: "docs/spec/native-surfaces.md", symbol: "clears that mark at the latest once a later surface is presented" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/iosurface_use_count_test.m", id: "the window server clears the mark of a replaced surface once a later surface is presented" },
+    ],
+    expected: "The window server clears the in-use mark of a replaced surface at the latest once a later surface is presented.",
+    levels: ["unit"],
+  },
+  {
     id: "F386-4",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "image present must be copy or lease" },

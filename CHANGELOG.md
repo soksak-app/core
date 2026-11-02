@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F386-6: The lease rule states that the window server clears the in-use mark of a replaced surface at the latest once a later surface is presented, which the hosted CI machine showed.
 - F386-7: The image attach of both hosts reads the presentation mode from the region check, so no default mode remains.
 - F388: Core pins the records kit 0.0.6, whose term list defines `presentation mode` and `lease`.
 - F386-4: The plugin API and `sok` manifest readers require `present`, `copy` or `lease`, on an image region.
