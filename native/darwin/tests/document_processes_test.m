@@ -7,8 +7,6 @@
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
-#import <signal.h>
-#import <errno.h>
 #import <string.h>
 #import <sys/types.h>
 #import "support/temporary_folder.h"
@@ -371,9 +369,10 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
     }
     fflush(stdout);
 
-    // Every object of the scenario ends here: the regions, the surface and the window. WebKit keeps an idle WebContent
-    // process after its last view closes, so the scenario ends each of its processes; the next scenario then starts without
-    // them.
+    // Every object of the scenario ends here: the regions, the surface and the window. WebKit ends or keeps the WebContent
+    // processes of the closed regions itself; the test sends them no signal, because a process ended while it writes the
+    // Metal compiler cache of the WebContent processes leaves that cache to the next processes in a state in which their
+    // main thread waits in flock of the cache (F335-7).
     for (int i = 0; i < 4; i++) {
         if (regions[i].document) sp_document_close(regions[i].document);
         [regions[i].state release];
@@ -381,15 +380,6 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
     }
     sp_surface_close(surface);
     [window close];
-    for (NSNumber *process in processes) {
-        pid_t pid = process.intValue;
-        if (kill(pid, SIGKILL) != 0 && errno != ESRCH) {
-            check(NO, [NSString stringWithFormat:@"the WebContent process %d cannot be ended: %s", pid, strerror(errno)]);
-            continue;
-        }
-        check(pumpUntil(10, ^BOOL { return kill(pid, 0) != 0; }),
-            [NSString stringWithFormat:@"the WebContent process %d ends after the scenario", pid]);
-    }
 }
 
 int main(int argc, char **argv) { @autoreleasepool {
