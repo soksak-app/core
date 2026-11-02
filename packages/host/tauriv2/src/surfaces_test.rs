@@ -88,9 +88,13 @@ mod declaration_table {
         assert_eq!(two.project, None);
         assert_eq!(two.declarations, one.declarations);
         assert_eq!(
-            crate::documents::surface_start_script("two", two)
-                .expect("the resolved start values form a valid script"),
-            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"dom":["alpha"],"nested":{"keep":true}}),"diagnostics":null,"section":null});"##
+            crate::documents::surface_start_script(
+                "two",
+                two,
+                &soksak_sok::log_policy::LogPolicy::default().classes()
+            )
+            .expect("the resolved start values form a valid script"),
+            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"dom":["alpha"],"nested":{"keep":true}}),"diagnostics":null,"section":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});"##
         );
 
         let next: SyncRequest = serde_json::from_value(serde_json::json!({

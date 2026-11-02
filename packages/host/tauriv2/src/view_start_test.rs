@@ -6,6 +6,14 @@ use serde_json::json;
 use super::surface_start_script;
 use crate::surfaces::{ViewStart, view_origin_directory};
 
+/// The stored level of each class under the default policy, which the host writes as the start value levels.
+fn default_levels() -> serde_json::Map<String, serde_json::Value> {
+    soksak_sok::log_policy::LogPolicy::default().classes()
+}
+
+/// The start value levels of the default policy as the script writes it, the classes in the order of their names.
+const DEFAULT_LEVELS: &str = r##""levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})"##;
+
 // contract: view.start-values.first-script
 #[test]
 fn the_start_values_script_freezes_the_start_values_for_the_first_page_script() {
@@ -19,8 +27,8 @@ fn the_start_values_script_freezes_the_start_values_for_the_first_page_script() 
     }))
     .expect("the start values have their form");
     assert_eq!(
-        surface_start_script("probe-surface", &start).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"}),"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"})});"##,
+        surface_start_script("probe-surface", &start, &default_levels()).expect("the origin has its form"),
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"}),"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"}),"##.to_string() + DEFAULT_LEVELS + "});",
         "the script sets the frozen start values"
     );
 }
@@ -36,8 +44,8 @@ fn the_start_values_script_carries_absent_values_as_null() {
     }))
     .expect("the start values have their form");
     assert_eq!(
-        surface_start_script("probe-surface", &start).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null});"##,
+        surface_start_script("probe-surface", &start, &default_levels()).expect("the origin has its form"),
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"##.to_string() + DEFAULT_LEVELS + "});",
         "the script carries the absent values as null"
     );
 }
@@ -52,7 +60,7 @@ fn the_start_values_script_refuses_a_missing_section() {
     }))
     .expect("the start values have their form");
     assert_eq!(
-        surface_start_script("probe-surface", &start),
+        surface_start_script("probe-surface", &start, &default_levels()),
         Err(r#"surface "probe-surface": view start section is missing"#.to_string()),
         "the script names the missing section"
     );
@@ -79,7 +87,7 @@ fn the_start_values_script_refuses_a_section_of_another_form() {
         }))
         .expect("the start values have their form");
         assert_eq!(
-            surface_start_script("probe-surface", &start),
+            surface_start_script("probe-surface", &start, &default_levels()),
             Err(text.to_string()),
             "the section {section} is refused"
         );
@@ -91,7 +99,7 @@ fn the_start_values_script_refuses_a_section_of_another_form() {
 #[test]
 fn the_start_values_script_refuses_a_missing_origin() {
     assert_eq!(
-        surface_start_script("probe-surface", &ViewStart::default()),
+        surface_start_script("probe-surface", &ViewStart::default(), &default_levels()),
         Err(r#"surface "probe-surface": view start origin is missing"#.to_string()),
         "the script names the missing origin"
     );
@@ -114,5 +122,24 @@ fn the_origin_directory_refuses_a_path_that_is_not_local_absolute() {
         view_origin_directory("probe-surface", Some(&json!({"directory": "/a"}))),
         Ok(Some("/a".to_string())),
         "an absolute local directory is accepted"
+    );
+}
+
+// The start value levels is the stored level of each class of the policy in force of the host writer, which the page reads only to
+// skip building data that the writer would not store (docs/spec/native-surfaces.md#view-surfaces).
+// contract: view.start-values.levels
+#[test]
+fn the_start_values_script_carries_the_stored_level_of_each_class() {
+    let start: ViewStart = serde_json::from_value(
+        json!({"origin": {"directory": null}, "diagnostics": null, "section": null}),
+    )
+    .expect("the start values have their form");
+    let mut levels = default_levels();
+    levels.insert("frame".to_string(), json!("debug"));
+    let script =
+        surface_start_script("probe-surface", &start, &levels).expect("the origin has its form");
+    assert!(
+        script.ends_with(r##","levels":Object.freeze({"call":"error","frame":"debug","input":"error","io":"error","lifecycle":"error"})});"##),
+        "{script}"
     );
 }

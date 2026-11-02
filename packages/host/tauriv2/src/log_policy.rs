@@ -41,6 +41,36 @@ pub fn event_enabled(class: Class, level: Level) -> bool {
     }
 }
 
+/// The stored level of each class under the gate of the writer of the host, `{<class>: <level>}` with `off` for a class that stores no
+/// level; the start value `levels` of a view (docs/spec/native-surfaces.md#view-surfaces). Without a writer every gate is open, so
+/// every class stores `trace`.
+pub fn stored_levels() -> serde_json::Map<String, Value> {
+    levels_from(event_enabled)
+}
+
+/// The least severe stored level of each class, which `enabled` answers for each class and level.
+pub(crate) fn levels_from(
+    enabled: impl Fn(Class, Level) -> bool,
+) -> serde_json::Map<String, Value> {
+    const LEVELS: [Level; 5] = [
+        Level::Trace,
+        Level::Debug,
+        Level::Info,
+        Level::Warn,
+        Level::Error,
+    ];
+    Class::ALL
+        .iter()
+        .map(|class| {
+            let stored = LEVELS
+                .iter()
+                .find(|level| enabled(*class, **level))
+                .map_or("off", |level| level.name());
+            (class.as_str().to_string(), json!(stored))
+        })
+        .collect()
+}
+
 /// Writes the policy file as a new file renamed over the path, so a watcher never reads half a policy.
 pub fn write_log_policy(path: &Path, policy: &LogPolicy) -> Result<(), String> {
     use std::io::Write;
@@ -216,3 +246,7 @@ pub fn start_log_policy(
     load();
     Ok(LogPolicyWatch { stop: Some(stop) })
 }
+
+#[cfg(test)]
+#[path = "log_policy_levels_test.rs"]
+mod levels_tests;

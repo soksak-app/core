@@ -1,4 +1,4 @@
-import { LOG_LEVELS, createSurfaceContext, releaseSurfaceReady } from "@soksak/plugin-api";
+import { createSurfaceContext, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { surfaceErrorText } from "./surface-status.js";
 import { isSectionSurface, markViewSurface, registry } from "./exposure.js";
@@ -21,7 +21,7 @@ import { active, tabStateStore, tabStatesReady, waitForInitialProjectContext } f
 import { forgetView, presentationAbandoned, viewResponsiveness } from "./plugin-processes.js";
 import { pluginRecords } from "./plugin-records.js";
 import { logGate } from "./log-gate.js";
-import { emitEvent, eventEnabled } from "./page-log.js";
+import { emitEvent } from "./page-log.js";
 import shortcutTable from "./shortcuts.json" with { type: "json" };
 import { documentRegions } from "./document-regions.js";
 import { forgetViewFocus } from "./view-focus.js";
@@ -455,9 +455,9 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     // The value of a status of the view: the registry follows the status and reports each value to the listener. A status that the
     // exposure declares names no status of the view, so the declaration is checked before the observation (view-calls.js).
     status: (name, watched, listener) => registry.observe(name, watched, (value) => listener(value), { exact: watched !== undefined }),
-    // The stored levels of a record of the plugin, read again at each change of the policy of the page gate.
+    // The stored level of each class, read again at each change of the policy of the page gate.
     logLevels: {
-      read: () => LOG_LEVELS.filter((level) => eventEnabled(level)),
+      read: () => logGate.classes(),
       on: (listener) => Promise.resolve(logGate.onChange(listener)),
     },
     push: (event, data) => scoped.native.call("viewEvent", { generation: viewGeneration, event, data }),

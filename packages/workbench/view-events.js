@@ -22,7 +22,7 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *                 resolves with the off function
  *     data        data(fn): registers fn(key) for the changes of the project data of the plugin for the start project of the view;
  *                 resolves with the off function
- *     logLevels   {read(), on(fn)}: read() returns the stored levels of a record of the plugin, and on(fn) registers fn for each
+ *     logLevels   {read(), on(fn)}: read() returns the stored level of each class {<class>: <level>}, and on(fn) registers fn for each
  *                 change of the policy in force; on resolves with the off function
  *     status      status(name, surface, fn): follows the value of the status name on the surface, as the registry observe does, and on the
  *                 workbench when surface is undefined; fn(value) receives each value and the function returns the unsubscribe function,
@@ -143,11 +143,11 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
     logLevels() {
       return subscribe("log.levels", () => {
         const owner = generation;
-        let last = logLevels.read().join();
+        let last = JSON.stringify(logLevels.read());
         return logLevels.on(() => {
           const next = logLevels.read();
-          if (next.join() === last) return;
-          last = next.join();
+          if (JSON.stringify(next) === last) return;
+          last = JSON.stringify(next);
           forward("log.levels", next, owner);
         });
       });

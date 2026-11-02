@@ -151,6 +151,18 @@ export function createViewBridge({ handler, report }) {
     });
   };
   const subscribe = (name) => calls.request("runtime.native.on", { name });
+  // The stored level of each class: the start value of the surface, then the data of each notice log.levels.
+  let levels = window.sokSurface?.levels;
+  let levelsWatched = false;
+  const readLevels = () => {
+    if (levels === undefined) throw new Error(`view ${plugin} has no start levels`);
+    if (!levelsWatched) {
+      levelsWatched = true;
+      listen("log.levels", () => calls.request("runtime.log.levels.on", null), (data) => { levels = data; })
+        .catch(recordError("log levels"));
+    }
+    return levels;
+  };
   // The status watches of the view: one page subscription per name and surface, and each listener of the watch receives the value of the
   // status. A refused watch removes its listeners and records the refusal as an error line of the view; the stop function ends the watch
   // when no listener of the watch remains (docs/spec/native-surfaces.md#view-surfaces, view events).
@@ -260,8 +272,11 @@ export function createViewBridge({ handler, report }) {
       read: () => calls.request("runtime.settings.read", null),
       on: (listener) => listen("settings", () => calls.request("runtime.settings.on", null), listener),
     },
-    // The event log of the page: log.<level>(event, fields, {cids}), as runtime.log of the surface context. The page has no level query.
-    log,
+    // The event log of the page: log.<level>(event, fields, {cids}), as runtime.log of the surface context. levels() returns the stored
+    // level of each class, the start value levels until the first notice log.levels and the levels of the last notice after it; the
+    // page reads it only to skip building data that the writer would not store (docs/spec/native-surfaces.md#view-surfaces). The first
+    // read subscribes the page to the notices.
+    log: Object.freeze({ ...log, levels: readLevels }),
     // The error line of an error that the view shows on its own page: the page writes `surface <surface> <where>: <text>` to the
     // application log at the moment the view shows it (docs/spec/native-surfaces.md#view-surfaces).
     error: (where, text) => calls.request("runtime.error", { where, text }).then(() => undefined),

@@ -338,6 +338,12 @@ test("runtime.data.get and runtime.data.set send the key, and the value for a se
   assert.throws(() => runtime.data.set(1, "x"), /runtime.data.set requires a non-empty key/);
 });
 
+test("runtime.log.levels of a document without start levels is refused", (t) => {
+  const { posted } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.throws(() => runtime.log.levels(), /^Error: view probe has no start levels$/);
+});
+
 test("runtime.settings.read reads the settings of the plugin and runtime.settings.on subscribes once", async (t) => {
   const { posted, host } = setup(t);
   const seen = [];

@@ -1708,7 +1708,10 @@ fn attach_view(
             let theme = crate::theme::get(window)?;
             let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
             platform.add_document_script(document, &theme_script(&theme))?;
-            platform.add_document_script(document, &surface_start_script(surface, &start)?)?;
+            platform.add_document_script(
+                document,
+                &surface_start_script(surface, &start, &crate::log_policy::stored_levels())?,
+            )?;
             record_view_process_request(surface, plugin);
             Ok(document)
         },
@@ -3191,8 +3194,13 @@ pub fn theme_script(theme: &Value) -> String {
 
 /// The document-start script that sets window.sokSurface to the frozen start values of the view of surface, which the first page
 /// script of the view reads (docs/spec/native-surfaces.md#view-surfaces). A value that the surface has none of is carried as JSON
-/// null, except the origin, which must be present and of its form; a missing or malformed origin is refused.
-pub fn surface_start_script(surface: &str, start: &ViewStart) -> Result<String, String> {
+/// null, except the origin, which must be present and of its form; a missing or malformed origin is refused. `levels` is the stored
+/// level of each class of the host writer, which the host adds to the values that the page sent.
+pub fn surface_start_script(
+    surface: &str,
+    start: &ViewStart,
+    levels: &serde_json::Map<String, Value>,
+) -> Result<String, String> {
     let params = start
         .params
         .as_ref()
@@ -3223,9 +3231,10 @@ pub fn surface_start_script(surface: &str, start: &ViewStart) -> Result<String, 
         Some(value @ Value::Object(_)) => format!("Object.freeze({value})"),
         _ => "null".to_string(),
     };
+    let levels = Value::Object(levels.clone());
     let id = Value::String(surface.to_string());
     Ok(format!(
-        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations}),\"diagnostics\":{diagnostics},\"section\":{section}}});"
+        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations}),\"diagnostics\":{diagnostics},\"section\":{section},\"levels\":Object.freeze({levels})}});"
     ))
 }
 

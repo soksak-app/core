@@ -424,7 +424,7 @@ emitter는 catalog 검사에서 하나의 지점이고(이름, level, 리터럴 
 
 ### View record 전달
 
-View는 공통 bounded event batcher를 사용해 record마다 workbench document를 거치지 않고 host writer로 직접 log를 보낸다. View에는 policy gate가 없어 모든 record를 만들고 host writer가 설치된 event catalog와 policy를 적용한다. Queue bound, clock anchor, correlation identifier, field truncation, loss report 및 전달 실패 보고는 page batcher와 공유한다.
+View는 공통 bounded event batcher를 사용해 record마다 workbench document를 거치지 않고 host writer로 직접 log를 보낸다. View에는 policy gate가 없다. host writer가 view가 보내는 모든 record에 설치된 event catalog와 policy를 적용한다. view page는 각 class의 저장 level인 시작 값 `levels`와 알림 `log.levels`([native surfaces](native-surfaces.ko.md#view-표면))를 읽어, frame마다의 화면 hash처럼 policy가 저장하지 않을 record의 데이터를 만들지 않는다. 그 읽기는 gate가 아니며 아무것도 세지 않는다. Queue bound, clock anchor, correlation identifier, field truncation, loss report 및 전달 실패 보고는 page batcher와 공유한다.
 
 주입하는 `view.ready` message는 `document`에 view의 page identity인 document UUID를, `time_origin`에 `performance.timeOrigin`을 적는다. Host는 document와 time origin을 native surface generation에 묶고, `time_origin`이 ready message의 time origin과 다른 view의 `page.start`를 거부한다. View batcher는 비어 있지 않은 document URL을 담은 `page.start`와 해당 document의 `page.log.clock`을 내보내며 plugin record는 workbench document 대신 그 view document identity를 가진다. Bootstrap은 두 값을 한 번 읽고 read-only `window.sokView.page`와 `window.sokView.timeOrigin`으로 공개한다. View writer는 batch identity에 page identity를, `page.start.time_origin`에 time origin을 사용하며 time origin을 다시 읽지 않는다.
 

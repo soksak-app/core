@@ -56,6 +56,34 @@ func GateEvent(class Class, level Level) bool {
 	return true
 }
 
+// StoredLevels is the stored level of each class under the gate of the writer of the host, {<class>: <level>} with off for a class
+// that stores no level; the start value levels of a view (docs/spec/native-surfaces.md#view-surfaces). Without a writer every gate is
+// open, so every class stores trace.
+func StoredLevels() map[string]string {
+	return levelsFrom(func(class Class, level Level) bool {
+		if log := activeLog.Load(); log != nil {
+			return log.Enabled(class, level)
+		}
+		return true
+	})
+}
+
+// levelsFrom is the least severe stored level of each class, which enabled answers for each class and level.
+func levelsFrom(enabled func(Class, Level) bool) map[string]string {
+	levels := []Level{sok.LevelTrace, sok.LevelDebug, sok.LevelInfo, sok.LevelWarn, sok.LevelError}
+	stored := make(map[string]string, len(sok.Classes))
+	for _, class := range sok.Classes {
+		stored[string(class)] = "off"
+		for _, level := range levels {
+			if enabled(class, level) {
+				stored[string(class)] = string(level)
+				break
+			}
+		}
+	}
+	return stored
+}
+
 // policyCidsRefusal is the refusal of the member `cids` of the action `policy`, the same text in both hosts.
 const policyCidsRefusal = "cids must be a non-empty list of identifiers that are not empty and hold no quote, backslash or control character"
 

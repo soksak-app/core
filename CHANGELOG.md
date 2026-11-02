@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F374-6-1: The view start values carry `levels`, the stored level of each event class of the host writer, and `runtime.log.levels.on` delivers each change of the page policy as `log.levels` with the class levels, so a view page reads `runtime.log.levels()` to skip building the data of a record that the policy would not store. Red: the start value tests of both hosts, the level test of both hosts, two workbench tests and the view bridge test failed. Green: the same tests and the structure checks pass.
 - F374-4-2: The route requests of `sidecarListen` and `viewSidecarRoute` are typed structs that the argument decoder of each host checks, so a request outside its form is refused with the argument sentence that every binding uses; the Wails test owners take sidecar messages through `DeliverSidecarMessage`, the event class tables carry `host.view.sidecar.discard`, the result of `documents.view` is checked, and the workbench view tests assert the route calls of each generation.
 - F373-1: The two dragged-height lookups of the sidebar sections state why a section that was not dragged has its declared height.
 - F374-5-1-5: The case `screen.apply.full-two-rows` of `packages/plugin-api/contract/screen-hash.json` applies the full form whose result the change cases follow, and two hash cases give the hashes of the screens before and after the change, and the apply messages carry `frame: null` as the other published messages do, so a consumer reaches a change form from published inputs.

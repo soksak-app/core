@@ -365,6 +365,9 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     case "runtime.textSize.on":
       await runtime.subscribe.textSize();
       return null;
+    case "runtime.log.levels.on":
+      await runtime.subscribe.logLevels();
+      return null;
     case "runtime.settings.read":
       return runtime.settings.read();
     case "runtime.settings.on":

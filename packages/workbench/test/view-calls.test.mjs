@@ -474,6 +474,13 @@ test("runtime.textSize.read returns the scale of the surface and runtime.textSiz
   assert.deepEqual(ran.subscribed, [{ textSize: true }]);
 });
 
+test("runtime.log.levels.on subscribes the view to the changes of the stored levels", async () => {
+  // A page reads the stored levels to skip building data that the writer would not store (docs/spec/native-surfaces.md#view-surfaces).
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.log.levels.on", params: null }, options), null);
+  assert.deepEqual(ran.subscribed, [{ logLevels: true }]);
+});
+
 test("runtime.settings.read returns the settings of the plugin and runtime.settings.on subscribes once", async () => {
   const { ran, options } = fakes();
   assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.settings.read", params: null }, options), { home: "https://example.test" });

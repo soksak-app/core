@@ -47,7 +47,7 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 	if len(fake.created) != 1 {
 		t.Fatalf("views created: %d, want one", len(fake.created))
 	}
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"module":"ui/probe-diagnostics.js","exposes":{}}),"section":null});`
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"module":"ui/probe-diagnostics.js","exposes":{}}),"section":null,"levels":Object.freeze({"call":"trace","frame":"trace","input":"trace","io":"trace","lifecycle":"trace"})});`
 	scripts := fake.scripts[fake.created[0]]
 	if len(scripts) != 2 {
 		t.Fatalf("user scripts of the view: %q, want the theme script and the start values script", scripts)
@@ -69,8 +69,8 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 // The start values script carries the start values that the surface has none of as JSON null.
 // contract: view.start-values.first-script
 func TestSurfaceStartScriptCarriesAbsentValuesAsNull(t *testing.T) {
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null});`
-	got, err := surfaceStartScript("probe-surface", nullOriginStart())
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});`
+	got, err := surfaceStartScript("probe-surface", nullOriginStart(), defaultLevels())
 	if err != nil {
 		t.Fatalf("start values script: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
 		string(start.Declarations) != `{"commands":[{"name":"probe.command","params":{"path":"/work/one"}}]}` {
 		t.Fatalf("resolved start values %+v", start)
 	}
-	script, err := surfaceStartScript("probe", *start)
+	script, err := surfaceStartScript("probe", *start, defaultLevels())
 	if err != nil || !strings.Contains(script, `"declarations":Object.freeze({"commands":[{"name":"probe.command","params":{"path":"/work/one"}}]})`) {
 		t.Fatalf("resolved declarations were not retained for injection: %q, error %v", script, err)
 	}
@@ -246,7 +246,7 @@ func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
 			t.Fatalf("%s: %v, want %q", tc.name, err, tc.want)
 		}
 	}
-	if _, err := surfaceStartScript("probe", ViewStart{}); err == nil {
+	if _, err := surfaceStartScript("probe", ViewStart{}, defaultLevels()); err == nil {
 		t.Fatalf("start values script without an origin: no error, want a refusal")
 	}
 }
@@ -332,8 +332,8 @@ func TestSurfaceStartScriptInjectsTheSection(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"origin":{"directory":null},"diagnostics":null,"section":{"card":"c3","id":"probe.tree","sidebar":"c3:right"}}`), &start); err != nil {
 		t.Fatalf("start values: %v", err)
 	}
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"})});`
-	got, err := surfaceStartScript("probe-surface", start)
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"}),"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});`
+	got, err := surfaceStartScript("probe-surface", start, defaultLevels())
 	if err != nil {
 		t.Fatalf("start values script: %v", err)
 	}
@@ -359,5 +359,24 @@ func TestViewOriginDirectoryRefusesAPathThatIsNotLocalAbsolute(t *testing.T) {
 	dir, err := viewOriginDirectory("probe-surface", json.RawMessage(`{"directory":"/a"}`))
 	if err != nil || dir == nil || *dir != "/a" {
 		t.Fatalf("absolute local directory: %v %v, want /a", dir, err)
+	}
+}
+
+// defaultLevels is the stored level of each class under the default policy, which the host writes as the start value levels.
+func defaultLevels() map[string]string { return DefaultLogPolicy().Classes() }
+
+// The start value levels is the stored level of each class of the policy in force of the host writer, which the page reads only to
+// skip building data that the writer would not store (docs/spec/native-surfaces.md#view-surfaces).
+// contract: view.start-values.levels
+func TestSurfaceStartScriptCarriesTheStoredLevelOfEachClass(t *testing.T) {
+	levels := defaultLevels()
+	levels["frame"] = "debug"
+	got, err := surfaceStartScript("probe-surface", nullOriginStart(), levels)
+	if err != nil {
+		t.Fatalf("start values script: %v", err)
+	}
+	want := `,"levels":Object.freeze({"call":"error","frame":"debug","input":"error","io":"error","lifecycle":"error"})});`
+	if !strings.HasSuffix(got, want) {
+		t.Fatalf("start values script %q, want the suffix %q", got, want)
 	}
 }

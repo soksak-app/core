@@ -15,7 +15,7 @@ const declarations = {
   dom: [],
 };
 
-function setup(t, { surface = true, params = { path: "sample.txt" } } = {}) {
+function setup(t, { surface = true, params = { path: "sample.txt" }, levels } = {}) {
   const dom = new JSDOM("<!doctype html><body><button data-expose=probe.button>Press</button></body>",
     { url: "soksak://probe/ui/view.html", runScripts: "outside-only" });
   const view = dom.window;
@@ -29,7 +29,7 @@ function setup(t, { surface = true, params = { path: "sample.txt" } } = {}) {
   } };
   view.webkit = { messageHandlers: { "sok-view": handler } };
   view.eval(readFileSync(new URL("../view-start.js", import.meta.url), "utf8"));
-  if (surface) view.sokSurface = { surface: "probe-tab", params, declarations };
+  if (surface) view.sokSurface = { surface: "probe-tab", params, declarations, ...(levels ? { levels } : {}) };
   view.sokTheme = { scheme: "dark", tokens: { "--bg": "rgb(1, 2, 3)" } };
   const viewport = new view.EventTarget();
   Object.assign(viewport, { width: 400.5, height: 200.5 });
@@ -262,4 +262,18 @@ test("the bridge cancels the default menu of a right click in the view and sends
   view.document.body.dispatchEvent(own);
   await turn();
   assert.deepEqual(menuCalls(), [{ x: 30, y: 12.5 }], "a right click that the plugin cancelled sent surface.menu");
+});
+
+// The page reads the stored level of each class to skip building data that the writer would not store
+// (docs/spec/native-surfaces.md#view-surfaces).
+test("runtime.log.levels returns the start levels, subscribes once and returns the levels of the last notice", async (t) => {
+  const start = Object.freeze({ lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" });
+  const { bridge, posted, host } = setup(t, { levels: start });
+  assert.deepEqual(bridge.runtime.log.levels(), start);
+  await turn();
+  assert.deepEqual(bridge.runtime.log.levels(), start);
+  assert.equal(posted.filter((message) => message.command === "runtime.log.levels.on").length, 1, "the first read subscribes the page");
+  host({ sok: 1, event: "log.levels", data: { ...start, frame: "debug" } });
+  assert.deepEqual(bridge.runtime.log.levels(), { ...start, frame: "debug" });
+  assert.equal(posted.filter((message) => message.command === "runtime.log.levels.on").length, 1, "a later read subscribes no more");
 });

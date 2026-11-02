@@ -439,7 +439,7 @@ func (s *Surfaces) addThemeScript(document unsafe.Pointer) error {
 // addStartScript adds the start values script of the view document, with the values that the page declared for the surface,
 // before the view loads its page (docs/spec/native-surfaces.md#view-surfaces).
 func (s *Surfaces) addStartScript(document unsafe.Pointer, surfaceID string, start ViewStart) error {
-	script, err := surfaceStartScript(surfaceID, start)
+	script, err := surfaceStartScript(surfaceID, start, StoredLevels())
 	if err != nil {
 		return err
 	}
@@ -448,8 +448,9 @@ func (s *Surfaces) addStartScript(document unsafe.Pointer, surfaceID string, sta
 
 // surfaceStartScript returns the document-start script that sets window.sokSurface to the frozen start values of the view of
 // surface, which the first page script of the view reads (docs/spec/native-surfaces.md#view-surfaces). A value that the surface
-// has none of is carried as JSON null.
-func surfaceStartScript(surface string, start ViewStart) (string, error) {
+// has none of is carried as JSON null. levels is the stored level of each class of the host writer, which the host adds to the values
+// that the page sent.
+func surfaceStartScript(surface string, start ViewStart, levels map[string]string) (string, error) {
 	id, err := json.Marshal(surface)
 	if err != nil {
 		return "", fmt.Errorf("view start surface cannot be serialized: %w", err)
@@ -500,13 +501,18 @@ func surfaceStartScript(surface string, start ViewStart) (string, error) {
 	if text := strings.TrimSpace(string(start.Section)); text != "null" {
 		section = "Object.freeze(" + text + ")"
 	}
+	stored, err := json.Marshal(levels)
+	if err != nil {
+		return "", fmt.Errorf("view start levels cannot be serialized: %w", err)
+	}
 	return "window.sokSurface = Object.freeze({\"surface\":" + string(id) +
 		",\"params\":" + params +
 		",\"origin\":Object.freeze({\"directory\":" + directory + "})" +
 		",\"project\":" + project +
 		",\"declarations\":Object.freeze(" + declarations + ")" +
 		",\"diagnostics\":" + diagnostics +
-		",\"section\":" + section + "});", nil
+		",\"section\":" + section +
+		",\"levels\":Object.freeze(" + string(stored) + ")});", nil
 }
 
 // viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the
