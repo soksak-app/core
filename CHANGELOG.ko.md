@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F335: `document_processes_test`는 benchmark `make -C native/darwin benchmark-document-processes`다. process 수와 footprint를 측정하며 unit suite에 속하지 않는다. F335-9: document test와 benchmark는 WebContent process를 `SIGKILL` 대신 view를 닫아 끝낸다.
 - F335-10: `document_processes_test`의 멈춤은 30초 뒤 load를 끝낸 region을 닫고, 그 WebContent process가 끝난 뒤 기다리는 region이 진행하는지 기록한다. `--unanswered-region=N`은 test server에서 region의 요청을 붙잡아 그 경로를 검사한다.
 - F335-7: `document_processes_test`는 region을 닫고 그 WebContent process가 끝나는지 검사하며, process에 signal을 보내지 않는다. hosted repeat은 kill이 F335-2의 Metal cache 대기의 원인이 아니었음을 보였다.
 - F335-8: host는 애플리케이션 종료 때 창마다 WebContent process를 죽이지 않는다. WebKit은 애플리케이션 프로세스가 끝날 때 그 WebContent process를 끝내며, `application_end_processes_test`가 종료 명령으로 끝나는 애플리케이션이 process를 남기지 않는지와 native library에 kill 동작이 없는지 검사한다.

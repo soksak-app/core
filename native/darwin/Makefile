@@ -211,6 +211,11 @@ benchmark-document: $(BUILD)/document_script_benchmark
 benchmark-page-layers: $(BUILD)/page_layers_benchmark
 	@$(BUILD)/page_layers_benchmark
 
+# The WebContent processes of document regions and their footprints (F196.9.3); ARGS passes --stall-record-after=<s> or
+# --unanswered-region=<n>.
+benchmark-document-processes: $(BUILD)/document_processes_benchmark
+	@$(BUILD)/document_processes_benchmark $(ARGS)
+
 benchmark-occlusion: $(BUILD)/occlusion_corner_benchmark
 	@$(BUILD)/occlusion_corner_benchmark
 
@@ -317,9 +322,6 @@ NATIVE_TESTS = observe_test \
   document_viewport_marker_test \
   document_menu_key_equivalent_test \
   document_throttle_test \
-  document_processes_test \
-  document_processes_test,--stall-record-after=0 \
-  document_processes_test,--unanswered-region=2 \
   document_caches_test \
   document_backforward_test \
   document_form_state_test \

@@ -554,6 +554,6 @@ int main(int argc, char **argv) { @autoreleasepool {
 
     nw_listener_cancel(listenerA);
     nw_listener_cancel(listenerB);
-    printf("%s\n", failures ? "FAIL: document_processes_test" : "PASS: document_processes_test");
+    printf("%s\n", failures ? "FAIL: document_processes_benchmark" : "PASS: document_processes_benchmark");
     return failures ? 1 : 0;
 }}

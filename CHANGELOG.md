@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F335: `document_processes_test` is the benchmark `make -C native/darwin benchmark-document-processes`; it measures process counts and footprints and is no part of the unit suite. F335-9: the document tests and benchmarks end their WebContent processes through the close of their views instead of `SIGKILL`.
 - F335-10: A stall of `document_processes_test` closes the regions whose load ended after 30 seconds and records whether the waiting region continues after their WebContent processes end; `--unanswered-region=N` holds the request of a region at the test server and checks that path.
 - F335-7: `document_processes_test` closes its regions and checks that their WebContent processes end, and sends no signal to them; the hosted repeat showed that the kill was not the cause of the Metal cache wait of F335-2.
 - F335-8: The hosts no longer kill the WebContent process of each window at application termination; WebKit ends the WebContent processes of an application when its process ends, and `application_end_processes_test` checks that an application ending through its termination command leaves none and that the native library offers no kill operation.
