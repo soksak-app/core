@@ -16,7 +16,7 @@ Tauri host의 native 이미지 표시 commit은 framework event callback 밖의 
 - 예제 컴포지터는 카드 사각형과 DOM 내부 여백으로 표면 사각형을 계산한다.
 - 호스트는 네이티브 뷰를 생성하고 표면 사각형을 적용한 뒤 실제 좌표를 반환한다.
 - 문서 영역은 자신이 놓인 surface의 appearance를 observe하므로, 영역이 닫힐 때까지 그 surface를 유지한다. 호스트는 surface를 그 위의 영역보다 먼저 닫을 수 있다(영역을 만드는 중에 surface가 제거되는 경우). 그때도 영역의 close는 살아 있는 surface에서 observation을 끝낸다.
-- macOS 표시 처리는 창의 단일 앱 DOM이 표시를 확인하고 보이는 모든 그림 영역에 정확한 현재 래스터가 준비된 뒤 네이티브 좌표를 커밋한다.
+- macOS 표시 처리는 창의 단일 앱 DOM이 표시를 확인하고 그리기 상태인 모든 그림 영역에 정확한 현재 래스터가 준비된 뒤 네이티브 좌표를 커밋한다.
 
 호스트는 DOM과 네이티브 렌더링의 차이가 최대 한 프레임이라고 가정하지 않는다.
 
@@ -76,7 +76,7 @@ macOS에서 각 표면의 root view는 AppKit point를 좌표 단위로 사용�
 
 [비공개 네이티브 API 목록](../operations/private-native-apis.ko.md)에 좌표·표시·입력 의존성, 필요성, 네이티브 업데이트 후 우선 검토 절차를 기록한다.
 
-그림 표시를 기다리기 전에 호스트는 표시 중인 모든 그림 영역의 실제 네이티브 래스터를 읽고 필요한 설정을 보낸다. 영역은 요소 크기나 인셋이 바뀌지 않고도 표시될 수 있으므로 이 검사는 새 DOM resize 알림에 의존하지 않는다. 설정 묶음 전송이 실패하면 오류를 보고하고 보내지 않은 모든 설정의 전송 예약을 해제해 다음 명시적 작업에서 설정할 수 있게 한다. 보내지 않은 작업을 완료로 처리하지 않는다.
+그림 표시를 기다리기 전에 호스트는 그리기 상태인 모든 그림 영역의 실제 네이티브 래스터를 읽고 필요한 설정을 보낸다. 영역은 요소 크기나 인셋이 바뀌지 않고도 표시될 수 있으므로 이 검사는 새 DOM resize 알림에 의존하지 않는다. 설정 묶음 전송이 실패하면 오류를 보고하고 보내지 않은 모든 설정의 전송 예약을 해제해 다음 명시적 작업에서 설정할 수 있게 한다. 보내지 않은 작업을 완료로 처리하지 않는다.
 
 바깥 표면은 문서 세대와 별개로 표시 상태를 소유한다. 문서의 첫 로드나 이동을 위해 그림 영역을 제거해도 이 표면 상태를 제거하면 안 된다. 바깥 표면 자체가 닫힐 때만 표시 상태의 소유권을 끝낸다.
 
@@ -220,7 +220,7 @@ Tauri host는 현재 view-message envelope를 한 번 decode하고 reply, call �
 
 모든 네이티브 영역은 자기 표면 `SurfaceHost.NativePlane`의 하위 뷰다. 호스트나 DOM 평면의 형제일 수 없다. 호스트는 적용한 완전한 합성에서 영역 프레임을 계산하고 호스트에 맞게 클리핑한다. 영역은 표면과 동기적으로 이동하고 숨겨지고 어두워지고 닫힌다.
 
-영역은 모달 대화 상자 아래에 있다. 문서 영역 렌더러는 표시 대기에서 빠지지만, 보이는 그림 영역은 준비된 배치를 커밋하기 전에 정확한 현재 래스터를 가져야 한다. 각 영역은 표면 안에서 고유한 이름을 갖는다. 호스트는 영역의 이름, 사각형, 표시 여부, 초점 여부를 `host.window`로 보고한다.
+영역은 모달 대화 상자 아래에 있다. 문서 영역 렌더러는 표시 대기에서 빠지지만, 그리기 상태인 그림 영역은 준비된 배치를 커밋하기 전에 정확한 현재 래스터를 가져야 한다. 각 영역은 표면 안에서 고유한 이름을 갖는다. 호스트는 영역의 이름, 사각형, 표시 여부, 초점 여부를 `host.window`로 보고한다.
 
 영역의 공급자는 둘이다.
 
@@ -291,6 +291,7 @@ place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트
 그림은 사이드카가 만들고 영역을 통해 코어에 공급한다. 코어는 불투명한 토큰과 픽셀 크기만 받으며, 그림 버퍼도 공급자의 정체도 토큰 외에는 알 수 없다.
 
 - **그림 공급과 크기 검증**: manifest가 공급 사이드카를 지정한다. 호스트는 적용한 네이티브 프레임에서 래스터 리비전과 정확한 크기를 계산해 공급자에게 보낸다. 프레임은 부착 세대, 래스터 리비전, 단조 증가 시퀀스, 실제 토큰 크기, 예상 크기, 창 배율이 모두 맞아야 한다. 불일치는 거절하며 이전 유효 스냅샷을 교체하지 않는다.
+- **그리기(drawing)**: 바깥 표면이 보이고 창이 화면에 있는 동안, 즉 가려지지 않았고(창의 AppKit occlusion 상태가 visible인 상태) 최소화되지 않은 동안 region은 그리기 상태다. 호스트는 region의 부착 때, 각 설정 때, 그리고 가림이나 최소화가 바뀔 때마다 두 호스트가 함께 부르는 native 함수 하나로 AppKit에서 창의 occlusion 상태를 읽는다. 완전히 가려진 채 열린 창은 framework 창 event를 보내지 않으므로 그 event에서 상태를 끌어내지 않는다. 호스트는 region의 부착 때와 값이 바뀔 때만 공급자에게 `{"image":{"drawing":{"name","generation","drawing"}}}`를 보내고, 설정은 그리기 상태인 region에만 보낸다. region이 그리기 상태가 아닌 동안 공급자는 raster를 그리지 않고 그 표면의 image envelope와 screen message를 보내지 않으며, 출력은 계속 엔진에 반영한다. region이 다시 그리기 상태가 되면 공급자는 진행 중인 frame의 `consumed` 뒤에 현재 화면을 한 번 보내고 raster를 하나 그린다. 호스트는 그리기 상태와 상관없이 받은 모든 전송 그림에 답하므로 진행 중인 frame은 답 없이 남지 않는다. 표시 대기는 그리기 상태인 region만 기다리고, 준비 중에 그리기 상태가 된 region은 그 대기에 들어간다. `consumed`는 호스트가 그림을 복사했다는 뜻이므로, 호스트는 공급자를 멈추려고 `consumed`를 보류하지 않는다. 가려진 창의 capture는 마지막으로 표시된 frame을 보이므로 검사는 가려진 창을 측정하지 않는다. 이 규칙의 review는 다음 반박에 답했다. framework 창 event는 초기 상태의 출처가 아니므로 호스트는 AppKit을 읽는다. 상태는 바뀔 때만 보내므로 가림이 자주 바뀌어도 같은 message를 반복하지 않는다. 진행 중인 frame은 답을 받고 그 `consumed` 뒤에 그린다. 억제된 screen message는 준비되지 않아 `number`를 쓰지 않으며, page와 공급자가 같은 마지막 화면을 가지므로 다음 screen message는 마지막으로 보낸 화면의 변경 형식일 수 있다. `consumed` 보류는 위의 까닭으로 기각했다.
 - **장치 픽셀 보고**: 영역은 CSS 픽셀이 아닌 장치 픽셀 단위로 크기를 보고한다.
 - **입력 처리**: 포인터 event는 아래 surface document로 통과하고 cursor는 그 document가 결정한다. Region은 cursor rectangle이나 cursor tracking area를 등록하지 않는다. Keyboard input, composition, accessibility는 region이 소유한다. Native region은 terminal history를 담지 않는 전용 marked-text buffer를 소유하는 `NSView` input client다. Glyph, marked-text decoration, selection, insertion point, focus ring, automatic editing indicator를 그리지 않으며 sidecar image만 표시한다. 각 outer input scope는 `{type: "input", actions, preedit, errors}` event 하나를 보내며 consumer는 해당 transaction의 ordered action과 최종 preedit/focus state를 표시 전에 적용한다. 이 경계는 뒤늦게 도착하는 비동기 PTY output까지 같은 표시로 묶지 않는다. 나중 event로 받은 output은 이후 frame에서 표시될 수 있다. Key는 page에 전달하고 command-key 조합은 application menu에 맡기며 focus는 host 요청으로 바꾼다. `host.window`는 현재 위치를 보고한다. Pointer press는 page로 통과한다. Press 준비 중 AppKit responder handoff는 region focus를 바꾸지 않는다. 다른 image region 내부 press는 region 간 focus를 직접 옮긴다.
 - **Input callback state**: 각 `native.input.callback` record에는 `before`, `after` state object가 포함된다. 두 object의 `active`, `keyWindow`는 각각 해당 state를 캡처할 때의 `NSApp.isActive`, 소유 window의 `isKeyWindow`에서 가져온 JSON boolean이다. 현재 marked buffer 밖을 지정하는 marked-text replacement는 변경 전에 거부하고 input error를 기록하며 같은 input scope의 후속 callback을 latch한다. 마지막 유효 preedit을 보존하고 잘못된 action을 publish하지 않는다.
@@ -322,7 +323,7 @@ place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트
 
 두 호스트는 각 네이티브 그림 이벤트를 `image-event {surface, name, event}`로 소유 표면 웹뷰에만 전달한다. 빈 콜백, 전체 전송, 키보드 전달을 직접 사이드카 명령으로 대체하는 것은 계약 위반이다. 잘못된 이벤트 JSON과 전달 실패는 보고하며 null 이벤트로 대체하지 않는다.
 
-터미널은 최신 셀 행을 `terminal.screen`으로 공개하고 사이드카 화면 이벤트마다 구독자에게 알린다. 입력 검사는 네이티브 클릭과 키를 사용하고 이 알림을 기다리며, 보이는 터미널 최소 3개에서 편집·명령 출력·입력 격리를 확인한다. `terminal.input`은 직접 사이드카 입력만 검사하며 네이티브 키보드 전달을 검증하지 않는다.
+터미널은 최신 셀 행을 `terminal.screen`으로 공개하고 사이드카 화면 이벤트마다 구독자에게 알린다. region이 그리기 상태가 아닌 동안 사이드카는 화면 이벤트를 보내지 않으므로 `terminal.screen`은 마지막 그리기 기간의 화면을 담고, 현재 화면을 읽는 쪽은 사이드카가 엔진에서 답하는 `terminal.screen.read`를 쓴다. 입력 검사는 네이티브 클릭과 키를 사용하고 이 알림을 기다리며, 보이는 터미널 최소 3개에서 편집·명령 출력·입력 격리를 확인한다. `terminal.input`은 직접 사이드카 입력만 검사하며 네이티브 키보드 전달을 검증하지 않는다.
 
 입력기 preedit activation 검사는 AppKit reference의 전체 document를 terminal의 committed screen cell 및 `terminal.compose`와 비교한다. 같은 document여도 AppKit reference와 image region의 marked state는 다를 수 있으므로 각 owner의 marked/selected range를 따로 검증한다. Cursor와 preedit을 제공한 screen event의 정확한 `{generation,raster,sequence}`를 `terminal.cursor`가 담아야 한다. `terminal.screen.read.frame`은 base cell 행을 가리키며 image region은 그 행을 바꾸지 않고 이후 overlay frame을 표시할 수 있다. Region의 presented identity는 같은 generation/raster의 진행 watermark이며 cursor source보다 sequence가 늦을 수 있다. 이 값은 exact cursor source identity를 대신하지 않으며 marked glyph가 보인다는 증거도 아니다.
 

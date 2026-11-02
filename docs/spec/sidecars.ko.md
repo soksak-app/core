@@ -136,7 +136,7 @@ Host는 state mutation을 직렬화하는 동안 각 immutable `host.sidecars` �
 
 논스는 IOSurface에 붙은 16바이트 값이고, 호스트는 전역 식별자로 표면을 찾을 때 이를 이용해 표면의 정체성을 검증한다. 세대는 페이지 부착 하나를, 래스터 리비전은 정확한 네이티브 크기·배율 하나를 식별하고, 순서 번호는 그 쌍 안에서 증가한다. 호스트는 응답에 셋을 모두 포함한다.
 
-호스트는 권한 있는 공급자에게 영역 이름, 세대, 래스터 리비전, 정확한 픽셀 크기, 배율을 담은 `configure` 본문을 보낸다. 공급자는 페이지 위치에서 이 값을 계산하면 안 된다. 보낸 전송 표면은 `consumed`나 오류가 올 때까지 수정하거나 재사용하면 안 된다. 호스트는 이 가변 전송 표면을 표시 레이어에 직접 연결하지 않으며, `consumed` 전에 완료한 복사가 재사용 경계다.
+호스트는 권한 있는 공급자에게 영역 이름, 세대, 래스터 리비전, 정확한 픽셀 크기, 배율을 담은 `configure` 본문을 보낸다. 공급자는 페이지 위치에서 이 값을 계산하면 안 된다. 호스트는 region의 부착 때와 바뀔 때마다 그 [그리기](native-surfaces.ko.md#그림-영역) 상태도 `{"image":{"drawing":{"name":"region-name","generation":2,"drawing":false}}}`로 공급자에게 보낸다. 공급자는 그리기 상태가 아닌 region에 아무것도 그리거나 보내지 않으며, 이 message에는 답이 없다. 보낸 전송 표면은 `consumed`나 오류가 올 때까지 수정하거나 재사용하면 안 된다. 호스트는 이 가변 전송 표면을 표시 레이어에 직접 연결하지 않으며, `consumed` 전에 완료한 복사가 재사용 경계다.
 
 호스트가 native image region을 닫으면서 sidecar session은 유지할 때는 native region을 닫은 뒤 해당 region의 supplier에 `{"image":{"detach":{"request":"opaque-id","name":"region-name","generation":2}}}`를 보낸다. Supplier는 해당 generation의 render ownership, 요청된 image, 대기 중 configuration을 해제한 뒤에만 답한다. 미해결 transfer image는 기존 transfer 소유권 규칙에 따라 짝이 맞는 `consumed` 또는 오류 응답, 혹은 연결 종료까지 유지한다. Detach는 surface session과 process를 유지하고 headless 상태로 두므로 image 없는 `open`이 같은 session을 이어갈 수 있다. Supplier는 `image.detached`에 다음 결과 중 하나를 담는다.
 
