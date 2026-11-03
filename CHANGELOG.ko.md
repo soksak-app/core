@@ -5,6 +5,7 @@
 ## 미배포
 
 - F435: load average 12~28에서 잰 F444 뒤 view benchmark를 기록하고, 1회 발생한 card 위치 실패를 재현되지 않음으로 닫는다.
+- F502-1: `docs/plans/mygo-host.md`가 workbench를 native UI로 그리는 framework mygo 위의 세 번째 host를 그 목표, 세 host benchmark B3, framework 변경, 결정, 구현 item F502-2부터 F502-27-1까지와 함께 제안한다.
 - F503: native surfaces 명세의 platform scope가 Wails host가 pin하는 Wails v3 fork와 그 변경을 밝히고, `go.mod` replacement의 주석이 main thread 변경을 밝힌다.
 - F444: Surface synchronization request는 host가 쥐고 있지 않은 view start 값만 전달하고, host는 마지막으로 받은 값을 보관한다. Page와 두 host에서 Red와 Green을 확인했다. Input tick부터 transaction까지의 시간은 Wails에서 7.2 ms에서 3.1 ms로, Tauri에서 4.6 ms에서 2.4 ms로 줄었다.
 - F443: view drag floor를 넘는 Wails host 경로를 열린 항목으로 기록한다. 한 turn 응답은 측정 결과 채택하지 않았다.

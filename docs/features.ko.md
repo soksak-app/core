@@ -136,6 +136,36 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [o] F360 — P0: release 0.0.27은 그것이 설치하는 plugin과 함께 사용자에게 간다. 입력: release run은 `v0.0.27`을 게시했고, 모든 plugin은 core 0.0.26만 허용하는 `engines.soksak` `^0.0.26`을 선언했다. registry는 가장 새 listed core보다 새로운 core를 포함하는 plugin 범위를 거부하므로 core release마다 그것을 위한 plugin version이 필요하다. 기대: 각 plugin repository는 새 version과 함께 `^0.0.27`을 선언하고(그 항목 F360-<repository>: browser 0.0.12, editor 0.0.12, files 0.0.13, hwp 0.0.10, terminal 0.0.26) 그것을 게시하며, registry는 그 version들과 함께 core 0.0.27을 올린다(그 항목 G62). 결과: 다섯 plugin release run이 그 version들을 게시했고, registry publication run이 그것들과 함께 core 0.0.27을 올린 index를 게시했다(G62).
 - [o] F359 — P0: 선언된 모든 작업공간 버전, core crate의 lock 항목, version 검사는 release candidate 0.0.27을 가리키고, 최신 게시 release는 0.0.26이다. 입력: core는 게시된 `v0.0.26` 뒤에 F355-3, F355-4, F357과 kit pin을 담고 있으며, `v0.0.26`의 plugin interface는 아직 commit, record, events, engines 검사를 싣는다. 기대: `scripts/check-versions.mjs`와 `scripts/test/versions.test.mjs`는 0.0.27과 0.0.26을 적고, 선언된 모든 version은 0.0.27이며, release run은 `v0.0.27`을 게시한다. 결과: `node scripts/check-versions.mjs`는 선언된 모든 작업공간 버전을 0.0.27로 보고하고, `scripts/test/versions.test.mjs`가 통과한다.
 - [-] F358 — P1, F319 연결: `a_buffered_close_is_recorded`(`packages/host/tauriv2/tests/flush_test.rs:122`)가 `macos-tauriv2` job에서 한 번 실패했다. 자식 test는 3.7초 뒤 status 101로 끝났고, 같은 코드의 이전 run은 통과했다. 기대: repeat target이 그것을 재현하고 자식의 record를 보고하며, 원인을 지우고 repeat가 통과한다. 그렇지 않으면 시도를 적고 재현되지 않음으로 닫는다. 재현되지 않음: `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=30 TEST_TARGET=test:flush_test TEST=a_buffered_close_is_recorded`는 macOS에서 load average 9~15에서 30번 중 30번 통과했고, `flush_test` target 전체는 load average 13~15에서 3번 중 3번 통과했다. 실패는 child의 상태와 표준 출력을 보고했지만 child는 panic을 error 출력에 쓴다. 이제 Tauri host의 각 child test assertion이 error 출력을 보고하므로, 재발하면 원인이 남는다. 재발하면 연결된 후속 ID를 연다.
+- [ ] F502 — P0: framework mygo 위의 세 번째 host가 workbench를 native UI로 그려서, window가 main page 없이 동작한다. 입력: Wails와 Tauri host의 main page는 사흘 사용 뒤 242 MB와 291 MB를 차지했고(F196), 빈 window도 plugin view가 생기기 전부터 main page의 WebContent, GPU, Networking process를 띄운다(V5-96-14-6-4-9). 기대: 구현 item이 시작되기 전에 명세가 mygo host, 그 목표, 그와 함께 Wails와 Tauri host가 받는 변경을 기술한다.
+  - [o] F502-1 — 제안서 `docs/plans/mygo-host.md`와 그 번역이 tag v0.7.4 기준의 mygo 사실, main page의 비용, 목표와 세 host benchmark B3, 구조, framework 변경, 결정, Red와 Green을 갖춘 구현 item F502-2부터 F502-27-1까지를 기술한다. 그 adversarial review는 네 번째 round에서 이의 없이 끝났다. 검증: `make docs-check`.
+  - [ ] F502-2 — 세 host의 측정 target, benchmark B3와 그 판정.
+  - [ ] F502-3 — framework의 U1 (D3).
+  - [ ] F502-4 — framework의 U2와 `native/darwin`의 N1.
+  - [ ] F502-5 — 명세와 용어, 이후 각 item이 바꾸는 계약을 담은 그 item의 entry, 제안서의 제거.
+  - [ ] F502-6 — `go.work`와 그 module의 Go 1.27.3 (D6).
+  - [ ] F502-7 — language host library와 framework adapter: `packages/host/{go,rust}`, Wails와 Tauri framework adapter, `packages/sok/{go,rust}`와 그 경로를 읽는 구조 검사.
+  - [ ] F502-8 — Go `sok`의 release identifier, host contract script의 host `mygo`, core release key의 host `mygo`.
+  - [ ] F502-9 — macOS에서 Go language host library의 시작은 framework adapter가 설치하는 두 main-thread function을 요구한다.
+  - [ ] F502-10 — framework의 U3, U4, U8과 `Frontend` port의 presentation notice와 settled presentation.
+  - [ ] F502-11 — framework의 U5와 U6.
+  - [ ] F502-12 — mygo host 시작: `Framework`와 `Frontend`의 모든 method를 갖춘 `apps/mygo`와 `packages/host/mygo`.
+  - [ ] F502-13 — Wails와 Tauri host의 D7과 workbench status.
+  - [ ] F502-13-1 — F502-13을 완료하는 revision의 core release.
+  - [ ] F502-14 — Wails와 Tauri host의 workbench event.
+  - [ ] F502-15 — Go layout model과 공유 layout case.
+  - [ ] F502-16 — mygo host의 workbench shell.
+  - [ ] F502-17 — mygo host의 workbench 화면.
+  - [ ] F502-18 — U2를 통한 mygo host의 view surface, document region, image region.
+  - [ ] F502-19 — mygo host의 workbench 기능.
+  - [ ] F502-20 — mygo host의 file command, memory saver, plugin의 `background` session.
+  - [ ] F502-21 — mygo host의 modal.
+  - [ ] F502-22 — mygo host의 file drop, deep link, notification, application update.
+  - [ ] F502-23 — mygo host의 diagnostics, main-page method, `diagnostics.drag`, U7과 그 contract run.
+  - [ ] F502-24 — mygo application의 build, release, packaging과 `make e2e`에서의 시작.
+  - [ ] F502-25 — B3의 floor와 baseline.
+  - [ ] F502-26 — B3 phase 1.
+  - [ ] F502-27 — 모아서 하는 run과 B3 final phase.
+  - [ ] F502-27-1 — F502-27이 측정한 revision의 core release, mygo application 포함.
 - [ ] F501 — P1: host가 선언하는 모든 diagnostic endpoint method가 명세에 있다. 입력: 두 host 모두 `diagnostics.presentation.failure`를 선언한다(`packages/host/wailsv3/src/diagnostics.go`의 `diagnosticMethods`, `packages/host/tauriv2/src/endpoint.rs`의 diagnostic method). 이 method는 host의 다음 settled 대기를 `injected native presentation failure`로 실패시키고(`native/darwin`의 `surfaceLayoutInjectSettledFailure`), `e2e/terminal.test.mjs`가 사용한다. 그러나 [진단 빌드](spec/endpoint.ko.md#진단-빌드) 표에는 이 method의 행이 없고, `scripts/check-host-parity.mjs`는 두 host의 diagnostic method를 서로 비교할 뿐 그 표와 비교하지 않는다. 기대: `scripts/test/check-host-parity.test.mjs`가 표에 없는 diagnostic method를 host가 선언하는 fixture와 어느 host도 선언하지 않는 method를 표가 나열하는 fixture에서 실패하고, `make host-parity-check`가 `diagnostics.presentation.failure`에서 실패한다(Red). 검사가 각 host의 diagnostic method를 그 표의 행과 비교하고, 표가 `diagnostics.presentation.failure`의 parameter, 응답과 효과를 밝히며, 둘 다 통과한다(Green). 검증: `node --test scripts/test/check-host-parity.test.mjs`, `make host-parity-check`, `make docs-check`.
 - [ ] F500 — P1: view page가 가려진 window에서도 document를 보이는 상태로 유지한다. 입력: `_setWindowOcclusionDetectionEnabled:`의 inventory 행([private native API](operations/private-native-apis.ko.md#현재-목록))과 `native/darwin/tests/window_occlusion_test.m`은 surface capture와 paint acknowledgement가 surface rendering을 기다리므로 window가 가려진 동안에도 surface document가 보이는 상태로 animation frame을 돌린다고 밝힌다. 그러나 surface web view에 이 selector를 설정하는 것은 `webviewAttachSurface`뿐이고 어느 host도 그것을 부르지 않으며, `sp_document_create`는 각 view page를 이 selector를 설정하지 않는 `sp_surface_place_view`로 배치한다. 기대: `window_occlusion_test`가 surface web view를 `sp_surface_create`와 `sp_surface_place_view`로 배치하고 `the covered surface document stays visible`에서 실패한다(Red). `sp_surface_place_view`가 배치하는 view의 occlusion detection을 끄고, `sp_window_set_main_webview`처럼 WebKit에 selector가 없으면 false를 반환하며, 같은 test가 통과하고, inventory 행이 `webviewAttachSurface` 대신 `sp_surface_place_view`를 밝힌다(Green). 검증: `make -C native/darwin repeat TEST=window_occlusion_test COUNT=5`, `make docs-check`.
 - [ ] F504 — P1: host가 project의 모든 common-only 설정을 거부한다. 입력: Wails host와 Tauri host는 project의 `.soksak/settings.json`과 project 설정 patch에서 `projectOpening`과 `textSize`만 거부하고(`packages/host/wailsv3/src/workspace.go`의 `commonOnly`, `packages/host/tauriv2/src/workspace.rs`의 `COMMON_ONLY`), [projects](spec/projects.ko.md#저장)도 이 두 key만 밝히지만, [settings](spec/settings.ko.md#값)는 `memorySaver`와 `memorySaverDelay`를 common scope로 정하고 workbench는 project 설정에서 네 key를 모두 거부한다(`packages/workbench/settings.js`의 `COMMON_ONLY`). 그래서 `memorySaver`를 담은 project patch를 host는 저장하고, workbench는 그 project 설정을 읽을 때 거부한다. 기대: 두 언어의 host test가 `memorySaver`와 `memorySaverDelay`를 담은 patch의 저장과 project 파일의 수용을 재현하고 실패한다(Red). 두 host가 project 파일과 project patch에서 네 common-only key를 거부하고, [projects](spec/projects.ko.md#저장)가 네 key를 밝힌다(Green). 검증: 두 host의 workspace test, `make docs-check`.
