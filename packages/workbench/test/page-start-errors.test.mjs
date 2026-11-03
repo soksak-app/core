@@ -71,3 +71,9 @@ test("the first module of the start document installs the handler", () => {
   const imports = [...html.matchAll(/^import [^\n]*from "([^"]+)"/gm)].map((match) => match[1]);
   assert.equal(imports[0], "./page-start-errors-install.js");
 });
+
+test("the settings listener is connected before a command can change a setting", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.ok(html.indexOf("onSettingsChange(() => {") < html.indexOf("installCoreExposure({"),
+    "a setting that core.settings.set changes before the listener is connected is not drawn");
+});

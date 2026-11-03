@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F421: `e2e/projects.test.mjs`의 사이드바 실패가 유효한 설정과 저장된 설정을 보고한다.
+- F421: 설정 listener가 core 명령보다 먼저 연결되어 page 시작 중에 바뀐 설정이 그려진다. `e2e/projects.test.mjs`의 사이드바 실패가 유효한 설정과 저장된 설정을 보고한다.
 - F420: 창이 닫힐 때 진행 중인 배치 요청은 두 host에서 표면을 만들지 않고 `project window is closed`로 실패한다.
 - F419: `host.window.presented`가 표시 중인 modal을 기다리므로 `displayed`가 modal을 보여 주는 갱신을 가리킨다.
 - F418: `e2e/hosts.test.mjs`의 드래그 검사가 표면 frame을 위치 순서로 정렬해 비교한다. `host.window`의 그리기 순서와 배치 요청의 순서는 서로 관련이 없기 때문이다.

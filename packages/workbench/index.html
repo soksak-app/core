@@ -688,6 +688,19 @@ if (chrome) fitTitlebar(start.controls);
 // The first screen is drawn, so the start error handler ends and the error display of this document takes the later errors.
 pageStart.finish();
 
+/* When a setting changes, the plane and the chrome are redrawn. This is connected before the core commands exist: a window
+   check or the settings file can change a setting at any time after them, and a change without this listener would not be drawn. */
+onSettingsChange(() => {
+  const half = halfGap();
+  setGap(half);
+  // A window without a plane redraws the first row only when the frame scale changes. The plane is redrawn on every setting change.
+  if (currentGrid() || drawnFrameText() !== value("textSize")) pageLayout.drawFrame();
+  drawBars();
+  drawSettings();
+  coreChanged();
+  memorySaver.settingsChanged();
+});
+
 // The core public entries are registered before the first await. The sidebar sections of the first screen are mounted asynchronously after that and can follow the core state
 // (docs/spec/plugins.md#sections). The connection with the host is awaited below.
 const coreExposure = installCoreExposure({
@@ -777,19 +790,6 @@ if (!chrome) addEventListener("pagehide", () => { projects.flush().catch(showErr
 
 /* Redraws when a composition handle changes. The handle is read in the render, so without a redraw
    the changed value would not appear. */
-
-/* When a setting changes, the plane and the chrome are redrawn. This is registered after the first project is created. If it were called
-   earlier, there would be no project to draw. */
-onSettingsChange(() => {
-  const half = halfGap();
-  setGap(half);
-  // A window without a plane redraws the first row only when the frame scale changes. The plane is redrawn on every setting change.
-  if (currentGrid() || drawnFrameText() !== value("textSize")) pageLayout.drawFrame();
-  drawBars();
-  drawSettings();
-  coreChanged();
-  memorySaver.settingsChanged();
-});
 
 /* When the window size changes, the ResizeObserver of SoksakView redraws. Observing the same
    thing here would make two observers, and after one lays out with the previous size the other would

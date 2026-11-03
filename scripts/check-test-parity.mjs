@@ -8833,6 +8833,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F421",
+    implementation: [{ file: "packages/workbench/index.html", symbol: "onSettingsChange(() => {" }],
+    tests: [{ file: "packages/workbench/test/page-start-errors.test.mjs", id: "the settings listener is connected before a command can change a setting" }],
+    expected: "A setting changed during the page start is drawn.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],
