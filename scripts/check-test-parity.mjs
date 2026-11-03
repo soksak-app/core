@@ -8735,6 +8735,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F404",
+    implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
+    tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],
+    expected: "A notification of a Tauri window that closed runs no step and reports no failure.",
+    levels: ["unit"],
+  },
+  {
     id: "F312",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" }],
     tests: [

@@ -11,7 +11,7 @@ use crate::exposure;
 use crate::images::{Configure, Images, Key};
 use crate::platform::{self, DOMOverlay, Insets};
 use crate::sidecars::WindowSidecars;
-use crate::windows::window_data;
+use crate::windows::{WindowData, window_data};
 
 fn release_image_configurations(images: &Images, configurations: &[(Key, Configure)]) {
     for (key, configuration) in configurations {
@@ -22,7 +22,11 @@ fn release_image_configurations(images: &Images, configurations: &[(Key, Configu
 /// Sends each drawing state that changed since it was last sent to the supplier of its region
 /// (docs/spec/native-surfaces.md#image-regions). The lock of the window keeps the messages in the order of the changes.
 pub(crate) fn send_image_drawing(window: &Window) -> Result<(), String> {
-    let data = window_data(window)?;
+    send_image_drawing_of(window, &*window_data(window)?)
+}
+
+/// Sends each drawing state that changed in the records of an open window.
+pub(crate) fn send_image_drawing_of(window: &Window, data: &WindowData) -> Result<(), String> {
     // default: a thread that stopped while holding the lock sent whole messages only, and that stop was already reported
     // as a panic report.
     let _order = data.drawing.lock().unwrap_or_else(PoisonError::into_inner);

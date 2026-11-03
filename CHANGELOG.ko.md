@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F404: 닫힌 Tauri window의 알림은 읽거나 그리지 않고 실패를 보고하지 않는다.
 - F403: 끝난 surface의 관찰은 실패 없이 watch를 끝내고, surface의 등록이 observer를 다시 결정한다.
 - F402: core 0.0.33이 plugin을 설치한다. 각 plugin release가 `^0.0.33`을 선언하고 registry가 그것을 올린다.
 - F401: release candidate는 v0.0.32 이후의 변경을 담은 0.0.33이고 최신 publish된 release는 v0.0.32이다.

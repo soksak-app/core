@@ -295,6 +295,18 @@ pub(crate) fn window_data(window: &Window) -> Result<Arc<WindowData>, String> {
     window_records_in(&window.state::<Windows>(), window.label())
 }
 
+/// Runs an action of a notification of a window. The window closes before a late notification runs, and a closed window has
+/// nothing to read or to draw, so the action does not run and no failure is reported.
+pub(crate) fn with_open_window(
+    records: &Result<Arc<WindowData>, String>,
+    action: impl FnOnce(&Arc<WindowData>) -> Result<(), String>,
+) -> Result<(), String> {
+    let Ok(data) = records else {
+        return Ok(());
+    };
+    action(data)
+}
+
 /// Returns window state when its record is still registered. A missing record means the window has been destroyed.
 pub(crate) fn window_data_if_registered(window: &Window) -> Option<Arc<WindowData>> {
     window_records_if_registered(&window.state::<Windows>(), window.label())
@@ -733,18 +745,16 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         Box::new(move || {
             crate::window_events::record_window_event(occluded.label(), "occlusion_changed");
             // An occluded or minimized window draws no image region (docs/spec/native-surfaces.md#image-regions).
-            match window_data(&occluded) {
-                Ok(data) => {
-                    if let Err(error) = crate::composition::read_on_screen(&occluded, &data.images)
-                    {
-                        log_error("window on screen", error);
-                    }
-                }
-                Err(error) => log_error("window on screen", error),
+            if let Err(error) = with_open_window(&window_data(&occluded), |data| {
+                crate::composition::read_on_screen(&occluded, &data.images)
+            }) {
+                log_error("window on screen", error);
             }
             let drawing = occluded.clone();
             crate::routine::spawn_named("image-drawing", move || {
-                if let Err(error) = crate::composition::send_image_drawing(&drawing) {
+                if let Err(error) = with_open_window(&window_data(&drawing), |data| {
+                    crate::composition::send_image_drawing_of(&drawing, data)
+                }) {
                     log_error("image drawing", error);
                 }
             });

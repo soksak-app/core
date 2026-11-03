@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F404: A notification of a Tauri window that closed reads and draws nothing and reports no failure.
 - F403: The observation of a surface that ended ends its watch without a failure, and the registration of the surface decides the observer again.
 - F402: Core 0.0.33 installs the plugins: each plugin release declares `^0.0.33`, and the registry lists them.
 - F401: The release candidate is 0.0.33, which carries the changes after v0.0.32, and the latest published release is v0.0.32.
