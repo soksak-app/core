@@ -103,6 +103,44 @@ static void checkSettledWaitsForLayout(NSWindow *window, WKWebView *main) {
             settledAt, committedAt]);
 }
 
+// A web view that holds the completion of its next presentation until the check releases it.
+@interface SPHeldPresentation : WKWebView
+@property(nonatomic, copy) void (^held)(void);
+@end
+@implementation SPHeldPresentation
+- (void)_doAfterNextPresentationUpdate:(void (^)(void))completion { self.held = completion; }
+- (void)dealloc { [_held release]; [super dealloc]; }
+@end
+
+// A shown modal is drawn by its own web view, so the settled wait ends after the modal has presented. A hidden modal
+// shows nothing and is not waited for.
+static void checkSettledWaitsForModal(NSWindow *window, WKWebView *main, WKWebViewConfiguration *configuration) {
+    SPHeldPresentation *modal = [[[SPHeldPresentation alloc] initWithFrame:window.contentView.bounds
+        configuration:configuration] autorelease];
+    [window.contentView addSubview:modal];
+    __block BOOL settled = NO;
+    surfaceLayoutAfterSettled(main, ^(double displayed, const char *error) {
+        check(error == NULL, @"the settled wait with a shown modal has no error");
+        settled = YES;
+    });
+    until(^BOOL { return settled || modal.held != nil; });
+    check(!settled && modal.held != nil, @"the settled wait does not end before a shown modal has presented");
+    if (modal.held) modal.held();
+    until(^BOOL { return settled; });
+    check(settled, @"the settled wait ends when the shown modal has presented");
+
+    modal.held = nil;
+    modal.hidden = YES;
+    settled = NO;
+    surfaceLayoutAfterSettled(main, ^(double displayed, const char *error) {
+        check(error == NULL, @"the settled wait with a hidden modal has no error");
+        settled = YES;
+    });
+    until(^BOOL { return settled; });
+    check(modal.held == nil, @"the settled wait does not ask a hidden modal for its presentation");
+    [modal removeFromSuperview];
+}
+
 // Notifies when the document load finishes.
 @interface SPLoaded : NSObject <WKNavigationDelegate>
 @property BOOL finished;
@@ -665,6 +703,11 @@ int main(void) { @autoreleasepool {
     WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 200, 300), @"sptest://app/main");
     WKWebView *sameOrigin = page(window, [[configuration copy] autorelease], NSMakeRect(200, 0, 200, 300), @"sptest://app/document");
     WKWebView *external = page(window, [[configuration copy] autorelease], NSMakeRect(400, 0, 200, 300), @"sptest://external/page");
+    // A document lives inside a surface of the composition and never directly in the content view.
+    NSView *composition = [[[NSView alloc] initWithFrame:window.contentView.bounds] autorelease];
+    [window.contentView addSubview:composition];
+    [composition addSubview:sameOrigin];
+    [composition addSubview:external];
     [window orderBack:nil];
     __block BOOL painted = NO;
     [main _doAfterNextPresentationUpdate:^{ painted = YES; }];
@@ -673,6 +716,7 @@ int main(void) { @autoreleasepool {
     checkRecordedComposition([[configuration copy] autorelease]);
     checkFirstShowPublication([[configuration copy] autorelease]);
     checkSettledWaitsForLayout(window, main);
+    checkSettledWaitsForModal(window, main, [[configuration copy] autorelease]);
     checkViewJoin([[configuration copy] autorelease]);
     checkQueuedTicketCancel();
     checkRootViewResizeJoin([[configuration copy] autorelease]);

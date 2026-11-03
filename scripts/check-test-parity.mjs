@@ -8819,6 +8819,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F419",
+    implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "static void afterModalsPresented" }],
+    tests: [{ file: "native/darwin/tests/surface_layout_test.m", id: "the settled wait does not end before a shown modal has presented" }],
+    expected: "The settled wait ends after a shown modal has presented and does not ask a hidden modal.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

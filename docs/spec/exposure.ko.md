@@ -208,7 +208,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 | command | `host.window.fullscreen` | 전체 화면으로 바꾸거나 `on`이 false 이면 되돌린다. 전환이 끝난 뒤에 답한다. macOS 는 전환 중의 요청을 무시하므로 호스트가 그 전환이 끝난 뒤에 적용한다 |
 | command | `host.window.resize` | 콘텐츠 영역 크기를 `{width, height}`로 바꾼다 |
 | command | `host.window.reload` | 메인 페이지를 다시 로드하고 새 페이지가 준비를 알린 뒤 완료한다. 10초 안에 알리지 않으면 1005다 |
-| command | `host.window.presented` | 메인 페이지와 표시 중인 애플리케이션 문서가 현재 배치를 화면에 표시하고, 표시 중인 모든 그림 영역이 정확한 현재 래스터를 표시한 뒤 완료된다. 창의 열린 표면 배치 트랜잭션이 먼저 커밋되기를 기다리며 명령 제한 시간 안에 현재 래스터가 도착하지 않으면 실패한다([네이티브 표면](native-surfaces.ko.md), [표면 합성](surface-composition.ko.md)). 그 상태를 보여 주는 화면 갱신 시각(ms, 녹화 프레임 시각과 같은 시계) `{displayed}`를 반환한다(표시 뒤 창이 있는 화면의 다음 갱신. 창이 어느 화면에도 없으면 호출 시각) |
+| command | `host.window.presented` | 메인 페이지와 표시 중인 modal이 현재 배치를 화면에 표시하고, 표시 중인 모든 그림 영역이 정확한 현재 래스터를 표시한 뒤 완료된다. 창의 열린 표면 배치 트랜잭션이 먼저 커밋되기를 기다리며 명령 제한 시간 안에 현재 래스터가 도착하지 않으면 실패한다([네이티브 표면](native-surfaces.ko.md), [표면 합성](surface-composition.ko.md)). 그 상태를 보여 주는 화면 갱신 시각(ms, 녹화 프레임 시각과 같은 시계) `{displayed}`를 반환한다(표시 뒤 창이 있는 화면의 다음 갱신. 창이 어느 화면에도 없으면 호출 시각) |
 | command | `host.hit` | 창 좌표의 점 `{x, y}`를 소유한 대상을 반환한다: 메인 페이지면 `{kind: "page"}`(DOM 표면과 그림 영역은 DOM 입력을 받으므로 여기에 속한다, [표면 합성](surface-composition.ko.md)), 문서 영역이면 `{kind: "document", surface, document}`, 네이티브 hit 이면 `{kind: "native", identifier, view}`다. 네이티브 뷰가 없으면 `view`는 `null`, 있으면 hit-test 된 실제 leaf 뷰의 창 콘텐츠 좌표 프레임과 클래스 `{class, frame}`를 담는다 |
 | command | `host.dock.select` | 제목이 `{title}`인 Dock 메뉴 항목을 실행한다 |
 | command | `host.quit` | 대기 중인 저장을 포함한 일반 애플리케이션 종료를 요청한다 |

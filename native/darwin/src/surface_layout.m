@@ -271,6 +271,23 @@ static bool layoutOpen(void *owner) {
     return false;
 }
 
+// Runs done after every shown modal has presented. A modal is the only web view placed directly in the content view
+// beside the composition; a surface's web views live inside it and render independently of this wait. A shown modal
+// starts drawing when it becomes visible, and the presentation of the main page says nothing about it.
+static void afterModalsPresented(WKWebView *main, void (^done)(void)) {
+    dispatch_group_t group = dispatch_group_create();
+    BOOL waiting = NO;
+    for (NSView *view in main.window.contentView.subviews) {
+        if (view == main || ![view isKindOfClass:WKWebView.class] || view.isHiddenOrHasHiddenAncestor) continue;
+        waiting = YES;
+        dispatch_group_enter(group);
+        [(WKWebView *)view _doAfterNextPresentationUpdate:^{ dispatch_group_leave(group); }];
+    }
+    if (waiting) dispatch_group_notify(group, dispatch_get_main_queue(), done);
+    else done();
+    dispatch_release(group);
+}
+
 static void settle(WKWebView *main, void (^done)(double, const char *)) {
     void *owner = main.window;
     if (layoutOpen(owner)) {
@@ -292,10 +309,12 @@ static void settle(WKWebView *main, void (^done)(double, const char *)) {
         }
         // DOM evaluation only finishes layout. The web content process must commit the rendering of that DOM before it appears on the screen.
         [main _doAfterNextPresentationUpdate:^{
-            // When a new transaction opened while waiting for presentation, the wait starts again from the settlement of that transaction.
-            if (layoutOpen(main.window)) settle(main, finish);
-            else afterNextFrame(main.window.screen, finish);
-            [main release];
+            afterModalsPresented(main, ^{
+                // When a new transaction opened while waiting for presentation, the wait starts again from the settlement of that transaction.
+                if (layoutOpen(main.window)) settle(main, finish);
+                else afterNextFrame(main.window.screen, finish);
+                [main release];
+            });
         }];
     }];
 }

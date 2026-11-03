@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F419: `host.window.presented` waits for a shown modal, so `displayed` names a refresh that shows it.
 - F418: The drag check of `e2e/hosts.test.mjs` compares surface frames ordered by position, because the drawing order of `host.window` and the order of a layout request are unrelated.
 - F417: An injected press reads its target before its delivery, so a layout in between does not lose the focus of its card.
 - F416: The Tauri host reports no failure for a view, exposure or stream notice that runs after its window closed.
