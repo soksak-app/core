@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -407,4 +408,19 @@ test('Go source inventory reports and bounds a stuck go list process', (t) => {
   }), /go list test-source inventory failed.*timed out/);
   assert.match(output[0], /^RUN  go list test-source inventory/);
   assert.match(output[1], /^FAIL go list test-source inventory.*after \d+\.\d+s:/);
+});
+
+test('a run removes its build folder', () => {
+  const temporary = mkdtempSync(join(tmpdir(), 'host-contract-folder-'));
+  try {
+    const script = fileURLToPath(new URL('../check-host-contract.mjs', import.meta.url));
+    const run = spawnSync(process.execPath, [script, '--host', 'tauriv2', '--run', 'no-run-has-this-id', '--only', 'none'], {
+      env: { ...process.env, TMPDIR: temporary },
+      encoding: 'utf8',
+    });
+    assert.match(run.stderr, /no test name contains/);
+    assert.deepEqual(readdirSync(temporary), []);
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
+  }
 });

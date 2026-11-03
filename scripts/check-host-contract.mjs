@@ -6,7 +6,7 @@
 // Rust tests without executing test bodies. Neither check uses file names or counts to infer coverage.
 import { parseArgs } from 'node:util';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, posix, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -508,6 +508,15 @@ async function main(argv) {
   const write = (line) => process.stdout.write(`${line}\n`);
   const concurrency = Math.max(2, cpus().length - 2);
   const buildDir = mkdtempSync(join(tmpdir(), 'host-contract-'));
+  try {
+    return await runContract(values, cases, buildDir, write, concurrency);
+  } finally {
+    rmSync(buildDir, { recursive: true, force: true });
+  }
+}
+
+/** Builds and runs the selected tests in `buildDir` and audits the contract cases. */
+async function runContract(values, cases, buildDir, write, concurrency) {
   // Go builds run together; the Rust builds share one cargo lock, so they follow one another. Both languages build at once.
   // A scoped run builds only the runs whose id contains the text of --run.
   if (values.run === '') throw new Error('--run needs a text that the id of a run contains');

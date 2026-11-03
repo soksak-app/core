@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F400: host contract 실행은 끝날 때 자기 build folder를 지운다.
 - F292-70-4: page가 presentation하지 않는 preparation을 `cancelSurfaces`로 취소하므로 다른 window의 preparation을 더 이상 대기시키지 않는다.
 - F399: 아무것도 load하지 않은 document의 store를 끝내면 network process도 끝나므로, 그 뒤에는 어떤 process도 폴더에 쓰지 않는다.
 - F292-44-1-1: 2.6.0에 변경이 없으므로, hold 항목은 그 변경을 담은 library의 publish release를 기다린다.
