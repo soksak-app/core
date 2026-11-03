@@ -244,6 +244,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F504",
+    implementation: [
+      { file: "packages/host/wailsv3/src/workspace.go", symbol: "var commonOnly = []string{\"projectOpening\", \"textSize\", \"memorySaver\", \"memorySaverDelay\"}" },
+      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "const COMMON_ONLY: [&str; 4] = [" },
+      { file: "apps/browser/runtime/browser-storage.js", symbol: "const COMMON_ONLY = Object.freeze([\"projectOpening\", \"textSize\", \"memorySaver\", \"memorySaverDelay\"]);" },
+      { file: "packages/workbench/settings.js", symbol: "for (const key of COMMON_ONLY) if (id && Object.hasOwn(patch, key)) throw new Error(`${key} is common-only`);" },
+      { file: "scripts/check-host-parity.mjs", symbol: "export function auditCommonOnlyKeys(keys) {" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestProjectCommonOnlyKeysAreRejected" },
+      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "project_common_only_keys_are_rejected" },
+      { file: "apps/browser/test/browser-storage.test.mjs", id: "a project write of each common-only key fails with the message of the hosts" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "a project write of each common-only key fails with the message of the hosts" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "a common-only key that the workbench refuses and a host or the browser runtime accepts fails" },
+    ],
+    expected: "Both hosts, the browser runtime and the workbench refuse the four common-only keys in a project settings file and in a project write with `<key> is common-only`, and the host parity check fails when their lists differ.",
+    levels: ["unit"],
+  },
+  {
     id: "F509",
     implementation: [{ file: "Cargo.toml", symbol: "[profile.release.build-override]\nstrip = false" }],
     tests: [{ file: "scripts/test/rust-release-profile.test.mjs", id: "a release build loads the proc-macro libraries that it builds for the host" }],

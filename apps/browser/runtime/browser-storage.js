@@ -1,3 +1,7 @@
+// The common settings that a project setting cannot override, the common-only keys of the hosts and the workbench
+// (docs/spec/projects.md#persistence).
+const COMMON_ONLY = Object.freeze(["projectOpening", "textSize", "memorySaver", "memorySaverDelay"]);
+
 // IndexedDB transactions handle duplicate projects and simultaneous changes from several windows.
 export class WorkspaceStore {
   constructor(database, channel) {
@@ -172,7 +176,8 @@ export class WorkspaceStore {
   }
 
   settings(id, patch) {
-    if (id && Object.hasOwn(patch, "projectOpening")) return Promise.reject(new Error("Project opening mode is common-only"));
+    const commonOnly = id && COMMON_ONLY.find((key) => Object.hasOwn(patch, key));
+    if (commonOnly) return Promise.reject(new Error(`${commonOnly} is common-only`));
     return this.transaction("readwrite", (projects, settings) => {
       const store = id ? projects : settings;
       // default: Without an id, the common settings are changed (settings(null, patch)).

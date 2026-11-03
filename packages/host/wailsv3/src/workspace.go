@@ -53,8 +53,9 @@ func NewWorkspace(directory string) *Workspace {
 type Record map[string]any
 
 // commonOnly are the common settings that the project settings cannot override (docs/spec/projects.md#persistence). The host sets the window title bar before the page starts
-// from textSize of the common settings (docs/spec/native-surfaces.md#title-bar-height).
-var commonOnly = []string{"projectOpening", "textSize"}
+// from textSize of the common settings (docs/spec/native-surfaces.md#title-bar-height), and the memory of the application that the
+// memory saver settings govern is shared by its projects (docs/spec/settings.md#values). The workbench refuses the same keys.
+var commonOnly = []string{"projectOpening", "textSize", "memorySaver", "memorySaverDelay"}
 
 // WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, settings, tabState,
 // tabStatePut, tabSession, tabSessionPut, and tabSessions.

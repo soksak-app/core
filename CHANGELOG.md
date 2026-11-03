@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F435: Record the view benchmarks after F444 at load average 12 to 28 and close the single card position failure as not reproduced.
+- F504: Both hosts, the browser runtime and the workbench refuse the four common-only keys `projectOpening`, `textSize`, `memorySaver` and `memorySaverDelay` in project settings with `<key> is common-only`, and the host parity check compares their lists.
 - F509: A release build of the Rust workspace no longer strips the proc-macro libraries that it builds for the host, so it builds on macOS 27.
 - F506: Every failed creation of a document region or view page states its cause, and a host reports a native failure without a cause as such.
 - F500: A view page keeps its document visible and its animation frames running in an occluded window, as the main page does.

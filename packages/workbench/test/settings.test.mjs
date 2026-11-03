@@ -261,7 +261,22 @@ test('the frame text factor is common-only', async () => {
     assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: { textSize: 1.5 } }] }, 'prj-a'),
       /project settings: textSize is common-only/);
     beginSettings({ common: { textSize: 1.5 }, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
-    assert.throws(() => change({ textSize: 2 }, 'project', 'test'), /Text size is common-only/);
+    assert.throws(() => change({ textSize: 2 }, 'project', 'test'), { message: 'textSize is common-only' });
+  } finally {
+    globalThis.document = realDocument;
+  }
+});
+
+// A project write of a common-only key fails with the message of the hosts, `<key> is common-only` (docs/spec/projects.md#persistence).
+test('a project write of each common-only key fails with the message of the hosts', async () => {
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const { beginSettings, set: change } = await import('../settings.js?test=common-only-write');
+  try {
+    beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
+    for (const [key, value] of [['projectOpening', 'tabs'], ['textSize', 2], ['memorySaver', false], ['memorySaverDelay', 30]]) {
+      assert.throws(() => change({ [key]: value }, 'project', 'test'), { message: `${key} is common-only` });
+    }
   } finally {
     globalThis.document = realDocument;
   }

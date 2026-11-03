@@ -5,6 +5,7 @@
 ## 미배포
 
 - F435: load average 12~28에서 잰 F444 뒤 view benchmark를 기록하고, 1회 발생한 card 위치 실패를 재현되지 않음으로 닫는다.
+- F504: 두 host, browser runtime, workbench가 project 설정에서 네 common-only key `projectOpening`, `textSize`, `memorySaver`, `memorySaverDelay`를 `<key> is common-only`로 거부하고, host parity 검사가 그 목록들을 비교한다.
 - F509: Rust workspace의 release build가 host용으로 만드는 proc-macro library를 strip하지 않으므로 macOS 27에서 build된다.
 - F506: document region과 view page의 모든 생성 실패가 원인을 밝히고, host는 원인 없는 native 실패를 그렇다고 보고한다.
 - F500: view page는 메인 페이지처럼 가려진 window에서도 document를 visible로 유지하고 animation frame을 계속 실행한다.

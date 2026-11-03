@@ -554,9 +554,7 @@ export function set(patch, scope = projectId ? "project" : "common", actor) {
   if (typeof actor !== "string" || actor === "") throw new Error("set requires the actor that changes the settings");
   const id = scope === "project" ? projectId : null;
   if (scope === "project" && !id) throw new Error("No project is selected");
-  if (id && Object.hasOwn(patch, "projectOpening")) throw new Error("Project opening mode is common-only");
-  if (id && Object.hasOwn(patch, "textSize")) throw new Error("Text size is common-only");
-  for (const key of ["memorySaver", "memorySaverDelay"]) if (id && Object.hasOwn(patch, key)) throw new Error(`${key} is common-only`);
+  for (const key of COMMON_ONLY) if (id && Object.hasOwn(patch, key)) throw new Error(`${key} is common-only`);
   for (const [key, val] of Object.entries(patch)) {
     if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
     if (val !== undefined) validateValue(key, val);

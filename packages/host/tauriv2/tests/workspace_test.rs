@@ -290,31 +290,45 @@ fn move_without_delta_is_refused() {
     }
 }
 
-// contract: workspace.settings.rejects-project-text-size-override
+// contract: workspace.settings.rejects-project-common-only-keys
 #[test]
-fn a_project_text_size_override_is_rejected() {
-    let config = folder::Folder::new();
-    let root = folder::Folder::new();
-    let store = Workspace::new(config.path().into());
-    apply(
-        &store,
-        json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
-    );
-    let refused = store.apply(
-        serde_json::from_value(
-            json!({"kind":"settings", "id":"prj-test", "patch":{"textSize":1.5}}),
-        )
-        .unwrap(),
-    );
-    assert_eq!(refused.err(), Some("textSize is common-only".to_string()));
-    let path = root.path().join(".soksak/settings.json");
-    fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(&path, r#"{"format":1,"textSize":1.5}"#).unwrap();
-    let snapshot = apply(&store, json!({"kind":"snapshot"}));
-    assert_eq!(
-        snapshot["projects"][0]["settingsError"],
-        json!(format!("{}: textSize is common-only", path.display()))
-    );
+fn project_common_only_keys_are_rejected() {
+    let mut failures = Vec::new();
+    for (key, value) in [
+        ("projectOpening", json!("tabs")),
+        ("textSize", json!(1.5)),
+        ("memorySaver", json!(false)),
+        ("memorySaverDelay", json!(30)),
+    ] {
+        let config = folder::Folder::new();
+        let root = folder::Folder::new();
+        let store = Workspace::new(config.path().into());
+        apply(
+            &store,
+            json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+        );
+        let refused = store.apply(
+            serde_json::from_value(
+                json!({"kind":"settings", "id":"prj-test", "patch":{key: value}}),
+            )
+            .unwrap(),
+        );
+        if refused.as_ref().err() != Some(&format!("{key} is common-only")) {
+            failures.push(format!("a project {key} write returned {refused:?}"));
+        }
+        let path = root.path().join(".soksak/settings.json");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, json!({"format": 1, key: value}).to_string()).unwrap();
+        let snapshot = apply(&store, json!({"kind":"snapshot"}));
+        let want = json!(format!("{}: {key} is common-only", path.display()));
+        if snapshot["projects"][0]["settingsError"] != want {
+            failures.push(format!(
+                "a project settings file with {key} reported {}",
+                snapshot["projects"][0]["settingsError"]
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
 }
 
 // contract: workspace.settings.refuses-project-file-at-its-project
