@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F401: release candidate는 v0.0.32 이후의 변경을 담은 0.0.33이고 최신 publish된 release는 v0.0.32이다.
 - F292-70-5: preparation 취소는 두 host에 선언한 contract test를 갖고, Tauri host는 첫 단계가 실패해도 두 단계를 모두 실행한다.
 - F400: host contract 실행은 끝날 때 자기 build folder를 지운다.
 - F292-70-4: page가 presentation하지 않는 preparation을 `cancelSurfaces`로 취소하므로 다른 window의 preparation을 더 이상 대기시키지 않는다.
