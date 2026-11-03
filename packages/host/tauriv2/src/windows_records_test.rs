@@ -110,7 +110,11 @@ fn a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure() 
         ran = true;
         Ok(())
     });
-    assert_eq!(result, Ok(()), "a closed window has nothing to read or to draw");
+    assert_eq!(
+        result,
+        Ok(()),
+        "a closed window has nothing to read or to draw"
+    );
     assert!(!ran);
 }
 
