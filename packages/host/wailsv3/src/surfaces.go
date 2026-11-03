@@ -1478,7 +1478,7 @@ func CloseWindowSurfaces(surfaces map[string]unsafe.Pointer, documents *Document
 	var failures []string
 	for _, id := range ids {
 		var natives []WindowNative
-		// The streams of the surface end with its documents; the closed documents need no turn-off.
+		// The streams and the request logs of the surface end with its documents.
 		streams.RemoveSurface(id)
 		for _, handle := range documents.RemoveSurface(id) {
 			natives = append(natives, WindowNative{Kind: WindowNativeDocument, Handle: handle})

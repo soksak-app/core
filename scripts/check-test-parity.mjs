@@ -244,6 +244,29 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F511",
+    implementation: [
+      { file: "packages/host/tauriv2/src/documents.rs", symbol: "pub fn attach(&self, key: &Key) -> Result<Vec<StreamEffect>, String> {" },
+      { file: "packages/host/wailsv3/src/documents.go", symbol: "func (d *DocumentStreams) Attach(key DocumentKey) ([]StreamEffect, error) {" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "stream_attach_creates_the_request_log_and_turns_its_collection_on" },
+      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "stream_request_log_outlives_the_subscriptions_of_the_region" },
+      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "stream_request_log_keeps_the_entries_that_arrive_without_a_subscription" },
+      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "stream_requests_subscription_of_a_region_with_elements_subscription_posts_no_entry_again" },
+      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "stream_removal_ends_subscriptions_and_releases_the_log" },
+      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "a_page_process_end_removes_every_subscription_of_the_page" },
+      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentStreamAttachCreatesTheRequestLogAndTurnsItsCollectionOn" },
+      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentRequestLogOutlivesTheSubscriptionsOfTheRegion" },
+      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentRequestLogKeepsTheEntriesThatArriveWithoutASubscription" },
+      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentRequestsSubscriptionOfARegionWithElementsSubscriptionPostsNoEntryAgain" },
+      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentStreamRemovalEndsSubscriptionsAndReleasesTheLog" },
+      { file: "packages/host/wailsv3/tests/documents_test.go", id: "TestDocumentStreamEndedPageProcessKeepsTheRegionsOfItsSurface" },
+    ],
+    expected: "A document region collects its requests and keeps a request log of at most 200 entries from its attach to its removal, a requests subscription and its end change no collection, and the end of the subscriptions of a page keeps the logs of its regions.",
+    levels: ["unit"],
+  },
+  {
     id: "F504",
     implementation: [
       { file: "packages/host/wailsv3/src/workspace.go", symbol: "var commonOnly = []string{\"projectOpening\", \"textSize\", \"memorySaver\", \"memorySaverDelay\"}" },
