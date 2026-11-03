@@ -11,6 +11,8 @@
 #import <QuartzCore/QuartzCore.h>
 #import <Security/Security.h>
 #import <WebKit/WebKit.h>
+#include <errno.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #import "application_log.h"
@@ -2298,6 +2300,40 @@ size_t sp_document_binary_count(void *handle) {
     return view ? view.binaries.count : 0;
 }
 
+// The stores whose sessions the network process is removing, the stores that wait for the process to end, and that process.
+static int storeRemovals;
+static NSMutableArray<void (^)(const char *)> *storeEndsWaiting;
+static pid_t storeEndProcess;
+
+// The network cache writes its records about one second after a load and keeps those writes after the session of the store
+// is removed, and clearing the disk cache does not drop them (document_store_end_test). WebKit gives no event for the end
+// of these writes, so the network process ends, and its exit tells that no write can follow. Ending it while another store
+// removes its session fails that removal, so it ends after the last removal. The next document that needs it starts it again.
+static void endNetworkProcess(void) {
+    NSArray<void (^)(const char *)> *waiting = [[storeEndsWaiting copy] autorelease];
+    [storeEndsWaiting removeAllObjects];
+    pid_t process = storeEndProcess;
+    storeEndProcess = 0;
+    dispatch_source_t exit = process > 0
+        ? dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)process, DISPATCH_PROC_EXIT, dispatch_get_main_queue())
+        : NULL;
+    if (!exit) {
+        for (void (^finish)(const char *) in waiting) finish(NULL);
+        return;
+    }
+    dispatch_source_set_event_handler(exit, ^{
+        dispatch_source_cancel(exit);
+        for (void (^finish)(const char *) in waiting) finish(NULL);
+    });
+    dispatch_resume(exit);
+    // A process that already ended reports its exit through the source, and any other refusal is the failure of the end.
+    if (kill(process, SIGKILL) != 0 && errno != ESRCH) {
+        dispatch_source_cancel(exit);
+        NSString *refusal = [NSString stringWithFormat:@"the network process %d does not end: %s", process, strerror(errno)];
+        for (void (^finish)(const char *) in waiting) finish(refusal.UTF8String);
+    }
+}
+
 void sp_document_store_close(const char *directory, sp_document_store_closed closed, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     NSString *path = directory ? storeDirectory(directory) : nil;
@@ -2327,10 +2363,24 @@ void sp_document_store_close(const char *directory, sp_document_store_closed clo
     // (WebsiteDataStore::~WebsiteDataStore calls NetworkProcessProxy::removeSession), and calls this handler after the
     // network process has destroyed the session and closed its storage. A closed web view can still hold its
     // configuration for a while, so the handler runs when that reference also goes away.
+    // The session of the store is removed first; a process that ended
+    // before that would start again for the session and open its databases in the directory.
+    pid_t networkProcess = store._networkProcessIdentifier;
+    if (networkProcess > 0) storeEndProcess = networkProcess;
+    storeRemovals++;
     [endingStores() addObject:path];
     [store _setCompletionHandlerForRemovalFromNetworkProcess:^(NSError *error) {
-        [endingStores() removeObject:path];
-        closed(context, error ? error.localizedDescription.UTF8String : NULL);
+        char *failure = error ? strdup(error.localizedDescription.UTF8String) : NULL;
+        void (^finish)(const char *) = [^(const char *refusal) {
+            [endingStores() removeObject:path];
+            closed(context, failure ?: refusal);
+            free(failure);
+        } copy];
+        if (!storeEndsWaiting) storeEndsWaiting = [NSMutableArray new];
+        [storeEndsWaiting addObject:finish];
+        [finish release];
+        storeRemovals--;
+        if (storeRemovals == 0) endNetworkProcess();
     }];
     [dataStores() removeObjectForKey:path];
 }

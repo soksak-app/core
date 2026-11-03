@@ -2,6 +2,7 @@
 // removed on every exit path of the process (return from main and exit), also when the check fails.
 #import <Foundation/Foundation.h>
 
+/// Each data store under the folder ends first (sp_document_store_close), and a document that stays open fails the process.
 /// Creates the new folder `<prefix>XXXXXX` in the folder that TMPDIR names and returns its path; a process without TMPDIR
 /// fails with status 1. The folder
 /// and its contents are removed when the process exits by returning from main or by exit(). A removal that fails is written

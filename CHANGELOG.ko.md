@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F317-3: document store를 끝내면 network process도 끝나므로, 지연된 cache 쓰기가 지운 폴더에 닿지 않는다.
 - F393-2: 저장소 표는 sidecar `alacritty`를 지금의 그리기로 적는다.
 - F393-1: 저장소 표의 plugin 목록은 plugin만 적는다.
 - F394: registry 명세는 plugin과 sidecar가 게시하는 release 파일 이름을 적는다.

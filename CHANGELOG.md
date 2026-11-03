@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F317-3: Ending a document store ends the network process, so its delayed cache writes cannot reach the removed folder.
 - F393-2: The repositories table describes the sidecar `alacritty` by its current drawing.
 - F393-1: The plugin list of the repositories table names only plugins.
 - F394: The registry specification names the release files that plugins and sidecars publish.

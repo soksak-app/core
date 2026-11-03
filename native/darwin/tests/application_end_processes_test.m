@@ -50,7 +50,7 @@ static void changed(void *context, const char *text) {
 
 // The child application: opens a main web view with a page and a document region with a file page, writes
 // `process <pid>` for each WebContent process to the standard output and ends through the termination command.
-static int runApplication(void) {
+static int runApplication(NSString *folder) {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -74,7 +74,6 @@ static int runApplication(void) {
     }
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);
-    NSString *folder = temporaryFolder(@"soksak-application-end-");
     NSString *page = [folder stringByAppendingPathComponent:@"page.html"];
     if (![@"<title>Region</title><p>region</p>" writeToFile:page atomically:YES encoding:NSUTF8StringEncoding error:nil]) {
         fprintf(stderr, "FAIL: the region page is not written\n");
@@ -106,7 +105,7 @@ static int runApplication(void) {
 }
 
 int main(int argc, char **argv) { @autoreleasepool {
-    if (argc == 2 && strcmp(argv[1], "--application") == 0) return runApplication();
+    if (argc == 3 && strcmp(argv[1], "--application") == 0) return runApplication(@(argv[2]));
 
     check(dlsym(RTLD_DEFAULT, "sp_webview_kill_content_process") == NULL,
         @"the native library offers no operation that kills a WebContent process");
@@ -121,7 +120,9 @@ int main(int argc, char **argv) { @autoreleasepool {
     posix_spawn_file_actions_adddup2(&actions, output[1], STDOUT_FILENO);
     posix_spawn_file_actions_addclose(&actions, output[0]);
     posix_spawn_file_actions_addclose(&actions, output[1]);
-    char *arguments[] = {argv[0], "--application", NULL};
+    // The parent owns the folder of the child, because the child ends with its document open.
+    NSString *folder = temporaryFolder(@"soksak-application-end-");
+    char *arguments[] = {argv[0], "--application", (char *)folder.fileSystemRepresentation, NULL};
     pid_t child = 0;
     int spawned = posix_spawn(&child, argv[0], &actions, NULL, arguments, environ);
     posix_spawn_file_actions_destroy(&actions);

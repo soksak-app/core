@@ -1,4 +1,6 @@
 #import "temporary_folder.h"
+#import "document_view.h"
+#include <pthread.h>
 #include <errno.h>
 #include <fts.h>
 #include <removefile.h>
@@ -51,8 +53,62 @@ static int writeRefusedEntry(removefile_state_t state, const char *path, void *c
     return REMOVEFILE_PROCEED;
 }
 
+typedef struct {
+    char *directory;
+    BOOL ended;
+    BOOL failed;
+} StoreEnd;
+
+static void recordStoreEnd(void *context, const char *error) {
+    StoreEnd *end = context;
+    end->ended = YES;
+    if (!error) return;
+    end->failed = YES;
+    fprintf(stderr, "FAIL: the data store of %s does not end: %s\n", end->directory, error);
+}
+
+// Ends the data store of each directory under the folders, because the WebKit network process of an open store writes into
+// it during the removal. A directory without a store ends at once. All stores end together: a store that stays open while
+// another ends starts the network process again, and that process writes into the folders. Ends only on the main thread,
+// which owns the documents.
+static BOOL endDocumentStores(void) {
+    if (!pthread_main_np()) return YES;
+    size_t count = 0, capacity = 64;
+    StoreEnd *ends = calloc(capacity, sizeof(StoreEnd));
+    for (int i = 0; i < folderCount; i++) {
+        char *roots[] = { folders[i], NULL };
+        FTS *walk = fts_open(roots, FTS_PHYSICAL | FTS_NOCHDIR, NULL);
+        if (!walk) continue;
+        for (FTSENT *entry = fts_read(walk); entry; entry = fts_read(walk)) {
+            if (entry->fts_info != FTS_D) continue;
+            if (count == capacity) ends = reallocf(ends, (capacity *= 2) * sizeof(StoreEnd));
+            ends[count++] = (StoreEnd){ strdup(entry->fts_path), NO, NO };
+        }
+        fts_close(walk);
+    }
+    for (size_t i = 0; i < count; i++) sp_document_store_close(ends[i].directory, recordStoreEnd, &ends[i]);
+    BOOL ended = YES;
+    @autoreleasepool {
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:20];
+        for (size_t i = 0; i < count; i++) {
+            while (!ends[i].ended && deadline.timeIntervalSinceNow > 0) {
+                [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+            }
+            // A store that has not ended keeps a pointer to this array, so the process ends here.
+            if (!ends[i].ended) {
+                fprintf(stderr, "FAIL: the data store of %s does not end within 20 seconds\n", ends[i].directory);
+                _exit(1);
+            }
+            if (ends[i].failed) ended = NO;
+        }
+    }
+    for (size_t i = 0; i < count; i++) free(ends[i].directory);
+    free(ends);
+    return ended;
+}
+
 static void removeFolders(void) {
-    BOOL failed = NO;
+    BOOL failed = !endDocumentStores();
     for (int i = 0; i < folderCount; i++) {
         struct stat info;
         if (lstat(folders[i], &info) != 0 && errno == ENOENT) continue;

@@ -225,8 +225,9 @@ size_t sp_document_binary_count(void *document);
 // when the call returns. Called on the main thread.
 typedef void (*sp_document_store_closed)(void *context, const char *error);
 
-// Ends the persistent data store of directory, so its folder can be removed: closed is called after the WebKit network
-// process has removed the session of the store and writes nothing more to the directory. Every document of the directory
+// Ends the persistent data store of directory, so its folder can be removed: closed is called after the session of the store
+// is removed and the WebKit network process, which the documents of other stores start again, has ended, so nothing writes
+// to the directory any more. Every document of the directory
 // must be closed first. A directory without a store ends at once; documents of a directory whose store is ending are not
 // created. closed reports an error for a directory that is not an absolute path, a store that is already ending, or an
 // open document of the directory.
