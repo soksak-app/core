@@ -757,6 +757,12 @@ export function mountSurface(slot, surface, options = {}) {
   return pending;
 }
 
+/** A drawing that mounts a mounted surface again receives its current state and the states after it. */
+function followSurfaceState(entry, onState) {
+  entry.stateListener = onState;
+  onState(entry.lastState);
+}
+
 async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedTextSize } = {}, registration, registered) {
   // A view surface has no module: its page is loaded by the host into the view (docs/spec/plugins.md#view-surfaces).
   // A surface is a view: its page runs in its view, and the workbench mounts no module (docs/spec/plugins.md#surface-ownership).
@@ -800,6 +806,7 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
   if (entry && entry.slot === slot) {
     if (entry.host.parentNode !== slot) slot.appendChild(entry.host);
     entry.host.removeAttribute("data-surface-suspended");
+    followSurfaceState(entry, onState);
     registered();
     return entry.ready;
   }
@@ -901,12 +908,16 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
         ...pluginRecords,
       },
     });
-    const state = context.status.subscribe(onState);
+    const reportState = (value) => {
+      entry.lastState = value;
+      entry.stateListener(value);
+    };
+    const state = context.status.subscribe(reportState);
     // A status change of a mounted view changes its entry in core.surfaces.
     context.status.subscribe(mountedChanged);
     let resolveCompositionDisposed;
     const compositionDisposed = new Promise((resolve) => { resolveCompositionDisposed = resolve; });
-    entry = { slot, host, shadow, context, closing, lifetime, state, exposure: null, composition: compositionReady.promise,
+    entry = { slot, host, shadow, context, closing, lifetime, state, stateListener: onState, lastState: null, exposure: null, composition: compositionReady.promise,
       compositionDisposed, resolveCompositionDisposed,
       mounted: null, ready: null, authorized: false, disposed: false, compositionDeclared: false,
       surfaceId: surface.surfaceId, pluginId: surface.pluginId, descriptor: surface, mountRegistration: registration,
@@ -919,11 +930,11 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
     mounted.set(surface.surfaceId, entry);
     mountedChanged();
     try {
-      onState(context.status.read());
+      reportState(context.status.read());
       const registrations = [];
       const closeView = answerViewCalls(surface, scoped, page, context, closing.signal, registrations);
       // A view that stopped its restarts shows its reason as the error of the surface (docs/spec/native-surfaces.md#view-surfaces).
-      const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
+      const stopping = scoped.native.on("view-stopped", (event) => reportState(viewStopState(event)));
       registrations.push(stopping);
       // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.
       const responding = scoped.native.on("view-responsiveness", (event) => {
@@ -1048,6 +1059,7 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
     entry.setViewport(slot);
     if (entry.host.parentNode !== slot) slot.appendChild(entry.host);
     entry.host.removeAttribute("data-surface-suspended");
+    followSurfaceState(entry, onState);
     registered();
   }
   return entry.ready;

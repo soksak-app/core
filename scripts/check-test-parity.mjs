@@ -8735,6 +8735,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F405",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "function followSurfaceState(" }],
+    tests: [{ file: "packages/workbench/test/section-surface-mount.test.mjs", id: "a surface that a new drawing mounts again reports its state to the new drawing" }],
+    expected: "A surface that a new drawing mounts again reports its current state and later states to that drawing.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],
