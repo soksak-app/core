@@ -8728,6 +8728,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F403",
+    implementation: [{ file: "packages/workbench/exposure.js", symbol: "const observeFailed =" }],
+    tests: [{ file: "packages/workbench/test/exposure.test.mjs", id: "an observation of a surface that ended is no failure, and its watch is forwarded again when the surface registers" }],
+    expected: "The observation of a surface that ended ends its watch without a failure, and a refusal with another code is reported.",
+    levels: ["unit"],
+  },
+  {
     id: "F312",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "pub(crate) fn end_ticket_waits(" }],
     tests: [

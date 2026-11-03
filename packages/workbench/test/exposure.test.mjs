@@ -491,6 +491,39 @@ test("a status watch that the surface refuses is not kept, so the next watch is 
     "a new watch is forwarded after the refused one");
 });
 
+test("an observation of a surface that ended is no failure, and its watch is forwarded again when the surface registers", async () => {
+  let refuse = true;
+  const host = fakeHost(({ method }) => (method === "status.watch" && refuse
+    ? { error: { code: EXPOSURE_ERRORS.gone, message: "surface tab-a closed" } } : { result: null }));
+  const made = coreRegistry(host);
+  const failures = [];
+  made.configure({ surfacePlugin: () => "probe", failed: (error) => { failures.push(error.message); return true; } });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  const stop = made.observe("probe.lines", "tab-a", () => {}, { exact: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(failures, [], "the end of the surface is not a failure of the observation");
+
+  refuse = false;
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === "status.watch").length, 2,
+    "the watch is forwarded again when the surface registers");
+  stop();
+});
+
+test("an observation that another error refuses is reported as a failure", async () => {
+  const host = fakeHost(({ method }) => (method === "status.watch"
+    ? { error: { code: EXPOSURE_ERRORS.failed, message: "the read threw" } } : { result: null }));
+  const made = coreRegistry(host);
+  const failures = [];
+  made.configure({ surfacePlugin: () => "probe", failed: (error) => { failures.push(error.message); return true; } });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  const stop = made.observe("probe.lines", "tab-a", () => {}, { exact: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(failures, ["probe.lines on tab-a: the read threw"]);
+  stop();
+});
+
 test("an observation chooses no surface that a drawing or a place left out, so no watch is forwarded to it", async () => {
   // A place closes the views that it leaves out before their own ends reach the registry (docs/spec/plugins.md#sections).
   const host = fakeHost(() => ({ result: null }));
@@ -682,9 +715,9 @@ test("runOwned without surface runs a command on the calling section surface whe
 test("observe reports a failed watch, value read, or release instead of hiding it", async () => {
   const host = fakeHost(({ surface, method }) => {
     if (method === "status.next") return new Promise(() => {});
-    if (surface === "tab-a" && method === "status.watch") return { error: { code: 1003, message: "watch lost" } };
-    if (method === "status.get") return { error: { code: 1003, message: "read lost" } };
-    if (method === "status.unwatch") return { error: { code: 1003, message: "unwatch lost" } };
+    if (surface === "tab-a" && method === "status.watch") return { error: { code: EXPOSURE_ERRORS.failed, message: "watch lost" } };
+    if (method === "status.get") return { error: { code: EXPOSURE_ERRORS.failed, message: "read lost" } };
+    if (method === "status.unwatch") return { error: { code: EXPOSURE_ERRORS.failed, message: "unwatch lost" } };
     return { result: null };
   });
   const made = coreRegistry(host);

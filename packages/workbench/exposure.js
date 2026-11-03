@@ -313,7 +313,12 @@ export function createRegistry({ call = null, report = null } = {}) {
   }
 
   /** Reports the failure of an observation with the name and the surface attached. */
-  const observeFailed = (name, surface) => (error) => options.failed(new Error(`${name} on ${surface}: ${error.message}`));
+  // A surface that ended while its watch was requested ends the watch and is no failure of the observation: the registration of the
+  // surface decides the observer again.
+  const observeFailed = (name, surface) => (error) => {
+    if (error.code === EXPOSURE_ERRORS.gone) return;
+    options.failed(new Error(`${name} on ${surface}: ${error.message}`));
+  };
 
   /** Ends the watch of an observer. When no other observer or external watch remains, the watch of the surface ends too. */
   function detach(observer) {
