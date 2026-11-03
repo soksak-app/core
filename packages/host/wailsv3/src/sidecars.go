@@ -1115,15 +1115,16 @@ func (c *Sidecars) closeAnswered(process *sidecar, surface string, closed bool, 
 		delete(c.closing, name)
 	}
 	stopped := !pending && take(process.stopClosing, surface)
+	// The failure is written before the status change, so a reader of the log after that status finds it.
+	if failure != nil && (pending || stopped) {
+		LogError("sidecar "+name, fmt.Sprintf("close %s: %s", surface, *failure))
+	}
 	if pending {
 		c.closingChanged()
 	}
 	c.mu.Unlock()
 	if !pending && !stopped {
 		return "unexpected close answer for " + surface
-	}
-	if failure != nil {
-		LogError("sidecar "+name, fmt.Sprintf("close %s: %s", surface, *failure))
 	}
 	if pending {
 		c.closingInvalidated()

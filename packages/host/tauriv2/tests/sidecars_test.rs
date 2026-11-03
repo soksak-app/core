@@ -1503,6 +1503,58 @@ fn failed_close_answer_is_logged() {
     );
 }
 
+// The log holds the failure when the closing entry ends, so a reader of the log after that status finds it. The
+// mark goes through the same writer, so the order of the two lines in the standard error is the order of the calls.
+// contract: sidecars.close.failed-answer-is-logged
+#[test]
+fn failed_close_answer_is_logged_before_the_closing_entry_ends() {
+    if std::env::var_os("SOKSAK_CLOSE_ORDER_CHILD").is_some() {
+        records::capturing(|| {
+            let script = "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; esac; done\n";
+            let (sidecars, _snapshots, _directory) = closing_sidecars(script);
+            let (ended, end) = channel();
+            sidecars.on_status_changed(move |value| {
+                if value.closing.is_empty() {
+                    soksak_host_tauriv2::application_log::log_error(
+                        "mark",
+                        "the closing entry ended",
+                    );
+                    let _ = ended.send(());
+                }
+            });
+            let (window, _events) = owner("a", "/projects/closing");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+                .unwrap();
+            sidecars.retain(&window, &|_| false).unwrap();
+            end.recv_timeout(STALL).unwrap();
+            sidecars.stop();
+        });
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "failed_close_answer_is_logged_before_the_closing_entry_ends",
+            "--nocapture",
+        ])
+        .env("SOKSAK_CLOSE_ORDER_CHILD", "1")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "the child check failed: {stderr}");
+    let failure = stderr
+        .find("close s1: busy")
+        .expect("the failure is logged");
+    let mark = stderr
+        .find("the closing entry ended")
+        .expect("the mark is logged");
+    assert!(
+        failure < mark,
+        "the closing entry ended before the failure was logged: {stderr}"
+    );
+}
+
 // contract: sidecars.declaration.replaces-changed-folder
 #[test]
 fn declaration_replaces_a_sidecar_whose_folder_changed() {

@@ -1121,6 +1121,33 @@ func TestFailedCloseAnswerIsLogged(t *testing.T) {
 	}
 }
 
+// The log holds the failure when the closing entry ends, so a reader of the log after that status finds it.
+// contract: sidecars.close.failed-answer-is-logged
+func TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds(t *testing.T) {
+	script := "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; esac; done\n"
+	sidecars := closingSidecars(t, script)
+	written := captureLog(t)
+	atEnd := make(chan string, 1)
+	sidecars.ClosingChanged = func(value host.SidecarStatus) {
+		if len(value.Closing) == 0 {
+			atEnd <- written()
+		}
+	}
+	owner := newFakeOwner("/projects/closing")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Close("s1")
+	select {
+	case log := <-atEnd:
+		if want := "error host sidecar @fixture/sidecar-echo: close s1: busy\n"; !strings.Contains(log, want) {
+			t.Fatalf("log at the end of the closing entry %q does not contain %q", log, want)
+		}
+	case <-time.After(stall):
+		t.Fatal("the closing entry did not end")
+	}
+}
+
 // contract: sidecars.close.unexpected-answer-fails
 func TestCloseAnswerForAnOpenSurfaceFailsTheSidecar(t *testing.T) {
 	sidecars := closingSidecars(t, "#!/bin/sh\nread line\nprintf '{\"surface\":\"s1\",\"closed\":true}\\n'\nexec cat >/dev/null\n")

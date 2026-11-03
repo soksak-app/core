@@ -273,6 +273,13 @@ fn close_answer<O: Owner>(
         {
             state.closing.remove(sidecar);
         }
+        // The failure is written before the status change, so a reader of the log after that status finds it.
+        if let Some(error) = answer.error.as_ref().filter(|_| pending || stopped) {
+            log_error(
+                &format!("sidecar {sidecar}"),
+                format!("close {}: {error}", answer.surface),
+            );
+        }
         if pending {
             publish_status(&state);
         }
@@ -280,12 +287,6 @@ fn close_answer<O: Owner>(
     };
     if !pending && !stopped {
         return Err(format!("unexpected close answer for {}", answer.surface));
-    }
-    if let Some(error) = answer.error {
-        log_error(
-            &format!("sidecar {sidecar}"),
-            format!("close {}: {error}", answer.surface),
-        );
     }
     if !pending {
         return Ok(true);

@@ -207,6 +207,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F398",
+    implementation: [
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "format!(\"close {}: {error}\", answer.surface)," },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "if failure != nil && (pending || stopped) {" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "failed_close_answer_is_logged_before_the_closing_entry_ends" },
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds" },
+    ],
+    expected: "The failure of a close answer is written to the log before the closing entry ends.",
+    levels: ["unit"],
+  },
+  {
     id: "F396",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "application active at the press: %s, window key at the press: %s" },
