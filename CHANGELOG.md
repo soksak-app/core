@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F416: The Tauri host reports no failure for a view, exposure or stream notice that runs after its window closed.
 - F415: The section checks no longer judge the activation of the host, and the persistence check expects the width that the grip band leaves.
 - F414: The Tauri host reports no failure for a sidecar message that arrives after its window closed.
 - F413: The event catalog declares the `cancelled` phase of `page.trace.layout`.

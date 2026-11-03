@@ -1791,13 +1791,10 @@ fn view_message(
     };
     match ready {
         Ok(true) => {
-            let first = match window_data(window) {
-                Ok(data) => data.documents.views().first_ready(surface),
-                Err(error) => {
-                    log_error("view channel", error);
-                    None
-                }
-            };
+            let first = window_data(window)
+                // default: a window that closed has no view to record.
+                .ok()
+                .and_then(|data| data.documents.views().first_ready(surface));
             if let Some(plugin) = first {
                 record_view_process_ready(surface, &plugin);
             }
@@ -1825,12 +1822,9 @@ fn view_log_message(
     document: Handle,
     call: ViewLogCall,
 ) {
-    let data = match window_data(window) {
-        Ok(data) => data,
-        Err(error) => {
-            log_error("view channel", error);
-            return;
-        }
+    let Ok(data) = window_data(window) else {
+        record_view_message_cancelled(surface, "window-closed");
+        return;
     };
     if !data.documents.views().is_current_log_source(&call, origin) {
         record_view_message_cancelled(surface, "retired-origin");
@@ -2199,9 +2193,9 @@ pub(crate) fn post_sidecar_message(
         "view sidecar route",
         window
             .run_on_main_thread(move || {
-                let data = match window_data(&task_window) {
-                    Ok(data) => data,
-                    Err(error) => return log_error("view sidecar route", error),
+                // A window that closed has no view to post to.
+                let Ok(data) = window_data(&task_window) else {
+                    return;
                 };
                 for (surface, generation) in views {
                     let current = data.view_source_origins.current_view(&surface)
@@ -2792,9 +2786,9 @@ fn apply_effects(
 /// delivery. It runs on the main thread.
 fn deliver_stream(window: &Window, platform: &'static dyn Platform, key: &Key, value: &str) {
     let place = format!("document stream {}", key.1);
-    let data = match window_data(window) {
-        Ok(data) => data,
-        Err(error) => return log_error(&place, error),
+    // A window that closed has no subscription to deliver to.
+    let Ok(data) = window_data(window) else {
+        return;
     };
     let result = match data.streams.deliver(key, value) {
         Ok(result) => result,

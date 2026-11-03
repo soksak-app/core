@@ -1116,40 +1116,35 @@ pub(crate) fn surface_closed(window: &Window, surface: &str) {
     }
 }
 
-/// Removes the registrations of a closed surface from the window that owned them. A window record that cannot be read leaves
-/// the registrations in place, and the error is recorded.
+/// Removes the registrations of a closed surface from the window that owned them. The registrations of a window that
+/// closed ended with its records, so nothing remains to remove.
 fn remove_surface_registrations(data: Result<Arc<WindowData>, String>, surface: &str) {
-    match data {
-        Ok(data) => data
-            .registrations
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the registrations, and the registrations of a closed
-            // surface are removed from them; the panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner)
-            .retain(|(owner, _, _)| owner != surface),
-        Err(error) => log_error("exposure surface closed", format!("{surface}: {error}")),
-    }
+    let Ok(data) = data else {
+        return;
+    };
+    data.registrations
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the registrations, and the registrations of the
+        // surface are removed from them; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .retain(|(owner, _, _)| owner != surface);
 }
 
 #[cfg(test)]
 mod surface_closed_tests {
     use super::*;
 
-    // A window record that cannot be read leaves the registrations of the closed surface in place, and the error is recorded.
-    // contract: exposure.surface-closed.window-record-error-is-recorded
+    // The registrations of a closed window ended with its records, so nothing remains to remove or to report.
+    // contract: exposure.surface-closed.closed-window-records-nothing
     #[test]
-    fn a_window_record_that_cannot_be_read_is_recorded() {
-        remove_surface_registrations(Err("window is not registered".into()), "probe-surface");
+    fn a_surface_that_closes_after_its_window_closed_records_nothing() {
+        remove_surface_registrations(Err("project window is closed".into()), "probe-surface");
         let recorded = crate::event_record::buffered_fields("host.record.error");
         assert!(
-            recorded
+            !recorded
                 .iter()
-                .any(|fields| fields["where"] == "exposure surface closed"
-                    && fields["text"]
-                        .as_str()
-                        .is_some_and(|text| text.contains("probe-surface")
-                            && text.contains("window is not registered"))),
-            "no record of the failed window record in {recorded:?}"
+                .any(|fields| fields["where"] == "exposure surface closed"),
+            "a record of the closed window in {recorded:?}"
         );
     }
 }

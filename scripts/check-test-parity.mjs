@@ -8798,6 +8798,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F416",
+    implementation: [{ file: "packages/host/tauriv2/src/exposure.rs", symbol: "fn remove_surface_registrations" }],
+    tests: [{ file: "packages/host/tauriv2/src/exposure.rs", id: "a_surface_that_closes_after_its_window_closed_records_nothing" }],
+    expected: "A notice that runs after its window closed reports no failure.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],
