@@ -33,8 +33,14 @@ pub fn prepare_config_directory(
 
 /// The common settings that a project setting cannot override (docs/spec/projects.md#persistence). The host sets the
 /// window title bar from textSize of the common settings before the page starts
-/// (docs/spec/native-surfaces.md#title-bar-height).
-const COMMON_ONLY: [&str; 2] = ["projectOpening", "textSize"];
+/// (docs/spec/native-surfaces.md#title-bar-height), and the memory of the application that the memory saver settings
+/// govern is shared by its projects (docs/spec/settings.md#values). The workbench refuses the same keys.
+const COMMON_ONLY: [&str; 4] = [
+    "projectOpening",
+    "textSize",
+    "memorySaver",
+    "memorySaverDelay",
+];
 
 /// The store of one configuration directory. Write requests run in order.
 pub struct Workspace {

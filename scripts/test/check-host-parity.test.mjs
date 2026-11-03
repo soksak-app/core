@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditHostParity, auditMenuTables, goMenuTables, rustHandlers, rustMenuTables, snake, specMenuTables } from "../check-host-parity.mjs";
+import { auditCommonOnlyKeys, auditHostParity, auditMenuTables, commonOnlyKeys, goMenuTables, rustHandlers, rustMenuTables, snake, specMenuTables } from "../check-host-parity.mjs";
 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({
@@ -16,6 +16,10 @@ const sources = () => ({
   wailsv3MenuSource: goMenuFixture,
   hostsSpec: hostsFixture,
   endpointSpec: endpointFixture,
+  tauriv2WorkspaceSource: 'const COMMON_ONLY: [&str; 2] = ["projectOpening", "textSize"];',
+  wailsv3WorkspaceSource: 'var commonOnly = []string{"projectOpening", "textSize"}',
+  browserStorageSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);',
+  workbenchSettingsSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);',
 });
 
 const endpointFixture = `## Diagnostic builds
@@ -150,4 +154,26 @@ test("a method of the diagnostic builds table that no host declares fails", { ti
 test("rustHandlers reads a command that is generic over the runtime", { timeout: 1000 }, () => {
   const bindings = "\nbindings! {\n#[tauri::command]\nasync fn plugins_run<R: tauri::Runtime>(\n    app: AppHandle<R>,\n) -> Result<(), String> {}\n#[tauri::command]\nfn release(window: Window) -> Result<(), String> {}\n}\n";
   assert.deepEqual([...rustHandlers(bindings)], ["plugins_run", "release"]);
+});
+
+test("a common-only key that the workbench refuses and a host or the browser runtime accepts fails", { timeout: 1000 }, () => {
+  const changed = { ...sources(), workbenchSettingsSource: 'const COMMON_ONLY = Object.freeze(["projectOpening", "textSize", "memorySaver"]);' };
+  assert.deepEqual(auditHostParity(changed), [
+    'tauriv2 common-only keys ["projectOpening","textSize"] differ from the common-only keys of the workbench ["memorySaver","projectOpening","textSize"]',
+    'wailsv3 common-only keys ["projectOpening","textSize"] differ from the common-only keys of the workbench ["memorySaver","projectOpening","textSize"]',
+    'browser common-only keys ["projectOpening","textSize"] differ from the common-only keys of the workbench ["memorySaver","projectOpening","textSize"]',
+  ]);
+});
+
+test("the common-only keys of the hosts, the browser runtime and the workbench are read from their sources", { timeout: 1000 }, async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+  const keys = commonOnlyKeys({
+    tauriv2WorkspaceSource: read("packages/host/tauriv2/src/workspace.rs"),
+    wailsv3WorkspaceSource: read("packages/host/wailsv3/src/workspace.go"),
+    browserStorageSource: read("apps/browser/runtime/browser-storage.js"),
+    workbenchSettingsSource: read("packages/workbench/settings.js"),
+  });
+  assert.deepEqual(keys.workbench, ["projectOpening", "textSize", "memorySaver", "memorySaverDelay"]);
+  assert.deepEqual(auditCommonOnlyKeys(keys), []);
 });

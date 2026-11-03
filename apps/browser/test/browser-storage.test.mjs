@@ -68,3 +68,16 @@ test('the tab sessions start empty, keep one document per tab, list the tabs and
     await assert.rejects(a.tabSessionPut('',null), {message:'tab session requires a tab'});
   } finally { a.close(); }
 });
+
+// The browser runtime refuses each common-only key in a project write with the message of the hosts (docs/spec/projects.md#persistence).
+test('a project write of each common-only key fails with the message of the hosts', async () => {
+  const indexedDB = new IDBFactory();
+  const store = await WorkspaceStore.open({indexedDB,channel:false});
+  try {
+    const project = await store.add({id:'p1',root:'/root',identity:'1',title:'p1',settings:{},spaces:[]});
+    for (const [key, value] of [['projectOpening','tabs'],['textSize',2],['memorySaver',false],['memorySaverDelay',30]]) {
+      await assert.rejects(store.settings(project.id,{[key]:value}),{message:`${key} is common-only`});
+    }
+    assert.deepEqual((await store.snapshot()).projects[0].settings,{});
+  } finally { store.close(); }
+});

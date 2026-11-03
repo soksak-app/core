@@ -358,31 +358,42 @@ func TestMoveWithoutDeltaIsRefused(t *testing.T) {
 
 func ptr(n int) *int { return &n }
 
-// contract: workspace.settings.rejects-project-text-size-override
-func TestProjectTextSizeOverrideIsRejected(t *testing.T) {
-	root := t.TempDir()
-	store := host.NewWorkspace(t.TempDir())
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "1:2"}}); err != nil {
-		t.Fatal(err)
-	}
-	_, err := store.Apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-test", Patch: host.Record{"textSize": 1.5}})
-	if want := "textSize is common-only"; err == nil || err.Error() != want {
-		t.Fatalf("a project textSize write returned %v, want %q", err, want)
-	}
-	path := filepath.Join(root, ".soksak", "settings.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(`{"format":1,"textSize":1.5}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
-	if err != nil {
-		t.Fatalf("the snapshot failed: %v", err)
-	}
-	project := snapshot.(host.Record)["projects"].([]host.Record)[0]
-	if want := path + ": textSize is common-only"; project["settingsError"] != want {
-		t.Fatalf("a project settings file with textSize reported %v, want %q", project["settingsError"], want)
+// contract: workspace.settings.rejects-project-common-only-keys
+func TestProjectCommonOnlyKeysAreRejected(t *testing.T) {
+	for _, c := range []struct {
+		key   string
+		value any
+		file  string
+	}{
+		{"projectOpening", "tabs", `"tabs"`},
+		{"textSize", 1.5, `1.5`},
+		{"memorySaver", false, `false`},
+		{"memorySaverDelay", 30, `30`},
+	} {
+		root := t.TempDir()
+		store := host.NewWorkspace(t.TempDir())
+		if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "1:2"}}); err != nil {
+			t.Fatal(err)
+		}
+		_, err := store.Apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-test", Patch: host.Record{c.key: c.value}})
+		if want := c.key + " is common-only"; err == nil || err.Error() != want {
+			t.Errorf("a project %s write returned %v, want %q", c.key, err, want)
+		}
+		path := filepath.Join(root, ".soksak", "settings.json")
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(`{"format":1,"`+c.key+`":`+c.file+`}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
+		if err != nil {
+			t.Fatalf("the snapshot failed: %v", err)
+		}
+		project := snapshot.(host.Record)["projects"].([]host.Record)[0]
+		if want := path + ": " + c.key + " is common-only"; project["settingsError"] != want {
+			t.Errorf("a project settings file with %s reported %v, want %q", c.key, project["settingsError"], want)
+		}
 	}
 }
 

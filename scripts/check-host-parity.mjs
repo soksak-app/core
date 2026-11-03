@@ -140,6 +140,40 @@ export function auditMenuTables(spec, rust, go) {
   return failures;
 }
 
+/** Reads the quoted names of the list that starts at declaration and ends at the first closing bracket after it. */
+function quotedList(source, declaration, close, file) {
+  const start = source.indexOf(declaration);
+  if (start < 0) throw new Error(`${file} has no ${declaration}`);
+  const body = source.slice(start + declaration.length, source.indexOf(close, start + declaration.length));
+  return [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+}
+
+/**
+ * Proposition 5: reads the common-only keys of each host, of the browser runtime and of the workbench, which refuse them in project settings
+ * (docs/spec/projects.md#persistence).
+ */
+export function commonOnlyKeys({ tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchSettingsSource }) {
+  return {
+    tauriv2: quotedList(tauriv2WorkspaceSource, 'const COMMON_ONLY: [&str;', '];', 'packages/host/tauriv2/src/workspace.rs'),
+    wailsv3: quotedList(wailsv3WorkspaceSource, 'var commonOnly = []string{', '}', 'packages/host/wailsv3/src/workspace.go'),
+    browser: quotedList(browserStorageSource, 'const COMMON_ONLY = Object.freeze([', '])', 'apps/browser/runtime/browser-storage.js'),
+    workbench: quotedList(workbenchSettingsSource, 'const COMMON_ONLY = Object.freeze([', '])', 'packages/workbench/settings.js'),
+  };
+}
+
+/** Proposition 5: each host refuses the common-only keys that the workbench refuses. */
+export function auditCommonOnlyKeys(keys) {
+  const failures = [];
+  const expected = JSON.stringify([...keys.workbench].sort());
+  for (const host of ['tauriv2', 'wailsv3', 'browser']) {
+    const actual = JSON.stringify([...keys[host]].sort());
+    if (actual !== expected) {
+      failures.push(`${host} common-only keys ${actual} differ from the common-only keys of the workbench ${expected}`);
+    }
+  }
+  return failures;
+}
+
 /**
  * Reads the endpoint methods that exist on one host only from the allowed differences table of the host specification
  * (docs/spec/hosts.md). A row whose ID is E<number> declares endpoint methods; its Wails and Tauri cells list method names
@@ -185,7 +219,8 @@ export function specDiagnosticMethods(endpointMarkdown) {
 /** Judges propositions 1, 2, and 3 on the injected sources and returns the list of failures. */
 export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
-  hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec }) {
+  hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
+  tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchSettingsSource }) {
   const failures = [];
   const tauriv2 = {
     calls: runtimeCalls(tauriv2Runtime, 'const COMMAND = {', 'tauriv2 runtime'),
@@ -232,6 +267,7 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   }
   failures.push(...auditMenuTables(specMenuTables(hostContractSpec), rustMenuTables(tauriv2MenuSource),
     goMenuTables(wailsv3MenuSource)));
+  failures.push(...auditCommonOnlyKeys(commonOnlyKeys({ tauriv2WorkspaceSource, wailsv3WorkspaceSource, browserStorageSource, workbenchSettingsSource })));
   return failures;
 }
 
@@ -256,11 +292,15 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     wailsv3MenuSource: read('packages/host/wailsv3/src/menu.go'),
     hostsSpec: read('docs/spec/hosts.md'),
     endpointSpec: read('docs/spec/endpoint.md'),
+    tauriv2WorkspaceSource: read('packages/host/tauriv2/src/workspace.rs'),
+    wailsv3WorkspaceSource: read('packages/host/wailsv3/src/workspace.go'),
+    browserStorageSource: read('apps/browser/runtime/browser-storage.js'),
+    workbenchSettingsSource: read('packages/workbench/settings.js'),
   });
   for (const failure of failures) console.error(`FAIL: ${failure}`);
   if (failures.length > 0) {
     console.error(`host parity: ${failures.length} difference(s)`);
     process.exit(1);
   }
-  console.log('Host parity passed: host.call names, handler wiring, endpoint method sets, the diagnostic builds table, and menu tables are equal');
+  console.log('Host parity passed: host.call names, handler wiring, endpoint method sets, the diagnostic builds table, menu tables and common-only keys are equal');
 }
