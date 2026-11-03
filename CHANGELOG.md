@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F414: The Tauri host reports no failure for a sidecar message that arrives after its window closed.
 - F413: The event catalog declares the `cancelled` phase of `page.trace.layout`.
 - F412: The hosts configure a raster that changed while a window was off screen when its region draws again, so a terminal draws after a transition to full screen.
 - F409: The window checks read the entries that they name, wait for the status that they judge, and cover the installed `term` plugin.

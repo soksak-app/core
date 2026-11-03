@@ -8784,6 +8784,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F414",
+    implementation: [{ file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn route_message" }],
+    tests: [{ file: "packages/host/tauriv2/src/sidecars_route_test.rs", id: "a_message_after_its_window_closed_posts_nothing_and_reports_no_failure" }],
+    expected: "A message after its window closed posts nothing and reports no failure.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

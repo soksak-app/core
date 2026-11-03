@@ -4326,19 +4326,17 @@ impl Owner for Window {
         }
     }
     fn deliver(&self, message: Message) {
-        let data = match window_data(self) {
-            Ok(data) => data,
-            Err(error) => return log_error("sidecar-message", error),
-        };
-        let targets = data
-            .sidecar_routes
-            .targets(&message.sidecar, &message.surface);
-        if !targets.views.is_empty() {
-            crate::documents::post_sidecar_message(self, &message, targets.views);
-        }
-        if targets.page
-            && let Err(error) = emit_window(self, "sidecar-message", message)
-        {
+        let routed = route_message(&window_data(self), &message, |targets| {
+            if !targets.views.is_empty() {
+                crate::documents::post_sidecar_message(self, &message, targets.views);
+            }
+            if targets.page {
+                emit_window(self, "sidecar-message", message.clone())
+                    .map_err(|error| error.to_string())?;
+            }
+            Ok(())
+        });
+        if let Err(error) = routed {
             log_error("sidecar-message", error);
         }
     }
@@ -4439,6 +4437,25 @@ fn write_stderr_records(stderr: std::process::ChildStderr, name: &str) {
 
 #[path = "image_detach.rs"]
 pub mod image_detach;
+
+/// Passes the targets of a sidecar message to post in the records of its window. A message that arrives after its
+/// window closed has no document to reach, so nothing runs and no failure is reported.
+fn route_message(
+    records: &Result<Arc<crate::windows::WindowData>, String>,
+    message: &Message,
+    post: impl FnOnce(crate::sidecar_routes::Targets) -> Result<(), String>,
+) -> Result<(), String> {
+    crate::windows::with_open_window(records, |data| {
+        post(
+            data.sidecar_routes
+                .targets(&message.sidecar, &message.surface),
+        )
+    })
+}
+
+#[cfg(test)]
+#[path = "sidecars_route_test.rs"]
+mod route_test;
 
 #[cfg(test)]
 #[path = "sidecars_lock_test.rs"]

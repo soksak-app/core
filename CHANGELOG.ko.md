@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F414: Tauri 호스트가 창이 닫힌 뒤 도착한 사이드카 메시지에 실패를 보고하지 않는다.
 - F413: event catalog가 `page.trace.layout`의 `cancelled` phase를 선언한다.
 - F412: 호스트가 창이 화면에 없는 동안 바뀐 raster를 region이 다시 그릴 때 설정하므로, 터미널이 전체 화면 전환 뒤에도 그린다.
 - F409: window check는 자기가 가리키는 항목을 읽고, 판단하는 status를 기다리며, 설치된 `term` plugin을 포함한다.
