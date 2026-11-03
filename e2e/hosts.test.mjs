@@ -45,12 +45,15 @@ const SIZE = { width: 1000, height: 620 };
 const settledX = (lines) => (transcript(lines).get("syncSurfaces") ?? [])
   .filter((call) => /"settled":true/.test(call.request)).map((call) => JSON.parse(call.request).surfaces[0]?.x);
 
+/** Orders surface frames by position: the drawing order of host.window and the order of a layout request are unrelated. */
+const byPosition = (a, b) => a.y - b.y || a.x - b.x;
+
 /** Every surface frame that is visible and settled in the last layout request. */
 const settledFrames = (lines) => {
   const call = [...(transcript(lines).get("syncSurfaces") ?? [])].reverse()
     .find((entry) => /"settled":true/.test(entry.request));
   return call && JSON.parse(call.request).surfaces.filter((surface) => surface.visible)
-    .map(({ x, y, w, h }) => ({ x, y, width: w, height: h }));
+    .map(({ x, y, w, h }) => ({ x, y, width: w, height: h })).sort(byPosition);
 };
 
 /** The line that says the page displayed the settled layout. */
@@ -101,7 +104,7 @@ if (requiresBoth(process.env)) test("both hosts answer the same page the same wa
     // The settled layout of the drag is taken by stopping the recording before the settings modal opens. The modal is an overlay of the whole window and changes the next layout,
     // and the moment at which that layout enters the recording differs per host.
     const start = (await s.get("host.window")).surfaces.find((item) => item.frame.width > 0)?.frame.x;
-    const expectedFrames = states[name].fresh.window.surfaces.filter((item) => item.visible).map((item) => item.frame);
+    const expectedFrames = states[name].fresh.window.surfaces.filter((item) => item.visible).map((item) => item.frame).sort(byPosition);
     const dragLog = await s.transcript(recordCatalog(s.app));
     results[name] = await drag(t, s, PLAN);
     // A settled layout also occurs at a moment where the drag is stopped. The drag returns to its place, so the check waits until the last settled layout equals the layout

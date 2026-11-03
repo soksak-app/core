@@ -8812,6 +8812,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F418",
+    implementation: [{ file: "e2e/hosts.test.mjs", symbol: "const byPosition" }],
+    tests: [{ file: "e2e/hosts.test.mjs", id: "both hosts answer the same page the same way" }],
+    expected: "The settled drag check compares surface frames ordered by position.",
+    levels: ["application"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],
