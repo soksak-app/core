@@ -7,6 +7,8 @@ const PROJECT = {
   activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } }], settings: {},
 };
 
+// The geometry that the window reports.
+let windowGeometry = null;
 // The project that received the window open request.
 const openRequests = [];
 mock.module("@soksak/runtime", {
@@ -19,7 +21,7 @@ mock.module("@soksak/runtime", {
       openProject: async (request) => { openRequests.push(request.id); return { local: true }; },
       projectShown: async () => {},
       releaseProject: async () => {},
-      state: async () => null,
+      state: async () => windowGeometry,
       close: async () => {},
       onRemoveProjectRequest: async () => {},
       askRemoveProject: async () => true,
@@ -165,6 +167,24 @@ test("plugin states follow the shown project and project data is patched under p
   assert.deepEqual(patches.at(-1), [PROJECT.id, { plugins: { probe: { marks: ["a"] } } }]);
   assert.deepEqual(dataOptions.data.get(PROJECT.id, "probe"), { marks: ["a"] });
   await projects.flush();
+});
+
+test("a flush writes the window geometry only when it changed", async () => {
+  const patches = [];
+  await projects.initialise({ ...store, patch: async (id, patch) => { if (patch.geometry) patches.push(patch.geometry); } });
+  await projects.browse();
+  await projects.activate(PROJECT.id);
+  windowGeometry = { x: 1, y: 2, width: 300, height: 200 };
+  try {
+    await projects.flush();
+    await projects.flush();
+    assert.deepEqual(patches, [windowGeometry], "an unchanged geometry was written again");
+    windowGeometry = { x: 5, y: 2, width: 300, height: 200 };
+    await projects.flush();
+    assert.equal(patches.length, 2, "a changed geometry was not written");
+  } finally {
+    windowGeometry = null;
+  }
 });
 
 test("the surfaces of every layout are listed with their project root, and removing a project retains the rest", async () => {

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F407: A flush writes the window geometry only when it changed, so a reload with nothing to save does not write `projects.json`.
 - F406: The set of an open card sidebar stops before the band of its grip, so a section view does not cover the grip and a drag sizes the side.
 - F405: A surface that a new drawing mounts again reports its current state and later states to that drawing, so a redrawn section reports `ready` or its error.
 - F404: A notification of a Tauri window that closed reads and draws nothing and reports no failure.

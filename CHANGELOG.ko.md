@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F407: flush는 window geometry가 바뀌었을 때만 쓰므로, 저장할 것이 없는 reload는 `projects.json`을 쓰지 않는다.
 - F406: 열린 card sidebar의 세트는 grip의 띠 앞에서 끝나므로 section view가 grip을 덮지 않고 drag가 면의 크기를 정한다.
 - F405: 새 drawing이 다시 mount하는 surface는 현재 상태와 이후 상태를 그 drawing에 보고하므로, 다시 그려진 section이 `ready`나 오류를 보고한다.
 - F404: 닫힌 Tauri window의 알림은 읽거나 그리지 않고 실패를 보고하지 않는다.

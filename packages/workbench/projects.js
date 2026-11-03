@@ -601,11 +601,18 @@ export function renameSpace(id, title) {
   keep("saved layout");
 }
 
+/** The geometry that this window last wrote per project: an unchanged geometry is no pending save. */
+const savedGeometry = new Map();
+
 export async function saveGeometry() {
   const id = activeProjectId;
   if (!id || browsing) return;
   const geometry = await windows.state();
-  if (geometry) await store.patch(id, { geometry });
+  if (!geometry) return;
+  const key = JSON.stringify(geometry);
+  if (savedGeometry.get(id) === key) return;
+  await store.patch(id, { geometry });
+  savedGeometry.set(id, key);
 }
 
 /**
