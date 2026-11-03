@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F317: The hosted repeats of `document_report_test`, `document_view_test` and `document_store_end_test` each passed 20 of 20 runs, so the failure of the temporary store folder is closed.
 - F317-5: Ending a document store also ends the GPU process, so the media cache of a closed document cannot change the folder after the store has ended.
 - F317-4: The exit source of the store end is registered through the entrance of `observe.m`, and it releases itself when it is cancelled.
 - F317-3: Ending a document store ends the network process, so its delayed cache writes cannot reach the removed folder.
