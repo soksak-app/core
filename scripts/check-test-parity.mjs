@@ -255,6 +255,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F500",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "view._windowOcclusionDetectionEnabled = NO;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_occlusion_test.m", id: "the covered surface document stays visible" },
+      { file: "native/darwin/tests/window_occlusion_test.m", id: "the covered surface document runs an animation frame" },
+    ],
+    expected: "A view page that sp_surface_place_view places keeps its document visible and its animation frames running while its window is occluded.",
+    levels: ["native"],
+  },
+  {
     id: "F505",
     implementation: [
       { file: "native/darwin/Makefile", symbol: "-DCMAKE_OSX_ARCHITECTURES=$(ARCH)" },

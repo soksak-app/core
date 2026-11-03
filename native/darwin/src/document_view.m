@@ -1517,6 +1517,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
         // A view draws its declared overlays in its own DOM, so it is placed below the plane that the overlay mask cuts.
         view.acceptsFirstMouseClick = YES;
         if (!sp_surface_place_view(surface, view)) {
+            setDocumentFailure(@"the view cannot be placed in its surface");
             webviewInputUnregister(view);
             [view release];
             return NULL;
