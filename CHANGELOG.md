@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F421: The sidebar failure of `e2e/projects.test.mjs` reports the effective and the stored setting.
 - F420: A layout request in flight when its window closes creates no surface and fails with `project window is closed` on both hosts.
 - F419: `host.window.presented` waits for a shown modal, so `displayed` names a refresh that shows it.
 - F418: The drag check of `e2e/hosts.test.mjs` compares surface frames ordered by position, because the drawing order of `host.window` and the order of a layout request are unrelated.

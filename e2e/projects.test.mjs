@@ -312,7 +312,12 @@ for (const app of Object.values(APPS)) {
     assert.equal((await child.get("core.layout")).windowSidebars.right.width, 213);
     await settings(child, { left: true }, "project");
     const shownLeft = await child.until("core.grid", (grid) => grid?.cards.some((c) => c.id === "left"),
-      "the left sidebar did not return");
+      "the left sidebar did not return").catch(async (error) => {
+      const { values, project: selected, overridden, saving } = await child.get("core.settings");
+      const stored = readFileSync(join(secondRoot, ".soksak", "settings.json"), "utf8");
+      throw new Error(`${error.message}; left ${values.left}, project ${selected}, overridden ${overridden}, ` +
+        `saving ${saving}, stored ${stored}`);
+    });
     assert.equal(shownLeft.cards.find((c) => c.id === "left").width, 215);
     const afterOpen = (await child.get("host.window")).frame;
     assert.deepEqual(afterOpen, { ...beforeClose, x: beforeClose.x + 30, y: beforeClose.y + 20 },
