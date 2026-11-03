@@ -546,7 +546,8 @@
               "draw",
               "drawn",
               "frame",
-              "presented"
+              "presented",
+              "cancelled"
             ]
           },
           "id": {

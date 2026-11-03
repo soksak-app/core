@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F413: The event catalog declares the `cancelled` phase of `page.trace.layout`.
 - F412: The hosts configure a raster that changed while a window was off screen when its region draws again, so a terminal draws after a transition to full screen.
 - F409: The window checks read the entries that they name, wait for the status that they judge, and cover the installed `term` plugin.
 - F408: A section with an integer height gives way when the sidebar is shorter, and a fill section keeps its head and the minimum height, so a section view stays inside its sidebar at a large text size.
