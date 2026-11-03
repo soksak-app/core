@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F435: Record the view benchmarks after F444 at load average 12 to 28 and close the single card position failure as not reproduced.
+- F502-1: `docs/plans/mygo-host.md` proposes a third host on the framework mygo that draws the workbench in native UI, with its goals, the three-host benchmark B3, the framework changes, the decisions and the implementation items F502-2 to F502-27-1.
 - F503: The platform scope of the native surfaces specification states the fork of Wails v3 that the Wails host pins and what it changes, and the comment of its `go.mod` replacement names the main-thread change.
 - F444: A surface synchronization request carries the start values of a view only when the host does not hold them, and the host keeps the last received values. Red and Green at the page and both hosts; the time from an input tick to a transaction fell from 7.2 to 3.1 ms on Wails and from 4.6 to 2.4 ms on Tauri.
 - F443: Record the Wails host path above the floor of a view drag as an open item; a one-turn response was measured and not adopted.
