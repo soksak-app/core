@@ -390,6 +390,25 @@ func TestSurfaceIsNamedWhenItsNativeViewIsCreated(t *testing.T) {
 	}
 }
 
+// contract: surface.sync.closed-window-creates-nothing
+func TestClosedWindowCreatesNoSurface(t *testing.T) {
+	s := &Surfaces{named: map[uintptr]string{}, closed: true}
+	created := false
+	_, err := s.createRegisteredSurface(func(step func()) { step() }, "tab-6", func() (unsafe.Pointer, error) {
+		created = true
+		return unsafe.Pointer(new(int)), nil
+	})
+	if created {
+		t.Fatal("a closed window created a native surface")
+	}
+	if err == nil || err.Error() != "project window is closed" {
+		t.Fatalf("closed window creation: err %v", err)
+	}
+	if len(s.named) != 0 {
+		t.Fatalf("closed window creation named %d surfaces", len(s.named))
+	}
+}
+
 // contract: exposure.host-window.unregistered-surface-named
 func TestUnregisteredNativeSurfaceViewFailsWithItsAddress(t *testing.T) {
 	named := map[uint64]string{7: "tab-2"}

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F420: 창이 닫힐 때 진행 중인 배치 요청은 두 host에서 표면을 만들지 않고 `project window is closed`로 실패한다.
 - F419: `host.window.presented`가 표시 중인 modal을 기다리므로 `displayed`가 modal을 보여 주는 갱신을 가리킨다.
 - F418: `e2e/hosts.test.mjs`의 드래그 검사가 표면 frame을 위치 순서로 정렬해 비교한다. `host.window`의 그리기 순서와 배치 요청의 순서는 서로 관련이 없기 때문이다.
 - F417: 주입된 press가 전달 전에 target을 읽으므로, 그 사이의 layout이 card의 focus를 잃게 하지 않는다.

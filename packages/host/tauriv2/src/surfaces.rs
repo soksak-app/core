@@ -1509,10 +1509,13 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 let id = s.id.clone();
                 let dispatch =
                     surface_dispatch(window, Some(ticket), "sync", "sync-surface-create-ui");
+                let owner = window.clone();
                 let handle = exposure::on_main(window, move || {
                     surface_dispatch_result(dispatch, || {
-                        create_registered_surface(&names, &hosts.surface_hosts, &id, || {
-                            platform.create_surface(main_handle)
+                        create_in_open_window(&window_data(&owner), || {
+                            create_registered_surface(&names, &hosts.surface_hosts, &id, || {
+                                platform.create_surface(main_handle)
+                            })
                         })
                     })
                 })?;
@@ -2134,6 +2137,17 @@ pub fn create_named_surface(
         .unwrap_or_else(PoisonError::into_inner)
         .insert(handle, id.to_string());
     Ok(handle)
+}
+
+/// Runs the creation of a native surface of an open window. A layout request of the page can still be in flight when
+/// the window closes, and a surface created after that close has nothing that closes it, so a closed window fails with
+/// the error of its records.
+pub(crate) fn create_in_open_window(
+    records: &Result<Arc<crate::windows::WindowData>, String>,
+    create: impl FnOnce() -> Result<Handle, String>,
+) -> Result<Handle, String> {
+    records.as_ref().map_err(Clone::clone)?;
+    create()
 }
 
 /// Creates the native surface of `id` and registers it in `named` and `hosts` in one step of the main thread. The window

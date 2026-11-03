@@ -427,6 +427,9 @@ var nativeViews = map[uint64]*nativeWebview{}
 var nativeSerial uint64
 
 type Surfaces struct {
+	// closed is set on the UI thread when the window closes. A layout request of the page that is still in flight then
+	// creates no surface, because nothing would close it.
+	closed bool
 	// drawingMu orders the drawing messages to the suppliers of image regions (sendImageDrawing).
 	drawingMu sync.Mutex
 	// prepareNative registers the main web view and prepares the window. It is decided when the window is created.
@@ -1618,6 +1621,10 @@ func (s *Surfaces) createRegisteredSurface(run func(func()), id string, create f
 	var view *nativeWebview
 	var err error
 	run(func() {
+		if s.closed {
+			err = errWindowClosed
+			return
+		}
 		view, err = createLogicalSurface(create, s, id)
 		if err == nil {
 			s.named[uintptr(view.handle)] = id

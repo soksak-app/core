@@ -91,6 +91,9 @@ type Host struct {
 // so none of them can succeed.
 var errNoWindow = errors.New("the main window is gone")
 
+// errWindowClosed is the failure of a request of the page that still runs when its window closes.
+var errWindowClosed = errors.New("project window is closed")
+
 // UseNativeWindow reads the native window of the window name with native in one step of the UI thread that invoke runs, and runs use with that window.
 // The destroy of Wails closes the window on the UI thread and sets the native window to nil, so a window closed before that step
 // is nil. For that window, it does not run use and returns the error 1003 of a window that does not exist. Native code does not receive a closed
@@ -642,6 +645,7 @@ func (s *Surfaces) close() {
 	// A window that ends keeps no tab, so a removal that asked it is allowed.
 	s.host.removals.Abandon(s.name)
 	application.InvokeSync(func() {
+		s.closed = true
 		cancelLayout(s, s.window)
 		// The close ends the observation and not the window, which Wails may have released.
 		system.EndResponderObservation(s.responderObservation)

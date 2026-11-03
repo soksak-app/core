@@ -10,10 +10,10 @@ use super::{
     Running, SurfaceComposition, SurfaceDispatchMode, abandon_waits_then_cancel_layout,
     cancel_layout_after_setup_error, clear_page_compositions, close_registered_surface,
     commit_layout_after_root_joins, committed_view_updates, complete_layout_presentation,
-    create_registered_surface, mark_first_commit, prepare_surface_visibility, pressed_surface,
-    read_press_then_deliver, removed_surfaces, surface_dispatch_clock_from,
-    surface_dispatch_context_with, surface_dispatch_fields, surface_dispatch_result_with,
-    with_registered_surface,
+    create_in_open_window, create_registered_surface, mark_first_commit,
+    prepare_surface_visibility, pressed_surface, read_press_then_deliver, removed_surfaces,
+    surface_dispatch_clock_from, surface_dispatch_context_with, surface_dispatch_fields,
+    surface_dispatch_result_with, with_registered_surface,
 };
 
 mod declaration_table {
@@ -637,6 +637,18 @@ fn dom_failure_skips_raster_and_dom_and_raster_errors_are_preserved() {
 }
 
 // contract: exposure.host-window.reads-during-surface-creation
+// contract: surface.sync.closed-window-creates-nothing
+#[test]
+fn a_closed_window_creates_no_surface() {
+    let mut created = false;
+    let result = create_in_open_window(&Err("project window is closed".to_string()), || {
+        created = true;
+        Ok(7usize)
+    });
+    assert!(!created, "a closed window created a native surface");
+    assert_eq!(result, Err("project window is closed".to_string()));
+}
+
 #[test]
 fn a_status_read_during_surface_creation_finds_the_registered_surface() {
     // The window status reads the surface ids of the native views from the surface_hosts registry. Creation names the
