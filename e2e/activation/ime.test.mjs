@@ -2,7 +2,7 @@
 //
 // The OS input method serves only the key window of the active application, so this check activates the app and takes the user's focus,
 // and switches the input source through diagnostics.input.source of the diagnostic build. At the end it restores the previous input source.
-// It is not part of the default window check (pnpm -F @soksak/e2e verify); a run that the user approved runs it
+// It is not part of the default window check (make e2e); a run that the user approved runs it
 // only through make e2e-activation.
 import assert from "node:assert/strict";
 import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

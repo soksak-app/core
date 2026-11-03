@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F298-9: Every script of `e2e/package.json` that drives a running application is reached through a make target whose name starts with `e2e`, and `scripts/test/test-kinds.test.mjs` fails on a script without one.
 - F374-7: A frame sends the view no screen message since VT S125; the measurement of VT S130 is stated.
 - F397: `log.closed` names what requested the end of the process before quit runs.
 - F398: The failure of a close answer is written to the log before the closing entry ends.

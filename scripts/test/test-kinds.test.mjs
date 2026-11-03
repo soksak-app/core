@@ -67,6 +67,14 @@ test("the root make targets are the only entry points of the window checks", { t
   assert.deepEqual(scripts, [], "the root package declares a window-check entry point");
 });
 
+// Every script of the e2e package except its unit test script drives a running application.
+test("every script of the e2e package that drives an application is run by a root target with the e2e prefix", { timeout: 1000 }, () => {
+  const targets = rules(read("Makefile")).filter((rule) => rule.target.startsWith("e2e"));
+  const scripts = Object.keys(JSON.parse(read("e2e/package.json")).scripts).filter((name) => name !== "test");
+  const runs = (recipe, name) => recipe.split(/\s+/).some((word, index, words) => word === name && ["run", "--script"].includes(words[index - 1]));
+  assert.deepEqual(scripts.filter((name) => !targets.some((rule) => runs(rule.recipe, name))), [], "these scripts of e2e/package.json have no e2e target");
+});
+
 test("the test script of the e2e package runs only its unit test folder", { timeout: 1000 }, () => {
   assert.equal(JSON.parse(read("e2e/package.json")).scripts.test, "node --test test/");
 });

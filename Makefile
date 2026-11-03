@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls e2e-terminal-sidebar-current e2e-terminal-focus-current e2e-shutdown e2e-benchmark-view-drag e2e-benchmark-resize-catch-up e2e-benchmark-idle-tab e2e-benchmark-split-load e2e-repeat exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -495,6 +495,33 @@ e2e-real: $(E2E_BUILD)
 
 e2e-person: $(E2E_BUILD)
 	@node scripts/e2e-run.mjs --script verify:person
+
+# These targets run one observation, benchmark or repeat against applications that already run; they build and start nothing.
+e2e-terminal-sidebar-current:
+	@pnpm -F @soksak/e2e run verify:terminal-sidebar-current
+
+e2e-terminal-focus-current:
+	@pnpm -F @soksak/e2e run verify:terminal-focus-current
+
+e2e-shutdown:
+	@pnpm -F @soksak/e2e run verify:shutdown
+
+e2e-benchmark-view-drag:
+	@pnpm -F @soksak/e2e run benchmark:view-drag
+
+e2e-benchmark-resize-catch-up:
+	@pnpm -F @soksak/e2e run benchmark:resize-catch-up
+
+e2e-benchmark-idle-tab:
+	@pnpm -F @soksak/e2e run benchmark:idle-tab
+
+e2e-benchmark-split-load:
+	@pnpm -F @soksak/e2e run benchmark:split-load
+
+e2e-repeat:
+	@case "$(FILE)" in '') echo "e2e-repeat requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac
+	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "e2e-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
+	@pnpm -F @soksak/e2e run repeat --file '$(FILE)' --name '$(NAME)' --count $(COUNT)
 
 # The two-profile builds of the two apps and their sizes.
 examples-size: tauriv2-build tauriv2-build-release wailsv3-build-release wailsv3-build

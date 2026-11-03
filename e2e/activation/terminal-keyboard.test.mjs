@@ -2,7 +2,7 @@
 //
 // The terminal drawing region passes ordinary characters to the input method (input context). The OS input method answers only the key window of the active application,
 // and once the application has been activated it does not answer character keys that arrive at any other window. So this check
-// activates the app and takes the user's focus. It is not part of the default window check (pnpm -F @soksak/e2e verify);
+// activates the app and takes the user's focus. It is not part of the default window check (make e2e);
 // a run that the user approved runs it only through make e2e-activation.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";

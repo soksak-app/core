@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F298-9: 실행 중인 애플리케이션을 다루는 `e2e/package.json`의 모든 script는 이름이 `e2e`로 시작하는 make target으로 실행하며, `scripts/test/test-kinds.test.mjs`는 target이 없는 script에서 실패한다.
 - F374-7: VT S125부터 frame은 view에 screen 메시지를 보내지 않으며, VT S130 측정을 적었다.
 - F397: `log.closed`가 quit을 실행하기 전에 프로세스 종료를 요청한 곳을 말한다.
 - F398: 닫기 응답의 실패를 닫는 중 항목이 끝나기 전에 로그에 쓴다.
