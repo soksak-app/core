@@ -7,12 +7,12 @@ use std::thread;
 use std::time::Duration;
 
 use super::{
-    Running, SurfaceComposition, SurfaceDispatchMode, cancel_layout_after_setup_error,
-    clear_page_compositions, close_registered_surface, commit_layout_after_root_joins,
-    committed_view_updates, complete_layout_presentation, create_registered_surface,
-    mark_first_commit, prepare_surface_visibility, pressed_surface, removed_surfaces,
-    surface_dispatch_clock_from, surface_dispatch_context_with, surface_dispatch_fields,
-    surface_dispatch_result_with, with_registered_surface,
+    Running, SurfaceComposition, SurfaceDispatchMode, abandon_waits_then_cancel_layout,
+    cancel_layout_after_setup_error, clear_page_compositions, close_registered_surface,
+    commit_layout_after_root_joins, committed_view_updates, complete_layout_presentation,
+    create_registered_surface, mark_first_commit, prepare_surface_visibility, pressed_surface,
+    removed_surfaces, surface_dispatch_clock_from, surface_dispatch_context_with,
+    surface_dispatch_fields, surface_dispatch_result_with, with_registered_surface,
 };
 
 mod declaration_table {
@@ -975,9 +975,31 @@ fn an_image_region_declares_its_presentation_mode() {
     );
 }
 
+// contract: surface-layout.page-cancels-preparation
 #[test]
 fn the_page_can_cancel_a_preparation() {
     assert!(crate::bindings::command_names().contains(&"cancel_surfaces"));
     let request: super::CancelRequest = serde_json::from_str(r#"{"ticket":42}"#).unwrap();
     assert_eq!(request.ticket, 42);
+}
+
+// contract: surface-layout.page-cancels-preparation
+#[test]
+fn a_cancelled_preparation_abandons_its_waits_and_then_cancels_its_layout() {
+    let steps = Mutex::new(Vec::new());
+    let result = abandon_waits_then_cancel_layout(
+        || {
+            steps.lock().unwrap().push("abandon");
+            Err("abandon failed".to_string())
+        },
+        || {
+            steps.lock().unwrap().push("cancel");
+            Err("cancel failed".to_string())
+        },
+    );
+    assert_eq!(*steps.lock().unwrap(), ["abandon", "cancel"]);
+    assert_eq!(
+        result,
+        Err("abandon failed; cancelling layout: cancel failed".to_string())
+    );
 }

@@ -1007,9 +1007,18 @@ pub(crate) fn cancel(window: &Window, request: CancelRequest) -> Result<(), Stri
 }
 
 fn cancel_layout_with_waits(window: &Window, ticket: u64) -> Result<(), String> {
-    let abandon = documents::abandon_layout_presentation_waits(window, ticket);
-    let cancel = cancel_window_layout_ticket(window, ticket);
-    match (abandon, cancel) {
+    abandon_waits_then_cancel_layout(
+        || documents::abandon_layout_presentation_waits(window, ticket),
+        || cancel_window_layout_ticket(window, ticket),
+    )
+}
+
+/// Runs both steps also when the first fails, because a failed abandon leaves the layout open.
+fn abandon_waits_then_cancel_layout(
+    abandon: impl FnOnce() -> Result<(), String>,
+    cancel: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    match (abandon(), cancel()) {
         (Ok(()), Ok(())) => Ok(()),
         (Err(abandon), Ok(())) => Err(abandon),
         (Ok(()), Err(cancel)) => Err(cancel),

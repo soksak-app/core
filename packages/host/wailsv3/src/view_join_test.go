@@ -283,7 +283,7 @@ func TestOlderViewPresentationCannotEndANewerJoin(t *testing.T) {
 	}
 }
 
-// contract: view.presentation-wait.cancel-clears-ticket
+// contract: view.presentation-wait.cancel-clears-ticket, surface-layout.page-cancels-preparation
 func TestLayoutCancellationClearsItsJoinWithoutPresentationAbandonment(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 	var events []string
@@ -563,6 +563,7 @@ func TestTheLimitOfAPresentedJoinChangesNothing(t *testing.T) {
 	}
 }
 
+// contract: surface-layout.page-cancels-preparation
 func TestCancelSurfacesWithoutAWindowIsRefused(t *testing.T) {
 	s, _, _ := newLifecycleSurfaces(t, &fakeClock{})
 	s.window = nil

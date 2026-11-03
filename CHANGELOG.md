@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-70-5: The cancellation of a preparation has declaring contract tests in both hosts, and the Tauri host runs both of its steps also when the first fails.
 - F400: A host contract run removes its build folder when it ends.
 - F292-70-4: A preparation that the page does not present is cancelled with `cancelSurfaces`, so it no longer queues the preparations of other windows.
 - F399: The end of a store whose document loaded nothing also ends its network process, so no process writes into the folder after the end.

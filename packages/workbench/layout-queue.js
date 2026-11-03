@@ -1,3 +1,5 @@
+import { errorText } from "./error-text.js";
+
 // Runs presentations one at a time, and after that lets only the newest layout wait.
 // One presentation takes at least one screen frame, so pointer input can arrive faster than presentations.
 // If every waiting layout ran in turn, the screen would lag behind the pointer by the number of queued layouts.
@@ -87,7 +89,7 @@ export async function drawPrepared({ epoch, current, prepare, draw, frame, prese
     try {
       await cancel();
     } catch (failure) {
-      throw new Error(`${error?.message ?? error}; cancelling layout: ${failure?.message ?? failure}`);
+      throw new Error(`${errorText(error)}; cancelling layout: ${errorText(failure)}`, { cause: error });
     }
     throw error;
   }
