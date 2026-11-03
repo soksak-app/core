@@ -5,7 +5,9 @@ LIBRARY := $(LIBDIR)/libsoksak-process-identity.a
 OBJECT := $(BUILD)/process_identity.o
 TEST_EXECUTABLE := $(BUILD)/process_identity_test
 MINIMUM := -mmacosx-version-min=14.4
-CFLAGS := -fmodules -Wall -Werror -O2 $(MINIMUM)
+# The architecture of the release platform darwin-arm64, as in the Makefile of native/darwin.
+ARCH := arm64
+CFLAGS := -arch $(ARCH) -fmodules -Wall -Werror -O2 $(MINIMUM)
 FRAMEWORKS := -framework ApplicationServices -framework CoreServices
 
 .PHONY: all test test-process-identity test-package-relocation repeat clean

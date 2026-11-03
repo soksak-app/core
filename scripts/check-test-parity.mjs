@@ -40,7 +40,7 @@ const MATRIX = [
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
-  lane("native library build and pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs", "scripts/test/native-offline.test.mjs"], { testLanguage: "js-ts" }),
+  lane("native library build and pkg-config", "build", ["native/darwin/Makefile", "native/darwin/process-identity/Makefile"], ["scripts/test/native-pkgconfig.test.mjs", "scripts/test/native-offline.test.mjs", "scripts/test/native-architecture.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
     "scripts/check-e2e.mjs",
     "scripts/check-e2e-host-parity.mjs",
@@ -252,6 +252,19 @@ const FEATURE_LINKS = [
       { file: "scripts/test/check-host-parity.test.mjs", id: "a method of the diagnostic builds table that no host declares fails" },
     ],
     expected: "The host parity check fails on a diagnostic method of a host that the diagnostic builds table of the endpoint specification does not list and on a row of that table that no host declares.",
+    levels: ["unit"],
+  },
+  {
+    id: "F505",
+    implementation: [
+      { file: "native/darwin/Makefile", symbol: "-DCMAKE_OSX_ARCHITECTURES=$(ARCH)" },
+      { file: "native/darwin/process-identity/Makefile", symbol: "CFLAGS := -arch $(ARCH)" },
+    ],
+    tests: [
+      { file: "scripts/test/native-architecture.test.mjs", id: "the library build compiles every object and configures ZXing for arm64 in a new build folder" },
+      { file: "scripts/test/native-architecture.test.mjs", id: "a ZXing library older than the Makefile is built again" },
+    ],
+    expected: "The native library builds every object and ZXing for arm64, the architecture of the release platform darwin-arm64, and configures ZXing in a new build folder whenever it builds it.",
     levels: ["unit"],
   },
   {

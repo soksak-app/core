@@ -99,6 +99,9 @@ ZXING_LIBRARY := $(ZXING_INSTALL)/lib/libZXing.a
 # The same minimum version is also put in Cflags and Libs of the .pc so that the builds that use it compile and link
 # with it.
 MINIMUM    := -mmacosx-version-min=14.4
+# The architecture of the release platform darwin-arm64. Every clang call and the ZXing configure name it, so a make that
+# runs as a translated process builds no part for another architecture.
+ARCH       := arm64
 
 ifneq ($(OFFLINE),0)
 ifneq ($(OFFLINE),1)
@@ -106,7 +109,7 @@ $(error OFFLINE must be 0 or 1 (got '$(OFFLINE)'))
 endif
 endif
 
-CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
+CFLAGS     := -arch $(ARCH) -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 DIAGNOSTIC ?= 1
 ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
@@ -152,9 +155,11 @@ $(ZXING_SOURCE)/LICENSE: $(ZXING_RELEASE_FILE) | $(BUILD)
 	  fi
 	@test -f $@
 
-$(ZXING_LIBRARY): $(ZXING_SOURCE)/LICENSE
+# The configure starts from a new build folder, so no value that an earlier configure detected remains in its cache.
+$(ZXING_LIBRARY): $(ZXING_SOURCE)/LICENSE Makefile
+	@rm -rf $(ZXING_BUILD) $(ZXING_INSTALL)
 	@cmake -S $(ZXING_SOURCE)/core -B $(ZXING_BUILD) \
-	  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=14.4 \
+	  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=$(ARCH) -DCMAKE_OSX_DEPLOYMENT_TARGET=14.4 \
 	  -DCMAKE_INSTALL_PREFIX=$(ZXING_INSTALL) -DBUILD_SHARED_LIBS=OFF \
 	  -DZXING_READERS=ON -DZXING_WRITERS=OFF -DZXING_C_API=ON \
 	  -DZXING_ENABLE_1D=OFF -DZXING_ENABLE_AZTEC=OFF -DZXING_ENABLE_DATAMATRIX=OFF \
@@ -438,7 +443,7 @@ test-ime-cli: $(BUILD)/ime_cli_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) ime_cli_test
 
 $(BUILD)/ime_cli_test: tests/ime_cli_test.m tests/support/ime_cli.m tests/support/ime_cli.h Makefile | $(BUILD)
-	@clang -fblocks -Wall -Werror -O2 -mmacosx-version-min=14.4 -I$(CURDIR)/tests $< tests/support/ime_cli.m -o $@
+	@clang $(CFLAGS) -I$(CURDIR)/tests $< tests/support/ime_cli.m -o $@
 
 # Repeat the focused activation variant and preserve each child output plus an independent source read after process exit.
 e2e-activation-backspace-repeat: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
