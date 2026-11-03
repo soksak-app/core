@@ -416,13 +416,12 @@ type WindowOverlayRequest struct {
 	Visible *bool   `json:"visible"`
 }
 
-// nativeWebviewOptions are the creation values of surface and modal web views.
+// nativeWebviewOptions are the creation values of modal web views.
 type nativeWebviewOptions struct {
 	URL                 string
 	Name                string
 	X, Y, Width, Height float64
 	Hidden, Transparent bool
-	FillParent          bool
 }
 
 // nativeWebview is a web view that the app created. The handle and the registry are read and changed on the AppKit main thread.
@@ -1662,7 +1661,6 @@ func newNativeWebview(owner *Surfaces, options nativeWebviewOptions) (*nativeWeb
 			Script:     webviewBootstrap + "\n" + backgroundScript,
 			X:          options.X, Y: options.Y, Width: options.Width, Height: options.Height,
 			Hidden: options.Hidden, Transparent: options.Transparent,
-			FillParent: options.FillParent,
 			Receive:    dispatchNative,
 			Committed:  committedNative,
 			Terminated: terminatedNative,

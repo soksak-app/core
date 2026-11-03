@@ -160,7 +160,6 @@ pub fn place(webview: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) {
     unsafe { webviewSetFrame(webview.inner().cast(), x, y, w, h) }
 }
 
-/// Registers a content webview in the common container with device pixel coordinates.
 pub fn hidden(webview: &PlatformWebview, hidden: bool) {
     unsafe extern "C" {
         fn webviewSetSurfaceHidden(view: *mut c_void, hidden: bool);

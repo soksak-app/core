@@ -4,6 +4,7 @@
 #import <CoreVideo/CoreVideo.h>
 #import "image_region.h"
 #import "webview_geometry.h"
+#import "support/surface_view.h"
 
 static void receive(void *context, const char *event) { (void)context; (void)event; }
 
@@ -15,16 +16,16 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
     WKWebView *main = [[WKWebView alloc] initWithFrame:window.contentView.bounds];
-    WKWebView *surface = [[WKWebView alloc] initWithFrame:window.contentView.bounds];
+    WKWebView *view = [[WKWebView alloc] initWithFrame:NSZeroRect];
     [window.contentView addSubview:main];
-    [window.contentView addSubview:surface];
-    void *composition = sp_surface_create(main);
-    webviewAttachSurface(surface, main);
+    void *surface = sp_surface_create(main);
+    BOOL placed = surface && SPPlaceSurfaceView(surface, view);
     webviewSetFrame(surface, 0, 0, 100, 100);
-    void *region = sp_region_create(surface, "nonce", receive, NULL);
-    sp_region_place(region, 0, 0, 0, 0, true);
+    webviewSetSurfaceHidden(surface, false);
+    void *region = placed ? sp_region_create(surface, "nonce", receive, NULL) : NULL;
+    if (region) sp_region_place(region, 0, 0, 0, 0, true);
     double raster[3] = {0};
-    if (!composition || !region || !sp_region_raster(region, raster)) {
+    if (!placed || !region || !sp_region_raster(region, raster)) {
         fprintf(stderr, "FAIL: image nonce fixture has no raster\n");
         return 1;
     }
@@ -54,8 +55,9 @@ int main(void) { @autoreleasepool {
     CFRelease(held);
     CFRelease(image);
     sp_region_close(region);
-    sp_surface_close(composition);
-    [surface removeFromSuperview]; [surface release];
+    sp_surface_unplace_view(view);
+    [view removeFromSuperview]; [view release];
+    sp_surface_close(surface);
     [main removeFromSuperview]; [main release];
     [window close]; [window release];
     return failures ? 1 : 0;

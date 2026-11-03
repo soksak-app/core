@@ -14,6 +14,7 @@
 #import "support/records.h"
 #import "webview_geometry.h"
 #import "webview_input.h"
+#import "support/surface_view.h"
 
 /// An input context that takes every key and answers nothing, as the input method does for a key outside the key window
 /// of the active application after the application was active once.
@@ -266,14 +267,13 @@ int main(int argc, char **argv) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [window.contentView addSubview:main];
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
-    [window.contentView addSubview:surface];
+    WKWebView *page = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
     [window orderBack:nil];
-    void *logicalSurface = sp_surface_create(main);
-    check(logicalSurface != NULL,
-        @"the main webview creates the composition before a surface webview is attached");
-    webviewAttachSurface(surface, main);
+    void *surface = sp_surface_create(main);
+    check(surface != NULL, @"the main webview creates the surface");
+    check(SPPlaceSurfaceView(surface, page), @"the view webview is placed in the surface");
     webviewSetFrame(surface, 0, 0, 500, 400);
+    webviewSetSurfaceHidden(surface, false);
     NSView *nativePlane = (NSView *)webviewSurfaceNativePlane(surface);
 
     // TEST 1: orientation and size - checks layer properties and surface ID
@@ -1401,7 +1401,8 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region17);
     }
 
-    // TEST 18: checks that the clip view is below the DOM plane within the native plane of SurfaceHost
+    // TEST 18: checks that the clip view is inside the native plane of SurfaceHost and that the native plane is above the
+    // view page web view
     {
         [collectedEvents removeAllObjects];
 
@@ -1416,17 +1417,17 @@ int main(int argc, char **argv) { @autoreleasepool {
             @"TEST 18: region has a non-WebView superview (clipView)");
 
         NSView *surfaceSuperSuperview = clipView.superview;
-        check(surfaceSuperSuperview == nativePlane && nativePlane.superview == surface.superview,
+        check(surfaceSuperSuperview == nativePlane && nativePlane.superview == page.superview,
             @"TEST 18: clipView is inside the surface host native plane");
 
-        // Inside SurfaceHost the DOM web view is above the native plane,
-        // and in the outer compositor the whole SurfaceHost is above the application DOM backing.
-        NSArray *subviews = surface.superview.subviews;
-        NSUInteger surfaceIndex = [subviews indexOfObject:surface];
+        // For a view surface the view regions are above the view page DOM (docs/spec/surface-composition.md), so inside
+        // SurfaceHost the native plane that holds the regions is above the view page web view.
+        NSArray *subviews = page.superview.subviews;
+        NSUInteger pageIndex = [subviews indexOfObject:page];
         NSUInteger nativeIndex = [subviews indexOfObject:nativePlane];
-        check(nativeIndex != NSNotFound && surfaceIndex != NSNotFound && nativeIndex < surfaceIndex,
-            [NSString stringWithFormat:@"TEST 18: native plane is below DOM plane inside SurfaceHost (native:%lu, DOM:%lu)",
-                (unsigned long)nativeIndex, (unsigned long)surfaceIndex]);
+        check(nativeIndex != NSNotFound && pageIndex != NSNotFound && nativeIndex > pageIndex,
+            [NSString stringWithFormat:@"TEST 18: native plane is above the view page inside SurfaceHost (native:%lu, page:%lu)",
+                (unsigned long)nativeIndex, (unsigned long)pageIndex]);
 
         sp_region_close(region18);
     }
@@ -1528,11 +1529,11 @@ int main(int argc, char **argv) { @autoreleasepool {
     // TEST 22: A region placed on a hidden surface is shown together when the surface is shown again.
     {
         void *region22 = sp_region_create(surface, "test22", testEvent, NULL);
-        [surface setHidden:YES];
+        webviewSetSurfaceHidden(surface, true);
         sp_region_place(region22, 10, 10, 10, 10, true);
         NSView *regionView = (NSView *)region22;
         check(!regionView.hidden, @"TEST 22: region keeps its wanted visibility while its surface is hidden");
-        [surface setHidden:NO];
+        webviewSetSurfaceHidden(surface, false);
         check(!regionView.isHiddenOrHasHiddenAncestor,
             @"TEST 22: region becomes visible when its surface is shown again");
         sp_region_close(region22);
@@ -1664,9 +1665,11 @@ int main(int argc, char **argv) { @autoreleasepool {
     // The region of a surface that has not received its first placement has no raster size and reports that the surface is not placed.
     // When the surface is placed, both values appear together.
     {
-        WKWebView *unplaced = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
-        [window.contentView addSubview:unplaced];
-        webviewAttachSurface(unplaced, main);
+        WKWebView *unplacedPage = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+        void *unplaced = sp_surface_create(main);
+        check(unplaced && SPPlaceSurfaceView(unplaced, unplacedPage),
+            @"unplaced surface: the view webview is placed in a surface that has no frame yet");
+        webviewSetSurfaceHidden(unplaced, false);
         void *region = sp_region_create(unplaced, "unplaced", testEvent, NULL);
         sp_region_place(region, 0, 0, 0, 0, true);
         double raster[3] = {0};
@@ -1681,6 +1684,9 @@ int main(int argc, char **argv) { @autoreleasepool {
             [NSString stringWithFormat:@"unplaced surface: placing the surface gives the region a %.0fx%.0f raster (got %.0fx%.0f)",
                 expectedWidth, expectedHeight, raster[0], raster[1]]);
         sp_region_close(region);
+        sp_surface_unplace_view(unplacedPage);
+        [unplacedPage removeFromSuperview];
+        sp_surface_close(unplaced);
     }
 
     // A pointer press inside the region frame is not reported as image region focus loss. The pointer passes through this view
@@ -1688,13 +1694,13 @@ int main(int argc, char **argv) { @autoreleasepool {
     // command returns it to the region. If the resign of that round trip were reported to the ?1004 child, the child would cancel a drag
     // in progress, so a resign while the press point is inside the region is not a focus change.
     if (activation) {
-        check(webviewInputRegister(surface),
+        check(webviewInputRegister(page),
             @"press focus: logical page registers the production pointer receipt path before navigation");
-        check(webviewIgnorePageFocus(surface),
+        check(webviewIgnorePageFocus(page),
             @"press focus: logical page disables automatic focus transfer before navigation");
         InputPageLoadHandler *inputPageLoad97 = [[[InputPageLoadHandler alloc] init] autorelease];
-        surface.navigationDelegate = inputPageLoad97;
-        [surface loadHTMLString:@"<!doctype html><html><body style='margin:0;width:500px;height:400px'></body></html>" baseURL:nil];
+        page.navigationDelegate = inputPageLoad97;
+        [page loadHTMLString:@"<!doctype html><html><body style='margin:0;width:500px;height:400px'></body></html>" baseURL:nil];
         NSDate *inputPageDeadline97 = [NSDate dateWithTimeIntervalSinceNow:5.0];
         while (!inputPageLoad97.finished && inputPageDeadline97.timeIntervalSinceNow > 0) {
             [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
@@ -1702,14 +1708,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         }
         check(inputPageLoad97.finished && inputPageLoad97.error == nil,
             [NSString stringWithFormat:@"press focus: the registered logical page finishes loading (%@)", inputPageLoad97.error]);
-        surface.navigationDelegate = nil;
-        check(sp_surface_place_view(logicalSurface, surface),
+        page.navigationDelegate = nil;
+        check(sp_surface_place_view(surface, page),
             @"press focus: the view webview is placed in its logical surface host");
-        webviewSetFrame(logicalSurface, 0, 0, 500, 400);
-        webviewSetSurfaceHidden(logicalSurface, false);
+        webviewSetFrame(surface, 0, 0, 500, 400);
+        webviewSetSurfaceHidden(surface, false);
 
         // This region receives the production logical surface handle, not its child WKWebView.
-        void *logicalRegion97 = sp_region_create(logicalSurface, "logical-release", testEvent, NULL);
+        void *logicalRegion97 = sp_region_create(surface, "logical-release", testEvent, NULL);
         sp_region_place(logicalRegion97, 100, 150, 100, 50, true);
         sp_region_focus(logicalRegion97);
         check(window.firstResponder == (NSResponder *)logicalRegion97,
@@ -1720,12 +1726,12 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSRect logicalFrame97 = [logicalRegionView97 convertRect:logicalRegionView97.bounds toView:nil];
         NSPoint logicalPoint97 = NSMakePoint(NSMidX(logicalFrame97), NSMidY(logicalFrame97));
 
-        WKUserContentController *focusController97 = surface.configuration.userContentController;
+        WKUserContentController *focusController97 = page.configuration.userContentController;
         PointerFocusMessageHandler *focusHandler97 = [[[PointerFocusMessageHandler alloc] init] autorelease];
         focusHandler97.region = logicalRegion97;
         [focusController97 addScriptMessageHandler:focusHandler97 name:@"f97Focus"];
         __block BOOL listenerReady97 = NO;
-        [surface evaluateJavaScript:@"window.__f97Focus = () => webkit.messageHandlers.f97Focus.postMessage('focus'); document.addEventListener('pointerdown', window.__f97Focus, true)"
+        [page evaluateJavaScript:@"window.__f97Focus = () => webkit.messageHandlers.f97Focus.postMessage('focus'); document.addEventListener('pointerdown', window.__f97Focus, true)"
             completionHandler:^(id result, NSError *error) {
                 (void)result;
                 check(error == nil, [NSString stringWithFormat:@"press focus: logical page installs its focus callback (%@)", error]);
@@ -1884,10 +1890,10 @@ int main(int argc, char **argv) { @autoreleasepool {
             && window.firstResponder == (NSResponder *)logicalRegion97,
             [NSString stringWithFormat:@"press focus: production receipt phase three preserves logical region focus after its queued responder restoration (%@, %@)",
                 collectedEvents, NSStringFromClass(window.firstResponder.class)]);
-        [surface evaluateJavaScript:@"document.removeEventListener('pointerdown', window.__f97Focus, true); delete window.__f97Focus"
+        [page evaluateJavaScript:@"document.removeEventListener('pointerdown', window.__f97Focus, true); delete window.__f97Focus"
             completionHandler:^(id result, NSError *error) { (void)result; (void)error; }];
         [focusController97 removeScriptMessageHandlerForName:@"f97Focus"];
-        webviewInputUnregister(surface);
+        webviewInputUnregister(page);
         sp_region_close(logicalRegion97);
 
         void *region15 = sp_region_create(surface, "test15", testEvent, NULL);
@@ -1945,12 +1951,12 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSEvent *upRoundTrip15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:inside15
             modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil eventNumber:15 clickCount:1 pressure:0];
-        WKUserContentController *focusController15 = surface.configuration.userContentController;
+        WKUserContentController *focusController15 = page.configuration.userContentController;
         PointerFocusMessageHandler *focusHandler15 = [[[PointerFocusMessageHandler alloc] init] autorelease];
         focusHandler15.region = region15;
         [focusController15 addScriptMessageHandler:focusHandler15 name:@"f89Focus"];
         __block BOOL focusListenerReady15 = NO;
-        [surface evaluateJavaScript:@"window.__f89Focus = () => webkit.messageHandlers.f89Focus.postMessage('focus'); document.addEventListener('pointerdown', window.__f89Focus, true)"
+        [page evaluateJavaScript:@"window.__f89Focus = () => webkit.messageHandlers.f89Focus.postMessage('focus'); document.addEventListener('pointerdown', window.__f89Focus, true)"
             completionHandler:^(id result, NSError *error) {
                 (void)result;
                 check(error == nil, [NSString stringWithFormat:@"press focus: the page installs its focus command listener (%@)", error]);
@@ -2040,7 +2046,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             [NSString stringWithFormat:@"press focus: same-region AppKit release keeps the region first responder (got %@)",
                 NSStringFromClass(window.firstResponder.class)]);
         __block BOOL focusListenerRemoved15 = NO;
-        [surface evaluateJavaScript:@"document.removeEventListener('pointerdown', window.__f89Focus, true); delete window.__f89Focus"
+        [page evaluateJavaScript:@"document.removeEventListener('pointerdown', window.__f89Focus, true); delete window.__f89Focus"
             completionHandler:^(id result, NSError *error) {
                 (void)result;
                 check(error == nil, [NSString stringWithFormat:@"press focus: the page removes its test focus listener (%@)", error]);
@@ -2136,12 +2142,12 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         // An explicit document focus request after the click still transfers keyboard focus away from the region.
         [collectedEvents removeAllObjects];
-        [window makeFirstResponder:surface];
+        [window makeFirstResponder:page];
         BOOL reportedDocumentFocusLoss15 = NO;
         for (NSString *eventStr in collectedEvents) {
             if ([eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) reportedDocumentFocusLoss15 = YES;
         }
-        check(reportedDocumentFocusLoss15 && window.firstResponder == surface,
+        check(reportedDocumentFocusLoss15 && window.firstResponder == page,
             @"press focus: an explicit document focus request after release is not suppressed by the old press");
 
         // A press outside the region is a real focus move, so it is reported as is. This is a control against over-suppression.
@@ -2347,19 +2353,19 @@ int main(int argc, char **argv) { @autoreleasepool {
     // Run the asynchronous direct-input contract last so its neutral current-event control does not affect the
     // separate physical AppKit event checks above.
     if (activation) {
-        void *logicalRegion = sp_region_create(logicalSurface, "logical-direct-focus", testEvent, NULL);
+        void *logicalRegion = sp_region_create(surface, "logical-direct-focus", testEvent, NULL);
         sp_region_place(logicalRegion, 100, 150, 100, 50, true);
         sp_region_focus(logicalRegion);
         [NSApp sendEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint
             modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil subtype:0 data1:0 data2:0]];
 
-        WKUserContentController *controller = surface.configuration.userContentController;
+        WKUserContentController *controller = page.configuration.userContentController;
         PointerFocusMessageHandler *handler = [[[PointerFocusMessageHandler alloc] init] autorelease];
         handler.region = logicalRegion;
         [controller addScriptMessageHandler:handler name:@"f97DirectFocus"];
         __block BOOL listenerReady = NO;
-        [surface evaluateJavaScript:@"window.__f97DirectFocus = () => webkit.messageHandlers.f97DirectFocus.postMessage('focus'); document.addEventListener('pointerdown', window.__f97DirectFocus, true)"
+        [page evaluateJavaScript:@"window.__f97DirectFocus = () => webkit.messageHandlers.f97DirectFocus.postMessage('focus'); document.addEventListener('pointerdown', window.__f97DirectFocus, true)"
             completionHandler:^(id result, NSError *error) {
                 (void)result;
                 check(error == nil, [NSString stringWithFormat:@"press focus: direct logical page listener loads (%@)", error]);
@@ -2405,7 +2411,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(!lost && window.firstResponder == (NSResponder *)logicalRegion,
             [NSString stringWithFormat:@"press focus: logical direct release retains the region responder (events %@)",
                 collectedEvents]);
-        [surface evaluateJavaScript:@"document.removeEventListener('pointerdown', window.__f97DirectFocus, true); delete window.__f97DirectFocus"
+        [page evaluateJavaScript:@"document.removeEventListener('pointerdown', window.__f97DirectFocus, true); delete window.__f97DirectFocus"
             completionHandler:^(id result, NSError *error) { (void)result; (void)error; }];
         [controller removeScriptMessageHandlerForName:@"f97DirectFocus"];
         sp_region_close(logicalRegion);

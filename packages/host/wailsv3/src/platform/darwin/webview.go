@@ -34,7 +34,7 @@ static void main_webviewSetSurfaceOverlays(void *view, const double *values, siz
 }
 
 void *nativeWebviewCreate(void *window, unsigned long long identifier, const char *name, const char *script,
-    double x, double y, double width, double height, bool hidden, bool transparent, bool fillParent);
+    double x, double y, double width, double height, bool hidden, bool transparent);
 bool nativeWebviewNavigate(void *view, const char *url);
 void nativeWebviewBounds(void *view, double x, double y, double width, double height);
 void nativeWebviewHidden(void *view, bool hidden);
@@ -167,7 +167,7 @@ func (implementation) CreateWebview(window unsafe.Pointer, options platform.Webv
 	defer C.free(unsafe.Pointer(name))
 	handle := C.nativeWebviewCreate(window, C.ulonglong(options.Identifier), name, script,
 		C.double(options.X), C.double(options.Y), C.double(options.Width), C.double(options.Height),
-		C.bool(options.Hidden), C.bool(options.Transparent), C.bool(options.FillParent))
+		C.bool(options.Hidden), C.bool(options.Transparent))
 	if handle == nil {
 		return nil, fmt.Errorf("cannot create a native webview in this window/WebKit")
 	}

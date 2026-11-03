@@ -84,8 +84,6 @@ type WebviewOptions struct {
 	Script              string
 	X, Y, Width, Height float64
 	Hidden, Transparent bool
-	// FillParent tells whether the view resizes with the size of its parent view.
-	FillParent bool
 	// Receive receives the messages that the document of the web view sent. It is called outside the UI thread.
 	Receive func(identifier uint64, body string)
 	// Committed receives that the web view started to show a new document. It is called outside the UI thread.

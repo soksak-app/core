@@ -1,5 +1,5 @@
 // Checks that a closed modal web view releases its input registration. The modal is created and closed with the calls that
-// the host makes for a modal that fills the window (nativeWebviewCreate with fillParent, FocusModal, nativeWebviewClose).
+// the host makes for a modal that fills the window (nativeWebviewCreate, FocusModal, nativeWebviewClose).
 // The count of input registrations after the close must equal the count before the modal was created. The check does not
 // activate the application.
 #import <Cocoa/Cocoa.h>
@@ -123,8 +123,8 @@ int main(void) { @autoreleasepool {
 
     // The modal and the objects that the calls of its lifetime autoreleased are released before the count is read.
     @autoreleasepool {
-        // nativeWebviewCreate with fillParent: copy the configuration of the main web view, replace its script controller,
-        // register input and ignore page focus, then add the view above the main web view without attaching it to a surface.
+        // nativeWebviewCreate: copy the configuration of the main web view, replace its script controller, register input
+        // and ignore page focus, then add the view above the main web view, outside every surface.
         WKWebViewConfiguration *configuration = [root.configuration copy];
         WKUserContentController *controller = [[WKUserContentController alloc] init];
         SPTestBridge *bridge = [[SPTestBridge alloc] init];

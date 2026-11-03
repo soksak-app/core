@@ -6,6 +6,7 @@
 #import "event_ring.h"
 #import "image_region.h"
 #import "webview_geometry.h"
+#import "support/surface_view.h"
 
 static int failures = 0;
 static NSMutableArray<NSDictionary *> *events = nil;
@@ -52,12 +53,13 @@ int main(void) { @autoreleasepool {
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
-    [window.contentView addSubview:surface];
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
     [window orderBack:nil];
-    check(sp_surface_create(main) != NULL, @"the main webview creates the composition");
-    webviewAttachSurface(surface, main);
+    void *surface = sp_surface_create(main);
+    check(surface != NULL, @"the main webview creates the surface");
+    check(SPPlaceSurfaceView(surface, view), @"the view web view is placed in the surface");
     webviewSetFrame(surface, 0, 0, 500, 400);
+    webviewSetSurfaceHidden(surface, false);
 
     events = [NSMutableArray array];
     void *region = sp_region_create(surface, "view", regionEvent, NULL);
@@ -112,5 +114,8 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the complete revised Hangul buffer commits exactly once (got %@, errors %@)", committed(), errors()]);
 
     sp_region_close(region);
+    sp_surface_unplace_view(view);
+    [view removeFromSuperview];
+    sp_surface_close(surface);
     return failures == 0 ? 0 : 1;
 } }

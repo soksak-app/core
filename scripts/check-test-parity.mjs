@@ -346,6 +346,19 @@ const FEATURE_LINKS = [
     ],
     expected: "Both hosts, the browser runtime and the workbench refuse the four common-only keys in a project settings file and in a project write with `<key> is common-only`, and the host parity check fails when their lists differ.",
     levels: ["unit"],
+    levels: ["unit"],
+  },
+  {
+    id: "F507",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "bool sp_surface_place_view(void *surfaceHandle, void *viewHandle) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "the placed view webview uses the main webview's canonical composition" },
+      { file: "native/darwin/tests/window_objects_test.m", id: "one window with a logical surface and a surface with a placed view webview counts" },
+    ],
+    expected: "The native tests build each surface with sp_surface_create and place its view web view with sp_surface_place_view, as the hosts do through sp_document_create, and no source attaches a web view through another path.",
+    levels: ["native"],
   },
   {
     id: "F509",

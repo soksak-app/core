@@ -1,8 +1,8 @@
 // Checks that the closed window, its webviews, and all native objects that the shared library attached to the window
 // and webviews are released. In the order in which the host does it for a project window, attaches main webview
-// registration, first display wait, input registration, file drop, occlusion observation, logical surface, attached
-// surface webview, modal webview, document region, drawing region, layout transaction, and display wait. Then only
-// the handles owned by the host (drawing region, document region, attached surface webview, logical surface) are
+// registration, first display wait, input registration, file drop, occlusion observation, logical surface, view
+// webview placed in its surface, modal webview, document region, drawing region, layout transaction, and display wait.
+// Then only the handles owned by the host (drawing region, document region, view webview, surfaces) are
 // closed with the close functions of the library. The main webview and the modal webview are only removed from the
 // view hierarchy and released, as the framework that created the window does, and their input registration is not
 // released. A webview that is not released does not end the web content process. The check does not activate the
@@ -15,6 +15,7 @@
 #import "image_region.h"
 #import "surface_layout.h"
 #import "webview_geometry.h"
+#import "support/surface_view.h"
 #import "webview_input.h"
 #import "window_facts.h"
 #import "window_reveal.h"
@@ -99,7 +100,8 @@ int main(void) { @autoreleasepool {
     void *surface;
     void *document;
     void *region;
-    WKWebView *attached;
+    void *viewSurface;
+    WKWebView *view;
     @autoreleasepool {
         window = [[NSWindow alloc] initWithContentRect:NSMakeRect(60, 60, 600, 400)
             styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];
@@ -138,10 +140,13 @@ int main(void) { @autoreleasepool {
         check(region != NULL, @"an image region is created");
         sp_region_place(region, 20, 20, 20, 20, true);
 
-        attached = [[WKWebView alloc] initWithFrame:NSMakeRect(20, 20, 200, 120)];
-        [window.contentView addSubview:attached positioned:NSWindowAbove relativeTo:nil];
-        check(webviewInputRegister(attached) && webviewIgnorePageFocus(attached), @"an attached surface webview registers for input");
-        webviewAttachSurface(attached, main);
+        viewSurface = sp_surface_create(main);
+        check(viewSurface != NULL, @"a surface for a view is created");
+        view = [[WKWebView alloc] initWithFrame:NSZeroRect];
+        check(webviewInputRegister(view) && webviewIgnorePageFocus(view), @"a view webview registers for input");
+        check(SPPlaceSurfaceView(viewSurface, view), @"the view webview is placed in its surface");
+        webviewSetFrame(viewSurface, 20, 20, 200, 120);
+        webviewSetSurfaceHidden(viewSurface, false);
         // A webview that fills the window, like a modal. It registers input but is not attached to a surface.
         WKWebView *modal = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
         [window.contentView addSubview:modal positioned:NSWindowAbove relativeTo:nil];
@@ -169,24 +174,25 @@ int main(void) { @autoreleasepool {
         track("SPDocumentView", (id)document);
         track("document WKUserContentController", ((WKWebView *)document).configuration.userContentController);
         track("SPImageRegion", (id)region);
-        track("attached surface WKWebView", attached);
-        track("attached surface WKUserContentController", attached.configuration.userContentController);
-        track("attached SPSurfaceHost", attached.superview);
-        track("attached SPSurfaceNativePlane", (id)webviewSurfaceNativePlane(attached));
+        track("view WKWebView", view);
+        track("view WKUserContentController", view.configuration.userContentController);
+        track("view SPSurfaceHost", (id)viewSurface);
+        track("view SPSurfaceNativePlane", (id)sp_surface_native_plane(viewSurface));
         track("modal WKWebView", modal);
         track("modal WKUserContentController", modal.configuration.userContentController);
         [modal removeFromSuperview];
     }
 
-    // Cleanup that the host does when it closes a window: closes the regions and documents, attached webviews, and
+    // Cleanup that the host does when it closes a window: closes the regions and documents, view webviews, and
     // surfaces, cancels the layout, and then closes the window.
     @autoreleasepool {
         sp_region_close(region);
         sp_document_close(document);
-        webviewInputUnregister(attached);
-        webviewDetachSurface(attached);
-        [attached removeFromSuperview];
-        [attached release];
+        webviewInputUnregister(view);
+        sp_surface_unplace_view(view);
+        [view removeFromSuperview];
+        [view release];
+        sp_surface_close(viewSurface);
         sp_surface_close(surface);
         surfaceLayoutCancel(window);
         [window close];

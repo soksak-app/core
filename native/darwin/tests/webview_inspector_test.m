@@ -9,6 +9,7 @@
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
 #import "private/webkit.h"
+#import "support/surface_view.h"
 
 static int failures = 0;
 
@@ -29,9 +30,9 @@ static void until(BOOL (^done)(void)) {
 }
 
 // The surface frame in window coordinates.
-static NSRect frameOf(WKWebView *view) {
+static NSRect frameOf(void *surface) {
     double rect[4] = {0, 0, 0, 0};
-    webviewGetFrame(view, rect);
+    webviewGetFrame(surface, rect);
     return NSMakeRect(rect[0], rect[1], rect[2], rect[3]);
 }
 
@@ -58,23 +59,23 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds
         configuration:configuration] autorelease];
     [window.contentView addSubview:main];
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 450)
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSZeroRect
         configuration:[[configuration copy] autorelease]] autorelease];
-    [window.contentView addSubview:surface];
     [main loadHTMLString:@"<body style='margin:0'>main</body>" baseURL:nil];
-    [surface loadHTMLString:@"<body style='margin:0'>surface</body>" baseURL:nil];
+    [view loadHTMLString:@"<body style='margin:0'>surface</body>" baseURL:nil];
     [window makeKeyAndOrderFront:nil];
-    until(^BOOL { return !main.loading && !surface.loading; });
-    check(sp_surface_create(main) != NULL,
-        @"the main webview creates the composition before a surface webview is attached");
-    webviewAttachSurface(surface, main);
+    until(^BOOL { return !main.loading && !view.loading; });
+    void *surface = sp_surface_create(main);
+    check(surface != NULL, @"the main webview creates the surface");
+    check(SPPlaceSurfaceView(surface, view), @"the surface webview is placed in the surface");
     webviewSetFrame(surface, 100, 50, 600, 450);
+    webviewSetSurfaceHidden(surface, false);
     NSRect placed = frameOf(surface);
     check(NSEqualRects(placed, NSMakeRect(100, 50, 600, 450)),
         [NSString stringWithFormat:@"the surface starts at its place (%@)", describe(placed)]);
 
-    surface.inspectable = YES;
-    id<SPInspector> inspector = surface._inspector;
+    view.inspectable = YES;
+    id<SPInspector> inspector = view._inspector;
     check(inspector != nil, @"the surface webview has an inspector");
     [NSApp activateIgnoringOtherApps:YES];
     until(^BOOL { return NSApp.isActive && window.isKeyWindow; });
@@ -100,6 +101,9 @@ int main(void) { @autoreleasepool {
     NSRect closed = frameOf(surface);
     check(NSEqualRects(closed, placed),
         [NSString stringWithFormat:@"closing the inspector leaves the surface at its place (%@)", describe(closed)]);
+    sp_surface_unplace_view(view);
+    [view removeFromSuperview];
+    sp_surface_close(surface);
     [window close];
     [window release];
     return failures ? 1 : 0;

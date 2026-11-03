@@ -12,6 +12,7 @@
 #import "capture.h"
 #import "image_region.h"
 #import "webview_geometry.h"
+#import "support/surface_view.h"
 #import "support/capture_frame.m"
 
 static const size_t sourceWidth = 96;
@@ -173,12 +174,12 @@ int main(int argc, const char **argv) { @autoreleasepool {
     [content addSubview:main];
     void *surfaceHost = sp_surface_create(main);
     CGFloat backingScale = window.backingScaleFactor;
-    WKWebView *surface = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0,
-        sourceWidth / backingScale, sourceHeight / backingScale)];
-    [content addSubview:surface];
-    if (surfaceHost) webviewAttachSurface(surface, main);
-    webviewSetFrame(surface, 0, 0, sourceWidth / backingScale, sourceHeight / backingScale);
-    void *region = surfaceHost ? sp_region_create(surface, "pixel-fixture", discardRegionEvent, NULL) : NULL;
+    WKWebView *page = [[WKWebView alloc] initWithFrame:NSZeroRect];
+    BOOL placed = surfaceHost && SPPlaceSurfaceView(surfaceHost, page);
+    check(placed, @"the view web view is placed in the surface host");
+    webviewSetFrame(surfaceHost, 0, 0, sourceWidth / backingScale, sourceHeight / backingScale);
+    webviewSetSurfaceHidden(surfaceHost, false);
+    void *region = placed ? sp_region_create(surfaceHost, "pixel-fixture", discardRegionEvent, NULL) : NULL;
     if (region) sp_region_place(region, 0, 0, 0, 0, true);
     check(region != NULL, @"the native image region is created through the normal surface composition");
     [window orderFrontRegardless];
@@ -316,8 +317,10 @@ int main(int argc, const char **argv) { @autoreleasepool {
     if (source) CFRelease(source);
     [sourceBytes release];
     sp_region_close(region);
+    sp_surface_unplace_view(page);
+    [page removeFromSuperview];
     if (surfaceHost) sp_surface_close(surfaceHost);
-    [surface release]; [main release]; [window close]; [content release]; [window release];
+    [page release]; [main release]; [window close]; [content release]; [window release];
     if (exact) [[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:NULL];
     return failures ? 1 : 0;
 } }
