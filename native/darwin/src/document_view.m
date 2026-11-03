@@ -2300,38 +2300,62 @@ size_t sp_document_binary_count(void *handle) {
     return view ? view.binaries.count : 0;
 }
 
-// The stores whose sessions the network process is removing, the stores that wait for the process to end, and that process.
+// The stores whose sessions the network process is removing, the stores that wait for the processes to end, and the network
+// process.
 static int storeRemovals;
 static NSMutableArray<void (^)(const char *)> *storeEndsWaiting;
 static pid_t storeEndProcess;
 
-// The network cache writes its records about one second after a load and keeps those writes after the session of the store
-// is removed, and clearing the disk cache does not drop them (document_store_end_test). WebKit gives no event for the end
-// of these writes, so the network process ends, and its exit tells that no write can follow. Ending it while another store
-// removes its session fails that removal, so it ends after the last removal. The next document that needs it starts it again.
-static void endNetworkProcess(void) {
+// Two processes write into the directory of a store after its session is removed, and WebKit gives no event for the end of
+// their writes (document_store_end_test). The network process writes the records of the network cache about one second after
+// a load, and clearing the disk cache does not drop them. The GPU process plays media and rewrites the media cache after the
+// player of a closed document ends. Each process ends, and its exit tells that it writes nothing more. Ending the network
+// process while another store removes its session fails that removal, so the processes end after the last removal. The next
+// document that needs a process starts it again.
+static void endStoreProcesses(void) {
     NSArray<void (^)(const char *)> *waiting = [[storeEndsWaiting copy] autorelease];
     [storeEndsWaiting removeAllObjects];
-    pid_t process = storeEndProcess;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    // The GPU process belongs to no store and a document has its own pool, so the class names the one process of the application.
+    // macOS 14.4 does not have this method, so the end reports that it cannot name the process.
+    BOOL named = [WKProcessPool respondsToSelector:@selector(_gpuProcessInfo)];
+    const pid_t processes[] = {storeEndProcess, named ? WKProcessPool._gpuProcessInfo.pid : 0};
+#pragma clang diagnostic pop
     storeEndProcess = 0;
-    __block dispatch_source_t exit = NULL;
-    void (^exited)(void) = ^{
-        dispatch_source_cancel(exit);
-        for (void (^finish)(const char *) in waiting) finish(NULL);
-    };
-    if (process > 0) exit = sp_observe_process_exit("document.store-end", SP_OBSERVE_RECORD, process, dispatch_get_main_queue(), exited);
-    if (!exit) {
-        for (void (^finish)(const char *) in waiting) finish(NULL);
-        return;
-    }
-    dispatch_source_set_cancel_handler(exit, ^{ dispatch_release(exit); });
-    dispatch_resume(exit);
-    // A process that already ended reports its exit through the source, and any other refusal is the failure of the end.
-    if (kill(process, SIGKILL) != 0 && errno != ESRCH) {
-        dispatch_source_cancel(exit);
-        NSString *refusal = [NSString stringWithFormat:@"the network process %d does not end: %s", process, strerror(errno)];
+    // The count starts at 1, so the waiting stores finish only after every process has been asked to end.
+    __block NSUInteger running = 1;
+    __block NSString *refusal = named ? nil : [[NSString alloc] initWithString:@"_gpuProcessInfo is unavailable"];
+    void (^ended)(void) = [^{
+        if (--running > 0) return;
         for (void (^finish)(const char *) in waiting) finish(refusal.UTF8String);
+        [refusal release];
+    } copy];
+    for (size_t i = 0; i < sizeof(processes) / sizeof(processes[0]); i++) {
+        pid_t process = processes[i];
+        if (process <= 0) continue;
+        running++;
+        __block dispatch_source_t exit = NULL;
+        exit = sp_observe_process_exit("document.store-end", SP_OBSERVE_RECORD, process, dispatch_get_main_queue(), ^{
+            dispatch_source_cancel(exit);
+            ended();
+        });
+        if (!exit) {
+            if (!refusal) refusal = [[NSString alloc] initWithFormat:@"the exit of the process %d is not observed", process];
+            ended();
+            continue;
+        }
+        dispatch_source_set_cancel_handler(exit, ^{ dispatch_release(exit); });
+        dispatch_resume(exit);
+        // A process that already ended reports its exit through the source, and any other refusal is the failure of the end.
+        if (kill(process, SIGKILL) != 0 && errno != ESRCH) {
+            if (!refusal) refusal = [[NSString alloc] initWithFormat:@"the process %d does not end: %s", process, strerror(errno)];
+            dispatch_source_cancel(exit);
+            ended();
+        }
     }
+    ended();
+    [ended release];
 }
 
 void sp_document_store_close(const char *directory, sp_document_store_closed closed, void *context) {
@@ -2380,7 +2404,7 @@ void sp_document_store_close(const char *directory, sp_document_store_closed clo
         [storeEndsWaiting addObject:finish];
         [finish release];
         storeRemovals--;
-        if (storeRemovals == 0) endNetworkProcess();
+        if (storeRemovals == 0) endStoreProcesses();
     }];
     [dataStores() removeObjectForKey:path];
 }

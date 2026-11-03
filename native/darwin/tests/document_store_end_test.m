@@ -1,7 +1,8 @@
 // Checks the contract of sp_document_store_close (native/darwin/src/document_view.h): after the store has ended, no WebKit
-// process writes into its directory, so the folder stays removed. A page loads cacheable resources over HTTP and media, the
+// process writes into its directory, so the folder stays removed. A page loads cacheable resources over HTTP and plays media, the
 // document closes and the store ends at once, while the network cache still holds writes. The check removes the folder and
-// watches it for longer than the network cache delays a write. An absent event has no notification, so this check observes
+// watches it for longer than the network cache delays a write. Before the removal it watches the entries of the folder, which the
+// media cache of the closed document would change. An absent event has no notification, so this check observes
 // for a fixed time and judges only whether the folder came back. A child that leaves its store to the removal of its
 // temporary folder shows that the removal ends the store first, and a child that leaves its document open fails.
 #import <Cocoa/Cocoa.h>
@@ -74,7 +75,7 @@ static void respond(nw_connection_t connection, NSString *request) {
         type = @"text/html; charset=utf-8";
         [body appendString:@"<!doctype html><title>loading</title>"];
         for (int i = 0; i < resourceCount; i++) [body appendFormat:@"<script src=/resource%d.js></script>", i];
-        [body appendString:@"<audio src=/silence.wav autoplay muted></audio><script>document.title = 'loaded'</script>"];
+        [body appendString:@"<audio id=audio loop src=/silence.wav></audio><script>audio.addEventListener('playing', () => { document.title = 'loaded'; }); audio.play();</script>"];
     } else {
         [body appendFormat:@"// %@\n", path];
         for (int i = 0; i < 4096; i++) [body appendString:@"// a line of a cacheable script\n"];
@@ -154,6 +155,28 @@ static NSArray<NSString *> *observeAbsent(NSString *path) {
     return [NSFileManager.defaultManager fileExistsAtPath:path] ? ([NSFileManager.defaultManager subpathsAtPath:path] ?: @[]) : nil;
 }
 
+// The entries under a path with their modification times, which a write of any process changes.
+static NSDictionary<NSString *, NSDate *> *entries(NSString *path) {
+    NSMutableDictionary<NSString *, NSDate *> *found = [NSMutableDictionary dictionary];
+    for (NSString *entry in [NSFileManager.defaultManager subpathsAtPath:path] ?: @[]) {
+        NSString *full = [path stringByAppendingPathComponent:entry];
+        NSDate *modified = [NSFileManager.defaultManager attributesOfItemAtPath:full error:nil].fileModificationDate;
+        if (modified) found[entry] = modified;
+    }
+    return found;
+}
+
+// Watches a path for the observation time and returns its entries at the first change, or nil while they stay the same.
+static NSDictionary<NSString *, NSDate *> *observeUnchanged(NSString *path, NSDictionary<NSString *, NSDate *> *before) {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:observation];
+    while (deadline.timeIntervalSinceNow > 0) {
+        NSDictionary<NSString *, NSDate *> *now = entries(path);
+        if (![now isEqualToDictionary:before]) return now;
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+    }
+    return nil;
+}
+
 // A child prints its folder and returns from main with its store open, or with its document also open.
 static int child(BOOL leaveOpen) {
     void *surface = prepareSurface();
@@ -205,6 +228,9 @@ int main(int argc, char **argv) { @autoreleasepool {
     sp_document_store_close(store.fileSystemRepresentation, recordStoreClosed, NULL);
     until(@"the data store ends", ^BOOL { return storeClosed; });
     check(storeError == nil, [NSString stringWithFormat:@"the data store ends without an error: %@", storeError]);
+    NSDictionary<NSString *, NSDate *> *ended = entries(store);
+    NSDictionary<NSString *, NSDate *> *changedEntries = observeUnchanged(store, ended);
+    check(changedEntries == nil, [NSString stringWithFormat:@"no process changes the folder of an ended store: %@ became %@", ended, changedEntries]);
     check(removefile(store.fileSystemRepresentation, NULL, REMOVEFILE_RECURSIVE) == 0, @"the folder of the ended store is removed");
     NSArray<NSString *> *written = observeAbsent(store);
     check(written == nil, [NSString stringWithFormat:@"no process writes into the folder of an ended store: %@", written]);
