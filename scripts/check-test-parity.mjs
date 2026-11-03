@@ -207,6 +207,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F397",
+    implementation: [
+      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "pub fn quit_with_cause(cause: &str, quit: impl FnOnce()) {" },
+      { file: "packages/host/wailsv3/src/event_record.go", symbol: "func QuitWithCause(cause string, quit func()) {" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/termination_test.rs", id: "a_quit_stores_its_cause_before_it_runs" },
+      { file: "packages/host/wailsv3/tests/termination_test.go", id: "TestAQuitStoresItsCauseBeforeItRuns" },
+    ],
+    expected: "A request to end the process stores log.closed with its cause before quit runs.",
+    levels: ["unit"],
+  },
+  {
     id: "F398",
     implementation: [
       { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "format!(\"close {}: {error}\", answer.surface)," },

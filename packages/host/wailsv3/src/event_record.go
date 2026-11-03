@@ -108,6 +108,13 @@ func EmitClosed(cause string, signal *int) {
 	}
 }
 
+// QuitWithCause requests the end of the process for cause (docs/spec/logging.md#self-reports): the event `log.closed`
+// names what requested the end before quit runs, because `exit-request` alone does not.
+func QuitWithCause(cause string, quit func()) {
+	EmitClosed(cause, nil)
+	quit()
+}
+
 // UseHostEventLog makes log the writer of the records of the host and hands it the records of the start buffer in their
 // order and with the time they were written; the records that the buffer refused are counted in the writer. A nil log
 // detaches the writer and clears the buffer.

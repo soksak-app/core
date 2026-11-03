@@ -2313,7 +2313,7 @@ impl Host {
             })(),
             "host.hit" => (|| hit(window, number(arguments, "x")?, number(arguments, "y")?))(),
             "host.quit" => {
-                self.0.exit(0);
+                crate::event_record::quit_with_cause("quit-command", || self.0.exit(0));
                 Ok(Value::Null)
             }
             _ => return None,

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F397: `log.closed` names what requested the end of the process before quit runs.
 - F398: The failure of a close answer is written to the log before the closing entry ends.
 - F396: The error of a pointer release that the page did not receive names the button and whether the application was active and the window key at the press.
 - F395: A closed notice that finds room in the queue of a sidecar writes no buffered record, and the flush tests of both hosts no longer require a record for a close that found room.

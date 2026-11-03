@@ -302,6 +302,13 @@ pub fn emit_closed(cause: &str, signal: Option<i32>) {
     }
 }
 
+/// Requests the end of the process for `cause` (docs/spec/logging.md#self-reports): the event `log.closed` names what
+/// requested the end before `quit` runs, because `exit-request` alone does not.
+pub fn quit_with_cause(cause: &str, quit: impl FnOnce()) {
+    emit_closed(cause, None);
+    quit();
+}
+
 /// Stores an event of the layer `host` with the correlation identifiers of the inputs it belongs to, like `emit_host`. An
 /// identifier that is not valid is reported on the standard error and nothing is stored.
 pub fn emit_host_cids(level: Level, event: &str, cids: &[String], fields: serde_json::Value) {

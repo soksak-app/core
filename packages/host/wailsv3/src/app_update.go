@@ -168,7 +168,7 @@ func (h *Host) AppUpdateApply(ctx context.Context, requestJSON json.RawMessage) 
 	h.mu.Lock()
 	h.update = &pendingStart{command: command}
 	h.mu.Unlock()
-	routine.Go("quit", application.Get().Quit)
+	QuitWithCause("update", func() { routine.Go("quit", application.Get().Quit) })
 	return nil
 }
 

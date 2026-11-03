@@ -308,7 +308,7 @@ func Run(assets fs.FS, options Options) error {
 func setupQuitRequest() {
 	application.Get().Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		application.InvokeSync(func() {
-			if err := system.OnQuitRequest(func() { application.Get().Quit() }); err != nil {
+			if err := system.OnQuitRequest(func() { QuitWithCause("quit-request", application.Get().Quit) }); err != nil {
 				fatalError("quit request", err)
 			}
 		})

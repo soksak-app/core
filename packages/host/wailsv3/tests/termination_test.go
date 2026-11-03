@@ -175,3 +175,22 @@ func quitDuringSignal() {
 	fmt.Println("quit requested")
 	os.Exit(0)
 }
+
+// contract: log.closed.cause-before-quit
+func TestAQuitStoresItsCauseBeforeItRuns(t *testing.T) {
+	log := useEventLog(t)
+	var fields any
+	host.QuitWithCause("quit-command", func() {
+		if err := log.Flush(5 * time.Second); err != nil {
+			t.Fatal(err)
+		}
+		for _, event := range readEventLog(t, log.Path()) {
+			if event["event"] == "log.closed" {
+				fields = event["fields"]
+			}
+		}
+	})
+	if cause, _ := fields.(map[string]any); cause == nil || cause["cause"] != "quit-command" {
+		t.Fatalf("log.closed before quit = %v, want the cause quit-command", fields)
+	}
+}

@@ -908,7 +908,7 @@ async fn app_update_apply(
             command,
             relaunch: false,
         });
-        window.app_handle().exit(0);
+        crate::event_record::quit_with_cause("update", || window.app_handle().exit(0));
         Ok(())
     })
     .await

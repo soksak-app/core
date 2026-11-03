@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F397: `log.closed`가 quit을 실행하기 전에 프로세스 종료를 요청한 곳을 말한다.
 - F398: 닫기 응답의 실패를 닫는 중 항목이 끝나기 전에 로그에 쓴다.
 - F396: page가 받지 못한 pointer release의 오류가 button과 press 때 앱 활성 여부, window key 여부를 말한다.
 - F395: sidecar queue에 자리를 찾은 closed notice는 buffered 기록을 쓰지 않으며, 두 host의 flush test는 자리를 찾은 close에 기록을 요구하지 않는다.

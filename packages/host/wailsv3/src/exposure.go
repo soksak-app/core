@@ -949,7 +949,9 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		}
 		return s.hit(*p.X, *p.Y)
 	case "host.quit":
-		b.h.quit.Request(func() { routine.Go("quit", application.Get().Quit) })
+		b.h.quit.Request(func() {
+			QuitWithCause("quit-command", func() { routine.Go("quit", application.Get().Quit) })
+		})
 	default:
 		return nil, rpcError(codeUnknownName, "unknown command %s", name)
 	}

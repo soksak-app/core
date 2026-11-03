@@ -866,7 +866,9 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             let registry = host.state::<Windows>();
             crate::performance::window_remove(host.label());
             if remove_window_records(&registry, host.label()) {
-                host.app_handle().exit(0);
+                crate::event_record::quit_with_cause("last-window-closed", || {
+                    host.app_handle().exit(0)
+                });
             }
             notify_workspace(host.app_handle());
             crate::exposure::windows_changed(host.app_handle());

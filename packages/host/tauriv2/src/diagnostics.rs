@@ -596,7 +596,7 @@ fn relaunch(host: &Host) -> Result<Value, Failure> {
         command,
         relaunch: true,
     });
-    host.0.exit(0);
+    crate::event_record::quit_with_cause("update", || host.0.exit(0));
     Ok(Value::Null)
 }
 

@@ -480,7 +480,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		h.notifyWorkspace()
 		routine.Go("windows-changed", h.windowsChanged)
 		if quit {
-			routine.Go("quit", application.Get().Quit)
+			QuitWithCause("last-window-closed", func() { routine.Go("quit", application.Get().Quit) })
 		}
 	})
 	return s

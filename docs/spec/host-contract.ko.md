@@ -725,6 +725,7 @@ fn invalid_json_closes_connection() {
 | `termination.signal.first-requests-quit-second-ends-process` | 첫 종료 신호는 종료를 요청하고 두 번째 신호는 프로세스를 끝낸다. | both |
 | `termination.signal.begins-the-quit-state` | 첫 종료 신호는 종료를 요청하기 전에 종료 상태를 시작한다. `host.quit`이 시작하는 상태와 같으므로, 그 종료 중의 WebContent process 종료는 오류 줄을 쓰지 않는다. | both |
 | `log.closed.signal-before-quit` | 첫 종료 신호는 quit을 요청하기 전에 원인 `signal`과 번호를 담은 `log.closed`를 저장하므로, quit의 flush가 실행될 때 기록이 로그에 있다. | both |
+| `log.closed.cause-before-quit` | 프로세스 종료 요청은 quit을 실행하기 전에 원인(`quit-command`, `quit-request`, `last-window-closed`, `update`)을 담은 `log.closed`를 저장한다. | both |
 | `log.closed.passes-every-gate` | writer는 class `lifecycle`을 끈 정책에서도 level `info`, class `lifecycle`의 `log.closed`를 저장한다. | both |
 | `window-close.surfaces.closes-regions-then-surface` | 창을 닫으면 논리 표면마다 id 순서로 그 문서 영역과 그림 영역을 닫은 뒤 표면을 닫고, 그 이름을 창의 문서 영역 목록과 그림 영역 목록에서 지운다. | both |
 | `window-close.native-window.used-in-reading-step` | native 창을 쓰는 host 요청은 native 창을 native code에 넘기는 main thread 단계에서 읽으므로(Wails host에서는 main thread가 그 단계를 위해 C에서 기다리는 동안 worker가 읽고, main thread가 같은 단계에서 실행하는 C 호출로 넘긴다: [hosts](hosts.ko.md#wails-host의-main-thread)), 요청의 앞선 단계 뒤에 main thread가 처리한 닫기가 닫힌 창을 native code에 넘기지 않는다. 그 단계 전에 닫힌 창은 native code에 닿지 않고, 요청은 오류 1003 `window "<name>" does not exist`로 실패한다. | both |

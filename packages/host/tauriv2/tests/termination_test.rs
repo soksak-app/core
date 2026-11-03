@@ -113,6 +113,48 @@ fn a_termination_signal_records_log_closed_before_quit() {
     );
 }
 
+// contract: log.closed.cause-before-quit
+#[test]
+fn a_quit_stores_its_cause_before_it_runs() {
+    if std::env::var_os("SOKSAK_QUIT_CAUSE_CHILD").is_some() {
+        let directory = PathBuf::from(std::env::var_os(DIRECTORY).unwrap());
+        let log = Arc::new(event_log::start_host(&directory).unwrap());
+        use_host_event_log(Some(Arc::clone(&log)));
+        soksak_host_tauriv2::event_record::quit_with_cause("quit-command", || {
+            log.flush(Duration::from_secs(5)).unwrap();
+            let events = records::read_events(&records::event_log_path(&directory));
+            match events.iter().find(|event| event["event"] == "log.closed") {
+                Some(event) => println!("log.closed: {}", event["fields"]),
+                None => println!("log.closed: none"),
+            }
+        });
+        use_host_event_log(None);
+        return;
+    }
+    let directory = folder::Folder::new();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_quit_stores_its_cause_before_it_runs",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env("SOKSAK_QUIT_CAUSE_CHILD", "1")
+        .env(DIRECTORY, directory.path())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "status {}, output {text:?}",
+        output.status
+    );
+    assert!(
+        text.contains("log.closed: {\"cause\":\"quit-command\"}"),
+        "output {text:?}"
+    );
+}
+
 /// Receives the termination signal of the child, which stores its event log with the default policy. The record of the
 /// signal is stored before quit is requested, so it is in the log when quit has been requested.
 fn record_closed_on_signal() {

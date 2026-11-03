@@ -363,7 +363,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // A termination request of the operating system runs the same termination as host.quit and answers after
                 // RunEvent::Exit has finished the save (docs/spec/hosts.md#process-lifecycle).
                 let quit = app.handle().clone();
-                platform::current()?.on_quit_request(Box::new(move || quit.exit(0)))?;
+                platform::current()?.on_quit_request(Box::new(move || {
+                    event_record::quit_with_cause("quit-request", || quit.exit(0))
+                }))?;
                 // The one memory pressure source of the process starts with the host, and each report goes to every window
                 // (docs/spec/hosts.md#memory-pressure).
                 let pressure = app.handle().clone();
