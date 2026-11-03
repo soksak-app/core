@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F412: 호스트가 창이 화면에 없는 동안 바뀐 raster를 region이 다시 그릴 때 설정하므로, 터미널이 전체 화면 전환 뒤에도 그린다.
 - F409: window check는 자기가 가리키는 항목을 읽고, 판단하는 status를 기다리며, 설치된 `term` plugin을 포함한다.
 - F408: 정수 높이의 section은 sidebar가 짧으면 줄어들고 fill section은 head와 최소 높이를 유지하므로, section view가 큰 글자 크기에서도 sidebar 안에 머문다.
 - F407: flush는 window geometry가 바뀌었을 때만 쓰므로, 저장할 것이 없는 reload는 `projects.json`을 쓰지 않는다.

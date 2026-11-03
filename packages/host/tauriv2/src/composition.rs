@@ -30,16 +30,65 @@ pub(crate) fn send_image_drawing_of(window: &Window, data: &WindowData) -> Resul
     // default: a thread that stopped while holding the lock sent whole messages only, and that stop was already reported
     // as a panic report.
     let _order = data.drawing.lock().unwrap_or_else(PoisonError::into_inner);
-    for change in data.images.drawing_changes() {
-        serde_json::value::to_raw_value(&serde_json::json!({ "image": { "drawing": change } }))
-            .map_err(|e| e.to_string())
-            .and_then(|body| {
-                window
-                    .state::<WindowSidecars>()
-                    .send(window, &change.sidecar, &change.key.0, &body)
-            })
-            .map_err(|error| format!("image {:?} drawing: {error}", change.name))?;
+    let changes = data.images.drawing_changes();
+    for (index, change) in changes.iter().enumerate() {
+        let sent =
+            serde_json::value::to_raw_value(&serde_json::json!({ "image": { "drawing": change } }))
+                .map_err(|e| e.to_string())
+                .and_then(|body| {
+                    window.state::<WindowSidecars>().send(
+                        window,
+                        &change.sidecar,
+                        &change.key.0,
+                        &body,
+                    )
+                })
+                .map_err(|error| format!("image {:?} drawing: {error}", change.name))
+                .and_then(|()| match &change.configure {
+                    Some(configuration) => {
+                        send_image_configuration(window, &change.key, configuration)
+                    }
+                    None => Ok(()),
+                });
+        if let Err(error) = sent {
+            for change in &changes[index..] {
+                if let Some(configuration) = &change.configure {
+                    data.images.retry_configure(
+                        &change.key,
+                        configuration.generation,
+                        configuration.raster,
+                    );
+                }
+            }
+            return Err(error);
+        }
     }
+    Ok(())
+}
+
+/// Sends one configure message to the supplier of its region and records the send.
+fn send_image_configuration(
+    window: &Window,
+    key: &Key,
+    configuration: &Configure,
+) -> Result<(), String> {
+    let body = serde_json::value::to_raw_value(&serde_json::json!({
+        "image": { "configure": configuration }
+    }))
+    .map_err(|e| e.to_string())?;
+    window
+        .state::<WindowSidecars>()
+        .send(window, &configuration.sidecar, &key.0, &body)?;
+    observe_raster(
+        key,
+        "sent",
+        "sidecar",
+        Some(&platform::Raster {
+            width: configuration.width,
+            height: configuration.height,
+            scale: configuration.scale,
+        }),
+    );
     Ok(())
 }
 
@@ -62,29 +111,10 @@ fn send_image_configurations(
         return Err(error);
     }
     for (index, (key, configuration)) in configurations.iter().enumerate() {
-        let sent = serde_json::value::to_raw_value(&serde_json::json!({
-            "image": { "configure": configuration }
-        }))
-        .map_err(|e| e.to_string())
-        .and_then(|body| {
-            window
-                .state::<WindowSidecars>()
-                .send(window, &configuration.sidecar, &key.0, &body)
-        });
-        if let Err(error) = sent {
+        if let Err(error) = send_image_configuration(window, key, configuration) {
             release_image_configurations(&data.images, &configurations[index..]);
             return Err(error);
         }
-        observe_raster(
-            key,
-            "sent",
-            "sidecar",
-            Some(&platform::Raster {
-                width: configuration.width,
-                height: configuration.height,
-                scale: configuration.scale,
-            }),
-        );
     }
     Ok(())
 }

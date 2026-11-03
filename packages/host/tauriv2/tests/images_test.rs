@@ -1593,6 +1593,64 @@ fn only_a_drawing_region_is_configured_and_awaited() {
     );
 }
 
+// contract: image.drawing.configures-a-raster-that-changed-while-not-drawing
+#[test]
+fn a_raster_that_changed_while_not_drawing_is_configured_when_drawing_returns() {
+    let images = Images::default();
+    let key = attached_drawing_image(&images, "tab-1");
+    images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("configure a drawing region");
+    images.drawing_changes();
+    images.set_on_screen(false);
+    assert_eq!(
+        images.visible(),
+        vec![(key.clone(), 100)],
+        "the raster of a shown region is not read while its window is off screen"
+    );
+    assert!(
+        images
+            .configure_raster(&key, 1000, 700, 2.0, true)
+            .unwrap()
+            .is_none(),
+        "a region of an occluded window was configured"
+    );
+    let stopped = images.drawing_changes();
+    assert!(
+        stopped.iter().all(|change| change.configure.is_none()),
+        "a region that stopped drawing received a configuration"
+    );
+    images.set_on_screen(true);
+    let resumed = images.drawing_changes();
+    let configuration = resumed[0]
+        .configure
+        .as_ref()
+        .expect("the raster that changed while the region was not drawing was not configured");
+    assert_eq!(
+        (
+            configuration.width,
+            configuration.height,
+            configuration.raster
+        ),
+        (1000, 700, 2)
+    );
+    assert!(
+        images
+            .configure_raster(&key, 1000, 700, 2.0, true)
+            .unwrap()
+            .is_none(),
+        "the raster was configured twice"
+    );
+    images.set_on_screen(false);
+    images.drawing_changes();
+    images.set_on_screen(true);
+    assert!(
+        images.drawing_changes()[0].configure.is_none(),
+        "a raster that did not change was configured again"
+    );
+}
+
 // contract: image.drawing.answers-transfers-while-not-drawing
 #[test]
 fn a_transfer_accepted_before_the_region_stopped_drawing_is_answered() {

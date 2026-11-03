@@ -54,18 +54,25 @@ func (s *Surfaces) sendImageConfigurations(configurations []pendingConfigure) er
 		return err
 	}
 	for index, pending := range configurations {
-		configuration := pending.configuration
-		body, err := json.Marshal(map[string]any{"image": map[string]any{"configure": configuration}})
-		if err != nil {
+		if err := s.sendImageConfiguration(pending); err != nil {
 			s.releaseImageConfigurations(configurations[index:])
 			return err
 		}
-		if err := s.sidecars.Send(configuration.Owner, configuration.Sidecar, pending.key.Surface, body); err != nil {
-			s.releaseImageConfigurations(configurations[index:])
-			return err
-		}
-		s.observeRaster(pending.key, "sent", "sidecar", configuration.Width, configuration.Height, configuration.Scale)
 	}
+	return nil
+}
+
+// sendImageConfiguration sends one configure message to the supplier of its region and records the send.
+func (s *Surfaces) sendImageConfiguration(pending pendingConfigure) error {
+	configuration := pending.configuration
+	body, err := json.Marshal(map[string]any{"image": map[string]any{"configure": configuration}})
+	if err != nil {
+		return err
+	}
+	if err := s.sidecars.Send(configuration.Owner, configuration.Sidecar, pending.key.Surface, body); err != nil {
+		return err
+	}
+	s.observeRaster(pending.key, "sent", "sidecar", configuration.Width, configuration.Height, configuration.Scale)
 	return nil
 }
 
@@ -74,16 +81,33 @@ func (s *Surfaces) sendImageConfigurations(configurations []pendingConfigure) er
 func (s *Surfaces) sendImageDrawing() error {
 	s.drawingMu.Lock()
 	defer s.drawingMu.Unlock()
-	for _, change := range s.images.DrawingChanges() {
-		body, err := json.Marshal(map[string]any{"image": map[string]any{"drawing": change}})
-		if err != nil {
+	changes := s.images.DrawingChanges()
+	for index, change := range changes {
+		if err := s.sendImageDrawingChange(change); err != nil {
+			for _, unsent := range changes[index:] {
+				if unsent.Configure != nil {
+					s.images.RetryConfigure(unsent.Key, unsent.Configure.Generation, unsent.Configure.Raster)
+				}
+			}
 			return err
-		}
-		if err := s.sidecars.Send(change.Owner, change.Sidecar, change.Key.Surface, body); err != nil {
-			return fmt.Errorf("image %q drawing: %w", change.Name, err)
 		}
 	}
 	return nil
+}
+
+// sendImageDrawingChange sends one drawing state and then the configuration that the region waited for.
+func (s *Surfaces) sendImageDrawingChange(change ImageDrawing) error {
+	body, err := json.Marshal(map[string]any{"image": map[string]any{"drawing": change}})
+	if err != nil {
+		return err
+	}
+	if err := s.sidecars.Send(change.Owner, change.Sidecar, change.Key.Surface, body); err != nil {
+		return fmt.Errorf("image %q drawing: %w", change.Name, err)
+	}
+	if change.Configure == nil {
+		return nil
+	}
+	return s.sendImageConfiguration(pendingConfigure{change.Key, change.Configure})
 }
 
 // readOnScreen records whether the window is neither occluded nor minimized. Call it on the UI thread.

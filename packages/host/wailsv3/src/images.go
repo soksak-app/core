@@ -133,12 +133,14 @@ type ImageConfigure struct {
 
 // ImageDrawing is the drawing state of an image region to send to its supplier (docs/spec/native-surfaces.md#image-regions).
 type ImageDrawing struct {
-	Name       string       `json:"name"`
-	Generation uint64       `json:"generation"`
-	Drawing    bool         `json:"drawing"`
-	Key        ImageKey     `json:"-"`
-	Sidecar    string       `json:"-"`
-	Owner      SidecarOwner `json:"-"`
+	Name       string `json:"name"`
+	Generation uint64 `json:"generation"`
+	Drawing    bool   `json:"drawing"`
+	// Configure is the configuration that this region waited for while it was not drawing.
+	Configure *ImageConfigure `json:"-"`
+	Key       ImageKey        `json:"-"`
+	Sidecar   string          `json:"-"`
+	Owner     SidecarOwner    `json:"-"`
 }
 
 // SetOnScreen records whether the window is neither occluded nor minimized.
@@ -154,8 +156,14 @@ func (i *Images) SetOnScreen(onScreen bool) {
 // drawingLocked reports whether a region is drawing: it is attached and visible, its outer surface is visible and the window is neither
 // occluded nor minimized. Call it while holding i.mu.
 func (i *Images) drawingLocked(key ImageKey, state *ImageRasterState) bool {
+	return i.shownLocked(key, state) && i.onScreen
+}
+
+// shownLocked reports whether a region and its outer surface are shown, whatever the state of the window. Call it while
+// holding i.mu.
+func (i *Images) shownLocked(key ImageKey, state *ImageRasterState) bool {
 	outer, known := i.surfaceVisible[key.Surface]
-	return i.handles[key] != nil && state.Visible && (!known || outer) && i.onScreen
+	return i.handles[key] != nil && state.Visible && (!known || outer)
 }
 
 // DrawingChanges returns the drawing state of each attached region whose state was not sent yet or changed since it was sent, sorted by
@@ -174,7 +182,15 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 			continue
 		}
 		state.Drawing, state.DrawingSent = drawing, true
-		changes = append(changes, ImageDrawing{Name: key.Name, Generation: state.Generation, Drawing: drawing, Key: key,
+		// A raster that changed while the region was not drawing has no configuration yet, and no later step sends it
+		// when the window returns without a new layout.
+		var configure *ImageConfigure
+		if drawing && !state.Configured && state.Width > 0 {
+			state.Configured = true
+			configure = &ImageConfigure{Name: key.Name, Generation: state.Generation, Raster: state.Raster,
+				Width: state.Width, Height: state.Height, Scale: state.Scale, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner}
+		}
+		changes = append(changes, ImageDrawing{Name: key.Name, Generation: state.Generation, Drawing: drawing, Configure: configure, Key: key,
 			Sidecar: owner.SidecarName, Owner: owner.SidecarOwner})
 	}
 	sort.Slice(changes, func(a, b int) bool {
@@ -429,7 +445,7 @@ func (i *Images) visibleWhere(belongs func(ImageKey) bool) map[ImageKey]unsafe.P
 		if !belongs(key) {
 			continue
 		}
-		if i.drawingLocked(key, state) {
+		if i.shownLocked(key, state) {
 			visible[key] = i.handles[key]
 		}
 	}

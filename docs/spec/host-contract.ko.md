@@ -686,6 +686,7 @@ fn invalid_json_closes_connection() {
 | `image.drawing.sent-at-attach-and-on-change` | 호스트는 image region의 공급자에게 region의 부착 때와 상태가 바뀔 때마다 그 그리기 상태를 보내고, 바뀌지 않은 상태는 다시 보내지 않는다. | both |
 | `image.drawing.reads-occlusion-at-attach` | 만들 때 완전히 가려진 창에 부착된 region의 그리기 상태는 false이며, 창 event가 아니라 AppKit occlusion 상태에서 읽는다. | both |
 | `image.drawing.configures-only-drawing-regions` | 그리기 상태가 아닌 region은 설정을 받지 않고 표시 대기도 그것을 기다리지 않는다. 준비 중에 그리기 상태가 된 region은 설정을 받고 대기에 들어간다. | both |
+| `image.drawing.configures-a-raster-that-changed-while-not-drawing` | 호스트는 창이 화면에 없는 동안에도 보이는 region의 raster를 읽되 설정을 보내지 않는다. region이 다시 그리기 상태가 되면 그리기 메시지 뒤에 바뀐 raster의 설정을 한 번 보내고, 바뀌지 않은 raster는 다시 설정하지 않는다. | both |
 | `image.drawing.answers-transfers-while-not-drawing` | region이 그리기를 멈추기 전에 받은 전송 그림은 `consumed`나 오류로 답을 받는다. | both |
 | `sidecars-transport.replace.runs-when-sessions-reach-zero` | 오래된 service로 보낸 마지막 열린 표면이 닫히면 host가 그 service를 교체한다. | both |
 | `sidecars-transport.persistent.starts-in-new-session` | 호스트가 시작한 영속 서비스는 새 session의 leader이므로 애플리케이션의 process group이나 terminal의 signal을 받지 않는다. | both |

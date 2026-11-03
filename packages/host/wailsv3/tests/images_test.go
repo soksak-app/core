@@ -1521,6 +1521,43 @@ func TestOnlyADrawingRegionIsConfiguredAndAwaited(t *testing.T) {
 	}
 }
 
+// contract: image.drawing.configures-a-raster-that-changed-while-not-drawing
+func TestARasterThatChangedWhileNotDrawingIsConfiguredWhenDrawingReturns(t *testing.T) {
+	images := host.NewImages()
+	key := attachedDrawingImage(t, images, "tab-1")
+	configureImage(t, images, key, 800, 600, 2)
+	images.DrawingChanges()
+	images.SetOnScreen(false)
+	if _, shown := images.Visible()[key]; !shown {
+		t.Fatal("the raster of a shown region is not read while its window is off screen")
+	}
+	if configuration, err := images.ConfigureRaster(key, 1000, 700, 2, true); err != nil || configuration != nil {
+		t.Fatalf("a region of an occluded window was configured: %+v %v", configuration, err)
+	}
+	for _, change := range images.DrawingChanges() {
+		if change.Configure != nil {
+			t.Fatalf("a region that stopped drawing received a configuration: %+v", change.Configure)
+		}
+	}
+	images.SetOnScreen(true)
+	configuration := images.DrawingChanges()[0].Configure
+	if configuration == nil {
+		t.Fatal("the raster that changed while the region was not drawing was not configured")
+	}
+	if configuration.Width != 1000 || configuration.Height != 700 || configuration.Raster != 2 {
+		t.Fatalf("the configuration is not the current raster: %+v", configuration)
+	}
+	if again, err := images.ConfigureRaster(key, 1000, 700, 2, true); err != nil || again != nil {
+		t.Fatalf("the raster was configured twice: %+v %v", again, err)
+	}
+	images.SetOnScreen(false)
+	images.DrawingChanges()
+	images.SetOnScreen(true)
+	if again := images.DrawingChanges()[0].Configure; again != nil {
+		t.Fatalf("a raster that did not change was configured again: %+v", again)
+	}
+}
+
 // contract: image.drawing.answers-transfers-while-not-drawing
 func TestATransferAcceptedBeforeTheRegionStoppedDrawingIsAnswered(t *testing.T) {
 	images := host.NewImages()

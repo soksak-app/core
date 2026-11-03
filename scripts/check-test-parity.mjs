@@ -8770,6 +8770,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F412",
+    implementation: [{ file: "packages/host/wailsv3/src/images.go", symbol: "func (i *Images) DrawingChanges" }],
+    tests: [{ file: "packages/host/wailsv3/tests/images_test.go", id: "TestARasterThatChangedWhileNotDrawingIsConfiguredWhenDrawingReturns" }],
+    expected: "A raster that changed while the window was off screen is configured when its region draws again.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

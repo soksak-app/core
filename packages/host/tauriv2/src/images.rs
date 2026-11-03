@@ -119,12 +119,17 @@ impl Inner {
     /// Whether a region is drawing: it is attached and visible, its outer surface is visible and the window is neither
     /// occluded nor minimized.
     fn drawing(&self, key: &Key, state: &RasterState) -> bool {
+        self.shown(key, state) && !self.off_screen
+    }
+
+    /// Reports whether a region and its outer surface are shown, whatever the state of the window.
+    fn shown(&self, key: &Key, state: &RasterState) -> bool {
         // default: the address of a region that is not registered is 0, the same as a region that is not attached.
         let attached = self.handles.get(key).copied().unwrap_or_default() != 0;
         // default: a surface that did not report hiding is visible (it is written to surface_visibility only when it is
         // hidden).
         let outer = self.surface_visibility.get(&key.0).copied().unwrap_or(true);
-        attached && state.visible && outer && !self.off_screen
+        attached && state.visible && outer
     }
 
     /// Clears the raster record of the regions detached from a surface. When the generation of the surface changes, the
@@ -222,6 +227,9 @@ pub struct Drawing {
     pub name: String,
     pub generation: u64,
     pub drawing: bool,
+    /// The configuration that this region waited for while it was not drawing.
+    #[serde(skip)]
+    pub configure: Option<Configure>,
     #[serde(skip)]
     pub key: Key,
     #[serde(skip)]
@@ -262,10 +270,25 @@ impl Images {
                 continue;
             }
             state.drawing_sent = Some(drawing);
+            // A raster that changed while the region was not drawing has no configuration yet, and no later step
+            // sends it when the window returns without a new layout.
+            let configure = (drawing && !state.configured && state.width > 0).then(|| {
+                state.configured = true;
+                Configure {
+                    name: key.1.clone(),
+                    generation: state.generation,
+                    raster: state.raster,
+                    width: state.width,
+                    height: state.height,
+                    scale: state.scale,
+                    sidecar: sidecar.clone(),
+                }
+            });
             changes.push(Drawing {
                 name: key.1.clone(),
                 generation: state.generation,
                 drawing,
+                configure,
                 key,
                 sidecar,
             });
@@ -658,7 +681,7 @@ impl Images {
             .states
             .iter()
             .filter_map(|(key, state)| {
-                if !belongs(&inner, key) || !inner.drawing(key, state) {
+                if !belongs(&inner, key) || !inner.shown(key, state) {
                     return None;
                 }
                 Some((key.clone(), inner.handles[key]))
