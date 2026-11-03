@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F317-4: The exit source of the store end is registered through the entrance of `observe.m`, and it releases itself when it is cancelled.
 - F317-3: Ending a document store ends the network process, so its delayed cache writes cannot reach the removed folder.
 - F393-2: The repositories table describes the sidecar `alacritty` by its current drawing.
 - F393-1: The plugin list of the repositories table names only plugins.

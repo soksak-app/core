@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F317-4: store 종료의 exit source를 `observe.m`의 entrance로 등록하고, cancel될 때 자신을 release한다.
 - F317-3: document store를 끝내면 network process도 끝나므로, 지연된 cache 쓰기가 지운 폴더에 닿지 않는다.
 - F393-2: 저장소 표는 sidecar `alacritty`를 지금의 그리기로 적는다.
 - F393-1: 저장소 표의 plugin 목록은 plugin만 적는다.

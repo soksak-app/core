@@ -2314,17 +2314,17 @@ static void endNetworkProcess(void) {
     [storeEndsWaiting removeAllObjects];
     pid_t process = storeEndProcess;
     storeEndProcess = 0;
-    dispatch_source_t exit = process > 0
-        ? dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)process, DISPATCH_PROC_EXIT, dispatch_get_main_queue())
-        : NULL;
+    __block dispatch_source_t exit = NULL;
+    void (^exited)(void) = ^{
+        dispatch_source_cancel(exit);
+        for (void (^finish)(const char *) in waiting) finish(NULL);
+    };
+    if (process > 0) exit = sp_observe_process_exit("document.store-end", SP_OBSERVE_RECORD, process, dispatch_get_main_queue(), exited);
     if (!exit) {
         for (void (^finish)(const char *) in waiting) finish(NULL);
         return;
     }
-    dispatch_source_set_event_handler(exit, ^{
-        dispatch_source_cancel(exit);
-        for (void (^finish)(const char *) in waiting) finish(NULL);
-    });
+    dispatch_source_set_cancel_handler(exit, ^{ dispatch_release(exit); });
     dispatch_resume(exit);
     // A process that already ended reports its exit through the source, and any other refusal is the failure of the end.
     if (kill(process, SIGKILL) != 0 && errno != ESRCH) {
