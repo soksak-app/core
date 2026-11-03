@@ -1,6 +1,6 @@
 module github.com/soksak-app/core/packages/host/wailsv3
 
-go 1.25.0
+go 1.27.3
 
 require (
 	github.com/soksak-app/core/packages/sok/wailsv3 v0.0.0
