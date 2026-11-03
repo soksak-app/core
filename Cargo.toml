@@ -1,4 +1,4 @@
-# Rust 워크스페이스. 크레이트가 하나의 Cargo.lock 과 target/ 을 공유한다.
+# The Rust workspace. Its crates share one Cargo.lock and one target/ folder.
 [workspace]
 resolver = "2"
 members = ["apps/tauriv2", "packages/host/tauriv2", "packages/sok/tauriv2"]
@@ -17,7 +17,13 @@ opt-level = 3
 [profile.dev.package.memchr]
 opt-level = 3
 
-# Wails release 빌드의 `-s -w` 처럼 release 실행 파일의 기호 테이블을 벗긴다. 진단 코드 검사는
-# 기호가 아니어도 남는 문자열로 한다(scripts/check-release.mjs).
+# The release executable drops its symbol table, as the `-s -w` of the Wails release build does. The check for diagnostic
+# code reads the strings that remain without symbols (scripts/check-release.mjs).
 [profile.release]
 strip = true
+
+# The proc-macro libraries and build scripts that the release build makes for the host are not stripped: no release carries
+# them, and on macOS 27 dyld refuses a proc-macro library that was stripped for the deployment target of the Makefile
+# (`mis-aligned LINKEDIT string pool`), so rustc cannot load it.
+[profile.release.build-override]
+strip = false

@@ -14,8 +14,8 @@ const languages = {
   "objective-c": new Set([".m"]),
   "native-interface": new Set([".h"]),
   declaration: new Set([".json"]),
-  // The build declaration is a Makefile, which has no extension.
-  build: new Set(["Makefile"]),
+  // A build declaration is a Makefile, which has no extension, or the Cargo manifest of the Rust workspace and its profiles.
+  build: new Set(["Makefile", ".toml"]),
   // A workflow declaration of the continuous integration is a YAML file.
   workflow: new Set([".yml"]),
 };
@@ -40,6 +40,7 @@ const MATRIX = [
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
+  lane("Rust workspace release profile", "build", ["Cargo.toml"], ["scripts/test/rust-release-profile.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library build and pkg-config", "build", ["native/darwin/Makefile", "native/darwin/process-identity/Makefile"], ["scripts/test/native-pkgconfig.test.mjs", "scripts/test/native-offline.test.mjs", "scripts/test/native-architecture.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
     "scripts/check-e2e.mjs",
@@ -240,6 +241,13 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/document_store_end_test.m", id: "no process writes into the folder of a store that loaded nothing" },
     ],
     expected: "The end of a store whose document loaded nothing also ends the network process of the store, so no process writes into its folder after the end.",
+    levels: ["unit"],
+  },
+  {
+    id: "F509",
+    implementation: [{ file: "Cargo.toml", symbol: "[profile.release.build-override]\nstrip = false" }],
+    tests: [{ file: "scripts/test/rust-release-profile.test.mjs", id: "a release build loads the proc-macro libraries that it builds for the host" }],
+    expected: "A release build of the Rust workspace with the deployment target of the Makefile builds the proc-macro libraries for the host without stripping them, so rustc loads them.",
     levels: ["unit"],
   },
   {
