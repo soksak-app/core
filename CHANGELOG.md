@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F292-44-1-1: The held item waits for a published release of the library that contains the change, because 2.6.0 does not.
 - F332-5, F332-6: The files and browser plugins draw their sections in their own views; files 0.0.18 and browser 0.0.18 are published.
 - F298-9: Every script of `e2e/package.json` that drives a running application is reached through a make target whose name starts with `e2e`, and `scripts/test/test-kinds.test.mjs` fails on a script without one.
 - F374-7: A frame sends the view no screen message since VT S125; the measurement of VT S130 is stated.
