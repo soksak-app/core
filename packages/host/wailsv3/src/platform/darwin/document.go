@@ -268,13 +268,17 @@ func failNextCreation(cause string) {
 	C.main_sp_document_fail_creation_for_test(text)
 }
 
-// creationError is the error of a native creation that returned no handle. It states the native cause when the native layer gives one.
+// creationError is the error of a native creation that returned no handle, followed by the native cause. Every failure of the
+// native creation states its cause, so an empty cause is reported as missing rather than left out.
 func creationError(message, cause string) error {
 	if cause == "" {
-		return errors.New(message)
+		cause = missingNativeCause
 	}
 	return fmt.Errorf("%s: %s", message, cause)
 }
+
+// missingNativeCause is the cause that an error states when the native layer failed a creation without a cause.
+const missingNativeCause = "the native layer stated no cause"
 
 func (implementation) LoadDocument(document unsafe.Pointer, url string) bool {
 	address := C.CString(url)

@@ -5,6 +5,7 @@
 ## 미배포
 
 - F435: load average 12~28에서 잰 F444 뒤 view benchmark를 기록하고, 1회 발생한 card 위치 실패를 재현되지 않음으로 닫는다.
+- F506: document region과 view page의 모든 생성 실패가 원인을 밝히고, host는 원인 없는 native 실패를 그렇다고 보고한다.
 - F500: view page는 메인 페이지처럼 가려진 window에서도 document를 visible로 유지하고 animation frame을 계속 실행한다.
 - F505: native library가 object, test, ZXing을 arm64로 빌드하고, ZXing을 빌드할 때마다 새 build folder에서 configure한다.
 - F501: host parity 검사가 각 host의 diagnostic method를 endpoint 명세의 진단 빌드 표와 비교하고, 그 표가 이제 `diagnostics.presentation.failure`를 밝힌다.

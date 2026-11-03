@@ -243,6 +243,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F506",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "static void *documentCreationFails(NSString *cause) {" },
+      { file: "packages/host/wailsv3/src/platform/darwin/document.go", symbol: "const missingNativeCause = \"the native layer stated no cause\"" },
+      { file: "packages/host/tauriv2/src/platform/darwin/document.rs", symbol: "const MISSING_NATIVE_CAUSE: &str = \"the native layer stated no cause\";" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_cause_test.m", id: "the surface has no native plane" },
+      { file: "packages/host/wailsv3/src/platform/darwin/document_test.go", id: "TestCreateDocumentReportsAMissingNativeCause" },
+      { file: "packages/host/tauriv2/src/platform/darwin/document_test.rs", id: "create_reports_a_missing_native_cause" },
+    ],
+    expected: "Every failed creation of a document region or view page states the condition that failed, and both hosts report an empty native cause as a missing cause.",
+    levels: ["native", "unit"],
+  },
+  {
     id: "F501",
     implementation: [
       { file: "scripts/check-host-parity.mjs", symbol: "export function specDiagnosticMethods(endpointMarkdown) {" },

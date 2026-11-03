@@ -26,6 +26,26 @@ fn create_reports_the_native_cause() {
     );
 }
 
+// A native layer that fails a creation without stating a cause is reported as such, so the error never hides that the cause
+// is missing.
+// contract: host.document.creation-error-states-the-cause
+#[test]
+fn create_reports_a_missing_native_cause() {
+    let _guard = INJECTION
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let cause = CString::new("").unwrap();
+    unsafe { sp_document_fail_creation_for_test(cause.as_ptr()) };
+    let error = match create(0, "/probe", "", "probe", None, Box::new(|_| {})) {
+        Ok(_) => panic!("a creation that the native layer fails returned a handle"),
+        Err(error) => error,
+    };
+    assert_eq!(
+        error,
+        "cannot create a document view in this surface: the native layer stated no cause"
+    );
+}
+
 struct CallbackDrop(std::sync::Arc<std::sync::atomic::AtomicUsize>);
 
 impl Drop for CallbackDrop {

@@ -1,5 +1,6 @@
-// Checks that a document region creation that fails reports its native cause through sp_document_last_error. A data store directory
-// that cannot be created names the directory and the error of the file system, so the host error names the cause.
+// Checks that every document region creation that fails reports its native cause through sp_document_last_error, so the host
+// error names the cause. A data store directory that cannot be created names the directory and the error of the file system;
+// each invalid argument and a surface without a native plane name the condition that failed.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "document_view.h"
@@ -32,6 +33,31 @@ int main(void) {
         NSString *cause = [NSString stringWithUTF8String:sp_document_last_error()];
         check([cause hasPrefix:@"cannot create the data store directory /dev/null/soksak-store: "],
             [NSString stringWithFormat:@"the failure names the directory and its error: %@", cause]);
+
+        NSString *store = [NSTemporaryDirectory() stringByAppendingPathComponent:@"soksak-document-cause-store"];
+        NSView *outside = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)] autorelease];
+        NSView *plain = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)] autorelease];
+        [window.contentView addSubview:plain];
+        struct { void *surface; const char *directory; const char *folder; const char *plugin; const char *channel;
+            sp_document_changed changed; NSString *cause; } cases[] = {
+            { NULL, store.UTF8String, "/tmp", "probe", "", changed, @"the surface is missing" },
+            { outside, store.UTF8String, "/tmp", "probe", "", changed, @"the surface is not in a window" },
+            { surface, NULL, "/tmp", "probe", "", changed, @"the data store directory is missing" },
+            { surface, store.UTF8String, "/tmp", "probe", "", NULL, @"the change callback is missing" },
+            { surface, store.UTF8String, NULL, "probe", "", changed, @"the view has no folder" },
+            { surface, store.UTF8String, "/tmp", NULL, "", changed, @"the view has no plugin" },
+            { surface, store.UTF8String, "/tmp", "probe", "\xff", changed, @"the channel of the view is not UTF-8" },
+            { plain, store.UTF8String, "/tmp", "probe", "", changed, @"the surface has no native plane" },
+            { plain, store.UTF8String, NULL, NULL, NULL, changed, @"the surface has no native plane" },
+        };
+        for (size_t index = 0; index < sizeof cases / sizeof cases[0]; index++) {
+            void *refused = sp_document_create(cases[index].surface, cases[index].directory, cases[index].folder,
+                cases[index].plugin, cases[index].channel, cases[index].changed, NULL);
+            NSString *reported = [NSString stringWithUTF8String:sp_document_last_error()];
+            check(refused == NULL && [reported isEqualToString:cases[index].cause],
+                [NSString stringWithFormat:@"case %zu fails with \"%@\" (actual %@, \"%@\")", index, cases[index].cause,
+                    refused ? @"a document" : @"no document", reported]);
+        }
     }
     return failures == 0 ? 0 : 1;
 }
