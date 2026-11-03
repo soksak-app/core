@@ -235,6 +235,23 @@ int main(int argc, char **argv) { @autoreleasepool {
     NSArray<NSString *> *written = observeAbsent(store);
     check(written == nil, [NSString stringWithFormat:@"no process writes into the folder of an ended store: %@", written]);
 
+    // A document that loads nothing starts the network process of its store, which creates the network cache after the store
+    // ended when the end did not know the process yet.
+    NSString *unloaded = [temporaryFolder(@"soksak-document-store-unloaded-") stringByAppendingPathComponent:@"store"];
+    void *unloadedSurface = prepareSurface();
+    @autoreleasepool {
+        void *unloadedDocument = sp_document_create(unloadedSurface, unloaded.fileSystemRepresentation, NULL, NULL, NULL, changed, NULL);
+        check(unloadedDocument != NULL, @"a document that loads nothing is created");
+        sp_document_close(unloadedDocument);
+    }
+    sp_surface_close(unloadedSurface);
+    storeClosed = NO;
+    sp_document_store_close(unloaded.fileSystemRepresentation, recordStoreClosed, NULL);
+    until(@"the data store of a document that loaded nothing ended", ^{ return storeClosed; });
+    check(removefile(unloaded.fileSystemRepresentation, NULL, REMOVEFILE_RECURSIVE) == 0, @"the folder of a store that loaded nothing is removed");
+    NSArray<NSString *> *unloadedWritten = observeAbsent(unloaded);
+    check(unloadedWritten == nil, [NSString stringWithFormat:@"no process writes into the folder of a store that loaded nothing: %@", unloadedWritten]);
+
     // The removal of a temporary folder ends the store under it, so the folder stays removed.
     int status = 0;
     NSString *folder = nil, *message = nil;

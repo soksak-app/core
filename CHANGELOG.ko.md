@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F399: 아무것도 load하지 않은 document의 store를 끝내면 network process도 끝나므로, 그 뒤에는 어떤 process도 폴더에 쓰지 않는다.
 - F292-44-1-1: 2.6.0에 변경이 없으므로, hold 항목은 그 변경을 담은 library의 publish release를 기다린다.
 - F332-5, F332-6: files와 browser plugin은 자기 view에서 section을 그리며, files 0.0.18과 browser 0.0.18이 publish되었다.
 - F298-9: 실행 중인 애플리케이션을 다루는 `e2e/package.json`의 모든 script는 이름이 `e2e`로 시작하는 make target으로 실행하며, `scripts/test/test-kinds.test.mjs`는 target이 없는 script에서 실패한다.

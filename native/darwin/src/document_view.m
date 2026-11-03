@@ -2383,30 +2383,37 @@ void sp_document_store_close(const char *directory, sp_document_store_closed clo
         closed(context, "a document of the directory is open");
         return;
     }
-    // WebKit removes the session of a store from the network process when the last reference to the store goes away
-    // (WebsiteDataStore::~WebsiteDataStore calls NetworkProcessProxy::removeSession), and calls this handler after the
-    // network process has destroyed the session and closed its storage. A closed web view can still hold its
-    // configuration for a while, so the handler runs when that reference also goes away.
-    // The session of the store is removed first; a process that ended
-    // before that would start again for the session and open its databases in the directory.
-    pid_t networkProcess = store._networkProcessIdentifier;
-    if (networkProcess > 0) storeEndProcess = networkProcess;
     storeRemovals++;
     [endingStores() addObject:path];
-    [store _setCompletionHandlerForRemovalFromNetworkProcess:^(NSError *error) {
-        char *failure = error ? strdup(error.localizedDescription.UTF8String) : NULL;
-        void (^finish)(const char *) = [^(const char *refusal) {
-            [endingStores() removeObject:path];
-            closed(context, failure ?: refusal);
-            free(failure);
-        } copy];
-        if (!storeEndsWaiting) storeEndsWaiting = [NSMutableArray new];
-        [storeEndsWaiting addObject:finish];
-        [finish release];
-        storeRemovals--;
-        if (storeRemovals == 0) endStoreProcesses();
+    // A store whose document loaded nothing can have no known network process yet, and that process then writes into the directory
+    // after the end. A fetch of the records of the store starts the process and answers after it runs, so the end knows it.
+    [store fetchDataRecordsOfTypes:[NSSet setWithObject:WKWebsiteDataTypeDiskCache] completionHandler:^(NSArray<WKWebsiteDataRecord *> *records) {
+        (void)records;
+        // WebKit removes the session of a store from the network process when the last reference to the store goes away
+        // (WebsiteDataStore::~WebsiteDataStore calls NetworkProcessProxy::removeSession), and calls this handler after the
+        // network process has destroyed the session and closed its storage. A closed web view can still hold its
+        // configuration for a while, so the handler runs when that reference also goes away.
+        // The session of the store is removed first; a process that ended
+        // before that would start again for the session and open its databases in the directory.
+        pid_t networkProcess = store._networkProcessIdentifier;
+        if (networkProcess > 0) storeEndProcess = networkProcess;
+        BOOL named = networkProcess > 0;
+        [store _setCompletionHandlerForRemovalFromNetworkProcess:^(NSError *error) {
+            char *failure = error ? strdup(error.localizedDescription.UTF8String)
+                : named ? NULL : strdup("the network process of the store has no identifier");
+            void (^finish)(const char *) = [^(const char *refusal) {
+                [endingStores() removeObject:path];
+                closed(context, failure ?: refusal);
+                free(failure);
+            } copy];
+            if (!storeEndsWaiting) storeEndsWaiting = [NSMutableArray new];
+            [storeEndsWaiting addObject:finish];
+            [finish release];
+            storeRemovals--;
+            if (storeRemovals == 0) endStoreProcesses();
+        }];
+        [dataStores() removeObjectForKey:path];
     }];
-    [dataStores() removeObjectForKey:path];
 }
 
 bool sp_document_set_hidden_clear_delay(double seconds) {

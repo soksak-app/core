@@ -233,6 +233,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F399",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "fetchDataRecordsOfTypes" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_store_end_test.m", id: "no process writes into the folder of a store that loaded nothing" },
+    ],
+    expected: "The end of a store whose document loaded nothing also ends the network process of the store, so no process writes into its folder after the end.",
+    levels: ["unit"],
+  },
+  {
     id: "F396",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "application active at the press: %s, window key at the press: %s" },
