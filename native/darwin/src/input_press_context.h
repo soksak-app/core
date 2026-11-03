@@ -17,6 +17,8 @@ void sp_input_press_context_pop(sp_input_press_context *context);
 bool sp_input_press_context_point(void *window, double *x, double *y);
 uint64_t sp_input_press_origin_set(void *window, int button, double x, double y);
 bool sp_input_press_origin_point(void *window, int button, double *x, double *y, uint64_t *token);
+// The state of the application and of the window at the press of a stored origin. Returns false when no origin is stored.
+bool sp_input_press_origin_state(void *window, int button, bool *active, bool *key);
 void sp_input_press_origin_clear(void *window, int button, uint64_t token);
 
 #endif

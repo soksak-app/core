@@ -342,6 +342,7 @@ NATIVE_TESTS = observe_test \
   document_press_test \
   image_nonce_ownership_test \
   image_region_test \
+  press_release_test \
   image_region_decoration_test \
   iosurface_use_count_test \
   image_region_lease_test \

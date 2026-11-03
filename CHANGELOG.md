@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F396: The error of a pointer release that the page did not receive names the button and whether the application was active and the window key at the press.
 - F395: A closed notice that finds room in the queue of a sidecar writes no buffered record, and the flush tests of both hosts no longer require a record for a close that found room.
 - F317: The hosted repeats of `document_report_test`, `document_view_test` and `document_store_end_test` each passed 20 of 20 runs, so the failure of the temporary store folder is closed.
 - F317-5: Ending a document store also ends the GPU process, so the media cache of a closed document cannot change the folder after the store has ended.

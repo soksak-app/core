@@ -207,6 +207,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F396",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "application active at the press: %s, window key at the press: %s" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/press_release_test.m", id: "a release that the page does not receive reports the state of its press" },
+    ],
+    expected: "The error of a pointer release that the page did not receive names the button and whether the application was active and the window key at the press.",
+    levels: ["unit"],
+  },
+  {
     id: "F395",
     implementation: [
       { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "format!(\"close {surface}: outbox full, buffered\")," },

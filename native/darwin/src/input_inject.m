@@ -67,7 +67,7 @@ uint64_t sp_input_press_origin_set(void *handle, int button, double x, double y)
     }
     uint64_t token = nextPressOriginToken++;
     if (token == 0) token = nextPressOriginToken++;
-    origins[@(button)] = @{ @"token": @(token), @"x": @(x), @"y": @(y) };
+    origins[@(button)] = @{ @"token": @(token), @"x": @(x), @"y": @(y), @"active": @(NSApp.isActive), @"key": @(window.isKeyWindow) };
     return token;
 }
 
@@ -80,6 +80,16 @@ bool sp_input_press_origin_point(void *handle, int button, double *x, double *y,
     if (x) *x = [origin[@"x"] doubleValue];
     if (y) *y = [origin[@"y"] doubleValue];
     if (token) *token = [origin[@"token"] unsignedLongLongValue];
+    return true;
+}
+
+bool sp_input_press_origin_state(void *handle, int button, bool *active, bool *key) {
+    NSCAssert(NSThread.isMainThread, @"mouse press origins belong to the main thread");
+    NSWindow *window = (__bridge NSWindow *)handle;
+    NSDictionary *origin = window ? objc_getAssociatedObject(window, &pressOriginsKey)[@(button)] : nil;
+    if (!origin) return false;
+    *active = [origin[@"active"] boolValue];
+    *key = [origin[@"key"] boolValue];
     return true;
 }
 
