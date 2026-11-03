@@ -108,8 +108,8 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(rows.map((c) => c.label), list.listed.map((id) => names[id]));
     assert.deepEqual(list.controls.filter((c) => c.name === "core.settings-modal.manage").map((c) => c.command),
       [{ name: "core.plugins.browse", params: {} }]);
-    await press(s, "core.settings-modal.search", "plugin-search", "TERM", "query");
-    await s.until("core.settings-modal", (modal) => modal.query === "TERM" && modal.listed.join() === "terminal",
+    await press(s, "core.settings-modal.search", "plugin-search", "TERMINAL", "query");
+    await s.until("core.settings-modal", (modal) => modal.query === "TERMINAL" && modal.listed.join() === "terminal",
       "the search did not keep only terminal");
     await press(s, "core.settings-modal.search", "plugin-search", "없는플러그인", "query");
     await s.until("core.settings-modal", (modal) => modal.listed.length === 0, "a query without a match still lists plugins");

@@ -8763,6 +8763,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F409",
+    implementation: [{ file: "e2e/view-content.mjs", symbol: "export async function viewContentCases(" }],
+    tests: [{ file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" }],
+    expected: "The window checks read the entries that they name, wait for the status that they judge, and cover the installed plugins.",
+    levels: ["application"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

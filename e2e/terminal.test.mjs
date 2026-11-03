@@ -265,7 +265,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(browser, "the fixture must contain a visible browser card");
     await s.run("core.card.split", { card: browser.id, side: "right", plugin: "browser" });
     await s.until("core.surfaces", (surfaces) => surfaces.filter((item) =>
-      item.visible && item.plugin === "browser").length === 2, "two browsers did not become visible");
+      item.visible && item.kind === "tab" && item.plugin === "browser").length === 2, "two browsers did not become visible");
     for (const terminal of terminals) {
       await s.until("terminal.session", (state) => Boolean(state.sessionId),
         `session ${terminal.surface} did not open`, { surface: terminal.surface });
@@ -275,12 +275,14 @@ for (const app of Object.values(APPS)) {
     // The app DOM webviews are the main page and one view web view per visible view surface. A view web view is
     // not a document region, so it is counted in appDomWebviews and not in documentWebviews.
     const viewSurfaces = (await s.get("core.surfaces")).filter((item) =>
-      item.visible && (item.plugin === "terminal" || item.plugin === "browser"));
+      item.visible && item.kind === "tab" && (item.plugin === "terminal" || item.plugin === "browser"));
     assert.equal(viewSurfaces.length, 5, `the fixture must show five view surfaces, found ${JSON.stringify(viewSurfaces)}`);
-    const expectedAppDom = 1 + viewSurfaces.length;
+    // The section views of the sidebars are view web views too, shown or hidden.
+    const sectionViews = (await s.get("core.surfaces")).filter((item) => item.kind === "section");
+    const expectedAppDom = 1 + viewSurfaces.length + sectionViews.length;
     assert.equal(window.webviews.filter((webview) => webview.main).length, 1, "the main page must be one webview of the window");
     assert.equal(window.appDomWebviews, expectedAppDom,
-      `expected the main page and ${viewSurfaces.length} view web views (${expectedAppDom} app DOM webviews), measured ${window.appDomWebviews}`);
+      `expected the main page, ${viewSurfaces.length} tab views and ${sectionViews.length} section views (${expectedAppDom} app DOM webviews), measured ${window.appDomWebviews}`);
     assert.equal(window.documentWebviews, 2, "external browser documents must have independent native WebViews");
     const processes = terminalProcessSnapshot(app.configDir);
     if (processes.shells.length !== 3) {

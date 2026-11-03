@@ -50,6 +50,8 @@ for (const app of Object.values(APPS)) {
       writeFileSync(file, original);
       await s.run("host.window.reload");
     });
+    // The reload of a ready page saves what is pending first, and a refused file refuses that save, so nothing is pending when the file changes.
+    await s.run("core.projects.flush");
     writeFileSync(file, "[]");
 
     const pattern = /^error page page: .*projects\.json: projects\.json: format must be 1$/;

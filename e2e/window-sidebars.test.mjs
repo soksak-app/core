@@ -55,7 +55,10 @@ for (const app of Object.values(APPS))
       const grid = await s.get("core.grid");
       assert.deepEqual(geometry(grid), geometry(baseline), "selection changed fixed sidebar or content geometry");
       const rail = await s.get("core.rail");
-      const bars = (await s.get("core.sidebars")).filter((bar) => bar.placement === "window");
+      // A section view that the selection mounts reports ready after the selection settles.
+      const bars = (await s.until("core.sidebars", (all) => all.every((bar) => bar.placement !== "window"
+        || bar.sections.filter((section) => section.mounted).every((section) => section.phase === "ready")),
+      "selected sidebar section views are not ready")).filter((bar) => bar.placement === "window");
       const overrides = settings.links.filter((link) => link.place.startsWith("window-") && link.plugin === tab.plugin);
       assert.equal(
         rail.groups.length,
@@ -88,10 +91,6 @@ for (const app of Object.values(APPS))
         assert.ok(
           bar.sections.every((section) => section.error === null),
           "selected section has an error",
-        );
-        assert.ok(
-          bar.sections.filter((section) => section.mounted).every((section) => section.phase === "ready"),
-          "selected sidebar section views are not ready",
         );
       }
       assert.deepEqual(

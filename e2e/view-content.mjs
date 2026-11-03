@@ -99,6 +99,7 @@ export async function viewContentCases(s, diagnostic) {
   const hwpPath = `${folder}/content.hwp`;
   const editorText = "SOKSAK EDITOR CONTENT";
   const terminalText = "SOKSAK TERMINAL CONTENT";
+  const termText = "SOKSAK TERM CONTENT";
   writeFileSync(join(root, editorPath), editorText + "\n");
   copyFileSync(FIXTURE, join(root, hwpPath));
   const status = async (tab, name, predicate) => {
@@ -126,6 +127,13 @@ export async function viewContentCases(s, diagnostic) {
       await status(tab, "hwp.document", value => value.path === hwpPath && value.phase === "ready" && value.pages === 1);
       await area(tab, "hwp.studio");
       return pixels(command, "속삭한글문서확인", "ko-KR", diagnostic);
+    } }],
+    ["term", { ready: async (_, { tab }) => {
+      await status(tab, "term.session", value => value.sessionId && value.cols > 0 && value.rows > 0);
+      await s.run("term.input", { bytes: `printf '${termText}\\n'\r` }, tab);
+      await status(tab, "term.screen", rows => rows.map(row => row.map(cell => cell.ch ?? " ").join("")).join("\n").includes(termText));
+      await area(tab, "term.view");
+      return pixels(command, termText, "en-US", diagnostic);
     } }],
     ["terminal", { ready: async (_, { tab }) => {
       await status(tab, "terminal.session", value => value.sessionId && value.cols > 0 && value.rows > 0);

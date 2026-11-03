@@ -129,11 +129,16 @@ for (const app of Object.values(APPS)) {
     sidebars = await s.until("core.sidebars", (value) => of(value, cardSidebar)?.layout === "tabs" && mounted(of(value, cardSidebar), ["files.tree"]),
       "the tabs layout did not mount the first section");
     assert.equal(of(sidebars, cardSidebar).tab, "files.tree");
-    assert.equal(of(sidebars, cardSidebar).sections[1].mounted, false, "a section of an unselected tab is mounted");
+    // A section of an unselected tab keeps its surface and is hidden (docs/spec/plugins.md#sections).
+    const hidden = async (section, message) => {
+      const { surfaceId } = of(await s.get("core.sidebars"), cardSidebar).sections.find((value) => value.id === section);
+      await s.until("core.surfaces", (all) => all.find((item) => item.surface === surfaceId)?.visible === false, message);
+    };
+    await hidden("files.bookmarks", "a section of an unselected tab is shown");
     await press(s, "core.sidebar.section.tab", indexOf(sidebars, "tabs", cardSidebar, "files.bookmarks"));
     sidebars = await s.until("core.sidebars", (value) => of(value, cardSidebar)?.tab === "files.bookmarks" && mounted(of(value, cardSidebar), ["files.bookmarks"]),
       "a click on the tab did not show its section");
-    assert.equal(of(sidebars, cardSidebar).sections[0].mounted, false, "the previous tab's section stayed mounted");
+    await hidden("files.tree", "the section of the previous tab stayed shown");
 
     await assert.rejects(s.run("core.sidebar.section.fold", { sidebar: cardSidebar, section: "files.bookmarks" }), /does not use the list layout/);
   });
@@ -174,9 +179,9 @@ for (const app of Object.values(APPS)) {
     const surface = of(sidebars).surface;
     assert.ok(surface, "the browser sections received the browser tab");
     const surfaces = await s.get("core.surfaces");
-    for (const id of sections) {
-      assert.ok(surfaces.some((item) => item.kind === "section" && item.sidebar === sidebar && item.surface === `${sidebar}/${id}`),
-        `core.surfaces does not list the section surface ${sidebar}/${id}`);
+    for (const { surfaceId } of of(sidebars).sections) {
+      assert.ok(surfaces.some((item) => item.kind === "section" && item.sidebar === sidebar && item.surface === surfaceId),
+        `core.surfaces does not list the section surface ${surfaceId}`);
     }
 
     // The two opened documents are the navigation of the browser tab that the sections follow.

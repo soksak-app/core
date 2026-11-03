@@ -106,12 +106,11 @@ for (const app of Object.values(APPS)) {
         `${label}: project did not become active`);
       await child.until("core.grid", (grid) => grid?.cards?.length > 0,
         `${label}: project grid did not render`);
-      const terminalSurfaces = await child.until("core.surfaces", (surfaces) => {
-        const usable = surfaces.filter((surface) => surface.visible && surface.plugin === "terminal" &&
-          surface.exposes.includes("status terminal.session"));
-        return usable.length > 0 ? usable : null;
-      }, `${label}: terminal surface did not become usable`);
-      await child.get("terminal.session", terminalSurfaces[0].surface);
+      const usable = (surface) => surface.visible && surface.plugin === "terminal" &&
+        surface.exposes.includes("status terminal.session");
+      const surfaces = await child.until("core.surfaces", (all) => all.some(usable),
+        `${label}: terminal surface did not become usable`);
+      await child.get("terminal.session", surfaces.find(usable).surface);
       await child.run("core.space.add");
       await child.run("core.projects.flush");
       return { id: opened.id, child };

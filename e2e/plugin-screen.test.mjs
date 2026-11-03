@@ -32,7 +32,7 @@ for (const app of Object.values(APPS)) {
     const library = await showPlugins(s);
     const plugins = await s.get("core.plugins");
     assert.deepEqual(library.plugins.shown, plugins.plugins.map((row) => row.id));
-    assert.deepEqual(library.plugins.shown, ["browser", "editor", "files", "hwp", "terminal"]);
+    assert.deepEqual(library.plugins.shown, ["browser", "editor", "files", "hwp", "term", "terminal"]);
     for (const row of plugins.plugins) {
       assert.ok(row.description.length > 0, `${row.id} shows no description`);
       assert.ok(row.installed?.version, `${row.id} shows no installed version: ${JSON.stringify(row)}`);
@@ -45,8 +45,8 @@ for (const app of Object.values(APPS)) {
     const update = plugins.updates.some((item) => item.id === "files") ? ["update"] : [];
     assert.deepEqual(actionsOf(library, "files"), [...update, "disable", "remove"]);
 
-    await s.run("core.library.plugins.search", { query: "TERM" });
-    await s.until("core.library", (value) => value.plugins.query === "TERM" && value.plugins.shown.join() === "terminal",
+    await s.run("core.library.plugins.search", { query: "TERMINAL" });
+    await s.until("core.library", (value) => value.plugins.query === "TERMINAL" && value.plugins.shown.join() === "terminal",
       "the plugin search did not keep only terminal");
     await s.run("core.library.plugins.search", { query: "없는플러그인" });
     await s.until("core.library", (value) => value.plugins.shown.length === 0, "a query without a match still lists plugins");

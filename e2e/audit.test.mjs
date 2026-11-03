@@ -13,10 +13,10 @@ import { unauditedViews } from "./audit-surfaces.mjs";
 async function clean(s, where) {
   const { unbound } = await s.get("core.page.audit");
   assert.deepEqual(unbound, [], `${where}: main document controls without a command or dom name`);
-  const surfaces = await s.surfaces();
-  const unaudited = unauditedViews(surfaces);
-  assert.deepEqual(unaudited.map((surface) => `${surface.plugin} ${surface.surface}`), [],
+  // A view that a focus change draws registers its entries after it is placed, so the wait ends when every visible view exposes its document.
+  await s.until("core.surfaces", (all) => unauditedViews(all.filter((surface) => surface.visible)).length === 0,
     `${where}: visible views whose page does not expose core.surface.document`);
+  const surfaces = await s.surfaces();
   for (const surface of surfaces) {
     if (!surface.exposes.includes("status core.surface.document")) continue;
     const doc = await s.get("core.surface.document", surface.surface);

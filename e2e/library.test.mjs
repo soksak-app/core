@@ -69,7 +69,8 @@ async function assertVisibleTerminalRasters(s, minimum, message) {
 async function assertNoOrphanNativeSurfaces(s, message) {
   const grid = await s.get("core.grid");
   const host = await s.get("host.window");
-  const owned = new Set(grid.cards.flatMap((card) => card.tabs.map((tab) => tab.id)));
+  const sections = (await s.get("core.sidebars")).flatMap((sidebar) => sidebar.sections.map((section) => section.surfaceId));
+  const owned = new Set([...grid.cards.flatMap((card) => card.tabs.map((tab) => tab.id)), ...sections]);
   const orphan = host.surfaces.filter((surface) => !owned.has(surface.id));
   assert.deepEqual(orphan, [], `${message}: orphan native surfaces ${orphan.map((surface) => surface.id).join(", ")}`);
 }
@@ -345,9 +346,12 @@ for (const app of Object.values(APPS)) {
     const projectWindow = listed.find((item) => item.project === folder);
     const other = s.on(projectWindow.window);
     const terminals = await terminalReady(other);
-    for (const terminal of terminals) {
-      await other.until("terminal.session", (session) => typeof session?.sessionId === "string" && session.sessionId !== "",
-        `terminal ${terminal.surface} of the project did not open its session`, { surface: terminal.surface });
+    // A terminal in a covered window opens its session when the window is shown (docs/spec/native-surfaces.md#image-regions), so it starts no opening here.
+    if (!(await other.get("host.window")).occluded) {
+      for (const terminal of terminals) {
+        await other.until("terminal.session", (session) => typeof session?.sessionId === "string" && session.sessionId !== "",
+          `terminal ${terminal.surface} of the project did not open its session`, { surface: terminal.surface });
+      }
     }
     rmSync(folder, { recursive: true });
     // This check shows the missing folder in the library and makes the project unopenable. Both errors are shown on the screen and recorded.
@@ -358,7 +362,7 @@ for (const app of Object.values(APPS)) {
     const removed = folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     // The files tree section view reports the removal with runtime.error, which writes `error page surface <surface> <where>: <text>`
     // (docs/spec/native-surfaces.md#view-surfaces).
-    s.expectError(new RegExp(`^error page surface left/files\\.tree files tree: (lstat ${removed}: no such file or directory|git rev-parse --show-toplevel: exit status 128: fatal: (Unable to read current working directory|cannot change to '${removed}'): No such file or directory)$`));
+    s.expectError(new RegExp(`^error page surface [^ ]+/left/files\\.tree files tree: (lstat ${removed}: no such file or directory|git rev-parse --show-toplevel: exit status 128: fatal: (Unable to read current working directory|cannot change to '${removed}'): No such file or directory)$`));
 
     await s.run("core.projects.browse");
     const library = await s.until("core.library", (state) => state.folderErrors?.[missing.id] !== undefined,

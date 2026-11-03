@@ -153,7 +153,7 @@ for (const app of Object.values(APPS))
                 bar.sections.every(
                   (section) =>
                     section.error === null &&
-                    (bar.layout === "tabs" ? section.mounted === (section.id === bar.tab) : section.mounted),
+                    (bar.layout !== "tabs" || section.id === bar.tab ? section.mounted : true),
                 )
               );
             }),

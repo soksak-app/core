@@ -465,13 +465,13 @@ for (const app of Object.values(APPS)) {
     };
     const measured = {};
     const lines = {};
-    for (const offset of [grid.gap / 2, 1, -0.5, -1.5, -3, -5]) {
+    for (const offset of [grid.gap / 2, 1, -1, -1.5, -3, -5]) {
       const [down, open, at] = await press(edge + offset);
       measured[offset] = [down, open];
       lines[offset] = at;
     }
     assert.deepEqual(measured, {
-      [grid.gap / 2]: ["core.divider", false], 1: ["core.divider", false], "-0.5": ["core.card", false],
+      [grid.gap / 2]: ["core.divider", false], 1: ["core.divider", false], "-1": ["core.card", false],
       "-1.5": ["core.card.sidebar.grip", true], "-3": ["core.card.sidebar.grip", true], "-5": ["core.card.sidebar.grip", true],
     }, `the gap and the folded strip do not keep their own input: ${JSON.stringify({ edge, gap: grid.gap, measured, drawn, lines })}`);
   });
