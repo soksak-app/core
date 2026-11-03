@@ -992,6 +992,20 @@ fn cancel_layout_after_setup_error(
     }
 }
 
+/// Names the preparation that the page does not present.
+#[derive(Deserialize)]
+pub(crate) struct CancelRequest {
+    ticket: u64,
+}
+
+/// Abandons the waits of the ticket and cancels its layout on the main thread.
+pub(crate) fn cancel(window: &Window, request: CancelRequest) -> Result<(), String> {
+    let cancel_window = window.clone();
+    exposure::on_main(window, move || {
+        cancel_layout_with_waits(&cancel_window, request.ticket)
+    })
+}
+
 fn cancel_layout_with_waits(window: &Window, ticket: u64) -> Result<(), String> {
     let abandon = documents::abandon_layout_presentation_waits(window, ticket);
     let cancel = cancel_window_layout_ticket(window, ticket);

@@ -110,6 +110,8 @@ test("Tauri page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["document_load", { request: { surface: "s1", document: "doc", url: "https://example.test" } }]);
   await host.call("documentPost", { surface: "s1", document: "doc", message: { ping: 1 } });
   assert.deepEqual(recorded.at(-1), ["document_post", { request: { surface: "s1", document: "doc", message: { ping: 1 } } }]);
+  await host.call("cancelSurfaces", { ticket: 7 });
+  assert.deepEqual(recorded.at(-1), ["cancel_surfaces", { request: { ticket: 7 } }]);
   assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });
   assert.deepEqual(recorded.at(-1), ["wait_presented", {}]);
   assert.deepEqual(await host.call("viewSourceOrigins"), { floor: 0, views: {} });

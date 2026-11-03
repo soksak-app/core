@@ -974,3 +974,10 @@ fn an_image_region_declares_its_presentation_mode() {
         Err(r#"document region "page" must own native input"#.to_string())
     );
 }
+
+#[test]
+fn the_page_can_cancel_a_preparation() {
+    assert!(crate::bindings::command_names().contains(&"cancel_surfaces"));
+    let request: super::CancelRequest = serde_json::from_str(r#"{"ticket":42}"#).unwrap();
+    assert_eq!(request.ticket, 42);
+}

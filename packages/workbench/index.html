@@ -49,7 +49,7 @@ import {
 
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
    are done here. */
-import { latest, onCommit, onRun, placeCompositorRecord, publish, publishAhead } from "./compositor.js";
+import { cancelPrepared, latest, onCommit, onRun, placeCompositorRecord, publish, publishAhead } from "./compositor.js";
 import { authorizeSurface, disposeSurfacesExcept, mountedSurface, onMountedChange, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { prepareRetainedSurface, releaseRetainedSurfaceSlots } from "./retained-surface-mounts.js";
 import { memoryPlacement } from "./memory-placement.js";
@@ -363,7 +363,7 @@ onRender(() => {
 const pageLayout = createPageLayout({
   document, showError, setVerify, log, surfaces: host,
   plane: { currentGrid, settle, clear },
-  compositor: { publishAhead, publish },
+  compositor: { publishAhead, publish, cancelPrepared },
   textSize: () => value("textSize"),
   rendered: () => presented,
   waitSurfaceCompositionDeclared,

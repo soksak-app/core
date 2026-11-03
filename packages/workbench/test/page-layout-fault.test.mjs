@@ -7,10 +7,11 @@ import { armLayoutFault, createPageLayout } from "../page-layout.js";
 test("an armed layout fault fails the next draw once and the next layout draws", async () => {
   const shown = [];
   const verified = [];
+  const cancelled = [];
   const page = createPageLayout({
     document: null, showError: (text) => shown.push(text), setVerify: (rows) => verified.push(rows), log: () => {},
     surfaces: { waitPresented: () => Promise.resolve() }, plane: { clear: () => {} },
-    compositor: { publishAhead: () => Promise.resolve(), publish: () => {} }, textSize: () => 1, rendered: () => Promise.resolve(),
+    compositor: { publishAhead: () => Promise.resolve(), publish: () => {}, cancelPrepared: () => { cancelled.push("cancel"); return Promise.resolve(); } }, textSize: () => 1, rendered: () => Promise.resolve(),
     waitSurfaceCompositionDeclared: () => Promise.resolve(),
   });
   const drawn = [];
@@ -19,6 +20,7 @@ test("an armed layout fault fails the next draw once and the next layout draws",
   assert.equal(await page.presented(), false, "the layout of the armed fault did not fail");
   assert.deepEqual(shown, ["surface presentation failed: diagnostic layout fault"]);
   assert.deepEqual(drawn, []);
+  assert.deepEqual(cancelled, ["cancel"], "the preparation of the failed draw was not cancelled");
   page.onLayout({}, () => drawn.push("second"), [], 0);
   assert.equal(await page.presented(), true);
   assert.deepEqual(drawn, ["second"]);

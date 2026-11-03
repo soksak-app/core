@@ -562,3 +562,11 @@ func TestTheLimitOfAPresentedJoinChangesNothing(t *testing.T) {
 		t.Fatalf("the presented generation joined %d times after the limit of its first join, want 2", len(fake.joins))
 	}
 }
+
+func TestCancelSurfacesWithoutAWindowIsRefused(t *testing.T) {
+	s, _, _ := newLifecycleSurfaces(t, &fakeClock{})
+	s.window = nil
+	if err := s.CancelSurfaces(CancelRequest{Ticket: 42}); err != errNoWindow {
+		t.Fatalf("CancelSurfaces without a window = %v, want %v", err, errNoWindow)
+	}
+}

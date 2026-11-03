@@ -68,19 +68,33 @@ export function createLayoutQueue({ failed, superseded }) {
  * by the start of the request alone, the new DOM would be shown first under the earlier native region. The drawing runs in the next task after the preparation
  * (frame(work), nextTask). The microtask checkpoint where the preparation reply was fulfilled can belong to a ResizeObserver callback, and
  * a task runs outside the observation round (F43). After drawing, it waits for the host presentation (presented) so that the next layout cannot
- * replace the DOM first. If current() differs from epoch while preparing or while waiting to draw, it does not draw.
+ * replace the DOM first. If current() differs from epoch while preparing or while waiting to draw, it does not draw. A preparation that does not reach its presentation is cancelled (cancel).
  */
-export async function drawPrepared({ epoch, current, prepare, draw, frame, presented }) {
+export async function drawPrepared({ epoch, current, prepare, draw, frame, presented, cancel }) {
   if (epoch !== current()) return;
   await prepare();
-  if (epoch !== current()) return;
   let drawn = false;
-  await frame(() => {
-    if (epoch !== current()) return;
-    draw();
-    drawn = true;
-  });
-  if (!drawn) return;
+  try {
+    if (epoch === current()) {
+      await frame(() => {
+        if (epoch !== current()) return;
+        draw();
+        drawn = true;
+      });
+    }
+  } catch (error) {
+    // A preparation holds the layout transaction of its window, and other windows wait for that transaction.
+    try {
+      await cancel();
+    } catch (failure) {
+      throw new Error(`${error?.message ?? error}; cancelling layout: ${failure?.message ?? failure}`);
+    }
+    throw error;
+  }
+  if (!drawn) {
+    await cancel();
+    return;
+  }
   await presented();
 }
 

@@ -23,7 +23,9 @@ use crate::modals::{self, OverlayRequest, PlaceRequest, RevisedContent, UpdateRe
 use crate::projects::{self, CreateProject, Folder};
 use crate::shapes::{self, ShapeRequest};
 use crate::sidecars::WindowSidecars;
-use crate::surfaces::{self, Placement, PreparedSurfaces, PresentRequest, Rect, SyncRequest};
+use crate::surfaces::{
+    self, CancelRequest, Placement, PreparedSurfaces, PresentRequest, Rect, SyncRequest,
+};
 use crate::theme::{self, Theme};
 use crate::windows::{self, Geometry, OpenProject, ProjectShown};
 use crate::workspace;
@@ -295,6 +297,13 @@ async fn present_surfaces(
 ) -> Result<Vec<Placement>, String> {
     let Argument(request) = request;
     surfaces::present(window, request).await
+}
+
+/// Ends a preparation that the page does not present, so the windows that wait for its transaction continue.
+#[tauri::command]
+fn cancel_surfaces(window: Window, request: Argument<CancelRequest>) -> Result<(), String> {
+    let Argument(request) = request;
+    surfaces::cancel(&window, request)
 }
 
 /// Waits for the DOM and native raster presentation of the last stable frame.

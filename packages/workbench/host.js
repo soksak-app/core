@@ -398,6 +398,7 @@ let themeReply = null;
 // Layout preparation and display form one transaction. The native compositor has only one active ticket per window,
 // so no next preparation is sent to the host between the two calls.
 let layoutTurn = Promise.resolve();
+const layoutTurnStart = layoutTurn;
 let layoutFrame = layoutTurn;
 let layoutResult = layoutTurn;
 let surfacePlacementTurn = Promise.resolve();
@@ -665,6 +666,16 @@ export const surfaces = native ? {
         });
       });
     },
+    /** Cancels the preparation that no presentation confirmed. A presentation that fails is cancelled by the host. */
+    cancelPrepared() {
+      return orderedSurfacePlacement(async () => {
+        if (layoutPresented || layoutFrame === layoutTurnStart) return;
+        const frame = await layoutFrame;
+        layoutPresented = true;
+        last = "";
+        await tell("cancelSurfaces", { ticket: frame.ticket });
+      });
+    },
     // Call it after the surface placement RPC has ended so that the page can keep handling native raster events.
     waitPresented: () => tell("waitPresented"),
     /**
@@ -682,6 +693,7 @@ export const surfaces = native ? {
   menuLanguage: () => {},
   // Without a host, the place where this document seats the surface is the actual place. The compositor records that reply.
   place: (record) => ({ placements: record.surfaces.map((s) => ({ id: s.id, ...s.applied })), deferred: [] }),
+  cancelPrepared: async () => {},
   waitPresented: async () => null,
   forget: () => {},
 };

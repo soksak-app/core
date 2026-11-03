@@ -356,6 +356,12 @@ function placementAnswer(record, answer) {
   return placements;
 }
 
+/** Cancels the preparation that its draw did not reach. The next commit then prepares again. */
+export function cancelPrepared() {
+  aheadRecord = null;
+  return app.cancelPrepared();
+}
+
 /**
  * Prepares the next card placement. An existing surface whose position cannot be calculated is hidden first.
  * titlebar is the height of the first row that the next drawing will show, and the host sets the window title

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createLayoutQueue, nextTask } from "../layout-queue.js";
+import { createLayoutQueue, drawPrepared, nextTask } from "../layout-queue.js";
 
 // The failure is reported by failed, so the reply of the request gives only the failed state and does not reject with that failure again (docs/spec/hosts.md#application-log).
 test("a failed presentation answers its request as failed, reports failure, and permits the next drag", async () => {
@@ -107,4 +107,59 @@ test("the wait for the drawn layout answers false when the newest layout failed"
   assert.deepEqual(await newest, { status: "failed" });
   assert.equal(await waiting, false);
   assert.deepEqual(reported.map((error) => error.message), ["replaced presentation failed", failure.message]);
+});
+
+// A preparation holds the layout transaction of its window, and other windows wait for that transaction, so it ends on every path.
+test("a preparation whose draw fails is cancelled and the failure reaches the caller", { timeout: 1000 }, async () => {
+  const calls = [];
+  const failure = new Error("draw failed");
+  await assert.rejects(drawPrepared({
+    epoch: 1, current: () => 1,
+    prepare: async () => { calls.push("prepare"); },
+    draw: () => { throw failure; },
+    frame: async (work) => work(),
+    presented: async () => { calls.push("presented"); },
+    cancel: async () => { calls.push("cancel"); },
+  }), failure);
+  assert.deepEqual(calls, ["prepare", "cancel"]);
+});
+
+test("a preparation that a newer layout replaced before its draw is cancelled", { timeout: 1000 }, async () => {
+  for (const moved of ["prepare", "frame"]) {
+    const calls = [];
+    let current = 1;
+    await drawPrepared({
+      epoch: 1, current: () => current,
+      prepare: async () => { calls.push("prepare"); if (moved === "prepare") current = 2; },
+      draw: () => { calls.push("draw"); },
+      frame: async (work) => { if (moved === "frame") current = 2; work(); },
+      presented: async () => { calls.push("presented"); },
+      cancel: async () => { calls.push("cancel"); },
+    });
+    assert.deepEqual(calls, ["prepare", "cancel"], `the epoch moved during ${moved}`);
+  }
+});
+
+test("a preparation that presents is not cancelled", { timeout: 1000 }, async () => {
+  const calls = [];
+  await drawPrepared({
+    epoch: 1, current: () => 1,
+    prepare: async () => { calls.push("prepare"); },
+    draw: () => { calls.push("draw"); },
+    frame: async (work) => work(),
+    presented: async () => { calls.push("presented"); },
+    cancel: async () => { calls.push("cancel"); },
+  });
+  assert.deepEqual(calls, ["prepare", "draw", "presented"]);
+});
+
+test("a failed cancellation is reported with the failure of the draw", { timeout: 1000 }, async () => {
+  await assert.rejects(drawPrepared({
+    epoch: 1, current: () => 1,
+    prepare: async () => {},
+    draw: () => { throw new Error("draw failed"); },
+    frame: async (work) => work(),
+    presented: assert.fail,
+    cancel: async () => { throw new Error("cancel refused"); },
+  }), /draw failed; cancelling layout: cancel refused/);
 });

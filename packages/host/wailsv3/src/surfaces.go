@@ -1286,6 +1286,24 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	return placed, nil
 }
 
+// CancelRequest names the preparation that the page does not present.
+type CancelRequest struct {
+	Ticket uint64 `json:"ticket"`
+}
+
+// CancelSurfaces abandons the waits of the ticket and cancels its layout on the UI thread.
+func (s *Surfaces) CancelSurfaces(req CancelRequest) error {
+	if s.window == nil {
+		return errNoWindow
+	}
+	done := make(chan error, 1)
+	window := s.window.NativeWindow()
+	if err := system.EnqueueUI(func() { done <- s.cancelLayoutPresentation(window, req.Ticket) }); err != nil {
+		return err
+	}
+	return <-done
+}
+
 // finishLayoutPresentation reads the actual surface frames and commits an accepted presentation on the UI thread.
 func (s *Surfaces) finishLayoutPresentation(window unsafe.Pointer, req PresentRequest) ([]Placement, error) {
 	if err := s.ensureCurrentPresentationJoins(window, req); err != nil {

@@ -314,3 +314,45 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
     dom.window.close();
   }
 });
+
+test("a cancelled preparation sends its ticket once and the next equal request is sent again", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const calls = [];
+  let ticket = 0;
+  t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: () => null,
+    waitSurfaceCompositionDeclared: async () => {},
+  } });
+  t.mock.module("@soksak/runtime", { namedExports: { host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      if (name === "log") return clockAnswer(name, request);
+      calls.push({ name, request });
+      if (name === "syncSurfaces") return { ticket: ++ticket, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
+      if (name === "presentSurfaces") return request.placements;
+      if (name === "cancelSurfaces") return null;
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+  const { surfaces } = await import("../host.js?cancel");
+  const record = (drawn) => ({ surfaces: [], settled: true, drawn, titlebar: 40 });
+  try {
+    await surfaces.cancelPrepared();
+    assert.deepEqual(calls, [], "no preparation is open");
+    await surfaces.place(record(false));
+    await surfaces.cancelPrepared();
+    assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "cancelSurfaces"]);
+    assert.deepEqual(calls[1].request, { ticket: 1 });
+    await surfaces.cancelPrepared();
+    assert.equal(calls.length, 2, "a cancelled preparation is not cancelled again");
+    await surfaces.place(record(false));
+    await surfaces.place(record(true));
+    assert.deepEqual(calls.slice(2).map((c) => c.name), ["syncSurfaces", "presentSurfaces"], "the equal request after a cancellation was not sent");
+    await surfaces.cancelPrepared();
+    assert.equal(calls.length, 4, "a presented preparation is not cancelled");
+  } finally {
+    dom.window.close();
+  }
+});

@@ -55,6 +55,7 @@ const METHOD = {
   appUpdateApply: "AppUpdateApply",
   syncSurfaces: "SyncSurfaces",
   presentSurfaces: "PresentSurfaces",
+  cancelSurfaces: "CancelSurfaces",
   waitPresented: "WaitPresented",
   setTheme: "SetTheme",
   setMenuLanguage: "SetMenuLanguage",

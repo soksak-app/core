@@ -16,6 +16,7 @@ const COMMAND = {
   windowState: "window_state", performance: "performance", log: "log", windowReady: "window_ready", windowClose: "window_close", windowCloseKept: "window_close_kept", appUpdateState: "app_update_state", appUpdateStage: "app_update_stage", appUpdateApply: "app_update_apply",
   syncSurfaces: "sync_surfaces",
   presentSurfaces: "present_surfaces",
+  cancelSurfaces: "cancel_surfaces",
   waitPresented: "wait_presented",
   setTheme: "set_theme",
   setMenuLanguage: "set_menu_language",
@@ -90,6 +91,7 @@ const ARG = {
   viewSourceOrigins: () => ({}),
   syncSurfaces: (v) => ({ request: v }),
   presentSurfaces: (v) => ({ request: v }),
+  cancelSurfaces: (v) => ({ request: v }),
   waitPresented: () => ({}),
   setTheme: (v) => ({ theme: v }),
   setMenuLanguage: (v) => {

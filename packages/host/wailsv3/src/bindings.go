@@ -136,6 +136,19 @@ func (h *Host) PresentSurfaces(ctx context.Context, reqJSON json.RawMessage) ([]
 	return s.PresentSurfaces(req)
 }
 
+// CancelSurfaces ends a preparation that the page does not present, so the windows that wait for its transaction continue.
+func (h *Host) CancelSurfaces(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[CancelRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.CancelSurfaces(req)
+}
+
 func (h *Host) WaitPresented(ctx context.Context) (float64, error) {
 	s, err := h.surface(ctx)
 	if err != nil {

@@ -72,7 +72,7 @@ export function armLayoutFault() {
  *   setVerify, log  receive the verification row and the observation line (core-exposure.js, host.js)
  *   surfaces   surface interface of the host (surfaces of host.js); uses waitPresented
  *   plane      { currentGrid, settle, clear }(plane.js)
- *   compositor { publishAhead, publish }(compositor.js)
+ *   compositor { publishAhead, publish, cancelPrepared }(compositor.js)
  *   textSize   frame scale of the current setting
  *   rendered   promise of the presentation that the last render committed (onRender of index.html)
  *   waitSurfaceCompositionDeclared  waits for the composition declaration of the surface modules (surface-modules.js)
@@ -134,7 +134,7 @@ export function createPageLayout({
       // that clears the plane uses the current scale and includes its first row in the preparation (docs/spec/native-surfaces.md#title-bar-height).
       const epoch = ++layoutEpoch;
       const layout = frameLayout({
-        factor: textSize(), publishAhead: compositor.publishAhead, publish: compositor.publish,
+        factor: textSize(), publishAhead: compositor.publishAhead, publish: compositor.publish, cancelPrepared: compositor.cancelPrepared,
         frame: nextTask, clearPlane: plane.clear, show,
       });
       layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
@@ -166,6 +166,7 @@ export function createPageLayout({
         },
         frame: async (work) => { await nextTask(work); mark("frame"); },
         presented: async () => { await rendered(); mark("presented"); },
+        cancel: async () => { await compositor.cancelPrepared(); mark("cancelled"); },
       }));
     },
     /**
@@ -180,7 +181,7 @@ export function createPageLayout({
       }
       const epoch = layoutEpoch;
       const layout = frameLayout({
-        factor: textSize(), publishAhead: compositor.publishAhead, publish: compositor.publish, frame: nextTask,
+        factor: textSize(), publishAhead: compositor.publishAhead, publish: compositor.publish, cancelPrepared: compositor.cancelPrepared, frame: nextTask,
       });
       layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
     },

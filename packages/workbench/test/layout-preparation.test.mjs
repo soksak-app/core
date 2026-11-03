@@ -20,6 +20,7 @@ function fixture() {
       draw: () => { calls.push("draw"); drawn.resolve(); },
       frame: (work) => new Promise((resolve) => frames.push(() => { work(); resolve(); })),
       presented: () => presented.promise,
+      cancel: async () => { calls.push("cancel"); },
     }));
   };
   const frame = () => { for (const callback of frames.splice(0)) callback(); };
@@ -64,7 +65,7 @@ test("a changed layout epoch cancels an old draw after pending native preparatio
   f.prepared.resolve([]);
   f.frame(); f.presented.resolve();
   await done;
-  assert.deepEqual(f.calls, ["prepare"], "an old preparation drew into the replacement layout");
+  assert.deepEqual(f.calls, ["prepare", "cancel"], "an old preparation drew into the replacement layout or stayed open");
   assert.deepEqual(f.errors, []);
 });
 
@@ -108,6 +109,6 @@ test("a changed layout epoch cancels a draw that waits for its task", async () =
   f.context.layoutEpoch++;
   f.frame();
   await done;
-  assert.deepEqual(f.calls, ["prepare"], "an old layout drew into the replacement layout at its frame");
+  assert.deepEqual(f.calls, ["prepare", "cancel"], "an old layout drew into the replacement layout at its frame or stayed open");
   assert.deepEqual(f.errors, []);
 });
