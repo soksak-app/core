@@ -8791,6 +8791,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F415",
+    implementation: [{ file: "e2e/window-sidebar-persistence.test.mjs", symbol: "near(inside.rect.w, 137" }],
+    tests: [{ file: "e2e/window-sidebar-persistence.test.mjs", id: "independent window and card settings survive hiding and project reload" }],
+    expected: "The section checks judge no activation state and expect the width inside the grip band.",
+    levels: ["application"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

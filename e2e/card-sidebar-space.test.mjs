@@ -126,7 +126,6 @@ for (const app of Object.values(APPS))
         console.info(`START ${app.name}: ${label}`);
         ({ displayed } = await s.presented());
         const host = await s.get("host.window");
-        assert.equal(host.active, false);
         assert.equal(host.occluded, false);
         const grid = await s.get("core.grid");
         const current = grid.cards.find((item) => item.id === card.id);

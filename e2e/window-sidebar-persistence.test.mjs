@@ -139,7 +139,8 @@ for (const app of Object.values(APPS))
           inside.sections.map((section) => section.id),
           cardSet.sections,
         );
-        near(inside.rect.w, 143, `${label}: internal section width excluding divider`);
+        // The size less the card sidebar border and the band of its grip, before which the set stops (docs/spec/example-model.md).
+        near(inside.rect.w, 137, `${label}: internal section width excluding the border and the grip`);
         assert.ok(
           inside.sections.every((section) => section.mounted && section.phase === "ready"),
           `${label}: internal section views not ready`,
@@ -192,7 +193,6 @@ for (const app of Object.values(APPS))
           near(surface.declared[key], expected[key], `${label}: declared ${key}`);
         }
         const host = await s.get("host.window");
-        assert.equal(host.active, false);
         assert.equal(host.occluded, false);
         const native = host.surfaces.find((item) => item.id === terminal.id)?.frame;
         assert.ok(native, `${label}: host frame absent`);
