@@ -8756,6 +8756,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F408",
+    implementation: [{ file: "packages/workbench/app.css", symbol: "min-height:calc(var(--head) + 32px)" }],
+    tests: [{ file: "packages/workbench/test/card-sidebars.test.mjs", id: "a section with an integer height gives way when the sidebar is short, and a fill section keeps its head and minimum height" }],
+    expected: "A section with an integer height gives way when the sidebar is shorter.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

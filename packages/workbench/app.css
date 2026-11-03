@@ -645,10 +645,12 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
    (docs/spec/plugins.md#sections). */
 .set__body{position:relative;min-width:0;min-height:0}
 .set__section{flex:0 0 auto}
-/* An open section with an integer height has that height. */
-.set__section:not([data-height=fill]):not([data-folded=true]) > .set__body{flex:0 0 var(--section-height);height:var(--section-height)}
-/* Fill sections share the height that the other sections leave. When collapsed, only the head remains. */
-.set__section[data-height=fill]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:0;display:flex;flex-direction:column}
+/* An open section with an integer height has that height and gives way when the sidebar is shorter, because a view is a native view
+   that no overflow clips (docs/spec/plugins.md#sections). */
+.set__section:not([data-height=fill]):not([data-folded=true]):not([hidden]){flex:0 1 auto;min-height:0;display:flex;flex-direction:column}
+.set__section:not([data-height=fill]):not([data-folded=true]) > .set__body{flex:0 1 var(--section-height);height:var(--section-height)}
+/* Fill sections share the height that the other sections leave, and keep their head and the minimum section height. When collapsed, only the head remains. */
+.set__section[data-height=fill]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:calc(var(--head) + 32px);display:flex;flex-direction:column}
 .set__section[data-height=fill]:not([data-folded=true]) > .set__body{flex:1 1 auto}
 /* A horizontal list divides the section width within the same height and scrolls each body. */
 .set[data-orientation=horizontal][data-layout=list]{flex-direction:row;min-width:0}

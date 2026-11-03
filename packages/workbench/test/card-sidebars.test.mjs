@@ -212,3 +212,19 @@ test("a section view of an open sidebar stops before the boundary line, so the v
     }
   }
 });
+
+test("a section with an integer height gives way when the sidebar is short, and a fill section keeps its head and minimum height", async () => {
+  const { JSDOM } = await import("jsdom");
+  const { readFile } = await import("node:fs/promises");
+  const css = await readFile(new URL("../app.css", import.meta.url), "utf8");
+  const dom = new JSDOM(`<style>${css}</style><div class="set"><section class="set__section" data-height="160"><div class="set__body"></div></section><section class="set__section" data-height="fill"><div class="set__body"></div></section></div>`);
+  try {
+    const of = (selector) => dom.window.getComputedStyle(dom.window.document.querySelector(selector));
+    assert.equal(of(`[data-height="160"]`).getPropertyValue("flex"), "0 1 auto", "the section of an integer height shrinks");
+    assert.equal(of(`[data-height="160"]`).getPropertyValue("min-height"), "0px");
+    assert.equal(of(`[data-height="160"] > .set__body`).getPropertyValue("flex"), "0 1 var(--section-height)", "its body shrinks");
+    assert.equal(of(`[data-height="fill"]`).getPropertyValue("min-height"), "calc(var(--head) + 32px)", "a fill section keeps its head and the minimum height");
+  } finally {
+    dom.window.close();
+  }
+});
