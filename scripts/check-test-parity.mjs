@@ -8805,6 +8805,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F417",
+    implementation: [{ file: "packages/host/wailsv3/src/surfaces.go", symbol: "func readPressThenDeliver" }],
+    tests: [{ file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestAPressReadsItsTargetBeforeItsDelivery" }],
+    expected: "An injected press reads its target before its delivery.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F417: 주입된 press가 전달 전에 target을 읽으므로, 그 사이의 layout이 card의 focus를 잃게 하지 않는다.
 - F416: Tauri 호스트가 창이 닫힌 뒤 실행되는 view, exposure, stream 알림에 실패를 보고하지 않는다.
 - F415: section check가 호스트 활성화를 판정하지 않고, persistence check가 grip band가 남기는 폭을 기대한다.
 - F414: Tauri 호스트가 창이 닫힌 뒤 도착한 사이드카 메시지에 실패를 보고하지 않는다.

@@ -2348,19 +2348,30 @@ impl Host {
                 .map_err(|e| Failure::new(NOT_ACTIVE, e))?;
         }
         let (tx, rx) = mpsc::channel();
-        with_native_owner(window, move |handle| {
-            platform.input_pointer(
-                handle,
-                pointer,
-                RECEIPT,
-                Box::new(move |delivery| {
-                    if tx.send(delivery).is_err() {
-                        crate::application_log::log_info(
-                            "exposure",
-                            "pointer delivery arrived after its request ended",
-                        );
+        let target = window.clone();
+        let pressed = with_native_owner(window, move |handle| {
+            crate::surfaces::read_press_then_deliver(
+                || {
+                    if pointer.phase != 1 {
+                        return Ok(None);
                     }
-                }),
+                    crate::surfaces::surface_at(platform, handle, &target, pointer.x, pointer.y)
+                },
+                || {
+                    platform.input_pointer(
+                        handle,
+                        pointer,
+                        RECEIPT,
+                        Box::new(move |delivery| {
+                            if tx.send(delivery).is_err() {
+                                crate::application_log::log_info(
+                                    "exposure",
+                                    "pointer delivery arrived after its request ended",
+                                );
+                            }
+                        }),
+                    )
+                },
             )
         })
         .map_err(native_failure(window.label(), NO_INPUT))?;
@@ -2370,9 +2381,14 @@ impl Host {
             .map_err(|e| Failure::new(NO_INPUT, e.to_string()))?
         {
             Delivery::Delivered => {
-                if pointer.phase == 1 {
-                    crate::surfaces::press_at(window, pointer.x, pointer.y)
-                        .map_err(native_failure(window.label(), NO_INPUT))?;
+                if let Some(id) = pressed {
+                    crate::windows::emit_window(window, "surface-pressed", id).map_err(
+                        |error| {
+                            native_failure(window.label(), NO_INPUT)(NativeFailure::Failed(
+                                error.to_string(),
+                            ))
+                        },
+                    )?;
                 }
                 Ok(Value::Null)
             }

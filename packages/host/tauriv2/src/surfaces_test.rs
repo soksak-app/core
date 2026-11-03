@@ -11,8 +11,9 @@ use super::{
     cancel_layout_after_setup_error, clear_page_compositions, close_registered_surface,
     commit_layout_after_root_joins, committed_view_updates, complete_layout_presentation,
     create_registered_surface, mark_first_commit, prepare_surface_visibility, pressed_surface,
-    removed_surfaces, surface_dispatch_clock_from, surface_dispatch_context_with,
-    surface_dispatch_fields, surface_dispatch_result_with, with_registered_surface,
+    read_press_then_deliver, removed_surfaces, surface_dispatch_clock_from,
+    surface_dispatch_context_with, surface_dispatch_fields, surface_dispatch_result_with,
+    with_registered_surface,
 };
 
 mod declaration_table {
@@ -1001,5 +1002,40 @@ fn a_cancelled_preparation_abandons_its_waits_and_then_cancels_its_layout() {
     assert_eq!(
         result,
         Err("abandon failed; cancelling layout: cancel failed".to_string())
+    );
+}
+
+// contract: input.pointer.reads-the-press-target-before-delivery
+#[test]
+fn a_press_reads_its_target_before_its_delivery() {
+    let steps = std::cell::RefCell::new(Vec::new());
+    let read = read_press_then_deliver(
+        || {
+            steps.borrow_mut().push("read");
+            Ok(7)
+        },
+        || {
+            steps.borrow_mut().push("deliver");
+            Ok(())
+        },
+    );
+    assert_eq!(read, Ok(7));
+    assert_eq!(
+        *steps.borrow(),
+        vec!["read", "deliver"],
+        "a layout between the delivery and the read names another view as the target of the press"
+    );
+    let delivered = std::cell::Cell::new(false);
+    let failed: Result<u8, String> = read_press_then_deliver(
+        || Err("no window".to_string()),
+        || {
+            delivered.set(true);
+            Ok(())
+        },
+    );
+    assert_eq!(failed, Err("no window".to_string()));
+    assert!(
+        !delivered.get(),
+        "a press whose target cannot be read was delivered"
     );
 }

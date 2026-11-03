@@ -755,21 +755,29 @@ func (s *Surfaces) press(view uintptr) bool {
 	return true
 }
 
-// pressAt publishes a surface press when the coordinates of a directly injected press are in a surface or its document.
-// A direct injection does not pass through the local event monitor of AppKit, so this is called separately from the monitor.
-func (s *Surfaces) pressAt(x, y float64) error {
+// readPressThenDeliver reads the view under a press and then delivers the press, in one step of the UI thread. A read
+// after the delivery runs after a later layout may have moved the views, and then names another view as the target.
+func readPressThenDeliver(read, deliver func() error) error {
+	if err := read(); err != nil {
+		return err
+	}
+	return deliver()
+}
+
+// viewAt reads the web view under the coordinates of a directly injected press. A direct injection does not pass through
+// the local event monitor of AppKit, so the host publishes its surface press separately from the monitor.
+func viewAt(window unsafe.Pointer, x, y float64) (uintptr, error) {
+	text, err := system.WindowHit(window, x, y)
+	if err != nil {
+		return 0, err
+	}
 	var got struct {
 		View uint64 `json:"view"`
 	}
-	if err := s.nativeFacts(func(window unsafe.Pointer) (string, error) {
-		return system.WindowHit(window, x, y)
-	}, &got, nil); err != nil {
-		return err
+	if err := json.Unmarshal([]byte(text), &got); err != nil {
+		return 0, err
 	}
-	if got.View != 0 {
-		s.press(uintptr(got.View))
-	}
-	return nil
+	return uintptr(got.View), nil
 }
 
 // SurfaceOwnerID finds the logical surface to which the native view that received the input belongs.

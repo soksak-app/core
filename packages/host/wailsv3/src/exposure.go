@@ -999,11 +999,21 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 		held   platform.ButtonHeld
 	}
 	done := make(chan delivery, 1)
+	var pressed uintptr
 	err = s.useWindow(func(window unsafe.Pointer) error {
-		return system.InjectPointer(window, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
-			input.DeltaX, input.DeltaY, receiveTimeout.Seconds(), func(result platform.PointerResult, held platform.ButtonHeld) {
-				done <- delivery{result, held}
-			})
+		return readPressThenDeliver(func() error {
+			if input.Phase != "down" {
+				return nil
+			}
+			var err error
+			pressed, err = viewAt(window, input.X, input.Y)
+			return err
+		}, func() error {
+			return system.InjectPointer(window, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
+				input.DeltaX, input.DeltaY, receiveTimeout.Seconds(), func(result platform.PointerResult, held platform.ButtonHeld) {
+					done <- delivery{result, held}
+				})
+		})
 	})
 	if err != nil {
 		return nativeError(codeNoInput, err)
@@ -1021,10 +1031,8 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	case platform.PointerPressOpen:
 		return rpcError(codePressOpen, "a synthetic press of this button is still open in the window; send up before the next down")
 	}
-	if input.Phase == "down" {
-		if err := s.pressAt(input.X, input.Y); err != nil {
-			return nativeError(codeNoInput, err)
-		}
+	if pressed != 0 {
+		s.press(pressed)
 	}
 	return nil
 }

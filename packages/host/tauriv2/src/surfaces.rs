@@ -521,31 +521,39 @@ pub fn surface_owner_id(named: &HashMap<Handle, String>, view: Handle) -> Option
         .map(String::as_str)
 }
 
-/// When the coordinates of a directly injected press are in a surface or its document, delivers the surface press to
-/// the page. A direct injection does not pass through the AppKit local event monitor, so this is called separately from
-/// the monitor.
-pub(crate) fn press_at(window: &Window, x: f64, y: f64) -> Result<(), NativeFailure> {
-    let platform = platform::current().map_err(NativeFailure::Failed)?;
-    let target = window.clone();
-    let id = with_native_owner(window, move |handle| {
-        let hit = platform.hit(handle, x, y)?;
-        // Destroyed deletes the registration, so it is read in this step, while the window is open.
-        let data = window_data(&target)?;
-        // default: a lock that a panicking thread poisoned still holds the surface names, which are only read; the panic
-        // hook records the panic.
-        let named = data.views.0.lock().unwrap_or_else(PoisonError::into_inner);
-        let documents = data.documents.names();
-        Ok(hit.chain.iter().find_map(|view| {
-            surface_owner_id(&named, *view)
-                .map(str::to_owned)
-                .or_else(|| documents.get(view).map(|(surface, _)| surface.clone()))
-        }))
-    })?;
-    if let Some(id) = id {
-        emit_window(window, "surface-pressed", id)
-            .map_err(|e| NativeFailure::Failed(e.to_string()))?;
-    }
-    Ok(())
+/// Reads the view under a press and then delivers the press, in one step of the main thread. A read after the delivery
+/// runs after a later layout may have moved the views, and then names another view as the target.
+pub(crate) fn read_press_then_deliver<T>(
+    read: impl FnOnce() -> Result<T, String>,
+    deliver: impl FnOnce() -> Result<(), String>,
+) -> Result<T, String> {
+    let target = read()?;
+    deliver()?;
+    Ok(target)
+}
+
+/// Returns the surface under the coordinates of a directly injected press. A direct injection does not pass through the
+/// AppKit local event monitor, so the host publishes its surface press separately from the monitor. It runs on the main
+/// thread.
+pub(crate) fn surface_at(
+    platform: &dyn platform::Platform,
+    handle: platform::Handle,
+    window: &Window,
+    x: f64,
+    y: f64,
+) -> Result<Option<String>, String> {
+    let hit = platform.hit(handle, x, y)?;
+    // Destroyed deletes the registration, so it is read in this step, while the window is open.
+    let data = window_data(window)?;
+    // default: a lock that a panicking thread poisoned still holds the surface names, which are only read here; the panic
+    // hook records the panic.
+    let named = data.views.0.lock().unwrap_or_else(PoisonError::into_inner);
+    let documents = data.documents.names();
+    Ok(hit.chain.iter().find_map(|view| {
+        surface_owner_id(&named, *view)
+            .map(str::to_owned)
+            .or_else(|| documents.get(view).map(|(surface, _)| surface.clone()))
+    }))
 }
 
 #[derive(Clone, Debug, Deserialize)]
