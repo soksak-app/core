@@ -93,6 +93,11 @@ fn every_pending_reply_is_flushed_after_the_queue_drains() {
 const FLUSH_LOG_CHILD: &str = "SOKSAK_FLUSH_LOG_CHILD";
 
 // A close that waits for the full queue is recorded with its surface.
+// The surfaces that the flush scenario closes while the queue is full. The writer can take lines out of the queue just after
+// the queue was full, until the pipe of the sidecar holds what it can (at most five lines of the scenario), so a close can find
+// room (a_close_that_finds_room_writes_no_buffered_record). More closes than those lines include a close that waits.
+const CLOSED: [&str; 8] = ["s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"];
+
 // contract: sidecars.close.buffered-close-is-recorded
 #[test]
 fn a_buffered_close_is_recorded() {
@@ -129,10 +134,111 @@ fn a_buffered_close_is_recorded() {
     let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
     )));
-    for surface in ["s2", "s3"] {
-        let want = format!(" info host sidecar {ECHO}: close {surface}: outbox full, buffered");
-        assert!(log.contains(&want), "no {want:?} in {log}");
+    assert!(
+        CLOSED.iter().any(|surface| {
+            log.contains(&format!(
+                " info host sidecar {ECHO}: close {surface}: outbox full, buffered"
+            ))
+        }),
+        "no close is recorded as buffered in {log}"
+    );
+}
+
+// contract: sidecars.close.room-has-no-buffered-record
+#[test]
+fn a_close_that_finds_room_writes_no_buffered_record() {
+    if let Some(config) = std::env::var_os(FLUSH_LOG_CHILD) {
+        soksak_host_tauriv2::application_log::start_standard_error(
+            Path::new(&config),
+            "com.soksak.test",
+        )
+        .unwrap();
+        let writer = records::start_writer(Path::new(&config));
+        close_with_room_scenario();
+        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        return;
     }
+    let config = folder::Folder::new();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_close_that_finds_room_writes_no_buffered_record",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(FLUSH_LOG_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}, output {:?}, error output {:?}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let log = records::text_of(&records::read_events(&records::event_log_path(
+        config.path(),
+    )));
+    let refused = format!(" info host sidecar {ECHO}: close s2: outbox full, buffered");
+    assert!(!log.contains(&refused), "{refused:?} in {log}");
+}
+
+// Fills the queue and lets the sidecar read after that. The receipts of the sidecar show that the writer has taken lines
+// out of the queue, so the close finds room, as a close does when the writer takes a line just after the queue was full.
+fn close_with_room_scenario() {
+    const RECEIPTS: usize = 10;
+    let directory = folder::Folder::new();
+    let fifo_path = directory.path().join("go");
+    let output = std::process::Command::new("mkfifo")
+        .arg(&fifo_path)
+        .output()
+        .expect("mkfifo failed");
+    assert!(output.status.success(), "mkfifo failed");
+    let script = format!(
+        "#!/bin/sh\nread _ < {}\nwhile IFS= read -r line; do\n  printf '%s\\n' '{{\"surface\":\"s1\",\"body\":\"received\"}}'\ndone\n",
+        fifo_path.display()
+    );
+    let echo_program = directory.path().join("echo");
+    std::fs::write(&echo_program, script).unwrap();
+    std::fs::set_permissions(&echo_program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let sidecars = create(
+        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
+        directory.path(),
+    )
+    .unwrap();
+    let (owner, events) = owner("a", "/p");
+    for s in &["s1", "s2"] {
+        sidecars.send(&owner, ECHO, s, &raw(r#"{}"#)).unwrap();
+    }
+    let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
+    let mut full = false;
+    for _i in 0..4000 {
+        if let Err(error) = sidecars.send(&owner, ECHO, "s1", &big) {
+            assert!(error.contains("is not keeping up"), "{error}");
+            full = true;
+            break;
+        }
+    }
+    assert!(full, "the queue never filled");
+    let mut fifo_file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&fifo_path)
+        .unwrap();
+    fifo_file.write_all(b"go\n").expect("release the fixture");
+    drop(fifo_file);
+    let mut receipts = 0;
+    while receipts < RECEIPTS {
+        let message = events
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .expect("the fixture acknowledges its lines");
+        let body: Value = serde_json::from_str(message.body.get()).unwrap();
+        if body == Value::String("received".to_string()) {
+            receipts += 1;
+        }
+    }
+    sidecars.retain(&owner, &|s| s != "s2").expect("retain");
+    sidecars.stop();
 }
 
 // The drain scenario observes receipt and then ends its child; the separate stop scenario tests shutdown flushing.
@@ -225,7 +331,7 @@ fn every_pending_reply_scenario() {
     let (owner, events) = owner("a", "/p");
 
     // First register the surface.
-    for s in &["s1", "s2", "s3"] {
+    for s in std::iter::once(&"s1").chain(CLOSED.iter()) {
         sidecars.send(&owner, ECHO, s, &raw(r#"{}"#)).unwrap();
     }
 
@@ -281,7 +387,7 @@ fn every_pending_reply_scenario() {
 
     // Close the surface.
     sidecars
-        .retain(&owner, &|s| !matches!(s, "s2" | "s3"))
+        .retain(&owner, &|s| !CLOSED.contains(&s))
         .expect("retain");
 
     // Release the sidecar from the FIFO.
@@ -299,14 +405,20 @@ fn every_pending_reply_scenario() {
         || sidecars.stop(),
         || {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-            let mut missing = vec![
+            let mut missing: Vec<String> = [
                 r#""name":"a""#,
                 r#""name":"b""#,
                 r#""name":"c""#,
                 r#""sequence":4"#,
-                r#""surface":"s2","root":"/p","closed":true"#,
-                r#""surface":"s3","root":"/p","closed":true"#,
-            ];
+            ]
+            .iter()
+            .map(|value| value.to_string())
+            .chain(
+                CLOSED
+                    .iter()
+                    .map(|s| format!(r#""surface":"{s}","root":"/p","closed":true"#)),
+            )
+            .collect();
             loop {
                 let message = events
                     .recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
@@ -332,7 +444,7 @@ fn every_pending_reply_scenario() {
                 }
                 let data = std::fs::read_to_string(&received)
                     .map_err(|error| format!("read acknowledged drain fixture output: {error}"))?;
-                missing.retain(|value| !data.contains(value));
+                missing.retain(|value| !data.contains(value.as_str()));
                 if missing.is_empty() {
                     return Ok(data);
                 }
@@ -351,11 +463,13 @@ fn every_pending_reply_scenario() {
     }
 
     // Verify that the close was sent.
-    for s in &[
-        r#""surface":"s2","root":"/p","closed":true"#,
-        r#""surface":"s3","root":"/p","closed":true"#,
-    ] {
-        assert!(data.contains(s), "close {} never reached the sidecar", s);
+    for s in &CLOSED {
+        let want = format!(r#""surface":"{s}","root":"/p","closed":true"#);
+        assert!(
+            data.contains(&want),
+            "close {} never reached the sidecar",
+            want
+        );
     }
 
     // Every immutable consumed ack must arrive exactly once. In particular, the new sequence of image a must not

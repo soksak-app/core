@@ -207,6 +207,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F395",
+    implementation: [
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "format!(\"close {surface}: outbox full, buffered\")," },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "LogInfo(\"sidecar \"+process.name, fmt.Sprintf(\"close %s: outbox full, buffered\", surface))" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/flush_test.rs", id: "a_close_that_finds_room_writes_no_buffered_record" },
+      { file: "packages/host/wailsv3/tests/flush_test.go", id: "TestACloseThatFindsRoomWritesNoBufferedRecord" },
+    ],
+    expected: "A closed notice that finds room in the queue of a sidecar is sent at once and writes no buffered record.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-295-1",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub fn reload_surface_sidecars<" }],
     tests: [

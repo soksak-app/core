@@ -11,6 +11,11 @@ import (
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
+// closedSurfaces are the surfaces that the flush scenario closes while the queue is full. The writer can take lines out of the
+// queue just after the queue was full, until the pipe of the sidecar holds what it can (at most five lines of the scenario), so a
+// close can find room (TestACloseThatFindsRoomWritesNoBufferedRecord). More closes than those lines include a close that waits.
+var closedSurfaces = []string{"s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"}
+
 // TestEveryPendingReplyIsFlushedAfterTheQueueDrains verifies that, when the write queue is full, all
 // buffered replies and closes are written in the correct order after the queue is emptied.
 // contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies, sidecars.close.buffered-close-is-recorded
@@ -33,7 +38,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	}
 	owner := newFakeOwner("/p")
 	// Registers the surfaces to close first (Close notifies only registered surfaces).
-	for _, s := range []string{"s1", "s2", "s3"} {
+	for _, s := range append([]string{"s1"}, closedSurfaces...) {
 		if err := sidecars.Send(owner, echoSidecar, s, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
@@ -66,13 +71,16 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	if err := sidecars.SendResponse(echoSidecar, "s1", "a", json.RawMessage(bodyBytes)); err != nil {
 		t.Fatal(err)
 	}
-	sidecars.Close("s2")
-	sidecars.Close("s3")
+	for _, surface := range closedSurfaces {
+		sidecars.Close(surface)
+	}
 	// A close that waits for the full queue is recorded with its surface.
-	for _, surface := range []string{"s2", "s3"} {
-		if want := " info host sidecar @fixture/sidecar-echo: close " + surface + ": outbox full, buffered"; !strings.Contains(written(), want) {
-			t.Errorf("the log has no %q:\n%s", want, written())
-		}
+	recorded := false
+	for _, surface := range closedSurfaces {
+		recorded = recorded || strings.Contains(written(), " info host sidecar @fixture/sidecar-echo: close "+surface+": outbox full, buffered")
+	}
+	if !recorded {
+		t.Errorf("the log records no close as buffered:\n%s", written())
 	}
 	// Releases the sidecar. Nothing more is sent after that.
 	f, err := os.OpenFile(fifo, os.O_WRONLY, 0)
@@ -92,8 +100,8 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 			t.Errorf("reply %s never reached the sidecar", want)
 		}
 	}
-	for _, s := range []string{`"surface":"s2","root":"/p","closed":true`, `"surface":"s3","root":"/p","closed":true`} {
-		if !strings.Contains(text, s) {
+	for _, surface := range closedSurfaces {
+		if s := `"surface":"` + surface + `","root":"/p","closed":true`; !strings.Contains(text, s) {
 			t.Errorf("close %s never reached the sidecar", s)
 		}
 	}
@@ -122,6 +130,74 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 		case i < last:
 			t.Errorf("%s arrived before the queued bodies", want)
 		}
+	}
+}
+
+// TestACloseThatFindsRoomWritesNoBufferedRecord fills the queue and lets the sidecar read after that. The receipts of the
+// sidecar show that the writer has taken lines out of the queue, so the close finds room, as a close does when the writer
+// takes a line just after the queue was full.
+// contract: sidecars.close.room-has-no-buffered-record
+func TestACloseThatFindsRoomWritesNoBufferedRecord(t *testing.T) {
+	written := captureLog(t)
+	directory := t.TempDir()
+	fifo := filepath.Join(directory, "go")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nread _ < " + fifo + "\nwhile IFS= read -r line; do\n  printf '%s\\n' '{\"surface\":\"s1\",\"body\":\"received\"}'\ndone\n"
+	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := newFakeOwner("/p")
+	for _, s := range []string{"s1", "s2"} {
+		if err := sidecars.Send(owner, echoSidecar, s, json.RawMessage(`{}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
+	full := false
+	for i := 0; i < 4000 && !full; i++ {
+		if err := sidecars.Send(owner, echoSidecar, "s1", big); err != nil {
+			if !strings.Contains(err.Error(), "is not keeping up") {
+				t.Fatal(err)
+			}
+			full = true
+		}
+	}
+	if !full {
+		t.Fatal("the queue never filled")
+	}
+	f, err := os.OpenFile(fifo, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Write([]byte("go\n"))
+	f.Close()
+	// The fake owner blocks on its full channel, so the receipts are taken until the sidecar has ended.
+	receipts := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		for count := 0; ; count++ {
+			if count == 10 {
+				close(receipts)
+			}
+			select {
+			case <-owner.seen:
+			case <-finished:
+				return
+			}
+		}
+	}()
+	<-receipts
+	sidecars.Close("s2")
+	sidecars.Stop()
+	close(finished)
+	if refused := " info host sidecar @fixture/sidecar-echo: close s2: outbox full, buffered"; strings.Contains(written(), refused) {
+		t.Errorf("the log has %q:\n%s", refused, written())
 	}
 }
 

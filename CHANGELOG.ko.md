@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F395: sidecar queue에 자리를 찾은 closed notice는 buffered 기록을 쓰지 않으며, 두 host의 flush test는 자리를 찾은 close에 기록을 요구하지 않는다.
 - F317: `document_report_test`, `document_view_test`, `document_store_end_test`의 hosted repeat가 각각 20회 중 20회 통과하여, 임시 store 폴더 실패를 닫는다.
 - F317-5: document store를 끝내면 GPU process도 끝나므로, 닫힌 document의 media cache가 store가 끝난 뒤에 폴더를 바꾸지 못한다.
 - F317-4: store 종료의 exit source를 `observe.m`의 entrance로 등록하고, cancel될 때 자신을 release한다.
