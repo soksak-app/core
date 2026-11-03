@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F406: The set of an open card sidebar stops before the band of its grip, so a section view does not cover the grip and a drag sizes the side.
 - F405: A surface that a new drawing mounts again reports its current state and later states to that drawing, so a redrawn section reports `ready` or its error.
 - F404: A notification of a Tauri window that closed reads and draws nothing and reports no failure.
 - F403: The observation of a surface that ended ends its watch without a failure, and the registration of the surface decides the observer again.

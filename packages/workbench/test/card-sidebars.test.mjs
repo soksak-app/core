@@ -198,3 +198,17 @@ test("a drag stores an open choice with the size", () => {
   assert.deepEqual(card.data.sidebars.top, { set: "first", collapsed: false, size: 150 });
 });
 
+test("a section view of an open sidebar stops before the boundary line, so the view does not cover the grip", async () => {
+  const { JSDOM } = await import("jsdom");
+  const { readFile } = await import("node:fs/promises");
+  const css = await readFile(new URL("../app.css", import.meta.url), "utf8");
+  for (const [side, margin] of [["left", "right"], ["right", "left"], ["top", "bottom"], ["bottom", "top"]]) {
+    const dom = new JSDOM(`<style>${css}</style><article class="card" data-sidebar-${side}="open"><aside class="card-sidebar" data-side-of="${side}"><div class="set"></div></aside></article>`);
+    try {
+      const style = dom.window.getComputedStyle(dom.window.document.querySelector(".set"));
+      assert.equal(style.getPropertyValue(`margin-${margin}`), "var(--divider)", `${side}: the set keeps the band of the grip`);
+    } finally {
+      dom.window.close();
+    }
+  }
+});

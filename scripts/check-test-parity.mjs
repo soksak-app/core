@@ -8742,6 +8742,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F406",
+    implementation: [{ file: "packages/workbench/app.css", symbol: ".card-sidebar[data-side-of=left] > .set{margin-right:var(--divider)}" }],
+    tests: [{ file: "packages/workbench/test/card-sidebars.test.mjs", id: "a section view of an open sidebar stops before the boundary line, so the view does not cover the grip" }],
+    expected: "The set of an open card sidebar stops before the band of its grip.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

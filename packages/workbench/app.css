@@ -332,6 +332,11 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .card[data-sidebar-left=folded] > .card-sidebar[data-side-of=left] > .card-sidebar__status,
 .card[data-sidebar-right=folded] > .card-sidebar[data-side-of=right] > .card-sidebar__status{display:none}
 /* The boundary line overlaps the inner edge of the sidebar by absolute position: dragging changes the size, pressing collapses. */
+/* A section view is a native view above the document, so the set stops before the band of the grip and the view does not cover it. */
+.card-sidebar[data-side-of=left] > .set{margin-right:var(--divider)}
+.card-sidebar[data-side-of=right] > .set{margin-left:var(--divider)}
+.card-sidebar[data-side-of=top] > .set{margin-bottom:var(--divider)}
+.card-sidebar[data-side-of=bottom] > .set{margin-top:var(--divider)}
 .card-sidebar__grip{position:absolute;z-index:2;background:transparent}
 .card-sidebar__grip[data-side-of=top],.card-sidebar__grip[data-side-of=bottom]{left:0;right:0;height:var(--divider);cursor:row-resize}
 .card-sidebar__grip[data-side-of=top]{bottom:0}
