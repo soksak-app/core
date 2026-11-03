@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F435: Record the view benchmarks after F444 at load average 12 to 28 and close the single card position failure as not reproduced.
+- F502-6: `go.work` and every module that it uses declare Go 1.27.3, the version that the mygo host requires, so every Go build of core runs on Go 1.27.3.
 - F511: A document region collects its requests from its attach and keeps its request log until it closes, so a subscription that starts later, also after every subscription ended, first receives the requests of the document, and a new `requests` subscription no longer makes the document post its entries again.
 - F504: Both hosts, the browser runtime and the workbench refuse the four common-only keys `projectOpening`, `textSize`, `memorySaver` and `memorySaverDelay` in project settings with `<key> is common-only`, and the host parity check compares their lists.
 - F509: A release build of the Rust workspace no longer strips the proc-macro libraries that it builds for the host, so it builds on macOS 27.

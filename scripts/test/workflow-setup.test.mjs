@@ -58,7 +58,37 @@ test('setup-go reads the workspace Go version and resolves a module from root', 
   assert.match(moduleStep.run, /test -d "\$directory"/);
   assert.doesNotMatch(JSON.stringify(steps), /go mod download/, 'setup-go must not fetch Go modules');
   assert.equal(setupGo.with['cache-dependency-path'].trimEnd(), '${{ inputs.root }}/go.work.sum\n${{ inputs.root }}/**/go.sum');
-  assert.match(read('go.work'), /^go 1\.25\.0$/m);
+});
+
+// The value of each `directive` line of a go.work or go.mod file, in file order. Comments are not part of a value.
+function directives(text, directive) {
+  const pattern = new RegExp(`^${directive}[ \\t]+([^\\s/]+)[ \\t]*(?://.*)?$`, 'gm');
+  return [...text.matchAll(pattern)].map((match) => match[1]);
+}
+
+// The module directories of the `use` directives of go.work, in the single-line and the block form.
+function workspaceModules(text) {
+  const modules = [];
+  for (const match of text.matchAll(/^use[ \t]+(?:\(([^)]*)\)|(\S+))/gm)) {
+    const entries = match[1] === undefined ? [match[2]] : match[1].split('\n');
+    for (const entry of entries) {
+      const path = entry.replace(/\/\/.*$/, '').trim();
+      if (path) modules.push(path);
+    }
+  }
+  return modules;
+}
+
+test('go.work and every module that it uses declare Go 1.27.3', { timeout: 1000 }, () => {
+  const files = ['go.work', ...workspaceModules(read('go.work')).map((module) => join(module, 'go.mod'))];
+  assert.ok(files.length > 1, 'go.work uses no module');
+  for (const file of files) {
+    const text = read(file);
+    assert.deepEqual(directives(text, 'go'), ['1.27.3'], `${file} must declare go 1.27.3`);
+    for (const toolchain of directives(text, 'toolchain')) {
+      assert.equal(toolchain, 'go1.27.3', `${file} names a toolchain other than go1.27.3`);
+    }
+  }
 });
 
 test('setup-rust installs the repository toolchain with format and lint components', { timeout: 1000 }, () => {

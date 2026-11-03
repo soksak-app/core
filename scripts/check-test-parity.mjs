@@ -244,6 +244,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-6",
+    implementation: [
+      { file: "go.work", symbol: "go 1.27.3" },
+      { file: "packages/host/wailsv3/go.mod", symbol: "go 1.27.3" },
+      { file: "packages/sok/wailsv3/go.mod", symbol: "go 1.27.3" },
+      { file: "apps/wailsv3/go.mod", symbol: "go 1.27.3" },
+    ],
+    tests: [{ file: "scripts/test/workflow-setup.test.mjs", id: "go.work and every module that it uses declare Go 1.27.3" }],
+    expected: "`go.work` and every module that it uses declare Go 1.27.3, so every Go build of core runs on Go 1.27.3 when CI installs the version of `go.work` with `GOTOOLCHAIN=local`.",
+    levels: ["unit"],
+  },
+  {
     id: "F511",
     implementation: [
       { file: "packages/host/tauriv2/src/documents.rs", symbol: "pub fn attach(&self, key: &Key) -> Result<Vec<StreamEffect>, String> {" },
