@@ -1480,6 +1480,12 @@ static SPDocumentView *pluginView(const char *directory, const char *folder, con
     return view;
 }
 
+// Stores the cause of a failed creation and returns the NULL of the failure.
+static void *documentCreationFails(NSString *cause) {
+    setDocumentFailure(cause);
+    return NULL;
+}
+
 void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, const char *channel,
     sp_document_changed changed, void *context) {
     setDocumentFailure(nil);
@@ -1487,10 +1493,18 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     bool isView = channel != NULL;
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     NSView *surface = (NSView *)surfaceHandle;
-    if (!surface || !directory || !changed || !surface.window) return NULL;
-    if (isView && !(folder && plugin)) return NULL;
+    // Every argument and the native plane of the surface are checked before a web view is made, and each failure states
+    // its condition (sp_document_last_error).
+    if (!surface) return documentCreationFails(@"the surface is missing");
+    if (!surface.window) return documentCreationFails(@"the surface is not in a window");
+    if (!directory) return documentCreationFails(@"the data store directory is missing");
+    if (!changed) return documentCreationFails(@"the change callback is missing");
+    if (isView && !folder) return documentCreationFails(@"the view has no folder");
+    if (isView && !plugin) return documentCreationFails(@"the view has no plugin");
     NSString *channelSource = isView ? [NSString stringWithUTF8String:channel] : nil;
-    if (isView && !channelSource) return NULL;
+    if (isView && !channelSource) return documentCreationFails(@"the channel of the view is not UTF-8");
+    NSView *nativePlane = (NSView *)sp_surface_native_plane(surface);
+    if (!nativePlane) return documentCreationFails(@"the surface has no native plane");
     SPDocumentView *view = pluginView(directory, folder, plugin, channelSource, isView, changed, context);
     if (!view) return NULL;
 #ifdef SOKSAK_DIAGNOSTIC
@@ -1503,15 +1517,15 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     }
     view.webSurface = surface;
     view.appearance = surface.effectiveAppearance;
-    if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) {
+    // The input functions log the WebKit method that is missing.
+    if (!webviewInputRegister(view)) {
         [view release];
-        return NULL;
+        return documentCreationFails(@"the document webview cannot be registered for input");
     }
-    NSView *nativePlane = (NSView *)sp_surface_native_plane(surface);
-    if (!nativePlane) {
+    if (!webviewIgnorePageFocus(view)) {
         webviewInputUnregister(view);
         [view release];
-        return NULL;
+        return documentCreationFails(@"the document webview cannot ignore the focus changes of its page");
     }
     if (isView) {
         // A view draws its declared overlays in its own DOM, so it is placed below the plane that the overlay mask cuts.

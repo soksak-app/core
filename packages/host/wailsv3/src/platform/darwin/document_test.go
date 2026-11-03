@@ -14,3 +14,15 @@ func TestCreateDocumentReportsTheNativeCause(t *testing.T) {
 		t.Fatalf("CreateDocument error %v, want %q", err, want)
 	}
 }
+
+// A native layer that fails a creation without stating a cause is reported as such, so the error never hides that the cause is
+// missing.
+// contract: host.document.creation-error-states-the-cause
+func TestCreateDocumentReportsAMissingNativeCause(t *testing.T) {
+	failNextCreation("")
+	_, err := implementation{}.CreateDocument(nil, "/probe", "", "probe", "", func(string) {})
+	want := "cannot create a document view in this surface: the native layer stated no cause"
+	if err == nil || err.Error() != want {
+		t.Fatalf("CreateDocument error %v, want %q", err, want)
+	}
+}

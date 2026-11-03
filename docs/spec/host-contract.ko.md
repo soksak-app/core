@@ -647,7 +647,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.accept.error-is-recorded` | endpoint가 서비스하는 동안 실패한 accept는 `error host endpoint accept: <reason>`을 쓰며, endpoint가 listener를 스스로 닫은 뒤 실패한 accept는 기록을 쓰지 않는다. | both |
 | `endpoint.close.reply-after-peer-close` | 상대가 닫은 연결을 만난 답이나 알림은, 닫힘을 먼저 읽었든 쓰기가 broken pipe나 reset으로 실패했든 오류가 아니다. 호스트는 `info host endpoint: reply to <id> not sent: peer closed` 또는 `info host endpoint: notification <method> not sent: peer closed`를 쓰고, 연결은 `peer closed`로 닫힌다. | both |
 | `endpoint.close.reason-of-read-error` | 프레임 중간에 끝난 연결은 `connection closed inside a length prefix` 또는 `connection closed inside a frame body`로 닫히고, 그 밖의 읽기 오류는 I/O 글로 닫히며, 프레임 경계에서의 끝이나 reset은 `peer closed`로 닫힌다. | both |
-| `host.document.creation-error-states-the-cause` | native layer가 만들지 못한 document region은 native 원인을 밝히면 생성 오류 뒤에 `: <native cause>`를 붙인 오류로 실패하며, 원인이 없으면 생성 오류만 쓴다. | both |
+| `host.document.creation-error-states-the-cause` | native layer가 만들지 못한 document region은 생성 오류 뒤에 `: <native cause>`를 붙인 오류로 실패한다. native 생성의 모든 실패는 원인을 밝히며, 원인이 없는 실패는 원인 `the native layer stated no cause`로 실패하므로 오류가 원인이 빠졌다는 사실을 숨기지 않는다. | both |
 | `sidecars.stop.forgets-running-sidecars` | 중지는 입력을 끝내기 전에 모든 사이드카를 실행 목록에서 빼고 답하지 않은 닫기를 지우므로, 그 뒤 표면이나 소유 창을 닫아도 아무것도 보내지 않고 닫는 중인 표면을 알리지 않는다. | both |
 | `sidecars.protocol.message-at-limit-is-delivered` | 줄바꿈 앞이 정확히 67108864 byte인 사이드카 메시지가 손상 없이 소유 창에 도착한다. | both |
 | `sidecars.failure.oversize-message-terminates-and-notifies` | 67108864 byte보다 긴 줄은 줄이 끝나기를 기다리지 않고 사이드카 프로세스를 끝내고 "exceeds"를 담은 `sidecar-failure`를 소유 창에 전달한다. | both |

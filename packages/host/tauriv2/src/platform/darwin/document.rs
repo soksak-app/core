@@ -223,15 +223,19 @@ pub fn create(
     Ok(handle)
 }
 
-/// The message of a native creation that returned no handle. It states the native cause when the native layer gives one.
+/// The message of a native creation that returned no handle, followed by the native cause. Every failure of the native
+/// creation states its cause, so an empty cause is reported as missing rather than left out.
 fn creation_error(message: &str) -> String {
     let cause = unsafe { CStr::from_ptr(sp_document_last_error()) }.to_string_lossy();
     if cause.is_empty() {
-        message.into()
+        format!("{message}: {MISSING_NATIVE_CAUSE}")
     } else {
         format!("{message}: {cause}")
     }
 }
+
+/// The cause that an error states when the native layer failed a creation without a cause.
+const MISSING_NATIVE_CAUSE: &str = "the native layer stated no cause";
 
 /// The receiver of one query reply. Native calls it once.
 struct QueryReceiver(Box<dyn FnOnce(String) + Send>);

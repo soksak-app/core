@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F435: Record the view benchmarks after F444 at load average 12 to 28 and close the single card position failure as not reproduced.
+- F506: Every failed creation of a document region or view page states its cause, and a host reports a native failure without a cause as such.
 - F500: A view page keeps its document visible and its animation frames running in an occluded window, as the main page does.
 - F505: The native library builds its objects, its tests and ZXing for arm64, and configures ZXing in a new build folder each time it builds it.
 - F501: The host parity check compares the diagnostic methods of each host with the diagnostic builds table of the endpoint specification, which now states `diagnostics.presentation.failure`.
