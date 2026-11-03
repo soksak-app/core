@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F374-7: A frame sends the view no screen message since VT S125; the measurement of VT S130 is stated.
 - F397: `log.closed` names what requested the end of the process before quit runs.
 - F398: The failure of a close answer is written to the log before the closing entry ends.
 - F396: The error of a pointer release that the page did not receive names the button and whether the application was active and the window key at the press.
