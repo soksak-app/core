@@ -243,6 +243,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F501",
+    implementation: [
+      { file: "scripts/check-host-parity.mjs", symbol: "export function specDiagnosticMethods(endpointMarkdown) {" },
+    ],
+    tests: [
+      { file: "scripts/test/check-host-parity.test.mjs", id: "a diagnostic method that the diagnostic builds table does not list fails" },
+      { file: "scripts/test/check-host-parity.test.mjs", id: "a method of the diagnostic builds table that no host declares fails" },
+    ],
+    expected: "The host parity check fails on a diagnostic method of a host that the diagnostic builds table of the endpoint specification does not list and on a row of that table that no host declares.",
+    levels: ["unit"],
+  },
+  {
     id: "F396",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "application active at the press: %s, window key at the press: %s" },

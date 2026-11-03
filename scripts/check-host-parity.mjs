@@ -2,7 +2,7 @@
 //
 // Proposition 1 (public bindings) checks the set of host.call names that each frontend runtime accepts and whether each name is actually connected
 // to the implementation of each host. Proposition 2 (endpoint methods) compares the set of endpoint methods that each host declares
-// per build flavor. Proposition 3 (menu contract table) checks that the menu table of the host contract specification and the menu builder tables of both hosts are the same.
+// per build flavor, and the diagnostic methods of each host with the diagnostic builds table of the endpoint specification. Proposition 3 (menu contract table) checks that the menu table of the host contract specification and the menu builder tables of both hosts are the same.
 // The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next extension.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -164,10 +164,28 @@ export function allowedEndpointMethods(hostsMarkdown) {
   return allowed;
 }
 
+/**
+ * Reads the methods of the diagnostic builds table of the endpoint specification (docs/spec/endpoint.md): each row whose
+ * first cell is one method name in backticks.
+ */
+export function specDiagnosticMethods(endpointMarkdown) {
+  const start = endpointMarkdown.indexOf('## Diagnostic builds');
+  if (start < 0) throw new Error('endpoint spec has no Diagnostic builds section');
+  const end = endpointMarkdown.indexOf('\n## ', start + 1);
+  const section = endpointMarkdown.slice(start, end < 0 ? undefined : end);
+  const methods = new Set();
+  for (const line of section.split('\n')) {
+    const name = /^`([a-z][a-z0-9_.-]*)`$/.exec(line.split('|').slice(1, -1).map((cell) => cell.trim())[0] ?? '');
+    if (name) methods.add(name[1]);
+  }
+  if (methods.size === 0) throw new Error('the Diagnostic builds section of the endpoint spec has no method row');
+  return methods;
+}
+
 /** Judges propositions 1, 2, and 3 on the injected sources and returns the list of failures. */
 export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
-  hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec }) {
+  hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec }) {
   const failures = [];
   const tauriv2 = {
     calls: runtimeCalls(tauriv2Runtime, 'const COMMAND = {', 'tauriv2 runtime'),
@@ -203,6 +221,15 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
       failures.push(`wailsv3 ${name} has "${method}" that tauriv2 does not`);
     }
   }
+  const documented = specDiagnosticMethods(endpointSpec);
+  for (const [host, methods] of [['tauriv2', endpointT.diagnostics], ['wailsv3', endpointW.diagnostics]]) {
+    for (const method of [...methods].filter((item) => !documented.has(item)).sort()) {
+      failures.push(`${host} diagnostic method "${method}" is not in the diagnostic builds table of the endpoint specification`);
+    }
+  }
+  for (const method of [...documented].filter((item) => !endpointT.diagnostics.has(item) && !endpointW.diagnostics.has(item)).sort()) {
+    failures.push(`the diagnostic builds table of the endpoint specification lists "${method}", which no host declares`);
+  }
   failures.push(...auditMenuTables(specMenuTables(hostContractSpec), rustMenuTables(tauriv2MenuSource),
     goMenuTables(wailsv3MenuSource)));
   return failures;
@@ -228,11 +255,12 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     tauriv2MenuSource: read('packages/host/tauriv2/src/menu.rs'),
     wailsv3MenuSource: read('packages/host/wailsv3/src/menu.go'),
     hostsSpec: read('docs/spec/hosts.md'),
+    endpointSpec: read('docs/spec/endpoint.md'),
   });
   for (const failure of failures) console.error(`FAIL: ${failure}`);
   if (failures.length > 0) {
     console.error(`host parity: ${failures.length} difference(s)`);
     process.exit(1);
   }
-  console.log('Host parity passed: host.call names, handler wiring, endpoint method sets, and menu tables are equal');
+  console.log('Host parity passed: host.call names, handler wiring, endpoint method sets, the diagnostic builds table, and menu tables are equal');
 }

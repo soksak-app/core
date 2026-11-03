@@ -15,7 +15,19 @@ const sources = () => ({
   tauriv2MenuSource: rustMenuFixture,
   wailsv3MenuSource: goMenuFixture,
   hostsSpec: hostsFixture,
+  endpointSpec: endpointFixture,
 });
+
+const endpointFixture = `## Diagnostic builds
+
+| Method | Params | Purpose |
+| --- | --- | --- |
+| \`diagnostics.fixture\` | \`{window}\` | fixture |
+
+## Clients`;
+
+// Adds a row of the diagnostic builds table before the next section.
+const withDiagnosticRow = (endpointSpec, method) => endpointSpec.replace("\n\n## Clients", `\n| \`${method}\` | \`{window}\` | ${method} |\n\n## Clients`);
 
 const hostsFixture = `## Allowed differences
 
@@ -77,6 +89,7 @@ test("an endpoint method that exists on one host only fails per build flavor", (
   diagnosticOnly.wailsv3DiagnosticsSource = diagnosticOnly.wailsv3DiagnosticsSource.replace(
     'diagnosticMethods["diagnostics.fixture"] = nil',
     'diagnosticMethods["diagnostics.fixture"] = nil\n  diagnosticMethods["diagnostics.ticks"] = nil');
+  diagnosticOnly.endpointSpec = withDiagnosticRow(diagnosticOnly.endpointSpec, "diagnostics.ticks");
   assert.deepEqual(auditHostParity(diagnosticOnly), ['wailsv3 endpoint diagnostics methods has "diagnostics.ticks" that tauriv2 does not']);
 });
 
@@ -96,6 +109,7 @@ test("menu tables that differ from the spec fail mechanically", () => {
 test("an endpoint method of one host passes only when the allowed differences declare it", () => {
   const changed = sources();
   changed.wailsv3DiagnosticsSource = changed.wailsv3DiagnosticsSource.replace("}", '  diagnosticMethods["diagnostics.heap.profile"] = nil\n}');
+  changed.endpointSpec = withDiagnosticRow(changed.endpointSpec, "diagnostics.heap.profile");
   assert.deepEqual(auditHostParity(changed), []);
   changed.hostsSpec = changed.hostsSpec.replace(/\| E1 .*\n/, "");
   assert.deepEqual(auditHostParity(changed),
@@ -109,7 +123,28 @@ test("hyphenated diagnostic endpoint methods are read from both hosts", () => {
   changed.wailsv3DiagnosticsSource = changed.wailsv3DiagnosticsSource.replace(
     'diagnosticMethods["diagnostics.fixture"] = nil',
     'diagnosticMethods["diagnostics.fixture"] = nil\n  diagnosticMethods["diagnostics.native.window-color-space"] = nil');
+  changed.endpointSpec = withDiagnosticRow(changed.endpointSpec, "diagnostics.native.window-color-space");
   assert.deepEqual(auditHostParity(changed), []);
+});
+
+test("a diagnostic method that the diagnostic builds table does not list fails", { timeout: 1000 }, () => {
+  const changed = sources();
+  changed.tauriv2EndpointSource = changed.tauriv2EndpointSource.replace('"diagnostics.fixture",', '"diagnostics.fixture",\n  "diagnostics.ticks",');
+  changed.wailsv3DiagnosticsSource = changed.wailsv3DiagnosticsSource.replace(
+    'diagnosticMethods["diagnostics.fixture"] = nil',
+    'diagnosticMethods["diagnostics.fixture"] = nil\n  diagnosticMethods["diagnostics.ticks"] = nil');
+  assert.deepEqual(auditHostParity(changed), [
+    'tauriv2 diagnostic method "diagnostics.ticks" is not in the diagnostic builds table of the endpoint specification',
+    'wailsv3 diagnostic method "diagnostics.ticks" is not in the diagnostic builds table of the endpoint specification',
+  ]);
+});
+
+test("a method of the diagnostic builds table that no host declares fails", { timeout: 1000 }, () => {
+  const changed = sources();
+  changed.endpointSpec = withDiagnosticRow(changed.endpointSpec, "diagnostics.retired");
+  assert.deepEqual(auditHostParity(changed), [
+    'the diagnostic builds table of the endpoint specification lists "diagnostics.retired", which no host declares',
+  ]);
 });
 
 test("rustHandlers reads a command that is generic over the runtime", { timeout: 1000 }, () => {
