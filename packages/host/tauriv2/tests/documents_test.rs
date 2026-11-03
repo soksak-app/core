@@ -178,34 +178,45 @@ fn stream_unsubscribe_rejects_a_handle_of_another_document() {
     assert!(streams.unsubscribe(&page, handle + 100).is_err());
 }
 
+/// The stream message of native with a request entry for each url.
+fn request_entries(urls: impl IntoIterator<Item = String>) -> String {
+    let entries: Vec<Value> = urls.into_iter().map(|url| json!({"url": url})).collect();
+    json!({"stream": "requests", "message": {"type": "entries", "entries": entries}}).to_string()
+}
+
+/// The urls e<first> to e<last - 1>.
+fn numbered(first: usize, last: usize) -> impl Iterator<Item = String> {
+    (first..last).map(|i| format!("e{i}"))
+}
+
 // contract: document.stream.first-on-last-off
 #[test]
-fn stream_turns_collection_on_at_the_first_subscription_and_off_at_the_last() {
+fn stream_turns_element_collection_on_at_the_first_subscription_and_off_at_the_last() {
     let streams = Streams::default();
     let page = stream_key("tab-1", "page");
-    let (first, effects, _) = streams.subscribe(&page, "requests").unwrap();
+    let (first, effects, _) = streams.subscribe(&page, "elements").unwrap();
     assert_eq!(
         effects,
         vec![StreamEffect {
             key: page.clone(),
-            stream: "requests".into(),
+            stream: "elements".into(),
             on: true
         }]
     );
-    let (second, effects, _) = streams.subscribe(&page, "requests").unwrap();
+    let (second, effects, _) = streams.subscribe(&page, "elements").unwrap();
     assert!(effects.is_empty());
-    assert_eq!(streams.subscribers(&page, "requests"), 2);
+    assert_eq!(streams.subscribers(&page, "elements"), 2);
     assert!(streams.unsubscribe(&page, first).unwrap().is_empty());
     let effects = streams.unsubscribe(&page, second).unwrap();
     assert_eq!(
         effects,
         vec![StreamEffect {
             key: page.clone(),
-            stream: "requests".into(),
+            stream: "elements".into(),
             on: false
         }]
     );
-    assert_eq!(streams.subscribers(&page, "requests"), 0);
+    assert_eq!(streams.subscribers(&page, "elements"), 0);
 }
 
 // contract: document.stream.native-refusal-rejects-subscription
@@ -213,10 +224,113 @@ fn stream_turns_collection_on_at_the_first_subscription_and_off_at_the_last() {
 fn stream_abandoned_subscription_is_not_kept() {
     let streams = Streams::default();
     let page = stream_key("tab-1", "page");
-    let (handle, _, _) = streams.subscribe(&page, "requests").unwrap();
+    let (handle, _, _) = streams.subscribe(&page, "elements").unwrap();
     streams.abandon(handle);
-    assert_eq!(streams.subscribers(&page, "requests"), 0);
+    assert_eq!(streams.subscribers(&page, "elements"), 0);
     assert!(streams.unsubscribe(&page, handle).is_err());
+}
+
+// contract: document.stream.attach-starts-request-collection
+#[test]
+fn stream_attach_creates_the_request_log_and_turns_its_collection_on() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    assert_eq!(
+        streams.subscribe(&page, "requests").unwrap_err(),
+        r#"document "page" has no request log"#
+    );
+    assert_eq!(
+        streams.attach(&page).unwrap(),
+        vec![StreamEffect {
+            key: page.clone(),
+            stream: "requests".into(),
+            on: true
+        }]
+    );
+    assert_eq!(streams.log_state(&page), Some((0, 0)));
+    assert_eq!(
+        streams.attach(&page).unwrap_err(),
+        r#"document "page" already has a request log"#
+    );
+}
+
+// contract: document.stream.request-log-lives-with-the-region
+#[test]
+fn stream_request_log_outlives_the_subscriptions_of_the_region() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    streams.attach(&page).unwrap();
+    let (handle, _, _) = streams.subscribe(&page, "requests").unwrap();
+    streams
+        .deliver(&page, &request_entries(numbered(0, 250)))
+        .unwrap();
+    streams.unsubscribe(&page, handle).unwrap();
+    assert_eq!(
+        streams.log_state(&page),
+        Some((200, 50)),
+        "the end of the last subscription changed the request log"
+    );
+    let (_, _, initial) = streams.subscribe(&page, "requests").unwrap();
+    let replay = initial.expect("a requests subscription receives its log");
+    assert_eq!(replay["dropped"], 50);
+    let entries = replay["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 200);
+    assert_eq!(entries[0], json!({"url": "e50"}));
+    assert_eq!(entries[199], json!({"url": "e249"}));
+}
+
+// contract: document.stream.request-log-lives-with-the-region
+#[test]
+fn stream_request_log_keeps_the_entries_that_arrive_without_a_subscription() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    streams.attach(&page).unwrap();
+    let result = streams
+        .deliver(&page, &request_entries(["navigation".into(), "a".into()]))
+        .unwrap();
+    assert!(result.deliveries.is_empty());
+    assert_eq!(streams.log_state(&page), Some((2, 0)));
+    let (_, _, initial) = streams.subscribe(&page, "requests").unwrap();
+    assert_eq!(
+        initial,
+        Some(
+            json!({"type": "entries", "entries": [{"url": "navigation"}, {"url": "a"}], "dropped": 0})
+        )
+    );
+}
+
+// contract: document.stream.request-subscription-changes-no-collection
+#[test]
+fn stream_requests_subscription_of_a_region_with_elements_subscription_posts_no_entry_again() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    streams.attach(&page).unwrap();
+    streams.subscribe(&page, "elements").unwrap();
+    let (handle, effects, _) = streams.subscribe(&page, "requests").unwrap();
+    assert!(
+        effects.is_empty(),
+        "a requests subscription changed a collection: {effects:?}"
+    );
+    streams
+        .deliver(&page, &request_entries(numbered(0, 210)))
+        .unwrap();
+    let effects = streams.unsubscribe(&page, handle).unwrap();
+    assert!(
+        effects.is_empty(),
+        "the end of the requests subscription turned the collection off: {effects:?}"
+    );
+    let (_, effects, initial) = streams.subscribe(&page, "requests").unwrap();
+    assert!(
+        effects.is_empty(),
+        "a new requests subscription turned the collection on, so the document posts its entries again: {effects:?}"
+    );
+    assert_eq!(streams.log_state(&page), Some((200, 10)));
+    let replay = initial.expect("a requests subscription receives its log");
+    assert_eq!(replay["dropped"], 10);
+    assert_eq!(
+        replay["entries"].as_array().unwrap()[0],
+        json!({"url": "e10"})
+    );
 }
 
 // contract: document.stream.page-load-removes-subscriptions, document.stream.region-close-removes-subscriptions
@@ -227,6 +341,7 @@ fn stream_removal_ends_subscriptions_and_releases_the_log() {
     let side = stream_key("tab-1", "side");
     let other = stream_key("tab-2", "page");
     for k in [&page, &side, &other] {
+        streams.attach(k).unwrap();
         for stream in ["elements", "requests"] {
             streams.subscribe(k, stream).unwrap();
         }
@@ -236,11 +351,23 @@ fn stream_removal_ends_subscriptions_and_releases_the_log() {
         for stream in ["elements", "requests"] {
             assert_eq!(streams.subscribers(k, stream), 0);
         }
+        assert_eq!(streams.log_state(k), None);
     }
     assert_eq!(streams.subscribers(&other, "requests"), 1);
+    assert_eq!(streams.log_state(&other), Some((0, 0)));
     streams.remove_region(&other);
     assert_eq!(streams.subscribers(&other, "requests"), 0);
-    assert_eq!(streams.log_state(&other), (0, 0));
+    assert_eq!(streams.log_state(&other), None);
+    // An entry that arrives after the removal of the region has no log to enter.
+    let result = streams
+        .deliver(&other, &request_entries(["a".into()]))
+        .unwrap();
+    assert!(result.deliveries.is_empty());
+    assert_eq!(streams.log_state(&other), None);
+    assert_eq!(
+        streams.subscribe(&other, "requests").unwrap_err(),
+        r#"document "page" has no request log"#
+    );
 }
 
 // contract: document.stream.request-log-replays-with-dropped
@@ -248,18 +375,14 @@ fn stream_removal_ends_subscriptions_and_releases_the_log() {
 fn stream_request_log_replays_its_last_entries_with_the_dropped_count() {
     let streams = Streams::default();
     let page = stream_key("tab-1", "page");
+    streams.attach(&page).unwrap();
     streams.subscribe(&page, "requests").unwrap();
-    let batch: Vec<Value> = (0..250).map(|i| json!({"url": format!("e{i}")})).collect();
     let result = streams
-        .deliver(
-            &page,
-            &json!({"stream": "requests", "message": {"type": "entries", "entries": batch}})
-                .to_string(),
-        )
+        .deliver(&page, &request_entries(numbered(0, 250)))
         .unwrap();
     assert_eq!(result.deliveries.len(), 1);
     assert!(!result.ack);
-    assert_eq!(streams.log_state(&page), (200, 50));
+    assert_eq!(streams.log_state(&page), Some((200, 50)));
     let (_, _, initial) = streams.subscribe(&page, "requests").unwrap();
     let replay = initial.expect("a requests subscription receives its log");
     assert_eq!(replay["type"], "entries");
@@ -269,10 +392,7 @@ fn stream_request_log_replays_its_last_entries_with_the_dropped_count() {
     assert_eq!(entries[0], json!({"url": "e50"}));
     assert_eq!(entries[199], json!({"url": "e249"}));
     let result = streams
-        .deliver(
-            &page,
-            r#"{"stream":"requests","message":{"type":"entries","entries":[{"url":"e250"}]}}"#,
-        )
+        .deliver(&page, &request_entries(["e250".into()]))
         .unwrap();
     assert_eq!(result.deliveries.len(), 2);
     assert_eq!(
@@ -286,19 +406,18 @@ fn stream_request_log_replays_its_last_entries_with_the_dropped_count() {
 fn stream_reset_clears_the_request_log() {
     let streams = Streams::default();
     let page = stream_key("tab-1", "page");
+    streams.attach(&page).unwrap();
     streams.subscribe(&page, "requests").unwrap();
     streams
-        .deliver(
-            &page,
-            r#"{"stream":"requests","message":{"type":"entries","entries":[{"url":"a"},{"url":"b"}]}}"#,
-        )
+        .deliver(&page, &request_entries(numbered(0, 250)))
         .unwrap();
+    assert_eq!(streams.log_state(&page), Some((200, 50)));
     let result = streams
         .deliver(&page, r#"{"stream":"requests","message":{"type":"reset"}}"#)
         .unwrap();
     assert_eq!(result.deliveries.len(), 1);
     assert_eq!(result.deliveries[0].message, json!({"type": "reset"}));
-    assert_eq!(streams.log_state(&page), (0, 0));
+    assert_eq!(streams.log_state(&page), Some((0, 0)));
     let (_, _, initial) = streams.subscribe(&page, "requests").unwrap();
     assert_eq!(
         initial,
@@ -312,6 +431,9 @@ fn stream_messages_reach_only_the_subscriptions_of_their_stream() {
     let streams = Streams::default();
     let page = stream_key("tab-1", "page");
     let other = stream_key("tab-2", "page");
+    for k in [&page, &other] {
+        streams.attach(k).unwrap();
+    }
     let (requests, _, _) = streams.subscribe(&page, "requests").unwrap();
     let (elements, _, _) = streams.subscribe(&page, "elements").unwrap();
     let (foreign, _, _) = streams.subscribe(&other, "requests").unwrap();
@@ -395,21 +517,20 @@ fn stream_ack_refusal_names_the_document_stream_and_seq() {
     );
 }
 
-// contract: document.stream.process-end-removes-subscriptions, document.stream.window-close-removes-subscriptions
+// contract: document.stream.window-close-removes-subscriptions
 #[test]
-fn stream_ended_surface_or_window_loses_its_subscriptions() {
+fn stream_closed_window_releases_the_request_log() {
     let streams = Streams::default();
     let page = stream_key("tab-1", "page");
+    streams.attach(&page).unwrap();
     streams.subscribe(&page, "requests").unwrap();
     streams
-        .deliver(
-            &page,
-            r#"{"stream":"requests","message":{"type":"entries","entries":[{"url":"a"}]}}"#,
-        )
+        .deliver(&page, &request_entries(["a".into()]))
         .unwrap();
+    // The close of a window removes each of its surfaces with their regions.
     streams.remove_surface("tab-1");
     assert_eq!(streams.subscribers(&page, "requests"), 0);
-    assert_eq!(streams.log_state(&page), (0, 0));
+    assert_eq!(streams.log_state(&page), None);
 }
 
 // contract: document.stream.page-load-removes-subscriptions
@@ -424,6 +545,7 @@ fn a_new_page_document_removes_the_subscriptions_of_its_surface() {
     );
     for (k, handle) in [(&page, 1), (&side, 2), (&other, 3)] {
         documents.reserve(k).unwrap();
+        streams.attach(k).unwrap();
         assert!(documents.set(k, handle));
         for stream in ["elements", "requests"] {
             streams.subscribe(k, stream).unwrap();
@@ -452,34 +574,27 @@ fn a_new_page_document_removes_the_subscriptions_of_its_surface() {
 fn a_page_process_end_removes_every_subscription_of_the_page() {
     let streams = Streams::default();
     let (first, second) = (stream_key("tab-1", "page"), stream_key("tab-2", "page"));
+    for k in [&first, &second] {
+        streams.attach(k).unwrap();
+    }
     streams.subscribe(&first, "requests").unwrap();
     streams.subscribe(&second, "elements").unwrap();
     streams
-        .deliver(
-            &first,
-            r#"{"stream":"requests","message":{"type":"entries","entries":[{"url":"a"}]}}"#,
-        )
+        .deliver(&first, &request_entries(["a".into()]))
         .unwrap();
-    let mut effects = streams.remove_page();
-    effects.sort_by(|a, b| a.key.cmp(&b.key));
+    // The regions stay until the page loads again, so they keep their request collection and their request log.
     assert_eq!(
-        effects,
-        vec![
-            StreamEffect {
-                key: first.clone(),
-                stream: "requests".to_string(),
-                on: false,
-            },
-            StreamEffect {
-                key: second.clone(),
-                stream: "elements".to_string(),
-                on: false,
-            },
-        ]
+        streams.remove_page(),
+        vec![StreamEffect {
+            key: second.clone(),
+            stream: "elements".to_string(),
+            on: false,
+        }]
     );
     assert_eq!(streams.subscribers(&first, "requests"), 0);
     assert_eq!(streams.subscribers(&second, "elements"), 0);
-    assert_eq!(streams.log_state(&first), (0, 0));
+    assert_eq!(streams.log_state(&first), Some((1, 0)));
+    assert_eq!(streams.log_state(&second), Some((0, 0)));
 }
 
 // contract: documents.query.reply-is-the-region-report

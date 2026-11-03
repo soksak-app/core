@@ -2295,7 +2295,7 @@ pub fn close_window_surfaces(
     surfaces.sort();
     let mut failures = Vec::new();
     for (surface, handle) in surfaces {
-        // The streams end with the surface; the closed regions need no turn-off. A view of the surface ends with its window.
+        // The streams and the request logs end with the regions of the surface. A view of the surface ends with its window.
         documents.lifecycle().record_end(&surface);
         streams.remove_surface(&surface);
         let natives = documents

@@ -285,17 +285,6 @@ impl StreamState {
             .count()
     }
 
-    /// Releases the request log of a region that has no subscription.
-    fn release(&mut self, key: &Key) {
-        if !self
-            .subscribers
-            .values()
-            .any(|subscriber| subscriber.key == *key)
-        {
-            self.logs.remove(key);
-        }
-    }
-
     /// The message of each subscription of a stream of the region, in the order of the handles.
     fn deliveries(&self, key: &Key, stream: &str, message: &Value) -> Vec<StreamDelivery> {
         self.subscribers
@@ -310,8 +299,9 @@ impl StreamState {
             .collect()
     }
 
-    /// Removes the subscriptions whose region matches and returns the turn-off effects of the streams that lose their last subscriber.
-    fn remove(&mut self, matches: impl Fn(&Key) -> bool) -> Vec<StreamEffect> {
+    /// Removes the subscriptions whose region matches and returns the turn-off effects of the element streams that lose their
+    /// last subscriber. The request collection of a region does not depend on its subscriptions, so it has no effect.
+    fn remove_subscriptions(&mut self, matches: impl Fn(&Key) -> bool) -> Vec<StreamEffect> {
         let mut lost = BTreeSet::new();
         self.subscribers.retain(|_, subscriber| {
             if matches(&subscriber.key) {
@@ -321,26 +311,29 @@ impl StreamState {
                 true
             }
         });
-        let effects = lost
-            .into_iter()
-            .filter(|(key, stream)| self.count(key, stream) == 0)
+        lost.into_iter()
+            .filter(|(key, stream)| stream == ELEMENTS && self.count(key, stream) == 0)
             .map(|(key, stream)| StreamEffect {
                 key,
                 stream,
                 on: false,
             })
-            .collect();
-        let keys: Vec<Key> = self.logs.keys().cloned().collect();
-        for key in &keys {
-            self.release(key);
-        }
-        effects
+            .collect()
+    }
+
+    /// Removes the subscriptions and the request logs of the closed regions that match. A closed region has no native stream
+    /// left to turn off, so no effect is returned.
+    fn remove_regions(&mut self, matches: impl Fn(&Key) -> bool) {
+        self.remove_subscriptions(&matches);
+        self.logs.retain(|key, _| !matches(key));
     }
 }
 
-/// The stream subscriptions of the document regions of a window. The host counts the subscriptions of each region and stream;
-/// the first subscription of a stream turns its collection on and the last removal turns it off. The methods do not call native,
-/// so the caller applies the returned effects on the main thread.
+/// The stream subscriptions and the request logs of the document regions of a window. The host counts the subscriptions of each
+/// region and stream; the first elements subscription turns the collection of the element tree on and the last removal turns it
+/// off. A region collects its requests and keeps its request log from its attach to its removal, whether a page subscribes or not
+/// (docs/spec/native-surfaces.md#document-streams). The methods do not call native, so the caller applies the returned effects on
+/// the main thread.
 #[derive(Default)]
 pub struct Streams(Mutex<StreamState>);
 
@@ -353,8 +346,24 @@ impl Streams {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    /// Creates the request log of a region that is being attached and returns the effect that turns its request collection on.
+    /// It is an error when the region already has a request log.
+    pub fn attach(&self, key: &Key) -> Result<Vec<StreamEffect>, String> {
+        let mut state = self.lock();
+        if state.logs.contains_key(key) {
+            return Err(format!("document {:?} already has a request log", key.1));
+        }
+        state.logs.insert(key.clone(), RequestLog::default());
+        Ok(vec![StreamEffect {
+            key: key.clone(),
+            stream: REQUESTS.to_string(),
+            on: true,
+        }])
+    }
+
     /// Registers a subscription of a stream on the region key. It returns the handle, the effects to apply, and the first message
-    /// of the subscriber, which is the request log of a requests subscription.
+    /// of the subscriber, which is the request log of a requests subscription. A requests subscription of a region without a
+    /// request log is an error.
     pub fn subscribe(
         &self,
         key: &Key,
@@ -362,6 +371,15 @@ impl Streams {
     ) -> Result<(u64, Vec<StreamEffect>, Option<Value>), String> {
         check_stream(stream)?;
         let mut state = self.lock();
+        let initial = if stream == REQUESTS {
+            let log = state
+                .logs
+                .get(key)
+                .ok_or_else(|| format!("document {:?} has no request log", key.1))?;
+            Some(entries_message(log))
+        } else {
+            None
+        };
         state.next += 1;
         let handle = state.next;
         state.subscribers.insert(
@@ -371,13 +389,8 @@ impl Streams {
                 stream: stream.to_string(),
             },
         );
-        let initial = if stream == REQUESTS {
-            Some(entries_message(state.logs.entry(key.clone()).or_default()))
-        } else {
-            None
-        };
         let mut effects = Vec::new();
-        if state.count(key, stream) == 1 {
+        if stream == ELEMENTS && state.count(key, stream) == 1 {
             effects.push(StreamEffect {
                 key: key.clone(),
                 stream: stream.to_string(),
@@ -389,10 +402,7 @@ impl Streams {
 
     /// Removes a subscription whose stream native refused to turn on. No effect is returned, because native did not turn the stream on.
     pub fn abandon(&self, handle: u64) {
-        let mut state = self.lock();
-        if let Some(subscriber) = state.subscribers.remove(&handle) {
-            state.release(&subscriber.key);
-        }
+        self.lock().subscribers.remove(&handle);
     }
 
     /// Ends the subscription handle of the region key. It is an error when the handle is not a subscription of that region.
@@ -409,32 +419,32 @@ impl Streams {
         };
         state.subscribers.remove(&handle);
         let mut effects = Vec::new();
-        if state.count(key, &stream) == 0 {
+        if stream == ELEMENTS && state.count(key, &stream) == 0 {
             effects.push(StreamEffect {
                 key: key.clone(),
                 stream,
                 on: false,
             });
         }
-        state.release(key);
         Ok(effects)
     }
 
     /// Removes the subscriptions of a closed region and releases its request log.
-    pub fn remove_region(&self, key: &Key) -> Vec<StreamEffect> {
-        self.lock().remove(|region| region == key)
+    pub fn remove_region(&self, key: &Key) {
+        self.lock().remove_regions(|region| region == key);
     }
 
-    /// Removes the subscriptions of a surface and returns the turn-off effects of the streams that lose their last subscriber.
-    pub fn remove_surface(&self, surface: &str) -> Vec<StreamEffect> {
-        self.lock().remove(|region| region.0 == surface)
+    /// Removes the subscriptions of the closed regions of a surface and releases their request logs.
+    pub fn remove_surface(&self, surface: &str) {
+        self.lock().remove_regions(|region| region.0 == surface);
     }
 
-    /// Removes every subscription of the main page of a window and returns the turn-off effects of the streams that lose
-    /// their last subscriber. Every subscription of a window is made by its main page, so this ends the subscriptions of
-    /// all surfaces of the window.
+    /// Removes every subscription of the main page of a window and returns the turn-off effects of the element streams that lose
+    /// their last subscriber. Every subscription of a window is made by its main page, so this ends the subscriptions of all
+    /// surfaces of the window. The regions remain until the page loads again, so they keep their request collection and their
+    /// request logs.
     pub fn remove_page(&self) -> Vec<StreamEffect> {
-        self.lock().remove(|_| true)
+        self.lock().remove_subscriptions(|_| true)
     }
 
     /// The number of subscriptions of a stream of a region.
@@ -442,16 +452,17 @@ impl Streams {
         self.lock().count(key, stream)
     }
 
-    /// The number of entries in the request log of a region and the number of entries it dropped since the last reset.
-    pub fn log_state(&self, key: &Key) -> (usize, u64) {
+    /// The number of entries in the request log of a region and the number of entries it dropped since the last reset, or None
+    /// for a region without a request log.
+    pub fn log_state(&self, key: &Key) -> Option<(usize, u64)> {
         self.lock()
             .logs
             .get(key)
-            .map_or((0, 0), |log| (log.entries.len(), log.dropped))
+            .map(|log| (log.entries.len(), log.dropped))
     }
 
-    /// Handles one stream message of native for the region key. A request entry that arrives while the region has no subscription
-    /// belongs to a collection that is turned off, so it is not kept.
+    /// Handles one stream message of native for the region key. A request entry for a region without a request log arrives after
+    /// the removal of the region, whose document is closing, so it is not kept.
     pub fn deliver(&self, key: &Key, value: &str) -> Result<StreamResult, String> {
         let envelope: Value = serde_json::from_str(value).map_err(|_| NOT_JSON.to_string())?;
         let stream = text_field(envelope.get("stream"))?;
@@ -2276,6 +2287,14 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     require_region(&data.compositions, &key.0, &key.1, "document", None)?;
     // The name is taken first. The lock is not held while waiting for native work.
     data.documents.reserve(&key)?;
+    // The request log exists before native can send an entry of the region.
+    let effects = match data.streams.attach(&key) {
+        Ok(effects) => effects,
+        Err(error) => {
+            drop(data.documents.remove(&key));
+            return Err(error);
+        }
+    };
     let handle = match create(
         webview,
         &window,
@@ -2283,10 +2302,12 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
         platform,
         data.overlay.dialog(),
         restore,
+        effects,
     ) {
         Ok(handle) => handle,
         Err(error) => {
             drop(data.documents.remove(&key));
+            data.streams.remove_region(&key);
             return Err(error);
         }
     };
@@ -2298,6 +2319,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
         if registry.documents.set(&stored, handle) {
             return Ok(true);
         }
+        registry.streams.remove_region(&stored);
         platform.close_document(handle)?;
         Ok(false)
     })?;
@@ -2310,7 +2332,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     Ok(())
 }
 
-/// Creates a document webview inside the surface webview and returns its address.
+/// Creates a document webview inside the surface webview, applies the stream effects of its attach and returns its address.
 fn create(
     webview: &Webview,
     window: &Window,
@@ -2318,6 +2340,7 @@ fn create(
     platform: &'static dyn platform::Platform,
     dialog: bool,
     restore: Option<String>,
+    effects: Vec<StreamEffect>,
 ) -> Result<Handle, String> {
     with_view(webview, move |view| platform.view_id(view))?;
     let host = window.clone();
@@ -2409,6 +2432,22 @@ fn create(
             handle,
             Box::new(move |value| deliver_stream(&stream_host, platform, &stream_key, &value)),
         )?;
+        // The region collects its requests from the start of its first document: native applies the collection when the
+        // document script reports that it is ready, which happens after this task.
+        for effect in &effects {
+            match platform.set_document_stream_on(handle, &effect.stream, effect.on) {
+                Ok(true) => {}
+                refused => {
+                    platform.close_document(handle)?;
+                    return Err(refused.err().unwrap_or_else(|| {
+                        format!(
+                            "document {name:?} does not accept stream {:?}",
+                            effect.stream
+                        )
+                    }));
+                }
+            }
+        }
         let event_host = host.clone();
         let event_surface = surface_id.clone();
         let event_document = name.clone();
@@ -2576,7 +2615,7 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
         if handle != 0 {
             platform.close_document(handle)?;
         }
-        // The closed region has no native stream left to turn off, so its effects are not applied.
+        // The closed region ends its subscriptions and releases its request log.
         data.streams.remove_region(&key);
         Ok(())
     })?;
@@ -2585,7 +2624,7 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
 }
 
 /// Ends the subscriptions of a surface whose page loaded a new document, and removes its document regions. The regions
-/// close with the page, so their stream effects are not applied. It returns the handles of the regions for the caller to
+/// close with the page, so their request logs are released. It returns the handles of the regions for the caller to
 /// close.
 pub fn remove_surface_for_reload(
     documents: &Documents,
@@ -2609,16 +2648,16 @@ pub fn remove_view_regions(
     images: &crate::images::Images,
     surface: &str,
 ) -> (Vec<Handle>, Vec<Handle>) {
-    // The regions close with the ended document, so their stream effects are not applied.
+    // The regions close with the ended document, so their request logs are released.
     streams.remove_surface(surface);
     let closed_documents = documents.remove_surface(surface);
     images.begin_generation(surface);
     (closed_documents, images.remove_surface(surface))
 }
 
-/// Ends every subscription of the main page of a window whose web content process ended, and turns off the streams that
-/// lose their last subscriber in the regions that remain until the page reloads. Each failed turn-off is logged with the
-/// name of its document.
+/// Ends every subscription of the main page of a window whose web content process ended, and turns off the element streams
+/// that lose their last subscriber in the regions that remain until the page reloads; the regions keep their request
+/// collection and their request logs. Each failed turn-off is logged with the name of its document.
 pub(crate) fn main_page_process_ended(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     let platform = platform::current()?;
@@ -2701,7 +2740,7 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
                 if let Some((plugin, generation)) = close.ended {
                     emit_source_ended(&host, &plugin, &surface, generation);
                 }
-                // The regions close with the surface, so their stream effects are not applied.
+                // The regions close with the surface, so their request logs are released.
                 data.streams.remove_surface(&surface);
                 let handles = data.documents.remove_surface(&surface);
                 if handles.is_empty() {
@@ -2820,7 +2859,7 @@ fn deliver_stream(window: &Window, platform: &'static dyn Platform, key: &Key, v
 }
 
 /// Subscribes to a stream of a document region and returns the handle. The first message of a requests subscription is the request log,
-/// and the subscription receives it before native turns the stream on.
+/// and the subscription receives it before the entries that follow it.
 pub(crate) fn subscribe(webview: &Webview, request: Request) -> Result<Subscription, String> {
     let (key, window) = owner(webview, &request)?;
     check_stream(&request.stream)?;
@@ -2844,7 +2883,7 @@ pub(crate) fn subscribe(webview: &Webview, request: Request) -> Result<Subscript
     Ok(Subscription { handle })
 }
 
-/// Ends a subscription of a document region. The last removal of a stream turns its collection off.
+/// Ends a subscription of a document region. The last removal of the elements stream turns its collection off.
 pub(crate) fn unsubscribe(webview: &Webview, request: Request) -> Result<(), String> {
     let (key, window) = owner(webview, &request)?;
     let handle = request

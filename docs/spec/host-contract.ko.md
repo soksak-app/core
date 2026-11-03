@@ -218,17 +218,20 @@ fn invalid_json_closes_connection() {
 | `documents.registry.remove-attached-returns-handle-once` | 연결된 문서 이름을 제거하면 핸들을 반환하고, 다시 제거하면 실패한다. | both |
 | `document.stream.subscribe-rejects-unknown-stream` | `elements`나 `requests`가 아닌 stream의 구독은 `unknown document stream "<name>"`으로 실패한다. | both |
 | `document.stream.unsubscribe-rejects-unknown-handle` | 문서가 가지지 않은 핸들을 끝내면 `document stream handle <handle> is not subscribed to document "<name>"`으로 실패한다. | both |
-| `document.stream.first-on-last-off` | stream의 첫 구독은 수집을 켜고, 같은 stream의 다음 구독은 다시 켜지 않으며, 마지막 구독을 제거하면 수집을 끈다. | both |
+| `document.stream.first-on-last-off` | 영역의 첫 `elements` 구독은 요소 트리의 수집을 켜고, 다음 `elements` 구독은 다시 켜지 않으며, 마지막 구독을 제거하면 수집을 끈다. | both |
+| `document.stream.attach-starts-request-collection` | 영역의 attach는 빈 요청 로그를 만들고 요청 수집을 켠다. 같은 영역의 두 번째 attach는 `document "<name>" already has a request log`로 실패하고, 요청 로그가 없는 영역의 `requests` 구독은 `document "<name>" has no request log`로 실패한다. | both |
+| `document.stream.request-log-lives-with-the-region` | 영역의 요청 로그는 어느 page도 구독하지 않는 동안 도착한 항목을 담고, 모든 구독이 끝나도 항목과 `dropped`를 유지하므로, 나중의 `requests` 구독은 로그 전체를 먼저 받는다. | both |
+| `document.stream.request-subscription-changes-no-collection` | `requests` 구독과 그 끝은 영역의 `elements` 구독이 남아 있는 동안에도 어떤 수집도 켜거나 끄지 않으므로, 로그는 각 항목을 한 번 담고 `dropped`는 로그가 버린 항목만 센다. | both |
 | `document.stream.native-refusal-rejects-subscription` | native 계층이 stream 켜기를 거부하면 구독은 유지되지 않고 호출은 `document "<name>" does not accept stream "<stream>"`으로 실패한다. | both |
 | `document.stream.page-load-removes-subscriptions` | 구독한 표면 페이지의 새 문서는 그 구독을 제거하고, stream마다 구독자 수는 0으로 돌아간다. | both |
-| `document.stream.region-close-removes-subscriptions` | 문서 영역을 닫으면 그 구독을 제거하고, 구독자 수는 0으로 돌아가며, 요청 로그는 해제된다. | both |
+| `document.stream.region-close-removes-subscriptions` | 문서 영역을 닫으면 그 구독을 제거하고, 구독자 수는 0으로 돌아가며, 요청 로그는 해제되므로, 그 뒤 영역의 항목은 남지 않고 그 뒤의 `requests` 구독은 실패한다. | both |
 | `document.stream.request-log-replays-with-dropped` | 새 requests 구독은 먼저 최대 200개 항목의 로그를 받고, `dropped`는 마지막 reset 이후 로그가 버린 항목 수이며, 이후 항목은 순서대로 따른다. | both |
 | `document.stream.reset-clears-request-log` | requests stream의 reset은 로그와 `dropped` 수를 지우고, 그 stream의 구독에 `reset`을 보낸다. | both |
 | `document.stream.delivers-to-subscribing-surface-only` | stream의 메시지는 영역에서 그 stream의 구독에만 전달되며, 각 구독의 표면과 핸들을 함께 실어 보낸다. | both |
 | `document.stream.snapshot-acknowledged-after-delivery` | snapshot은 elements stream의 구독에 전달되고, 그 `seq`는 전달 뒤에 native로 확인되며, 남은 구독이 없어도 같다. | both |
 | `document.stream.rejects-unknown-message` | JSON이 아닌 stream 메시지는 `document stream message is not JSON`으로, 알 수 없는 stream은 `unknown document stream "<name>"`으로, 알 수 없는 메시지 type은 `document stream "<stream>" sent an unknown message type "<type>"`으로, `seq`가 없는 elements snapshot은 `document stream "elements" snapshot has no seq`로 실패한다. | both |
 | `document.stream.ack-refusal-names-seq` | native가 거부한 확인은 `document "<name>" stream <stream>: seq <seq> was not sent`로 실패하며, host는 이를 애플리케이션 로그에 쓴다. | both |
-| `document.stream.process-end-removes-subscriptions` | 구독한 표면 페이지의 web content process가 끝나면 그 구독을 제거하고, stream마다 구독자 수는 0으로 돌아간다. | both |
+| `document.stream.process-end-removes-subscriptions` | 구독한 표면 페이지의 web content process가 끝나면 그 구독을 제거하고, stream마다 구독자 수는 0으로 돌아가며, 마지막 구독을 잃은 `elements` 수집은 꺼지고, 영역은 요청 수집과 요청 로그를 유지한다. | both |
 | `document.stream.window-close-removes-subscriptions` | 구독한 표면이 있는 창을 닫으면 그 구독을 제거하고, 구독자 수는 0으로 돌아가며, 요청 로그는 해제된다. | both |
 | `document.plugin.folder` | 문서 영역의 plugin 폴더는 `plugins/installed.json`이 표면의 켜진 설치 plugin에 기록한 폴더다. 꺼졌거나 알 수 없는 plugin은 `plugin <id> is not installed and enabled`로 실패한다. | both |
 | `document.message.forward` | plugin 문서의 메시지 `{"message": value}`는 `document-message`의 payload `{surface, document, message}`가 되고, `{"error": reason}`은 host가 로그에 쓰는 이유가 되며, 둘 다 없는 값은 `document message <name> has neither message nor error`로 실패한다. | both |

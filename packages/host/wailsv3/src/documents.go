@@ -287,6 +287,12 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	if err := s.documents.Reserve(key); err != nil {
 		return err
 	}
+	// The request log exists before native can send an entry of the region.
+	effects, err := s.streams.Attach(key)
+	if err != nil {
+		s.documents.Remove(key)
+		return err
+	}
 	var handle unsafe.Pointer
 	application.InvokeSync(func() {
 		view := s.views[key.Surface]
@@ -326,9 +332,18 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		if err == nil {
 			err = system.SetDocumentStream(handle, func(value string) { s.documentStream(key, value) })
 		}
+		// The region collects its requests from the start of its first document: native applies the collection when the document script
+		// reports that it is ready, which happens after this task.
+		for _, effect := range effects {
+			if err == nil && !system.SetDocumentStreamOn(handle, effect.Stream, effect.On) {
+				system.CloseDocument(handle)
+				err = fmt.Errorf("document %q does not accept stream %q", key.Name, effect.Stream)
+			}
+		}
 	})
 	if err != nil {
 		s.documents.Remove(key)
+		s.streams.RemoveRegion(key)
 		return err
 	}
 	// When the surface was removed during creation, the created document is closed. Registration and closing run on the UI thread.
@@ -336,6 +351,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	application.InvokeSync(func() {
 		registered = s.documents.Set(key, handle)
 		if !registered {
+			s.streams.RemoveRegion(key)
 			system.CloseDocument(handle)
 		}
 	})
@@ -636,7 +652,7 @@ func (s *Surfaces) applyStreamEffects(effects []StreamEffect) error {
 }
 
 // subscribeDocument opens a subscription of a stream of a document region and returns its handle. The first message of a requests subscription
-// is the request log, and the subscription receives it before native starts the stream.
+// is the request log, and the subscription receives it before the entries that follow it.
 func (s *Surfaces) subscribeDocument(viewID uint64, req DocumentRequest) (uint64, error) {
 	key, err := s.checkDocument(viewID, req)
 	if err != nil {
@@ -650,6 +666,9 @@ func (s *Surfaces) subscribeDocument(viewID uint64, req DocumentRequest) (uint64
 	}
 	var handle uint64
 	application.InvokeSync(func() {
+		if _, err = s.documents.Get(key); err != nil {
+			return
+		}
 		var effects []StreamEffect
 		var initial json.RawMessage
 		handle, effects, initial, err = s.streams.Subscribe(key, req.Stream)
@@ -666,7 +685,7 @@ func (s *Surfaces) subscribeDocument(viewID uint64, req DocumentRequest) (uint64
 	return handle, err
 }
 
-// unsubscribeDocument ends a subscription of a document region. The last removal of a stream turns its collection off.
+// unsubscribeDocument ends a subscription of a document region. The last removal of the elements stream turns its collection off.
 func (s *Surfaces) unsubscribeDocument(viewID uint64, req DocumentRequest) error {
 	key, err := s.checkDocument(viewID, req)
 	if err != nil {
@@ -815,15 +834,16 @@ func (s *Surfaces) detachDocument(viewID uint64, req DocumentRequest) error {
 	return nil
 }
 
-// surfaceTerminated removes the subscriptions of a surface whose WebContent process ended and turns off the streams that lose their last
-// subscriber. The regions stay attached until the framework reloads the page, which commits a new document.
+// surfaceTerminated removes the subscriptions of a surface whose WebContent process ended and turns off the element streams that lose their last
+// subscriber. The regions stay attached until the framework reloads the page, which commits a new document, so they keep their request collection
+// and their request logs.
 func (s *Surfaces) surfaceTerminated(viewID uint64) {
 	surface := s.surfaceOf(viewID)
 	if surface == "" {
 		return
 	}
 	application.InvokeSync(func() {
-		for _, effect := range s.streams.RemoveSurface(surface) {
+		for _, effect := range s.streams.RemovePage(surface) {
 			if err := s.applyStreamEffects([]StreamEffect{effect}); err != nil {
 				LogError("document stream "+effect.Key.Name, err)
 			}
@@ -838,7 +858,7 @@ func (s *Surfaces) closeSurfaceDocuments(surface string) {
 	if channel, ok := s.documents.view(surface); ok && s.sourceOriginState().retire(surface, channel.generation) {
 		s.windowEvent("view-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": channel.generation})
 	}
-	// The regions close with their documents, so their stream effects are not applied.
+	// The regions close with their documents, so their request logs are released.
 	s.streams.RemoveSurface(surface)
 	handles := s.documents.RemoveSurface(surface)
 	for _, handle := range handles {
@@ -1109,9 +1129,10 @@ type streamLog struct {
 	dropped int64
 }
 
-// DocumentStreams are the stream subscriptions of the document regions of a window. The host counts the subscriptions of each region and stream;
-// the first subscription of a stream turns its collection on and the last removal turns it off. A region that has no subscription has no request
-// log. It does not call native, so the caller applies the returned effects on the UI thread.
+// DocumentStreams are the stream subscriptions and the request logs of the document regions of a window. The host counts the subscriptions of each
+// region and stream; the first elements subscription turns the collection of the element tree on and the last removal turns it off. A region collects
+// its requests and keeps its request log from its attach to its removal, whether a page subscribes or not (docs/spec/native-surfaces.md#document-streams).
+// It does not call native, so the caller applies the returned effects on the UI thread.
 type DocumentStreams struct {
 	mu   sync.Mutex
 	next uint64
@@ -1134,16 +1155,6 @@ func (d *DocumentStreams) countLocked(key DocumentKey, stream string) int {
 	return n
 }
 
-// releaseLocked releases the request log of a region that has no subscription. The caller holds mu.
-func (d *DocumentStreams) releaseLocked(key DocumentKey) {
-	for _, sub := range d.subs {
-		if sub.key == key {
-			return
-		}
-	}
-	delete(d.logs, key)
-}
-
 // Subscribers returns the number of subscriptions of a stream of a region.
 func (d *DocumentStreams) Subscribers(key DocumentKey, stream string) int {
 	d.mu.Lock()
@@ -1151,15 +1162,16 @@ func (d *DocumentStreams) Subscribers(key DocumentKey, stream string) int {
 	return d.countLocked(key, stream)
 }
 
-// LogState returns the number of entries in the request log of a region and the number of entries it dropped since the last reset.
-func (d *DocumentStreams) LogState(key DocumentKey) (int, int64) {
+// LogState returns the number of entries in the request log of a region, the number of entries it dropped since the last reset, and whether the
+// region has a request log.
+func (d *DocumentStreams) LogState(key DocumentKey) (int, int64, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	log := d.logs[key]
 	if log == nil {
-		return 0, 0
+		return 0, 0, false
 	}
-	return len(log.entries), log.dropped
+	return len(log.entries), log.dropped, true
 }
 
 // logMessage is the entries message of the request log: the entries and the dropped count.
@@ -1176,35 +1188,44 @@ func logMessage(log *streamLog) (json.RawMessage, error) {
 	}{"entries", entries, log.dropped})
 }
 
+// Attach creates the request log of a region that is being attached and returns the effect that turns its request collection on. It is an error
+// when the region already has a request log.
+func (d *DocumentStreams) Attach(key DocumentKey) ([]StreamEffect, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.logs[key] != nil {
+		return nil, fmt.Errorf("document %q already has a request log", key.Name)
+	}
+	d.logs[key] = &streamLog{}
+	return []StreamEffect{{Key: key, Stream: streamRequests, On: true}}, nil
+}
+
 // Subscribe registers a subscription of stream on the region key and returns its handle, the effects to apply, and the first message
 // of the subscriber. The first message of a requests subscription is the request log; an elements subscription has none, and native
-// sends its first snapshot when the stream turns on.
+// sends its first snapshot when the stream turns on. A requests subscription of a region without a request log is an error.
 func (d *DocumentStreams) Subscribe(key DocumentKey, stream string) (uint64, []StreamEffect, json.RawMessage, error) {
 	if err := checkStream(stream); err != nil {
 		return 0, nil, nil, err
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.next++
-	handle := d.next
-	d.subs[handle] = streamSubscriptionState{key: key, stream: stream}
 	var initial json.RawMessage
 	if stream == streamRequests {
 		log := d.logs[key]
 		if log == nil {
-			log = &streamLog{}
-			d.logs[key] = log
+			return 0, nil, nil, fmt.Errorf("document %q has no request log", key.Name)
 		}
 		message, err := logMessage(log)
 		if err != nil {
-			delete(d.subs, handle)
-			d.releaseLocked(key)
 			return 0, nil, nil, err
 		}
 		initial = message
 	}
+	d.next++
+	handle := d.next
+	d.subs[handle] = streamSubscriptionState{key: key, stream: stream}
 	var effects []StreamEffect
-	if d.countLocked(key, stream) == 1 {
+	if stream == streamElements && d.countLocked(key, stream) == 1 {
 		effects = append(effects, StreamEffect{Key: key, Stream: stream, On: true})
 	}
 	return handle, effects, initial, nil
@@ -1214,10 +1235,7 @@ func (d *DocumentStreams) Subscribe(key DocumentKey, stream string) (uint64, []S
 func (d *DocumentStreams) Abandon(handle uint64) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if sub, ok := d.subs[handle]; ok {
-		delete(d.subs, handle)
-		d.releaseLocked(sub.key)
-	}
+	delete(d.subs, handle)
 }
 
 // Unsubscribe ends the subscription handle of the region key. It is an error when the handle is not a subscription of that region.
@@ -1230,16 +1248,15 @@ func (d *DocumentStreams) Unsubscribe(key DocumentKey, handle uint64) ([]StreamE
 	}
 	delete(d.subs, handle)
 	var effects []StreamEffect
-	if d.countLocked(key, sub.stream) == 0 {
+	if sub.stream == streamElements && d.countLocked(key, sub.stream) == 0 {
 		effects = append(effects, StreamEffect{Key: key, Stream: sub.stream, On: false})
 	}
-	d.releaseLocked(key)
 	return effects, nil
 }
 
-// removeLocked removes the subscriptions that match and returns the turn-off effects of the streams that lose their last subscriber.
-// The caller holds mu.
-func (d *DocumentStreams) removeLocked(match func(DocumentKey) bool) []StreamEffect {
+// removeSubscriptionsLocked removes the subscriptions that match and returns the turn-off effects of the element streams that lose their last
+// subscriber. The request collection of a region does not depend on its subscriptions, so it has no effect. The caller holds mu.
+func (d *DocumentStreams) removeSubscriptionsLocked(match func(DocumentKey) bool) []StreamEffect {
 	lost := map[StreamEffect]bool{}
 	for handle, sub := range d.subs {
 		if !match(sub.key) {
@@ -1250,12 +1267,9 @@ func (d *DocumentStreams) removeLocked(match func(DocumentKey) bool) []StreamEff
 	}
 	var effects []StreamEffect
 	for effect := range lost {
-		if d.countLocked(effect.Key, effect.Stream) == 0 {
+		if effect.Stream == streamElements && d.countLocked(effect.Key, effect.Stream) == 0 {
 			effects = append(effects, StreamEffect{Key: effect.Key, Stream: effect.Stream, On: false})
 		}
-	}
-	for key := range d.logs {
-		d.releaseLocked(key)
 	}
 	sort.Slice(effects, func(i, j int) bool {
 		a, b := effects[i], effects[j]
@@ -1270,23 +1284,44 @@ func (d *DocumentStreams) removeLocked(match func(DocumentKey) bool) []StreamEff
 	return effects
 }
 
-// RemoveRegion removes the subscriptions of a closed region and releases its request log.
-func (d *DocumentStreams) RemoveRegion(key DocumentKey) []StreamEffect {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.removeLocked(func(k DocumentKey) bool { return k == key })
+// removeRegionsLocked removes the subscriptions and the request logs of the closed regions that match. A closed region has no native stream left
+// to turn off, so no effect is returned. The caller holds mu.
+func (d *DocumentStreams) removeRegionsLocked(match func(DocumentKey) bool) {
+	d.removeSubscriptionsLocked(match)
+	for key := range d.logs {
+		if match(key) {
+			delete(d.logs, key)
+		}
+	}
 }
 
-// RemoveSurface removes the subscriptions of a surface: its page loaded a new document, its web content process ended, or its window closed.
-func (d *DocumentStreams) RemoveSurface(surface string) []StreamEffect {
+// RemoveRegion removes the subscriptions of a closed region and releases its request log.
+func (d *DocumentStreams) RemoveRegion(key DocumentKey) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.removeLocked(func(k DocumentKey) bool { return k.Surface == surface })
+	d.removeRegionsLocked(func(k DocumentKey) bool { return k == key })
+}
+
+// RemoveSurface removes the subscriptions and the request logs of the regions of a surface whose regions close: its page loaded a new document,
+// or the surface or its window closed.
+func (d *DocumentStreams) RemoveSurface(surface string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.removeRegionsLocked(func(k DocumentKey) bool { return k.Surface == surface })
+}
+
+// RemovePage removes the subscriptions of the page of a surface whose web content process ended and returns the turn-off effects of the element
+// streams that lose their last subscriber. The regions of the surface remain until the page loads again, so they keep their request collection
+// and their request logs.
+func (d *DocumentStreams) RemovePage(surface string) []StreamEffect {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.removeSubscriptionsLocked(func(k DocumentKey) bool { return k.Surface == surface })
 }
 
 // Deliver handles one stream message of native for the region key. It returns the deliveries to the subscriptions of the stream, and for a
-// snapshot the seq that native is acknowledged with after the deliveries. A request entry that arrives while the region has no subscription
-// belongs to a collection that is turned off, so it is not kept.
+// snapshot the seq that native is acknowledged with after the deliveries. A request entry for a region without a request log arrives after the
+// removal of the region, whose document is closing, so it is not kept.
 func (d *DocumentStreams) Deliver(key DocumentKey, value string) (StreamResult, error) {
 	var envelope struct {
 		Stream  string          `json:"stream"`
