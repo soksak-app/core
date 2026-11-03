@@ -7,6 +7,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
+#import "support/surface_view.h"
 #import "webview_input.h"
 #import "window_facts.h"
 #import "window_objects.h"
@@ -63,7 +64,8 @@ int main(void) { @autoreleasepool {
     sp_window_objects baseline = sp_window_objects_count();
     NSWindow *window;
     void *surface;
-    WKWebView *attached;
+    void *viewSurface;
+    WKWebView *view;
     @autoreleasepool {
         window = [[NSWindow alloc] initWithContentRect:NSMakeRect(60, 60, 600, 400)
             styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];
@@ -78,26 +80,30 @@ int main(void) { @autoreleasepool {
         check(webviewInputRegister(main), @"the main webview registers for input");
         surface = sp_surface_create(main);
         check(surface != NULL, @"a logical surface is created");
-        attached = [[WKWebView alloc] initWithFrame:NSMakeRect(20, 20, 200, 120)];
-        [window.contentView addSubview:attached positioned:NSWindowAbove relativeTo:nil];
-        check(webviewInputRegister(attached), @"an attached surface webview registers for input");
-        webviewAttachSurface(attached, main);
+        viewSurface = sp_surface_create(main);
+        check(viewSurface != NULL, @"a surface for a view is created");
+        view = [[WKWebView alloc] initWithFrame:NSZeroRect];
+        check(webviewInputRegister(view), @"a view webview registers for input");
+        check(SPPlaceSurfaceView(viewSurface, view), @"the view webview is placed in its surface");
+        webviewSetFrame(viewSurface, 20, 20, 200, 120);
+        webviewSetSurfaceHidden(viewSurface, false);
     }
     sp_window_objects open = sp_window_objects_count();
     sp_window_objects expected = {
         baseline.windowCompositions + 1, baseline.surfaceHosts + 2, baseline.inputRegistrations + 2,
     };
     check(same(open, expected), [NSString stringWithFormat:
-        @"one window with a logical surface and an attached webview counts %@ (expected %@)", describe(open), describe(expected)]);
+        @"one window with a logical surface and a surface with a placed view webview counts %@ (expected %@)", describe(open), describe(expected)]);
 
     SPCounted state = {0};
     // One event loop iteration of AppKit. Objects autoreleased while the window closes are released when this pool is
     // drained.
     @autoreleasepool {
-        webviewInputUnregister(attached);
-        webviewDetachSurface(attached);
-        [attached removeFromSuperview];
-        [attached release];
+        webviewInputUnregister(view);
+        sp_surface_unplace_view(view);
+        [view removeFromSuperview];
+        [view release];
+        sp_surface_close(viewSurface);
         sp_surface_close(surface);
         [window close];
         [[window retain] autorelease];

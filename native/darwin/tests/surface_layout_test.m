@@ -8,6 +8,7 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "private/webkit.h"
+#import "support/surface_view.h"
 
 static const NSTimeInterval kBusy = 3;
 
@@ -523,9 +524,8 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             check(error == nil, @"the first-show marker loads before its surface is revealed"); markerLoaded = YES;
         }];
     until(^BOOL { return markerLoaded; });
-    root.hidden = YES;
-    webviewAttachSurface(root, main);
-    webviewSetFrame(root, 40, 40, 180, 100);
+    check(SPPlaceSurfaceView(compositionSurface, root), @"the first-show root is placed in its hidden surface");
+    webviewSetFrame(compositionSurface, 40, 40, 180, 100);
     __block BOOL fixtureStateRead = NO;
     [root evaluateJavaScript:@"({viewport:[innerWidth,innerHeight],marker:(()=>{const r=document.querySelector('div').getBoundingClientRect();"
         "return {rect:[r.x,r.y,r.width,r.height],background:getComputedStyle(document.querySelector('div')).backgroundColor}})()})"
@@ -550,7 +550,10 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     char directory[] = "/tmp/soksak-first-show-test-XXXXXX";
     BOOL created = mkdtemp(directory) != NULL;
     check(created, @"the first-show recording directory is created");
-    if (!created) { webviewDetachSurface(root); sp_surface_close(compositionSurface); [window close]; [window release]; return; }
+    if (!created) {
+        sp_surface_unplace_view(root); [root removeFromSuperview]; sp_surface_close(compositionSurface);
+        [window close]; [window release]; return;
+    }
     compositionDirectory = [[NSString stringWithUTF8String:directory] copy];
     char *operationError = NULL;
     BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
@@ -564,8 +567,8 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         __block BOOL prepared = NO;
         surfaceLayoutBegin(window, 108, ^(int allowed) { prepared = allowed != 0; });
         check(prepared, @"the first-show layout transaction starts");
-        webviewSetFrame(root, 40, 40, 180, 100);
-        webviewSetSurfaceHidden(root, false);
+        webviewSetFrame(compositionSurface, 40, 40, 180, 100);
+        webviewSetSurfaceHidden(compositionSurface, false);
         check(!((NSView *)root.superview).hidden && !root.hidden,
             @"the first-show root is made visible during preparation");
         check(window.firstResponder == main,
@@ -645,9 +648,9 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:&cleanupError],
         [NSString stringWithFormat:@"the first-show recording is removed (%@)", cleanupError]);
     if (cleanupError == nil) { [compositionDirectory release]; compositionDirectory = nil; }
-    webviewDetachSurface(root);
-    sp_surface_close(compositionSurface);
+    sp_surface_unplace_view(root);
     [root removeFromSuperview];
+    sp_surface_close(compositionSurface);
     [window close]; [window release];
 }
 

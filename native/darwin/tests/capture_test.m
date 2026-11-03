@@ -7,6 +7,7 @@
 #import "image_capture_match.h"
 #import "image_region.h"
 #import "webview_geometry.h"
+#import "support/surface_view.h"
 #import "support/capture_frame.m"
 
 static int failures;
@@ -163,18 +164,19 @@ int main(void) { @autoreleasepool {
         main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         [window.contentView addSubview:main positioned:NSWindowBelow relativeTo:nil];
         void *surfaceHost = sp_surface_create(main);
-        WKWebView *surface = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
-        surface.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-        if (surfaceHost) webviewAttachSurface(surface, main);
-        webviewSetFrame(surface, 0, 0, NSWidth(window.contentView.bounds), NSHeight(window.contentView.bounds));
-        void *regionA = surfaceHost ? sp_region_create(surface, "capture-identity-a", discardRegionEvent, NULL) : NULL;
-        void *regionB = surfaceHost ? sp_region_create(surface, "capture-identity-b", discardRegionEvent, NULL) : NULL;
+        WKWebView *page = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+        BOOL placed = surfaceHost && SPPlaceSurfaceView(surfaceHost, page);
+        webviewSetFrame(surfaceHost, 0, 0, NSWidth(window.contentView.bounds), NSHeight(window.contentView.bounds));
+        webviewSetSurfaceHidden(surfaceHost, false);
+        void *regionA = placed ? sp_region_create(surfaceHost, "capture-identity-a", discardRegionEvent, NULL) : NULL;
+        void *regionB = placed ? sp_region_create(surfaceHost, "capture-identity-b", discardRegionEvent, NULL) : NULL;
         sp_region_place(regionA, 0, 0, 192, 0, true);
         sp_region_place(regionB, 192, 0, 0, 0, true);
         double rasterA[3] = {0}, rasterB[3] = {0};
         BOOL rasterAReady = sp_region_raster(regionA, rasterA);
         BOOL rasterBReady = sp_region_raster(regionB, rasterB);
         check(surfaceHost != NULL, @"opt-in identity fixture creates its surface host");
+        check(placed, @"opt-in identity fixture places its view web view in the surface host");
         check(regionA != NULL && regionB != NULL, @"opt-in identity fixture creates both image regions");
         check(rasterAReady && rasterBReady && rasterA[0] >= 192 && rasterA[1] >= 192
             && rasterB[0] >= 192 && rasterB[1] >= 192,
@@ -329,7 +331,8 @@ int main(void) { @autoreleasepool {
         sp_image_capture_match_end();
         sp_region_restore_capture_identity();
         sp_region_close(regionA); sp_region_close(regionB);
-        webviewDetachSurface(surface);
+        sp_surface_unplace_view(page);
+        [page removeFromSuperview];
         if (surfaceHost) sp_surface_close(surfaceHost);
         if (imageA) CFRelease(imageA);
         if (imageB) CFRelease(imageB);

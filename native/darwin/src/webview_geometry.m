@@ -376,37 +376,6 @@ static void notifyScale(NSView *view) {
 }
 @end
 
-void webviewAttachSurface(void *handle, void *mainHandle) {
-    NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
-    WKWebView *view = (WKWebView *)handle;
-    WKWebView *main = (WKWebView *)mainHandle;
-    NSCAssert([main.superview isKindOfClass:SPWindowComposition.class],
-        @"the main webview must be installed in the surface composition before attaching a surface webview");
-    SPWindowComposition *composition = (SPWindowComposition *)main.superview;
-    NSCAssert(composition.coordinates != nil,
-        @"the surface composition must own its canonical native coordinate container");
-    configureWebViewTransparency(view);
-    SPSurfaceCoordinates *container = composition.coordinates;
-    normalizeCoordinateBounds(container);
-    container.mainView = main;
-    NSRect frame = [view convertRect:view.bounds toView:container];
-    [view retain];
-    [view removeFromSuperview];
-    SPSurfaceHost *host = [[[SPSurfaceHost alloc] initWithFrame:frame] autorelease];
-    host.webview = view;
-    host.hidden = view.hidden;
-    [container addSubview:host];
-    [host addSubview:view positioned:NSWindowAbove relativeTo:host.nativePlane];
-    view.frame = host.bounds;
-    // Renders one local coordinate unit as one real device pixel. The CSS size is kept.
-    view.pageZoom = 1;
-    [view _setOverrideDeviceScaleFactor:container.scale];
-    // Like the main web view, the document is not hidden when the window is occluded. The capture and drawing check of the surface must finish
-    // even in an occluded window. Without this selector, the registration of the main web view (sp_window_set_main_webview) already fails, so it exists here.
-    view._windowOcclusionDetectionEnabled = NO;
-    [view release];
-}
-
 static SPSurfaceHost *surfaceHost(NSView *view) {
     if ([view isKindOfClass:SPSurfaceHost.class]) return (SPSurfaceHost *)view;
     for (NSView *parent = view.superview; parent; parent = parent.superview) {
@@ -524,18 +493,6 @@ void sp_surface_set_window_overlays(void *mainHandle, const double *rects, size_
         [overlays addObject:[NSValue valueWithRect:NSMakeRect(rect[0], rect[1], rect[2], rect[3])]];
     }
     composition.overlays = overlays;
-}
-
-void webviewDetachSurface(void *handle) {
-    NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
-    NSView *view = (NSView *)handle;
-    SPSurfaceHost *host = surfaceHost(view);
-    if (!host) return;
-    [view retain];
-    [view removeFromSuperview];
-    host.webview = nil;
-    [host removeFromSuperview];
-    [view release];
 }
 
 void *webviewSurfaceNativePlane(void *handle) {

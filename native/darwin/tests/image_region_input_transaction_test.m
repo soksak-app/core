@@ -4,6 +4,7 @@
 #import "image_region.h"
 #import "support/records.h"
 #import "webview_geometry.h"
+#import "support/surface_view.h"
 
 @interface SPControlledInputContext : NSTextInputContext
 @property(copy) void (^callback)(id<NSTextInputClient> client);
@@ -65,13 +66,13 @@ int main(void) { @autoreleasepool {
     window.contentView = [[[NSView alloc] initWithFrame:window.contentView.bounds] autorelease];
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
-    [window.contentView addSubview:surface];
-    void *composition = sp_surface_create(main);
-    webviewAttachSurface(surface, main);
+    WKWebView *page = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+    void *surface = sp_surface_create(main);
+    BOOL placed = surface && SPPlaceSurfaceView(surface, page);
     webviewSetFrame(surface, 0, 0, 240, 160);
+    webviewSetSurfaceHidden(surface, false);
     void *region = sp_region_create(surface, "input-transaction", receiveRegionEvent, NULL);
-    check(composition != NULL && region != NULL, @"the exported image region is created");
+    check(placed && region != NULL, @"the exported image region is created");
 
     reports = [NSMutableArray array];
     NSView *view = (NSView *)region;
@@ -419,7 +420,9 @@ int main(void) { @autoreleasepool {
             (unsigned long)context.discardedMarkedTextCalls]);
     [view release];
 
-    sp_surface_close(composition);
+    sp_surface_unplace_view(page);
+    [page removeFromSuperview];
+    sp_surface_close(surface);
     [window close];
     [window release];
     return failures ? 1 : 0;

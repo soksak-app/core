@@ -6,6 +6,7 @@
 #import "event_ring.h"
 #import "image_region.h"
 #import "webview_geometry.h"
+#import "support/surface_view.h"
 
 static int failures = 0;
 static NSMutableArray<NSDictionary *> *events = nil;
@@ -112,15 +113,15 @@ int main(void) { @autoreleasepool {
     window.releasedWhenClosed = NO;
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
+    WKWebView *page = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
     [window.contentView addSubview:main];
-    [window.contentView addSubview:surface];
     [window orderBack:nil];
-    void *mainSurface = sp_surface_create(main);
-    check(mainSurface != NULL, @"the main webview creates the native surface composition");
-    if (!mainSurface) return 1;
-    webviewAttachSurface(surface, main);
+    void *surface = sp_surface_create(main);
+    check(surface != NULL, @"the main webview creates the native surface");
+    if (!surface) return 1;
+    check(SPPlaceSurfaceView(surface, page), @"the view web view is placed in the surface");
     webviewSetFrame(surface, 0, 0, 500, 400);
+    webviewSetSurfaceHidden(surface, false);
     events = [NSMutableArray array];
     void *region = sp_region_create(surface, "decoration", regionEvent, NULL);
     check(region != NULL, @"the declared region interface creates the native image region");
@@ -213,8 +214,9 @@ int main(void) { @autoreleasepool {
         @"unmark and Enter-equivalent command transactions commit marked text once, retain newline, and finish clean");
 
     sp_region_close(region);
-    webviewDetachSurface(surface);
-    sp_surface_close(mainSurface);
+    sp_surface_unplace_view(page);
+    [page removeFromSuperview];
+    sp_surface_close(surface);
     [window close];
     [window release];
     if (source) CFRelease(source);

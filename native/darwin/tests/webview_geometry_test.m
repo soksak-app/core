@@ -17,6 +17,7 @@
 #import "webview_input.h"
 #import "webview_geometry.h"
 #import "surface_layout.h"
+#import "support/surface_view.h"
 
 static int failures = 0;
 
@@ -473,31 +474,33 @@ static void checkHitTesting(WKWebView *main) {
         @"native surface hit testing resumes after its window layout commits");
     sp_surface_close(otherSurface);
     // A view surface whose web view does not cover the point: the point under the overlay is not a native hit.
-    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 200, 150)] autorelease];
-    [main.window.contentView addSubview:view positioned:NSWindowAbove relativeTo:main];
-    webviewAttachSurface(view, main);
-    NSView *viewSurface = view.superview;
-    webviewSetFrame(view, 0, 0, 200, 150);
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+    NSView *viewSurface = (NSView *)sp_surface_create(main);
+    check(SPPlaceSurfaceView(viewSurface, view), @"a view webview is placed in its surface");
+    webviewSetFrame(viewSurface, 0, 0, 200, 150);
+    webviewSetSurfaceHidden(viewSurface, false);
     view.frame = NSMakeRect(0, 0, 100, 100);
     addNativeView(viewSurface);
-    webviewSetSurfaceOverlays(view, overlay, 1);
+    webviewSetSurfaceOverlays(viewSurface, overlay, 1);
     check([viewSurface hitTest:superviewPoint(viewSurface, NSMakePoint(150, 100))] == nil,
         @"a point under the visible overlay of a view that its web view does not cover is not a native hit");
     // A hidden view web view under a visible overlay: the point is not a native hit.
-    WKWebView *hiddenView = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 200, 150)] autorelease];
-    [main.window.contentView addSubview:hiddenView positioned:NSWindowAbove relativeTo:main];
-    webviewAttachSurface(hiddenView, main);
-    NSView *hiddenSurface = hiddenView.superview;
-    webviewSetFrame(hiddenView, 0, 0, 200, 150);
+    WKWebView *hiddenView = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+    NSView *hiddenSurface = (NSView *)sp_surface_create(main);
+    check(SPPlaceSurfaceView(hiddenSurface, hiddenView), @"a view webview that is hidden later is placed in its surface");
+    webviewSetFrame(hiddenSurface, 0, 0, 200, 150);
+    webviewSetSurfaceHidden(hiddenSurface, false);
     addNativeView(hiddenSurface);
     hiddenView.hidden = YES;
-    webviewSetSurfaceOverlays(hiddenView, overlay, 1);
+    webviewSetSurfaceOverlays(hiddenSurface, overlay, 1);
     check([hiddenSurface hitTest:superviewPoint(hiddenSurface, NSMakePoint(100, 80))] == nil,
         @"a point under the visible overlay of a hidden view web view is not a native hit");
     [plain removeFromSuperview];
     [moved removeFromSuperview];
-    [viewSurface removeFromSuperview];
-    [hiddenSurface removeFromSuperview];
+    sp_surface_unplace_view(view);
+    sp_surface_close(viewSurface);
+    sp_surface_unplace_view(hiddenView);
+    sp_surface_close(hiddenSurface);
 }
 
 int main(void) { @autoreleasepool {
@@ -514,24 +517,23 @@ int main(void) { @autoreleasepool {
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
     [window.contentView addSubview:main];
     load(main, @"<!doctype html><body style='margin:0;background:#fff'></body>");
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)] autorelease];
-    [window.contentView addSubview:surface positioned:NSWindowAbove relativeTo:main];
+    WKWebView *page = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
     [window orderBack:nil];
     // The window is behind other windows so that it does not take focus, and other windows can cover it. Records the
     // start state to interpret a failure.
     fprintf(stdout, "INFO: window occlusion visible at start: %d\n",
         (window.occlusionState & NSWindowOcclusionStateVisible) != 0);
-    check(sp_surface_create(main) != NULL,
-        @"the main webview creates the composition before a surface webview is attached");
-    webviewAttachSurface(surface, main);
-    check(main.superview == surface.superview.superview.superview,
-        @"the attached surface webview uses the main webview's canonical composition");
-    check(surface.underPageBackgroundColor.alphaComponent == 0
-        && ![[surface valueForKey:@"drawsBackground"] boolValue],
-        @"an attached surface webview does not paint an opaque backing over native regions");
+    void *surface = sp_surface_create(main);
+    check(surface != NULL, @"the main webview creates the surface");
+    check(SPPlaceSurfaceView(surface, page), @"the view webview is placed in the surface");
+    check(main.superview == page.superview.superview.superview,
+        @"the placed view webview uses the main webview's canonical composition");
+    check(page.underPageBackgroundColor.alphaComponent == 0
+        && ![[page valueForKey:@"drawsBackground"] boolValue],
+        @"a placed view webview does not paint an opaque backing over native regions");
     // The app event monitor (wheel unit conversion) is installed when a webview is registered for input.
-    webviewInputRegister(surface);
-    load(surface, @"<!doctype html><html style='height:100%'><body style='margin:0;height:100%;background:#0d1a14'>"
+    webviewInputRegister(page);
+    load(page, @"<!doctype html><html style='height:100%'><body style='margin:0;height:100%;background:#0d1a14'>"
         "<div style='height:5000px'></div>"
         "<script>addEventListener('pointerup', e => window.pressed = {trusted: e.isTrusted, x: e.clientX, y: e.clientY}, true)</script>"
         "</body></html>");
@@ -539,7 +541,8 @@ int main(void) { @autoreleasepool {
     // At 2x, a half-point height lies on a device pixel boundary. At 1x, it is fitted to the inner device pixel.
     SPSetScaledWindowResolution(window, 2);
     webviewSetFrame(surface, 40, 30, 300, 200.5);
-    verify(window, surface, 2, 200.5, @"at 2x");
+    webviewSetSurfaceHidden(surface, false);
+    verify(window, page, 2, 200.5, @"at 2x");
     // The document region is a subview of the surface. Its size without the margins is 300-10-30 × 200.5-20-40. The
     // document store directory is removed when the check ends.
     NSString *store = temporaryFolder(@"soksak-geometry-store-");
@@ -549,12 +552,12 @@ int main(void) { @autoreleasepool {
     verifyRegion(region, 2, 260, 140.5, @"at 2x");
     double overlay[5] = {50, 50, 50, 50, 1};
     webviewSetSurfaceOverlays(surface, overlay, 1);
-    check(webViewAtTopPoint(window, 190, 130) == surface,
+    check(webViewAtTopPoint(window, 190, 130) == page,
         @"a declared DOM overlay receives input above a native document region");
     check(webViewAtTopPoint(window, 60, 60) == region,
         @"the native document receives input outside the declared DOM overlay");
     // Cuts the native plane out of the overlay rectangle so that the DOM of the logically upper overlay is visible.
-    NSView *host = surface;
+    NSView *host = page;
     while (host && ![NSStringFromClass(host.class) isEqualToString:@"SPSurfaceHost"]) host = host.superview;
     NSView *plane = nil;
     for (NSView *child in host.subviews) if ([NSStringFromClass(child.class) isEqualToString:@"SPSurfaceNativePlane"]) plane = child;
@@ -570,12 +573,12 @@ int main(void) { @autoreleasepool {
 
     SPSetScaledWindowResolution(window, 1);
     webviewSetFrame(surface, 40, 30, 300, 200.5);
-    verify(window, surface, 1, 200.5, @"after changing to 1x");
+    verify(window, page, 1, 200.5, @"after changing to 1x");
     verifyRegion(region, 1, 260, 140.5, @"after changing to 1x");
 
     SPSetScaledWindowResolution(window, 2);
     webviewSetFrame(surface, 40, 30, 300, 200.5);
-    verify(window, surface, 2, 200.5, @"after changing back to 2x");
+    verify(window, page, 2, 200.5, @"after changing back to 2x");
     verifyRegion(region, 2, 260, 140.5, @"after changing back to 2x");
 
     // A document region at page zoom 1.5 on the 2x surface receives the same 120-point scroll as a web view at the same
@@ -597,8 +600,8 @@ int main(void) { @autoreleasepool {
     [plain removeFromSuperview];
     sp_document_close(region);
 
-    checkScrollBarSide(window, surface, @"rtl");
-    checkScrollBarSide(window, surface, @"ltr");
+    checkScrollBarSide(window, page, @"rtl");
+    checkScrollBarSide(window, page, @"ltr");
 
     // The file drop view of the window: the only native drag target that accepts file URLs only; hit testing passes
     // to the view below.

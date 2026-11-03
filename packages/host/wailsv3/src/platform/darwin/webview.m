@@ -51,7 +51,7 @@ extern void goNativeTerminated(unsigned long long identifier);
         if (error) sp_log_error("surface background", error.localizedDescription.UTF8String);
     }];
 }
-// The WebContent process of a surface or a modal ended; the host records it as it records the page process of a window.
+// The WebContent process of a modal ended; the host records it as it records the page process of a window.
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
     sp_webview_log_process_end((__bridge void *)view, "surface webview");
     unsigned long long identifier = self.messageIdentifier;
@@ -134,7 +134,7 @@ static void nativeWebviewBoundsOnMain(void *handle, double x, double y, double w
 }
 
 static void *nativeWebviewCreateOnMain(void *handle, unsigned long long identifier, const char *name, const char *script,
-    double x, double y, double width, double height, bool hidden, bool transparent, bool fillParent) {
+    double x, double y, double width, double height, bool hidden, bool transparent) {
     NSWindow *window = (NSWindow *)handle;
     WKWebView *root = sp_window_main_webview(handle);
     if (!root || !root.URL || !webviewInputRegister(root)) return NULL;
@@ -164,7 +164,7 @@ static void *nativeWebviewCreateOnMain(void *handle, unsigned long long identifi
     view.UIDelegate = root.UIDelegate;
     view.navigationDelegate = view;
     view.hidden = hidden;
-    view.autoresizingMask = fillParent ? NSViewWidthSizable | NSViewHeightSizable : NSViewMinYMargin;
+    view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     if (transparent) {
         view.underPageBackgroundColor = NSColor.clearColor;
         @try {
@@ -173,14 +173,11 @@ static void *nativeWebviewCreateOnMain(void *handle, unsigned long long identifi
         // default: WebKit throws an exception for an unknown key, and the NULL of this function is reported by the caller as an error that the web view could not be created.
         } @catch (NSException *error) { [view release]; return NULL; }
     }
-    // The pages of surfaces and modals do not move the keyboard focus of the window. The main page does.
+    // The page of a modal does not move the keyboard focus of the window. The main page does.
     if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) { [view release]; return NULL; }
-    // A new surface is placed above the main web view and below the existing modals. A modal is kept hidden here
-    // and raised when it finishes rendering.
+    // The modal is placed directly in the window, above the main web view and below the existing modals, and fills
+    // the window. It is kept hidden here and raised when it finishes rendering.
     [window.contentView addSubview:view positioned:NSWindowAbove relativeTo:root];
-    // A modal with fillParent is placed directly in the window, and every surface is attached to
-    // SurfaceHost regardless of transparency. The native plane must be below the DOM web view of a mixed surface.
-    if (!fillParent) webviewAttachSurface(view, root);
     nativeWebviewBoundsOnMain(view, x, y, width, height);
     return view; // Go owns this reference until nativeWebviewClose.
 }
@@ -207,7 +204,6 @@ static void nativeWebviewCloseOnMain(void *handle) {
     webviewInputUnregister(view);
     [view stopLoading];
     [view.configuration.userContentController removeScriptMessageHandlerForName:@"soksak"];
-    webviewDetachSurface(view);
     [view removeFromSuperview];
     [view release];
 }
@@ -256,9 +252,9 @@ void nativeWebviewBounds(void *handle, double x, double y, double width, double 
     wailsRunOnMain(^{ nativeWebviewBoundsOnMain(handle, x, y, width, height); });
 }
 void *nativeWebviewCreate(void *handle, unsigned long long identifier, const char *name, const char *script,
-    double x, double y, double width, double height, bool hidden, bool transparent, bool fillParent) {
+    double x, double y, double width, double height, bool hidden, bool transparent) {
     return ON_MAIN(void *, nativeWebviewCreateOnMain(handle, identifier, name, script, x, y, width, height, hidden,
-        transparent, fillParent));
+        transparent));
 }
 bool nativeWebviewNavigate(void *handle, const char *url) {
     return ON_MAIN(bool, nativeWebviewNavigateOnMain(handle, url));

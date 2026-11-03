@@ -137,7 +137,7 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	modalURL := "/overlay.html?id=" + url.QueryEscape(req.ID) + "&instance=" + fmt.Sprint(instance)
 	view, err := newNativeWebview(s, nativeWebviewOptions{
 		URL: modalURL, X: at.X, Y: at.Y, Width: at.W, Height: at.H,
-		Hidden: true, Transparent: true, FillParent: true,
+		Hidden: true, Transparent: true,
 		Name: "modal:" + req.ID,
 	})
 	if err != nil {

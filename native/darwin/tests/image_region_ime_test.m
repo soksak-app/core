@@ -19,6 +19,7 @@
 #import "support/ime_wire_document.h"
 #import "support/records.h"
 #import "webview_geometry.h"
+#import "support/surface_view.h"
 
 static NSString *const ABC = @"com.apple.keylayout.ABC";
 static NSString *const KOREAN_2SET = @"com.apple.inputmethod.Korean.2SetKorean";
@@ -134,10 +135,10 @@ static NSArray<NSString *> *outerStateRestoreErrors(NSString *outerSource, NSRun
     return errors;
 }
 
-static void closeTraceWindow(NSWindow *window, void *region, void *mainSurface);
+static void closeTraceWindow(NSWindow *window, void *region, void *surface);
 
 static NSArray<NSString *> *baselineAndOuterRestoreErrors(NSString *baselineSource, NSString *outerSource,
-    NSRunningApplication *outerApplication, NSDate *deadline, NSWindow *window, void *region, void *mainSurface) {
+    NSRunningApplication *outerApplication, NSDate *deadline, NSWindow *window, void *region, void *surface) {
     pid_t outerPID = outerApplication.processIdentifier;
     SPIMESelectAndAwaitSource select = ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, deadline); };
     SPIMEReadSource readSource = ^NSString * { return currentSourceID(); };
@@ -149,16 +150,16 @@ static NSArray<NSString *> *baselineAndOuterRestoreErrors(NSString *baselineSour
     };
     SPIMEReadFrontmostProcess readFrontmost = ^pid_t { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier; };
     return sp_ime_source_cleanup_errors(baselineSource, outerSource, outerPID,
-        readSource, activate, readFrontmost, select, ^{ closeTraceWindow(window, region, mainSurface); });
+        readSource, activate, readFrontmost, select, ^{ closeTraceWindow(window, region, surface); });
 }
 
 static void reportRestoreErrors(NSArray<NSString *> *errors, NSString *phase) {
     for (NSString *error in errors) check(NO, [NSString stringWithFormat:@"%@ failed: %@", phase, error]);
 }
 
-static void closeTraceWindow(NSWindow *window, void *region, void *mainSurface) {
+static void closeTraceWindow(NSWindow *window, void *region, void *surface) {
     if (region) sp_region_close(region);
-    if (mainSurface) sp_surface_close(mainSurface);
+    if (surface) sp_surface_close(surface);
     [window close];
     [window release];
 }
@@ -614,12 +615,12 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     [window.contentView addSubview:main];
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
-    [window.contentView addSubview:surface];
-    void *mainSurface = sp_surface_create(main);
-    check(mainSurface != NULL, @"the main webview creates the composition");
-    webviewAttachSurface(surface, main);
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+    void *surface = sp_surface_create(main);
+    check(surface != NULL, @"the main webview creates the surface");
+    check(surface && SPPlaceSurfaceView(surface, view), @"the view web view is placed in the surface");
     webviewSetFrame(surface, 0, 0, 500, 400);
+    webviewSetSurfaceHidden(surface, false);
     void *region = sp_region_create(surface, "ime", regionEvent, NULL);
     sp_region_place(region, 10, 10, 10, 10, true);
 
@@ -646,7 +647,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
         if (!adopted) {
             NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
             reportRestoreErrors(baselineAndOuterRestoreErrors(ABC, previousSource, previousApp,
-                cleanupDeadline, window, region, mainSurface), @"baseline and outer cleanup after Korean adoption failure");
+                cleanupDeadline, window, region, surface), @"baseline and outer cleanup after Korean adoption failure");
             traceDeadline = nil;
             return 1;
         }
@@ -696,7 +697,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
         NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
         if (abcBaselineTrace) {
             NSArray<NSString *> *restoreErrors = baselineAndOuterRestoreErrors(ABC, previousSource, previousApp,
-                cleanupDeadline, window, region, mainSurface);
+                cleanupDeadline, window, region, surface);
             reportRestoreErrors(restoreErrors, @"baseline and outer state restoration");
             NSDictionary *inProcess = sourceProbeSnapshot();
             NSData *inProcessJSON = [NSJSONSerialization dataWithJSONObject:inProcess options:NSJSONWritingFragmentsAllowed error:NULL];
@@ -726,7 +727,7 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
             check(selectAndAwaitInputSource(previousSource, cleanupDeadline), @"the previous input source is restored");
             check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
                 @"the previous input source is active before cleanup ends");
-            closeTraceWindow(window, region, mainSurface);
+            closeTraceWindow(window, region, surface);
             if (previousApp) {
                 [previousApp activateWithOptions:0];
                 check(pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier

@@ -16,8 +16,6 @@ double sp_surface_scale(void *surface);
 // Window coordinate rectangle (x,y,w,h) where the app DOM modal or menu takes precedence over native input.
 void sp_surface_set_window_overlays(void *mainWebview, const double *rects, size_t count);
 
-void webviewAttachSurface(void *webview, void *mainWebview);
-void webviewDetachSurface(void *webview);
 // Native plane of the surface. Regions can be placed only below this view.
 void *webviewSurfaceNativePlane(void *surface);
 // Places the web view of a view in the surface below the native plane, so the overlay mask of the plane does not cut it

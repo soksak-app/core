@@ -126,7 +126,7 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 
 비동기 시작·대리자 종료 실패는 현재 스트림을 식별할 때만 녹화 오류를 바꾼다. 이전 스트림의 지연 실패는 스트림 동일성과 함께 보고하며 이후 녹화 오류·첫 프레임 준비를 바꾸지 않는다. 시작 완료는 전달될 때까지 원래 스트림 동일성을 유지하며 교체된 스트림의 동일성을 자신의 것으로 읽지 않는다.
 
-웹뷰 연산은 DOM 평면을 창의 공통 표면 컨테이너에 직접 붙이지 않고 `SurfaceHost`에 붙인다. 문서·그림 연산은 그 호스트 네이티브 평면의 하위 뷰를 만든다. 플랫폼 인터페이스는 영역을 `SurfaceHost`의 형제로 배치하는 연산을 노출하지 않는다. 두 언어 호스트는 플랫폼 코드를 호출하기 전에 [표면 합성](surface-composition.ko.md)을 검증한다.
+문서 연산은 view page의 웹뷰를 창의 공통 표면 컨테이너에 직접 두지 않고 그 표면의 `SurfaceHost` 안, 그 호스트 네이티브 평면 아래에 배치한다. 메인 웹뷰를 빼면 어느 표면에도 속하지 않는 웹뷰는 창을 채우는 모달뿐이다. 문서 영역과 그림 영역은 그 호스트 네이티브 평면의 하위 뷰다. 플랫폼 인터페이스는 영역을 `SurfaceHost`의 형제로 배치하는 연산을 노출하지 않는다. 두 언어 호스트는 플랫폼 코드를 호출하기 전에 [표면 합성](surface-composition.ko.md)을 검증한다.
 
 두 호스트에서 place는 답하기 전에 더 이상 나열하지 않는 각 표면의 문서 영역과 그림 영역을 모두 닫는다(Wails에서 `closeSurfaceDocuments`와 `images.CloseSurface`, Tauri에서 `documents::close_surface`와 `images::close_surface`). 그 뒤 page는 영역을 detach하지 않고 그 표면을 release한다([region lifetime](native-surfaces.ko.md#region-lifetime)).
 
