@@ -1,4 +1,4 @@
-// Checks that the registered main webview and the attached surface webviews keep running animation frames without
+// Checks that the registered main webview and the view pages placed in a surface keep running animation frames without
 // hiding the document even when the window is occluded. Layout display and project commands wait for the next display
 // of the main webview, and capture and drawing confirmation of a surface wait for the rendering of the surface, so
 // they must finish in an occluded window too. The check does not activate the application.
@@ -81,25 +81,27 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     [window.contentView addSubview:main];
-    check(sp_surface_create(main) != NULL, @"the main webview creates the surface composition");
+    void *surface = sp_surface_create(main);
+    check(surface != NULL, @"the main webview creates a surface");
     check(sp_window_set_main_webview(window, main), @"the main webview is registered");
-    WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(20, 20, 200, 120)] autorelease];
-    [window.contentView addSubview:surface positioned:NSWindowAbove relativeTo:main];
-    webviewAttachSurface(surface, main);
+    WKWebView *page = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+    check(sp_surface_place_view(surface, page), @"the view page is placed in its surface");
+    webviewSetFrame(surface, 20, 20, 200, 120);
+    webviewSetSurfaceHidden(surface, false);
     SPNavigation *navigation = [[SPNavigation new] autorelease];
     SPNavigation *surfaceNavigation = [[SPNavigation new] autorelease];
     main.navigationDelegate = navigation;
-    surface.navigationDelegate = surfaceNavigation;
+    page.navigationDelegate = surfaceNavigation;
     [main loadHTMLString:@"<!doctype html><body>main</body>" baseURL:nil];
-    [surface loadHTMLString:@"<!doctype html><body>surface</body>" baseURL:nil];
+    [page loadHTMLString:@"<!doctype html><body>surface</body>" baseURL:nil];
     [window orderFrontRegardless];
     until(^BOOL { return navigation.finished && surfaceNavigation.finished
         && (window.occlusionState & NSWindowOcclusionStateVisible) != 0; },
         @"the main and surface pages did not load in a visible window");
     afterActivityState(main);
-    afterActivityState(surface);
+    afterActivityState(page);
     check([visibility(main) isEqualToString:@"visible"], @"the uncovered document is visible");
-    check([visibility(surface) isEqualToString:@"visible"], @"the uncovered surface document is visible");
+    check([visibility(page) isEqualToString:@"visible"], @"the uncovered surface document is visible");
     check(sp_window_on_screen(window), @"the uncovered window is on screen");
 
     // AppKit moves a window with a title bar out of the Dock and menu bar areas, so the occluding window covers the
@@ -115,14 +117,14 @@ int main(void) { @autoreleasepool {
             NSStringFromRect(cover.frame), NSStringFromRect(cover.screen.frame), (long)cover.level, cover.isVisible]);
     check(!sp_window_on_screen(window), @"the covered window is not on screen");
     afterActivityState(main);
-    afterActivityState(surface);
+    afterActivityState(page);
     NSString *covered = visibility(main);
     check([covered isEqualToString:@"visible"], [NSString stringWithFormat:@"the covered document stays visible (actual %@)", covered]);
     NSString *frame = animationFrame(main);
     check([frame isEqualToString:@"frame"], [NSString stringWithFormat:@"the covered document runs an animation frame (result %@)", frame ?: @"none within 5 seconds"]);
-    covered = visibility(surface);
+    covered = visibility(page);
     check([covered isEqualToString:@"visible"], [NSString stringWithFormat:@"the covered surface document stays visible (actual %@)", covered]);
-    frame = animationFrame(surface);
+    frame = animationFrame(page);
     check([frame isEqualToString:@"frame"], [NSString stringWithFormat:@"the covered surface document runs an animation frame (result %@)", frame ?: @"none within 5 seconds"]);
 
     check(!NSApp.isActive, @"application stays inactive");
