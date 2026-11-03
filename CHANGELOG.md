@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F402: Core 0.0.33 installs the plugins: each plugin release declares `^0.0.33`, and the registry lists them.
 - F401: The release candidate is 0.0.33, which carries the changes after v0.0.32, and the latest published release is v0.0.32.
 - F292-70-5: The cancellation of a preparation has declaring contract tests in both hosts, and the Tauri host runs both of its steps also when the first fails.
 - F400: A host contract run removes its build folder when it ends.
