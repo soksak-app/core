@@ -102,10 +102,11 @@ trace-share:
 
 # Sets the trace state TRACE and prints the live malloc nodes and bytes of the host process of the running application of CONFIG_DIR, the process
 # whose command line has --config-dir CONFIG_DIR, at start and after each minute (scripts/measure-host-allocations.mjs,
-# docs/operations/examples.md). SOK defaults to the sok binary of target/debug.
+# docs/operations/examples.md), and the footprint of the host at each step and after it settles. SOK defaults to the sok binary of target/debug.
+# B3_OUT=FILE, with at least 60 minutes, writes the B3 output of S4 to FILE.
 host-allocations:
-	@case "$(CONFIG_DIR)" in '') echo "host-allocations requires CONFIG_DIR=DIR TRACE=0|1 [MINUTES=10] [SOK=PATH]" >&2; exit 2;; esac
-	@node scripts/measure-host-allocations.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --trace "$(TRACE)" --minutes $(or $(MINUTES),10)
+	@case "$(CONFIG_DIR)" in '') echo "host-allocations requires CONFIG_DIR=DIR TRACE=0|1 [MINUTES=10] [SOK=PATH] [B3_OUT=FILE]" >&2; exit 2;; esac
+	@node scripts/measure-host-allocations.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --trace "$(TRACE)" --minutes $(or $(MINUTES),10) $(if $(B3_OUT),--b3-out "$(B3_OUT)")
 
 # Checks that core, plugin, and sidecar sources do not name each other.
 boundaries:
