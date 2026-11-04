@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F525: A wait of `untilFolderState` reads the folder at a report of lost events of FSEvents and goes on, every other error of the watch rejects the wait, and the patch of @parcel/watcher wakes the callbacks for a report in a batch that adds no event.
 - F533: A delay unload of the memory saver that fails gets its next deadline one delay later, so a read or a commit that keeps failing no longer runs again at once with the error display each time.
 - F532: The update step of the Rust diagnostics ends the application through `quit` of the framework port, so `make tauriv2-build` compiles again. `make hosts-check` runs the new `make host-debug-check`, which compiles the two hosts and the two apps in the configuration of the debug apps.
 - F531: A WebKit process of no application that ends during `make app-usage` or `make terminal-redraw-usage` leaves the unattributed list instead of failing the measurement, so a window run of another application no longer stops it; such a process that runs without a reading and a process of the application that ends stay errors.

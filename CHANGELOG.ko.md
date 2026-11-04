@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F525: `untilFolderState`의 wait는 FSEvents의 event 손실 보고에서 폴더를 읽고 계속 기다리고, watch의 다른 error는 wait를 reject하며, @parcel/watcher의 patch는 event를 더하지 않는 batch의 보고에도 callback을 깨운다.
 - F533: 실패한 memory saver delay unload는 다음 deadline을 한 delay 뒤에 받으므로, 계속 실패하는 읽기나 commit이 매번 오류 표시와 함께 곧바로 다시 돌지 않는다.
 - F532: Rust diagnostics의 update 단계가 framework port의 `quit`으로 애플리케이션을 끝내므로, `make tauriv2-build`가 다시 컴파일된다. `make hosts-check`는 새 `make host-debug-check`를 실행하며, 이 target은 두 host와 두 앱을 debug 앱의 구성으로 컴파일한다.
 - F531: 어떤 애플리케이션에도 속하지 않는 WebKit process가 `make app-usage`나 `make terminal-redraw-usage` 중에 끝나면 측정을 실패시키지 않고 unattributed 목록에서 빠지므로, 다른 애플리케이션의 window run이 측정을 멈추지 않는다. 실행 중인데 읽기가 없는 process와 애플리케이션의 process가 끝나는 경우는 여전히 오류다.
