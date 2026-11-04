@@ -153,6 +153,17 @@ test("a quit step ends when the process that holds the configuration lock exits,
   assert.notEqual(holder.exitCode, null, "the quit step ended while the process that holds process.lock was running");
 });
 
+test("a failed start skips the quit of its application, so the run reports the start as its one failure", { timeout: 10000 }, async (t) => {
+  const configDir = workspace(t);
+  const { lines, write } = recorder();
+  const failures = await runPlan([
+    { name: "start app", phase: "prepare", kind: "start", app: "app", argv: node("process.exit(4)"), configDir, output: join(configDir, "app.out") },
+    { name: "quit app", phase: "cleanup", kind: "quit", app: "app", configDir },
+  ], { write });
+  assert.deepEqual(failures, ["start app: the application exited with code 4 before it wrote endpoint.json"]);
+  assert.ok(lines.includes("skipped quit app: app was not started"), lines.join("\n"));
+});
+
 test("a quit step without a started application is skipped", { timeout: 5000 }, async () => {
   const { lines, write } = recorder();
   assert.deepEqual(await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", app: "app", configDir: "/none" }], { write }), []);
