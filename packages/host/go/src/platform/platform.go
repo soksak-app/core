@@ -388,8 +388,15 @@ type Platform interface {
 	EvaluateScript(view unsafe.Pointer, script string)
 	// CloseWebview removes the web view and releases the handle.
 	CloseWebview(view unsafe.Pointer)
-	// CreateSurface creates a logical SurfaceHost below the main DOM web view.
-	CreateSurface(main unsafe.Pointer) (unsafe.Pointer, error)
+	// NativeView returns the native view of window, an empty view that holds the surface hosts of a window without a main web view
+	// and that the framework puts in the window (docs/spec/native-surfaces.md#surface-host-container).
+	NativeView(window unsafe.Pointer) unsafe.Pointer
+	// CreateSurface creates a logical SurfaceHost in the view that holds the surface hosts of window: below the main DOM web view, or
+	// in the native view of a window without one.
+	CreateSurface(window unsafe.Pointer) (unsafe.Pointer, error)
+	// RetainView keeps a view alive through its close until ReleaseView, and ReleaseView ends that. Call them on the main thread.
+	RetainView(view unsafe.Pointer)
+	ReleaseView(view unsafe.Pointer)
 	CloseSurface(surface unsafe.Pointer)
 	SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64)
 	SurfaceFrame(surface unsafe.Pointer) Rect

@@ -439,6 +439,8 @@ type Surfaces struct {
 	closed bool
 	// pageReloading is set from the reload request to a ready page until the new page starts (askPageToReload).
 	pageReloading atomic.Bool
+	// elements are the surfaces as the workbench of a window without a main page draws them.
+	elements surfaceElements
 	// drawingMu orders the drawing messages to the suppliers of image regions (sendImageDrawing).
 	drawingMu sync.Mutex
 	// prepareNative registers the main web view and prepares the window. It is decided when the window is created.
@@ -927,12 +929,8 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 				return err
 			}
 		}
-		main, err := system.MainWebview(win.NativeWindow())
-		if err != nil {
-			return err
-		}
 		began = RunLayout(func() error {
-			return system.SetWindowOverlays(main, windowOverlays)
+			return setWindowOverlays(win.NativeWindow(), windowOverlays)
 		}, func() error {
 			s.lastPreparation++
 			prepared.Ticket = s.lastPreparation
@@ -993,6 +991,19 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 		})
 	})
 	return prepared, err
+}
+
+// setWindowOverlays gives the main web view of window the declared overlays. A window without a main page has none, because its
+// workbench draws over native views through the covers of the framework (docs/spec/native-surfaces.md#surface-host-container).
+func setWindowOverlays(window unsafe.Pointer, overlays []platform.WindowOverlay) error {
+	if !framework.MainPage() {
+		return nil
+	}
+	main, err := system.MainWebview(window)
+	if err != nil {
+		return err
+	}
+	return system.SetWindowOverlays(main, overlays)
 }
 
 // PrepareRasterUpdate starts the prepared raster configuration before the caller replies, and cancels a failed preparation.
@@ -1567,10 +1578,12 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		// Newly created native surfaces start hidden; existing visible surfaces remain visible through preparation.
 		prepareSurfaceVisibility(item.visible, item.view.SetHidden)
 		system.SetSurfaceAlphaHandle(item.view.NativeView(), alphaFor(item.decl.Dim))
-		if item.visible {
+		// A window without a main page sets the frame of a surface in the frame that draws its card, when its native view element gives
+		// its placement (docs/spec/hosts.md#operation-groups).
+		if item.visible && framework.MainPage() {
 			item.view.SetBounds(item.aligned.X, item.aligned.Y, item.aligned.W, item.aligned.H)
 		}
-		placement := Placement{ID: item.id, Rect: Rect(system.SurfaceFrame(item.view.NativeView())), Visible: item.visible}
+		placement := Placement{ID: item.id, Rect: placedRect(item.view, item.aligned, item.visible), Visible: item.visible}
 		PerformanceSurface("placed", item.id, &placement)
 		placed = append(placed, placement)
 	}
@@ -1581,6 +1594,7 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		if wanted[id] {
 			continue
 		}
+		s.setElement(id, SurfaceElement{})
 		s.closeSurfaceDocuments(id)
 		s.images.CloseSurface(id, func(handle unsafe.Pointer) {
 			system.CloseImage(handle)
@@ -1604,6 +1618,14 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		s.sidecars.SurfaceOpened(surface.Plugin, surface.ID)
 	}
 	return gone, placed, nil
+}
+
+// placedRect is the rectangle that a visible surface has in the frame that shows the layout, and the frame of a hidden one.
+func placedRect(view *nativeWebview, aligned Rect, visible bool) Rect {
+	if visible && !framework.MainPage() {
+		return aligned
+	}
+	return Rect(system.SurfaceFrame(view.NativeView()))
 }
 
 // createRegisteredSurface creates the native view of the surface id and names it in s.named in one call of run. The window

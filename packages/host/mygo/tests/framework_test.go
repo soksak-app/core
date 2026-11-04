@@ -382,7 +382,7 @@ func TestAWindowStartsHiddenWithItsWorkbench(t *testing.T) {
 		t.Fatalf("the open windows are %v", got)
 	}
 	if width, height := window.Size(); width != 400 || height != 300 {
-		t.Fatalf("size %d×%d", width, height)
+		t.Fatalf("size %g×%g", width, height)
 	}
 	if !slices.Contains(workbench.received(), "build main") {
 		t.Fatalf("the workbench received %v", workbench.received())
@@ -418,12 +418,12 @@ func TestSizeAndPositionOfTheWindow(t *testing.T) {
 	window.SetSize(500, 320)
 	<-resized
 	if width, height := window.Size(); width != 500 || height != 320 {
-		t.Fatalf("size %d×%d", width, height)
+		t.Fatalf("size %g×%g", width, height)
 	}
 	window.SetPosition(40, 60)
 	<-moved
 	if x, y := window.Position(); x != 40 || y != 60 {
-		t.Fatalf("position %d, %d", x, y)
+		t.Fatalf("position %g, %g", x, y)
 	}
 }
 
