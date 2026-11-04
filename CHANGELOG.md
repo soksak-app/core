@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F446: Record that the worker class does not change the plain view latency, and open the report of the shown-frame interval.
 - F445: Run the main-thread worker of the Wails framework at the user-interactive class.
 - F435: Record the view benchmarks after F444 at load average 12 to 28 and close the single card position failure as not reproduced.
 - F444: A surface synchronization request carries the start values of a view only when the host does not hold them, and the host keeps the last received values. Red and Green at the page and both hosts; the time from an input tick to a transaction fell from 7.2 to 3.1 ms on Wails and from 4.6 to 2.4 ms on Tauri.

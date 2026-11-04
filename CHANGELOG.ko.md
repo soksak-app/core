@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F446: worker class가 plain view latency를 바꾸지 않는다는 결과를 기록하고, 화면 frame 간격 report 항목을 엽니다.
 - F445: Wails framework의 main-thread worker를 user-interactive class로 실행합니다.
 - F435: load average 12~28에서 잰 F444 뒤 view benchmark를 기록하고, 1회 발생한 card 위치 실패를 재현되지 않음으로 닫는다.
 - F444: Surface synchronization request는 host가 쥐고 있지 않은 view start 값만 전달하고, host는 마지막으로 받은 값을 보관한다. Page와 두 host에서 Red와 Green을 확인했다. Input tick부터 transaction까지의 시간은 Wails에서 7.2 ms에서 3.1 ms로, Tauri에서 4.6 ms에서 2.4 ms로 줄었다.
