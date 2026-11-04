@@ -35,6 +35,10 @@ type ShellOptions struct {
 	Report func(line string)
 	// Reload starts the workbench of the window again.
 	Reload func()
+	// Project is the project that the address of the window names, and "" without one.
+	Project string
+	// Located names the project that the window shows from now on, and "" when it shows none.
+	Located func(project string)
 	// Elements are the elements of the window, which the element requests answer from.
 	Elements Elements
 	// Element returns the surface host and the key view of the surface id, for its native view element.
@@ -317,22 +321,44 @@ func (s *Shell) Start() {
 				return
 			}
 			s.openTabs(func() {
-				s.calls.Call("windowReady", nil, func(_ any, err error) {
-					if err != nil {
-						s.fail(err)
-					}
-					s.options.Invalidate()
-					s.startNotices(func() {
-						s.startPlugins(func(installed bool) {
-							s.started = true
-							if s.changed || installed {
-								s.pluginsChanged()
-							}
+				s.showRequested(func() {
+					s.calls.Call("windowReady", nil, func(_ any, err error) {
+						if err != nil {
+							s.fail(err)
+						}
+						s.options.Invalidate()
+						s.startNotices(func() {
+							s.startPlugins(func(installed bool) {
+								s.started = true
+								if s.changed || installed {
+									s.pluginsChanged()
+								}
+							})
 						})
 					})
 				})
 			})
 		})
+	})
+}
+
+// showRequested shows the project that the address of the window names and then runs done. A window whose project is gone, or
+// whose project cannot be opened, starts at the library.
+func (s *Shell) showRequested(done func()) {
+	if s.options.Project == "" {
+		done()
+		return
+	}
+	if s.project(s.options.Project) == nil {
+		s.options.Located("")
+		done()
+		return
+	}
+	s.activateThen(s.options.Project, func() {
+		if s.active == "" {
+			s.options.Located("")
+		}
+		done()
 	})
 }
 

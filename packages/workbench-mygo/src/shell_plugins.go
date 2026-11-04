@@ -206,7 +206,7 @@ func (s *Shell) drawPluginPlaceholder(c *ui.Context, plugin string) {
 	ui.Column(c).Fill().Gap(s.metrics.tabsGap).Center().Children(func() {
 		ui.Text(c, line).FontSize(12).TextColor(s.palette.Muted)
 		if action != "" {
-			s.barText(c, s.binder.Press(c, "core.card.placeholder-action", "core.plugins."+action, plugin, pluginParam{plugin}), label, false)
+			s.binder.Button(c, "core.card.placeholder-action", "core.plugins."+action, plugin, label, pluginParam{plugin})
 		}
 	})
 }

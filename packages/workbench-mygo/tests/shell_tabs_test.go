@@ -124,6 +124,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 	table["sidecarListen"] = record("listen")
 	table["sidecarSend"] = record("send")
 	shell, err := workbench.NewShell(workbench.ShellOptions{
+		Located:     func(string) {},
 		Element:     func(string) (uintptr, uintptr, bool) { return 0, 0, false },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(table, f.pending.post),

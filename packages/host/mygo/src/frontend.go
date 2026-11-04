@@ -37,6 +37,8 @@ type Frontend struct {
 	released []func()
 	// placed belongs to the main thread: the box that each native view element last gave its surface host.
 	placed map[uintptr]mygo.RectF
+	// address belongs to the main thread: the address of the window, which names the project that it shows.
+	address string
 }
 
 // Window is the mygo window.
@@ -335,6 +337,12 @@ func (f *Frontend) whenReleased(run func()) {
 	}
 	f.released = append(f.released, run)
 }
+
+// Address returns the address of the window: the URL that the host opened it with, or the last that the workbench set.
+func (f *Frontend) Address() string { return f.address }
+
+// SetAddress sets the address of the window, which the next start of the workbench reads.
+func (f *Frontend) SetAddress(address string) { f.address = address }
 
 // StartWorkbench ends the workbench of the window and builds it again. A workbench of a window that the host holds starts at once.
 func (f *Frontend) StartWorkbench() {
