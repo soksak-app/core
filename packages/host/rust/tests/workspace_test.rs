@@ -12,7 +12,7 @@ mod records;
 use serde_json::{Value, json};
 use soksak_host::platform;
 use soksak_host::projects::folder;
-use soksak_host::workspace::{Workspace, prepare_config_directory};
+use soksak_host::workspace::{Workspace, common_only_keys, prepare_config_directory};
 
 fn apply(store: &Workspace, request: Value) -> Value {
     store
@@ -290,16 +290,41 @@ fn move_without_delta_is_refused() {
     }
 }
 
-// contract: workspace.settings.rejects-project-common-only-keys
-#[test]
-fn project_common_only_keys_are_rejected() {
-    let mut failures = Vec::new();
-    for (key, value) in [
+/// The common-only keys, each with a value.
+fn common_only_cases() -> [(&'static str, Value); 4] {
+    [
         ("projectOpening", json!("tabs")),
         ("textSize", json!(1.5)),
         ("memorySaver", json!(false)),
         ("memorySaverDelay", json!(30)),
-    ] {
+    ]
+}
+
+// contract: workspace.settings.common-only-keys-are-the-declared-list
+#[test]
+fn common_only_keys_are_the_declared_list() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/workbench.json");
+    let declaration: Value = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+    let declared: Vec<String> =
+        serde_json::from_value(declaration["settings"]["commonOnly"].clone()).unwrap();
+    assert!(
+        !declared.is_empty(),
+        "workbench.json declares no common-only key"
+    );
+    assert_eq!(common_only_keys(), declared);
+    let cases = common_only_cases().map(|(key, _)| key.to_string());
+    assert_eq!(
+        cases.as_slice(),
+        declared.as_slice(),
+        "the refusal test covers other keys than workbench.json declares"
+    );
+}
+
+// contract: workspace.settings.rejects-project-common-only-keys
+#[test]
+fn project_common_only_keys_are_rejected() {
+    let mut failures = Vec::new();
+    for (key, value) in common_only_cases() {
         let config = folder::Folder::new();
         let root = folder::Folder::new();
         let store = Workspace::new(config.path().into());

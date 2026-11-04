@@ -358,18 +358,21 @@ func TestMoveWithoutDeltaIsRefused(t *testing.T) {
 
 func ptr(n int) *int { return &n }
 
+// commonOnlyCases are the common-only keys, each with a value and the text of that value in a settings file.
+var commonOnlyCases = []struct {
+	key   string
+	value any
+	file  string
+}{
+	{"projectOpening", "tabs", `"tabs"`},
+	{"textSize", 1.5, `1.5`},
+	{"memorySaver", false, `false`},
+	{"memorySaverDelay", 30, `30`},
+}
+
 // contract: workspace.settings.rejects-project-common-only-keys
 func TestProjectCommonOnlyKeysAreRejected(t *testing.T) {
-	for _, c := range []struct {
-		key   string
-		value any
-		file  string
-	}{
-		{"projectOpening", "tabs", `"tabs"`},
-		{"textSize", 1.5, `1.5`},
-		{"memorySaver", false, `false`},
-		{"memorySaverDelay", 30, `30`},
-	} {
+	for _, c := range commonOnlyCases {
 		root := t.TempDir()
 		store := host.NewWorkspace(t.TempDir())
 		if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "1:2"}}); err != nil {
@@ -394,6 +397,35 @@ func TestProjectCommonOnlyKeysAreRejected(t *testing.T) {
 		if want := path + ": " + c.key + " is common-only"; project["settingsError"] != want {
 			t.Errorf("a project settings file with %s reported %v, want %q", c.key, project["settingsError"], want)
 		}
+	}
+}
+
+// contract: workspace.settings.common-only-keys-are-the-declared-list
+func TestCommonOnlyKeysAreTheDeclaredList(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "src", "workbench.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declaration struct {
+		Settings struct {
+			CommonOnly []string `json:"commonOnly"`
+		} `json:"settings"`
+	}
+	if err := json.Unmarshal(data, &declaration); err != nil {
+		t.Fatal(err)
+	}
+	if len(declaration.Settings.CommonOnly) == 0 {
+		t.Fatal("workbench.json declares no common-only key")
+	}
+	if got := host.CommonOnlyKeys(); !reflect.DeepEqual(got, declaration.Settings.CommonOnly) {
+		t.Errorf("the host refuses %v, workbench.json declares %v", got, declaration.Settings.CommonOnly)
+	}
+	cases := make([]string, 0, len(commonOnlyCases))
+	for _, c := range commonOnlyCases {
+		cases = append(cases, c.key)
+	}
+	if !reflect.DeepEqual(cases, declaration.Settings.CommonOnly) {
+		t.Errorf("the refusal test covers %v, workbench.json declares %v", cases, declaration.Settings.CommonOnly)
 	}
 }
 

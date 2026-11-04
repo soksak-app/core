@@ -632,6 +632,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/layout/stored.go", symbol: "func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {" },
       { file: "packages/workbench-mygo/src/layout/spaces.go", symbol: "func ClosingSpace(p *Project, id string) (*Closing, error) {" },
       { file: "scripts/check-host-parity.mjs", symbol: "workbenchDeclarationSource" },
+      { file: "scripts/check-exposure.mjs", symbol: "export function auditDeclarationCopies(copies, read) {" },
+      { file: "packages/host/go/src/workspace.go", symbol: "func CommonOnlyKeys() []string" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "pub fn common_only_keys() -> &'static [String]" },
       { file: "Makefile", symbol: "host-test-mygo:" },
     ],
     tests: [
@@ -644,9 +647,13 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestStoredCases" },
       { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestSpaceCases" },
       { file: "scripts/test/check-host-parity.test.mjs", id: "the common-only keys of the hosts, the browser runtime and the workbench are read from their sources" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestCommonOnlyKeysAreTheDeclaredList" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "common_only_keys_are_the_declared_list" },
+      { file: "scripts/test/check-exposure.test.mjs", id: "each language host library holds a copy of workbench.json" },
+      { file: "scripts/test/check-exposure.test.mjs", id: "a copy of workbench.json in a language host library that differs from its source fails" },
       { file: "scripts/test/workflows.test.mjs", id: "make host-test-mygo runs the unit tests of the Go packages of the mygo host" },
     ],
-    expected: "The workbench values are declared once in `packages/workbench/workbench.json`, which `settings.js` and `text-size.js` import and whose chrome metrics the workbench sets as custom properties of the document root, so no stylesheet holds a literal length, ratio or duration; the JavaScript layout model of `packages/soksak` and `packages/workbench` and the Go layout model of `packages/workbench-mygo` pass the same layout cases of `docs/spec/cases/layout`, which `make host-test-mygo` runs for the Go model.",
+    expected: "The workbench values are declared once in `packages/workbench/workbench.json`, which `settings.js` and `text-size.js` import and whose chrome metrics the workbench sets as custom properties of the document root, so no stylesheet holds a literal length, ratio or duration; the JavaScript layout model of `packages/soksak` and `packages/workbench` and the Go layout model of `packages/workbench-mygo` pass the same layout cases of `docs/spec/cases/layout`, which `make host-test-mygo` runs for the Go model. Each language host library embeds a copy of `workbench.json` and reads the common-only keys from it, and `make exposure-check` fails when a copy differs from its source.",
     levels: ["unit"],
   },
   {
@@ -709,8 +716,8 @@ const FEATURE_LINKS = [
   {
     id: "F504",
     implementation: [
-      { file: "packages/host/go/src/workspace.go", symbol: "var commonOnly = []string{\"projectOpening\", \"textSize\", \"memorySaver\", \"memorySaverDelay\"}" },
-      { file: "packages/host/rust/src/workspace.rs", symbol: "const COMMON_ONLY: [&str; 4] = [" },
+      { file: "packages/host/go/src/workspace.go", symbol: "var commonOnly = declaredCommonOnly()" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "static COMMON_ONLY: LazyLock<Vec<String>>" },
       { file: "apps/browser/runtime/browser-storage.js", symbol: "const COMMON_ONLY = Object.freeze([\"projectOpening\", \"textSize\", \"memorySaver\", \"memorySaverDelay\"]);" },
       { file: "packages/workbench/settings.js", symbol: "for (const key of COMMON_ONLY) if (id && Object.hasOwn(patch, key)) throw new Error(`${key} is common-only`);" },
       { file: "scripts/check-host-parity.mjs", symbol: "export function auditCommonOnlyKeys(keys) {" },

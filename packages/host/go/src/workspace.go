@@ -4,6 +4,7 @@ package host
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -52,10 +54,34 @@ func NewWorkspace(directory string) *Workspace {
 // Record is one JSON object.
 type Record map[string]any
 
+// workbenchDeclaration is the copy of packages/workbench/workbench.json, which make exposure-check holds equal to its source.
+//
+//go:embed workbench.json
+var workbenchDeclaration []byte
+
 // commonOnly are the common settings that the project settings cannot override (docs/spec/projects.md#persistence). The host sets the window title bar before the page starts
 // from textSize of the common settings (docs/spec/native-surfaces.md#title-bar-height), and the memory of the application that the
 // memory saver settings govern is shared by its projects (docs/spec/settings.md#values). The workbench refuses the same keys.
-var commonOnly = []string{"projectOpening", "textSize", "memorySaver", "memorySaverDelay"}
+var commonOnly = declaredCommonOnly()
+
+// declaredCommonOnly reads the list of the embedded declaration. The host does not start without the list.
+func declaredCommonOnly() []string {
+	var declaration struct {
+		Settings struct {
+			CommonOnly []string `json:"commonOnly"`
+		} `json:"settings"`
+	}
+	if err := json.Unmarshal(workbenchDeclaration, &declaration); err != nil {
+		panic(fmt.Sprintf("workbench.json: %v", err))
+	}
+	if len(declaration.Settings.CommonOnly) == 0 {
+		panic("workbench.json declares no common-only key")
+	}
+	return declaration.Settings.CommonOnly
+}
+
+// CommonOnlyKeys returns the keys that a project setting cannot hold.
+func CommonOnlyKeys() []string { return slices.Clone(commonOnly) }
 
 // WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, settings, tabState,
 // tabStatePut, tabSession, tabSessionPut, and tabSessions.
