@@ -29,10 +29,39 @@ type Frontend struct {
 	// held and released belong to the main thread: whether the adapter holds the frames of the window, and what waits for its release.
 	held     bool
 	released []func()
+	// placed belongs to the main thread: the box that each native view element last gave its surface host.
+	placed map[uintptr]mygo.RectF
 }
 
 // Window is the mygo window.
 func (f *Frontend) Window() *mygo.Window { return f.window }
+
+// placeNativeView puts the native view of the window under its content. Every surface of the window lies in that view, so a window
+// without it can show no surface, and each surface reports that failure. Call it on the main thread.
+func (f *Frontend) placeNativeView() {
+	system, err := platform.Current()
+	if err == nil {
+		native := system.NativeView(f.NativeWindow())
+		err = f.window.NewNativeView(uintptr(native), func(views []mygo.NativePlacement) { f.placeSurfaces(system, views) })
+	}
+	if err != nil {
+		host.LogError("window native view", err)
+	}
+}
+
+// placeSurfaces sets the frame of each surface host that the frame shows, in the Core Animation transaction of the frame. The frame
+// is in the content coordinates of the window as on the other hosts, and native/darwin converts it into the container of the surface
+// hosts, so the elements alone place the hosts (docs/spec/hosts.md#native-views). The surface layout transaction hides and shows them.
+func (f *Frontend) placeSurfaces(system platform.Platform, views []mygo.NativePlacement) {
+	placed := make(map[uintptr]mygo.RectF, len(views))
+	for _, view := range views {
+		placed[view.View] = view.Box
+		if box, ok := f.placed[view.View]; !ok || box != view.Box {
+			system.SetSurfaceBounds(*(*unsafe.Pointer)(unsafe.Pointer(&view.View)), view.Box.X, view.Box.Y, view.Box.W, view.Box.H)
+		}
+	}
+	f.placed = placed
+}
 
 // started builds the workbench of the window and connects the window to it. Call it on the main thread.
 func (f *Frontend) started() {

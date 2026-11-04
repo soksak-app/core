@@ -96,7 +96,8 @@ func (*Framework) InstallDock(newWindow func()) error {
 
 // NewWindow creates a hidden window whose content reaches under a hidden title bar and draws while it is occluded, because the
 // layout transaction and the captures of an occluded window wait for a presented frame (docs/spec/hosts.md#framework-changes). The
-// window is made in one step, so its view first runs when the frontend is complete.
+// window is made in one step, so its view first runs when the frontend is complete, and its native view is in the window before any
+// surface of the window exists.
 func (f *Framework) NewWindow(options host.WindowOptions) host.Frontend {
 	frontend := &Frontend{name: options.Name, framework: f}
 	mygo.RunOnMain(func() {
@@ -109,6 +110,7 @@ func (f *Framework) NewWindow(options host.WindowOptions) host.Frontend {
 				}
 			}),
 		})
+		frontend.placeNativeView()
 		frontend.started()
 		f.mu.Lock()
 		f.frontends[frontend.window] = frontend

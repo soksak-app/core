@@ -89,3 +89,13 @@ func TestOnlyAFrameworkWithAMainPageReadsTheBackgroundScript(t *testing.T) {
 type pagedFramework struct{ frameworkRecord }
 
 func (pagedFramework) MainPage() bool { return true }
+
+// contract: application.window.no-main-page-calls-no-main-web-view
+func TestAWindowWithoutAMainPageSetsNoWindowOverlays(t *testing.T) {
+	previousFramework, previousSystem := framework, system
+	framework, system = pagelessFramework{}, &pagelessPlatform{}
+	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
+	if err := setWindowOverlays(unsafe.Pointer(new(byte)), nil); err != nil {
+		t.Fatal(err)
+	}
+}

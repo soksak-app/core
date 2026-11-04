@@ -476,6 +476,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		}
 		return err
 	}
+	s.setElement(surfaceID, SurfaceElement{Surface: surface, Key: handle})
 	EmitHost(LevelDebug, "host.trace.view.process-request", map[string]any{"plugin": plugin, "surface": surfaceID})
 	return nil
 }

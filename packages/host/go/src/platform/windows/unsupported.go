@@ -370,6 +370,19 @@ func (implementation) CloseWebview(unsafe.Pointer) {
 	unreachable("native webview close")
 }
 
+func (implementation) NativeView(unsafe.Pointer) unsafe.Pointer {
+	unreachable("native view")
+	return nil
+}
+
+func (implementation) RetainView(unsafe.Pointer) {
+	unreachable("view retention")
+}
+
+func (implementation) ReleaseView(unsafe.Pointer) {
+	unreachable("view retention")
+}
+
 func (implementation) CreateSurface(unsafe.Pointer) (unsafe.Pointer, error) {
 	return nil, unsupported("surface host")
 }

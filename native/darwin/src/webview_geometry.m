@@ -424,10 +424,24 @@ void *sp_webview_window_composition(void *mainHandle) {
     return composition;
 }
 
+static const char nativeViewKey;
+
 void *sp_window_composition(void *window) {
     NSCAssert(NSThread.isMainThread, @"window composition requires the UI thread");
     NSView *parent = ((WKWebView *)sp_window_main_webview(window)).superview;
-    return [parent isKindOfClass:SPWindowComposition.class] ? parent : NULL;
+    if ([parent isKindOfClass:SPWindowComposition.class]) return parent;
+    NSView *native = objc_getAssociatedObject((NSWindow *)window, &nativeViewKey);
+    return native.window ? native : NULL;
+}
+
+void *sp_window_native_view(void *window) {
+    NSCAssert(NSThread.isMainThread, @"native view requires the UI thread");
+    NSView *native = objc_getAssociatedObject((NSWindow *)window, &nativeViewKey);
+    if (!native) {
+        native = [[[NSView alloc] initWithFrame:NSZeroRect] autorelease];
+        objc_setAssociatedObject((NSWindow *)window, &nativeViewKey, native, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    return native;
 }
 
 bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, sp_file_drop_release release, void *context) {

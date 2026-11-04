@@ -384,6 +384,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	// when the application starts.
 	// The window is put on the screen transparent and made opaque when the first screen is displayed. Call Show outside the UI thread.
 	var revealed sync.Once
+	s.elements.drawn = !framework.MainPage()
 	s.prepareNative = func() {
 		place()
 		revealed.Do(func() {
