@@ -12,3 +12,17 @@ type ElementName struct {
 
 // RunCommand runs the declared command name with params.
 type RunCommand func(name string, params map[string]any)
+
+// ElementNames gives the elements of one build their names in document order. The shell makes one for each build and passes
+// it to every screen of the build, so the position of an element counts the elements of its name in every screen.
+type ElementNames struct{ counts map[string]int }
+
+// NewElementNames returns the names of one build.
+func NewElementNames() *ElementNames { return &ElementNames{counts: map[string]int{}} }
+
+// Next returns the name of the next element of the dom name.
+func (n *ElementNames) Next(name string) ElementName {
+	index := n.counts[name]
+	n.counts[name] = index + 1
+	return ElementName{Name: name, Index: index}
+}
