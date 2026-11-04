@@ -36,6 +36,8 @@ func Run(assets fs.FS, options host.Options, workbench Workbench) error {
 		}
 	})
 	mygo.App.OnQuit(session.Shutdown)
+	// The listener exists before the application runs, so a link that opens the application arrives too (docs/spec/native-host.md#deep-links).
+	mygo.App.OnOpenURL(session.OpenDeepLink)
 	mygo.App.OnDidBecomeActive(func() { host.RecordAppEvent("activated") })
 	mygo.App.OnDidResignActive(func() { host.RecordAppEvent("deactivated") })
 	var opening error

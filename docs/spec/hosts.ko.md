@@ -121,6 +121,7 @@ packages/host/mygo/
   tests/
     presentation_test.go (build constraint e2e)     차이 H33
     presentation_notice_test.go                     차이 H36
+    system_test.go                                  차이 H37
     (없음)                                          차이 H9
   benchmark/                                        차이 H35
 ```
@@ -277,6 +278,7 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H35 | 없음 | 없음 | `benchmark/` | 빈 mygo 창의 추적 benchmark([빈 창 benchmark](../operations/examples.ko.md#빈-창-benchmark)). framework adapter 없이 framework의 창을 읽으며, mygo host의 floor다 |
 | H33 | 없음 | 없음 | `tests/presentation_test.go` | 창의 표시된 frame은 mygo framework adapter의 `AfterPresentation`과 `SettledPresentation`의 입력이고 display가 필요하므로, 이 test는 build constraint `e2e`를 가진다([test 종류](../operations/examples.ko.md#test-종류)). 다른 framework는 page의 웹 뷰로 표시하고, 그 test는 window check다 |
 | H36 | 없음 | 없음 | `tests/presentation_notice_test.go` | Frame의 결과를 읽는 것은 mygo framework adapter뿐이고(`AwaitPresentation`), 이 test는 display 없이 각 결과를 준다 |
+| H37 | 없음 | 없음 | `tests/system_test.go` | mygo 창의 workbench는 Go 코드이므로, 이 test의 자식 프로세스는 workbench처럼 host handler를 호출하는 fixture workbench로 애플리케이션을 실행한다. Wails host의 창은 그렇게 하려면 page가 필요하다 |
 | B1 | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | none | native modal web view와 surface 위 shape의 call이다. mygo host의 window는 modal과 shape를 native UI로 그리므로 `packages/workbench-mygo`의 `hostCalls`에는 이 call이 없다. |
 | A1 | 내용만 다름 | 내용만 다름 | 없음 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다. mygo 애플리케이션에는 runtime이 없다(A6 행). |
 | A2 | 없음 | `build.rs` | 없음 | Tauri는 `tauri_build::build()`를 요구한다 |
