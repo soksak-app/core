@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F435: Record the view benchmarks after F444 at load average 12 to 28 and close the single card position failure as not reproduced.
 - F444: A surface synchronization request carries the start values of a view only when the host does not hold them, and the host keeps the last received values. Red and Green at the page and both hosts; the time from an input tick to a transaction fell from 7.2 to 3.1 ms on Wails and from 4.6 to 2.4 ms on Tauri.
 - F443: Record the Wails host path above the floor of a view drag as an open item; a one-turn response was measured and not adopted.
 - F442: The drag convergence is judged by 33 ms without a frame count, and the floor benchmark reports convergence and load. The latency targets stay, because the Tauri floor meets them. Red and Green: `packages/window-check/test/view-metrics.test.mjs`, `e2e/test/plain-view-case.test.mjs`.
