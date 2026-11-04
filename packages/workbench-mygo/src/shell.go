@@ -189,6 +189,8 @@ type Shell struct {
 
 	picker picker
 	icons  map[string]*ui.SVG
+	// windowSidebars holds the widths of the fixed sidebars of the shown space, which outlive their columns.
+	windowSidebars map[string]layout.WindowSidebar
 
 	units         map[string]*installedUnit
 	contributions *Contributions

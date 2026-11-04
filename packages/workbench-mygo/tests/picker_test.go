@@ -315,3 +315,150 @@ func TestATabThatCanNeverUnloadHasNoMenu(t *testing.T) {
 		t.Fatalf("the menu answered %v", err)
 	}
 }
+
+// modifiedShell is a shown project with the tabs a and b of a plugin that saves. The tab a is modified.
+func modifiedShell(t *testing.T) *tabShell {
+	t.Helper()
+	f := newTabShell(t, &storedHost{installed: `{"plugins":[{"id":"notes","package":"notes","version":"1.0.0","manifest":{"id":"notes","name":"Notes",
+		"description":"notes","mark":"N","surface":{"composition":{"kind":"view","page":"n.html"},"save":"notes.save"},"exposes":{"commands":[{"name":"notes.save"}]}}}]}`,
+		projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}})
+	f.open(t)
+	f.modified("tab-aaaaaa")
+	return f
+}
+
+// viewCalled delivers a call of the view of a tab.
+func (f *tabShell) viewCalled(surface, command string, params any) {
+	f.t.Helper()
+	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "notes", "generation": 1, "id": 5, "command": command, "params": params}})
+	f.settle()
+}
+
+// modified makes the view of a tab report changes that are not saved.
+func (f *tabShell) modified(surface string) {
+	f.t.Helper()
+	f.viewCalled(surface, "tab.modified", true)
+}
+
+func TestAModifiedTabAsksBeforeItCloses(t *testing.T) {
+	f := modifiedShell(t)
+	answer := f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`).(map[string]bool)
+	if answer["closed"] {
+		t.Fatal("the tab closed")
+	}
+	f.settle()
+	menu := f.menu()
+	if menu.Title != "tab-aaaaaa 탭에 저장하지 않은 변경이 있습니다" || !slices.Equal(menu.keys(), []string{"save", "discard", "keep"}) {
+		t.Fatalf("the question is %+v", menu)
+	}
+	f.click("core.picker.item", "keep")
+	if len(f.tabsOf("main")) != 2 {
+		t.Fatal("the keep answer closed the tab")
+	}
+	f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
+	f.settle()
+	f.click("core.picker.item", "discard")
+	if tabs := f.tabsOf("main"); len(tabs) != 1 || tabs[0].(map[string]any)["id"] != "tab-bbbbbb" {
+		t.Fatalf("the card holds %v", tabs)
+	}
+}
+
+func TestClosingACardAsksAboutEachModifiedTab(t *testing.T) {
+	f := modifiedShell(t)
+	if _, err := f.answer("core.card.split", map[string]string{"card": "main", "side": "right", "plugin": "notes"}); err != nil {
+		t.Fatal(err)
+	}
+	f.modified("tab-bbbbbb")
+	answer := f.run(t, "core.card.close", `{"card":"main"}`).(map[string]bool)
+	if answer["closed"] {
+		t.Fatal("the card closed")
+	}
+	f.settle()
+	f.click("core.picker.item", "discard")
+	menu := f.menu()
+	if !menu.Open || !strings.HasPrefix(menu.Title, "tab-bbbbbb ") {
+		t.Fatalf("the next question is %+v", menu)
+	}
+	f.click("core.picker.item", "discard")
+	for _, id := range f.tabbedCards() {
+		if id == "main" {
+			t.Fatal("the card stays")
+		}
+	}
+}
+
+func TestASavedTabCloses(t *testing.T) {
+	f := modifiedShell(t)
+	f.viewCalled("tab-aaaaaa", "runtime.command.register", map[string]any{"name": "notes.save"})
+	f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
+	f.settle()
+	item, ok := exposedNode(f.tester.ElementTree(), "core.picker.item", "save")
+	if !ok {
+		t.Fatal("no save item")
+	}
+	f.viewCalled("tab-aaaaaa", "tab.modified", false) // The view saves before it answers.
+	f.tester.ClickAt(item.Bounds.X+4, item.Bounds.Y+4)
+	f.settle()
+	forwards := f.host.forwards
+	if len(forwards) != 1 || forwards[0]["surface"] != "tab-aaaaaa" {
+		t.Fatalf("the host forwarded %v", forwards)
+	}
+	if params, _ := forwards[0]["params"].(map[string]any); params["name"] != "notes.save" {
+		t.Fatalf("the host forwarded %v", forwards)
+	}
+	if tabs := f.tabsOf("main"); len(tabs) != 1 {
+		t.Fatalf("the tabs are %v", tabs)
+	}
+}
+
+func TestAFailedSaveKeepsTheTabAndShowsTheError(t *testing.T) {
+	f := modifiedShell(t)
+	f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
+	f.settle()
+	item, ok := exposedNode(f.tester.ElementTree(), "core.picker.item", "save")
+	if !ok {
+		t.Fatal("no save item")
+	}
+	f.tester.ClickAt(item.Bounds.X+4, item.Bounds.Y+4)
+	if shown := f.shownErrors(); len(shown) != 1 || !strings.Contains(shown[0], "저장하지 못했습니다 · notes.save: ") {
+		t.Fatalf("the shell showed %q", shown)
+	}
+	f.settle()
+	if len(f.tabsOf("main")) != 2 {
+		t.Fatal("the tab closed")
+	}
+}
+
+func TestClosingTheActiveSpaceAsksAboutItsModifiedTabs(t *testing.T) {
+	f := modifiedShell(t)
+	if _, err := f.shell.Registry().Run("core.space.add", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	project := f.host.projects[0]
+	spaces := project["spaces"].([]any)
+	if len(spaces) != 2 {
+		t.Fatalf("the project holds %v", spaces)
+	}
+	first := spaces[0].(map[string]any)["id"]
+	f.run(t, "core.space.activate", `{"id":"`+first.(string)+`"}`)
+	var value any
+	answered := false
+	f.shell.Registry().RunLater("core.space.close", json.RawMessage(`{"id":"`+first.(string)+`"}`), func(result any, err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		value, answered = result, true
+	})
+	f.settle()
+	if answered {
+		t.Fatal("the close answered before the question")
+	}
+	f.click("core.picker.item", "keep")
+	if !answered || value.(map[string]bool)["closed"] {
+		t.Fatalf("the close answered %v", value)
+	}
+	if len(f.host.projects[0]["spaces"].([]any)) != 2 {
+		t.Fatal("the space closed")
+	}
+}

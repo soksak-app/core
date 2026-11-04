@@ -17,8 +17,9 @@ import (
 
 // storedLayout is a stored layout: the state of the plane with the other members as they are stored.
 type storedLayout struct {
-	State    layout.State    `json:"state"`
-	Sidebars json.RawMessage `json:"sidebars"`
+	State          layout.State    `json:"state"`
+	Sidebars       json.RawMessage `json:"sidebars"`
+	WindowSidebars json.RawMessage `json:"windowSidebars"`
 }
 
 // newLayout returns the layout of a new space, from the grid of the environment declaration.
@@ -269,9 +270,37 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err := s.sidebars.Restore(stored.Sidebars); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
-	s.plane, s.focused, s.fullscreen = plane, s.firstCard(plane), ""
+	// default: a stored layout without records has no stored width (docs/spec/projects.md#persistence).
+	widths := map[string]layout.WindowSidebar{}
+	if len(stored.WindowSidebars) > 0 {
+		if widths, err = layout.RestoreWindowSidebars(stored.WindowSidebars); err != nil {
+			return fmt.Errorf("space %s: %w", space.ID, err)
+		}
+	}
+	s.plane, s.focused, s.fullscreen, s.windowSidebars = plane, s.firstCard(plane), "", widths
+	if _, err := s.arrangeWindowSidebars(); err != nil {
+		return fmt.Errorf("space %s: %w", space.ID, err)
+	}
 	s.operated = map[string]map[string]layout.Side{}
 	return nil
+}
+
+// arrangeWindowSidebars matches the fixed sidebars of the plane to the settings left and right, and tells whether the plane changed.
+// A plane without its size has no room for a column, and its first frame arranges it.
+func (s *Shell) arrangeWindowSidebars() (bool, error) {
+	if s.plane == nil || s.plane.Width() == 0 {
+		return false, nil
+	}
+	shown := func(side string) bool {
+		on, _ := s.settings.Value(side).(bool)
+		return on
+	}
+	width, _ := s.settings.Value("sidebarWidth").(float64)
+	changed, err := layout.ArrangeWindowSidebars(s.plane, s.sidebars.Sides(), s.windowSidebars, width, shown)
+	if _, ok := s.plane.Card(s.focused); !ok {
+		s.focused = s.firstCard(s.plane)
+	}
+	return changed, err
 }
 
 // firstCard returns the card that takes the focus when a space shows: the first card with a tab of the plugin that the environment
@@ -326,6 +355,10 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 	if kept["sidebars"], err = json.Marshal(s.sidebars.Stored()); err != nil {
 		return err
 	}
+	layout.KeepWindowSidebarWidths(s.plane, s.windowSidebars)
+	if kept["windowSidebars"], err = json.Marshal(s.windowSidebars); err != nil {
+		return err
+	}
 	next, err := json.Marshal(kept)
 	if err != nil {
 		return err
@@ -367,6 +400,9 @@ func (s *Shell) settle() { s.settleThen(func() {}) }
 // settleThen is settle that runs stored after the plane is stored.
 func (s *Shell) settleThen(stored func()) {
 	s.closePicker()
+	if _, err := s.arrangeWindowSidebars(); err != nil {
+		s.fail(err)
+	}
 	s.held = nil
 	s.keepThen(stored)
 	s.tabsSettled()

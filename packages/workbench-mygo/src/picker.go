@@ -180,7 +180,8 @@ func (s *Shell) openCardTools(card string) error {
 	s.settle()
 	s.openPicker("카드 도구", items, func(key string) error {
 		if key == "close" {
-			return s.closeCard(card)
+			_, err := s.askedCloseCard(card)
+			return err
 		}
 		if side, ok := strings.CutPrefix(key, "side-"); ok {
 			s.binder.run("core.card.sidebar.toggle", cardSideParam{Card: card, Side: side})

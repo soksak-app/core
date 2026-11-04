@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-21: mygo workbench가 modal을 native UI로 그린다: 설정 창, 추가·분할·도구·탭·context menu를 가진 picker layer, 수정된 tab에 대한 질문. `core.card.close`, `core.tab.close`, `core.space.close`는 사람의 답 없이 수정된 tab을 닫지 않고, plugin과 그 setting은 설치된 plugin 문서에서 온다. 설정 `left`, `right`는 고정 창 sidebar를 plane에 넣고 뺀다.
 - F502-12: mygo workbench 가 status `core.app` 과 command `core.app.update`, `core.app.release` 에 답한다. 플러그인 화면은 core 업데이트를 맨 앞에 보여 주고, 그 진행 상태와 후보 버전에 맞지 않는 플러그인도 함께 보여 준다.
 - F502-12: mygo workbench 의 tab 은 unload 뒤에도 이름을 유지한다. tab store 는 view 가 보고한 제목을 저장하므로, unload 상태로 시작한 tab 에도 그 이름이 보인다.
 - F502-16: mygo workbench의 `core.focus`는 창의 first responder와 view가 보고한 focus를 따른다.

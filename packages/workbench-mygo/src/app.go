@@ -227,7 +227,10 @@ func (s *Shell) pluginsChanged() {
 }
 
 // Event handles an event of the host in a step of the main thread.
-func (s *Shell) Event(name string, data []any) {
+func (s *Shell) Event(name string, data []any) { s.event(name, data) }
+
+// event handles an event of the host in a step of the main thread.
+func (s *Shell) event(name string, data []any) {
 	switch name {
 	case "exposure-request":
 		if !s.viewExposure(data) {

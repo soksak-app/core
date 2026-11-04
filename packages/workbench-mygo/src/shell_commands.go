@@ -80,7 +80,39 @@ func (s *Shell) register() {
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
 	act(s, "core.project.close", func(value idParam) error { s.removeProject(value.ID); return nil })
 	act(s, "core.space.activate", func(value idParam) error { return s.activateSpace(value.ID) })
-	act(s, "core.space.close", func(value idParam) error { return s.closeSpace(value.ID) })
+	s.registry.CommandLater("core.space.close", func(raw json.RawMessage, answer func(any, error)) {
+		value, err := params[idParam](raw)
+		if err != nil {
+			answer(nil, fmt.Errorf("core.space.close: %w", err))
+			return
+		}
+		project := s.opened()
+		if project == nil {
+			answer(nil, fmt.Errorf("no project is shown"))
+			return
+		}
+		// The last space does not close. Only the active space has tabs in the plane, so only it can hold a modified tab.
+		if len(project.Spaces) == 1 {
+			answer(closed(false), nil)
+			return
+		}
+		closeIt := func(settled bool) {
+			if !settled {
+				answer(closed(false), nil)
+				return
+			}
+			if err := s.closeSpace(value.ID); err != nil {
+				answer(nil, err)
+				return
+			}
+			answer(closed(true), nil)
+		}
+		if value.ID == project.ActiveSpaceID {
+			s.settleModified(closeIt)
+			return
+		}
+		closeIt(true)
+	})
 	act(s, "core.space.add", func(struct{}) error { return s.addSpace() })
 	act(s, "core.layout.balance", func(struct{}) error {
 		if err := s.requirePlane(); err != nil {
@@ -132,10 +164,8 @@ func (s *Shell) register() {
 		if err := s.requirePlane(); err != nil {
 			return nil, err
 		}
-		if err := s.closeCard(value.Card); err != nil {
-			return nil, err
-		}
-		return map[string]bool{"closed": true}, nil
+		done, err := s.askedCloseCard(value.Card)
+		return closed(done), err
 	})
 	command(s, "core.boundary.move", func(value boundaryParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
@@ -167,10 +197,11 @@ func (s *Shell) register() {
 		}
 		return s.selectTab(value.Tab)
 	})
-	act(s, "core.tab.close", func(value tabParam) error {
+	command(s, "core.tab.close", func(value tabParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
-			return err
+			return nil, err
 		}
-		return s.closeTab(value.Tab)
+		done, err := s.askedCloseTab(value.Tab)
+		return closed(done), err
 	})
 }
