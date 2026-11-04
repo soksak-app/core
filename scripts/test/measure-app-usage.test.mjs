@@ -226,7 +226,8 @@ test("the options take a state, the idle wait, the pointer step and the trace st
   const base = ["--sok", "/b/sok", "--config-dir", MYGO, "--trace", "0"];
   assert.throws(() => parseOptions([...base, "--state", "S2"]), /--state must be one of S0, S0b, S1, S9, S11, S12, S14, S15 \(S2\)/);
   assert.throws(() => parseOptions([...base, "--step", "key"]), /--step must be pointer \(key\)/);
-  assert.throws(() => parseOptions(["--sok", "/b/sok", "--config-dir", MYGO]), /TRACE must be 0 or 1, not set/);
+  assert.throws(() => parseOptions(["--sok", "/b/sok", "--config-dir", MYGO]), /TRACE must be 0, 1 or frame-records, not set/);
+  assert.throws(() => parseOptions([...base.slice(0, 4), "--trace", "2", "--step", "pointer"]), /TRACE must be 0, 1 or frame-records, not "2"/);
   assert.throws(() => parseOptions([...base, "--config-dir", "/var/tester/other", "--idle"]),
     /--state, --idle and --step prepare and measure one application; 2 --config-dir were given/);
   assert.throws(() => parseOptions([...base, "--config-dir", "/var/tester/other", "--b3-out", "/var/tester/b3.json"]),
