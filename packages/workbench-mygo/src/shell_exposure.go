@@ -1,33 +1,12 @@
 package workbench
 
 import (
-	"encoding/json"
 	"fmt"
-	"slices"
 	"sort"
 )
 
 // The surfaces of a window as the registry sees them: the declarations of its plugins, the order of the surfaces that answer a
 // request, and the events of the host that change them (docs/spec/exposure.md#relay).
-
-// declaredExposes returns the declarations of the plugin: those of plugin.json, with the diagnostic declaration of a diagnostic
-// build (docs/spec/plugins.md#diagnostic-declarations).
-func (u *installedUnit) declaredExposes() (Exposes, error) {
-	exposes := u.Exposes
-	if len(u.Diagnostics) == 0 || string(u.Diagnostics) == "null" {
-		return exposes, nil
-	}
-	var diagnostics struct {
-		Exposes Exposes `json:"exposes"`
-	}
-	if err := json.Unmarshal(u.Diagnostics, &diagnostics); err != nil {
-		return exposes, fmt.Errorf("plugin %s diagnostics: %w", u.ID, err)
-	}
-	exposes.Status = slices.Concat(exposes.Status, diagnostics.Exposes.Status)
-	exposes.Commands = slices.Concat(exposes.Commands, diagnostics.Exposes.Commands)
-	exposes.Dom = slices.Concat(exposes.Dom, diagnostics.Exposes.Dom)
-	return exposes, nil
-}
 
 // linkSurfaces gives the registry the declarations of the plugins and the surfaces of the window. A plugin whose declarations are
 // refused is shown, and its names stay unknown.
@@ -38,11 +17,7 @@ func (s *Shell) linkSurfaces() {
 	}
 	sort.Strings(ids)
 	for _, id := range ids {
-		exposes, err := s.units[id].declaredExposes()
-		if err == nil {
-			err = s.registry.Declare(id, exposes)
-		}
-		if err != nil {
+		if err := s.registry.Declare(id, s.units[id].Exposes); err != nil {
 			s.fail(err)
 		}
 	}

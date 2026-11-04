@@ -24,7 +24,7 @@ const installedDocument = `{"plugins": [
 			"settings": {"cursor.shape": {"type": "enum", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "text", "default": ""}},
 			"surface": {"drop": "terminal.drop", "composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
 	{"id": "browser", "package": "@soksak/plugin-browser", "version": "1.0.0",
-		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "plugin.browser.probe"}]}},
+		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "browser.probe"}]}},
 		"manifest": {"id": "browser", "name": "브라우저", "mark": "www",
 			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}
 ]}`
@@ -288,13 +288,13 @@ func TestADiagnosticPluginAddsItsDeclarationsToTheSurface(t *testing.T) {
 		start := surface["start"].(map[string]any)
 		declared, _ := json.Marshal(declarations[int(start["declarations"].(float64))])
 		if surface["plugin"] != "browser" {
-			if start["diagnostics"] != nil || strings.Contains(string(declared), "plugin.browser.probe") {
+			if start["diagnostics"] != nil || strings.Contains(string(declared), "browser.probe") {
 				t.Fatalf("surface %v starts with %v and %s", surface["id"], start, declared)
 			}
 			continue
 		}
 		found = true
-		if start["diagnostics"].(map[string]any)["module"] != "ui/diagnostics.js" || !strings.Contains(string(declared), "plugin.browser.probe") {
+		if start["diagnostics"].(map[string]any)["module"] != "ui/diagnostics.js" || !strings.Contains(string(declared), "browser.probe") {
 			t.Fatalf("the view starts with %v and %s", start, declared)
 		}
 	}

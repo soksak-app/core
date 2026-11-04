@@ -109,7 +109,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		}
 		if len(plugin.Diagnostics) > 0 {
 			var diagnostics struct {
-				Exposes surfaceMarks `json:"exposes"`
+				Exposes Exposes `json:"exposes"`
 			}
 			if err := json.Unmarshal(plugin.Diagnostics, &diagnostics); err != nil {
 				return nil, fmt.Errorf("plugin %s diagnostics: %w", plugin.ID, err)
