@@ -650,6 +650,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-17",
+    implementation: [
+      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) Show(where, text, detail string) {" },
+      { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func SectionHeights(sections []SidebarSection, metrics SidebarMetrics, room float32) []float32 {" },
+      { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func SidebarSeats(frame SidebarFrame) []SidebarSeat {" },
+      { file: "packages/workbench-mygo/src/plugin_screen.go", symbol: "func DrawPluginPage(c *ui.Context, names *ElementNames, page PluginPage, shown *ShownErrors, run RunCommand) {" },
+      { file: "packages/workbench-mygo/src/debug_screen.go", symbol: "func DrawDebugView(c *ui.Context, names *ElementNames, view DebugView, shown *ShownErrors, run RunCommand) {" },
+      { file: "packages/workbench-mygo/src/debug_state.go", symbol: "func ParseDebugState(file, text string, truncated bool) (DebugState, error) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestTheErrorBannerShowsTheErrorOfTheWorkbench" },
+      { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestAListSidebarDrawsItsHeadersAndFoldsASection" },
+      { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestTheSeatOfASectionIsItsBody" },
+      { file: "packages/workbench-mygo/tests/plugin_screen_test.go", id: "TestTheActionsOfACardFollowThePlugin" },
+      { file: "packages/workbench-mygo/tests/debug_view_test.go", id: "TestTheDebugViewListsEachFileWithItsActions" },
+      { file: "packages/workbench-mygo/tests/debug_view_test.go", id: "TestTheTimelineHasItsRowsAndTheirButtons" },
+    ],
+    expected: "The error display, the sidebar frame with its seats, the plugin page and the debug view of the mygo workbench draw from values, each element has its declared name, and each control runs its command.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-16",
     implementation: [
       { file: "packages/workbench/workbench.json", symbol: "\"tab-peek-w\": \"56px\"" },
