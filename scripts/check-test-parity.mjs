@@ -217,6 +217,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Go host main-thread functions", "objective-c", ["packages/host/go/src/platform/darwin/main_thread.m"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", "packages/host/go/tests/main_thread_test.go", "packages/host/go/src/platform/darwin/main_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("Workbench styles", "stylesheet", ["packages/workbench/app.css", "packages/workbench/library.css"], ["packages/workbench/test/background.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench declarations", "declaration", ["packages/workbench/exposure.json"], ["packages/workbench/test/exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("mygo workbench declarations", "declaration", ["packages/workbench-mygo/src/exposure.json"], ["scripts/test/check-exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench shortcuts", "declaration", ["packages/workbench/shortcuts.json"], ["scripts/test/shortcut-table.test.mjs"], { testLanguage: "js-ts" }),
   lane("Workbench documents", "document", ["packages/workbench/index.html", "packages/workbench/overlay.html"], ["packages/workbench/test/published-imports.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
 ];
@@ -679,7 +680,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/check-host-parity.test.mjs", id: "the common-only keys of the hosts and the workbench are read from their sources" },
       { file: "packages/host/go/tests/workspace_test.go", id: "TestCommonOnlyKeysAreTheDeclaredList" },
       { file: "packages/host/rust/tests/workspace_test.rs", id: "common_only_keys_are_the_declared_list" },
-      { file: "scripts/test/check-exposure.test.mjs", id: "each language host library holds a copy of workbench.json" },
+      { file: "scripts/test/check-exposure.test.mjs", id: "each language host library and the mygo workbench hold their copies of the declarations" },
       { file: "scripts/test/check-exposure.test.mjs", id: "a copy of workbench.json in a language host library that differs from its source fails" },
       { file: "scripts/test/workflows.test.mjs", id: "make host-test-mygo runs the unit tests of the Go packages of the mygo host" },
     ],
