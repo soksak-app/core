@@ -438,6 +438,13 @@ func TestHostFailureShowsInTheLibrary(t *testing.T) {
 	if !f.tester.HasText("project directory is gone") {
 		t.Fatalf("the library shows %q", f.tester.Texts())
 	}
+	shown, err := f.shell.Registry().Read("core.page.error")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text, ok := shown.(*string); !ok || text == nil || *text != "project directory is gone" {
+		t.Fatalf("the status core.page.error is %v", shown)
+	}
 }
 
 // drain runs the later steps until no call of the host is answering. The handlers of storedHost answer at once.

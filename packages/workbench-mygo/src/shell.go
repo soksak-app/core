@@ -156,6 +156,12 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.errors = NewShownErrors(options.Report)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.requests = NewRequests(s.registry, s.calls, options.Post, options.Report)
+	s.registry.Status("core.page.error", func() any {
+		if text, ok := s.errors.Text(workbenchErrorPlace); ok {
+			return &text
+		}
+		return (*string)(nil)
+	})
 	s.sidebars, err = NewSidebars(SidebarsOptions{Declared: options.Declared, Registry: s.registry, Binder: s.binder,
 		Environment: options.Environment, Installed: options.Installed, Changed: s.settle, Seat: options.SectionSeat})
 	if err != nil {
