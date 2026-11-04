@@ -2338,7 +2338,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
 
 /// The native operations that configure a document region after its creation. `PlatformDocument` runs them on the platform,
 /// and the tests of the creation run operations that fail.
-pub trait DocumentNative {
+trait DocumentNative {
     fn restore(&self, document: Handle, state: &str) -> Result<(), String>;
     fn appearance(&self, document: Handle, dark: bool) -> Result<(), String>;
     fn background(&self, document: Handle, enabled: bool) -> Result<(), String>;
@@ -2380,29 +2380,29 @@ impl DocumentNative for PlatformDocument {
 }
 
 /// The configuration of a created document region.
-pub struct DocumentSetup {
+struct DocumentSetup {
     /// The name of the region.
-    pub name: String,
+    name: String,
     /// The interaction state that the region restores before it loads anything.
-    pub restore: Option<String>,
+    restore: Option<String>,
     /// Whether the document shows the dark scheme.
-    pub dark: bool,
+    dark: bool,
     /// Whether a dialog of the window is open, which dims the document.
-    pub dialog: bool,
+    dialog: bool,
     /// The receiver of the messages of a plugin document.
-    pub message: Box<dyn Fn(String) + Send>,
+    message: Box<dyn Fn(String) + Send>,
     /// The receiver of the stream messages.
-    pub stream: Box<dyn Fn(String) + Send>,
+    stream: Box<dyn Fn(String) + Send>,
     /// The stream effects of the attach of the region.
-    pub effects: Vec<StreamEffect>,
+    effects: Vec<StreamEffect>,
     /// The receiver of the document events.
-    pub event: Box<dyn Fn(String) + Send>,
+    event: Box<dyn Fn(String) + Send>,
 }
 
 /// Configures a created document region: it restores the history, sets the appearance and the background, sets the receivers of
 /// the messages and the streams, applies the stream effects of the attach and sets the receiver of the events. When a step fails,
 /// the document is closed before the error returns, and a failed close is reported with the failure. It runs on the main thread.
-pub fn configure_document(
+fn configure_document(
     native: &dyn DocumentNative,
     document: Handle,
     setup: DocumentSetup,
@@ -3313,6 +3313,10 @@ pub fn record_view_process_ready(surface: &str, plugin: &str) {
 #[cfg(test)]
 #[path = "view_responsiveness_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "documents_test.rs"]
+mod creation_test;
 
 /// The document-start script that sets window.sokTheme to the frozen theme value {scheme, tokens}, which the first page script of a
 /// view reads (docs/spec/native-surfaces.md#view-surfaces).
