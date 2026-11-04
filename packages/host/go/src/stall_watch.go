@@ -23,6 +23,8 @@ const (
 	stallBeat = 250 * time.Millisecond
 	// stallLate is the lateness of a heartbeat that is a stall.
 	stallLate = time.Second
+	// stallSampleRunning is the error of a stall during the sample of an earlier stall.
+	stallSampleRunning = "a sample of the threads is still running"
 )
 
 // StallWatchOptions are the parts of the watch: Heartbeat sends a heartbeat that the watched thread answers and returns the time
@@ -59,7 +61,7 @@ func StartStallWatch(options StallWatchOptions) func() {
 	if wait == nil {
 		wait = time.Sleep
 	}
-	var stopped atomic.Bool
+	var stopped, sampling atomic.Bool
 	routine.Go("stall-watch", func() {
 		// The first heartbeat is the reference of the answers until the watched thread answers one.
 		options.Heartbeat()
@@ -80,11 +82,20 @@ func StartStallWatch(options StallWatchOptions) func() {
 				stalledFrom = last
 				options.EmitHost(LevelWarn, "host.stall", map[string]any{"late_ms": now - last, "watch_late_ms": watchLate.Milliseconds()})
 				path := filepath.Join(options.Folder, fmt.Sprintf("stall-host-%d-%d.txt", os.Getpid(), time.Now().UnixMilli()))
-				if err := options.Sample(path); err != nil {
-					options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path, "error": err.Error()})
-				} else {
-					options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path})
+				if !sampling.CompareAndSwap(false, true) {
+					options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path, "error": stallSampleRunning})
+					break
 				}
+				// A sample lasts for seconds on a loaded system. The watch keeps sending heartbeats meanwhile, so that time is not
+				// read as lateness of the main thread.
+				routine.Go("stall-sample", func() {
+					defer sampling.Store(false)
+					if err := options.Sample(path); err != nil {
+						options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path, "error": err.Error()})
+					} else {
+						options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path})
+					}
+				})
 			case stalledFrom >= 0 && last > stalledFrom:
 				options.EmitHost(LevelInfo, "host.stall.resumed", map[string]any{"stalled_ms": last - stalledFrom})
 				stalledFrom = -1
