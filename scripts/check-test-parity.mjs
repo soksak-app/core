@@ -8950,6 +8950,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F429",
+    implementation: [{ file: "packages/workbench/package.json", symbol: "docs/spec/events.json" }],
+    tests: [{ file: "packages/workbench/test/page-layout-trace.test.mjs", id: "a cancelled layout records only the phases that the event catalog declares" }],
+    expected: "A package declares the spec files that its tests read.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

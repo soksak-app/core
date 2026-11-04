@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F429: `make boundaries`와 host contract 검사가 다시 통과한다. workbench의 `specFiles`가 `docs/spec/events.json`을 선언하고, 중복된 contract case를 없앴다.
 - F428: window check가 다시 그려지는 terminal의 선택 drag를 녹화하고 모든 frame의 강조를 pointer와 비교한다.
 - F427: `make e2e` 한 번의 window 활성과 capture stream 실패는 그 뒤 세 번의 실행에서 재발하지 않았다.
 - F426: Tauri platform interface에서 쓰지 않는 `attach_surface`와 `detach_surface`를 없앴다.

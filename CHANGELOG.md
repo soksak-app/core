@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F429: `make boundaries` and the host contract check pass again: `specFiles` of the workbench declares `docs/spec/events.json`, and a duplicated contract case is removed.
 - F428: A window check records a selection drag over a redrawing terminal and compares the highlight of every frame with the pointer.
 - F427: The window activation and capture stream failures of one `make e2e` run did not recur in the three runs after it.
 - F426: The unused `attach_surface` and `detach_surface` of the Tauri platform interface are removed.

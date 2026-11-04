@@ -636,7 +636,6 @@ fn dom_failure_skips_raster_and_dom_and_raster_errors_are_preserved() {
     );
 }
 
-// contract: exposure.host-window.reads-during-surface-creation
 // contract: surface.sync.closed-window-creates-nothing
 #[test]
 fn a_closed_window_creates_no_surface() {
@@ -649,6 +648,7 @@ fn a_closed_window_creates_no_surface() {
     assert_eq!(result, Err("project window is closed".to_string()));
 }
 
+// contract: exposure.host-window.reads-during-surface-creation
 #[test]
 fn a_status_read_during_surface_creation_finds_the_registered_surface() {
     // The window status reads the surface ids of the native views from the surface_hosts registry. Creation names the
