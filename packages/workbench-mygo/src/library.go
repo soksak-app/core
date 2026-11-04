@@ -1,6 +1,7 @@
 package workbench
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -167,7 +168,11 @@ func (s *Shell) submitForm() error {
 			return
 		}
 		s.library.formMode, s.library.name, s.library.parent = "", "", ""
-		s.openFolder(folder)
+		s.openFolder(folder, s.freeTint(), func(_ json.RawMessage, err error) {
+			if err != nil {
+				s.fail(err)
+			}
+		})
 	}
 	if s.library.formMode == "create" {
 		s.calls.Call("projectCreate", map[string]string{"parent": s.library.parent, "name": s.library.name}, opened)

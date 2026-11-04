@@ -681,3 +681,41 @@ func (s steps) drain(t *testing.T) {
 		}
 	}
 }
+
+// core.project.open adds the folder as a project with a fresh layout, shows it and answers with the project.
+func TestProjectOpenCommandOpensTheFolder(t *testing.T) {
+	stored := &storedHost{}
+	f := newShell(t, stored)
+	var answer any
+	var failure error
+	answered := false
+	f.shell.Registry().RunLater("core.project.open", json.RawMessage(`{"root":"/work/alpha"}`), func(value any, err error) {
+		answered, answer, failure = true, value, err
+	})
+	f.settle()
+	if !answered || failure != nil {
+		t.Fatalf("the command answered %v with %v", answered, failure)
+	}
+	project := status[map[string]any](t, f, "core.project")
+	text, err := json.Marshal(answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var opened struct {
+		ID   string `json:"id"`
+		Root string `json:"root"`
+	}
+	if err := json.Unmarshal(text, &opened); err != nil {
+		t.Fatal(err)
+	}
+	if opened.Root != "/work/alpha" || project["id"] != opened.ID || len(stored.projects) != 1 || stored.projects[0]["color"] != "#ffb36b" {
+		t.Fatalf("the command answered %s, the shell shows %v and stores %v", text, project, stored.projects)
+	}
+}
+
+func TestProjectOpenCommandRefusesAnEmptyRoot(t *testing.T) {
+	f := newShell(t, &storedHost{})
+	if err := f.finish("core.project.open", map[string]string{"root": " "}); err == nil || err.Error() != "Project directory is empty" {
+		t.Fatalf("the command failed with %v", err)
+	}
+}

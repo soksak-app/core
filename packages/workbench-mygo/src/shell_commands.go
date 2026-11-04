@@ -75,6 +75,7 @@ func (s *Shell) register() {
 		s.pluginsChanged()
 		return map[string]bool{"reloaded": true}, nil
 	})
+	s.registerProjectOpen()
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
 	act(s, "core.project.close", func(value idParam) error { s.removeProject(value.ID); return nil })
 	act(s, "core.space.activate", func(value idParam) error { return s.activateSpace(value.ID) })

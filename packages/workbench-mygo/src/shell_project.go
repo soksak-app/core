@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"strings"
@@ -62,34 +63,78 @@ func tabData(tabs []layout.Tab, active string) map[string]any {
 	return map[string]any{"tabs": tabs, "activeId": active}
 }
 
-// openFolder adds the folder as a project and shows it, as projects.open does.
-func (s *Shell) openFolder(folder ProjectFolderValue) {
+// openFolder adds the folder as a project of the color and shows it, as projects.open does. done takes the stored project, or the
+// failure, after the project is shown.
+func (s *Shell) openFolder(folder ProjectFolderValue, color string, done func(project json.RawMessage, err error)) {
 	first, err := s.newLayout()
 	if err != nil {
-		s.fail(err)
+		done(nil, err)
 		return
 	}
 	space := layout.Space{ID: s.newSpaceID(), Title: "SPACE1", Layout: first}
 	id := s.newProjectID()
 	record := map[string]any{"id": id, "root": folder.Root, "identity": folder.Identity, "title": baseName(folder.Root),
-		"color": s.freeTint(), "named": 1, "spaces": []layout.Space{space}, "activeSpaceId": space.ID, "settings": map[string]any{}}
+		"color": color, "named": 1, "spaces": []layout.Space{space}, "activeSpaceId": space.ID, "settings": map[string]any{}}
 	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "add", "project": record}, func(value any, err error) {
 		if err != nil {
-			s.fail(err)
+			done(nil, err)
 			return
 		}
 		raw, err := json.Marshal(value)
 		if err != nil {
-			s.fail(err)
+			done(nil, err)
 			return
 		}
 		added, err := readProject(raw)
 		if err != nil {
-			s.fail(err)
+			done(nil, err)
 			return
 		}
 		s.projects = append(s.projects, added)
-		s.activate(added.ID)
+		s.activateThen(added.ID, func() { done(raw, nil) })
+	})
+}
+
+// projectOpenColor is the color of a project that core.project.open opens without one.
+const projectOpenColor = "#ffb36b"
+
+// registerProjectOpen registers core.project.open, which opens a folder for an endpoint client as the library form does for a person.
+func (s *Shell) registerProjectOpen() {
+	s.registry.CommandLater("core.project.open", func(raw json.RawMessage, answer func(any, error)) {
+		value, err := params[struct {
+			Root  string `json:"root"`
+			Color string `json:"color"`
+		}](raw)
+		switch {
+		case err != nil:
+			answer(nil, Refuse(InvalidParams, "core.project.open: %s", err))
+			return
+		case strings.TrimSpace(value.Root) == "":
+			answer(nil, errors.New("Project directory is empty"))
+			return
+		}
+		color := value.Color
+		if color == "" {
+			color = projectOpenColor
+		}
+		s.calls.Call("projectFolder", value.Root, func(reply any, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			folder, err := decode[ProjectFolderValue](reply)
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			s.openFolder(folder, color, func(project json.RawMessage, err error) {
+				if err != nil {
+					answer(nil, err)
+					return
+				}
+				answer(project, nil)
+			})
+		})
 	})
 }
 
