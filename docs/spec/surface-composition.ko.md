@@ -92,7 +92,7 @@ const view = composition.region("view");
 
 반환한 영역 손잡이는 선언한 종류의 연산만 가진다. 문서 손잡이는 불러오기와 탐색을 수행하고, plugin 문서와 메시지를 주고받는다(`post(message)`, `onMessage(fn)`, [문서 영역](native-surfaces.ko.md#문서-영역)). 문서 손잡이는 `history`도 알린다. 이 값은 attach 답이 오기 전까지 null이고, 그 뒤에는 영역이 세션 기록을 restore했는지를 boolean으로 알린다. view 문서 손잡이는 page 문서 손잡이와 같은 `history`를 알리며, boolean `history`가 없는 attach 답은 영역 이름을 밝힌 오류로 합성을 거부한다. 그림 손잡이는 초점, 캐럿, 접근성 텍스트를 제어하고 공급자 이벤트를 받는다. 개별 영역 분리는 허용하지 않는다. 표면을 닫거나 탐색하면 완전한 합성을 제거한다.
 
-관찰된 위치가 직전 placement와 같으면 placement를 보내지 않는다. view 크기 변경 하나가 두 observer에 모두 전달되기 때문이다. 거부된 placement는 다음 관찰에서 다시 보내고, `composition.update`는 항상 placement를 보낸다.
+관찰된 위치가 직전 placement와 같으면 placement를 보내지 않는다. view 크기 변경 하나가 두 observer에 모두 전달되기 때문이다. 거부된 placement는 다음 관찰에서 다시 보내고, `composition.update`는 항상 placement를 보낸다. host가 caret을 region 기준으로 들고 있으므로 image region은 직전에 받아들여진 값과 같은 caret을 보내지 않고, 거부된 caret은 다시 보낸다.
 
 표면을 닫을 때는 영역을 분리하거나 native 합성 선언을 제거하기 전에 마지막으로 진행 중인 완전한 합성 배치가 끝날 때까지 기다린다. 닫기는 이후 배치를 취소할 수 있지만 선언이나 native 영역을 제거한 뒤 배치가 경합하게 해서는 안 된다.
 

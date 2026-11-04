@@ -138,6 +138,41 @@ test("setCaret() calls caret with coordinates", async () => {
   assert.deepEqual(p.calls, [["caret", "preview", 10, 20, 2, 24]]);
 });
 
+test("a caret equal to the last one is not sent again, and a refused caret is sent again", async () => {
+  const f = fixture();
+  const p = port();
+  let refuse = false;
+  const caret = p.caret;
+  p.caret = async (...args) => {
+    await caret(...args);
+    if (refuse) throw new Error("refused");
+  };
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  await settle();
+  p.calls.length = 0;
+  const rect = { x: 10, y: 20, width: 2, height: 24 };
+  await image.setCaret(rect);
+  await image.setCaret({ ...rect });
+  assert.equal(p.calls.length, 1, `equal caret sent again: ${JSON.stringify(p.calls)}`);
+  await image.setCaret({ ...rect, x: 12 });
+  assert.equal(p.calls.length, 2, `changed caret not sent: ${JSON.stringify(p.calls)}`);
+  refuse = true;
+  await assert.rejects(image.setCaret(rect), /refused/);
+  refuse = false;
+  await image.setCaret(rect);
+  assert.equal(p.calls.length, 4, `refused caret not sent again: ${JSON.stringify(p.calls)}`);
+});
+
+test("an equal caret after detach reports the detached region", async () => {
+  const f = fixture();
+  const p = port();
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const rect = { x: 10, y: 20, width: 2, height: 24 };
+  await image.setCaret(rect);
+  await image.detach();
+  await assert.rejects(image.setCaret(rect), /image preview is detached/);
+});
+
 test("setAccessibleText() calls text with string", async () => {
   const f = fixture();
   const p = port();

@@ -17,6 +17,9 @@ export function attachImage(port, element, name, sidecar, options = {}) {
   const listeners = new Map();
   let detached = false;
   let chain = port.attach(name, sidecar);
+  // The host holds the caret of the region relative to the region, so a caret equal to the last accepted one changes nothing.
+  let lastCaret = null;
+  let lastCaretWork = null;
   const queue = (work) => {
     if (detached) return Promise.reject(new Error(`image ${name} is detached`));
     const next = chain.then(work);
@@ -53,7 +56,16 @@ export function attachImage(port, element, name, sidecar, options = {}) {
       return queue(() => port.focus(name));
     },
     setCaret(rect) {
-      return queue(() => port.caret(name, rect.x, rect.y, rect.width, rect.height));
+      const key = JSON.stringify([rect.x, rect.y, rect.width, rect.height]);
+      if (!detached && key === lastCaret) return lastCaretWork;
+      const work = queue(() => port.caret(name, rect.x, rect.y, rect.width, rect.height));
+      lastCaret = key;
+      lastCaretWork = work;
+      // A refused caret is sent again by the next call with the same value.
+      work.catch(() => {
+        if (lastCaretWork === work) lastCaret = null;
+      });
+      return work;
     },
     setAccessibleText(text) {
       return queue(() => port.text(name, text));

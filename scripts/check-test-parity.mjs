@@ -8949,6 +8949,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F439",
+    implementation: [{ file: "packages/plugin-api/image-region.js", symbol: "attachImage" }],
+    tests: [{ file: "packages/plugin-api/test/image-region.test.mjs", id: "a caret equal to the last one is not sent again, and a refused caret is sent again" }],
+    expected: "An equal caret is not sent again and a refused caret is sent again",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

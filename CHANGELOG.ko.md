@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F439: image region은 직전에 받아들여진 값과 같은 caret을 보내지 않고, 거부된 caret은 다시 보낸다. Red와 Green: `packages/plugin-api/test/image-region.test.mjs`.
 - F438: view가 직전과 같은 관찰 placement를 더 이상 보내지 않아 드래그의 placement가 절반으로 줄었다.
 - F437: `make e2e-benchmark-plain-view`가 plugin 코드 없는 view의 드래그 지연도 재고 transaction 단계를 저장한다.
 - F436: section surface가 있는 layout이 준비를 두 번이 아니라 한 번 한다. 준비가 각 section surface의 측정한 카드 기준 여백을 유지하기 때문이다. `page.trace.surface.resend`는 두 번째 요청의 값을 기록한다.
