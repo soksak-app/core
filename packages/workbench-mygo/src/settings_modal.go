@@ -781,13 +781,29 @@ func (s *Shell) settingsSave(project string, patch map[string]any, remove []stri
 
 // settingsChanged applies the settings after a change.
 func (s *Shell) settingsChanged() error {
-	if err := s.applyPalette(); err != nil {
+	if err := s.applySettings(); err != nil {
 		return err
 	}
 	s.followScale()
 	s.followSettings()
 	s.options.Invalidate()
 	return nil
+}
+
+// applySettings takes what the settings hold for the screens: the colors and the shape, and the sets and the links of the sidebars.
+func (s *Shell) applySettings() error {
+	if err := s.applyPalette(); err != nil {
+		return err
+	}
+	sets, err := decode[[]SidebarSet](s.settings.Value("sets"))
+	if err != nil {
+		return err
+	}
+	links, err := decode[[]SidebarLink](s.settings.Value("links"))
+	if err != nil {
+		return err
+	}
+	return s.sidebars.Adopt(sets, links)
 }
 
 // applyPalette takes the colors and the shape of the settings.
@@ -1170,5 +1186,5 @@ func (s *Shell) beginSettings() error {
 	if err := s.settings.Begin(s.commonSettings, overrides, id); err != nil {
 		return err
 	}
-	return s.applyPalette()
+	return s.applySettings()
 }

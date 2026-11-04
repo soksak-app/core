@@ -198,6 +198,26 @@ func NewSettingsStore(definitions []SettingDefinition, save SaveSettings) (*Sett
 	return store, nil
 }
 
+// SidebarDefaults makes the declared sets and links the defaults of the settings `sets` and `links`. It runs before the stored
+// settings begin, and a window without declared sidebars keeps the empty defaults.
+func (s *SettingsStore) SidebarDefaults(sets []SidebarSet, links []SidebarLink) error {
+	if len(sets) > 0 {
+		value, err := decode[any](sets)
+		if err != nil {
+			return fmt.Errorf("sidebar defaults: %w", err)
+		}
+		s.defaults["sets"] = value
+	}
+	if len(links) > 0 {
+		value, err := decode[any](links)
+		if err != nil {
+			return fmt.Errorf("sidebar defaults: %w", err)
+		}
+		s.defaults["links"] = value
+	}
+	return nil
+}
+
 // Loaded records a plugin that the window loaded, whose stored settings the store checks.
 func (s *SettingsStore) Loaded(plugin string) { s.loaded[plugin] = true }
 
