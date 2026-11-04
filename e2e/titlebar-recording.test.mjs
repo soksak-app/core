@@ -56,8 +56,8 @@ async function record(s, buttons, action) {
 }
 
 /**
- * Judges that in every frame the button center and the first-row center are within TOLERANCE, and that every displayed state was recorded within two screen frames
- * after its display.
+ * Judges that in every frame the button center and the first-row center are within TOLERANCE, that the recording has no gap above 100 ms, and that every displayed state
+ * was recorded up to the first frame at or after two screen frames from its display.
  */
 function judge(t, label, { poses, stop, measured }, refreshRate) {
   assert.ok(measured.length > 1, `${label}: the recording has ${measured.length} frames`);
@@ -69,6 +69,7 @@ function judge(t, label, { poses, stop, measured }, refreshRate) {
     `largest difference ${largest.toFixed(2)}px, longest gap ${stop.longestGap}ms, ${stop.layouts.length} layout transactions`);
   assert.equal(off.length, 0, `${label}: ${off.length} of ${measured.length} frames have the window button centre more than ` +
     `${TOLERANCE}px from the first-row centre or cannot be measured: ${JSON.stringify(off.slice(0, 12))}`);
+  assert.ok(stop.longestGap <= 100, `${label}: missing frames, gap ${stop.longestGap}ms`);
   assert.deepEqual(missing, [], `${label}: displayed first rows missing from the recording at ${refreshRate}Hz`);
 }
 

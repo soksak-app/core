@@ -8957,6 +8957,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F430",
+    implementation: [{ file: "e2e/card-panel-checks.mjs", symbol: "missingPoses" }],
+    tests: [{ file: "e2e/test/card-panel-checks.test.mjs", id: "a pose in the first frame that a recording gap delivers after two display frames counts as recorded" }],
+    expected: "A displayed state counts as recorded when the frames up to the first frame at or after two display frames hold it.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

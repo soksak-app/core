@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F430: frame stream이 주기를 약속하지 않으므로 누락 상태 판정은 두 화면 frame 뒤 또는 그 이후의 첫 녹화 frame까지 읽는다. title bar check는 녹화 간격을 제한한다.
 - F429: `make boundaries`와 host contract 검사가 다시 통과한다. workbench의 `specFiles`가 `docs/spec/events.json`을 선언하고, 중복된 contract case를 없앴다.
 - F428: window check가 다시 그려지는 terminal의 선택 drag를 녹화하고 모든 frame의 강조를 pointer와 비교한다.
 - F427: `make e2e` 한 번의 window 활성과 capture stream 실패는 그 뒤 세 번의 실행에서 재발하지 않았다.

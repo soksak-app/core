@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 
 /**
  * Display states that are missing from the recording. frames are { time, edges } (display time in ms, boundary coordinates measured in that frame) and poses are
- * { displayed, at } (display time in ms, boundary coordinates of that state). When no frame that holds the boundary exists within two screen frames after a state is displayed,
- * the recording was not made at the requested rate.
+ * { displayed, at } (display time in ms, boundary coordinates of that state). A state is missing when it is absent from the frames up to the first frame at or after two screen
+ * frames from its display, or when no such frame exists. A frame stream promises no cadence, so the limit is that frame and not a time; each check bounds the recording gap itself.
  */
 export function missingPoses(frames, poses, refreshRate) {
   assert.ok(Number.isFinite(refreshRate) && refreshRate > 0, `the display refresh rate is unknown (${refreshRate})`);
@@ -21,8 +21,12 @@ export function missingPoses(frames, poses, refreshRate) {
   // after the reply). So the check looks at the frames from the display of the previous state to two screen frames after the display of this state. Frames before the previous state
   // was displayed record an earlier state.
   const after = (index) => (index === 0 ? -Infinity : poses[index - 1].displayed - 1);
+  const until = (pose, index) => {
+    const settled = start(pose, index) + window;
+    return Math.min(...frames.filter((frame) => frame.time >= settled).map((frame) => frame.time), Infinity);
+  };
   return poses.filter((pose, index) => !frames.some((frame) => frame.time >= after(index) &&
-    frame.time <= start(pose, index) + window && frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1)));
+    frame.time <= until(pose, index) && frame.edges.some((edge) => Math.abs(edge - pose.at) <= 1)));
 }
 
 /** Fails when a panel remains after all panels are turned off. A remaining default panel fails as well. */

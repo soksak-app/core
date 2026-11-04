@@ -3,11 +3,22 @@ import test from "node:test";
 
 import { gripInk, missingPoses, requireCleared, requireContentWidth, tabSwitchPair } from "../card-panel-checks.mjs";
 
-test("a pose without a recorded frame within two display frames is missing", () => {
-  const frames = [{ time: 100, edges: [10] }, { time: 130, edges: [20] }, { time: 200, edges: [30] }];
+test("a pose absent from the first recorded frame after two display frames is missing", () => {
+  const frames = [{ time: 100, edges: [10] }, { time: 130, edges: [20] }, { time: 200, edges: [40] }, { time: 210, edges: [30] }];
   const poses = [{ displayed: 99, at: 10 }, { displayed: 120, at: 20 }, { displayed: 150, at: 30 }];
   assert.deepEqual(missingPoses(frames, poses, 60), [{ displayed: 150, at: 30 }]);
   assert.deepEqual(missingPoses(frames, poses.slice(0, 2), 60), []);
+});
+
+test("a pose in the first frame that a recording gap delivers after two display frames counts as recorded", () => {
+  // Measured example at 120 Hz: the stream delivered no frame between 32.2 ms before and 20.3 ms after the display time.
+  const frames = [{ time: -32.2, edges: [147] }, { time: 20.3, edges: [137] }, { time: 34, edges: [137] }];
+  assert.deepEqual(missingPoses(frames, [{ displayed: -60, at: 147 }, { displayed: 0, at: 137 }], 120), []);
+});
+
+test("a pose with no recorded frame after two display frames is missing", () => {
+  const frames = [{ time: -32.2, edges: [147] }, { time: 5, edges: [147] }];
+  assert.deepEqual(missingPoses(frames, [{ displayed: -60, at: 147 }, { displayed: 0, at: 137 }], 120), [{ displayed: 0, at: 137 }]);
 });
 
 test("a pose displayed before the recording started counts from the first recorded frame", () => {

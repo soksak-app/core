@@ -210,7 +210,7 @@ for (const app of Object.values(APPS)) {
               ),
               `${side}: no intermediate movement frame`,
             );
-            // Every displayed state must remain with its boundary in a recorded frame within two screen frames after the display.
+            // Every displayed state must remain with its boundary in a recorded frame up to the first frame at or after two screen frames from the display.
             const recorded = captured.map((frame, frameIndex) => ({ time: frame.time, edges: measured[frameIndex] }));
             const missing = missingPoses(
               recorded,
