@@ -9428,7 +9428,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F408",
-    implementation: [{ file: "packages/workbench/app.css", symbol: "min-height:calc(var(--head) + var(--section-min-h))" }],
+    implementation: [{ file: "packages/workbench/app.css", symbol: "min-height:calc(var(--head-h) + var(--section-min-h))" }],
     tests: [{ file: "packages/workbench/test/card-sidebars.test.mjs", id: "a section with an integer height gives way when the sidebar is short, and a fill section keeps its head and minimum height" }],
     expected: "A section with an integer height gives way when the sidebar is shorter.",
     levels: ["unit"],

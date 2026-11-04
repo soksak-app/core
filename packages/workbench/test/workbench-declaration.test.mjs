@@ -114,11 +114,20 @@ test("every chrome metric is a CSS value that a stylesheet or a module of the wo
   }
   // The other custom properties that the stylesheets read: the theme tokens of the settings, the values of the page and the ones the stylesheets declare.
   const themeTokens = ["--bg", "--card", "--fg", "--muted", "--edge", "--rule", "--rail", "--focus", "--no", "--r", "--half-gap", "--bw", "--font", "--size"];
-  const page = ["--controls-w", "--head", "--foot", "--pl", "--pr", "--pt", "--pb", "--depth", "--text-zoom", "--section-height",
+  const page = ["--controls-w", "--pl", "--pr", "--pt", "--pb", "--depth", "--text-zoom", "--section-height",
     "--preview-ink", "--font-mono"];
   const unknown = [...new Set([...sheets.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]))]
     .filter((name) => !set.has(name) && !declaredHere.has(name) && !themeTokens.includes(name) && !page.includes(name));
   assert.deepEqual(unknown, [], `the stylesheets read custom properties that nothing declares: ${unknown.join(", ")}`);
+});
+
+// Both workbenches read the layout values of the plane: the head and the foot of a card, which also bound the drop zones, and the widths at
+// which the tab strip folds (docs/spec/settings.md#values). A value in the code of each workbench would be a second copy.
+test("the layout values that the plane reads are chrome metrics of workbench.json", () => {
+  const { chrome } = declared();
+  const layout = ["head-h", "foot-h", "tab-peek-w", "tab-min-w"];
+  assert.deepEqual(layout.filter((name) => !(name in chrome)), [], "missing chrome metrics");
+  for (const name of layout) assert.match(chrome[name], /^\d+px$/, name);
 });
 
 test("the workbench sets the chrome metrics as custom properties of the document root", async () => {

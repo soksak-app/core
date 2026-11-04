@@ -170,7 +170,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    The z order is set by composition, not by CSS. A native surface is an OS view and does not
    take part in the CSS stack, so the simulator reproduces it by putting the surface layer on top. */
 .card{position:absolute;z-index:1;display:grid;grid-template-columns:minmax(0,1fr);
-  grid-template-rows:minmax(0,var(--head)) minmax(0,1fr) minmax(0,var(--foot));
+  grid-template-rows:minmax(0,var(--head-h)) minmax(0,1fr) minmax(0,var(--foot-h));
   min-width:0;overflow:hidden;border:var(--bw) solid var(--edge);border-radius:var(--r);
   background:var(--card);outline:0}
 /* The default min-width auto of a grid child expands the column to min-content, and
@@ -300,7 +300,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* Places the sidebars on four sides and the content slot inside a card in rows and columns. */
 .card:has(> .card-sidebar){
   grid-template-columns:var(--pl,0px) minmax(0,1fr) var(--pr,0px);
-  grid-template-rows:minmax(0,var(--head)) var(--pt,0px) minmax(0,1fr) var(--pb,0px) minmax(0,var(--foot));
+  grid-template-rows:minmax(0,var(--head-h)) var(--pt,0px) minmax(0,1fr) var(--pb,0px) minmax(0,var(--foot-h));
 }
 /* The left and right sidebars continue from below the head to the bottom edge of the card, and the content column is the top sidebar, the content, the bottom sidebar and the content foot.
    The bottom edge of the card is a band of foot height in which the status lines of the left and right sidebars and the content foot lie in one line. */
@@ -598,7 +598,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .card[data-text-zoom] .surface-module-host,.card[data-text-zoom] > .set{zoom:var(--text-zoom)}
 /* Sidebar. The section starts at the top without a set title row or a placeholder, and ends with a 26pt status line.
    The section head is a band one step lighter than the sidebar, and a collapsed section keeps only the head. All colors come from theme tokens. */
-.card[data-place]{grid-template-rows:0 minmax(0,1fr) minmax(0,var(--foot))}
+.card[data-place]{grid-template-rows:0 minmax(0,1fr) minmax(0,var(--foot-h))}
 .card[data-place] > .chrome{display:none}
 .card[data-place] > .set{grid-row:2}
 .card[data-place] > .status{grid-row:3}
@@ -608,11 +608,11 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   background:transparent;color:var(--muted);cursor:pointer}
 .sidebar-status__fold:hover{background:var(--inset);color:var(--fg)}
 .sidebar-status__fold svg{width:var(--card-icon);height:var(--card-icon)}
-.sidebar-status,.card-sidebar__status{display:flex;align-items:center;gap:var(--sidebar-status-gap);height:var(--foot);flex:0 0 var(--foot);box-sizing:border-box;
+.sidebar-status,.card-sidebar__status{display:flex;align-items:center;gap:var(--sidebar-status-gap);height:var(--foot-h);flex:0 0 var(--foot-h);box-sizing:border-box;
   padding:0 var(--space-2);border-top:var(--bw) solid var(--edge);font-size:var(--text-caption);color:var(--muted);
   white-space:nowrap;overflow:hidden}
 /* The head has the height of the card head, so the bottom line of the first sidebar head and the bottom line of the neighboring card head lie in one line. */
-.set__head,.set__tab{display:flex;align-items:center;gap:var(--section-head-gap);height:var(--head);flex:0 0 var(--head);box-sizing:border-box;padding:0 var(--section-head-pad);
+.set__head,.set__tab{display:flex;align-items:center;gap:var(--section-head-gap);height:var(--head-h);flex:0 0 var(--head-h);box-sizing:border-box;padding:0 var(--section-head-pad);
   border:0;background:color-mix(in srgb,var(--fg) var(--section-head-mix),var(--card));color:var(--fg);
   font:600 var(--section-head-text) var(--ui-font);letter-spacing:0;text-align:left;cursor:pointer}
 /* The head line is an inner shadow, so the content box of the head is the same in every state and the name does not move. The bottom line is always present,
@@ -629,7 +629,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .set__section[data-folded=true] .set__body{display:none}
 /* The tab strip scrolls horizontally when it overflows, like the card tab strip, and tabs neither wrap nor shrink. The bottom line is a shadow, so
    the tabs fill the full height of the strip. */
-.set__tabs{display:flex;flex:0 0 var(--head);height:var(--head);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+.set__tabs{display:flex;flex:0 0 var(--head-h);height:var(--head-h);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
   box-shadow:inset 0 calc(0px - var(--bw)) 0 var(--edge);background:color-mix(in srgb,var(--fg) var(--section-head-mix),var(--card))}
 .set__tabs::-webkit-scrollbar{display:none}
 .set__tab{flex:0 0 auto;height:var(--fill);white-space:nowrap;color:var(--muted);background:transparent}
@@ -643,7 +643,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .set__section:not([data-height=fill]):not([data-folded=true]):not([hidden]){flex:0 1 auto;min-height:0;display:flex;flex-direction:column}
 .set__section:not([data-height=fill]):not([data-folded=true]) > .set__body{flex:0 1 var(--section-height);height:var(--section-height)}
 /* Fill sections share the height that the other sections leave, and keep their head and the minimum section height. When collapsed, only the head remains. */
-.set__section[data-height=fill]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:calc(var(--head) + var(--section-min-h));display:flex;flex-direction:column}
+.set__section[data-height=fill]:not([data-folded=true]):not([hidden]){flex:1 1 0;min-height:calc(var(--head-h) + var(--section-min-h));display:flex;flex-direction:column}
 .set__section[data-height=fill]:not([data-folded=true]) > .set__body{flex:1 1 auto}
 /* A horizontal list divides the section width within the same height and scrolls each body. */
 .set[data-orientation=horizontal][data-layout=list]{flex-direction:row;min-width:0}

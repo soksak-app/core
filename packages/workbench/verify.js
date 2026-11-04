@@ -330,10 +330,10 @@ export function verify(controls = null) {
   // a distance that the style sheet sets is not written down but measured from what is drawn.
   //
   // When a card is too low to hold two rows, the rows shrink together. The drawn header is then not the
-  // declared height, so it is not a target to measure. The declared height of a row is set on the root by the plane.
+  // declared height, so it is not a target to measure. The declared height of a row is a chrome metric that the page sets on the root.
   const band = dropBands();
   const row = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
-  const head0 = row("--head"), foot0 = row("--foot");
+  const head0 = row("--head-h"), foot0 = row("--foot-h");
   let bandOff = 0, banded = 0;
   for (const el of plane.querySelectorAll(".card[data-card-id]")) {
     const box = el.getBoundingClientRect();

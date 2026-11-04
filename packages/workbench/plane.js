@@ -8,7 +8,7 @@ import { Soksak, SoksakView, outline, sliceTree } from "soksak";
 import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { effectiveTextScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
-import { placeFocusMark } from "./chrome-metrics.js";
+import { CHROME, placeFocusMark } from "./chrome-metrics.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
 import { clearSet, drawSet, restoreSidebarChoices, sidebarChoices } from "./sidebar-sections.js";
 import { bindSidebarGrip } from "./sidebar-grip.js";
@@ -54,11 +54,9 @@ const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary
   }
 }
 
-/* The height of the head and the foot of a card. This value is the boundary of the drop zones and also the row height of the
-   stylesheet. If each is written in its own place, the zones drift at the end of the head when only one of them changes. */
-const HEADER = 32, FOOTER = 22;
-document.documentElement.style.setProperty("--head", `${HEADER}px`);
-document.documentElement.style.setProperty("--foot", `${FOOTER}px`);
+/* The height of the head and the foot of a card: the chrome metrics head-h and foot-h. This value is the boundary of the drop zones and
+   also the row height of the stylesheet, so both read the one declaration; the zones would drift at the end of the head if one changed alone. */
+const HEADER = parseFloat(CHROME["head-h"]), FOOTER = parseFloat(CHROME["foot-h"]);
 
 
 /* Whether a surface that lost focus is dimmed. A card has one surface, so it is decided per card. */
@@ -1269,9 +1267,10 @@ function centreTab(strip, activeId) {
  * If the tools do not fit with the current tab title, the tool row folds into the ⋯ menu (F81). The title stays longer
  * than the tools.
  */
-// PEEK    the spare width other than the active tab that is needed to keep the strip stage
-// MIN_TAB the minimum width of an active tab that is truncated with an ellipsis. Narrower than this, it drops to the ham stage
-const PEEK = 56, MIN_TAB = 48;
+// PEEK    the spare width other than the active tab that is needed to keep the strip stage: the chrome metric tab-peek-w
+// MIN_TAB the minimum width of an active tab that is truncated with an ellipsis. Narrower than this, it drops to the ham stage: the chrome
+//         metric tab-min-w
+const PEEK = parseFloat(CHROME["tab-peek-w"]), MIN_TAB = parseFloat(CHROME["tab-min-w"]);
 
 function fitChrome(chrome, strip) {
   const acts = chrome.querySelector(".chrome__acts");
