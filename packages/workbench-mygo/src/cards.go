@@ -101,6 +101,9 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, width 
 			s.anchored("core.card.tab-list/"+id, list)
 			list.Size(s.metrics.actW, s.metrics.actH).Center().Label(fmt.Sprintf("탭 %d개", len(tabs))).Children(func() {
 				ui.Text(c, "≡").FontSize(12).TextColor(s.palette.Muted)
+				for _, tab := range tabs {
+					s.noticeMark(c, tab.ID)
+				}
 			})
 		}
 		ui.Row(c).Grow(1).Gap(s.metrics.tabsGap).AlignItems(ui.Center).Clip().Children(func() {
@@ -128,10 +131,8 @@ func (s *Shell) tabName(tab layout.Tab) string {
 func (s *Shell) drawTab(c *ui.Context, tab layout.Tab, on bool) {
 	ui.Row(c.Key("tab-" + tab.ID)).AlignItems(ui.Center).Children(func() {
 		button := s.binder.Press(c, "core.card.tab", "core.tab.select", tab.ID, tabParam{tab.ID})
+		s.noticeMark(c, tab.ID)
 		s.barText(c, button, s.tabName(tab), on)
-		if report := s.surfaces.reports[tab.ID]; report != nil && report.Notice != nil {
-			ui.Text(c, "•").FontSize(10).TextColor(s.palette.Focus).Label(report.Notice.Text)
-		}
 		s.tabContextMenu(button, tab.ID)
 		s.barText(c, s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID}), "✕", false)
 	})

@@ -16,9 +16,11 @@ const installedDocument = `{"plugins": [
 	{"id": "terminal", "package": "@soksak/plugin-terminal", "version": "1.0.0", "sidecars": {"@soksak/sidecar-vt": {}},
 		"manifest": {"id": "terminal", "name": "터미널", "mark": "◊",
 			"dependencies": {"@soksak/sidecar-vt": "^1.0.0"},
-			"data": {"notes": {"schema": {"type": "string"}, "default": "none", "format": 2}},
+			"exposes": {"commands": [{"name": "terminal.drop"}]},
+			"data": {"notes": {"schema": {"type": "string"}, "default": "none", "format": 2},
+				"marks": {"schema": {"type": "array", "items": {"type": "string"}}, "default": ["start"]}},
 			"settings": {"cursor.shape": {"type": "enum", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "text", "default": ""}},
-			"surface": {"composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
+			"surface": {"drop": "terminal.drop", "composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
 	{"id": "browser", "package": "@soksak/plugin-browser", "version": "1.0.0",
 		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "plugin.browser.probe"}]}},
 		"manifest": {"id": "browser", "name": "브라우저", "mark": "www",
@@ -75,7 +77,7 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		h.replies = append(h.replies, reply)
 		return nil, nil
 	}
-	for _, name := range []string{"viewSidecarRoute", "sidecarListen", "viewEvent", "compositionPlace", "imageAttach", "sidecarSend", "exposureRegister"} {
+	for _, name := range []string{"viewSidecarRoute", "sidecarListen", "viewEvent", "compositionPlace", "imageAttach", "sidecarSend", "exposureRegister", "viewRequest", "notify", "notificationRemove"} {
 		table[name] = func(_ context.Context, argument json.RawMessage) (any, error) {
 			h.hostName = append(h.hostName, name+" "+string(argument))
 			return nil, nil
@@ -95,6 +97,12 @@ func (h *surfaceHost) element(id string) (uintptr, uintptr, bool) {
 // surfaceShell opens a project in a shell with the plugins of installedDocument.
 func surfaceShell(t *testing.T) (*shellFixture, *surfaceHost) {
 	t.Helper()
+	return surfaceShellOf(t, installedDocument)
+}
+
+// surfaceShellOf opens a project in a shell with the plugins of document.
+func surfaceShellOf(t *testing.T, document string) (*shellFixture, *surfaceHost) {
+	t.Helper()
 	declared, err := workbench.Declared()
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +113,7 @@ func surfaceShell(t *testing.T) (*shellFixture, *surfaceHost) {
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.surfaceTable(), f.pending.post),
 		Environment: environment(t),
-		Installed:   []byte(installedDocument),
+		Installed:   []byte(document),
 		Invalidate:  func() {},
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },

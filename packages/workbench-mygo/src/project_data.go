@@ -1,9 +1,11 @@
 package workbench
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 )
 
 // The project data of a plugin (docs/spec/plugins.md#project-data): a view reads and writes the keys that its plugin declares, in the
@@ -109,14 +111,25 @@ func (s *Shell) writeProjectData(project *projectRecord, unit *installedUnit, ke
 	if err != nil {
 		return err
 	}
-	id := project.ID
-	s.patchThen(id, map[string]any{"plugins": json.RawMessage(encoded)}, func() {
-		kept := s.project(id)
-		if kept == nil {
-			answer(nil, errors.New("the project is gone"))
+	// The next write starts from this one, so the record takes it before the store confirms it. A store that refuses it takes it
+	// back out, unless a later write stands on it.
+	id, before, stored := project.ID, project.Rest["plugins"], json.RawMessage(encoded)
+	if project.Rest == nil {
+		project.Rest = map[string]json.RawMessage{}
+	}
+	project.Rest["plugins"] = stored
+	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "patch", "id": id, "patch": map[string]any{"plugins": stored}}, func(_ any, err error) {
+		if err != nil {
+			if kept := s.project(id); kept != nil && bytes.Equal(kept.Rest["plugins"], stored) {
+				if before == nil {
+					delete(kept.Rest, "plugins")
+				} else {
+					kept.Rest["plugins"] = before
+				}
+			}
+			answer(nil, err)
 			return
 		}
-		kept.Rest["plugins"] = encoded
 		answer(nil, nil)
 		s.dataChanged(id, unit.ID, key)
 	})
@@ -170,4 +183,92 @@ func (s *Shell) runDataCall(call viewCallEvent, unit *installedUnit, view *viewS
 	}
 	answer(value, nil)
 	return nil
+}
+
+// workspaceChanged reads the store after a write and reports each key of plugin data that differs from what this window holds,
+// as a write of another window reaches this window through the store.
+func (s *Shell) workspaceChanged() {
+	s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
+		if err == nil {
+			err = s.compareData(value)
+		}
+		if err != nil {
+			s.fail(fmt.Errorf("workspace changed: %w", err))
+		}
+	})
+}
+
+// compareData takes the plugin data of the projects of a workspace snapshot.
+func (s *Shell) compareData(value any) error {
+	snapshot, err := decode[struct {
+		Projects      []json.RawMessage `json:"projects"`
+		ProjectsError *string           `json:"projectsError"`
+	}](value)
+	if err != nil {
+		return err
+	}
+	if snapshot.ProjectsError != nil {
+		return errors.New(*snapshot.ProjectsError)
+	}
+	for _, raw := range snapshot.Projects {
+		read, err := readProject(raw)
+		if err != nil {
+			return err
+		}
+		project := s.project(read.ID)
+		if project == nil {
+			continue // A project that this window never read holds no view here.
+		}
+		before, err := storedPlugins(project)
+		if err != nil {
+			return err
+		}
+		now, err := storedPlugins(&read)
+		if err != nil {
+			return err
+		}
+		if stored, ok := read.Rest["plugins"]; ok {
+			if project.Rest == nil {
+				project.Rest = map[string]json.RawMessage{}
+			}
+			project.Rest["plugins"] = stored
+		} else {
+			delete(project.Rest, "plugins")
+		}
+		for _, changed := range changedKeys(before, now) {
+			s.dataChanged(project.ID, changed[0], changed[1])
+		}
+	}
+	return nil
+}
+
+// changedKeys returns each plugin and key whose stored value differs, in a stable order.
+func changedKeys(before, now map[string]map[string]json.RawMessage) [][2]string {
+	changed := [][2]string{}
+	for _, side := range []map[string]map[string]json.RawMessage{before, now} {
+		for plugin, keys := range side {
+			for key := range keys {
+				pair := [2]string{plugin, key}
+				if !slices.Contains(changed, pair) && !sameJSON(before[plugin][key], now[plugin][key]) {
+					changed = append(changed, pair)
+				}
+			}
+		}
+	}
+	slices.SortFunc(changed, func(a, b [2]string) int { return slices.Compare(a[:], b[:]) })
+	return changed
+}
+
+// sameJSON tells whether two stored values are the same JSON value, whatever the white space and the order of their members.
+func sameJSON(a, b json.RawMessage) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return len(a) == len(b)
+	}
+	var left, right any
+	if json.Unmarshal(a, &left) != nil || json.Unmarshal(b, &right) != nil {
+		return bytes.Equal(a, b)
+	}
+	first, _ := json.Marshal(left)   // silent: a value that json decoded encodes again.
+	second, _ := json.Marshal(right) // silent: as above.
+	return bytes.Equal(first, second)
 }

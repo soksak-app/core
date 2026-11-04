@@ -78,7 +78,7 @@ func TestAppStartsWhenTheWindowShows(t *testing.T) {
 	}
 	app.Shown(window)
 	queue.drain(t)
-	if strings.Join(startCalls(stored.calls), " ") != "workspace workspace windowReady pluginsState sidecarsOutdated" {
+	if strings.Join(startCalls(stored.calls), " ") != "workspace workspace windowReady notificationState pluginsState sidecarsOutdated" {
 		t.Fatalf("the start called %v", stored.calls)
 	}
 }
