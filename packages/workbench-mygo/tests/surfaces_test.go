@@ -23,7 +23,7 @@ const installedDocument = `{"plugins": [
 			"data": {"notes": {"schema": {"type": "string"}, "default": "none", "format": 2},
 				"marks": {"schema": {"type": "array", "items": {"type": "string"}}, "default": ["start"]}},
 			"settings": {"cursor.shape": {"type": "enum", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "text", "default": ""}},
-			"surface": {"drop": "terminal.drop", "composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
+			"surface": {"menu": [{"title": "닫기", "command": "terminal.close"}], "drop": "terminal.drop", "composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image"}]}}}},
 	{"id": "browser", "package": "@soksak/plugin-browser", "version": "1.0.0",
 		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "browser.probe"}]}},
 		"manifest": {"id": "browser", "name": "브라우저", "mark": "www",
