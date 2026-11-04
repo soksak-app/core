@@ -300,10 +300,11 @@ const framesText = (frames) => frames.map(String).join(" ");
 
 /**
  * Waits until frames of host.window of every window has not changed for 3 seconds; a window whose frames is null waits the 3 seconds
- * (docs/plans/mygo-host.md, G2). frames() returns the frames of each window, and sleep(ms) waits. The host notifies host.window watchers
+ * (docs/plans/mygo-host.md, G2). frames() returns the frames of each window, and sleep(ms) waits, by default on the timer that
+ * measureApps uses, so a caller writes no timer of its own. The host notifies host.window watchers
  * when settled changes, not at each frame, and frames counts every frame, so two readings 3 seconds apart are the rule itself.
  */
-export async function untilFramesQuiet({ frames, sleep, intervals = QUIET_INTERVALS }) {
+export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIET_INTERVALS }) {
   let previous = await frames();
   for (let interval = 1; interval <= intervals; interval++) {
     await sleep(QUIET_MS);
