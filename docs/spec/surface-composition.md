@@ -93,6 +93,8 @@ Insets use the element's CSS rectangle and the current mounted viewport, measure
 
 The returned region handle contains only operations for its declared kind. Document handles load, navigate, and exchange messages with a plugin document (`post(message)` and `onMessage(fn)`, [document regions](native-surfaces.md#document-regions)). A document handle also reports `history`: null until its attach replies, then whether the region restored a session history. A view document handle reports the same `history` as a page document handle, and an attach reply without a boolean `history` rejects the composition with an error that names the region. Image handles control focus, caret, accessibility text, and receive supplier events. Detaching an individual region is not permitted; closing or navigating the surface destroys the complete composition.
 
+An observed geometry equal to the last placement sends no placement, because one view resize reaches both of its observers. A refused placement is sent again at the next observation, and `composition.update` always sends its placement.
+
 Closing a surface waits for its last in-flight complete composition placement to settle before detaching regions or removing the native composition declaration. A close may cancel future placements, but it must not let a placement race after the declaration or its native region has been removed.
 
 ## Revisions and atomicity

@@ -462,3 +462,45 @@ test("a view composition refuses an attach reply without a boolean history, nami
     /document page attach reply has no history: \{\}/,
   );
 });
+
+test("an observed placement equal to the last one is not sent again, and a failed placement is sent again", { timeout: 10_000 }, async () => {
+  const f = fixture();
+  let refuse = false;
+  const r = runtime({ place: () => {
+    if (refuse) throw new Error("placement refused");
+  } });
+  const composition = await createSurfaceCompositionController(r.page, declaration, {
+    regions: { page: f.page, image: f.image },
+    overlays: { toolbar: f.toolbar, badge: f.badge },
+  }, f.window);
+  const first = r.placements.length;
+
+  // A view resize reaches both the ResizeObserver and the resize listener with one geometry.
+  f.resize();
+  f.window.dispatchEvent(new f.window.Event("resize"));
+  f.frame();
+  f.frame();
+  await settle();
+  assert.equal(r.placements.length, first, "a placement with the same geometry was sent again");
+
+  f.setRect("page", { left: 20, top: 20, right: 320, bottom: 220, width: 300, height: 200 });
+  f.resize();
+  f.window.dispatchEvent(new f.window.Event("resize"));
+  f.frame();
+  f.frame();
+  await settle();
+  assert.equal(r.placements.length, first + 1, "one geometry change must send one placement");
+
+  refuse = true;
+  await assert.rejects(composition.update(() => {
+    f.setRect("page", { left: 30, top: 20, right: 330, bottom: 220, width: 300, height: 200 });
+  }), /placement refused/);
+  refuse = false;
+  const attempts = r.placements.length;
+  f.resize();
+  await settle();
+  assert.equal(r.placements.length, attempts + 1, "the geometry of a refused placement must be sent again");
+  await composition.update(() => {});
+  assert.equal(r.placements.length, attempts + 2, "composition.update must always send its placement");
+  await composition.dispose();
+});

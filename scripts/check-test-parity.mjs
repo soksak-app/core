@@ -8942,6 +8942,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F438",
+    implementation: [{ file: "packages/plugin-api/surface-composition.js", symbol: "createSurfaceCompositionController" }],
+    tests: [{ file: "packages/plugin-api/test/surface-composition.test.mjs", id: "an observed placement equal to the last one is not sent again, and a failed placement is sent again" }],
+    expected: "one placement for one observed geometry",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

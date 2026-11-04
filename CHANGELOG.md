@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F438: A view no longer sends an observed placement equal to the last one, which halves the placements of a drag.
 - F437: `make e2e-benchmark-plain-view` also measures the drag latency of a view without plugin code and stores its transaction stages.
 - F436: A layout with section surfaces prepares once instead of twice, because the preparation keeps the measured offsets of each section surface from its card. `page.trace.surface.resend` records the values of any second request.
 - F212.14-6: `make e2e-benchmark-plain-view` measures the floor of a view drag on a fixture view without plugin code; the 33 ms criterion stays.

@@ -135,14 +135,26 @@ export async function createSurfaceCompositionController(
         .map((name) => measured(name, overlays[name]));
       return { regionSnapshot, overlaySnapshot };
     };
-    const place = () => {
+    // The geometry of the last placement. One view resize reaches both the ResizeObserver and the resize listener, so an
+    // observed placement equal to the last one is not sent. composition.update always sends its placement.
+    let lastGeometry = null;
+    let lastPlacement = null;
+    const place = (explicit = false) => {
       const { regionSnapshot, overlaySnapshot } = snapshot();
+      const geometry = JSON.stringify([regionSnapshot, overlaySnapshot]);
+      if (!explicit && active && geometry === lastGeometry) return lastPlacement;
+      lastGeometry = geometry;
       const current = ++revision;
       const work = pending.catch((error) => {
         if (error?.code !== "SURFACE_COMPOSITION_INACTIVE") reportFailure(error);
       }).then(() => {
         if (!active) throw inactiveError();
         return runtimePage.composition.place(current, regionSnapshot, overlaySnapshot);
+      });
+      lastPlacement = work;
+      work.catch(() => {
+        // A refused placement did not reach the host, so the next one sends its geometry again.
+        if (lastPlacement === work) lastGeometry = null;
       });
       pending = work.catch((error) => {
         if (error?.code !== "SURFACE_COMPOSITION_INACTIVE") reportFailure(error);
