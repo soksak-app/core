@@ -626,6 +626,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-19",
+    implementation: [
+      { file: "packages/workbench-mygo/src/text_size.go", symbol: "func NextTextSize(steps []float64, value float64, direction int) (float64, error) {" },
+      { file: "packages/workbench-mygo/src/pointer.go", symbol: "func NewPointerSequence(changed func()) *PointerSequence {" },
+      { file: "packages/workbench-mygo/src/focus.go", symbol: "func (f *Focus) SetResponder(event Responder) error {" },
+      { file: "packages/workbench-mygo/src/shortcuts.go", symbol: "func ParseShortcut(text string) (ui.Modifiers, ui.Key, error) {" },
+      { file: "packages/workbench-mygo/src/contributions.go", symbol: "func ResolveContributions(installed []InstalledPlugin) ([]ResolvedContribution, error) {" },
+      { file: "packages/workbench-mygo/src/verify.go", symbol: "func Verify(in VerifyInput) ([]VerifyRow, error) {" },
+      { file: "packages/workbench-mygo/src/functions.go", symbol: "func (f Functions) Register(registry *Registry) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/text_size_test.go", id: "TestTextSizeChangesThePlacePressedLast" },
+      { file: "packages/workbench-mygo/tests/pointer_test.go", id: "TestPointerSequenceReportsAPressAndItsClick" },
+      { file: "packages/workbench-mygo/tests/focus_test.go", id: "TestFocusReportsTheFocusedElement" },
+      { file: "packages/workbench-mygo/tests/shortcuts_test.go", id: "TestShortcutsRunTheCommandOfTheRowThatHolds" },
+      { file: "packages/workbench-mygo/tests/contributions_test.go", id: "TestContributionCases" },
+      { file: "packages/workbench-mygo/tests/verify_test.go", id: "TestVerifyRowsFindTheirDefects" },
+      { file: "packages/workbench-mygo/tests/verify_test.go", id: "TestVerifyReadsTheDrawnCards" },
+      { file: "packages/workbench-mygo/tests/functions_test.go", id: "TestFunctionsAnswerTheRegistry" },
+    ],
+    expected: "The mygo workbench answers `core.text`, `core.focus`, `core.pointer`, `core.contributions` and `core.verify` through its registry with the same values as the page, takes the keys of `shortcuts.json`, and each function has a `ui.Tester` test.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-16",
     implementation: [
       { file: "packages/workbench/workbench.json", symbol: "\"tab-peek-w\": \"56px\"" },
