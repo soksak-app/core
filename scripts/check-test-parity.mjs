@@ -252,6 +252,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F502-2-5",
+    implementation: [
+      { file: "scripts/workspace-registry.mjs", symbol: "export function buildWorkspaceRegistry(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function sourceRevision(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function checkOptions(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function publicRegistryEntries(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export function buildPublicRegistry(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export async function readIndex(" },
+    ],
+    tests: [
+      { file: "scripts/test/workspace-registry.test.mjs", id: "SIDECARS=diagnostic releases each sidecar with PROFILE=release FEATURES=diagnostics and records the revision of each sidecar repository" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "the default registry releases each sidecar as its make release builds it and removes the revision record of an earlier diagnostic run" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "the revision of a sidecar repository counts a tracked modification as a change and fails for a folder without a repository" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "the registry options take SIDECARS=diagnostic and PLUGINS=public, and PLUGINS=public only with SIDECARS=diagnostic" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public lists the plugin versions of the public registry whose sidecar ranges the diagnostic sidecar releases satisfy" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public fails when leaving out a version would make an installation select an older version or no version" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public writes the public plugin entries beside the sidecar entries of make registry SIDECARS=diagnostic and builds no release" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public fails when the checkout holds no sidecar releases of make registry SIDECARS=diagnostic" },
+      { file: "scripts/test/workspace-registry.test.mjs", id: "the index of the public registry is read from its address, and an answer other than 200 is an error" },
+    ],
+    expected: "`make registry SIDECARS=diagnostic` runs `make release PROFILE=release FEATURES=diagnostics` of each sidecar repository and writes `sidecar-revisions.json` beside its index with the revision and the working tree changes of each sidecar repository; `make registry SIDECARS=diagnostic PLUGINS=public` packs and builds nothing and writes an index of the plugins of the public registry beside those sidecar releases, and fails when they are missing.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-6",
     implementation: [
       { file: "go.work", symbol: "go 1.27.3" },
