@@ -9,7 +9,7 @@
 // platform method called. Proposition 7 (framework port) checks that the Go and Rust framework ports have the same methods outside the
 // rows P of the language table. The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next
 // extension.
-import { LANGUAGE_TABLE, allowedDifferenceTables } from './check-hosts.mjs';
+import { FRAMEWORK_TABLE, LANGUAGE_TABLE, allowedDifferenceTables } from './check-hosts.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +42,35 @@ export function goHostMethods(sources) {
     for (const match of source.matchAll(/^func \(h \*Host\) ([A-Z]\w*)\(/gm)) methods.add(snake(match[1]));
   }
   return methods;
+}
+
+/** The names of hostCalls of the mygo workbench, each with the Host method that it calls. */
+export function goHostCalls(source) {
+  const start = source.indexOf('func hostCalls(');
+  if (start < 0) throw new Error('host_calls.go has no hostCalls table');
+  const table = source.slice(start, source.indexOf('\n}\n', start));
+  const calls = new Map();
+  for (const line of table.split('\n')) {
+    const named = line.match(/^\t\t"(\w+)": /);
+    if (!named) continue;
+    // A row with a body names its handler in the body, on the line of the first h.<Method> after it.
+    const body = table.slice(table.indexOf(line));
+    const method = body.match(/\bh\.([A-Z]\w*)/);
+    if (!method) throw new Error(`hostCalls ${named[1]} names no Host method`);
+    calls.set(snake(named[1]), method[1]);
+  }
+  return calls;
+}
+
+/** The host.call names that a row B of the framework table of the host specification lists as absent on mygo. */
+export function absentOnMygo(hostsMarkdown) {
+  const rows = allowedDifferenceTables(hostsMarkdown).get(FRAMEWORK_TABLE.title);
+  const absent = new Set();
+  for (const [id, row] of rows) {
+    if (!/^B\d+$/.test(id)) continue;
+    for (const match of row[FRAMEWORK_TABLE.left].matchAll(/`(\w+)`/g)) absent.add(snake(match[1]));
+  }
+  return absent;
 }
 
 /** The set of method names that the Rust endpoint declares (per build flavor). */
@@ -489,7 +518,7 @@ export function hostProductSources(directory, extension) {
 }
 
 /** Judges propositions 1, 2, 3 and 6 on the injected sources and returns the list of failures. */
-export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources,
+export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources, mygoCallsSource,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
   tauriv2DeclarationSource, wailsv3DeclarationSource, workbenchDeclarationSource,
@@ -515,6 +544,18 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   }
   for (const name of [...wailsv3.calls].filter((item) => !wailsv3.methods.has(item)).sort()) {
     failures.push(`wailsv3 host.call(${name}) has no Host method`);
+  }
+  const mygo = goHostCalls(mygoCallsSource);
+  const absent = absentOnMygo(hostsSpec);
+  for (const name of [...mygo.keys()].filter((item) => !wailsv3.calls.has(item)).sort()) {
+    failures.push(`mygo host.call(${name}) does not exist on wailsv3`);
+  }
+  for (const name of [...wailsv3.calls].filter((item) => !mygo.has(item) && !absent.has(item)).sort()) {
+    failures.push(`wailsv3 host.call(${name}) does not exist on mygo`);
+  }
+  for (const [name, method] of [...mygo].sort()) {
+    if (!wailsv3.methods.has(snake(method))) failures.push(`mygo host.call(${name}) has no Host method`);
+    if (absent.has(name)) failures.push(`mygo host.call(${name}) is listed as absent on mygo`);
   }
   const endpointT = rustEndpointMethods(tauriv2EndpointSource);
   const endpointW = goEndpointMethods(wailsv3EndpointSource, wailsv3DiagnosticsSource);
@@ -579,6 +620,7 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     tauriv2Bindings: read('packages/host/tauriv2/src/bindings.rs'),
     wailsv3Runtime: read('apps/wailsv3/runtime/index.js'),
     wailsv3HostSources: wailsv3Sources,
+    mygoCallsSource: read('packages/workbench-mygo/src/host_calls.go'),
     tauriv2EndpointSource: read('packages/host/rust/src/endpoint.rs'),
     wailsv3EndpointSource: read('packages/host/go/src/endpoint.go'),
     wailsv3DiagnosticsSource: read('packages/host/go/src/diagnostics.go'),

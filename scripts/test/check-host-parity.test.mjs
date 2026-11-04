@@ -10,6 +10,7 @@ const sources = () => ({
   tauriv2Runtime: 'const COMMAND = {\n  windowNew: "window_new",\n  overlayShow: "overlay_show",\n};',
   tauriv2Bindings: 'macro_rules! bindings {}\nbindings! {\n#[tauri::command]\nfn window_new() {}\n#[tauri::command(async)]\nasync fn overlay_show() {}\n}',
   wailsv3Runtime: 'const METHOD = {\n  windowNew: "WindowNew",\n  overlayShow: "OverlayShow",\n}',
+  mygoCallsSource: 'func hostCalls(h *host.Host, ctx context.Context) map[string]HostCall {\n\treturn map[string]HostCall{\n\t\t"windowNew": run(h.WindowNew),\n\t}\n}',
   wailsv3HostSources: { "host.go": "func (h *Host) WindowNew(ctx context.Context) error { return nil }\nfunc (h *Host) OverlayShow(ctx context.Context) error { return nil }" },
   tauriv2EndpointSource: 'const METHODS: &[&str] = &[\n  "windows.list",\n];\nconst DIAGNOSTICS: &[&str] = &[\n  "diagnostics.fixture",\n];',
   wailsv3EndpointSource: 'var endpointMethods = map[string]endpointMethod{\n  "windows.list": nil,\n}\nvar subscriptionMethods = map[string]subscriptionMethod{}\nvar diagnosticSubscriptions = map[string]subscriptionMethod{}',
@@ -109,6 +110,7 @@ const hostsFixture = `## Allowed differences
 | ID | Wails | Tauri | Reason |
 | --- | --- | --- | --- |
 | H9 | \`tests/framework_log_test.go\` | none | file difference |
+| B1 | \`overlayShow\` | \`overlayShow\` | calls that a mygo window does not have |
 
 ## Process lifecycle`;
 
@@ -139,6 +141,18 @@ const goMenuFixture = 'var menuTable = []struct{ id, ko, en string }{\n\t{"app",
 
 test("equal surfaces pass with no failure", () => {
   assert.deepEqual(auditHostParity(sources()), []);
+});
+
+test("a name of hostCalls without a handler fails", () => {
+  const changed = sources();
+  changed.mygoCallsSource = changed.mygoCallsSource.replace('"windowNew": run(h.WindowNew),', '"windowNew": run(h.WindowNew),\n\t\t"overlayShow": run(h.OverlayShow),\n\t\t"absent": run(h.Absent),');
+  assert.deepEqual(auditHostParity(changed), ["mygo host.call(absent) does not exist on wailsv3", "mygo host.call(absent) has no Host method", "mygo host.call(overlay_show) is listed as absent on mygo"]);
+});
+
+test("a call of wailsv3 that hostCalls does not name fails unless a row B lists it", () => {
+  const changed = sources();
+  changed.mygoCallsSource = changed.mygoCallsSource.replace('"windowNew": run(h.WindowNew),', '');
+  assert.deepEqual(auditHostParity(changed), ["wailsv3 host.call(window_new) does not exist on mygo"]);
 });
 
 test("a call name that exists on one host only fails", () => {
