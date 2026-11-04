@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-12: The mygo workbench answers the status `core.app` and the commands `core.app.update` and `core.app.release`, and the plugin page lists the core update first with its operation and the plugins that do not fit the candidate.
 - F502-12: A tab of the mygo workbench keeps its label through an unload, and the tab store caches the title that a view reports, so a tab that starts unloaded shows it too.
 - F502-16: `core.focus` of the mygo workbench follows the first responder of the window and the focus that a view reports.
 - F502-16: The window of the mygo application shows its project with live views: a split card starts the view of its plugin, a terminal shows its shell and a browser tab its page, and the shell reports `core.grid`, `core.layout`, `core.surfaces`, `core.rail`, `core.chrome`, `core.window.workbench` and the other statuses that the Wails window reports.

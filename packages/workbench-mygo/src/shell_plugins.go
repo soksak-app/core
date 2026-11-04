@@ -55,7 +55,7 @@ type libraryStatus struct {
 func (s *Shell) pluginPage() PluginPage {
 	status := s.pluginOperations.Status()
 	page := PluginPage{Hosted: true, Core: status.Core, Query: s.library.pluginQuery, Failure: s.pluginOperations.Failure(), Plugins: status.Plugins,
-		Operation: status.Operation, Updates: status.Updates, Outdated: status.Outdated}
+		Operation: status.Operation, Updates: status.Updates, Outdated: status.Outdated, App: s.appUpdates.Status()}
 	for _, entry := range s.contributions.Status() {
 		contribution := PluginContribution{Plugin: entry.Plugin, Point: entry.Point, Index: entry.Index, State: entry.State}
 		if entry.Reason != nil {
@@ -109,6 +109,7 @@ func (s *Shell) showLibraryPage(page string) error {
 	if page == pluginsPage {
 		s.pluginOperations.Refresh(func() {})
 		s.pluginOperations.RefreshOutdated(func() {})
+		s.appUpdates.Refresh()
 	}
 	s.options.Invalidate()
 	return nil
@@ -151,6 +152,7 @@ func laterCommand[T any](s *Shell, name string, run func(value T, answer func(er
 func (s *Shell) registerPlugins() {
 	s.registry.Status("core.plugins", func() any { return s.pluginOperations.Status() })
 	s.registry.Status("core.library", func() any { return s.libraryStatus() })
+	s.registry.Status("core.app", func() any { return s.appUpdates.Status() })
 	for _, action := range PluginActions {
 		laterCommand(s, "core.plugins."+action, func(value pluginParam, answer func(err error)) error {
 			if value.Plugin == "" {
@@ -179,7 +181,18 @@ func (s *Shell) registerPlugins() {
 		if value.Index == "" {
 			return Refuse(InvalidParams, "index must be a non-empty string")
 		}
-		s.pluginOperations.UseRegistry(value.Index, answer)
+		s.pluginOperations.UseRegistry(value.Index, func(err error) {
+			s.appUpdates.Refresh()
+			answer(err)
+		})
+		return nil
+	})
+	laterCommand(s, "core.app.update", func(_ struct{}, answer func(err error)) error {
+		s.appUpdates.Update(answer)
+		return nil
+	})
+	laterCommand(s, "core.app.release", func(_ struct{}, answer func(err error)) error {
+		s.appUpdates.OpenRelease(answer)
 		return nil
 	})
 	act(s, "core.plugins.browse", func(struct{}) error { return s.browsePlugins() })

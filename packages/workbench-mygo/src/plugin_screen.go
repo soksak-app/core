@@ -108,6 +108,8 @@ type AppUpdate struct {
 	Available    *AppVersion
 	Incompatible []AppIncompatible
 	Operation    *AppOperation
+	// Error is the failure of the last read of the candidate.
+	Error string
 }
 
 // PluginPage is what the plugin screen draws.

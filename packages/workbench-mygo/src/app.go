@@ -260,6 +260,7 @@ func (s *Shell) Event(name string, data []any) {
 		s.pluginOperations.RefreshOutdated(func() {})
 	case "window-active":
 		s.pluginOperations.Refresh(func() {})
+		s.appUpdates.Refresh()
 	case "project-close-request":
 		s.keep()
 		s.flushTabs()
