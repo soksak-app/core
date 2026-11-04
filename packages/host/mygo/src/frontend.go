@@ -1,8 +1,12 @@
 package adapter
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"net/url"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -100,6 +104,15 @@ func (f *Frontend) started() {
 			f.window.Show()
 		}
 	})
+	// A listener makes the window take the files that no element of the workbench takes (docs/spec/native-surfaces.md).
+	f.window.OnFileDrop(func(event *mygo.FileDropEvent) {
+		text, err := FileDropText(event)
+		if err != nil {
+			host.LogError("file drop", err)
+			return
+		}
+		f.Emit("files-dropped", text)
+	})
 	f.window.OnClosed(func() {
 		f.framework.workbench.Close(f)
 		f.framework.closed(f)
@@ -117,6 +130,33 @@ func (f *Frontend) Unmaximize()           { f.window.Unmaximize() }
 func (f *Frontend) IsMaximized() bool     { return f.window.IsMaximized() }
 func (f *Frontend) IsFullscreen() bool    { return f.window.IsFullScreen() }
 func (f *Frontend) IsMinimized() bool     { return f.window.IsMinimized() }
+
+// FileDropText is the text of the event files-dropped: the JSON of {urls, x, y} that the file drop view writes on the hosts with a
+// main page (docs/spec/native-surfaces.md), the workbench parses it. The URL of a folder ends with a slash, as that view writes it, and
+// a path that no longer resolves refuses the drop as that view refuses it.
+func FileDropText(event *mygo.FileDropEvent) (string, error) {
+	urls := make([]string, 0, len(event.Paths))
+	for _, path := range event.Paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			return "", fmt.Errorf("the drop was refused: %w", err)
+		}
+		if info.IsDir() {
+			path = strings.TrimSuffix(path, "/") + "/"
+		}
+		address := url.URL{Scheme: "file", Path: path}
+		urls = append(urls, address.String())
+	}
+	text, err := json.Marshal(struct {
+		URLs []string `json:"urls"`
+		X    int      `json:"x"`
+		Y    int      `json:"y"`
+	}{urls, event.X, event.Y})
+	if err != nil {
+		return "", fmt.Errorf("the drop was refused: %w", err)
+	}
+	return string(text), nil
+}
 
 // Pixels is the nearest integer of a logical length of the port, which the framework holds as an integer.
 func Pixels(length float64) int { return int(math.Round(length)) }

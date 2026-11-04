@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -112,15 +114,21 @@ type running struct {
 	child  *exec.Cmd
 	config string
 	lines  chan string
+	seen   []string
 	ended  chan error
 }
 
 // runStep starts the application in its bundle with the workbench of step.
 func runStep(t *testing.T, step string) *running {
 	t.Helper()
-	config := t.TempDir()
-	child := exec.Command(bundled(t))
-	child.Env = append(os.Environ(), systemHelper+"="+config, systemStep+"="+step)
+	return startStep(t, step, t.TempDir(), bundled(t))
+}
+
+// startStep starts executable with the workbench of step, the configuration directory config and the environment of env.
+func startStep(t *testing.T, step, config, executable string, env ...string) *running {
+	t.Helper()
+	child := exec.Command(executable)
+	child.Env = append(append(os.Environ(), systemHelper+"="+config, systemStep+"="+step), env...)
 	child.Stderr = os.Stderr
 	output, err := child.StdoutPipe()
 	if err != nil {
@@ -141,23 +149,48 @@ func runStep(t *testing.T, step string) *running {
 	return run
 }
 
-// expect returns the first line of the standard output that holds text, within the limit of a test.
+// expect returns the first line of the standard output that holds text, within the limit of a test. The lines arrive in the order of
+// the goroutines of the host, so a line that an earlier expect passed still counts.
 func (r *running) expect(t *testing.T, text string) string {
 	t.Helper()
+	if index := slices.IndexFunc(r.seen, func(line string) bool { return strings.Contains(line, text) }); index >= 0 {
+		return r.seen[index]
+	}
 	limit := time.After(10 * time.Second)
 	for {
 		select {
 		case line, open := <-r.lines:
 			if !open {
-				t.Fatalf("the application ended before it wrote %q\n%s", text, logged(r.config))
+				t.Fatalf("the application ended before it wrote %q, after %q\n%s", text, r.seen, logged(r.config))
 			}
+			r.seen = append(r.seen, line)
 			if strings.Contains(line, text) {
 				return line
 			}
 		case <-limit:
-			t.Fatalf("the application did not write %q within 10 s\n%s", text, logged(r.config))
+			t.Fatalf("the application did not write %q within 10 s, after %q\n%s", text, r.seen, logged(r.config))
 		}
 	}
+}
+
+// finished waits for the end of an application that quits by itself and returns its event log.
+func (r *running) finished(t *testing.T) string {
+	t.Helper()
+	limit := time.After(10 * time.Second)
+	for open := true; open; {
+		select {
+		case line, more := <-r.lines:
+			if open = more; open {
+				r.seen = append(r.seen, line)
+			}
+		case <-limit:
+			t.Fatalf("the application did not end within 10 s, after %q\n%s", r.seen, logged(r.config))
+		}
+	}
+	if failure := <-r.ended; failure != nil {
+		t.Fatalf("the application ended with %v, after %q\n%s", failure, r.seen, logged(r.config))
+	}
+	return r.events(t)
 }
 
 // quit ends the application with a signal and returns its event log.
@@ -171,22 +204,7 @@ func (r *running) quit(t *testing.T) string {
 	if err := r.child.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatal(err)
 	}
-	var after []string
-	limit := time.After(10 * time.Second)
-	for open := true; open; {
-		select {
-		case line, more := <-r.lines:
-			if open = more; open {
-				after = append(after, line)
-			}
-		case <-limit:
-			t.Fatalf("the application did not end within 10 s of the signal, after %q\n%s", after, logged(r.config))
-		}
-	}
-	if failure := <-r.ended; failure != nil {
-		t.Fatalf("the application ended with %v after the signal, after %q\n%s", failure, after, logged(r.config))
-	}
-	return r.events(t)
+	return r.finished(t)
 }
 
 // events returns the event log of the application.
@@ -217,5 +235,138 @@ func TestALinkThatTheApplicationIsAskedToOpenRunsOnceTheWindowIsReady(t *testing
 	log := run.quit(t)
 	if !strings.Contains(log, refusedLink) || !strings.Contains(log, "is not soksak") {
 		t.Fatalf("the refused link wrote no record:\n%s", log)
+	}
+}
+
+// nsPoint and nsRect are the structures of AppKit.
+type nsPoint struct{ X, Y float64 }
+type nsRect struct {
+	Origin nsPoint
+	Width  float64
+	Height float64
+}
+
+// The dragging info of the test: one object that answers for the drag of the moment. It belongs to the main thread.
+var (
+	draggingClass sync.Once
+	dragging      objc.ID
+	dragLocation  nsPoint
+	dragBoard     objc.ID
+)
+
+// sel is the selector of name.
+func sel(name string) objc.SEL { return objc.RegisterName(name) }
+
+// surfaceView is the view of the framework under view that draws the native UI of a window.
+func surfaceView(view objc.ID) objc.ID {
+	if objc.Send[bool](view, sel("isKindOfClass:"), objc.GetClass("MyGoSurfaceView")) {
+		return view
+	}
+	children := view.Send(sel("subviews"))
+	for index := range objc.Send[uint](children, sel("count")) {
+		if found := surfaceView(children.Send(sel("objectAtIndex:"), index)); found != 0 {
+			return found
+		}
+	}
+	return 0
+}
+
+// dropFiles drags the paths to (x, y), in points from the top-left corner of the content of window, and drops them there as Finder
+// does: it sends the surface view its dragging messages, with the file reference URLs on the pasteboard. It reports whether the view
+// took the drag and the drop.
+func dropFiles(t *testing.T, window *adapter.Frontend, x, y float64, paths ...string) (over, dropped bool) {
+	t.Helper()
+	mygo.RunOnMain(func() {
+		draggingClass.Do(func() {
+			class, err := objc.RegisterClass("SoksakTestDraggingInfo", objc.GetClass("NSObject"), nil, nil, []objc.MethodDef{
+				{Cmd: sel("draggingLocation"), Fn: func(objc.ID, objc.SEL) nsPoint { return dragLocation }},
+				{Cmd: sel("draggingPasteboard"), Fn: func(objc.ID, objc.SEL) objc.ID { return dragBoard }},
+				{Cmd: sel("draggingSourceOperationMask"), Fn: func(objc.ID, objc.SEL) uint { return 1 }},
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			dragging = objc.ID(class).Send(sel("alloc")).Send(sel("init"))
+			dragBoard = objc.ID(objc.GetClass("NSPasteboard")).Send(sel("pasteboardWithUniqueName")).Send(sel("retain"))
+		})
+		native := objc.ID(uintptr(window.NativeWindow()))
+		content := native.Send(sel("contentView"))
+		dragLocation = nsPoint{x, objc.Send[nsRect](content, sel("frame")).Height - y}
+		list := objc.ID(objc.GetClass("NSMutableArray")).Send(sel("array"))
+		for _, path := range paths {
+			text := objc.ID(objc.GetClass("NSString")).Send(sel("stringWithUTF8String:"), path+"\x00")
+			file := objc.ID(objc.GetClass("NSURL")).Send(sel("fileURLWithPath:"), text)
+			list.Send(sel("addObject:"), file.Send(sel("fileReferenceURL")))
+		}
+		dragBoard.Send(sel("clearContents"))
+		dragBoard.Send(sel("writeObjects:"), list)
+		view := surfaceView(content)
+		if view == 0 {
+			t.Error("the window has no surface view")
+			return
+		}
+		over = objc.Send[uint](view, sel("draggingEntered:"), dragging) != 0
+		over = objc.Send[uint](view, sel("draggingUpdated:"), dragging) != 0 && over
+		if over {
+			dropped = objc.Send[bool](view, sel("prepareForDragOperation:"), dragging) &&
+				objc.Send[bool](view, sel("performDragOperation:"), dragging)
+		} else {
+			view.Send(sel("draggingExited:"), dragging)
+		}
+	})
+	return over, dropped
+}
+
+func TestAFileDroppedOnAWindowReachesItsWorkbenchAsTheTextOfTheFileDropView(t *testing.T) {
+	_, workbench, window := open(t, "drop")
+	folder, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(folder, "a b.txt")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	inner := filepath.Join(folder, "inner")
+	if err := os.Mkdir(inner, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if over, dropped := dropFiles(t, window, 40, 30, file, inner); !over || !dropped {
+		t.Fatalf("the view took the drag: %v, and the drop: %v", over, dropped)
+	}
+	const event = "event drop files-dropped "
+	var received string
+	wait(t, "files-dropped", func() bool {
+		index := slices.IndexFunc(workbench.received(), func(record string) bool { return strings.HasPrefix(record, event) })
+		if index >= 0 {
+			received = workbench.received()[index]
+		}
+		return index >= 0
+	})
+	// The port delivers the JSON text of the drop as its one value, and the workbench parses it, as the page does.
+	var drop struct {
+		URLs []string `json:"urls"`
+		X    float64  `json:"x"`
+		Y    float64  `json:"y"`
+	}
+	text := strings.TrimSuffix(strings.TrimPrefix(received, event+"["), "]")
+	if err := json.Unmarshal([]byte(text), &drop); err != nil {
+		t.Fatalf("the event holds %s: %v", received, err)
+	}
+	spaced := url.URL{Scheme: "file", Path: file}
+	directory := url.URL{Scheme: "file", Path: inner + "/"}
+	if !slices.Equal(drop.URLs, []string{spaced.String(), directory.String()}) || drop.X != 40 || drop.Y != 30 {
+		t.Fatalf("the workbench received %s", text)
+	}
+	if !strings.Contains(text, "a%20b.txt") {
+		t.Fatalf("the URL of the file is not encoded: %s", text)
+	}
+}
+
+func TestADropOfAPathThatNoLongerResolvesIsRefused(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	if text, err := adapter.FileDropText(&mygo.FileDropEvent{Paths: []string{missing}}); err == nil || !strings.Contains(err.Error(), missing) {
+		t.Fatalf("the drop gave %q, %v", text, err)
 	}
 }

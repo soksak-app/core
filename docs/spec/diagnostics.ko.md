@@ -167,6 +167,7 @@ Matching용 image source를 보존하는 동안 diagnostic capture는 snapshot�
 | image region event의 `cids`가 식별자 목록이 아니거나 `type`이 없어 host가 그 중계를 기록하지 못한다 | `error host input relay: <reason>` |
 | 딥링크가 거부된다: URL을 해석할 수 없거나 [딥링크](native-host.ko.md#딥링크) 형식에 맞지 않거나, 열린 창이 없거나, 가리키는 command가 실패한다 | `error host deep link: <url>: <reason>`, URL마다 한 번 |
 | Tauri host가 딥링크의 실행 URL을 읽지 못한다 | `error host deep link: launch URL: <reason>` |
+| mygo 창에 놓인 경로가 더 이상 파일을 가리키지 않는다([native surface](native-surfaces.ko.md)) | `error host file drop: <reason>` |
 | Tauri host가 logs 폴더 저장의 진행이나 끝을 요청한 창에 전달할 수 없다 | `error host debug save: debug-save-progress: <reason>` 또는 `error host debug save: debug-save-done: <reason>` |
 | 호스트의 시작 단계가 실패한다 | `error host startup: <reason>`, 그리고 프로세스가 상태 1로 끝난다 |
 
