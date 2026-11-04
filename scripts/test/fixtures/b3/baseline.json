@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "heads": ["1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"],
+  "sidecars": [
+    { "repository": "../sidecars/alacritty", "revisions": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"] },
+    { "repository": "../sidecars/files", "revisions": ["cccccccccccccccccccccccccccccccccccccccc"] }
+  ],
+  "plugins": [
+    { "id": "browser", "version": "0.0.15", "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" },
+    { "id": "term", "version": "0.0.3", "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" }
+  ]
+}

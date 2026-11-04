@@ -314,7 +314,7 @@ All four macOS application bundle build targets check the target bundle before r
 
 ## Performance goals
 
-The goals G1 to G8 state the costs of the mygo host beside the Wails and the Tauri host. The three-host benchmark measures them in its scenarios S0 to S16, and `make b3-judge` judges each session of it. The other hosts are the Wails and the Tauri host built from the revision of the mygo host, and the baseline hosts are the Wails and the Tauri host built from the baseline revision that the benchmark defines. `docs/spec/performance-goals.json` holds the numeric bounds of the goals; the two tables of this section are copies of that file, which `scripts/test/performance-goals.test.mjs` holds equal to it, and the idle tab and the split load benchmarks read `IDLE_TAB_BOUND_KB` and `SPLIT_LOAD_GROWTH_BOUND_KB` from it. A value that [plugin processes](plugin-processes.md#pass-values) or [native surfaces](native-surfaces.md#acceptance-criteria) defines is not copied into the file: the benchmark that holds it judges it, and the judge reads only the verdict of that benchmark.
+The goals G1 to G8 state the costs of the mygo host beside the Wails and the Tauri host. The [three-host benchmark](../operations/examples.md#three-host-benchmark) measures them in its scenarios S0 to S16, and `make b3-judge` judges each session of it. The other hosts are the Wails and the Tauri host built from the revision of the mygo host, and the baseline hosts are the Wails and the Tauri host built from the baseline revision that the benchmark defines. `docs/spec/performance-goals.json` holds the numeric bounds of the goals; the two tables of this section are copies of that file, which `scripts/test/performance-goals.test.mjs` holds equal to it, and the idle tab and the split load benchmarks read `IDLE_TAB_BOUND_KB` and `SPLIT_LOAD_GROWTH_BOUND_KB` from it. A value that [plugin processes](plugin-processes.md#pass-values) or [native surfaces](native-surfaces.md#acceptance-criteria) defines is not copied into the file: the benchmark that holds it judges it, and the judge reads only the verdict of that benchmark.
 
 The judge applies these rules:
 
@@ -333,78 +333,80 @@ The judge applies these rules:
 | Backing scale of each window | 2 |
 | Swap use at the start of a run | below 0.5 of the swap total |
 | CPU share of `fseventsd` at the start of a run | below 0.1 of a core |
+| Content size of the window of each scenario | 1200×760 points |
+| Content size of the window of S2 | 760×614 points |
 
-The values of the goals, each with the scenario and the target that measure it:
+The values of the goals, each with the scenario and the target that measure it and the measurement, the key of the output of that target that holds the value in its unit:
 
-| Value | Goal | Scenario | Target | Unit | Over | Bound | Compared with |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `G1-S0-webkit-processes` | G1 | S0 | `make app-usage STATE=S0` | count | each run | equals 0 | — |
-| `G1-S0b-webcontent-processes` | G1 | S0b | `make app-usage STATE=S0b` | count | each run | equals 0 | — |
-| `G2-S0-frames` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
-| `G2-S0-command-buffers` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
-| `G2-S0-host-cpu` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | s | median | at most 0.12 s | each other host and baseline host |
-| `G2-S1-frames` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
-| `G2-S1-command-buffers` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
-| `G2-S1-host-cpu` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | s | median | at most 0.12 s | each other host and baseline host |
-| `G2-S9-frames` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
-| `G2-S9-command-buffers` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
-| `G2-S9-host-cpu` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | s | median | at most 0.12 s | each other host and baseline host |
-| `G2-S12-frames` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
-| `G2-S12-command-buffers` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | count | each run | equals 0 | — |
-| `G2-S12-host-cpu` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | s | median | at most 0.12 s | each other host and baseline host |
-| `G2-S0-footprint-before-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | KB | median | — | — |
-| `G2-S0-footprint-after-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | KB | median | — | `G2-S0-footprint-before-pointer` |
-| `G2-S1-footprint-before-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | KB | median | — | — |
-| `G2-S1-footprint-after-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | KB | median | — | `G2-S1-footprint-before-pointer` |
-| `G2-S12-error-lines` | G2 | S12 | `make app-usage STATE=S12` | count | each run | equals 1 | — |
-| `G3-S0-footprint` | G3 | S0 | `make app-usage STATE=S0` | KB | median | — | each other host and baseline host |
-| `G3-S0b-footprint` | G3 | S0b | `make app-usage STATE=S0b` | KB | median | — | each other host and baseline host |
-| `G3-S1-footprint` | G3 | S1 | `make app-usage STATE=S1` | KB | median | — | each other host and baseline host |
-| `G3-S1-host-footprint` | G3 | S1 | `make app-usage STATE=S1` | KB | median | — | — |
-| `G3-S5-peak-before-drag` | G3 | S5 | `make e2e-benchmark-view-drag` | KB | median | — | each other host and baseline host |
-| `G3-S5-peak-after-drag` | G3 | S5 | `make e2e-benchmark-view-drag` | KB | median | — | each other host and baseline host |
-| `G3-S13-peak-before-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | KB | median | — | each other host and baseline host |
-| `G3-S13-peak-after-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | KB | median | — | each other host and baseline host |
-| `G3-S11-second-window-footprint` | G3 | S11 | `make app-usage STATE=S11` | KB | median | — | each other host and baseline host |
-| `G3-S15-settings-window-footprint` | G3 | S15 | `make app-usage STATE=S15` | KB | median | — | each other host and baseline host |
-| `G3-S14-footprint` | G3 | S14 | `make app-usage STATE=S14` | KB | median | — | each other host and baseline host |
-| `G3-S3-changed-counts` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | count | each run | equals 0 | — |
-| `G3-S3-growing-figures` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | count | each run | equals 0 | — |
-| `G3-S4-host-footprint` | G3 | S4 | `make host-allocations MINUTES=60` | KB | median | — | `G3-S1-host-footprint` |
-| `G3-S10-host-growth` | G3 | S10 | `make e2e-benchmark-split-load` | KB | median | below 131072 KB (`SPLIT_LOAD_GROWTH_BOUND_KB`) | — |
-| `G4-S5-view-drag` | G4 | S5 | `make e2e-benchmark-view-drag` | verdict | each run | passed | — |
-| `G4-S5-resize-catch-up` | G4 | S5 | `make e2e-benchmark-resize-catch-up` | verdict | each run | passed | — |
-| `G4-S7-browser-view` | G4 | S7 | `e2e/benchmark/browser-view.test.mjs` | verdict | each run | passed | — |
-| `G4-S7-editor-view` | G4 | S7 | `e2e/benchmark/editor-view.test.mjs` | verdict | each run | passed | — |
-| `G4-S7-hwp-view` | G4 | S7 | `e2e/benchmark/hwp-view.test.mjs` | verdict | each run | passed | — |
-| `G4-S7-terminal-view` | G4 | S7 | `e2e/benchmark/terminal-view.test.mjs` | verdict | each run | passed | — |
-| `G4-S7-term-view` | G4 | S7 | `e2e/benchmark/term-view.test.mjs` | verdict | each run | passed | — |
-| `G4-S7-section-view` | G4 | S7 | `e2e/benchmark/section-view.test.mjs` | verdict | each run | passed | — |
-| `G4-S7-editor-footprint` | G4 | S7 | `e2e/benchmark/editor-footprint.test.mjs` | verdict | each run | passed | — |
-| `G5-S2-rows-1-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | ms | median | at most 1.6 ms | each other host and baseline host |
-| `G5-S2-rows-20-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | ms | median | at most 3.1 ms | each other host and baseline host |
-| `G5-S2-rows-1-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | frames/s | median | at least 27 frames/s | — |
-| `G5-S2-rows-20-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | frames/s | median | at least 27 frames/s | — |
-| `G6-S6-idle-tab-cost` | G6 | S6 | `make e2e-benchmark-idle-tab` | KB | median | at most 51200 KB (`IDLE_TAB_BOUND_KB`) | — |
-| `G6-S6-document-part` | G6 | S6 | `make e2e-benchmark-idle-tab` | KB | median | — | each other host and baseline host |
-| `G7-S8-terminal-median` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | each other host and baseline host |
-| `G7-S8-terminal-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | each other host and baseline host |
-| `G7-S8-term-median` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | each other host and baseline host |
-| `G7-S8-term-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | ms | median | — | each other host and baseline host |
-| `G8-S5-drag-cpu` | G8 | S5 | `make e2e-benchmark-view-drag` | s | median | — | each other host and baseline host |
-| `G8-S13-drag-cpu` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | s | median | — | each other host and baseline host |
-| `G8-S1-pointer-cpu` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | s | median | — | each other host and baseline host |
-| `G8-S5-drag-frame-p90` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | at most 8.33 ms | — |
-| `G8-S5-drag-step-p90` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | at most 8.33 ms | — |
-| `G8-S13-drag-frame-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | at most 8.33 ms | — |
-| `G8-S13-drag-step-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | at most 8.33 ms | — |
-| `G8-S16-drag-frame-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1` | ms | median | at most 8.33 ms | — |
-| `G8-S16-drag-step-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1` | ms | median | at most 8.33 ms | — |
-| `G8-S5-drag-first-frame` | G8 | S5 | `make e2e-benchmark-view-drag` | ms | median | at most 8.33 ms | — |
-| `G8-S13-drag-first-frame` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1` | ms | median | at most 8.33 ms | — |
-| `G8-S5-maximise-frame-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up` | ms | median | at most 8.33 ms | — |
-| `G8-S5-maximise-step-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up` | ms | median | at most 8.33 ms | — |
-| `G8-S1-hit-test-p90` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | ms | median | at most 8.33 ms | — |
+| Value | Goal | Scenario | Target | Measurement | Unit | Over | Bound | Compared with |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `G1-S0-webkit-processes` | G1 | S0 | `make app-usage STATE=S0` | `webKitProcesses` | count | each run | equals 0 | — |
+| `G1-S0b-webcontent-processes` | G1 | S0b | `make app-usage STATE=S0b` | `webContentProcesses` | count | each run | equals 0 | — |
+| `G2-S0-frames` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | `frames` | count | each run | equals 0 | — |
+| `G2-S0-command-buffers` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | `commandBuffers` | count | each run | equals 0 | — |
+| `G2-S0-host-cpu` | G2 | S0 | `make app-usage STATE=S0 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | at most 0.12 s | each other host and baseline host |
+| `G2-S1-frames` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | `frames` | count | each run | equals 0 | — |
+| `G2-S1-command-buffers` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | `commandBuffers` | count | each run | equals 0 | — |
+| `G2-S1-host-cpu` | G2 | S1 | `make app-usage STATE=S1 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | at most 0.12 s | each other host and baseline host |
+| `G2-S9-frames` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | `frames` | count | each run | equals 0 | — |
+| `G2-S9-command-buffers` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | `commandBuffers` | count | each run | equals 0 | — |
+| `G2-S9-host-cpu` | G2 | S9 | `make app-usage STATE=S9 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | at most 0.12 s | each other host and baseline host |
+| `G2-S12-frames` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | `frames` | count | each run | equals 0 | — |
+| `G2-S12-command-buffers` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | `commandBuffers` | count | each run | equals 0 | — |
+| `G2-S12-host-cpu` | G2 | S12 | `make app-usage STATE=S12 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | at most 0.12 s | each other host and baseline host |
+| `G2-S0-footprint-before-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
+| `G2-S0-footprint-after-pointer` | G2 | S0 | `make app-usage STATE=S0 STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S0-footprint-before-pointer` |
+| `G2-S1-footprint-before-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
+| `G2-S1-footprint-after-pointer` | G2 | S1 | `make app-usage STATE=S1 STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S1-footprint-before-pointer` |
+| `G2-S12-error-lines` | G2 | S12 | `make app-usage STATE=S12` | `errorLines` | count | each run | equals 1 | — |
+| `G3-S0-footprint` | G3 | S0 | `make app-usage STATE=S0` | `applicationFootprintKb` | KB | median | — | each other host and baseline host |
+| `G3-S0b-footprint` | G3 | S0b | `make app-usage STATE=S0b` | `applicationFootprintKb` | KB | median | — | each other host and baseline host |
+| `G3-S1-footprint` | G3 | S1 | `make app-usage STATE=S1` | `applicationFootprintKb` | KB | median | — | each other host and baseline host |
+| `G3-S1-host-footprint` | G3 | S1 | `make app-usage STATE=S1` | `hostFootprintKb` | KB | median | — | — |
+| `G3-S5-peak-before-drag` | G3 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `peakBeforeDragKb` | KB | median | — | each other host and baseline host |
+| `G3-S5-peak-after-drag` | G3 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `peakAfterDragKb` | KB | median | — | each other host and baseline host |
+| `G3-S13-peak-before-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakBeforeDragKb` | KB | median | — | each other host and baseline host |
+| `G3-S13-peak-after-drag` | G3 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakAfterDragKb` | KB | median | — | each other host and baseline host |
+| `G3-S11-second-window-footprint` | G3 | S11 | `make app-usage STATE=S11` | `applicationFootprintKb` | KB | median | — | each other host and baseline host |
+| `G3-S15-settings-window-footprint` | G3 | S15 | `make app-usage STATE=S15` | `applicationFootprintKb` | KB | median | — | each other host and baseline host |
+| `G3-S14-footprint` | G3 | S14 | `make app-usage STATE=S14` | `applicationFootprintKb` | KB | median | — | each other host and baseline host |
+| `G3-S3-changed-counts` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | `changedCounts` | count | each run | equals 0 | — |
+| `G3-S3-growing-figures` | G3 | S3 | `make object-counts BUILD=release REPETITIONS=30` | `growingFigures` | count | each run | equals 0 | — |
+| `G3-S4-host-footprint` | G3 | S4 | `make host-allocations MINUTES=60` | `hostFootprintKb` | KB | median | — | `G3-S1-host-footprint` |
+| `G3-S10-host-growth` | G3 | S10 | `make e2e-benchmark-split-load` | `hostGrowthKb` | KB | median | below 131072 KB (`SPLIT_LOAD_GROWTH_BOUND_KB`) | — |
+| `G4-S5-view-drag` | G4 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `verdict` | verdict | each run | passed | — |
+| `G4-S5-resize-catch-up` | G4 | S5 | `make e2e-benchmark-resize-catch-up TRACE=captured` | `verdict` | verdict | each run | passed | — |
+| `G4-S7-browser-view` | G4 | S7 | `e2e/benchmark/browser-view.test.mjs` | `verdict` | verdict | each run | passed | — |
+| `G4-S7-editor-view` | G4 | S7 | `e2e/benchmark/editor-view.test.mjs` | `verdict` | verdict | each run | passed | — |
+| `G4-S7-hwp-view` | G4 | S7 | `e2e/benchmark/hwp-view.test.mjs` | `verdict` | verdict | each run | passed | — |
+| `G4-S7-terminal-view` | G4 | S7 | `e2e/benchmark/terminal-view.test.mjs` | `verdict` | verdict | each run | passed | — |
+| `G4-S7-term-view` | G4 | S7 | `e2e/benchmark/term-view.test.mjs` | `verdict` | verdict | each run | passed | — |
+| `G4-S7-section-view` | G4 | S7 | `e2e/benchmark/section-view.test.mjs` | `verdict` | verdict | each run | passed | — |
+| `G4-S7-editor-footprint` | G4 | S7 | `e2e/benchmark/editor-footprint.test.mjs` | `verdict` | verdict | each run | passed | — |
+| `G5-S2-rows-1-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | `applicationCpuPerFrameMs` | ms | median | at most 1.6 ms | each other host and baseline host |
+| `G5-S2-rows-20-cpu-per-frame` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | `applicationCpuPerFrameMs` | ms | median | at most 3.1 ms | each other host and baseline host |
+| `G5-S2-rows-1-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1` | `framesPerSecond` | frames/s | median | at least 27 frames/s | — |
+| `G5-S2-rows-20-frame-rate` | G5 | S2 | `make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=20` | `framesPerSecond` | frames/s | median | at least 27 frames/s | — |
+| `G6-S6-idle-tab-cost` | G6 | S6 | `make e2e-benchmark-idle-tab` | `idleTabCostKb` | KB | median | at most 51200 KB (`IDLE_TAB_BOUND_KB`) | — |
+| `G6-S6-document-part` | G6 | S6 | `make e2e-benchmark-idle-tab` | `documentPartKb` | KB | median | — | each other host and baseline host |
+| `G7-S8-terminal-median` | G7 | S8 | `e2e/input-latency.test.mjs` | `terminalMedianMs` | ms | median | — | each other host and baseline host |
+| `G7-S8-terminal-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | `terminalP90Ms` | ms | median | — | each other host and baseline host |
+| `G7-S8-term-median` | G7 | S8 | `e2e/input-latency.test.mjs` | `termMedianMs` | ms | median | — | each other host and baseline host |
+| `G7-S8-term-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | `termP90Ms` | ms | median | — | each other host and baseline host |
+| `G8-S5-drag-cpu` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=0` | `dragCpuSeconds` | s | median | — | each other host and baseline host |
+| `G8-S13-drag-cpu` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `dragCpuSeconds` | s | median | — | each other host and baseline host |
+| `G8-S1-pointer-cpu` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer` | `applicationCpuSeconds` | s | median | — | each other host and baseline host |
+| `G8-S5-drag-frame-p90` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=frame-records` | `dragFrameP90Ms` | ms | median | at most 8.33 ms | — |
+| `G8-S5-drag-step-p90` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=frame-records` | `dragStepP90Ms` | ms | median | at most 8.33 ms | — |
+| `G8-S13-drag-frame-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragFrameP90Ms` | ms | median | at most 8.33 ms | — |
+| `G8-S13-drag-step-p90` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragStepP90Ms` | ms | median | at most 8.33 ms | — |
+| `G8-S16-drag-frame-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1 TRACE=frame-records` | `dragFrameP90Ms` | ms | median | at most 8.33 ms | — |
+| `G8-S16-drag-step-p90` | G8 | S16 | `make e2e-benchmark-view-drag GC_LOOP=1 TRACE=frame-records` | `dragStepP90Ms` | ms | median | at most 8.33 ms | — |
+| `G8-S5-drag-first-frame` | G8 | S5 | `make e2e-benchmark-view-drag TRACE=frame-records` | `dragFirstFrameMs` | ms | median | at most 8.33 ms | — |
+| `G8-S13-drag-first-frame` | G8 | S13 | `make e2e-benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragFirstFrameMs` | ms | median | at most 8.33 ms | — |
+| `G8-S5-maximise-frame-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up TRACE=frame-records` | `maximiseFrameP90Ms` | ms | median | at most 8.33 ms | — |
+| `G8-S5-maximise-step-p90` | G8 | S5 | `make e2e-benchmark-resize-catch-up TRACE=frame-records` | `maximiseStepP90Ms` | ms | median | at most 8.33 ms | — |
+| `G8-S1-hit-test-p90` | G8 | S1 | `make app-usage STATE=S1 STEP=pointer TRACE=frame-records` | `hitTestP90Ms` | ms | median | at most 8.33 ms | — |
 
 The values of each goal:
 

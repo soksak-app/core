@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls e2e-terminal-sidebar-current e2e-terminal-focus-current e2e-shutdown e2e-benchmark-view-drag e2e-benchmark-resize-catch-up e2e-benchmark-idle-tab e2e-benchmark-split-load e2e-repeat exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls e2e-terminal-sidebar-current e2e-terminal-focus-current e2e-shutdown e2e-benchmark-view-drag e2e-benchmark-resize-catch-up e2e-benchmark-idle-tab e2e-benchmark-split-load e2e-repeat e2e-b3 b3-judge exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage terminal-redraw-usage trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -564,6 +564,22 @@ e2e-repeat:
 	@case "$(FILE)" in '') echo "e2e-repeat requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "e2e-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@pnpm -F @soksak/e2e run repeat --file '$(FILE)' --name '$(NAME)' --count $(COUNT)
+
+# The three-host benchmark B3 (scripts/e2e-b3.mjs, docs/operations/examples.md#three-host-benchmark): it checks the BASELINE checkout
+# against target/b3/baseline.json, builds the release bundles of this checkout and of BASELINE and the two registry indexes, starts and
+# quits each application for each run of each scenario and writes one session folder under target/b3 for make b3-judge. It runs
+# STEP=pointer, which brings a window to the front, so it runs with the Accessibility permission and the approval of the real-input tier.
+e2e-b3:
+	@case "$(PHASE)" in 1|final) ;; *) echo "e2e-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout>" >&2; exit 2;; esac
+	@case "$(RUNS)" in ''|*[!0-9]*|0*) echo "e2e-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout>" >&2; exit 2;; esac
+	@case "$(BASELINE)" in '') echo "e2e-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout>" >&2; exit 2;; esac
+	@node scripts/e2e-b3.mjs --phase $(PHASE) --runs $(RUNS) --baseline "$(BASELINE)"
+
+# Judges a session folder of make e2e-b3 against docs/spec/performance-goals.json without starting an application and prints each
+# value with its runs, its spread and its result (scripts/b3-judge.mjs, docs/operations/examples.md#three-host-benchmark).
+b3-judge:
+	@case "$(SESSION)" in '') echo "b3-judge requires SESSION=<session folder of make e2e-b3>" >&2; exit 2;; esac
+	@node scripts/b3-judge.mjs --session "$(SESSION)"
 
 # The two-profile builds of the two apps and their sizes.
 examples-size: tauriv2-build tauriv2-build-release wailsv3-build-release wailsv3-build

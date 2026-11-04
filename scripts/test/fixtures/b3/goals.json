@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "runs": 3,
+  "conditions": {
+    "refreshRate": 120,
+    "backingScale": 2,
+    "swapUseBelow": 0.5,
+    "fseventsdCoreBelow": 0.1,
+    "window": { "width": 1200, "height": 760 },
+    "scenarioWindows": { "S2": { "width": 760, "height": 614 } }
+  },
+  "values": [
+    { "id": "G2-S0-frames", "goal": "G2", "scenario": "S0", "target": "make app-usage STATE=S0 IDLE=1 INTERVAL=240", "measurement": "frames", "unit": "count", "over": "each", "bound": { "equals": 0 } },
+    { "id": "G2-S0-host-cpu", "goal": "G2", "scenario": "S0", "target": "make app-usage STATE=S0 IDLE=1 INTERVAL=240", "measurement": "hostCpuSeconds", "unit": "s", "over": "median", "bound": { "atMost": 0.12 }, "relative": true },
+    { "id": "G3-S1-host-footprint", "goal": "G3", "scenario": "S1", "target": "make app-usage STATE=S1", "measurement": "hostFootprintKb", "unit": "KB", "over": "median" },
+    { "id": "G3-S4-host-footprint", "goal": "G3", "scenario": "S4", "target": "make host-allocations MINUTES=60", "measurement": "hostFootprintKb", "unit": "KB", "over": "median", "against": "G3-S1-host-footprint" },
+    { "id": "G3-S10-host-growth", "goal": "G3", "scenario": "S10", "target": "make e2e-benchmark-split-load", "measurement": "hostGrowthKb", "unit": "KB", "over": "median", "bound": { "below": 131072 }, "constant": "SPLIT_LOAD_GROWTH_BOUND_KB" },
+    { "id": "G4-S5-view-drag", "goal": "G4", "scenario": "S5", "target": "make e2e-benchmark-view-drag TRACE=0", "measurement": "verdict", "unit": "verdict", "over": "each", "bound": { "equals": "passed" } },
+    { "id": "G5-S2-rows-1-frame-rate", "goal": "G5", "scenario": "S2", "target": "make terminal-redraw-usage PLUGIN=term RATE=30 ROWS=1", "measurement": "framesPerSecond", "unit": "frames/s", "over": "median", "bound": { "atLeast": 27 }, "relative": true }
+  ]
+}
