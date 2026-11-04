@@ -22,7 +22,7 @@ import {
   activeTab, addTabTo, assignSidebar, openFile, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
   focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
-  cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, splitFocusedCard, surfaceState, tabsOf,
+  cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
   applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
@@ -541,8 +541,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     return openFile(checkOpenPath(path), card);
   });
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
-  registry.command("core.card.split-right", () => splitFocusedCard("right"));
-  registry.command("core.card.split-bottom", () => splitFocusedCard("bottom"));
   registry.command("core.card.close", ({ card }) => closeCard(card));
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
   registry.command("core.tab.close", ({ tab }) => closeTabById(tab));

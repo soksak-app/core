@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"slices"
 	"testing"
@@ -37,7 +38,7 @@ func (f *shellFixture) answer(name string, params any) (map[string]any, error) {
 // splitShell is a shown project whose first card is split to the right. It returns the two cards.
 func splitShell(t *testing.T) (*shellFixture, string, string) {
 	t.Helper()
-	f := openedShell(t)
+	f := pluginShell(t)
 	left := f.tabbedCards()[0]
 	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "terminal"})
 	if err != nil {
@@ -85,7 +86,7 @@ func (f *shellFixture) divider(left, right string) (ui.Rect, string) {
 func TestCoreCardSplitAnswersTheCardAndTheTab(t *testing.T) {
 	for _, side := range []string{"right", "left", "top", "bottom"} {
 		t.Run(side, func(t *testing.T) {
-			f := openedShell(t)
+			f := pluginShell(t)
 			source := f.tabbedCards()[0]
 			before := len(f.tabbedCards())
 			made, err := f.answer("core.card.split", map[string]string{"card": source, "side": side, "plugin": "terminal"})
@@ -114,7 +115,7 @@ func TestCoreCardSplitAnswersTheCardAndTheTab(t *testing.T) {
 }
 
 func TestCoreCardSplitRefuses(t *testing.T) {
-	f := openedShell(t)
+	f := pluginShell(t)
 	source := f.tabbedCards()[0]
 	for _, c := range []struct {
 		card, side, want string
@@ -399,36 +400,49 @@ func TestThePlaneHasTheGapOfThePage(t *testing.T) {
 	}
 }
 
-// cmd+d splits the focused card to the right, shift+cmd+d below it, and in the library neither key does anything.
-func TestShortcutsSplitTheFocusedCard(t *testing.T) {
-	f := openedShell(t)
-	source := f.tabbedCards()[0]
-	f.run("core.card.focus", map[string]string{"card": source})
+// pluginShell is a shell with a project and the plugins of a view.
+func pluginShell(t *testing.T) *shellFixture {
+	t.Helper()
+	f := newShell(t, &storedHost{installed: installedDocument})
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.library.form.submit", nil)
+	return f
+}
+
+// A new tab is named by the mark of its plugin and the counter of the project, which is stored with the project.
+func TestANewTabCarriesTheMarkOfItsPlugin(t *testing.T) {
+	f := pluginShell(t)
+	card := f.tabbedCards()[0]
+	f.run("core.card.add-tab", map[string]string{"card": card, "plugin": "browser"})
+	f.settle()
+	if !f.tester.HasText("www 탭 2") {
+		t.Fatalf("the texts are %q", f.tester.Texts())
+	}
+	f.run("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "terminal"})
+	f.settle()
+	if !f.tester.HasText("◊ 탭 3") {
+		t.Fatalf("the texts are %q", f.tester.Texts())
+	}
+	if got := f.host.projects[0]["named"]; fmt.Sprint(got) != "3" {
+		t.Fatalf("the stored counter is %v", got)
+	}
+}
+
+// A tab or a split of a plugin that is not loaded is refused, with the words of the page.
+func TestAnUnknownPluginIsRefused(t *testing.T) {
+	f := pluginShell(t)
+	card := f.tabbedCards()[0]
 	before := len(f.tabbedCards())
-	f.tester.Key(ui.Super, ui.KeyD)
-	f.settle()
-	cards := f.tabbedCards()
-	if len(cards) != before+1 {
-		t.Fatalf("cmd+d stored %v", cards)
+	for name, params := range map[string]map[string]string{
+		"core.card.split":   {"card": card, "side": "right", "plugin": "missing"},
+		"core.card.add-tab": {"card": card, "plugin": "missing"},
+	} {
+		if _, err := f.answer(name, params); err == nil || err.Error() != "unknown plugin missing" {
+			t.Fatalf("%s answered %v", name, err)
+		}
 	}
-	right := cards[len(cards)-1]
-	if a, b := f.box("core.card", source), f.box("core.card", right); b.X < a.X+a.W {
-		t.Fatalf("cmd+d put the card at %+v beside %+v", b, a)
-	}
-	f.tester.Key(ui.Super|ui.Shift, ui.KeyD)
-	f.settle()
-	cards = f.tabbedCards()
-	if len(cards) != before+2 {
-		t.Fatalf("shift+cmd+d stored %v", cards)
-	}
-	below := cards[len(cards)-1]
-	if a, b := f.box("core.card", right), f.box("core.card", below); b.Y < a.Y+a.H {
-		t.Fatalf("shift+cmd+d put the card at %+v beside %+v", b, a)
-	}
-	f.run("core.projects.browse", nil)
-	f.tester.Key(ui.Super, ui.KeyD)
-	f.settle()
-	if got := len(f.tabbedCards()); got != before+2 {
-		t.Fatalf("cmd+d in the library stored %d cards", got)
+	if got := len(f.tabbedCards()); got != before {
+		t.Fatalf("the refusals left %d cards", got)
 	}
 }
