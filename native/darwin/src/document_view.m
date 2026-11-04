@@ -145,8 +145,15 @@ static NSString *const kPageScript = @"(() => {"
     "addEventListener('mouseover', (event) => point(event.target), true);"
     "addEventListener('mouseout', (event) => { if (!event.relatedTarget) point(null); }, true);"
     "addEventListener('pagehide', () => point(null));"
-    // A document restored from the page cache does not run this script again, so it asks for its streams again.
-    "addEventListener('pageshow', (event) => { if (event.persisted) post({ ready: true }); });"
+    // A document restored from the page cache does not run this script again, and native sent reset at the commit of its
+    // restore. The script turns its streams off and asks for them again, so each stream that is on sends the data of the
+    // restored document: a snapshot, and the navigation entry with every buffered resource entry.
+    "addEventListener('pageshow', (event) => {"
+    "  if (!event.persisted) return;"
+    "  if (elements) { tree.disconnect(); elements = false; marked = false; }"
+    "  if (resources !== null) { resources.disconnect(); resources = null; }"
+    "  post({ ready: true });"
+    "});"
     "post({ ready: true });"
     "})();";
 
