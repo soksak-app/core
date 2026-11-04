@@ -1,16 +1,12 @@
 import assert from "node:assert/strict";
 
-import { drag } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { firstContentFrame } from "../../view-first-content.mjs";
-import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
-  from "../../view-frame-geometry.mjs";
-import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture, monotonicTimeMs,
-  selectOneShotViewSourceFrame, TAB_PLACEMENT, viewCardWithDifferentPluginTab, viewFootprints,
-  requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
-  withViewContentTrace } from "../../view-metrics-collection.mjs";
+import { declaredSlotInsets, effectiveCardCornerRadiusPt } from "../../view-frame-geometry.mjs";
+import { collectViewReclaimMeasurements, collectViewStartAndMemory, TAB_PLACEMENT, viewCardWithDifferentPluginTab,
+  viewFootprints } from "../../view-metrics-collection.mjs";
 import { viewContentCases } from "../../view-content.mjs";
 import { viewProcessGroup } from "../../view-process-footprint.mjs";
+import { activeCoreTheme, dragTailGeometryFrame, markerDragObservation, markerLayoutObservation, paletteWithMarkerColor,
+  sourceContentFrame, themeGeometryPalette } from "./marker-view.mjs";
 
 /** Measures the complete OS process group attached to selected editor view surfaces. */
 export async function collectEditorProcessFootprint(s, surfaces, measureFootprint) {
@@ -137,194 +133,32 @@ export function editorContentSlotInsets(grid, surfaces, cardId, surfaceId, regio
     regionRect: { x: regionRect.x, y: regionRect.y, w: regionRect.width, h: regionRect.height } });
 }
 
-function editorFrameGeometry(frame, palette, targetRect) {
-  return measureViewFrameGeometry(frame, { ...palette, targetRect });
-}
-
 /** Validates and applies the RGB paint color declared by the successful Editor trace start. */
 export function editorPaletteWithMarkerColor(palette, markerColor) {
-  assert.ok(Array.isArray(markerColor) && markerColor.length === 3
-    && markerColor.every((channel) => Number.isInteger(channel) && channel >= 0 && channel <= 255),
-  "editor trace start must declare a three-channel RGB paint marker color");
-  const geometryColors = [palette?.cardColor, palette?.planeColor, ...(palette?.borderColors ?? [])];
-  const conflicts = geometryColors.some((color) => Array.isArray(color) && color.length === 3
-    && color.every((channel, index) => Math.abs(channel - markerColor[index]) <= 4));
-  assert.equal(conflicts, false,
-    `editor diagnostic paint color ${JSON.stringify(markerColor)} conflicts with core card geometry colors`);
-  return { ...palette, contentColor: [...markerColor] };
+  return paletteWithMarkerColor(palette, markerColor, "editor");
 }
 
 /** Records same-frame measured Editor content geometry for one post-gesture capture. */
 export function editorDragTailGeometryFrame(frameIndex, measured, slotInsetsPt) {
-  assert.ok(Number.isSafeInteger(frameIndex) && frameIndex >= 0, "editor drag tail frame index is invalid");
-  assert.ok(Number.isFinite(measured?.timeMs) && measured.timeMs >= 0,
-    "editor drag tail frame time is invalid");
-  assert.ok(measured?.cardRectPt && measured?.nativeRectPt,
-    "editor drag tail requires measured card and content rectangles");
-  return { frameIndex, timeMs: measured.timeMs, cardRectPt: measured.cardRectPt,
-    nativeRectPt: measured.nativeRectPt, contentRectPt: measured.nativeRectPt, slotInsetsPt,
-    contentInsetsPt: { left: 0, top: 0, right: 0, bottom: 0 } };
-}
-
-function editorDocumentRow(host, surface) {
-  const row = host.documents.find((item) => item.surface === surface && item.document === "");
-  assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
-    `editor surface ${surface} has no visible view document frame`);
-  return row;
+  return dragTailGeometryFrame(frameIndex, measured, slotInsetsPt, "editor");
 }
 
 /** Preserves source dimensions and the capture frame that proves its display. */
 export function editorSourceContentFrame(source, captureTimeMs, displayCapture = null) {
-  assert.ok(Number.isSafeInteger(source?.sourceSequence) && source.sourceSequence >= 0,
-    "editor source frame has an invalid sequence");
-  assert.ok(Number.isFinite(source?.frameTimeMs) && source.frameTimeMs >= 0
-    && Number.isFinite(source?.timeRange?.lowerMs) && Number.isFinite(source?.timeRange?.upperMs)
-    && source.timeRange.lowerMs <= source.timeRange.upperMs, "editor source frame has invalid timing evidence");
-  assert.ok(Number.isFinite(source?.width) && source.width > 0
-    && Number.isFinite(source?.height) && source.height > 0, "editor source frame has invalid dimensions");
-  if (source.frameIndex === null) {
-    assert.equal(captureTimeMs, null, "uncaptured editor source frame must not have a capture timestamp");
-  } else {
-    assert.ok(Number.isSafeInteger(source.frameIndex) && source.frameIndex >= 0,
-      "editor source frame has an invalid capture index");
-    assert.ok(Number.isFinite(captureTimeMs) && captureTimeMs >= source.timeRange.upperMs,
-      "editor source frame capture must be at or after its source interval");
-  }
-  return { sourceSequence: source.sourceSequence, frameIndex: source.frameIndex, frameTimeMs: source.frameTimeMs,
-    captureTimeMs, displayCapture, timeRange: source.timeRange, width: source.width, height: source.height, source };
+  return sourceContentFrame(source, captureTimeMs, displayCapture, "editor");
 }
 
-async function editorLayoutObservation(t, s, descriptor, surface, card, theme, cornerRadiusPt) {
-  const traced = await withViewContentTrace(t, s, descriptor, surface, async () => {
-    const recording = await s.record();
-    const grid = await s.get("core.grid");
-    const pane = grid.cards.find((item) => item.id === card);
-    assert.ok(pane && Number.isFinite(pane.w), `editor measurement card ${card} has no current width`);
-    const beforeRoot = editorDocumentRow(await s.get("host.window"), surface);
-    const beforeChangeTimeMs = (await monotonicTimeMs(s)).timeMs;
-    await s.run("core.grid.size", { card, axis: "x", size: pane.w + 80 });
-    const { displayed } = await s.presented();
-    const result = await recording.stop({ after: displayed });
-    assert.equal(result.limited, false, "editor layout recording reached its bounded frame limit");
-    const files = frames(result.frames);
-    assert.equal(files.length, result.count, "editor layout recording omitted finalized frame files");
-    assert.ok(files.length > 0, "editor layout recording contains no frames");
-    return { displayed, beforeChangeTimeMs, result, captured: files.map(readFrame), paletteRect: beforeRoot.frame };
-  });
-  const { beforeChangeTimeMs, displayed, result, captured, paletteRect } = traced.action;
-  const host = await s.get("host.window");
-  const root = editorDocumentRow(host, surface);
-  const palette = editorGeometryPalette(captured[0], paletteRect, theme, cornerRadiusPt, traced.start?.markerColor);
-  const nativePlacement = rootNativePlacementBeforeCapture(traced.events, surface, displayed,
-    { afterMs: beforeChangeTimeMs });
-  const sourceSelection = selectOneShotViewSourceFrame(traced.contentFrames,
-    { requestAtMs: beforeChangeTimeMs, nativePlacement });
-  const source = sourceSelection.frame;
-  assert.ok(source, `editor source has no frame matching its final post-request native placement projection: ${JSON.stringify(sourceSelection.failure)}`);
-  const grid = await s.get("core.grid");
-  const surfaces = await s.get("core.surfaces");
-  const targetRect = { x: root.frame.x, y: root.frame.y,
-    width: root.frame.width, height: root.frame.height };
-  const slotInsetsPt = editorSlotInsets(grid, surfaces, card, surface);
-  const measured = captured.map((frame) => editorFrameGeometry(frame, palette, targetRect));
-  const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
-  const captureAfter = Math.max(displayed, source.timeRange.upperMs);
-  const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= captureAfter);
-  assert.ok(candidates.length > 0, `editor layout has no declared-slot pixel match at or after ${captureAfter} ms`);
-  const localProof = await firstContentFrame({ captured: candidates.map((index) => captured[index]),
-    rect: { x: root.frame.x, y: root.frame.y, w: root.frame.width, h: root.frame.height },
-    expected: descriptor.expectedContent, language: descriptor.language, directory: result.frames });
-  const frameIndex = candidates[localProof.frameIndex];
-  const geometry = measured[frameIndex];
-  return {
-    changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: captured.length,
-      timeMs: captured[transition.changeFrameIndex].time },
-    contentFrame: { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].time,
-      requestAtMs: beforeChangeTimeMs, displayedAtMs: displayed, sourceTimeRange: source.timeRange,
-      width: source.width, height: source.height, nativePlacement,
-      surfaceEvents: traced.events.filter((event) => event?.event === "host.trace.surface" && event.fields?.surface === surface),
-      proof: localProof.proof },
-    sourceFrame: source,
-    slotInsetsPt,
-    initialGeometry: { frameIndex, timeMs: captured[frameIndex].time, cardRectPt: geometry.cardRectPt,
-      nativeRectPt: geometry.nativeRectPt, slotInsetsPt },
-    pixelPalette: palette,
-    events: traced.events,
-    captureDirectory: result.frames,
-  };
-}
-
+/** The drag observation (viii) of the Editor view: the first vertical boundary moves 80 pt right and back once. */
 async function editorDragObservation(t, s, descriptor, surface, card, palette) {
-  await s.presented();
-  const traced = await withViewContentTrace(t, s, descriptor, surface, async () =>
-    drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true }));
-  const dragPalette = editorPaletteWithMarkerColor(palette, traced.start?.markerColor);
-  const run = traced.action;
-  const files = frames(run.frames);
-  assert.equal(files.length, run.count, "editor drag recording omitted finalized frame files");
-  const captured = files.map(readFrame);
-  assert.ok(captured.length > 2, "editor drag recording contains too few frames");
-  const firstGestureFrameIndex = captured.findIndex((frame) => frame.time >= run.ticks[0]);
-  const gestureEndedFrameIndex = captured.findIndex((frame) => frame.time >= run.ticks.at(-1));
-  assert.ok(firstGestureFrameIndex >= 0 && gestureEndedFrameIndex >= firstGestureFrameIndex,
-    "editor drag capture does not cover the complete requested gesture");
-  const grid = await s.get("core.grid");
-  const surfaces = await s.get("core.surfaces");
-  const root = editorDocumentRow(await s.get("host.window"), surface);
-  const targetRect = { x: root.frame.x, y: root.frame.y,
-    width: root.frame.width, height: root.frame.height };
-  const slotInsetsPt = editorSlotInsets(grid, surfaces, card, surface);
-  const contentRect = targetRect;
-  const rootSlotInsetsPt = slotInsetsPt;
-  const geometryFrames = [];
-  for (let frameIndex = firstGestureFrameIndex; frameIndex <= gestureEndedFrameIndex; frameIndex++) {
-    const measured = editorFrameGeometry(captured[frameIndex], dragPalette, contentRect);
-    geometryFrames.push({ frameIndex, timeMs: captured[frameIndex].time,
-      cardRectPt: measured.cardRectPt, nativeRectPt: measured.nativeRectPt, slotInsetsPt });
-  }
-  const tailGeometryFrames = [];
-  for (let frameIndex = gestureEndedFrameIndex + 1; frameIndex < captured.length; frameIndex++) {
-    const measured = editorFrameGeometry(captured[frameIndex], dragPalette, contentRect);
-    tailGeometryFrames.push(editorDragTailGeometryFrame(frameIndex, { ...measured,
-      timeMs: captured[frameIndex].time }, slotInsetsPt));
-  }
-  const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
-    gestureStartedAtMs: run.ticks[0], gestureEndedAtMs: run.ticks.at(-1),
-  });
-  const contentFrames = mapped.map((source) => {
-    const displayCaptureIndex = captured.findIndex((frame) => frame.time >= Math.max(run.displayed, source.timeRange.upperMs));
-    return editorSourceContentFrame(source, source.frameIndex === null ? null : captured[source.frameIndex].time,
-      displayCaptureIndex < 0 ? null : { frameIndex: displayCaptureIndex, timeMs: captured[displayCaptureIndex].time });
-  });
-  const finalRoot = editorDocumentRow(await s.get("host.window"), surface);
-  return {
-    recordedFrameCount: captured.length,
-    firstGestureFrameIndex,
-    lastGestureFrameIndex: gestureEndedFrameIndex,
-    gestureEndedFrameIndex,
-    gestureStartedAtMs: run.ticks[0],
-    gestureEndedAtMs: run.ticks.at(-1),
-    finalPresentation: { displayedAtMs: run.displayed,
-      targetViewport: { width: Math.trunc(finalRoot.frame.width), height: Math.trunc(finalRoot.frame.height) },
-      targetRectPt: { left: finalRoot.frame.x, top: finalRoot.frame.y,
-        right: finalRoot.frame.x + finalRoot.frame.width, bottom: finalRoot.frame.y + finalRoot.frame.height } },
-    geometryFrames,
-    tailGeometryFrames,
-    contentFrames,
-    sourceContentFrames: traced.contentFrames,
-    rootSlotInsetsPt,
-    layouts: run.layouts,
-    ticks: run.ticks,
-    events: traced.events,
-    captureDirectory: run.frames,
-  };
+  return markerDragObservation(t, s, descriptor, surface, card, palette,
+    { owner: "editor", plan: { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 } });
 }
 
 /** Measures layout presentation and a full card drag using actual editor capture pixels. */
 export async function collectEditorMotionMeasurements(t, s, prepared) {
   const surface = prepared.start.warmDisplay.surface;
-  const layoutDisplay = await editorLayoutObservation(t, s, prepared.descriptor, surface,
-    prepared.start.card, prepared.theme, prepared.cornerRadiusPt);
+  const layoutDisplay = await markerLayoutObservation(t, s, prepared.descriptor, surface, prepared.start.card,
+    { owner: "editor", theme: prepared.theme, cornerRadiusPt: prepared.cornerRadiusPt, axis: "x" });
   const drag = await editorDragObservation(t, s, prepared.descriptor, surface,
     prepared.start.card, layoutDisplay.pixelPalette);
   return { layoutDisplay: [layoutDisplay], drag,
@@ -335,23 +169,7 @@ export async function collectEditorMotionMeasurements(t, s, prepared) {
 
 /** Uses the exact opaque CSS paint color set by the Editor content-frame diagnostic. */
 export function editorGeometryPalette(frame, rect, theme, cornerRadiusPt, markerColor) {
-  assert.ok(frame && frame.data instanceof Uint8Array && frame.data.length === frame.stride * frame.height,
-    "editor palette requires a complete decoded frame");
-  assert.ok(rect && [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
-    && rect.width > 0 && rect.height > 0, "editor palette requires a visible document rectangle");
-  assert.ok(theme && typeof theme === "object", "editor palette requires the active core theme");
-  assert.ok(Number.isFinite(cornerRadiusPt) && cornerRadiusPt >= 0,
-    "editor palette requires the effective core card radius");
-  const parse = (name, token) => {
-    assert.ok(typeof token === "string" && /^#[0-9a-f]{6}$/iu.test(token), `theme ${name} is not an RGB hex token`);
-    return [1, 3, 5].map((index) => Number.parseInt(token.slice(index, index + 2), 16));
-  };
-  const cardColor = parse("card", theme.card);
-  const planeColor = parse("background", theme.bg);
-  const borderColors = [theme.edge, theme.rule, theme.focus].filter((value) => value !== undefined).map((value, index) =>
-    parse(`border ${index}`, value));
-  assert.ok(borderColors.length > 0, "theme has no declared border or focus color");
-  return editorPaletteWithMarkerColor({ cardColor, planeColor, borderColors, cornerRadiusPt }, markerColor);
+  return themeGeometryPalette(frame, rect, theme, cornerRadiusPt, markerColor, "editor");
 }
 
 async function editorDescriptor(s, diagnostic) {
@@ -402,12 +220,8 @@ export function editorViewDescriptor(content) {
 export async function prepareEditorMeasurements(t, s) {
   const descriptor = await editorDescriptor(s, (message) => t.diagnostic(message));
   const start = await collectViewStartAndMemory(t, s, descriptor, { viewCount: 3 });
-  const { values } = await s.get("core.settings");
-  const mode = values.mode;
-  const themeName = values.theme;
-  const theme = (await s.get("core.themes")).find((item) => item.name === themeName)?.[mode];
-  assert.ok(theme, `active core theme ${themeName}/${mode} is unavailable`);
-  const cornerRadiusPt = effectiveCardCornerRadiusPt(values);
+  const theme = await activeCoreTheme(s);
+  const cornerRadiusPt = effectiveCardCornerRadiusPt((await s.get("core.settings")).values);
   return { descriptor, start, theme, cornerRadiusPt };
 }
 
