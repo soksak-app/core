@@ -639,6 +639,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/surface_elements_test.go", id: "TestAnElementOfANewViewPageReplacesTheOneOfTheEndedPage" },
       { file: "packages/host/go/src/surface_elements_test.go", id: "TestAnElementReleasesItsViewsWhenNoFrameCanFollow" },
       { file: "packages/host/go/src/surface_elements_test.go", id: "TestAWindowWithAMainPageHasNoElements" },
+      { file: "packages/host/go/src/surface_elements_test.go", id: "TestAWindowWithoutAMainPageStartsWithoutThePageTitleBar" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestACardDrawsTheNativeViewElementOfItsSurface" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestADiagnosticPluginAddsItsDeclarationsToTheSurface" },
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestPluginsChangedStartsTheWorkbenchAgain" },
