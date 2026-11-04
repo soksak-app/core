@@ -75,6 +75,7 @@ type Grid struct {
 	grab      float64
 	snapAt    float64
 	snapMode  string
+	frames    frameRead
 }
 
 func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
@@ -386,7 +387,7 @@ func (g *Grid) Replace(state State) error {
 }
 
 func (g *Grid) plane() *plane {
-	return &plane{xs: g.xs, ys: g.ys, cards: g.list, width: g.w, height: g.h, gap: g.gap, minSize: g.min}
+	return &plane{xs: g.xs, ys: g.ys, cards: g.list, width: g.w, height: g.h, gap: g.gap, minSize: g.min, read: &g.frames}
 }
 
 func (g *Grid) arr(axis Axis) []float64 {
