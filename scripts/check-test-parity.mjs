@@ -798,6 +798,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F526",
+    implementation: [
+      { file: "packages/window-check/stall-sample.mjs", symbol: "function endError(error, stderr, limitMs) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export function runProcess(command, args, limitMs = 10000) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended at its limit is named with the signal, the limit and its standard error" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended by a signal of another sender is not reported as ended at its limit" },
+    ],
+    expected: "A process of the stall sample that does not reach its own exit fails with its signal, the limit when the limit ended it, and its standard error.",
+    levels: ["unit"],
+  },
+  {
     id: "F523",
     implementation: [
       { file: "packages/plugin-api/exposure-check.js", symbol: "export function checkContractCopies(root) {" },
