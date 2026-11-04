@@ -40,3 +40,14 @@ test("footprint output and options are read strictly", () => {
   assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--reloads=-1"]), /non-negative integer/);
   assert.throws(() => parseOptions(["--other", "x"]), /Unknown option '--other'/);
 });
+
+test("a window whose host.window reports pageProcess null fails before any step with the error of the mygo host", async () => {
+  const steps = [];
+  await assert.rejects(measure({
+    status: async () => ({ pageProcess: null, frames: 0 }),
+    reload: async () => { steps.push("reload"); },
+    footprint: () => { steps.push("footprint"); return 1; },
+    alive: () => true, wait: async () => { steps.push("wait"); }, idleMs: 0, reloads: 1, log: () => {},
+  }), new Error("the mygo host has no main page"));
+  assert.deepEqual(steps, []);
+});

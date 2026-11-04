@@ -33,32 +33,36 @@ release-check: wailsv3-build-release tauriv2-build-release
 	@node scripts/check-release.mjs --macos-minimum $(MACOS_MINIMUM) --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)" --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
 
 # Measures the memory of the main page process of a running application at start, idle, and after reload (docs/operations/examples.md).
-# APP is wailsv3 or tauriv2, CONFIG is the configuration folder of that application, BUILD is release (default) or debug.
+# APP is wailsv3, tauriv2 or mygo, CONFIG is the configuration folder of that application, BUILD is release (default) or debug. A window of the
+# mygo host has no main page, and the measurement fails with "the mygo host has no main page".
 # HOST is wailsv3 or tauriv2. Checks with a copy of the built debug bundle that an application update replaces the bundle.
 app-update-check:
 	@case "$(HOST)" in wailsv3|tauriv2) ;; *) echo "app-update-check requires HOST=wailsv3|tauriv2" >&2; exit 2;; esac
 	@node scripts/check-app-update.mjs --host $(HOST) --bundle target/debug/soksak-$(HOST).app --registry target/registry/index.json
 
 page-memory:
-	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "page-memory requires APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]" >&2; exit 2;; esac
+	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "page-memory requires APP=wailsv3|tauriv2|mygo CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "page-memory requires CONFIG=DIR" >&2; exit 2;; esac
 	@case "$(BUILD)" in ''|release|debug) ;; *) echo "page-memory requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-page-memory.mjs --sok $(if $(filter debug,$(BUILD)),target/debug/soksak-$(APP).app,target/release/$(APP)/soksak.app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
 
-# Repeats the operations of scripts/measure-object-counts.mjs for the surface plugins PLUGINS REPETITIONS times against a running diagnostic build and prints
-# the object counts and footprints per repetition (docs/operations/examples.md#page-memory). The diagnostic methods exist only in diagnostic builds, so BUILD defaults to debug.
+# Sets the trace state TRACE, repeats the operations of scripts/measure-object-counts.mjs for the surface plugins PLUGINS REPETITIONS times against a
+# running diagnostic build and prints the object counts, the Go runtime figures and the footprints of the host, page and document processes per
+# repetition (docs/operations/examples.md#page-memory); a window of the mygo host has no page process. The diagnostic methods exist only in
+# diagnostic builds, so BUILD defaults to debug.
 object-counts:
-	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "object-counts requires APP=wailsv3|tauriv2 CONFIG=DIR PLUGINS='ID...' [BUILD=release|debug] [REPETITIONS=20]" >&2; exit 2;; esac
+	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "object-counts requires APP=wailsv3|tauriv2|mygo CONFIG=DIR PLUGINS='ID...' TRACE=0|1 [BUILD=release|debug] [REPETITIONS=20]" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "object-counts requires CONFIG=DIR" >&2; exit 2;; esac
 	@case "$(strip $(PLUGINS))" in '') echo "object-counts requires PLUGINS='ID...', the surface plugins whose tabs it opens" >&2; exit 2;; esac
 	@case "$(BUILD)" in ''|debug|release) ;; *) echo "object-counts requires BUILD=release|debug" >&2; exit 2;; esac
-	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" $(foreach plugin,$(PLUGINS),--plugin $(plugin)) --repetitions $(or $(REPETITIONS),20)
+	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --trace "$(TRACE)" $(foreach plugin,$(PLUGINS),--plugin $(plugin)) --repetitions $(or $(REPETITIONS),20)
 
 # Has the main page of a running diagnostic build send CALLS host calls ROUNDS times and prints the footprint of its page process before the calls, after
 # them and after a collection (scripts/measure-host-calls.mjs); MINUTES=M waits M minutes without input instead of the calls;
 # EVENTS=N has the host send N host events that the page does not listen to instead of the calls. The diagnostic methods exist only in diagnostic builds.
+# A window of the mygo host has no main page, and the measurement fails with "the mygo host has no main page".
 host-calls:
-	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "host-calls requires APP=wailsv3|tauriv2 CONFIG=DIR [CALLS=1000 | MINUTES=M | EVENTS=N] [ROUNDS=5]" >&2; exit 2;; esac
+	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "host-calls requires APP=wailsv3|tauriv2|mygo CONFIG=DIR [CALLS=1000 | MINUTES=M | EVENTS=N] [ROUNDS=5]" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "host-calls requires CONFIG=DIR" >&2; exit 2;; esac
 	@node scripts/measure-host-calls.mjs --sok target/debug/soksak-$(APP).app/Contents/MacOS/sok --config-dir "$(CONFIG)" --calls $(or $(CALLS),1000) --idle-minutes $(or $(MINUTES),0) --events $(or $(EVENTS),0) --rounds $(or $(ROUNDS),5)
 
@@ -75,25 +79,25 @@ terminal-redraw-usage:
 	@case "$(SURFACE)" in '') echo "terminal-redraw-usage requires SURFACE=TAB" >&2; exit 2;; esac
 	@node scripts/measure-terminal-redraw.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --surface "$(SURFACE)" --rate $(or $(RATE),20) --interval $(or $(INTERVAL),10)
 
-# Measures the share of the diagnostics in the memory of a running host: with the debug switch on and then off, it runs five repetitions of
-# object-counts and prints the footprint of the host process (docs/operations/examples.md).
+# Measures the share of the diagnostics in the memory of a running host: in the trace state TRACE=1 and then TRACE=0 it runs five repetitions of
+# object-counts and prints the entry of the last repetition, which holds the footprint of the host process (docs/operations/examples.md).
 trace-share:
-	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "trace-share requires APP=wailsv3|tauriv2 CONFIG=DIR PLUGINS='ID...'" >&2; exit 2;; esac
+	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "trace-share requires APP=wailsv3|tauriv2|mygo CONFIG=DIR PLUGINS='ID...'" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "trace-share requires CONFIG=DIR" >&2; exit 2;; esac
-	@sok=target/debug/soksak-$(APP).app/Contents/MacOS/sok; \
-	  pid=$$(pgrep -f "soksak-$(APP).app/Contents/MacOS/soksak-$(APP) --config-dir $(CONFIG)" | head -1); \
-	  test -n "$$pid" || { echo "trace-share: no running $(APP) with --config-dir $(CONFIG)" >&2; exit 1; }; \
-	  for on in true false; do \
-	    echo "start debug=$$on"; \
-	    $$sok core.settings.debug --config-dir "$(CONFIG)" --params "{\"on\":$$on}" > /dev/null || exit 1; \
-	    $(MAKE) --no-print-directory object-counts APP=$(APP) CONFIG="$(CONFIG)" PLUGINS="$(PLUGINS)" BUILD=debug REPETITIONS=5 > /dev/null 2>&1 || exit 1; \
-	    echo "end debug=$$on host $$pid $$(footprint -p $$pid | grep -o 'Footprint: [0-9.]* [KMG]*B' | head -1)"; \
-	  done
+	@for trace in 1 0; do \
+	  echo "start TRACE=$$trace"; \
+	  out=$$($(MAKE) --no-print-directory object-counts APP=$(APP) CONFIG="$(CONFIG)" PLUGINS="$(PLUGINS)" TRACE=$$trace BUILD=debug REPETITIONS=5) || exit 1; \
+	  last=$$(printf '%s\n' "$$out" | grep '^{"repetition":' | tail -1); \
+	  test -n "$$last" || { echo "trace-share: object-counts printed no repetition for TRACE=$$trace" >&2; exit 1; }; \
+	  echo "end TRACE=$$trace $$last"; \
+	done
 
-# Prints the live malloc nodes and bytes of a running host process at start and after each minute (docs/operations/examples.md).
+# Sets the trace state TRACE and prints the live malloc nodes and bytes of the host process of the running application of CONFIG_DIR, the process
+# whose command line has --config-dir CONFIG_DIR, at start and after each minute (scripts/measure-host-allocations.mjs,
+# docs/operations/examples.md). SOK defaults to the sok binary of target/debug.
 host-allocations:
-	@case "$(PID)" in ''|*[!0-9]*) echo "host-allocations requires PID=<host process> [MINUTES=10]" >&2; exit 2;; esac
-	@node scripts/measure-host-allocations.mjs --pid $(PID) --minutes $(or $(MINUTES),10)
+	@case "$(CONFIG_DIR)" in '') echo "host-allocations requires CONFIG_DIR=DIR TRACE=0|1 [MINUTES=10] [SOK=PATH]" >&2; exit 2;; esac
+	@node scripts/measure-host-allocations.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --trace "$(TRACE)" --minutes $(or $(MINUTES),10)
 
 # Checks that core, plugin, and sidecar sources do not name each other.
 boundaries:
