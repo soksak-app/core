@@ -48,6 +48,8 @@ type surfaceHost struct {
 	elements bool
 	// calls replaces the calls of the table.
 	calls map[string]workbench.HostCall
+	// tabs gives the shell its tab ports.
+	tabs func(*workbench.Shell) workbench.TabPorts
 }
 
 func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
@@ -152,6 +154,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 		Element:     func(id string) (uintptr, uintptr, bool) { return stored.element(id) },
 		Reload:      func() { f.reloads++ },
 		Elements:    fixtureElements{f},
+		Tabs:        stored.tabs,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -551,5 +554,90 @@ func TestAViewFollowsTheSettingsOfItsPlugin(t *testing.T) {
 	f.settle()
 	if got := pushed(); len(got) != 1 || got[0]["cursor.shape"] != "beam" {
 		t.Fatalf("the view received %v", got)
+	}
+}
+
+// attachShell is a shell whose host stores session as the session of each tab, and refuses a restored history when refuses is set.
+// attaches receives each documentAttach request.
+func attachShell(t *testing.T, session string, refuses bool) (*shellFixture, *surfaceHost, *[]map[string]any) {
+	t.Helper()
+	attaches := &[]map[string]any{}
+	stored := &surfaceHost{}
+	base := stored.table()["workspace"]
+	timers := &clock{}
+	stored.calls = map[string]workbench.HostCall{
+		"workspace": func(ctx context.Context, argument json.RawMessage) (any, error) {
+			if strings.Contains(string(argument), `"kind":"tabSession"`) {
+				return json.RawMessage(session), nil
+			}
+			return base(ctx, argument)
+		},
+		"documentAttach": func(_ context.Context, argument json.RawMessage) (any, error) {
+			var request map[string]any
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			*attaches = append(*attaches, request)
+			if _, restores := request["interactionState"]; restores && refuses {
+				return nil, fmt.Errorf("the web view refused the interactionState")
+			}
+			return nil, nil
+		},
+	}
+	stored.tabs = func(*workbench.Shell) workbench.TabPorts {
+		return workbench.TabPorts{
+			Plugins:        func() []workbench.ShellPlugin { return nil },
+			Surfaces:       &fakeSurfaces{mounted: map[string]bool{}},
+			Enabled:        func() bool { return false },
+			Delay:          func() int { return 120 },
+			PluginSettings: func(string) map[string]any { return nil },
+			Commit:         func(answer func(error)) { answer(nil) },
+			Emit:           func(string, string, map[string]any) {},
+			Now:            func() int64 { return timers.now },
+			After:          timers.after,
+		}
+	}
+	return surfaceShellOn(t, installedDocument, stored), stored, attaches
+}
+
+func TestARegionAttachAnswersWhetherItRestoredAHistory(t *testing.T) {
+	const session = `{"regions":{"page":{"session":"c3RhdGU="}}}`
+	for _, test := range []struct {
+		name     string
+		session  string
+		refuses  bool
+		history  bool
+		attaches int
+	}{
+		{name: "a stored history restores", session: session, history: true, attaches: 1},
+		{name: "a refused history attaches again without it", session: session, refuses: true, attaches: 2},
+		{name: "another region has no history", session: `{"regions":{"other":{"session":"c3RhdGU="}}}`, attaches: 1},
+		{name: "a tab without a session has no history", session: "null", attaches: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			f, stored, attaches := attachShell(t, test.session, test.refuses)
+			surface := anySurface(t, stored)
+			// A refused history is recorded as a failure, which settle does not allow.
+			f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": 5, "command": "document.attach",
+				"params": map[string]any{"name": "page"}}})
+			f.pending.drain(t)
+			if len(stored.replies) != 1 {
+				t.Fatalf("the replies are %v", stored.replies)
+			}
+			reply := stored.replies[0]
+			result, ok := reply["result"].(map[string]any)
+			if reply["error"] != nil || !ok || result["history"] != test.history {
+				t.Fatalf("the reply is %v", reply)
+			}
+			if recorded := f.host.written("workbench.record.error"); (len(recorded) == 1) != test.refuses {
+				t.Fatalf("the shell recorded %v", recorded)
+			}
+			if len(*attaches) != test.attaches {
+				t.Fatalf("the host took %v", *attaches)
+			}
+			if _, restores := (*attaches)[len(*attaches)-1]["interactionState"]; restores != test.history {
+				t.Fatalf("the last attach is %v", (*attaches)[len(*attaches)-1])
+			}
+		})
 	}
 }
