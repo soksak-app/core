@@ -33,9 +33,7 @@ The host-equivalence job installs every language and toolchain required for its 
 
 Dependency acquisition precedes offline build and check stages. Node and pnpm versions follow their exact declarations, Go follows its module/workspace declaration, and Rust uses the exact toolchain that `rust-toolchain.toml` declares, which the workflow setup installs. Frozen pnpm locks, Cargo.lock and Go module sums remain enforced. Offline checks do not fetch a missing dependency or update locks; they fail with the missing input.
 
-Each release host job builds and audits its own bundle, and packages its release file. Registry compatibility remains a separate required check. The final decision requires success from every required job, including independent equivalence. Publication consumes the audited host release files only after that decision; failed, cancelled or skipped required jobs prevent publication.
-
-An explicitly selected registry index may carry a pinned SHA-256. When supplied, the digest is exactly 64 lowercase hexadecimal characters, requires a nonempty explicit index URL, and is checked against the downloaded bytes before JSON parsing. A mismatch fails acceptance. The default public-index check and an explicit index without a digest retain their existing behavior.
+Each release host job builds and audits its own bundle, and packages its release file. The release reads no registry: the [registry check](registry.md#check) checks, for each core version that `core.json` lists, the plugin versions that installation selects for it, so no job of the release checks the registry. The final decision requires success from every required job, including independent equivalence. Publication consumes the audited host release files only after that decision; failed, cancelled or skipped required jobs prevent publication.
 
 
 ## Bounded execution
