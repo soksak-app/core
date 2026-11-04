@@ -24,6 +24,9 @@ const CORE_EXPOSURE = join(ROOT, "packages/plugin-api/core-exposure.json");
 export const DECLARATION_COPIES = Object.freeze([
   { source: "packages/workbench/workbench.json", copy: "packages/host/go/src/workbench.json" },
   { source: "packages/workbench/workbench.json", copy: "packages/host/rust/src/workbench.json" },
+  { source: "packages/workbench/exposure.json", copy: "packages/workbench-mygo/src/exposure.json" },
+  { source: "packages/workbench/shortcuts.json", copy: "packages/workbench-mygo/src/shortcuts.json" },
+  { source: "packages/workbench/workbench.json", copy: "packages/workbench-mygo/src/workbench.json" },
 ]);
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));

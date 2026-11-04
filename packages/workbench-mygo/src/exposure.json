@@ -1,0 +1,4559 @@
+{
+  "exposes": {
+    "status": [
+      {
+        "name": "core.window.document",
+        "description": "The main document's page identity, time origin, ready state, visibility, applied color scheme, background blur, device pixel ratio, and viewport size.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "page": {
+              "type": "string"
+            },
+            "timeOrigin": {
+              "type": "number"
+            },
+            "readyState": {
+              "enum": [
+                "loading",
+                "interactive",
+                "complete"
+              ]
+            },
+            "visibility": {
+              "enum": [
+                "visible",
+                "hidden"
+              ]
+            },
+            "scheme": {
+              "type": "string"
+            },
+            "background": {
+              "type": "boolean"
+            },
+            "scale": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.screen",
+        "description": "The shown screen and the open modal of the main document.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "screen": {
+              "enum": [
+                "library",
+                "workspace"
+              ]
+            },
+            "modal": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "settings",
+                "debug",
+                "picker",
+                null
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "core.page.error",
+        "description": "The error text shown in the main document, or null.",
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      {
+        "name": "core.page.audit",
+        "description": "Interactive elements of the main document (button, input, select, textarea, role=button, contenteditable) that are not connected to a declared command or have no dom name. Each is {tag, expose, command, text}; an empty list means every control runs a command.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "unbound": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tag": {
+                    "type": "string"
+                  },
+                  "expose": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "command": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.projects",
+        "description": "Every saved project with its open state.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      {
+        "name": "core.project",
+        "description": "The project shown in this window, or null.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      {
+        "name": "core.layout",
+        "description": "The saved form of the current space layout: grid state, focus, and restore widths, or null.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      {
+        "name": "core.sidebars",
+        "description": "The drawn sidebars in document order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sidebar": {
+                "type": "string"
+              },
+              "set": {
+                "type": "string"
+              },
+              "layout": {
+                "type": "string",
+                "enum": [
+                  "list",
+                  "tabs"
+                ]
+              },
+              "orientation": { "type": "string", "enum": ["horizontal", "vertical"] },
+              "placement": { "enum": ["window", "card"] },
+              "plugin": { "type": ["string", "null"] },
+              "side": { "type": ["string", "null"] },
+              "rect": { "type": "object" },
+              "tab": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "card": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "surface": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sections": { "type": "array", "items": { "type": "object", "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "folded": { "type": "boolean" },
+                "clipped": { "type": "boolean" },
+                "surfaceId": { "type": "string" },
+                "surface": { "type": ["string", "null"] },
+                "height": { "type": ["string", "integer"] },
+                "size": { "type": ["integer", "null"] },
+                "mounted": { "type": "boolean" },
+                "phase": { "type": ["string", "null"], "enum": ["loading", "ready", "error", null] },
+                "error": { "type": ["string", "null"] }
+              } } }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.grid",
+        "description": "The current grid: size, gap, boundary positions, and cards in document order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "fullscreen": { "type": ["string", "null"] },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            },
+            "gap": {
+              "type": "number"
+            },
+            "plane": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "w": {
+                  "type": "number"
+                },
+                "h": {
+                  "type": "number"
+                }
+              }
+            },
+            "lines": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "y": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "cards": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "fullscreen": { "type": "boolean" },
+                  "id": {
+                    "type": "string"
+                  },
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  },
+                  "h": {
+                    "type": "number"
+                  },
+                  "c0": {
+                    "type": "integer"
+                  },
+                  "c1": {
+                    "type": "integer"
+                  },
+                  "r0": {
+                    "type": "integer"
+                  },
+                  "r1": {
+                    "type": "integer"
+                  },
+                  "fixed": {
+                    "type": "boolean"
+                  },
+                  "width": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "focused": {
+                    "type": "boolean"
+                  },
+                  "pane": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "tabs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "plugin": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "notice": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "footer": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "modified": {
+                          "type": "boolean"
+                        },
+                        "error": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "active": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "acts": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "add": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "hidden": {
+                            "type": "boolean"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "split-x": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "hidden": {
+                            "type": "boolean"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "split-y": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "hidden": {
+                            "type": "boolean"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "close": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "hidden": {
+                            "type": "boolean"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "fit": {
+                        "enum": [
+                          "strip",
+                          "one",
+                          "ham"
+                        ]
+                      },
+                      "tools": {
+                        "enum": [
+                          "bar",
+                          "menu"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.surfaces",
+        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, host or unread); a mounted surface reports placeholder null. state is the memory saver state of the tab: loaded, unloaded or restoring. kind is tab for the surface of a tab and section for a section surface, and sidebar is the sidebar id of a section surface or null.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "tab",
+                  "section"
+                ]
+              },
+              "sidebar": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "loaded",
+                  "unloaded",
+                  "restoring"
+                ]
+              },
+              "surface": {
+                "type": "string"
+              },
+              "plugin": {
+                "type": "string"
+              },
+              "visible": {
+                "type": "boolean"
+              },
+              "dim": {
+                "type": "boolean"
+              },
+              "declared": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  },
+                  "h": {
+                    "type": "number"
+                  }
+                }
+              },
+              "applied": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "w": {
+                    "type": "number"
+                  },
+                  "h": {
+                    "type": "number"
+                  }
+                }
+              },
+              "placeholder": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "missing",
+                  "disabled",
+                  "reload",
+                  "host",
+                  "unread",
+                  null
+                ]
+              },
+              "exposes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "status": {
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "enum": ["loading", "ready", "error"]
+                  },
+                  "error": {
+                    "type": ["string", "null"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.tab.memory",
+        "description": "The memory saver of the main page: the settings memorySaver (enabled) and memorySaverDelay (delay, minutes), the last memory pressure report, and each tab with its state, the reasons that protect it, the time it was hidden, its next delay deadline and the time of the last decision that read the regions. kind is tab for a tab and section for a section surface, which the tab commands refuse.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "delay": {
+              "type": "integer"
+            },
+            "pressure": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "enum": [
+                    "normal",
+                    "warn",
+                    "critical"
+                  ]
+                },
+                "seq": {
+                  "type": "integer"
+                }
+              }
+            },
+            "tabs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "tab",
+                      "section"
+                    ]
+                  },
+                  "tab": {
+                    "type": "string"
+                  },
+                  "plugin": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "enum": [
+                      "loaded",
+                      "unloaded",
+                      "restoring"
+                    ]
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "shown",
+                        "recent",
+                        "keep:modified",
+                        "keep:busy",
+                        "media",
+                        "media-unknown",
+                        "capture",
+                        "form",
+                        "kept",
+                        "off",
+                        "undeclared",
+                        "background"
+                      ]
+                    }
+                  },
+                  "hiddenAt": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "unloadAt": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "checkedAt": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.drop",
+        "description": "The files last dropped on the window: their URLs, the drop point in page coordinates, the surface under the point, the drop command its plugin declares, and the reason when nothing ran.",
+        "schema": {
+          "type": ["object", "null"],
+          "properties": {
+            "urls": { "type": ["array", "null"], "items": { "type": "string" } },
+            "x": { "type": ["number", "null"] },
+            "y": { "type": ["number", "null"] },
+            "surface": { "type": ["string", "null"] },
+            "command": { "type": ["string", "null"] },
+            "error": { "type": ["string", "null"] }
+          }
+        }
+      },
+      {
+        "name": "core.notifications",
+        "description": "The operating system's permission for this application's notifications the last failure to request permission, post, or remove a notification, and the tabs of the window whose notification the notification center accepted and that were not removed.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "authorization": { "enum": ["notDetermined", "denied", "authorized", "provisional"] },
+            "error": { "type": ["string", "null"] },
+            "posted": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      },
+      {
+        "name": "core.settings",
+        "description": "The effective settings, the project that project-scope changes apply to, the keys that the project overrides, and whether a change is still being saved.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "values": {
+              "type": "object"
+            },
+            "project": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "overridden": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "saving": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.themes",
+        "description": "The theme catalog in order: each theme's name, shape values, and the color tokens of its dark and light modes.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "shape": { "type": "object" },
+              "dark": { "type": "object" },
+              "light": { "type": "object" }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.contributions",
+        "description": "The contributions of the installed and enabled plugins to extension points, resolved when the page loaded, sorted by plugin, point and item: the contributing plugin id, the point as <plugin id>.<point>, the item index, the state (connected, provider-missing, version-mismatch or invalid) and the reason, or null for a connected item.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "point": {
+                "type": "string"
+              },
+              "index": {
+                "type": "integer"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "connected",
+                  "provider-missing",
+                  "version-mismatch",
+                  "invalid"
+                ]
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.app",
+        "description": "The application update of the window: the version of the running core or null before the first read, the candidate of the registry index with its version and the page of its release (null when its release URL names no published release) or null, the application update operation with its state (staging, applying or failed), the version and the error, or null, the error of the last read of the registry index or null, and the installed plugins whose engines.soksak does not contain the candidate, by id, each with its installed version, that range and the newest version of the plugin that is not revoked and contains the candidate or null.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": ["string", "null"]
+            },
+            "available": {
+              "type": ["object", "null"],
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "release": {
+                  "type": ["string", "null"]
+                }
+              }
+            },
+            "operation": {
+              "type": ["object", "null"],
+              "properties": {
+                "state": {
+                  "enum": ["staging", "applying", "failed"]
+                },
+                "version": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": ["string", "null"]
+                }
+              }
+            },
+            "error": {
+              "type": ["string", "null"]
+            },
+            "incompatible": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "installed": {
+                    "type": "string"
+                  },
+                  "range": {
+                    "type": "string"
+                  },
+                  "compatible": {
+                    "type": ["string", "null"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.plugins",
+        "description": "The plugin cards of the library plugin page: the registry index URL or null, the registry index or plugin state error or null, one entry per loaded, installed or registry plugin sorted by id with its name, description, state (loaded, disabled, available, reload or refused), the loaded surface composition kind or null without a loaded surface declaration, installed version and enabled value or null, newest registry version or null, and sidecars with their range and installed version, the latest plugin operation with its state (running, done or failed) and error, or null, whether a plugin waits for a page reload, and the installed plugins whose registry index lists a newer version.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "registry": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "plugins": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "loaded",
+                      "disabled",
+                      "available",
+                      "reload",
+                      "refused"
+                    ]
+                  },
+                  "composition": {
+                    "type": ["string", "null"],
+                    "enum": ["view", null]
+                  },
+                  "installed": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string"
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "latest": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "sidecars": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": { "type": "string" },
+                        "range": { "type": ["string", "null"] },
+                        "version": { "type": ["string", "null"] }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "operation": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "install",
+                    "update",
+                    "remove",
+                    "enable",
+                    "disable"
+                  ]
+                },
+                "plugin": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "running",
+                    "done",
+                    "failed"
+                  ]
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "reload": {
+              "type": "boolean"
+            },
+            "updates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "installed": {
+                    "type": "string"
+                  },
+                  "latest": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "outdated": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sidecar": {
+                    "type": "string"
+                  },
+                  "running": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "installed": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "sessions": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.settings-modal",
+        "description": "The settings modal: whether it is open, its section, scope, the plugin search text, the loaded plugin ids listed, the plugin whose page is shown or null, the edited set or null, the rows of declared plugin settings with their label and description, the scroll position of the shown content in points, card rectangle in window coordinates, and its controls with the command each control runs and the option values of each select box.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "scroll": {
+              "type": "number"
+            },
+            "open": {
+              "type": "boolean"
+            },
+            "controls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "index": {
+                    "type": "integer"
+                  },
+                  "key": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "on": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "value": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "command": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "params": {
+                        "type": "object"
+                      }
+                    }
+                  },
+                  "options": {
+                    "type": ["array", "null"],
+                    "items": { "type": "string" }
+                  },
+                  "groups": {
+                    "type": ["array", "null"],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": { "type": "string" },
+                        "values": { "type": "array", "items": { "type": "string" } }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "section": {
+              "enum": [
+                "general",
+                "plugins",
+                "sidebars"
+              ]
+            },
+            "plugin": {
+              "type": ["string", "null"]
+            },
+            "query": {
+              "type": "string"
+            },
+            "listed": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": { "type": "string" },
+                  "name": { "type": "string" },
+                  "description": { "type": ["string", "null"] }
+                }
+              }
+            },
+            "editing": {
+              "type": ["string", "null"]
+            },
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            },
+            "card": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "w": {
+                  "type": "number"
+                },
+                "h": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.debug",
+        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files whose reading stopped at the row limit, whether it follows the growing files and the number of rows appended since it was shown, the counts of all rows, rows that pass the filter and shown lines with the context rows, the number of selected rows and the warning that a saved file can hold typed text, and its filter or null, the shown state file with its path, the number of tree lines, the state file it is compared with or null and the number of differences, or null, the scroll position of the shown content in points, the running or last save operation with, for a save of the logs folder, the bytes written and the bytes listed, and the error of the last failed step or operation or null.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "open": {
+              "type": "boolean"
+            },
+            "recorded": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "number"
+                  },
+                  "modified": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "viewing": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "number"
+                },
+                "truncated": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "enum": [
+                    "text",
+                    "image"
+                  ]
+                },
+                "length": {
+                  "type": "number"
+                }
+              }
+            },
+            "timeline": {
+              "type": ["object", "null"],
+              "properties": {
+                "sources": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "limited": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "following": {
+                  "type": "boolean"
+                },
+                "appended": {
+                  "type": "number"
+                },
+                "total": {
+                  "type": "number"
+                },
+                "shown": {
+                  "type": "number"
+                },
+                "drawn": {
+                  "type": "number"
+                },
+                "omitted": {
+                  "type": "number"
+                },
+                "context": {
+                  "type": "number"
+                },
+                "level": {
+                  "enum": ["error", "warn", "info", "debug", "trace"]
+                },
+                "layer": {
+                  "enum": ["all", "native", "host", "workbench", "page", "plugin", "sidecar", "sok"]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "event": {
+                  "type": "string"
+                },
+                "surface": {
+                  "type": "string"
+                },
+                "session": {
+                  "type": "string"
+                },
+                "cid": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                },
+                "context": {
+                  "type": "string"
+                },
+                "lines": {
+                  "type": "number"
+                },
+                "selected": {
+                  "type": "number"
+                },
+                "warning": {
+                  "type": "string"
+                }
+              }
+            },
+            "state": {
+              "type": ["object", "null"],
+              "properties": {
+                "path": { "type": "string" },
+                "lines": { "type": "number" },
+                "with": { "type": ["string", "null"] },
+                "differences": { "type": "number" }
+              }
+            },
+            "scroll": {
+              "type": "number"
+            },
+            "operation": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "action": {
+                  "enum": [
+                    "save",
+                    "save-all",
+                    "save-rows"
+                  ]
+                },
+                "path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "running",
+                    "done",
+                    "failed"
+                  ]
+                },
+                "written": { "type": "integer" },
+                "total": { "type": "integer" }
+              }
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "core.picker",
+        "description": "Whether the add, tab, tool or space apps menu is open, its title, its items in order and its group headings in order; group is the card of an item in a grouped menu and null otherwise, and a heading reports the card id, its name and its indentation depth.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "open": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "string"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "group": {
+                    "type": ["string", "null"]
+                  }
+                }
+              }
+            },
+            "groups": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "depth": { "type": "integer" }
+                }
+              }
+            },
+            "columns": {
+              "type": "object",
+              "properties": {
+                "groups": { "type": "array", "items": { "type": "object", "properties": { "icon": { "type": "number" }, "name": { "type": "number" } } } },
+                "items": { "type": "array", "items": { "type": "object", "properties": { "icon": { "type": "number" }, "name": { "type": "number" } } } }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.library",
+        "description": "The library screen: the shown page (projects or plugins), the plugin search text, the plugin ids of the cards shown and their action buttons in order, shown and pinned projects, count, search, sort, form state and field values, return button visibility, pending work, empty and no-result notes, error, preview rectangles, and the validation error of each project whose saved layout cannot be opened.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "page": {
+              "enum": [
+                "projects",
+                "plugins"
+              ]
+            },
+            "plugins": {
+              "type": "object",
+              "properties": {
+                "query": { "type": "string" },
+                "shown": { "type": "array", "items": { "type": "string" } },
+                "actions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "plugin": { "type": "string" },
+                      "action": { "enum": ["install", "update", "apply", "remove", "enable", "disable"] },
+                      "disabled": { "type": "boolean" }
+                    }
+                  }
+                }
+              }
+            },
+            "shown": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "count": {
+              "type": "string"
+            },
+            "query": {
+              "type": "string"
+            },
+            "sort": {
+              "type": "string"
+            },
+            "form": {
+              "type": "boolean"
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "previews": {
+              "type": "object"
+            },
+            "folderErrors": {
+              "type": "object"
+            },
+            "previewErrors": {
+              "type": "object"
+            },
+            "pinned": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "formState": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "create",
+                    "open"
+                  ]
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "returnVisible": {
+              "type": "boolean"
+            },
+            "pending": {
+              "type": "boolean"
+            },
+            "empty": {
+              "type": "boolean"
+            },
+            "noResults": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.verify",
+        "description": "The latest layout verification rows and the number of failed rows, or null before the first verification.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "failed": {
+              "type": "integer"
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "type": "string"
+                  },
+                  "ok": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.surface.document",
+        "description": "Registered by every plugin surface page: its address, time origin, ready state, whether the first theme is applied, device pixel ratio, body and viewport sizes, and the root filter, and the page's interactive elements without a command binding or dom name (`unbound`, as in core.page.audit).",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "timeOrigin": {
+              "type": "number"
+            },
+            "readyState": {
+              "type": "string"
+            },
+            "themed": {
+              "type": "boolean"
+            },
+            "scale": {
+              "type": "number"
+            },
+            "body": {
+              "type": "object",
+              "properties": {
+                "width": {
+                  "type": "number"
+                },
+                "height": {
+                  "type": "number"
+                }
+              }
+            },
+            "viewport": {
+              "type": "object",
+              "properties": {
+                "width": {
+                  "type": "number"
+                },
+                "height": {
+                  "type": "number"
+                }
+              }
+            },
+            "filter": {
+              "type": "string"
+            },
+            "unbound": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tag": {
+                    "type": "string"
+                  },
+                  "expose": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "command": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.surface.input",
+        "description": "Registered by every plugin surface page: its last 32 pointer, click, wheel, and key events in order, with the modifier keys each event carries.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sequence": {
+                "type": "integer"
+              },
+              "type": {
+                "type": "string"
+              },
+              "trusted": {
+                "type": "boolean"
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "key": {
+                "type": "string"
+              },
+              "modifiers": {
+                "type": "array",
+                "items": {
+                  "enum": ["shift", "alt", "control", "command"]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.modal",
+        "description": "The open native modal of this window with the state its document reported, or null.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "mode": {
+              "type": "string"
+            },
+            "document": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string"
+                },
+                "filter": {
+                  "type": "string"
+                },
+                "htmlBackground": {
+                  "type": "string"
+                },
+                "bodyBackground": {
+                  "type": "string"
+                },
+                "scrimBackground": {
+                  "type": "string"
+                },
+                "loaded": {
+                  "type": "boolean"
+                },
+                "rect": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "width": {
+                      "type": "number"
+                    },
+                    "height": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.drag",
+        "description": "The tab drag in progress: the dragged tab, its card, whether it moved, the drop target, and the drop preview in plane coordinates; null without a drag.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "card": {
+              "type": "string"
+            },
+            "moved": {
+              "type": "boolean"
+            },
+            "target": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "card": {
+                  "type": "string"
+                },
+                "zone": {
+                  "enum": [
+                    "centre",
+                    "left",
+                    "right",
+                    "top",
+                    "bottom"
+                  ]
+                }
+              }
+            },
+            "preview": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "w": {
+                  "type": "number"
+                },
+                "h": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.rename",
+        "description": "The tab being renamed in place: its kind, id, and current input value; null when nothing is renamed.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "project",
+                "space"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.plugin.open-calls",
+        "description": "The open calls of each plugin: `{plugin, count, oldestStartedAt}`, where oldestStartedAt is the start time of the oldest open call, or null without open calls.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "count": {
+                "type": "number"
+              },
+              "oldestStartedAt": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.plugin.losses",
+        "description": "The counts of each plugin's losses kept until the application ends: `{plugin, abandoned, lateReplies, timeouts, peerLost}`, one count per kind of loss in the plugin process design.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "abandoned": {
+                "type": "number"
+              },
+              "lateReplies": {
+                "type": "number"
+              },
+              "timeouts": {
+                "type": "number"
+              },
+              "peerLost": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.plugin.views",
+        "description": "The responsiveness of each plugin view surface: `{plugin, surface, responsive}`, where responsive is false while the view process does not answer WebKit's responsiveness check.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "surface": {
+                "type": "string"
+              },
+              "responsive": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.pointer",
+        "description": "The last pointer sequence that the main document received: a press increments sequence, and down, up and click name the exposed element (or tag) that received pointerdown, pointerup and click; pressedConnected tells whether the pressed element was still in the document at pointerup. A click is missing when the pressed element was replaced before the release.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "sequence": { "type": "integer" },
+            "down": { "type": ["string", "null"] },
+            "up": { "type": ["string", "null"] },
+            "pressedConnected": { "type": ["boolean", "null"] },
+            "click": { "type": ["string", "null"] }
+          }
+        }
+      },
+      {
+        "name": "core.focus",
+        "description": "The exposed element that has keyboard focus in the document that holds the first responder of the window: the main document, including surface modules mounted in shadow roots, or the document of a view surface, which reports its element; its name, its index within its own document or shadow root, and the surface id (null in the main document); null when focus is elsewhere or a document region, modal or native view holds the first responder. Changes with every focus transition and first responder change.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "index": {
+              "type": "integer"
+            },
+            "surface": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "core.text",
+        "description": "The text size scope and factors: the frame factor and each card's factor.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "card",
+                    "frame"
+                  ]
+                },
+                "card": {
+                  "type": "string"
+                }
+              }
+            },
+            "frame": {
+              "type": "number"
+            },
+            "cards": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.chrome",
+        "description": "The window chrome: the width reserved for the window's own buttons and where the project tabs stand.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "controlsWidth": {
+              "type": "number"
+            },
+            "projectTabs": {
+              "enum": [
+                "top",
+                "left"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "core.rail",
+        "description": "The rail outline path in plane coordinates and the focus corner mark rectangle; null without a layout.",
+        "schema": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "groups": { "type": "array", "items": { "type": "object" } },
+            "focusMark": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "w": {
+                  "type": "number"
+                },
+                "h": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "core.settings.set",
+        "description": "Changes settings in the common or project scope and resolves after the change is saved.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "patch": {
+              "type": "object"
+            },
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.reset",
+        "description": "Removes the project override of one setting.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.debug",
+        "description": "Turns the 디버그 switch on or off. On sets diagnostics.performance to true and every class of diagnostics.log to trace; off sets diagnostics.performance to false and diagnostics.log to {}, which stores only the errors. Both are common settings.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.open",
+        "description": "Opens the settings modal.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.close",
+        "description": "Closes the settings modal.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.debug.open",
+        "description": "Closes the settings modal, opens the debug view, records the state of every window into the logs folder and lists the files of the logs folder.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 120000
+      },
+      {
+        "name": "core.debug.close",
+        "description": "Closes the debug view.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.debug.save",
+        "description": "Saves one file of the logs folder through the save panel where the person chooses; answers the chosen path, or null when the person cancels.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "saved": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.debug.timeline.save",
+        "description": "Saves the text lines of the selected rows of the shown debug timeline, in timeline order and one line each, through the save panel as soksak-timeline-<UTC time>.txt where the person chooses; answers the chosen path, or null when the person cancels. A selection without a row is an error. The saved file can hold typed text.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "saved": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.debug.save-all",
+        "description": "Saves the logs folder as one gzip-compressed tar file through the save panel where the person chooses; answers the chosen path, or null when the person cancels.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "saved": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.debug.view",
+        "description": "Shows the content of one text file of the logs folder in the open debug view: the whole file, or its last 262144 bytes.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.debug.list",
+        "description": "Shows the list of the files of the logs folder again in the open debug view.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.debug.state",
+        "description": "Shows one state file of the logs folder as a tree of its keys and values in the open debug view; a file that is not a state file of the list, or whose content is not a state, is an error.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.debug.state.compare",
+        "description": "Compares the shown state file with the state file at with and lists the paths whose values differ; an empty with ends the comparison; a with that is not another state file of the list is an error.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "with": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.debug.timeline",
+        "description": "Shows the newest page of the events of the event files of the logs folder in the open debug view, asked from the host through the query; a file that breaks the event structure is an error.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.debug.timeline.follow",
+        "description": "Stops or resumes following the event files in the shown debug timeline: with on true the timeline first asks for the rows that were written while it was stopped and then adds the rows that later change notices report, with on false it adds nothing; the same call again changes nothing, and a query that fails stops following.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.debug.timeline.older",
+        "description": "Asks for the page of events before the oldest row that the shown debug timeline holds and puts it in front of the rows; it changes nothing when no older row exists, and it is an error when the timeline already holds 2000 rows.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.debug.timeline.select",
+        "description": "Selects or unselects one row of the shown debug timeline: row is its position among the rows that the view holds from 0, in key order at the time of the call, and selected is true or false; the same call again changes nothing. A selection stays on its row when other rows come in front or leave.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "row": {
+              "type": "integer"
+            },
+            "selected": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.debug.timeline.context",
+        "description": "Brings the rows around one row of the shown debug timeline into the held rows: row is its position among the rows that the view holds from 0, in key order at the time of the call; the 5 rows before it and the 5 rows after it in the channel of the filter are asked for whatever the other members of the filter are, and the rows that were not held are shown as context, indented by two spaces. A new filter shows its own rows only.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "row": {
+              "type": "integer"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.debug.timeline.filter",
+        "description": "Sets the filter of the shown debug timeline and asks for its newest page again: channel is other, debug or all, level is the least severe level shown, class is a class, layer is a layer or all, text is a case-insensitive part of the line, event is the exact event name, event_prefix is an event name or the first part of one that ends before a dot, surface and session are whole identifiers, cid is one correlation identifier, run is a run identifier, and from and to are inclusive UTC times like 2026-10-08T22:53:20.123456Z; an empty text leaves class, text, event, event_prefix, surface, session, cid, run, from or to open. A member that is not given keeps its value; at least one member is required.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "channel": {
+              "enum": ["other", "debug", "all"]
+            },
+            "level": {
+              "enum": ["error", "warn", "info", "debug", "trace"]
+            },
+            "class": {
+              "type": "string"
+            },
+            "layer": {
+              "enum": ["all", "native", "host", "workbench", "page", "plugin", "sidecar", "sok"]
+            },
+            "text": {
+              "type": "string"
+            },
+            "event": {
+              "type": "string"
+            },
+            "event_prefix": {
+              "type": "string"
+            },
+            "surface": {
+              "type": "string"
+            },
+            "session": {
+              "type": "string"
+            },
+            "cid": {
+              "type": "string"
+            },
+            "run": {
+              "type": "string"
+            },
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.projects.browse",
+        "description": "Shows the project library in this window.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.projects.flush",
+        "description": "Saves the current layout, settings, and window geometry.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.project.open",
+        "description": "Registers the directory as a project with a fresh layout and opens it; returns the project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "color": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object"
+        }
+      },
+      {
+        "name": "core.project.activate",
+        "description": "Opens a saved project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.project.close",
+        "description": "Closes and removes a project. A window that shows the project asks about each modified tab first, and keeping a tab keeps the project: the result is closed false.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "closed": {
+              "type": "boolean"
+            }
+          }
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.project.rename",
+        "description": "Renames a project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.project.move",
+        "description": "Moves a project in the saved order by delta positions.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "delta": {
+              "type": "integer"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.project.pin",
+        "description": "Pins or unpins a project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "pinned": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.window.new",
+        "description": "Opens a new unassigned window.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.folder.create",
+        "description": "Creates a project folder through the host and returns its root and identity.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "parent": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "identity": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.space.add",
+        "description": "Adds a space with a fresh layout, shows it, and returns its id and title.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.space.activate",
+        "description": "Shows a space of the current project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.space.rename",
+        "description": "Renames a space of the current project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.space.close",
+        "description": "Closes a space of the current project; the last space does not close. A modified tab of the active space is not closed until the workbench asks whether to save, discard or keep it, and keeping it leaves the space open. The result is closed false when the space stays.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "closed": {
+              "type": "boolean"
+            }
+          }
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.grid.size",
+        "description": "Sets the width or height of a card on an axis and redraws.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "axis": {
+              "enum": [
+                "x",
+                "y"
+              ]
+            },
+            "size": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.boundary.move",
+        "description": "Moves boundary line on axis to a position in plane coordinates and redraws; returns the resulting position.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "enum": [
+                "x",
+                "y"
+              ]
+            },
+            "line": {
+              "type": "integer"
+            },
+            "position": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "position": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.layout.balance",
+        "description": "Gives every card of the current space a fair share of the plane and keeps the arrangement; a cut gives its sides room in proportion to the cards they hold along its axis, counted on their fullest row.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.change",
+        "description": "Sets one setting from a control value; strings are converted to the setting's type. Without scope it sets the common value.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "value": {},
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.theme",
+        "description": "Applies a theme with its shape values in the given mode (the current mode by default) and scope (common by default).",
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "mode": {
+              "enum": [
+                "dark",
+                "light"
+              ]
+            },
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.link",
+        "description": "Changes a general window, plugin window, or card-side choice. A set ID selects a set; off removes the link. Window choices have no inheritance.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "place": {
+              "enum": [
+                "left",
+                "right",
+                "window-left",
+                "window-right",
+                "card-left",
+                "card-right",
+                "card-top",
+                "card-bottom"
+              ]
+            },
+            "plugin": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "set": {
+              "type": "string"
+            },
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.sets.create",
+        "description": "Adds a sidebar set titled 새 세트 with layout list and no sections to the scope, opens it for editing when settings are open, and returns its id.",
+        "params": {
+          "type": "object",
+          "properties": { "scope": { "enum": ["common", "project"] } }
+        },
+        "result": { "type": "object", "properties": { "id": { "type": "string" } } }
+      },
+      {
+        "name": "core.settings.sets.update",
+        "description": "Changes the title or the layout of a sidebar set in the scope; a rejected change fails with invalid params.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "layout": {
+              "enum": [
+                "list",
+                "tabs"
+              ]
+            },
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.sets.row",
+        "description": "Changes one section row of a sidebar set in the scope: choose replaces row index with section, up and down swap it with a neighbour, remove deletes it, and add appends the first registered section the set lacks. A repeated section or an impossible move fails with invalid params.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "action": {
+              "enum": [
+                "choose",
+                "up",
+                "down",
+                "remove",
+                "add"
+              ]
+            },
+            "index": {
+              "type": "integer"
+            },
+            "section": {
+              "type": "string"
+            },
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings.sets.delete",
+        "description": "Removes a sidebar set and every link to it in the scope in one change.",
+        "params": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "scope": { "enum": ["common", "project"] } }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.nav",
+        "description": "Shows a section of the open settings modal.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "section": {
+              "enum": [
+                "general",
+                "plugins",
+                "sidebars"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.scope",
+        "description": "Shows the common or project scope in the open settings modal.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.move",
+        "description": "Moves the open settings card by dx, dy points, kept inside the window.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "dx": {
+              "type": "number"
+            },
+            "dy": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.install",
+        "description": "Installs a plugin from the registry index through the host, as sok plugin install does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.update",
+        "description": "Installs the selected version of an installed plugin through the host, as sok plugin update does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.remove",
+        "description": "Removes an installed plugin through the host, as sok plugin remove does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.enable",
+        "description": "Enables an installed plugin through the host, as sok plugin enable does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.disable",
+        "description": "Disables an installed plugin through the host, as sok plugin disable does; the host applies the change to its sidecars and every window reloads its page after the questions of its modified tabs.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.apply",
+        "description": "Asks for each modified tab of the window whether to save it, discard its changes or keep the page, then saves the projects and reloads the page so that it loads the plugins that installed.json lists; answers reloaded false when a tab is kept.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "reloaded": {
+              "type": "boolean"
+            }
+          }
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.plugins.show-updates",
+        "description": "Shows the library plugin page with the update list; the window control 업데이트 N runs it.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.app.update",
+        "description": "Downloads, checks and extracts the release of the candidate application update, then replaces the application bundle and starts the application again; the operation of core.app reports the step, and a failed step rejects with its message. It fails when the registry index lists no candidate.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.app.release",
+        "description": "Opens the release page of the candidate application update in the default application of the person; it fails when the candidate has no release page.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.update-all",
+        "description": "Updates the plugins that the registry lists in a newer version, in id order, one after the other, and reads the plugin state again after each; stops at the first failure with the host error and does nothing when no plugin has an update.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.plugins.replace",
+        "description": "Replaces the outdated persistent service of a sidecar after its sessions end, as the plugin screen offers, and reads the outdated sidecars again; fails with the host error when the sidecar has no running service of another version.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sidecar": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.plugins.registry",
+        "description": "Sets the registry index that plugin operations read, through the host, as sok registry use does, and reads the plugin state again.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.plugins.browse",
+        "description": "Closes the settings modal when it is open, shows the library when the window shows a workspace, and selects its plugin page.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.plugin",
+        "description": "Opens the settings page of a loaded plugin in the plugins section of the open settings modal; a null plugin returns to the list.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.search",
+        "description": "Sets the plugin search text of the open settings modal; the list shows loaded plugins whose id, name, or description contains it, ignoring letter case.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.edit",
+        "description": "Opens the editor of a sidebar set in the open settings modal; a null set closes the editor.",
+        "params": {
+          "type": "object",
+          "properties": { "set": { "type": ["string", "null"] } }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.text.larger",
+        "description": "Enlarges the text of the current text size scope: the last pressed card, or the frame and every card.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.text.smaller",
+        "description": "Reduces the text of the current text size scope.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.text.reset",
+        "description": "Restores the text of the current text size scope to factor 1.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.card.focus",
+        "description": "Focuses a card.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.card.fullscreen",
+        "description": "Toggles one content card across the work area without changing the saved arrangement or OS window state.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.card.menu",
+        "description": "Opens or closes a card's add or split menu.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "menu": {
+              "enum": [
+                "add",
+                "split-x",
+                "split-y"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.card.sidebar.set",
+        "description": "Assigns a set, disables the side with off, or restores the plugin default with inherit.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "type": "string",
+              "enum": [
+                "top",
+                "bottom",
+                "left",
+                "right"
+              ]
+            },
+            "set": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.card.sidebar.toggle",
+        "description": "Folds or unfolds one card sidebar without changing the card size.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "type": "string",
+              "enum": [
+                "top",
+                "bottom",
+                "left",
+                "right"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.card.sidebar.size",
+        "description": "Sets one card sidebar width or height within the configured bounds.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "type": "string",
+              "enum": [
+                "top",
+                "bottom",
+                "left",
+                "right"
+              ]
+            },
+            "size": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.sidebar.section.select",
+        "description": "Shows one section of a sidebar whose set uses the tabs layout; the selection is kept for that sidebar.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sidebar": {
+              "type": "string"
+            },
+            "section": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.sidebar.section.size",
+        "description": "Sets the height of one section of a vertical sidebar whose set uses the list layout, an integer from 32 to 4096 pixels; the height is kept for that sidebar and saved with the space.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sidebar": {
+              "type": "string"
+            },
+            "section": {
+              "type": "string"
+            },
+            "height": {
+              "type": "integer"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.sidebar.section.fold",
+        "description": "Folds or unfolds one section of a sidebar whose set uses the list layout; the state is kept for that sidebar.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sidebar": {
+              "type": "string"
+            },
+            "section": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.card.tab-list",
+        "description": "Opens or closes a card's tab list.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.card.tools",
+        "description": "Opens or closes a card's tool menu, which a narrow card header shows instead of its tools; its items run the same commands as the sidebar buttons and the enabled tools.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.space.apps",
+        "description": "Opens or closes the space apps list of a fullscreen card: every tab of the space in groups by card, in the order of the tree of cuts of the arrangement; picking a tab moves fullscreen to its card and shows it.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.surface.menu",
+        "description": "Opens the context menu that the plugin of a surface declares in surface.menu, in the selection layer at x and y of the window; picking an item runs its command on that surface. A surface whose plugin declares no menu is refused.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "surface": {
+              "type": "string"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.file.place",
+        "description": "Asks the person where to save a new document of the project of the window: the save panel opens in the project root with name as the file name, and the answer is the chosen file relative to the project root, or null when the person cancelled.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.file.open",
+        "description": "Opens the file at path, relative to the project root, in the loaded plugin whose surface.opens declares its extension, or else in the plugin that declares *: activates the tab of that plugin with the same path, or adds a tab with params {path} to card or to the focused card.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.card.add-tab",
+        "description": "Adds a tab of a plugin to a card and activates it. params, when given, must match the plugin's surface.params and are stored with the tab.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "plugin": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.card.split",
+        "description": "Splits a card and puts a new tab of a plugin in a new card on the named side of it: left, right, top, or bottom.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "enum": [
+                "left",
+                "right",
+                "top",
+                "bottom"
+              ]
+            },
+            "plugin": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.card.close",
+        "description": "Closes a card with all its tabs. When a tab of the card is modified, the workbench asks about that tab first, the result is closed false, and the card closes after its modified tabs are saved or discarded.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "closed": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.tab.select",
+        "description": "Activates a tab and focuses its card.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.tab.close",
+        "description": "Closes a tab; the last tab closes its card when the card can close. A modified tab is not closed: the workbench asks whether to save, discard or keep it, and the result is closed false.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "closed": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.tab.move",
+        "description": "Moves a tab to the centre (as a tab) or an edge (as a new card) of a card, as a drop does.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "card": {
+              "type": "string"
+            },
+            "zone": {
+              "enum": [
+                "centre",
+                "left",
+                "right",
+                "top",
+                "bottom"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.tab.unload",
+        "description": "Unloads a hidden tab now. It does not wait for recent, media, media-unknown, capture or form, and fails with tab <id> is protected: <reasons> for the other reasons and for the reasons that ended the attempt.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.tab.keep",
+        "description": "Sets (true) or clears (false) the mark kept of a tab and stores it in tab-state.json; it fails for a tab that can never be unloaded.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "keep": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.tab.menu",
+        "description": "Opens the context menu of a tab in the selection layer at x and y of the window; its keep item runs core.tab.keep with the toggled mark. A tab whose menu has no item, a tab that can never be unloaded, is refused.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.picker.pick",
+        "description": "Picks an item of the open menu by index.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "integer"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.picker.close",
+        "description": "Closes the open menu without picking.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.modal.dismiss",
+        "description": "Closes the open native menu without picking. Escape in the menu answers with this command.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.page",
+        "description": "Shows a page of the library: projects or plugins.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "page": {
+              "enum": [
+                "projects",
+                "plugins"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.plugins.search",
+        "description": "Sets the plugin search text of the library plugin page; the page shows plugins whose id, name, or description contains it, ignoring letter case.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.search",
+        "description": "Sets the library search text.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.search.focus",
+        "description": "Focuses the search field of the currently shown library page.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.sort",
+        "description": "Sets the library sort order.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "order": {
+              "enum": [
+                "saved",
+                "name",
+                "recent",
+                "open"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.open",
+        "description": "Opens a project from the library in place and shows its workspace.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.pin",
+        "description": "Pins or unpins a project from the library.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "pinned": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.remove",
+        "description": "Removes a project and its spaces from the library. The project folder is not changed.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.library.window",
+        "description": "Opens a new window from the library.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.return",
+        "description": "Returns to the active project's workspace.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.form.open",
+        "description": "Opens the library form to create a project folder or to open an existing folder.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": [
+                "create",
+                "open"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.form.cancel",
+        "description": "Closes the library form.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.form.set",
+        "description": "Sets a field of the library form.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "enum": [
+                "name",
+                "parent"
+              ]
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.form.submit",
+        "description": "Submits the library form: creates the folder when asked, then opens it as a project.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.library.choose-folder",
+        "description": "Asks for a folder with the system dialog and puts it in the form's parent field.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 600000
+      },
+      {
+        "name": "core.rename.begin",
+        "description": "Starts renaming a project or space tab in place.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "project",
+                "space"
+              ]
+            },
+            "id": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.rename.set",
+        "description": "Sets the value of the tab being renamed.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.rename.commit",
+        "description": "Saves the new name; an empty name keeps the old one.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.rename.cancel",
+        "description": "Stops renaming without saving.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.focus.set",
+        "description": "Gives keyboard focus to an exposed element of the main document.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "index": {
+              "type": "integer"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.surface.hit",
+        "description": "Registered by every plugin surface page: whether an element of the document is at the point in CSS pixels.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "boolean"
+        }
+      }
+    ],
+    "dom": [
+      {
+        "name": "core.brand",
+        "description": "The soksak logo at the start of the title bar; its letters are light in dark mode and dark in light mode."
+      },
+      {
+        "name": "core.chrome.bar",
+        "description": "The window chrome row."
+      },
+      {
+        "name": "core.chrome.balance",
+        "description": "The card auto-arrange button after the project library button."
+      },
+      {
+        "name": "core.chrome.projects",
+        "description": "The project library button."
+      },
+      {
+        "name": "core.chrome.left",
+        "description": "The left sidebar switch."
+      },
+      {
+        "name": "core.chrome.right",
+        "description": "The right sidebar switch."
+      },
+      {
+        "name": "core.chrome.mode",
+        "description": "The light and dark mode switch."
+      },
+      {
+        "name": "core.chrome.settings",
+        "description": "The settings button."
+      },
+      {
+        "name": "core.chrome.updates",
+        "description": "The window control 업데이트 N, present only while the registry lists a plugin update; it shows the plugin page at the update list."
+      },
+      {
+        "name": "core.project-tab",
+        "description": "The project tabs in order.",
+        "many": true
+      },
+      {
+        "name": "core.project-tab.add",
+        "description": "The project tab add button."
+      },
+      {
+        "name": "core.space-tab",
+        "description": "The space tabs in order.",
+        "many": true
+      },
+      {
+        "name": "core.space-tab.add",
+        "description": "The space tab add button."
+      },
+      {
+        "name": "core.card",
+        "description": "The cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.tab",
+        "description": "The tabs of every card in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.sidebar.grip",
+        "description": "The dividers of card sidebars in document order; dragging sizes a side and clicking folds or unfolds it.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar",
+        "description": "The drawn sidebars in document order, in the order of core.sidebars; each holds its sections.",
+        "many": true
+      },
+      {
+        "name": "core.card.header",
+        "description": "The headers of cards with tabs in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.status",
+        "description": "The content footers of cards with tabs in document order; each spans only its card's content column.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.status",
+        "description": "The status lines that end the fixed left and right window sidebars in document order.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.fold",
+        "description": "The fold controls at the end of the window sidebar status lines in document order; each turns its sidebar off with core.settings.set, and the window header control turns it on again.",
+        "many": true
+      },
+      {
+        "name": "core.card.sidebar.fold",
+        "description": "The sidebar controls of the card headers in document order: one for each side a card shows, before the card tools in the order top, bottom, left, right; each runs core.card.sidebar.toggle for its side and is pressed while the side is open.",
+        "many": true
+      },
+      {
+        "name": "core.card.sidebar.status",
+        "description": "The status lines that end the open card sidebars in document order; each names its side and its set.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.section",
+        "description": "The section elements of drawn sidebars in document order; each holds the view of its section surface.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.section.header",
+        "description": "The fold headers of sections in list-layout sidebars in document order.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.tabs",
+        "description": "The tab strips of tabs-layout sidebars in document order.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.section.name",
+        "description": "The names in the fold headers of list-layout sidebars in document order.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.section.divider",
+        "description": "The dividers between adjacent open sections of vertical list-layout sidebars in document order; dragging one sizes a section.",
+        "many": true
+      },
+      {
+        "name": "core.sidebar.section.tab",
+        "description": "The section tabs of tabs-layout sidebars in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.add",
+        "description": "The add-tab buttons of pane cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.split-x",
+        "description": "The vertical split buttons of pane cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.split-y",
+        "description": "The horizontal split buttons of pane cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.fullscreen",
+        "description": "The card fullscreen toggles immediately before each header close button, in document order.",
+        "many": true
+      },
+      {
+        "name": "core.card.close",
+        "description": "The close buttons of pane cards in document order.",
+        "many": true
+      },
+      {
+        "name": "core.picker.item",
+        "description": "The items of the open add or tab menu in order.",
+        "many": true
+      },
+      {
+        "name": "core.tab.menu-keep",
+        "description": "The keep item of the tab context menu; it runs core.tab.keep with the toggled mark, is active while the tab has the mark kept, and is absent for a tab that can never be unloaded."
+      },
+      {
+        "name": "core.picker.item-icon",
+        "description": "The icon slots of the items of the open menu in item order; at one depth they stand in the column of core.picker.group-icon.",
+        "many": true
+      },
+      {
+        "name": "core.picker.item-name",
+        "description": "The names of the items of the open menu in item order; at one depth they start at the x of core.picker.group-name.",
+        "many": true
+      },
+      {
+        "name": "core.picker.group-icon",
+        "description": "The map icons of the group headings of the open grouped menu in heading order.",
+        "many": true
+      },
+      {
+        "name": "core.picker.group-name",
+        "description": "The names of the group headings of the open grouped menu in heading order.",
+        "many": true
+      },
+      {
+        "name": "core.library.page",
+        "description": "The 프로젝트 and 플러그인 page tabs of the library heading in order.",
+        "many": true
+      },
+      {
+        "name": "core.library.plugins.search",
+        "description": "The plugin search field of the library plugin page."
+      },
+      {
+        "name": "core.library.plugins.action",
+        "description": "The action buttons of the plugin cards in document order: 설치, 업데이트, 사용 or 사용 안 함, and 제거, each bound to its core.plugins command.",
+        "many": true
+      },
+      {
+        "name": "core.library.plugins.outdated",
+        "description": "The rows of the outdated persistent services above the plugin cards, in sidecar order.",
+        "many": true
+      },
+      {
+        "name": "core.library.app.row",
+        "description": "The row of the candidate application update, first in the update list of the plugin page: the versions, the release page and update controls and the step or error of the operation."
+      },
+      {
+        "name": "core.library.app.release",
+        "description": "The button that opens the release page of the candidate application update."
+      },
+      {
+        "name": "core.library.app.update",
+        "description": "The button that updates the application."
+      },
+      {
+        "name": "core.library.app.incompatible",
+        "description": "The lines of the installed plugins whose engines.soksak does not contain the candidate application update, each with the newest version of the plugin that does or the note that none does, below the row of the candidate.",
+        "many": true
+      },
+      {
+        "name": "core.library.app.operation",
+        "description": "The step or the error of the application update operation, below the row of the candidate."
+      },
+      {
+        "name": "core.library.plugins.updates",
+        "description": "The rows of the plugins that the registry lists in a newer version, above the plugin cards, in id order.",
+        "many": true
+      },
+      {
+        "name": "core.library.plugins.update-all",
+        "description": "The button that updates every plugin of the update list."
+      },
+      {
+        "name": "core.library.plugins.replace",
+        "description": "The buttons that end the sessions of an outdated service and replace it, in the order of the rows.",
+        "many": true
+      },
+      {
+        "name": "core.library.search",
+        "description": "The project search field."
+      },
+      {
+        "name": "core.library.sort",
+        "description": "The project sort selection."
+      },
+      {
+        "name": "core.library.open",
+        "description": "The open buttons of the shown projects in order.",
+        "many": true
+      },
+      {
+        "name": "core.library.pin",
+        "description": "The pin buttons of the shown projects in order.",
+        "many": true
+      },
+      {
+        "name": "core.library.remove",
+        "description": "The remove buttons of the shown projects in order.",
+        "many": true
+      },
+      {
+        "name": "core.library.add",
+        "description": "The new project button."
+      },
+      {
+        "name": "core.library.return",
+        "description": "The button that returns to the current project."
+      },
+      {
+        "name": "core.library.window",
+        "description": "The new window button."
+      },
+      {
+        "name": "core.library.form.name",
+        "description": "The project folder name field."
+      },
+      {
+        "name": "core.library.form.parent",
+        "description": "The parent or folder path field."
+      },
+      {
+        "name": "core.library.form.choose",
+        "description": "The folder selection button."
+      },
+      {
+        "name": "core.library.form.mode-new",
+        "description": "The toggle that switches the form to making a new folder."
+      },
+      {
+        "name": "core.library.form.mode-existing",
+        "description": "The toggle that switches the form to adopting an existing folder."
+      },
+      {
+        "name": "core.library.form.cancel",
+        "description": "The form cancel button."
+      },
+      {
+        "name": "core.library.form.submit",
+        "description": "The form submit button."
+      },
+      {
+        "name": "core.debug.card",
+        "description": "The debug card in the main document; the native modal draws it at the same rectangle."
+      },
+      {
+        "name": "core.debug.scrim",
+        "description": "The layer that blocks the main document while the debug view is open."
+      },
+      {
+        "name": "core.debug.close",
+        "description": "The debug view close button."
+      },
+      {
+        "name": "core.debug.save-all",
+        "description": "The button that saves the logs folder as one file."
+      },
+      {
+        "name": "core.debug.view",
+        "description": "The 보기 buttons of the text file rows in path order.",
+        "many": true
+      },
+      {
+        "name": "core.debug.list",
+        "description": "The button that shows the list of files again."
+      },
+      {
+        "name": "core.debug.text",
+        "description": "The text of the shown file."
+      },
+      {
+        "name": "core.debug.progress",
+        "description": "The progress bar of a save of the logs folder: the bytes written of the bytes listed, shown while the host writes."
+      },
+      {
+        "name": "core.debug.image",
+        "description": "The image of the shown PNG file."
+      },
+      {
+        "name": "core.debug.file",
+        "description": "The rows of the files of the logs folder in path order.",
+        "many": true
+      },
+      {
+        "name": "core.debug.state",
+        "description": "The 상태 buttons of the state file rows in path order.",
+        "many": true
+      },
+      {
+        "name": "core.debug.state.list",
+        "description": "The button of the state view that shows the list of files again."
+      },
+      {
+        "name": "core.debug.state.with",
+        "description": "The selection box of the state file that the shown state file is compared with."
+      },
+      {
+        "name": "core.debug.state.differences",
+        "description": "The container of the differences between the compared state files."
+      },
+      {
+        "name": "core.debug.state.difference",
+        "description": "The paths whose values differ, each as the path with the value in the shown file and in the other file.",
+        "many": true
+      },
+      {
+        "name": "core.debug.state.tree",
+        "description": "The container of the lines of the shown state file."
+      },
+      {
+        "name": "core.debug.state.line",
+        "description": "The lines of the shown state file in file order, each a key with its value or the number of its members, indented by depth.",
+        "many": true
+      },
+      {
+        "name": "core.debug.timeline",
+        "description": "The button that shows the timeline of the event files."
+      },
+      {
+        "name": "core.debug.timeline.list",
+        "description": "The button of the timeline that shows the list of files again."
+      },
+      {
+        "name": "core.debug.timeline.channel",
+        "description": "The selection box of the channel of the event files that the timeline shows."
+      },
+      {
+        "name": "core.debug.timeline.follow",
+        "description": "The button of the timeline that stops following the growing event files, or resumes it."
+      },
+      {
+        "name": "core.debug.timeline.older",
+        "description": "The button of the timeline that puts the page of events before the oldest held row in front of the rows; hidden when no older row exists."
+      },
+      {
+        "name": "core.debug.timeline.level",
+        "description": "The selection box of the least severe level that the timeline shows."
+      },
+      {
+        "name": "core.debug.timeline.layer",
+        "description": "The selection box of the layer that the timeline shows."
+      },
+      {
+        "name": "core.debug.timeline.class",
+        "description": "The text field of the class that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.text",
+        "description": "The text field of the part of a line that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.event",
+        "description": "The text field of the exact event name that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.event-prefix",
+        "description": "The text field of the event name, or the first part of one that ends before a dot, that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.surface",
+        "description": "The text field of the surface that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.session",
+        "description": "The text field of the session that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.cid",
+        "description": "The text field of the correlation identifier that a row of the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.run",
+        "description": "The text field of the run identifier whose range of time the timeline shows."
+      },
+      {
+        "name": "core.debug.timeline.from",
+        "description": "The text field of the first UTC time that the timeline shows."
+      },
+      {
+        "name": "core.debug.timeline.to",
+        "description": "The text field of the last UTC time that the timeline shows."
+      },
+      {
+        "name": "core.debug.timeline.select",
+        "description": "The buttons that select or unselect the rows of the timeline, one before each row; a selected row's container has data-selected true.",
+        "many": true
+      },
+      {
+        "name": "core.debug.timeline.context",
+        "description": "The buttons that bring the rows around a row of the timeline into the held rows, one before each row.",
+        "many": true
+      },
+      {
+        "name": "core.debug.timeline.save",
+        "description": "The button that saves the selected rows of the timeline."
+      },
+      {
+        "name": "core.debug.timeline.omitted",
+        "description": "The note that states how many of the oldest rows the view left out when following filled it; hidden when it left none out."
+      },
+      {
+        "name": "core.debug.timeline.warning",
+        "description": "The warning beside the save button that the saved file can hold typed text."
+      },
+      {
+        "name": "core.debug.timeline.rows",
+        "description": "The container of the rows of the timeline."
+      },
+      {
+        "name": "core.debug.timeline.row",
+        "description": "The rows of the timeline in key order, each the text line of one event.",
+        "many": true
+      },
+      {
+        "name": "core.debug.save",
+        "description": "The save buttons of the file rows in path order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.card",
+        "description": "The settings card in the main document; the native modal draws it at the same rectangle."
+      },
+      {
+        "name": "core.settings-modal.scrim",
+        "description": "The layer that blocks the main document while settings are open."
+      },
+      {
+        "name": "core.settings-modal.grip",
+        "description": "The settings header that moves the card."
+      },
+      {
+        "name": "core.settings-modal.close",
+        "description": "The settings close button."
+      },
+      {
+        "name": "core.settings-modal.nav",
+        "description": "The settings section buttons in order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.scope",
+        "description": "The settings scope buttons in order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.theme",
+        "description": "The theme swatches in order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.set",
+        "description": "The setting controls in document order (switches, select boxes, sliders and text fields, one control per setting form); core.settings-modal lists their keys.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.debug",
+        "description": "The 디버그 switch of the 진단 row: on when the performance trace is on and every class of the log policy is at trace."
+      },
+      {
+        "name": "core.settings-modal.reset",
+        "description": "The buttons that remove project overrides in document order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.plugin",
+        "description": "The rows of the loaded plugin list in id order, filtered by the search text; each shows the plugin name.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.edit",
+        "description": "The set edit buttons in set order, then the button that closes the editor.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.set-caption",
+        "description": "The line of each sidebar set in set order: its title, layout and sections.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.delete",
+        "description": "The set delete buttons in set order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.create",
+        "description": "The button that creates a sidebar set."
+      },
+      {
+        "name": "core.settings-modal.search",
+        "description": "The plugin search field."
+      },
+      {
+        "name": "core.card.placeholder-action",
+        "description": "The 설치 or 사용 button of a placeholder card for a tab of a plugin that is not loaded, bound to core.plugins.install or core.plugins.enable."
+      },
+      {
+        "name": "core.settings-modal.back",
+        "description": "The 목록 button of a plugin page, which returns to the plugin list."
+      },
+      {
+        "name": "core.settings-modal.manage",
+        "description": "The 플러그인 관리 button of the plugins section, bound to core.plugins.browse."
+      },
+      {
+        "name": "core.settings-modal.row",
+        "description": "The section select boxes of the set editor, one per row in set order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.row-act",
+        "description": "The ▲, ▼, and − buttons of the set editor rows in document order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.add",
+        "description": "The + button of the set editor, which adds a section row."
+      },
+{
+        "name": "core.project-tab.close",
+        "description": "The close buttons of the project tabs, in tab order.",
+        "many": true
+      },
+      {
+        "name": "core.space-tab.close",
+        "description": "The close buttons of the space tabs, in tab order; absent with one space.",
+        "many": true
+      },
+      {
+        "name": "core.card.tab-list",
+        "description": "The tab list buttons of the cards, in card order.",
+        "many": true
+      },
+      {
+        "name": "core.card.tools",
+        "description": "The tool menu buttons of the cards, in card order.",
+        "many": true
+      },
+      {
+        "name": "core.card.space-apps",
+        "description": "The space apps buttons of the cards, in card order; the button is shown at the front of a fullscreen card's header.",
+        "many": true
+      },
+      {
+        "name": "core.card.tab-close",
+        "description": "The close buttons of the tabs in cards, in document order.",
+        "many": true
+      },
+      {
+        "name": "core.divider",
+        "description": "The grab areas of the layout boundaries.",
+        "many": true
+      },
+      {
+        "name": "core.rename.input",
+        "description": "The input of the tab being renamed."
+      },
+      {
+        "name": "core.drop",
+        "description": "The drop preview of the main document."
+      },
+      {
+        "name": "core.projects.column",
+        "description": "The left column that holds the project tabs when they stand on the left."
+      },
+      {
+        "name": "core.library.empty",
+        "description": "The note shown when there are no projects."
+      },
+      {
+        "name": "core.library.no-results",
+        "description": "The note shown when the search matches no project."
+      }
+    ]
+  }
+}
