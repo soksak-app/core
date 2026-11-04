@@ -42,6 +42,13 @@
 #                         footprint, and then the reuse of the retained processes by a fresh set of views. It sends no signal to
 #                         a WebContent process. It fails when a navigation does not finish within its limit, or when a WebContent
 #                         process that the benchmark retained still exists after the benchmark exits
+#   make benchmark-site-cost [RUNS=<count>]
+#                         measures each site of the fixed list of tests/support/site_cost.m in a document region, with RUNS (at
+#                         least 5, the default) runs of each site, each run in its own process. It prints each run and, per site, the
+#                         median, quartiles and interquartile range of the memory increase of the WebContent, GPU and network processes
+#                         over a baseline without the tab, the CPU at rest and in the background, the load time and the input delay. It
+#                         needs the network and a window on the visible screen, takes about two minutes per run, prints numbers and
+#                         asserts nothing
 #   make benchmark-region-cost [URL=<address>] [LONG=<minutes>] [VARIANTS=<name,name>] [RELOAD=<count>] [COLLECTION=<minutes>] [PRESSURE=<level>]
 #                         loads an address (default https://www.google.com/) in a 1200×760 window with a 1180×400 region in the
 #                         variants of tests/region_cost_benchmark.m (plain web views with one setting each, a document region with no
@@ -115,7 +122,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: all fetch capture-text-path test e2e test-capture-frame-identity test-capture-stop-intake e2e-activation e2e-input-reference-readiness e2e-view-focus-restore e2e-activation-backspace e2e-activation-backspace-repeat build-ime-activation-target test-ime-cli e2e-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
+.PHONY: all fetch capture-text-path test e2e benchmark-site-cost test-capture-frame-identity test-capture-stop-intake e2e-activation e2e-input-reference-readiness e2e-view-focus-restore e2e-activation-backspace e2e-activation-backspace-repeat build-ime-activation-target test-ime-cli e2e-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
 
 all: fetch $(LIBRARY) $(PKGCONFIG)
 
@@ -196,6 +203,9 @@ $(PROCESS_IDENTITY_LIBRARY):
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
 	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
+$(BUILD)/site_cost_test: tests/site_cost_test.m tests/support/site_cost.m tests/support/site_cost.h tests/support/no_activation.m | $(BUILD)
+	@clang $(CFLAGS) -I$(CURDIR)/tests $< tests/support/site_cost.m tests/support/no_activation.m -framework Foundation -framework AppKit -o $@
+
 # Vision reads captured pixels only in this check executable, outside application rendering.
 $(BUILD)/capture_text_test: tests/capture_text_test.m tests/support/no_activation.m | $(BUILD)
 	@clang $(CFLAGS) $< tests/support/no_activation.m -framework Foundation -framework AppKit -framework Vision -framework CoreText -o $@
@@ -206,6 +216,9 @@ capture-text-path: $(BUILD)/capture_text_test
 # A measurement tool is not a test. It prints numbers, asserts nothing, and is not part of the test target.
 $(BUILD)/%_benchmark: tests/%_benchmark.m tests/support/temporary_folder.m tests/support/temporary_folder.h $(LIBRARY) $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+
+$(BUILD)/site_cost_benchmark: tests/site_cost_benchmark.m tests/support/site_cost.m tests/support/site_cost.h tests/support/temporary_folder.m tests/support/temporary_folder.h $(LIBRARY) $(wildcard src/*.h src/private/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/site_cost.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 benchmark: $(BUILD)/event_ring_benchmark
 	@$(BUILD)/event_ring_benchmark
@@ -233,6 +246,11 @@ benchmark-view-processes: $(BUILD)/view_processes_benchmark
 URL ?= https://www.google.com/
 benchmark-region-cost: $(BUILD)/region_cost_benchmark
 	@$(BUILD)/region_cost_benchmark $(if $(URL),"$(URL)") $(if $(LONG),--long $(LONG)) $(if $(VARIANTS),--variants $(VARIANTS)) $(if $(RELOAD),--reload $(RELOAD)) $(if $(COLLECTION),--collection $(COLLECTION)) $(if $(PRESSURE),--pressure $(PRESSURE))
+
+# The cost of each site of the fixed list of tests/support/site_cost.m: make benchmark-site-cost RUNS=5
+RUNS ?= 5
+benchmark-site-cost: $(BUILD)/site_cost_benchmark
+	@$(BUILD)/site_cost_benchmark --runs $(RUNS)
 
 # A check that includes the acceptance check body is rebuilt when that body changes.
 $(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
@@ -292,6 +310,7 @@ NATIVE_TESTS = observe_test \
   application_log_test \
   application_log_fatal_test \
   event_ring_test \
+  site_cost_test \
   surface_host_test \
   surface_container_test \
   surface_layout_observe_test \

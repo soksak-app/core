@@ -692,6 +692,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F520",
+    implementation: [
+      { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostSummarize(const double *values, int count, SiteCostSummary *summary) {" },
+      { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostParseRuns(const char *text, int *runs) {" },
+      { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostCheckRun(const SiteCostRun *run) {" },
+      { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostDecodeRun(NSData *data, SiteCostRun *run) {" },
+      { file: "native/darwin/tests/support/site_cost.m", symbol: "NSString *siteCostReport(const SiteCostRun *runs, int runCount, NSString **error) {" },
+      { file: "native/darwin/tests/site_cost_benchmark.m", symbol: "static void measureRun(const SiteCostSite *site, NSString *output) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/site_cost_test.m", id: "the fixed list has seven sites" },
+      { file: "native/darwin/tests/site_cost_test.m", id: "five values have the quartiles 2, 4 and 5" },
+      { file: "native/darwin/tests/site_cost_test.m", id: "four values are refused" },
+      { file: "native/darwin/tests/site_cost_test.m", id: "five runs are accepted" },
+      { file: "native/darwin/tests/site_cost_test.m", id: "a run survives its file" },
+      { file: "native/darwin/tests/site_cost_test.m", id: "the refusal names the site, the run and the metric" },
+    ],
+    expected: "A tracked benchmark target measures each site of a fixed list in a document region, with a page that changes its tree without pause among them, and reports per site the memory increase of the content, graphics and network processes over a baseline without the tab, the CPU at rest and in the background, the load time and the input delay, as the median and interquartile range of at least five runs.",
+    levels: ["unit"],
+  },
+  {
     id: "F518",
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "char *sp_document_binary_put(void *handle, const void *bytes, size_t length, const char *type, char id[33]) {" },

@@ -395,6 +395,7 @@ Performance acceptance uses locally optimized diagnostic binaries: both core hos
 - Consecutive captured view-drag frames target a maximum interval of 33 ms. ScreenCaptureKit does not guarantee its requested update interval; retain the measured interval and whether it exceeds this target.
 - During a divider drag, a recorded frame shows the layout of a step at most four display frames after the grid left that layout, and over the drag the median delay is at most 2.5 frames and the 90th percentile at most 3 frames (at 60Hz: 66.7ms, 41.7ms and 50ms).
 - A document region adds no memory and no CPU to the page that it shows: over five runs, the memory and the CPU of a page in a region equal, within the interquartile range of the runs, those of the same page in a plain web view with the same user agent. `make -C native/darwin benchmark-region-cost URL=<address>` measures the memory of both.
+- `make -C native/darwin benchmark-site-cost [RUNS=<count>]` reports what a tab costs for each site of a fixed list, among them a page that changes its tree without pause, in a document region with the element and request streams subscribed: the memory of the content, GPU and network processes over a baseline without the tab, the CPU at rest and in the background, the load time and the input delay, each as the median and the interquartile range of at least five runs. It holds no bound; a cost that it attributes to this repository is corrected under its own unit test.
 
 ## Platform scope
 
