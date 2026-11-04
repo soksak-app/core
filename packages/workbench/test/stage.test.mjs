@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { PAGE_IMPORTS, VIEW_IMPORTS, VIEW_IMPORTS_FILE, pageImports, viewImports } from "@soksak/plugin-api";
+import { JSDOM } from "jsdom";
+import { PAGE_IMPORTS, VIEW_IMPORTS, VIEW_IMPORTS_FILE, importSpecifiers, pageImports, viewImports } from "@soksak/plugin-api";
+import { STAGED } from "../staged.js";
 
 const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
 const OBSERVE = fileURLToPath(new URL("../observe.js", import.meta.url));
@@ -216,4 +218,57 @@ test("staging writes the view import map as the JSON text of VIEW_IMPORTS, which
   stage(app, "--diagnostics");
   assert.equal(readFileSync(join(app, "out", VIEW_IMPORTS_FILE), "utf8"),
     JSON.stringify({ imports: viewImports({ diagnostics: true }) }));
+});
+
+/** The pages that a host opens from the staged frontend. */
+const PAGES = ["index.html", "overlay.html"];
+
+/** The path in the staged frontend of a specifier of `importer`, through the import map of its page. Undefined when the map does not hold it. */
+function stagedPath(specifier, importer, imports) {
+  const mapped = Object.entries(imports).find(([name]) => name === specifier || (name.endsWith("/") && specifier.startsWith(name)));
+  const relative = specifier.startsWith("./") || specifier.startsWith("../") || specifier.startsWith("/");
+  if (!mapped && !relative) return undefined;
+  const target = mapped ? `${mapped[1]}${specifier.slice(mapped[0].length)}` : specifier;
+  return new URL(target, `http://stage/${importer}`).pathname.slice(1);
+}
+
+/** Walks the scripts, styles and imports from a staged page and returns each reference that the staged frontend does not hold. */
+function missingReferences(out, page) {
+  const html = readFileSync(join(out, page), "utf8");
+  const { document } = new JSDOM(html).window;
+  const imports = pageImports(html);
+  const scripts = [...document.querySelectorAll("script:not([type=importmap])")];
+  const references = (importer, specifiers) => specifiers.map((specifier) => ({ importer, specifier }));
+  const pending = [
+    ...references(page, scripts.filter((script) => script.src).map((script) => script.getAttribute("src"))),
+    ...references(page, scripts.filter((script) => !script.src).flatMap((script) => importSpecifiers(script.textContent))),
+    ...references(page, [...document.querySelectorAll("link[rel=stylesheet]")].map((link) => link.getAttribute("href"))),
+  ];
+  const seen = new Set();
+  const missing = [];
+  while (pending.length > 0) {
+    const { importer, specifier } = pending.shift();
+    const path = stagedPath(specifier, importer, imports);
+    if (path === undefined) {
+      missing.push(`${importer} imports ${specifier}, which the import map of ${page} does not map`);
+    } else if (STAGED.served.includes(path) || seen.has(path)) {
+      continue;
+    } else if (!existsSync(join(out, path))) {
+      missing.push(`${importer} imports ${specifier}, which is not staged`);
+    } else {
+      seen.add(path);
+      if (path.endsWith(".js")) pending.push(...references(path, importSpecifiers(readFileSync(join(out, path), "utf8"))));
+    }
+  }
+  return missing;
+}
+
+test("staging holds every file that a staged page reaches, in a release and in a diagnostic build", (t) => {
+  for (const flags of [[], ["--diagnostics"]]) {
+    const app = fixtureApp(t);
+    stage(app, ...flags);
+    for (const page of PAGES) {
+      assert.deepEqual(missingReferences(join(app, "out"), page), [], `${page} ${flags.join(" ")}`);
+    }
+  }
 });

@@ -697,6 +697,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F530",
+    implementation: [
+      { file: "packages/workbench/package.json", symbol: "\"head-fit.js\"," },
+      { file: "packages/plugin-api/index.js", symbol: "export function importSpecifiers(source) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/stage.test.mjs", id: "staging holds every file that a staged page reaches, in a release and in a diagnostic build" },
+    ],
+    expected: "Every script, style and import that a staged page reaches in a release and in a diagnostic build is staged, except the documents that a host creates for each request.",
+    levels: ["unit"],
+  },
+  {
     id: "F527",
     implementation: [
       { file: "packages/workbench/settings.js", symbol: "export function settingType(key) {" },

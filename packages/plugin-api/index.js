@@ -98,7 +98,7 @@ const VIEW_CLOSURE_ENTRIES = Object.freeze({
 });
 
 /** Returns the specifiers of the static imports, dynamic imports and re-exports of a module, without comments. */
-function importSpecifiers(source) {
+export function importSpecifiers(source) {
   const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   const found = [];
   const pattern = /\bfrom\s+["']([^"']+)["']|\bimport\s+["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)/g;
