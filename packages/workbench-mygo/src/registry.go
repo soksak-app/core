@@ -174,6 +174,26 @@ var methodKinds = map[string]string{
 // causeID is the form of a correlation identifier of the cause of a request (docs/spec/exposure.md#requests).
 var causeID = regexp.MustCompile(`^[^"\\\x00-\x1f\x7f]+$`)
 
+// Reply is Answer for a request whose command may answer in a later step. It calls answer once.
+func (r *Registry) Reply(method string, params json.RawMessage, changed Changed, answer func(result any, err error)) {
+	var fields map[string]json.RawMessage
+	var name string
+	if method == "command.run" && json.Unmarshal(params, &fields) == nil && json.Unmarshal(fields["name"], &name) == nil {
+		r.mu.Lock()
+		later := r.later[name]
+		r.mu.Unlock()
+		if later != nil {
+			if err := r.checkRequest(name, fields); err != nil {
+				answer(nil, err)
+				return
+			}
+			later(fields["params"], answer)
+			return
+		}
+	}
+	answer(r.Answer(method, params, changed))
+}
+
 // Answer answers one request of the relay (docs/spec/exposure.md#relay) with its result, or with a Refusal in the words of the page.
 // A status that the request starts to watch sends its values to changed.
 func (r *Registry) Answer(method string, params json.RawMessage, changed Changed) (any, error) {
@@ -223,18 +243,26 @@ func (r *Registry) runRequest(name string, fields map[string]json.RawMessage) (a
 	if !registered {
 		return nil, Refuse(Unregistered, "command %s is not registered", name)
 	}
+	if err := r.checkRequest(name, fields); err != nil {
+		return nil, err
+	}
+	return r.Run(name, fields["params"])
+}
+
+// checkRequest makes the checks of the page on the parameters of a command request, in their order.
+func (r *Registry) checkRequest(name string, fields map[string]json.RawMessage) error {
 	var input map[string]any
 	if json.Unmarshal(fields["params"], &input) != nil || input == nil {
-		return nil, Refuse(InvalidParams, "command.run for %s requires params", name)
+		return Refuse(InvalidParams, "command.run for %s requires params", name)
 	}
 	if !MatchesSchema(r.declared.params[name], input) {
-		return nil, Refuse(InvalidParams, "invalid params for %s", name)
+		return Refuse(InvalidParams, "invalid params for %s", name)
 	}
 	// The handlers of the workbench take no cause, and an invalid list is refused also for a handler that ignores it.
 	if cids, present := fields["cids"]; present && !validCauses(cids) {
-		return nil, Refuse(InvalidParams, "command.run for %s: command cids must be an array of non-empty strings without a quote, a backslash or a control character", name)
+		return Refuse(InvalidParams, "command.run for %s: command cids must be an array of non-empty strings without a quote, a backslash or a control character", name)
 	}
-	return r.Run(name, fields["params"])
+	return nil
 }
 
 // validCauses reports whether cids is a list of correlation identifiers.
@@ -257,7 +285,7 @@ func (r *Registry) list() map[string][]map[string]any {
 	defer r.mu.Unlock()
 	registered := map[string]func(name string) bool{
 		"status":   func(name string) bool { return r.statuses[name] != nil },
-		"commands": func(name string) bool { return r.commands[name] != nil },
+		"commands": func(name string) bool { return r.commands[name] != nil || r.later[name] != nil },
 		"dom":      func(string) bool { return false },
 	}
 	out := map[string][]map[string]any{}

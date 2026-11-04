@@ -33,6 +33,8 @@ type ShellOptions struct {
 	Report func(line string)
 	// Seat draws what stands in the slot of a card. Without it the slot stays empty.
 	Seat Seat
+	// Tabs is what the file commands, the memory saver and the background sessions read. Without it they are not registered.
+	Tabs *TabPorts
 }
 
 // Seat draws the surface of the active tab of a card in the box of the slot, in window coordinates.
@@ -125,6 +127,7 @@ type Shell struct {
 	plane    *layout.Grid
 	focused  string
 	library  libraryState
+	tabs     *shellTabs
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
@@ -152,6 +155,9 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.requests = NewRequests(s.registry, s.calls, options.Post, options.Report)
 	s.register()
+	if options.Tabs != nil {
+		s.connectTabs(*options.Tabs)
+	}
 	return s, nil
 }
 
@@ -169,11 +175,13 @@ func (s *Shell) Start() {
 			s.fail(err)
 			return
 		}
-		s.calls.Call("windowReady", nil, func(_ any, err error) {
-			if err != nil {
-				s.fail(err)
-			}
-			s.options.Invalidate()
+		s.openTabs(func() {
+			s.calls.Call("windowReady", nil, func(_ any, err error) {
+				if err != nil {
+					s.fail(err)
+				}
+				s.options.Invalidate()
+			})
 		})
 	})
 }

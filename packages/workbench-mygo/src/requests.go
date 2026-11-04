@@ -34,8 +34,9 @@ func (q *Requests) Deliver(data ...any) {
 			q.failed(fmt.Sprintf("exposure request: %v", err))
 			return
 		}
-		result, err := q.registry.Answer(request.Method, request.Params, q.changed)
-		q.send("exposureReply", "exposure reply", replyOf(request.ID, result, err))
+		q.registry.Reply(request.Method, request.Params, q.changed, func(result any, err error) {
+			q.send("exposureReply", "exposure reply", replyOf(request.ID, result, err))
+		})
 	})
 }
 
