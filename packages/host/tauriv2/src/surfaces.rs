@@ -1309,16 +1309,23 @@ fn check_resolved_sync_request(
 /// cannot be fitted, the previous title bar is restored with restore and then the placement is canceled. A cancel
 /// commits the transaction, so without the restore the new title bar would be shown together with the previous rows.
 /// steps reads the answer of titlebar and returns that answer together when it succeeds.
-pub fn run_layout<C, T>(
+pub fn run_layout(
     overlays: impl FnOnce() -> Result<(), String>,
     begin: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    overlays()?;
+    begin()
+}
+
+/// Sets the title bar in the started layout and then fits the surfaces. A title bar that cannot be set does not fit the
+/// surfaces. When the surfaces cannot be fitted, it restores the title bar and cancels: a cancel commits the transaction,
+/// so without the restore the new title bar would appear.
+pub fn apply_or_cancel<C, T>(
     titlebar: impl FnOnce() -> Result<C, String>,
     steps: impl FnOnce(&C) -> Result<T, String>,
     restore: impl FnOnce(C) -> Result<(), String>,
     cancel: impl FnOnce(),
 ) -> Result<(T, C), String> {
-    overlays()?;
-    begin()?;
     let change = match titlebar() {
         Ok(change) => change,
         Err(error) => {
@@ -1339,6 +1346,205 @@ pub fn run_layout<C, T>(
     }
 }
 
+/// What a layout turn leaves for the work that runs outside the main thread.
+struct AppliedLayout {
+    prepared: Result<(PreparedSurfaces, TitlebarChange), String>,
+    /// The surfaces that this layout created, as (plugin, surface).
+    opened: Vec<(String, String)>,
+    /// The surfaces that this layout removed.
+    removed: HashSet<String>,
+}
+
+/// The values of one layout that its main-thread steps read.
+struct LayoutTurn {
+    window: Window,
+    context: Arc<crate::windows::WindowData>,
+    platform: &'static dyn platform::Platform,
+    main_handle: Handle,
+    scale: f64,
+    ticket: u64,
+}
+
+/// Creates, fits and removes the surface views. It runs on the main thread inside the layout transaction, so no other
+/// main-thread work runs among its steps. A surface removed before a failure stays in `removed`.
+fn apply_surfaces(
+    turn: &LayoutTurn,
+    request: &ResolvedSyncRequest,
+    opened: &mut Vec<(String, String)>,
+    removed_ids: &mut HashSet<String>,
+) -> Result<Vec<Placement>, String> {
+    let LayoutTurn {
+        window,
+        context,
+        platform,
+        main_handle,
+        scale,
+        ..
+    } = turn;
+    let (platform, main_handle, scale) = (*platform, *main_handle, *scale);
+    let surface_hosts = &context.surface_hosts;
+    let mut targets = Vec::with_capacity(request.surfaces.len());
+    for s in &request.surfaces {
+        context
+            .compositions
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the composition declarations, which the layout
+            // step replaces; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(s.id.clone(), s.composition.clone());
+        context
+            .surface_plugins
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the surface plugins, which the layout step
+            // replaces; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(s.id.clone(), s.plugin.clone());
+        // A webview of size 0 is not visible and some platforms reject it, so it is handled as a hidden surface.
+        let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
+        context.images.set_surface_visible(&s.id, visible);
+        let (ax, ay, aw, ah) = aligned(s.x, s.y, s.w.max(1.0), s.h.max(1.0), scale);
+        let solid = if s.dim { 0.45 } else { 1.0 };
+        let existing = surface_hosts
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only
+            // read; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&s.id)
+            .copied();
+        let handle = if let Some(handle) = existing {
+            handle
+        } else {
+            opened.push((s.plugin.clone(), s.id.clone()));
+            let handle = create_in_open_window(&window_data(window), || {
+                create_registered_surface(&context.views.0, surface_hosts, &s.id, || {
+                    platform.create_surface(main_handle)
+                })
+            })?;
+            crate::performance::surface("created", &s.id, None);
+            handle
+        };
+        with_registered_surface(surface_hosts, &s.id, handle, |handle| {
+            // Visible surfaces keep their current visibility until present applies the transaction; invisible surfaces hide now.
+            prepare_surface_visibility(visible, |hidden| {
+                platform.set_surface_hidden_handle(handle, hidden)
+            })?;
+            platform.set_surface_alpha_handle(handle, solid)?;
+            if visible {
+                platform.place_surface(handle, ax, ay, aw, ah)?;
+            }
+            Ok(())
+        })?;
+        // The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
+        // default: a view surface without start values has no origin; documents::sync_view refuses it when it
+        // builds the start values script, and CheckSyncRequest refuses it first.
+        let start = s.start.clone().unwrap_or_default();
+        with_registered_surface(surface_hosts, &s.id, handle, |handle| {
+            documents::sync_view(
+                window,
+                platform,
+                handle,
+                &s.id,
+                &s.plugin,
+                &s.composition.page,
+                visible,
+                start,
+            )
+        })?;
+        targets.push((handle, s.id.clone(), visible));
+    }
+
+    // Only the page writes the surface list, so a surface that is not in the list is a removed surface.
+    let alive: HashSet<String> = request.surfaces.iter().map(|s| s.id.clone()).collect();
+    let removed = removed_surfaces(surface_hosts, &alive)?;
+    // A failed close does not stop the closes of the others.
+    let mut close_failures = Vec::new();
+    for (id, handle) in removed {
+        // The trigger of the surface lifecycle (V5-104): a surface that disappeared from the list is destroyed at
+        // this point.
+        crate::performance::surface("destroyed", &id, None);
+        removed_ids.insert(id.clone());
+        documents::close_surface(window, &id);
+        images::close_surface(window, &id);
+        context.images.end_generation(&id);
+        if let Err(error) =
+            close_registered_surface(&context.views.0, surface_hosts, &id, handle, |handle| {
+                platform.close_surface(handle)
+            })
+        {
+            close_failures.push(format!("surface {id}: {error}"));
+        }
+        context
+            .compositions
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the composition declarations, which the close
+            // of a removed surface amends; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&id);
+        context
+            .surface_plugins
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the surface plugins, which the close of a
+            // removed surface amends; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&id);
+        context
+            .composition_revisions
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the composition revisions, which the close of
+            // a removed surface amends; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&id);
+    }
+    if !close_failures.is_empty() {
+        return Err(format!("surface close: {}", close_failures.join("; ")));
+    }
+
+    // Returns the actual position of each surface. The host fits the rectangles that the page declared to display
+    // pixels, so the difference between the two values is reported to the page.
+    targets
+        .into_iter()
+        .filter_map(|(handle, id, visible)| {
+            with_registered_surface(surface_hosts, &id, handle, |handle| {
+                surface_handle_placement(platform, handle, &id, visible)
+            })
+            .transpose()
+        })
+        .collect()
+}
+
+/// Restores the title bar of a layout that ended without its presentation. A window that closed has no title bar to
+/// restore (#F161.35).
+fn restore_layout_titlebar(
+    window: &Window,
+    ticket: u64,
+    change: TitlebarChange,
+) -> Result<(), String> {
+    let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-titlebar-restore-ui");
+    with_native_owner(window, move |owner| {
+        surface_dispatch_result(dispatch, || restore_titlebar(owner, change.previous))
+    })
+    .or_else(|failure| match failure {
+        NativeFailure::Closed => Ok(()),
+        NativeFailure::Failed(error) => Err(error),
+    })
+}
+
+/// Queues the cancel of a layout on the main thread.
+fn enqueue_layout_cancel(window: &Window, platform: &'static dyn platform::Platform, ticket: u64) {
+    let target = window.clone();
+    let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-cancel-ui");
+    if let Err(error) = platform.enqueue_ui(Box::new(move || {
+        surface_dispatch_result(dispatch, || {
+            log_failure(
+                "surface layout cancel",
+                cancel_layout_with_waits(&target, ticket),
+            );
+        });
+    })) {
+        log_error("surface layout cancel", error);
+    }
+}
+
 /// Fits the child webviews of the window to the surfaces that the page declared, and prepares the surface placement
 /// transaction.
 pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, String> {
@@ -1347,7 +1553,6 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     let views = &context.views;
     let watching = &context.watching;
     let running = &context.running;
-    let surface_hosts = &context.surface_hosts;
 
     let overlays = check_resolved_sync_request(
         &request,
@@ -1374,345 +1579,153 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         emit_window(window, "page-ready", ()).map_err(|e| e.to_string())?;
     }
     watch_presses(window, views, watching)?;
-    let scale_window = window.clone();
-    let dispatch = surface_dispatch(window, None, "sync", "sync-scale-ui");
-    let scale = exposure::on_main(window, move || {
-        surface_dispatch_result(dispatch, || {
-            scale_window.scale_factor().map_err(|e| e.to_string())
-        })
-    })?;
     let platform = platform::current()?;
-
-    let root_window = window.clone();
-    let dispatch = surface_dispatch(window, None, "sync", "sync-root-view-ui");
-    let main = exposure::on_main(window, move || {
-        surface_dispatch_result(dispatch, || {
-            crate::windows::root_view(&root_window).ok_or_else(|| "the main webview is gone".into())
-        })
-    })?;
     let ticket = running.prepared.fetch_add(1, Ordering::Relaxed) + 1;
-    let main_handle = {
-        let (tx, rx) = mpsc::channel::<Result<Handle, String>>();
-        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-main-handle-ui");
-        main.with_webview(move |webview| {
-            let result = surface_dispatch_result(dispatch, || platform.view_id(&webview));
-            match tx.send(result) {
-                Ok(()) => {}
-                // A failure after the request ended was not reported by that request, so it is left as an error line.
-                Err(mpsc::SendError(Err(error))) => log_error("main webview handle", error),
-                Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
-                    "surface",
-                    "main webview handle arrived after its request ended",
-                ),
-            }
-        })
-        .map_err(|e| e.to_string())?;
-        rx.recv().map_err(|e| e.to_string())??
-    };
-    let begin = || -> Result<(), String> {
-        let (tx, rx) = mpsc::channel::<bool>();
-        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-layout-begin-ui");
-        let callback_window = window.clone();
-        with_native_owner(window, move |owner| {
-            surface_dispatch_result(dispatch, || {
-                let callback_dispatch = surface_dispatch(
-                    &callback_window,
-                    Some(ticket),
-                    "sync",
-                    "sync-layout-ready-callback",
-                );
-                platform.begin_layout(
-                    owner,
-                    ticket,
-                    Box::new(move |allowed| {
-                        let sent =
-                            surface_dispatch_result(callback_dispatch.clone(), || tx.send(allowed));
-                        if sent.is_err() {
-                            crate::application_log::log_info(
-                                "surface",
-                                "surface preparation result arrived after its request ended",
-                            );
-                        }
-                    }),
-                )
+    let (applied_tx, applied) = mpsc::channel::<AppliedLayout>();
+    // The whole layout runs in one turn of the main thread and in the ready callback of its transaction, so other
+    // main-thread work does not run among its steps.
+    let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-layout-ui");
+    let turn_window = window.clone();
+    let turn_context = Arc::clone(&context);
+    exposure::on_main(window, move || {
+        surface_dispatch_result(dispatch, || {
+            let scale = turn_window.scale_factor().map_err(|e| e.to_string())?;
+            let main = crate::windows::root_view(&turn_window)
+                .ok_or_else(|| "the main webview is gone".to_string())?;
+            let (handle_tx, handle_rx) = mpsc::channel::<Result<Handle, String>>();
+            // On the main thread with_webview runs its work before it returns.
+            main.with_webview(move |webview| {
+                if handle_tx.send(platform.view_id(&webview)).is_err() {
+                    crate::application_log::log_info(
+                        "surface",
+                        "main webview handle arrived after its request ended",
+                    );
+                }
             })
-        })
-        .map_err(|e| e.to_string())?;
-        if !rx.recv().map_err(|e| e.to_string())? {
-            return Err("window closed before layout".into());
-        }
-        Ok(())
-    };
-    let place_overlays = || {
-        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-overlays-ui");
-        exposure::on_main(window, move || {
-            surface_dispatch_result(dispatch, || {
-                platform.set_window_overlays(main_handle, &overlays)
-            })
-        })
-    };
-    let titlebar = request.titlebar;
-    let set_titlebar = || {
-        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-titlebar-ui");
-        with_native_owner(window, move |owner| {
-            surface_dispatch_result(dispatch, || titlebar_chrome(owner, titlebar))
-        })
-        .map_err(|e| e.to_string())
-    };
-    let restore = |change: TitlebarChange| {
-        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-titlebar-restore-ui");
-        with_native_owner(window, move |owner| {
-            surface_dispatch_result(dispatch, || restore_titlebar(owner, change.previous))
-        })
-        .or_else(|failure| match failure {
-            // A window that closed before the restore step has no title bar to restore (#F161.35).
-            NativeFailure::Closed => Ok(()),
-            NativeFailure::Failed(error) => Err(error),
-        })
-    };
-    // The surfaces that this layout creates, as (plugin, surface), which the sidecars are told about after the layout.
-    let opened = std::cell::RefCell::new(Vec::new());
-    let steps = |change: &TitlebarChange| -> Result<PreparedSurfaces, String> {
-        for s in &request.surfaces {
-            context
-                .compositions
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the composition declarations, which the layout
-                // step replaces; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(s.id.clone(), s.composition.clone());
-            context
-                .surface_plugins
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the surface plugins, which the layout step
-                // replaces; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(s.id.clone(), s.plugin.clone());
-            // A webview of size 0 is not visible and some platforms reject it, so it is handled as a hidden surface.
-            let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
-            context.images.set_surface_visible(&s.id, visible);
-            let (ax, ay, aw, ah) = aligned(s.x, s.y, s.w.max(1.0), s.h.max(1.0), scale);
-            let solid = if s.dim { 0.45 } else { 1.0 };
-            let existing = surface_hosts
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only
-                // read; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .get(&s.id)
-                .copied();
-            let handle = if let Some(handle) = existing {
-                handle
-            } else {
-                opened.borrow_mut().push((s.plugin.clone(), s.id.clone()));
-                let names = Arc::clone(&views.0);
-                let hosts = Arc::clone(&context);
-                let id = s.id.clone();
-                let dispatch =
-                    surface_dispatch(window, Some(ticket), "sync", "sync-surface-create-ui");
-                let owner = window.clone();
-                let handle = exposure::on_main(window, move || {
-                    surface_dispatch_result(dispatch, || {
-                        create_in_open_window(&window_data(&owner), || {
-                            create_registered_surface(&names, &hosts.surface_hosts, &id, || {
-                                platform.create_surface(main_handle)
-                            })
-                        })
-                    })
-                })?;
-                crate::performance::surface("created", &s.id, None);
-                handle
-            };
-            let dispatch =
-                surface_dispatch(window, Some(ticket), "sync", "sync-surface-prepare-ui");
-            let prepared_hosts = Arc::clone(&context);
-            let prepared = s.id.clone();
-            exposure::on_main(window, move || {
-                surface_dispatch_result(dispatch, || {
-                    with_registered_surface(
-                        &prepared_hosts.surface_hosts,
-                        &prepared,
-                        handle,
-                        |handle| {
-                            // Visible surfaces keep their current visibility until present applies the transaction; invisible surfaces hide now.
-                            prepare_surface_visibility(visible, |hidden| {
-                                platform.set_surface_hidden_handle(handle, hidden)
-                            })?;
-                            platform.set_surface_alpha_handle(handle, solid)?;
-                            if visible {
-                                platform.place_surface(handle, ax, ay, aw, ah)?;
-                            }
-                            Ok(())
-                        },
-                    )
-                    .map(|_| ())
-                })
-            })?;
-            // The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
-            let view_window = window.clone();
-            let surface = s.id.clone();
-            let plugin = s.plugin.clone();
-            let page = s.composition.page.clone();
-            // default: a view surface without start values has no origin; documents::sync_view refuses it when it
-            // builds the start values script, and CheckSyncRequest refuses it first.
-            let start = s.start.clone().unwrap_or_default();
-            let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-view-ui");
-            let view_hosts = Arc::clone(&context);
-            exposure::on_main(window, move || {
-                surface_dispatch_result(dispatch, || {
-                    with_registered_surface(&view_hosts.surface_hosts, &surface, handle, |handle| {
-                        documents::sync_view(
-                            &view_window,
-                            platform,
-                            handle,
-                            &surface,
-                            &plugin,
-                            &page,
-                            visible,
-                            start,
+            .map_err(|e| e.to_string())?;
+            let main_handle = handle_rx.recv().map_err(|e| e.to_string())??;
+            let begin_window = turn_window.clone();
+            run_layout(
+                || platform.set_window_overlays(main_handle, &overlays),
+                move || {
+                    with_native_owner(&begin_window.clone(), move |owner| {
+                        let callback_dispatch = surface_dispatch(
+                            &begin_window,
+                            Some(ticket),
+                            "sync",
+                            "sync-layout-ready-callback",
+                        );
+                        let pending = std::cell::Cell::new(Some((
+                            begin_window,
+                            turn_context,
+                            request,
+                            applied_tx,
+                        )));
+                        platform.begin_layout(
+                            owner,
+                            ticket,
+                            Box::new(move |allowed| {
+                                let Some((window, context, request, sent)) = pending.take() else {
+                                    return;
+                                };
+                                let turn = LayoutTurn {
+                                    window,
+                                    context,
+                                    platform,
+                                    main_handle,
+                                    scale,
+                                    ticket,
+                                };
+                                let outcome =
+                                    surface_dispatch_result(callback_dispatch.clone(), || {
+                                        apply_layout(&turn, &request, allowed)
+                                    });
+                                if sent.send(outcome).is_err() {
+                                    crate::application_log::log_info(
+                                        "surface",
+                                        "surface preparation result arrived after its request ended",
+                                    );
+                                }
+                            }),
                         )
                     })
-                    .map(|_| ())
-                })
-            })?;
-        }
-
-        // Only the page writes the surface list, so a surface that is not in the list is a removed surface.
-        let alive: HashSet<String> = request.surfaces.iter().map(|s| s.id.clone()).collect();
-        let removed = removed_surfaces(surface_hosts, &alive)?;
-        let removed_ids: HashSet<String> = removed.iter().map(|(id, _)| id.clone()).collect();
-        // A failed close does not stop the closes of the others.
-        let mut close_failures = Vec::new();
-        for (id, handle) in removed {
-            // The trigger of the surface lifecycle (V5-104): a surface that disappeared from the list is destroyed at
-            // this point.
-            crate::performance::surface("destroyed", &id, None);
-            documents::close_surface(window, &id);
-            images::close_surface(window, &id);
-            context.images.end_generation(&id);
-            let names = Arc::clone(&views.0);
-            let hosts = Arc::clone(&context);
-            let closing = id.clone();
-            let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-surface-close-ui");
-            if let Err(error) = exposure::on_main(window, move || {
-                surface_dispatch_result(dispatch, || {
-                    close_registered_surface(
-                        &names,
-                        &hosts.surface_hosts,
-                        &closing,
-                        handle,
-                        |handle| platform.close_surface(handle),
-                    )
-                })
-            }) {
-                close_failures.push(format!("surface {id}: {error}"));
-            }
-            context
-                .compositions
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the composition declarations, which the close
-                // of a removed surface amends; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&id);
-            context
-                .surface_plugins
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the surface plugins, which the close of a
-                // removed surface amends; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&id);
-            context
-                .composition_revisions
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the composition revisions, which the close of
-                // a removed surface amends; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&id);
-            exposure::surface_closed(window, &id);
-        }
-        // Only removed surfaces are announced to the sidecars. A sidecar session that is not a surface (the session of
-        // a plugin state module) is not in the surface list, so closing it because it is not in the list would lose the
-        // root and the watch of that session.
-        window
-            .state::<WindowSidecars>()
-            .native_views_removed(window, &removed_ids)?;
-        if !close_failures.is_empty() {
-            return Err(format!("surface close: {}", close_failures.join("; ")));
-        }
-
-        // Returns the actual position of each surface. The host fits the rectangles that the page declared to display
-        // pixels, so the difference between the two values is reported to the page.
-        let mut targets = Vec::with_capacity(request.surfaces.len());
-        for s in &request.surfaces {
-            let Some(handle) = surface_hosts
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only
-                // read; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .get(&s.id)
-                .copied()
-            else {
-                continue;
-            };
-            let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
-            targets.push((handle, s.id.clone(), visible));
-        }
-        let placed = read_surface_placements(targets, |targets| {
-            let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-placement-read-ui");
-            let placed_hosts = Arc::clone(&context);
-            exposure::on_main(window, move || {
-                surface_dispatch_result(dispatch, || {
-                    targets
-                        .into_iter()
-                        .filter_map(|(handle, id, visible)| {
-                            with_registered_surface(
-                                &placed_hosts.surface_hosts,
-                                &id,
-                                handle,
-                                |handle| surface_handle_placement(platform, handle, &id, visible),
-                            )
-                            .transpose()
-                        })
-                        .collect()
-                })
-            })
-        })?;
-        // Before it waits for the DOM presentation, it starts the image preparation of the size that was applied.
-        Ok(PreparedSurfaces {
-            ticket,
-            placements: placed,
-            chrome: change.chrome.clone(),
+                    .map_err(|e| e.to_string())
+                },
+            )
         })
-    };
-    let cancel = || {
-        let target = window.clone();
-        let dispatch = surface_dispatch(window, Some(ticket), "sync", "sync-cancel-ui");
-        if let Err(error) = platform.enqueue_ui(Box::new(move || {
-            surface_dispatch_result(dispatch, || {
-                log_failure(
-                    "surface layout cancel",
-                    cancel_layout_with_waits(&target, ticket),
-                );
-            });
-        })) {
-            log_error("surface layout cancel", error);
-        }
-    };
-    let (prepared, change) =
-        run_layout(place_overlays, begin, set_titlebar, steps, restore, cancel)?;
+    })?;
+    let AppliedLayout {
+        prepared,
+        opened,
+        removed,
+    } = applied.recv().map_err(|e| e.to_string())?;
+    // Tells the sidecars and the exposure registration about the removed surfaces, outside the main thread.
+    for id in &removed {
+        exposure::surface_closed(window, id);
+    }
+    // Only removed surfaces are announced to the sidecars. A sidecar session that is not a surface (the session of
+    // a plugin state module) is not in the surface list, so closing it because it is not in the list would lose the
+    // root and the watch of that session.
+    let announced = window
+        .state::<WindowSidecars>()
+        .native_views_removed(window, &removed);
+    let (prepared, change) = prepared?;
+    // Even if the announcement or the image raster update fails after the placement was fitted, no started placement
+    // remains. A cancel commits the transaction, so the title bar is restored first.
+    if let Err(error) = announced.and_then(|_| crate::composition::refresh_image_rasters(window)) {
+        log_failure(
+            "surface layout title bar restore",
+            restore_layout_titlebar(window, ticket, change),
+        );
+        enqueue_layout_cancel(window, platform, ticket);
+        return Err(error);
+    }
     // The layout is applied, so the surfaces it created are opened: their plugins may clear a restart limit.
-    for (plugin, surface) in opened.into_inner() {
+    for (plugin, surface) in opened {
         window
             .state::<WindowSidecars>()
             .surface_opened(&plugin, &surface);
     }
-    // Even if the image raster update fails after the placement was fitted, no started placement remains. A cancel
-    // commits the transaction, so the title bar is restored first.
-    if let Err(error) = crate::composition::refresh_image_rasters(window) {
-        log_failure("surface layout title bar restore", restore(change));
-        cancel();
-        return Err(error);
-    }
     Ok(prepared)
+}
+
+/// The ready callback of a layout transaction: sets the title bar and fits the surfaces on the main thread.
+fn apply_layout(turn: &LayoutTurn, request: &ResolvedSyncRequest, allowed: bool) -> AppliedLayout {
+    let LayoutTurn {
+        window,
+        platform,
+        ticket,
+        ..
+    } = turn;
+    let (platform, ticket) = (*platform, *ticket);
+    let mut opened = Vec::new();
+    let mut removed = HashSet::new();
+    let prepared = if allowed {
+        let titlebar = request.titlebar;
+        apply_or_cancel(
+            || {
+                with_native_owner(window, move |owner| titlebar_chrome(owner, titlebar))
+                    .map_err(|e| e.to_string())
+            },
+            |change: &TitlebarChange| {
+                let placements = apply_surfaces(turn, request, &mut opened, &mut removed)?;
+                Ok(PreparedSurfaces {
+                    ticket,
+                    placements,
+                    chrome: change.chrome.clone(),
+                })
+            },
+            |change| restore_layout_titlebar(window, ticket, change),
+            || enqueue_layout_cancel(window, platform, ticket),
+        )
+    } else {
+        Err("window closed before layout".into())
+    };
+    AppliedLayout {
+        prepared,
+        opened,
+        removed,
+    }
 }
 
 fn prepare_surface_visibility(
@@ -2300,14 +2313,3 @@ pub fn close_window_surfaces(
 #[cfg(test)]
 #[path = "surfaces_test.rs"]
 mod tests;
-
-/// Reads the prepared frames through the main-thread dispatcher.
-fn read_surface_placements(
-    targets: Vec<(Handle, String, bool)>,
-    mut read: impl FnMut(Vec<(Handle, String, bool)>) -> Result<Vec<Placement>, String>,
-) -> Result<Vec<Placement>, String> {
-    if targets.is_empty() {
-        return Ok(Vec::new());
-    }
-    read(targets)
-}

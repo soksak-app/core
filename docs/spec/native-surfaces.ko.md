@@ -25,7 +25,7 @@ Tauri host의 native 이미지 표시 commit은 framework event callback 밖의 
 연속 layout 변경을 포함한 모든 준비는 응답 전에 적용된 native geometry의 raster update를 시작한다. Page가 대응 DOM을 그리고 표시하는 동안 raster를 생성할 수 있다. Presentation 단계는 해당 DOM이 변경한 region geometry를 다시 refresh하고 commit 전에 정확한 필수 raster를 계속 기다린다. 조기 update는 presentation 확인이 아니다.
 
 1. 카드 DOM을 갱신하기 전에 페이지가 다음 표면 사각형을 제출한다.
-2. 호스트는 해당 창의 배치를 위해 UI 스레드의 레이어 트랜잭션 사용을 시작하고 네이티브 사각형 전체를 적용한다. 응답에는 실제 좌표와 준비 전체의 식별자 하나를 포함한다.
+2. 호스트는 해당 창의 배치를 위해 UI 스레드의 레이어 트랜잭션 사용을 시작하고 네이티브 사각형 전체를 main thread 진입 한 번과 그 트랜잭션의 ready callback에서 적용하므로, 그 단계들 사이에 다른 main-thread 작업이 실행되지 않는다. 응답에는 실제 좌표와 준비 전체의 식별자 하나를 포함한다.
 3. 준비가 완료되면 페이지가 카드 DOM을 갱신하고 해당 식별자의 표시를 요청한다.
 4. 표시 요청의 첫 UI 스레드 단계에서 호스트는 요청된 visibility를 적용하고, 변경되거나 새로 표시되거나 재생성된 plugin root view를 열린 transaction에 참여시킨다. 이어서 창의 앱 DOM과 필요한 그림 래스터를 기다린다. 마지막 UI 스레드 단계에서 대기 중 교체된 root generation을 다시 참여시키고, 참여한 generation만 기록한 뒤 실제 좌표를 읽고 커밋하며, 참여한 모든 root view가 표시될 때까지 transaction은 열린 상태로 유지된다. [문서 영역](#문서-영역)은 독립적으로 렌더링하며 URL 출처와 무관하게 root-view 표시 대기에 참여하지 않는다.
 5. 응답 후 페이지가 대기 중인 최신 배치의 준비를 시작한다. 시작하지 않은 이전 배치는 더 새 배치로 대신되며, 대신된 배치의 준비와 그리기는 실행되지 않는다. 가장 새 배치는 앞선 입력을 모두 담는다. 표시가 정착하면 페이지는 대신된 배치의 수를 애플리케이션 로그에 기록한다.

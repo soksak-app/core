@@ -3,14 +3,27 @@
 
 use std::cell::RefCell;
 
-use soksak_host_tauriv2::surfaces::run_layout;
+use soksak_host_tauriv2::surfaces::{apply_or_cancel, run_layout};
+
+/// The order of a sync: the ready callback of the begun layout sets the title bar and fits the surfaces.
+fn layout<C, T>(
+    overlays: impl FnOnce() -> Result<(), String>,
+    begin: impl FnOnce() -> Result<(), String>,
+    titlebar: impl FnOnce() -> Result<C, String>,
+    steps: impl FnOnce(&C) -> Result<T, String>,
+    restore: impl FnOnce(C) -> Result<(), String>,
+    cancel: impl FnOnce(),
+) -> Result<(T, C), String> {
+    run_layout(overlays, begin)?;
+    apply_or_cancel(titlebar, steps, restore, cancel)
+}
 
 fn run(
     overlays: Result<(), String>,
     steps: Result<u32, String>,
 ) -> (Result<u32, String>, Vec<&'static str>) {
     let calls = RefCell::new(Vec::new());
-    let result = run_layout(
+    let result = layout(
         || {
             calls.borrow_mut().push("overlays");
             overlays
@@ -72,10 +85,10 @@ fn a_successful_sync_does_not_cancel() {
 #[test]
 fn the_titlebar_is_set_in_the_begun_layout_before_the_surfaces() {
     let calls = RefCell::new(Vec::new());
-    let layout = |titlebar: Result<f64, String>,
-                  surfaces: Result<f64, String>,
-                  restore: Result<(), String>| {
-        run_layout(
+    let attempt = |titlebar: Result<f64, String>,
+                   surfaces: Result<f64, String>,
+                   restore: Result<(), String>| {
+        layout(
             || {
                 calls.borrow_mut().push("overlays");
                 Ok(())
@@ -100,7 +113,7 @@ fn the_titlebar_is_set_in_the_begun_layout_before_the_surfaces() {
         )
     };
     assert_eq!(
-        layout(Ok(54.0), Ok(1.0), Ok(())),
+        attempt(Ok(54.0), Ok(1.0), Ok(())),
         Ok((55.0, 54.0)),
         "the surfaces step reads the title bar answer and the layout returns it"
     );
@@ -110,7 +123,7 @@ fn the_titlebar_is_set_in_the_begun_layout_before_the_surfaces() {
     );
     let refused = "the window has no standard buttons or content view for a title bar";
     assert_eq!(
-        layout(Err(refused.into()), Ok(1.0), Ok(())),
+        attempt(Err(refused.into()), Ok(1.0), Ok(())),
         Err(refused.to_string())
     );
     assert_eq!(
@@ -118,7 +131,7 @@ fn the_titlebar_is_set_in_the_begun_layout_before_the_surfaces() {
         vec!["overlays", "begin", "titlebar", "cancel"]
     );
     assert_eq!(
-        layout(Ok(54.0), Err("surface failed".into()), Ok(())),
+        attempt(Ok(54.0), Err("surface failed".into()), Ok(())),
         Err("surface failed".to_string())
     );
     assert_eq!(
@@ -128,7 +141,7 @@ fn the_titlebar_is_set_in_the_begun_layout_before_the_surfaces() {
         ]
     );
     assert_eq!(
-        layout(
+        attempt(
             Ok(54.0),
             Err("surface failed".into()),
             Err("restore failed".into())

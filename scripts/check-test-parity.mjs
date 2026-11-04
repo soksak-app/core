@@ -1593,15 +1593,13 @@ const FEATURE_LINKS = [
   {
     id: "F239-163",
     implementation: [
-      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn read_surface_placements(" },
+      { file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn apply_surfaces(" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "prepared_frames_share_one_main_thread_turn" },
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "frame_read_failure_rejects_the_placement_reply" },
-      { file: "packages/host/tauriv2/src/surfaces_test.rs", id: "no_surfaces_require_no_main_thread_turn" },
+      { file: "e2e/surface-sync-turn.test.mjs", id: "a surface layout enters the main thread once and its ready callback once" },
     ],
     expected: "Prepared placement reads share one main-thread turn and preserve read errors.",
-    levels: ["unit"],
+    levels: ["application"],
   },
   {
     id: "F239-164",
@@ -8961,6 +8959,13 @@ const FEATURE_LINKS = [
     tests: [{ file: "packages/workbench/test/compositor.test.mjs", id: "a preparation hides a section surface whose offsets do not fit the target card" }],
     expected: "A section surface that does not fit its target card is hidden with a zero frame",
     levels: ["unit"],
+  },
+  {
+    id: "F441",
+    implementation: [{ file: "packages/host/tauriv2/src/surfaces.rs", symbol: "fn apply_surfaces(" }],
+    tests: [{ file: "e2e/surface-sync-turn.test.mjs", id: "a surface layout enters the main thread once and its ready callback once" }],
+    expected: "One main-thread entry and one ready callback per layout on both hosts",
+    levels: ["application"],
   },
   {
     id: "F404",

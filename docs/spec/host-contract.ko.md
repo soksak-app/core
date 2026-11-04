@@ -1084,9 +1084,6 @@ fn invalid_json_closes_connection() {
 | `tauriv2.window-notification.closed-window-reports-no-failure` | window가 닫힌 뒤 실행되는 window 알림은 단계를 실행하지 않고 실패를 보고하지 않는다. | tauriv2 only: 알림은 host의 window record를 따른다. |
 | `tauriv2.window-notification.open-window-reports-its-failure` | 열린 window의 알림은 단계를 실행하고 단계의 실패를 보고한다. | tauriv2 only: 알림은 host의 window record를 따른다. |
 | `tauriv2.surface-sync.closed-handle-is-not-used` | surface가 닫힌 뒤 실행되는 surface sync의 main-thread 단계는 sync가 읽은 handle을 쓰지 않는다. close가 먼저 registration을 잊기 때문이다. | tauriv2 only: Tauri sync는 main thread 밖에서 handle을 읽고 그 handle을 쓰는 단계를 queue한다. Wails layout은 한 main-thread 단계에서 handle을 읽고 쓴다 |
-| `tauriv2.surface-placement.reads-in-one-main-thread-turn` | Tauri는 준비된 모든 surface placement를 한 번의 main-thread turn에서 읽고 같은 frame 응답을 각 placement에 사용한다. | tauriv2 only: Rust host의 placement snapshot helper를 검증한다 |
-| `tauriv2.surface-placement.empty-skips-main-thread-dispatch` | Placement snapshot에 surface가 없으면 Tauri는 main-thread dispatch를 하지 않는다. | tauriv2 only: Rust host의 placement snapshot helper를 검증한다 |
-| `tauriv2.surface-placement.read-error-reaches-reply` | Tauri surface-placement의 frame-read 오류를 placement reply에 그대로 전달한다. | tauriv2 only: Rust host의 placement snapshot helper에서 오류가 전달되는지 검증한다 |
 | `tauriv2.document-callback.retirement-keeps-active-callback-alive` | Tauri document를 폐기할 때 이미 실행 중인 invocation이 반환된 뒤 ended, changed, event, responsiveness callback을 해제한다. | tauriv2 only: native document FFI 경계를 넘는 Rust callback receiver ownership을 검증한다 |
 | `exposure.surface-closed.closed-window-records-nothing` | 창이 닫힌 뒤 닫히는 surface는 아무것도 제거하지 않고 오류도 쓰지 않는다. registration은 창의 record와 함께 끝났다. | tauriv2 only: Go host는 surface 값에 registration을 두고 닫기가 그 값에 직접 닿으므로 그곳에서는 record 조회가 실패할 수 없다 |
 | `surface.sync.closed-window-creates-nothing` | 창이 닫힐 때 진행 중인 배치나 modal 요청은 표면이나 modal view를 만들지 않고 `project window is closed`로 실패한다. 창을 닫을 때 모든 표면을 이미 닫았으므로 그 뒤에 만든 표면은 닫는 곳이 없기 때문이다. | both |
