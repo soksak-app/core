@@ -311,35 +311,22 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, "", func(state string) {
 			s.documentChanged(key, state)
 		})
-		// The history is restored before anything else uses the new region, so it loads the restored entry first.
-		if err == nil && restore != "" {
-			if refusal := system.RestoreDocument(handle, restore); refusal != nil {
-				system.CloseDocument(handle)
-				err = fmt.Errorf("document %s: %w", key.Name, refusal)
-			}
+		if err != nil {
+			return
 		}
-		if err == nil {
-			s.mu.Lock()
-			dark := s.theme.Scheme == "dark"
-			s.mu.Unlock()
-			system.SetDocumentAppearance(handle, dark)
-			system.SetDocumentBackground(handle, s.dialog())
-			err = system.SetDocumentEvent(handle, func(event string) { s.documentEvent(key, event) })
-		}
-		if err == nil {
-			err = system.SetDocumentMessage(handle, func(value string) { s.documentMessage(key, value) })
-		}
-		if err == nil {
-			err = system.SetDocumentStream(handle, func(value string) { s.documentStream(key, value) })
-		}
-		// The region collects its requests from the start of its first document: native applies the collection when the document script
-		// reports that it is ready, which happens after this task.
-		for _, effect := range effects {
-			if err == nil && !system.SetDocumentStreamOn(handle, effect.Stream, effect.On) {
-				system.CloseDocument(handle)
-				err = fmt.Errorf("document %q does not accept stream %q", key.Name, effect.Stream)
-			}
-		}
+		s.mu.Lock()
+		dark := s.theme.Scheme == "dark"
+		s.mu.Unlock()
+		err = configureDocument(handle, documentSetup{
+			name:    key.Name,
+			restore: restore,
+			dark:    dark,
+			dialog:  s.dialog(),
+			message: func(value string) { s.documentMessage(key, value) },
+			stream:  func(value string) { s.documentStream(key, value) },
+			effects: effects,
+			event:   func(event string) { s.documentEvent(key, event) },
+		})
 	})
 	if err != nil {
 		s.documents.Remove(key)
@@ -359,6 +346,59 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		return fmt.Errorf("surface %q closed while its document was created", key.Surface)
 	}
 	return nil
+}
+
+// documentSetup is the configuration of a created document region.
+type documentSetup struct {
+	// name is the name of the region.
+	name string
+	// restore is the interaction state that the region restores before it loads anything, or empty.
+	restore string
+	// dark is whether the document shows the dark scheme.
+	dark bool
+	// dialog is whether a dialog of the window is open, which dims the document.
+	dialog bool
+	// message, stream and event receive the messages of a plugin document, the stream messages and the document events.
+	message, stream, event func(value string)
+	// effects are the stream effects of the attach of the region.
+	effects []StreamEffect
+}
+
+// configureDocument configures a created document region: it restores the history, sets the appearance and the background, sets the
+// receivers of the messages and the streams, applies the stream effects of the attach and sets the receiver of the events. When a step
+// fails, the document is closed before the error returns. It runs on the UI thread.
+func configureDocument(document unsafe.Pointer, setup documentSetup) error {
+	err := configureSteps(document, setup)
+	if err != nil {
+		system.CloseDocument(document)
+	}
+	return err
+}
+
+// configureSteps runs the steps of configureDocument, in their order.
+func configureSteps(document unsafe.Pointer, setup documentSetup) error {
+	// The history is restored before anything else uses the new region, so it loads the restored entry first.
+	if setup.restore != "" {
+		if refusal := system.RestoreDocument(document, setup.restore); refusal != nil {
+			return fmt.Errorf("document %s: %w", setup.name, refusal)
+		}
+	}
+	system.SetDocumentAppearance(document, setup.dark)
+	system.SetDocumentBackground(document, setup.dialog)
+	if err := system.SetDocumentMessage(document, setup.message); err != nil {
+		return err
+	}
+	if err := system.SetDocumentStream(document, setup.stream); err != nil {
+		return err
+	}
+	// The region collects its requests from the start of its first document: native applies the collection when the document script reports
+	// that it is ready, which happens after this task.
+	for _, effect := range setup.effects {
+		if !system.SetDocumentStreamOn(document, effect.Stream, effect.On) {
+			return fmt.Errorf("document %q does not accept stream %q", setup.name, effect.Stream)
+		}
+	}
+	return system.SetDocumentEvent(document, setup.event)
 }
 
 // viewRegionName is the document name of the view web view of a view surface. No composition region has an empty name, so the view

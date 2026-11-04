@@ -216,6 +216,7 @@ fn invalid_json_closes_connection() {
 | `documents.registry.rejects-set-after-surface-removed` | 표면이 제거된 문서 키의 설정은 실패한다. | both |
 | `documents.registry.remove-reserved-returns-empty` | 예약만 된 문서 이름을 제거하면 빈 핸들로 성공한다. | both |
 | `documents.registry.remove-attached-returns-handle-once` | 연결된 문서 이름을 제거하면 핸들을 반환하고, 다시 제거하면 실패한다. | both |
+| `documents.create.failure-closes-document` | 만든 document region의 구성 단계가 실패하거나, 만든 view의 구성 단계나 page load가 실패하면 native document는 오류가 반환되기 전에 닫히고, 이후 단계는 실행되지 않으며, 실패한 close는 그 실패와 함께 보고된다. | both |
 | `document.stream.subscribe-rejects-unknown-stream` | `elements`나 `requests`가 아닌 stream의 구독은 `unknown document stream "<name>"`으로 실패한다. | both |
 | `document.stream.unsubscribe-rejects-unknown-handle` | 문서가 가지지 않은 핸들을 끝내면 `document stream handle <handle> is not subscribed to document "<name>"`으로 실패한다. | both |
 | `document.stream.first-on-last-off` | 영역의 첫 `elements` 구독은 요소 트리의 수집을 켜고, 다음 `elements` 구독은 다시 켜지 않으며, 마지막 구독을 제거하면 수집을 끈다. | both |

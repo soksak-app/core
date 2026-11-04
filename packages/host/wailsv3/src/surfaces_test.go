@@ -492,6 +492,73 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	}
 }
 
+// failingViewPlatform is the view platform whose step named fail fails. It records the closed view documents.
+type failingViewPlatform struct {
+	viewPlatform
+	fail   string
+	closed []unsafe.Pointer
+}
+
+func (p *failingViewPlatform) failed(step string) error {
+	if p.fail == step {
+		return fmt.Errorf("%s failed", step)
+	}
+	return nil
+}
+
+func (p *failingViewPlatform) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
+	return p.failed("message")
+}
+
+func (p *failingViewPlatform) SetViewEnded(document unsafe.Pointer, ended func()) error {
+	return p.failed("ended")
+}
+
+func (p *failingViewPlatform) SetViewResponsiveness(document unsafe.Pointer, responsiveness func(responsive bool)) error {
+	return p.failed("responsiveness")
+}
+
+func (p *failingViewPlatform) AddDocumentScript(document unsafe.Pointer, source string) error {
+	return p.failed("script")
+}
+
+func (p *failingViewPlatform) LoadDocument(document unsafe.Pointer, url string) bool {
+	p.loaded = append(p.loaded, url)
+	return p.fail != "load"
+}
+
+func (p *failingViewPlatform) CloseDocument(document unsafe.Pointer) {
+	p.closed = append(p.closed, document)
+}
+
+// contract: documents.create.failure-closes-document
+func TestAFailedConfigurationOrLoadOfAViewClosesTheView(t *testing.T) {
+	for _, step := range []string{"message", "ended", "responsiveness", "script", "load"} {
+		fake := &failingViewPlatform{fail: step}
+		saved := system
+		system = fake
+		s := &Surfaces{documents: NewDocuments(), events: func(string, any) {}}
+		err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart())
+		system = saved
+		want := step + " failed"
+		if step == "load" {
+			want = `view of surface "probe-surface" cannot load soksak://probe/ui/page.html`
+		}
+		if err == nil || err.Error() != want {
+			t.Fatalf("the failure of %s: %v, want %s", step, err, want)
+		}
+		if len(fake.closed) != 1 {
+			t.Fatalf("the failure of %s closed %d view documents, want 1", step, len(fake.closed))
+		}
+		if loaded := len(fake.loaded) != 0; loaded != (step == "load") {
+			t.Fatalf("the failure of %s loaded %v; the page loads only after the configuration", step, fake.loaded)
+		}
+		if _, err := s.documents.Get(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err == nil {
+			t.Fatalf("the failure of %s keeps the view recorded for its surface", step)
+		}
+	}
+}
+
 // contract: surface-layout.prepare-visible-surfaces
 func TestPrepareSurfaceVisibilityPreservesVisibleAndHidesInvisible(t *testing.T) {
 	cases := []struct {

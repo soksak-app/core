@@ -216,6 +216,7 @@ Items:
 | `documents.registry.rejects-set-after-surface-removed` | Setting a document key whose surface was removed fails. | both |
 | `documents.registry.remove-reserved-returns-empty` | Removing a reserved but unset document name succeeds with an empty handle. | both |
 | `documents.registry.remove-attached-returns-handle-once` | Removing an attached document name returns its handle, and removing it again fails. | both |
+| `documents.create.failure-closes-document` | When a step of the configuration of a created document region fails, or a step of the configuration or the page load of a created view fails, the native document is closed before the error returns, the later steps do not run, and a failed close is reported with the failure. | both |
 | `document.stream.subscribe-rejects-unknown-stream` | A subscription to a stream other than `elements` or `requests` fails with `unknown document stream "<name>"`. | both |
 | `document.stream.unsubscribe-rejects-unknown-handle` | Ending a handle that the document does not hold fails with `document stream handle <handle> is not subscribed to document "<name>"`. | both |
 | `document.stream.first-on-last-off` | The first `elements` subscription of a region turns the collection of its element tree on, a further `elements` subscription does not, and the removal of the last turns it off. | both |

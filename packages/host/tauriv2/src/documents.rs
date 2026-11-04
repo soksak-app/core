@@ -1413,12 +1413,14 @@ impl ViewChannels {
 /// region, and the view closes with the other documents of its surface.
 pub(crate) const VIEW_NAME: &str = "";
 
-/// Creates the view web view of a view surface, with the view configuration (`view` is true), and loads soksak://<plugin>/<page>
-/// into it. When the load does not succeed, the view is closed and the error is returned. create, load and close are the
-/// platform operations, and they run on the main thread.
+/// Creates the view web view of a view surface, with the view configuration (`view` is true), configures it and loads
+/// soksak://<plugin>/<page> into it. When the configuration or the load does not succeed, the view is closed before the error
+/// returns, and a failed close is reported with the failure. create, configure, load and close are the platform operations, and
+/// they run on the main thread.
 pub fn create_view(
     channel: &str,
     create: impl FnOnce(&str) -> Result<Handle, String>,
+    configure: impl FnOnce(Handle) -> Result<(), String>,
     load: impl FnOnce(Handle, &str) -> Result<bool, String>,
     close: impl FnOnce(Handle) -> Result<(), String>,
     plugin: &str,
@@ -1426,7 +1428,7 @@ pub fn create_view(
 ) -> Result<Handle, String> {
     let handle = create(channel)?;
     let address = format!("soksak://{plugin}/{page}");
-    let reason = match load(handle, &address) {
+    let reason = match configure(handle).and_then(|()| load(handle, &address)) {
         Ok(true) => return Ok(handle),
         Ok(false) => format!("view cannot load {address}"),
         Err(error) => error,
@@ -1630,7 +1632,7 @@ fn attach_view(
     create_view(
         channel,
         |channel| {
-            let document = platform.create_document(
+            platform.create_document(
                 surface_handle,
                 directory,
                 &folder,
@@ -1639,7 +1641,9 @@ fn attach_view(
                 Box::new(move |state: String| {
                     view_state(&state_window, &state_surface, &state_origin, &state)
                 }),
-            )?;
+            )
+        },
+        |document| {
             // The receiver is set before the page loads, so the first message of the page reaches it.
             platform.set_view_message(
                 document,
@@ -1724,7 +1728,7 @@ fn attach_view(
                 &surface_start_script(surface, &start, &crate::log_policy::stored_levels())?,
             )?;
             record_view_process_request(surface, plugin);
-            Ok(document)
+            Ok(())
         },
         |document, url| platform.load_document(document, url),
         |document| platform.close_document(document),
@@ -2332,6 +2336,115 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     Ok(())
 }
 
+/// The native operations that configure a document region after its creation. `PlatformDocument` runs them on the platform,
+/// and the tests of the creation run operations that fail.
+pub trait DocumentNative {
+    fn restore(&self, document: Handle, state: &str) -> Result<(), String>;
+    fn appearance(&self, document: Handle, dark: bool) -> Result<(), String>;
+    fn background(&self, document: Handle, enabled: bool) -> Result<(), String>;
+    fn message(&self, document: Handle, message: Box<dyn Fn(String) + Send>) -> Result<(), String>;
+    fn stream(&self, document: Handle, stream: Box<dyn Fn(String) + Send>) -> Result<(), String>;
+    fn stream_on(&self, document: Handle, stream: &str, on: bool) -> Result<bool, String>;
+    fn event(&self, document: Handle, event: Box<dyn Fn(String) + Send>) -> Result<(), String>;
+    fn close(&self, document: Handle) -> Result<(), String>;
+}
+
+/// The document operations of the platform.
+struct PlatformDocument(&'static dyn Platform);
+
+impl DocumentNative for PlatformDocument {
+    fn restore(&self, document: Handle, state: &str) -> Result<(), String> {
+        self.0.restore_document(document, state)
+    }
+    fn appearance(&self, document: Handle, dark: bool) -> Result<(), String> {
+        self.0.set_document_appearance(document, dark)
+    }
+    fn background(&self, document: Handle, enabled: bool) -> Result<(), String> {
+        self.0.set_document_background(document, enabled)
+    }
+    fn message(&self, document: Handle, message: Box<dyn Fn(String) + Send>) -> Result<(), String> {
+        self.0.set_document_message(document, message)
+    }
+    fn stream(&self, document: Handle, stream: Box<dyn Fn(String) + Send>) -> Result<(), String> {
+        self.0.set_document_stream(document, stream)
+    }
+    fn stream_on(&self, document: Handle, stream: &str, on: bool) -> Result<bool, String> {
+        self.0.set_document_stream_on(document, stream, on)
+    }
+    fn event(&self, document: Handle, event: Box<dyn Fn(String) + Send>) -> Result<(), String> {
+        self.0.set_document_event(document, event)
+    }
+    fn close(&self, document: Handle) -> Result<(), String> {
+        self.0.close_document(document)
+    }
+}
+
+/// The configuration of a created document region.
+pub struct DocumentSetup {
+    /// The name of the region.
+    pub name: String,
+    /// The interaction state that the region restores before it loads anything.
+    pub restore: Option<String>,
+    /// Whether the document shows the dark scheme.
+    pub dark: bool,
+    /// Whether a dialog of the window is open, which dims the document.
+    pub dialog: bool,
+    /// The receiver of the messages of a plugin document.
+    pub message: Box<dyn Fn(String) + Send>,
+    /// The receiver of the stream messages.
+    pub stream: Box<dyn Fn(String) + Send>,
+    /// The stream effects of the attach of the region.
+    pub effects: Vec<StreamEffect>,
+    /// The receiver of the document events.
+    pub event: Box<dyn Fn(String) + Send>,
+}
+
+/// Configures a created document region: it restores the history, sets the appearance and the background, sets the receivers of
+/// the messages and the streams, applies the stream effects of the attach and sets the receiver of the events. When a step fails,
+/// the document is closed before the error returns, and a failed close is reported with the failure. It runs on the main thread.
+pub fn configure_document(
+    native: &dyn DocumentNative,
+    document: Handle,
+    setup: DocumentSetup,
+) -> Result<(), String> {
+    let Err(reason) = configure_steps(native, document, setup) else {
+        return Ok(());
+    };
+    native
+        .close(document)
+        .map_err(|closing| format!("{reason}; closing the document: {closing}"))?;
+    Err(reason)
+}
+
+/// The steps of configure_document, in their order.
+fn configure_steps(
+    native: &dyn DocumentNative,
+    document: Handle,
+    setup: DocumentSetup,
+) -> Result<(), String> {
+    // The history is restored before anything else uses the new region, so it loads the restored entry first.
+    if let Some(state) = &setup.restore {
+        native
+            .restore(document, state)
+            .map_err(|refusal| format!("document {}: {refusal}", setup.name))?;
+    }
+    native.appearance(document, setup.dark)?;
+    native.background(document, setup.dialog)?;
+    native.message(document, setup.message)?;
+    native.stream(document, setup.stream)?;
+    // The region collects its requests from the start of its first document: native applies the collection when the
+    // document script reports that it is ready, which happens after this task.
+    for effect in &setup.effects {
+        if !native.stream_on(document, &effect.stream, effect.on)? {
+            return Err(format!(
+                "document {:?} does not accept stream {:?}",
+                setup.name, effect.stream
+            ));
+        }
+    }
+    native.event(document, setup.event)
+}
+
 /// Creates a document webview inside the surface webview, applies the stream effects of its attach and returns its address.
 fn create(
     webview: &Webview,
@@ -2395,88 +2508,70 @@ fn create(
             .to_str()
             .ok_or_else(|| format!("plugin folder is not UTF-8: {}", folder.display()))?
             .to_string();
+        // Every step that can fail without the document runs before its creation, so configure_document is the only step after it.
+        let dark = crate::theme::is_dark(&host)?;
         let handle =
             platform.create_document(surface, directory, &folder, &plugin, None, changed)?;
-        // The history is restored before anything else uses the new region, so it loads the restored entry first.
-        if let Some(state) = &restore
-            && let Err(refusal) = platform.restore_document(handle, state)
-        {
-            platform.close_document(handle)?;
-            return Err(format!("document {name}: {refusal}"));
-        }
-        let dark = crate::theme::is_dark(&host)?;
-        platform.set_document_appearance(handle, dark)?;
-        platform.set_document_background(handle, dialog)?;
         let message_host = host.clone();
         let message_surface = surface_id.clone();
         let message_document = name.clone();
-        platform.set_document_message(
-            handle,
-            Box::new(move |value| {
-                let place = format!("document message {message_document}");
-                match document_message(&message_surface, &message_document, &value) {
-                    Ok(Message::Forward(payload)) => {
-                        if let Err(error) = emit_window(&message_host, "document-message", payload)
-                        {
-                            log_error(&place, error);
-                        }
+        let message = Box::new(move |value: String| {
+            let place = format!("document message {message_document}");
+            match document_message(&message_surface, &message_document, &value) {
+                Ok(Message::Forward(payload)) => {
+                    if let Err(error) = emit_window(&message_host, "document-message", payload) {
+                        log_error(&place, error);
                     }
-                    Ok(Message::Failure(reason)) => log_error(&place, reason),
-                    Err(error) => log_error(&place, error),
                 }
-            }),
-        )?;
+                Ok(Message::Failure(reason)) => log_error(&place, reason),
+                Err(error) => log_error(&place, error),
+            }
+        });
         let stream_host = host.clone();
         let stream_key = (surface_id.clone(), name.clone());
-        platform.set_document_stream(
-            handle,
-            Box::new(move |value| deliver_stream(&stream_host, platform, &stream_key, &value)),
-        )?;
-        // The region collects its requests from the start of its first document: native applies the collection when the
-        // document script reports that it is ready, which happens after this task.
-        for effect in &effects {
-            match platform.set_document_stream_on(handle, &effect.stream, effect.on) {
-                Ok(true) => {}
-                refused => {
-                    platform.close_document(handle)?;
-                    return Err(refused.err().unwrap_or_else(|| {
-                        format!(
-                            "document {name:?} does not accept stream {:?}",
-                            effect.stream
-                        )
-                    }));
-                }
-            }
-        }
+        let stream = Box::new(move |value: String| {
+            deliver_stream(&stream_host, platform, &stream_key, &value)
+        });
         let event_host = host.clone();
         let event_surface = surface_id.clone();
         let event_document = name.clone();
-        platform.set_document_event(
-            handle,
-            Box::new(move |value| {
-                let event = match serde_json::from_str(&value) {
-                    Ok(event) => event,
-                    Err(error) => {
-                        log_error(
-                            "document-event",
-                            format!("the event is not JSON: {error}: {value}"),
-                        );
-                        return;
-                    }
-                };
-                if let Err(error) = emit_window(
-                    &event_host,
-                    "document-event",
-                    Event {
-                        surface: event_surface.clone(),
-                        document: event_document.clone(),
-                        event,
-                    },
-                ) {
-                    log_error("document-event", error);
+        let event = Box::new(move |value: String| {
+            let event = match serde_json::from_str(&value) {
+                Ok(event) => event,
+                Err(error) => {
+                    log_error(
+                        "document-event",
+                        format!("the event is not JSON: {error}: {value}"),
+                    );
+                    return;
                 }
-                exposure::window_changed(&event_host);
-            }),
+            };
+            if let Err(error) = emit_window(
+                &event_host,
+                "document-event",
+                Event {
+                    surface: event_surface.clone(),
+                    document: event_document.clone(),
+                    event,
+                },
+            ) {
+                log_error("document-event", error);
+            }
+            exposure::window_changed(&event_host);
+        });
+        configure_document(
+            &PlatformDocument(platform),
+            handle,
+            DocumentSetup {
+                name: name.clone(),
+                restore,
+                dark,
+                dialog,
+                message,
+                stream,
+                effects,
+                event,
+            },
         )?;
         Ok(handle)
     })
