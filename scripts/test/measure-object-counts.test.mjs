@@ -298,13 +298,16 @@ test("a divider drag whose split card is missing from core.grid fails with the c
   await assert.rejects(step(), /core\.grid reports no card other after core\.card\.split: \["main"\]/);
 });
 
-test("each count of a member that the reply adds outside host, page, documents, sessions and runtime is a count of the measurement", async () => {
+test("every count of every object member of the reply outside runtime, documents and sessions is a count of the measurement", async () => {
   // The mygo host adds the counts of its workbench, its native views and its framework callbacks; their member names are the host's.
   const counted = countsOf({ ...snapshot(2), page: null, sessions: [], runtime: runtime(9), added: { first: 4, second: 0 },
     host: { ...snapshot(2).host, more: 6 } });
   assert.equal(counted["added.first"], 4);
   assert.equal(counted["added.second"], 0);
   assert.equal(counted["host.more"], 6);
+  assert.equal(countsOf({ ...snapshot(2), page: { elements: 2, documents: 1, more: 5 } })["page.more"], 5);
+  assert.throws(() => countsOf({ ...snapshot(2), page: { elements: 2, documents: 1, more: null } }),
+    /object count page\.more is not a non-negative integer \(null\)/);
   assert.ok(!Object.keys(counted).some((name) => name.startsWith("runtime.") || name.startsWith("sessions")), "runtime figures are not counts");
   assert.throws(() => countsOf({ ...snapshot(2), added: { first: -1 } }), /object count added\.first is not a non-negative integer \(-1\)/);
   assert.throws(() => countsOf({ ...snapshot(2), added: 3 }), /diagnostics\.objects member added is not an object of counts \(3\)/);

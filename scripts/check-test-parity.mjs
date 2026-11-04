@@ -292,7 +292,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/measure-object-counts.test.mjs", id: "a window of the mygo host reads the host footprint and the runtime figures in every repetition and no page process" },
       { file: "scripts/test/measure-object-counts.test.mjs", id: "the divider drag splits a card, drags the boundary of the split through diagnostics.drag and closes the split" },
       { file: "scripts/test/measure-object-counts.test.mjs", id: "the menu and the settings window open and close through their declared commands and wait for their statuses" },
-      { file: "scripts/test/measure-object-counts.test.mjs", id: "each count of a member that the reply adds outside host, page, documents, sessions and runtime is a count of the measurement" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "every count of every object member of the reply outside runtime, documents and sessions is a count of the measurement" },
       { file: "scripts/test/measure-host-allocations.test.mjs", id: "the host is the process of the release bundle of the mygo host that has the --config-dir of the application, and the trace state is set" },
       { file: "scripts/test/measure-host-calls.test.mjs", id: "a window whose host.window reports pageProcess null fails before any request with the error of the mygo host" },
       { file: "scripts/test/measure-page-memory.test.mjs", id: "a window whose host.window reports pageProcess null fails before any step with the error of the mygo host" },

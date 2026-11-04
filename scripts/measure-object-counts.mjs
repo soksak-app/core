@@ -111,7 +111,7 @@ export function operationSteps({ window, windows, plugins, run, request, until, 
 /** The baseline reads at most this many times before it fails, so a count that keeps changing ends the measurement. */
 const BASELINE_MAX_READINGS = 10;
 
-/** The host counts of diagnostics.objects, in the order of the report. */
+/** The counts that the member host of every diagnostics.objects reply holds. */
 const HOST_COUNTS = ["surfaces", "regions", "documents", "sidecarSessions", "pendingReplies", "eventSubscribers"];
 
 /** The figures of the Go runtime in the member runtime of diagnostics.objects (docs/spec/endpoint.md), which a host without a Go runtime leaves out. */
@@ -127,31 +127,35 @@ function requireCount(value, name) {
 /** The members of a diagnostics.objects reply that are not objects of counts: sessions lists what host.sidecarSessions counts, and runtime holds figures. */
 const UNCOUNTED_MEMBERS = new Set(["sessions", "runtime"]);
 
+/** The counts that the member page of every reply with a main page holds. */
+const PAGE_COUNTS = ["elements", "documents"];
+
 /**
- * Flattens a diagnostics.objects reply into one number per count name. page is null for a window without a main page, which then
- * has no page counts. Every other member of host, and every member of the reply outside host, page, documents, sessions and runtime,
- * is an object of counts that the host adds, as the mygo host adds the counts of its workbench, its native views and its framework
- * callbacks, and each of its counts is a count `<member>.<name>`.
+ * Flattens a diagnostics.objects reply into one number per count name. Every object member of the reply outside runtime, documents
+ * and sessions is an object of counts, and each of its members is the count `<member>.<name>`, because the S3 judge of B3 compares
+ * "every count of diagnostics.objects outside its runtime member", the counts that a host adds among them, as the mygo host adds
+ * the counts of its workbench, its native views and its framework callbacks. host holds at least HOST_COUNTS and page at least
+ * PAGE_COUNTS; page is null for a window without a main page, which then has no page counts. documents is counted by its entries.
  */
 export function countsOf({ host, page, documents, ...added }) {
   if (!host || typeof host !== "object") throw new Error("diagnostics.objects reply has no host object");
   if (page !== null && (!page || typeof page !== "object")) throw new Error("diagnostics.objects reply has no page object and no page null");
   if (!Array.isArray(documents)) throw new Error("diagnostics.objects reply has no documents array");
   const counts = {};
-  for (const name of HOST_COUNTS) counts[`host.${name}`] = requireCount(host[name], `host.${name}`);
-  for (const name of Object.keys(host)) {
-    if (!HOST_COUNTS.includes(name)) counts[`host.${name}`] = requireCount(host[name], `host.${name}`);
-  }
-  for (const [member, value] of Object.entries(added)) {
-    if (UNCOUNTED_MEMBERS.has(member)) continue;
+  const count = (member, value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       throw new Error(`diagnostics.objects member ${member} is not an object of counts (${JSON.stringify(value)})`);
     }
-    for (const [name, count] of Object.entries(value)) counts[`${member}.${name}`] = requireCount(count, `${member}.${name}`);
-  }
+    for (const [name, number] of Object.entries(value)) counts[`${member}.${name}`] = requireCount(number, `${member}.${name}`);
+  };
+  for (const name of HOST_COUNTS) requireCount(host[name], `host.${name}`);
+  count("host", host);
   if (page !== null) {
-    counts["page.elements"] = requireCount(page.elements, "page.elements");
-    counts["page.documents"] = requireCount(page.documents, "page.documents");
+    for (const name of PAGE_COUNTS) requireCount(page[name], `page.${name}`);
+    count("page", page);
+  }
+  for (const [member, value] of Object.entries(added)) {
+    if (!UNCOUNTED_MEMBERS.has(member)) count(member, value);
   }
   counts["documents.regions"] = documents.length;
   counts["documents.elements"] = documents.reduce((sum, document) => sum + requireCount(document.elements, "documents[].elements"), 0);
