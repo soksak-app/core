@@ -125,7 +125,7 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"a replaced file drop receiver is released once (released %@)", releasedReceivers]);
         // Objects that the block of the occlusion observation captured are released only when the observation ends.
         NSObject *occlusionCapture = [[NSObject new] autorelease];
-        check(sp_window_observe_occlusion(window, ^{ [occlusionCapture self]; }), @"the window occlusion is observed");
+        check(sp_window_observe_occlusion(window, ^(bool onScreen) { (void)onScreen; [occlusionCapture self]; }), @"the window occlusion is observed");
 
         surface = sp_surface_create(main);
         check(surface != NULL, @"a logical surface is created");

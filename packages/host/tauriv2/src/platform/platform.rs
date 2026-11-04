@@ -370,9 +370,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Changes the window to full screen or back, and calls done when the transition ends. A request that arrives
     /// during a transition is handled after that transition ends.
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String>;
-    /// Calls changed on the UI thread whenever the occlusion state of the window changes. The observation ends with the
+    /// Calls changed on the UI thread with whether the window is on screen whenever the occlusion state of the window changes. The observation ends with the
     /// window.
-    fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String>;
+    fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn(bool)>) -> Result<(), String>;
     /// Calls changed on the UI thread each time the first responder of the window changes, and returns the observation. An
     /// existing observation of the window stops calling back, and its owner still ends it. Call it on the UI thread.
     fn observe_responder(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<Handle, String>;

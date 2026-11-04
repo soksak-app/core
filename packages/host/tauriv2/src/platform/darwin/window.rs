@@ -8,6 +8,7 @@ use block2::{Block, RcBlock};
 use objc2::msg_send;
 #[cfg(feature = "diagnostics")]
 use objc2::runtime::AnyObject;
+use objc2::runtime::Bool;
 use serde_json::Value;
 use tauri::Window;
 
@@ -93,12 +94,12 @@ pub fn on_screen(window: Handle) -> Result<bool, String> {
     Ok(unsafe { sp_window_on_screen(window as *mut c_void) })
 }
 
-/// Calls changed whenever the occlusion state of the window changes (NSWindowDidChangeOcclusionStateNotification).
-pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
+/// Calls changed with whether the window is on screen whenever the occlusion state of the window changes (NSWindowDidChangeOcclusionStateNotification).
+pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn(bool)>) -> Result<(), String> {
     unsafe extern "C" {
-        fn sp_window_observe_occlusion(window: *mut c_void, changed: &Block<dyn Fn()>) -> bool;
+        fn sp_window_observe_occlusion(window: *mut c_void, changed: &Block<dyn Fn(Bool)>) -> bool;
     }
-    let changed = RcBlock::new(changed);
+    let changed = RcBlock::new(move |on_screen: Bool| changed(on_screen.as_bool()));
     if unsafe { sp_window_observe_occlusion(window as *mut c_void, &changed) } {
         Ok(())
     } else {

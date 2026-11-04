@@ -745,11 +745,13 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     let occluded = window.clone();
     platform.observe_occlusion(
         owner,
-        Box::new(move || {
+        Box::new(move |on_screen| {
             crate::window_events::record_window_event(occluded.label(), "occlusion_changed");
             // An occluded or minimized window draws no image region (docs/spec/native-surfaces.md#image-regions).
             if let Err(error) = with_open_window(&window_data(&occluded), |data| {
-                crate::composition::read_on_screen(&occluded, &data.images)
+                // The notice carries the state of its window: the handle of a closing window is no longer available.
+                data.images.set_on_screen(on_screen);
+                Ok(())
             }) {
                 log_error("window on screen", error);
             }

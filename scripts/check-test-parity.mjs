@@ -8847,6 +8847,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F423",
+    implementation: [{ file: "native/darwin/src/window_facts.m", symbol: "callback(sp_window_on_screen(notification.object))" }],
+    tests: [{ file: "native/darwin/tests/window_facts_test.m", id: "the observation of a hidden window reports that it is not on screen" }],
+    expected: "An occlusion notice passes the state of the notified window.",
+    levels: ["unit"],
+  },
+  {
     id: "F404",
     implementation: [{ file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) fn with_open_window(" }],
     tests: [{ file: "packages/host/tauriv2/src/windows_records_test.rs", id: "a_notification_after_its_window_closed_runs_nothing_and_reports_no_failure" }],

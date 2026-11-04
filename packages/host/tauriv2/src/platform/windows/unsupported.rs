@@ -43,7 +43,7 @@ pub fn fullscreen(_window: Handle, _on: bool, _done: Box<dyn Fn()>) -> Result<()
     missing("full screen")
 }
 
-pub fn observe_occlusion(_window: Handle, _changed: Box<dyn Fn()>) -> Result<(), String> {
+pub fn observe_occlusion(_window: Handle, _changed: Box<dyn Fn(bool)>) -> Result<(), String> {
     missing("window occlusion")
 }
 

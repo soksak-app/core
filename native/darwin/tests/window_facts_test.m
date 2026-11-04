@@ -189,18 +189,24 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
     [observed setReleasedWhenClosed:NO];
     __block int changes = 0;
-    check(sp_window_observe_occlusion(observed, ^{ changes++; }), @"occlusion observation starts");
-    check(!sp_window_observe_occlusion(NULL, ^{}), @"occlusion observation without a window is rejected");
+    __block bool reportedOnScreen = false;
+    check(sp_window_observe_occlusion(observed, ^(bool onScreen) {
+        changes++;
+        reportedOnScreen = onScreen;
+    }), @"occlusion observation starts");
+    check(!sp_window_observe_occlusion(NULL, ^(bool onScreen) { (void)onScreen; }), @"occlusion observation without a window is rejected");
     [observed orderFrontRegardless];
     NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:2];
     while (changes == 0 && [limit timeIntervalSinceNow] > 0) pumpOcclusion();
     check(changes > 0 && (observed.occlusionState & NSWindowOcclusionStateVisible) != 0,
         [NSString stringWithFormat:@"showing the window reports an occlusion change (%d changes)", changes]);
+    check(reportedOnScreen, @"the observation of a shown window reports that it is on screen");
     int shown = changes;
     [observed orderOut:nil];
     limit = [NSDate dateWithTimeIntervalSinceNow:2];
     while (changes == shown && [limit timeIntervalSinceNow] > 0) pumpOcclusion();
     check(changes > shown, [NSString stringWithFormat:@"hiding the window reports an occlusion change (%d changes)", changes]);
+    check(!reportedOnScreen, @"the observation of a hidden window reports that it is not on screen");
     check(!NSApp.isActive, @"application stays inactive");
     [window close];
     return failures ? 1 : 0;

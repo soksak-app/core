@@ -68,7 +68,7 @@ impl Platform for Windows {
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String> {
         unsupported::set_main_appearance(view, dark)
     }
-    fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
+    fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn(bool)>) -> Result<(), String> {
         unsupported::observe_occlusion(window, changed)
     }
     fn observe_responder(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<Handle, String> {

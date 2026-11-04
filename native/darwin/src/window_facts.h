@@ -83,7 +83,7 @@ bool sp_window_on_screen(void *window);
 // (NSWindowDidChangeOcclusionStateNotification). The observation ends when the window is released. An
 // existing observation of the window is replaced. Returns false when there is no window.
 #ifdef __BLOCKS__
-bool sp_window_observe_occlusion(void *window, void (^changed)(void));
+bool sp_window_observe_occlusion(void *window, void (^changed)(bool onScreen));
 #endif
 
 // Calls changed on the main thread each time the first responder of the window changes, observed with key-value

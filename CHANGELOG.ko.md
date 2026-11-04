@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F423: 닫히는 window의 occlusion 알림이 Tauri host에서 `window on screen: the underlying handle is not available`을 기록하지 않는다. native 관찰이 알림 대상 window의 상태를 넘긴다.
 - F422: reload를 요청받은 page는 page가 필요한 surface document를 더 기다리지 않는다. host가 새 page가 시작할 때까지 그 요청을 1003으로 끝내므로 `host.window.reload`가 1005로 끝나지 않는다.
 - F421: 설정 listener가 core 명령보다 먼저 연결되어 page 시작 중에 바뀐 설정이 그려진다. `e2e/projects.test.mjs`의 사이드바 실패가 유효한 설정과 저장된 설정을 보고한다.
 - F420: 창이 닫힐 때 진행 중인 배치 요청은 두 host에서 표면을 만들지 않고 `project window is closed`로 실패한다.

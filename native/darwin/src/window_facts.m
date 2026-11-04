@@ -411,17 +411,17 @@ bool sp_window_on_screen(void *handle) {
     return window && (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
 }
 
-bool sp_window_observe_occlusion(void *handle, void (^changed)(void)) {
+bool sp_window_observe_occlusion(void *handle, void (^changed)(bool onScreen)) {
     NSCAssert(NSThread.isMainThread, @"occlusion observation requires the UI thread");
     NSWindow *window = (NSWindow *)handle;
     if (!window || !changed) {
         sp_log_error("window facts", "the window or the callback of the occlusion observation is missing");
         return false;
     }
-    void (^callback)(void) = [[changed copy] autorelease];
+    void (^callback)(bool) = [[changed copy] autorelease];
     SPOcclusionObserver *observer = [[SPOcclusionObserver new] autorelease];
     observer.token = sp_observe_notification("window_facts.occlusion", SP_OBSERVE_RECORD, NSWindowDidChangeOcclusionStateNotification,
-        window, NSOperationQueue.mainQueue, ^(NSNotification *notification) { callback(); });
+        window, NSOperationQueue.mainQueue, ^(NSNotification *notification) { callback(sp_window_on_screen(notification.object)); });
     objc_setAssociatedObject(window, &occlusionObserverKey, observer, OBJC_ASSOCIATION_RETAIN);
     return true;
 }
