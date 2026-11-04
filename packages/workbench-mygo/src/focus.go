@@ -58,6 +58,21 @@ func NewFocus(declared *Declarations, changed func()) *Focus {
 		views: map[string]*FocusStatus{}}
 }
 
+// Register registers the status core.focus and the command core.focus.set.
+func (f *Focus) Register(registry *Registry) {
+	registry.Status("core.focus", func() any { return f.Status() })
+	registry.Command("core.focus.set", func(params json.RawMessage) (any, error) {
+		var target struct {
+			Name  string `json:"name"`
+			Index int    `json:"index"`
+		}
+		if err := json.Unmarshal(params, &target); err != nil {
+			return nil, fmt.Errorf("core.focus.set: %w", err)
+		}
+		return nil, f.Set(target.Name, target.Index)
+	})
+}
+
 // Frame starts a frame of the view of window. The view calls it before it binds an element; a focus that moved since the last
 // frame reports its change here.
 func (f *Focus) Frame(window *ui.Context) {

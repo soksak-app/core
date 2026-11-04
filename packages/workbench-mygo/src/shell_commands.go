@@ -66,6 +66,7 @@ func (s *Shell) register() {
 	s.registerSettings()
 	s.registerPicker()
 	s.text.Register(s.registry)
+	s.keyboard.Register(s.registry)
 	s.registerCardSidebars()
 	s.registerPlugins()
 	s.registerDebug()

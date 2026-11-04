@@ -34,18 +34,8 @@ type Functions struct {
 // Register registers the statuses and the commands of the functions.
 func (f Functions) Register(registry *Registry) {
 	f.Text.Register(registry)
-	registry.Status("core.focus", func() any { return f.Focus.Status() })
+	f.Focus.Register(registry)
 	registry.Status("core.pointer", func() any { return f.Pointer.Status() })
 	registry.Status("core.contributions", func() any { return f.Contributions.Status() })
 	registry.Status("core.verify", func() any { return f.Verification.Status() })
-	registry.Command("core.focus.set", func(params json.RawMessage) (any, error) {
-		var target struct {
-			Name  string `json:"name"`
-			Index int    `json:"index"`
-		}
-		if err := json.Unmarshal(params, &target); err != nil {
-			return nil, fmt.Errorf("core.focus.set: %w", err)
-		}
-		return nil, f.Focus.Set(target.Name, target.Index)
-	})
 }

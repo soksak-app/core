@@ -57,8 +57,6 @@ type viewState struct {
 	// status of a surface.
 	statuses map[string]string
 	observed map[string]func()
-	// focus is the value of the last call tab.focus.
-	focus json.RawMessage
 }
 
 // end ends the calls of the page to a view whose document ended.
@@ -450,17 +448,9 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		s.tabs.states.Write(call.Surface, state)
 		done()
 	case "tab.focus":
-		var focus *struct {
-			Name  string `json:"name"`
-			Index *int   `json:"index"`
+		if err := s.keyboard.SetViewFocus(call.Surface, call.Params); err != nil {
+			return err
 		}
-		if err := json.Unmarshal(call.Params, &focus); err != nil {
-			return fmt.Errorf("view call %s: %w", call.Command, err)
-		}
-		if focus != nil && (focus.Name == "" || focus.Index == nil || *focus.Index < 0) {
-			return fmt.Errorf("view call %s requires {name, index} or null", call.Command)
-		}
-		view.focus = call.Params
 		done()
 	case "tab.notify":
 		notice, err := viewFields[tabNotice](call)
@@ -1134,6 +1124,7 @@ func (s *Shell) viewEnded(data []any) {
 	}
 	view.end()
 	delete(s.surfaces.views, event.Surface)
+	s.keyboard.ForgetView(event.Surface)
 	delete(s.surfaces.documents, event.Surface)
 }
 

@@ -268,6 +268,8 @@ func (s *Shell) Event(name string, data []any) {
 		s.workspaceChanged()
 	case "files-dropped":
 		s.filesDropped(data)
+	case "window-responder":
+		s.windowResponder(data)
 	default:
 		if !s.noticeEvent(name, data) {
 			s.tabEvent(name, data)
@@ -286,6 +288,17 @@ func (s *Shell) menuCommand(data []any) {
 		return
 	}
 	s.binder.run(item.Name, nil)
+}
+
+// windowResponder follows the first responder of the window.
+func (s *Shell) windowResponder(data []any) {
+	responder, err := eventBody[Responder]("window-responder", data)
+	if err == nil {
+		err = s.keyboard.SetResponder(responder)
+	}
+	if err != nil {
+		s.fail(err)
+	}
 }
 
 // eventBody reads the one value of the event name.
@@ -310,7 +323,7 @@ var eventsLeft = map[string]bool{"diagnostics-tick": true, "diagnostics-unlisten
 	"run-began":              true, "run-ended": true, "sidecar-failure": true, "sidecar-message": true, "sidecars-changed": true, "surface-input": true,
 	"surface-pressed": true, "theme": true, "view-call": true, "view-presentation-abandoned": true, "view-process-ended": true,
 	"view-reply": true, "view-responsiveness": true, "view-source-ended": true, "view-source-registered": true, "view-stopped": true,
-	"window-active": true, "window-responder": true}
+	"window-active": true}
 
 // eventLeft writes an event that no part of the workbench knows to the application log. The host names notification events by type.
 func (s *Shell) eventLeft(name string) {
