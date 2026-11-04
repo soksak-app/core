@@ -3,6 +3,8 @@ package workbench
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // params reads the parameters of a command.
@@ -34,6 +36,12 @@ type cardParam struct {
 	Card   string `json:"card"`
 	Side   string `json:"side"`
 	Plugin string `json:"plugin"`
+}
+
+type boundaryParam struct {
+	Axis     layout.Axis `json:"axis"`
+	Line     int         `json:"line"`
+	Position *float64    `json:"position"`
 }
 
 type tabParam struct {
@@ -86,17 +94,30 @@ func (s *Shell) register() {
 		if err := s.requirePlane(); err != nil {
 			return nil, err
 		}
-		born, err := s.splitCard(value.Card, value.Side, value.Plugin)
-		if err != nil || born == "" {
+		return s.splitCard(value.Card, value.Side, value.Plugin)
+	})
+	command(s, "core.card.close", func(value cardParam) (any, error) {
+		if err := s.requirePlane(); err != nil {
 			return nil, err
 		}
-		return map[string]string{"card": born}, nil
-	})
-	act(s, "core.card.close", func(value cardParam) error {
-		if err := s.requirePlane(); err != nil {
-			return err
+		if err := s.closeCard(value.Card); err != nil {
+			return nil, err
 		}
-		return s.closeCard(value.Card)
+		return map[string]bool{"closed": true}, nil
+	})
+	command(s, "core.boundary.move", func(value boundaryParam) (any, error) {
+		if err := s.requirePlane(); err != nil {
+			return nil, err
+		}
+		if !s.plane.HasBoundary(value.Axis, value.Line) {
+			return nil, fmt.Errorf("no %s boundary at line %d", value.Axis, value.Line)
+		}
+		if value.Position == nil {
+			return nil, fmt.Errorf("core.boundary.move: position is missing")
+		}
+		moved := s.plane.MoveBoundary(value.Axis, value.Line, *value.Position, false)
+		s.settle()
+		return map[string]float64{"position": moved}, nil
 	})
 	command(s, "core.card.add-tab", func(value cardParam) (any, error) {
 		if err := s.requirePlane(); err != nil {

@@ -270,6 +270,7 @@ func (s *Shell) patch(id string, members map[string]any) {
 
 // settle stores the plane and asks for a frame after a change of the plane.
 func (s *Shell) settle() {
+	s.held = nil
 	s.keep()
 	s.options.Invalidate()
 }
@@ -455,37 +456,62 @@ func (s *Shell) newTabOf(plugin string) layout.Tab {
 	return layout.Tab{ID: s.newTabID(), Plugin: plugin, Title: plugin}
 }
 
-// splitCard splits the card id toward side with a new tab of plugin, and focuses the new card.
-func (s *Shell) splitCard(id, side, plugin string) (string, error) {
+// paneCard refuses an id that is no card of the plane or that is a window sidebar.
+func (s *Shell) paneCard(id string) error {
+	if _, ok := s.plane.Card(id); !ok || isPlace(id) {
+		return fmt.Errorf("no card %s", id)
+	}
+	return nil
+}
+
+// splitSide tells whether side is a side that a card splits toward.
+func splitSide(side string) bool {
+	return side == "left" || side == "right" || side == "top" || side == "bottom"
+}
+
+// splitCard splits the card id toward side with a new tab of plugin, focuses the new card, and returns the card and its tab. Without
+// a plugin the new tab has the plugin of the active tab, as the split tools of the card head ask.
+func (s *Shell) splitCard(id, side, plugin string) (map[string]string, error) {
+	if err := s.paneCard(id); err != nil {
+		return nil, err
+	}
+	if !splitSide(side) {
+		return nil, fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
+	}
 	data, err := s.cardData(id)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if plugin == "" {
 		active := data.ActiveTab()
 		if active == nil {
-			return "", fmt.Errorf("card %s has no active tab to split", id)
+			return nil, fmt.Errorf("card %s has no active tab to split", id)
 		}
 		plugin = active.Plugin
 	}
 	tab := s.newTabOf(plugin)
 	encoded, err := json.Marshal(tabData([]layout.Tab{tab}, tab.ID))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	born, ok := s.plane.SplitToward(id, side, layout.SplitInit{Data: encoded})
-	if ok {
-		s.focused = born
+	if !ok {
+		return nil, fmt.Errorf("card %s cannot split toward %s", id, side)
 	}
+	s.focused = born
 	s.settle()
-	return born, nil
+	return map[string]string{"card": born, "tab": tab.ID}, nil
 }
 
 // closeCard closes the card id with its tabs.
 func (s *Shell) closeCard(id string) error {
-	if !s.plane.Close(id) {
-		return fmt.Errorf("card %s does not close", id)
+	if err := s.paneCard(id); err != nil {
+		return err
 	}
+	if !s.plane.CanClose(id) {
+		return fmt.Errorf("card %s cannot close", id)
+	}
+	s.plane.Close(id)
 	if s.focused == id {
 		s.focused = s.firstCard(s.plane)
 	}
