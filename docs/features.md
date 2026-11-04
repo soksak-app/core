@@ -157,7 +157,7 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
   - [ ] F502-9 — On macOS, the start of the Go language host library requires both main-thread functions that the framework adapter installs.
   - [ ] F502-10 — U3, U4 and U8 in the framework, and the presentation notice and the settled presentation of the `Frontend` port.
   - [ ] F502-11 — U5 and U6 in the framework.
-  - [ ] F502-12 — The mygo host start: `apps/mygo` and `packages/host/mygo` with every method of `Framework` and `Frontend`.
+  - [ ] F502-12 — The mygo host start: `apps/mygo` and `packages/host/mygo` with every method of `Framework` and `Frontend`, and the Makefile targets of the mygo host, among them `mygo-build` and `mygo-build-release`, which `make e2e-b3` runs.
   - [ ] F502-13 — D7 and the workbench statuses on the Wails and Tauri hosts.
   - [ ] F502-13-1 — The core release of the revision that completes F502-13.
   - [ ] F502-14 — Workbench events on the Wails and Tauri hosts.
