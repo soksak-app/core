@@ -1,5 +1,5 @@
 // The replies of modal documents that the host relays (docs/spec/native-host.md): a reply of a modal that the page does not
-// show, or that has no receiver, is dropped and recorded as `page.overlay.dropped`, never dropped without a record.
+// show, or that has no receiver, is dropped and recorded as `workbench.overlay.dropped`, never dropped without a record.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 
@@ -17,8 +17,8 @@ mock.module("../page-log.js", { namedExports: {
 } });
 await import("../host.js");
 
-test("a reply of a modal that the page does not show is recorded as page.overlay.dropped", () => {
+test("a reply of a modal that the page does not show is recorded as workbench.overlay.dropped", () => {
   recorded.length = 0;
   listeners["overlay-pick"]({ id: "debug", key: "save-all", value: "" });
-  assert.deepEqual(recorded, [{ level: "info", event: "page.overlay.dropped", fields: { id: "debug", shown: "", key: "save-all" } }]);
+  assert.deepEqual(recorded, [{ level: "info", event: "workbench.overlay.dropped", fields: { id: "debug", shown: "", key: "save-all" } }]);
 });

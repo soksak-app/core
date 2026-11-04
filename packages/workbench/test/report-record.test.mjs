@@ -10,16 +10,16 @@ test("a line `<where>: <text>` is split at its first `: `", () => {
   });
 });
 
-test("a line without `: ` has the place page and is the whole text", () => {
-  assert.deepEqual(recordOf("info", "focus in browser.address"), { level: "info", where: "page", text: "focus in browser.address" });
+test("a line without `: ` has the place workbench and is the whole text", () => {
+  assert.deepEqual(recordOf("info", "focus in browser.address"), { level: "info", where: "workbench", text: "focus in browser.address" });
 });
 
-test("a line that starts with `: ` or holds a line feed before the separator keeps the place page", () => {
-  assert.deepEqual(recordOf("error", ": nothing"), { level: "error", where: "page", text: ": nothing" });
-  assert.deepEqual(recordOf("error", "first\nsecond: third"), { level: "error", where: "page", text: "first\nsecond: third" });
+test("a line that starts with `: ` or holds a line feed before the separator keeps the place workbench", () => {
+  assert.deepEqual(recordOf("error", ": nothing"), { level: "error", where: "workbench", text: ": nothing" });
+  assert.deepEqual(recordOf("error", "first\nsecond: third"), { level: "error", where: "workbench", text: "first\nsecond: third" });
 });
 
 test("a value that is not text is written as its text and split like a line", () => {
   assert.deepEqual(recordOf("error", new Error("boom")), { level: "error", where: "Error", text: "boom" });
-  assert.deepEqual(recordOf("error", 42), { level: "error", where: "page", text: "42" });
+  assert.deepEqual(recordOf("error", 42), { level: "error", where: "workbench", text: "42" });
 });

@@ -990,7 +990,7 @@ for (const app of Object.values(APPS)) {
         }
         if (event.event === "plugin.terminal.frame") return event.fields?.session === terminalSession.sessionId;
         if (["log.dropped", "log.pruned", "host.buffer.dropped", "native.record.info"].includes(event.event)) return true;
-        return ["log.gated", "page.log.gated"].includes(event.event) &&
+        return ["log.gated", "workbench.log.gated", "page.log.gated"].includes(event.event) &&
           ((event.fields?.class === "call" && event.fields?.level === "debug") ||
             (event.fields?.class === "frame" && event.fields?.level === "debug"));
       });

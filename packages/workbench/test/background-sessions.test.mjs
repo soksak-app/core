@@ -1,7 +1,7 @@
 // A background session keeps the sidecar session of a tab that has no mounted surface (docs/spec/plugins.md). A tab whose
 // surface stays mounted while another tab of its card is shown already owns its session with its image region, so a background
 // `open` for it is a second owner of the same surface: the terminal sidecar then fed the output of that terminal without drawing
-// it (F192). Each decision of a background session is the event `page.background.session`.
+// it (F192). Each decision of a background session is the event `workbench.background.session`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -92,7 +92,7 @@ test("a background session opens only for a tab without a mounted surface and en
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const plane = await import("../plane.js");
-  const decisions = (tab) => events.filter((e) => e.event === "page.background.session" && e.fields.tab === tab)
+  const decisions = (tab) => events.filter((e) => e.event === "workbench.background.session" && e.fields.tab === tab)
     .map((e) => `${e.fields.action}:${e.fields.surface}`);
   const opens = (tab) => sends.filter((s) => s.surface === tab && s.body.operation === "open").length;
   try {

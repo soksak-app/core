@@ -1,5 +1,5 @@
 // Measures the Escape round trip of the native modal menu: the time from the receipt of the overlay answer on the main page
-// (page.trace.modal.answer, key core.modal.dismiss) to the close of the picker (page.trace.picker.close, reason dismiss). Both
+// (workbench.trace.modal.answer, key core.modal.dismiss) to the close of the picker (workbench.trace.picker.close, reason dismiss). Both
 // events carry the monotonic clock mono_ns of the event contract, and the difference of the two clocks is the round trip. The
 // check reports the median of the runs of each host (docs/spec/performance-trace.md#producers).
 import assert from "node:assert/strict";
@@ -15,8 +15,8 @@ const RUNS = 5;
 const ROUND_TIMEOUT = 30000;
 // The limit of the runs of one host, which covers the menu opens and their closes.
 const HOST_TIMEOUT = 300000;
-const ANSWER = "page.trace.modal.answer";
-const CLOSE = "page.trace.picker.close";
+const ANSWER = "workbench.trace.modal.answer";
+const CLOSE = "workbench.trace.picker.close";
 
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
 

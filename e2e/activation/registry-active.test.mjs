@@ -17,7 +17,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a window that becomes active reads the registry again`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     // The records that decide whether the owner became key and whether the application was active when the project opened.
-    await fresh(s, { log: { lifecycle: "debug" }, reads: ["host.window.event", "host.project.front", "page.window.active", "page.plugins.reread"] });
+    await fresh(s, { log: { lifecycle: "debug" }, reads: ["host.window.event", "host.project.front", "workbench.window.active", "workbench.plugins.reread"] });
     await keepCommonSettings(s);
     // A window becomes the key window only in the active application, so the check activates the application first, as a person who
     // switches to it does (docs/spec/installation.md#plugin-operations-in-the-application).

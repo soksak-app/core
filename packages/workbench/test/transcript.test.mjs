@@ -71,16 +71,16 @@ test("nothing is recorded while recording is off or for failed calls", async () 
   assert.deepEqual(bridge.started, []);
 });
 
-test("the sender passes the whole line of a call to the host call log with the action transcript and the page identity", async () => {
+test("the sender passes the whole line of a call to the host call log with the action transcript and the start of the workbench", async () => {
   const calls = [];
   const transcript = createTranscript(transcriptSender((name, request) => {
     calls.push({ name, request });
     return Promise.resolve(null);
-  }, "page-1"));
+  }, "start-1"));
   transcript.set(true);
   // The payload holds ": " inside a value and is longer than the record bound of 8192 bytes.
   const payload = { description: "Sets the state: on or off", text: "x".repeat(9000) };
   transcript.record("syncSurfaces", payload, Promise.resolve(null));
   await settle();
-  assert.deepEqual(calls, [{ name: "log", request: { action: "transcript", page: "page-1", line: `host syncSurfaces ${JSON.stringify(payload)} -> null` } }]);
+  assert.deepEqual(calls, [{ name: "log", request: { action: "transcript", start: "start-1", line: `host syncSurfaces ${JSON.stringify(payload)} -> null` } }]);
 });

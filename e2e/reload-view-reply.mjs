@@ -2,8 +2,8 @@
 export function acceptedCurrentViewReplies(events, { window, page, plugin, surface }) {
   if (typeof window !== "string" || window.length === 0) throw new TypeError("viewReply evidence requires the current window identity");
   if (typeof page !== "string" || page.length === 0) throw new TypeError("viewReply evidence requires the current page identity");
-  const sourceEvents = events.filter((event) => event.layer === "page" && event.page === page &&
-    ["page.view.call", "page.view.reply"].includes(event.event));
+  const sourceEvents = events.filter((event) => event.layer === "workbench" && event.start === page &&
+    ["workbench.view.call", "workbench.view.reply"].includes(event.event));
   const dispatches = events.filter((event) => event.layer === "host" && event.event === "host.view.reply.dispatch");
   const matches = [];
   for (const event of dispatches) {
@@ -32,14 +32,14 @@ export function acceptedCurrentViewReplies(events, { window, page, plugin, surfa
     if (sameTarget.length !== 1) {
       throw new Error(`viewReply ${fields.id} generation ${fields.generation} has ${sameTarget.length} native dispatch records`);
     }
-    const calls = sourceEvents.filter((source) => source.event === "page.view.call" &&
+    const calls = sourceEvents.filter((source) => source.event === "workbench.view.call" &&
       source.fields.plugin === plugin && source.fields.surface === fields.surface &&
       source.fields.id === fields.id && source.fields.generation === fields.generation);
     if (calls.length === 0) continue;
     if (calls.length !== 1) {
       throw new Error(`viewReply ${fields.id} generation ${fields.generation} has ${calls.length} page receipts`);
     }
-    const replies = sourceEvents.filter((source) => source.event === "page.view.reply" &&
+    const replies = sourceEvents.filter((source) => source.event === "workbench.view.reply" &&
       source.fields.plugin === plugin && source.fields.surface === fields.surface &&
       source.fields.id === fields.id && source.fields.generation === fields.generation &&
       source.fields.outcome === fields.outcome);
@@ -54,21 +54,21 @@ export function acceptedCurrentViewReplies(events, { window, page, plugin, surfa
 
 const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 const callIdentity = (fields) => `${fields.plugin}\u0000${fields.surface}\u0000${fields.id}`;
-const sourceIdentity = (event) => `${event.page}\u0000${event.fields.plugin}\u0000${event.fields.surface}\u0000${event.fields.generation}\u0000${event.fields.id}`;
+const sourceIdentity = (event) => `${event.start}\u0000${event.fields.plugin}\u0000${event.fields.surface}\u0000${event.fields.generation}\u0000${event.fields.id}`;
 
 /** Selects sealed host calls that occurred after the replacement page start beyond its stated clock uncertainty. */
 export function currentPageNativeViewCalls(events, { page }) {
   if (typeof page !== "string" || page.length === 0) throw new TypeError("view-call coverage requires the current page identity");
-  const starts = events.filter((event) => event.layer === "page" && event.event === "page.start" && event.page === page);
-  const timeOrigin = starts[0]?.fields?.time_origin;
+  const starts = events.filter((event) => event.layer === "workbench" && event.event === "workbench.start" && event.start === page);
+  const startedAt = starts[0]?.fields?.started_at;
   if (starts.length !== 1 || !integer(starts[0].mono_ns) || starts[0].mono_ns === 0 ||
-      typeof timeOrigin !== "number" || !Number.isFinite(timeOrigin) || timeOrigin <= 0) {
-    throw new Error(`the current page ${page} has no unique valid page.start record`);
+      typeof startedAt !== "number" || !Number.isFinite(startedAt) || startedAt <= 0) {
+    throw new Error(`the current page ${page} has no unique valid workbench.start record`);
   }
-  const clocks = events.filter((event) => event.layer === "page" && event.event === "page.log.clock" && event.page === page);
+  const clocks = events.filter((event) => event.layer === "workbench" && event.event === "workbench.log.clock" && event.start === page);
   if (clocks.length !== 1 || !integer(clocks[0].fields?.trip_us) ||
       !integer(clocks[0].fields?.resolution_us) || clocks[0].fields.resolution_us === 0) {
-    throw new Error(`the current page ${page} has no unique valid page.log.clock record`);
+    throw new Error(`the current page ${page} has no unique valid workbench.log.clock record`);
   }
   const clockBoundNs = Math.ceil(clocks[0].fields.trip_us * 500 + clocks[0].fields.resolution_us * 1000);
   if (!Number.isSafeInteger(clockBoundNs)) throw new Error(`the current page ${page} has an invalid page clock bound`);
@@ -144,8 +144,8 @@ export function currentPageViewCallCoverage(events, { window, page, calls }) {
   const groups = new Map();
   const candidates = new Map();
   for (const event of events) {
-    if (event.layer !== "page" || event.page !== page ||
-        !["page.view.call", "page.view.reply", "page.view.call.cancel"].includes(event.event)) continue;
+    if (event.layer !== "workbench" || event.start !== page ||
+        !["workbench.view.call", "workbench.view.reply", "workbench.view.call.cancel"].includes(event.event)) continue;
     const fields = event.fields;
     if (typeof fields?.surface !== "string") continue;
     const surfaceCall = `${fields.surface}\u0000${fields.id}`;
@@ -156,18 +156,18 @@ export function currentPageViewCallCoverage(events, { window, page, calls }) {
       throw new Error(`${event.event} for sealed ${target.plugin}/${target.surface}/${target.id} has an invalid source identity`);
     }
     const source = sourceIdentity(event);
-    const group = groups.get(source) ?? { page: event.page, plugin: fields.plugin, surface: fields.surface,
+    const group = groups.get(source) ?? { page: event.start, plugin: fields.plugin, surface: fields.surface,
       generation: fields.generation, id: fields.id, calls: [], replies: [], cancels: [] };
-    if (event.event === "page.view.call") {
-      if (typeof fields.command !== "string" || fields.command.length === 0) throw new Error("page.view.call has no command");
+    if (event.event === "workbench.view.call") {
+      if (typeof fields.command !== "string" || fields.command.length === 0) throw new Error("workbench.view.call has no command");
       group.calls.push(event);
     }
-    if (event.event === "page.view.reply") {
-      if (!["result", "error"].includes(fields.outcome)) throw new Error("page.view.reply has an invalid outcome");
+    if (event.event === "workbench.view.reply") {
+      if (!["result", "error"].includes(fields.outcome)) throw new Error("workbench.view.reply has an invalid outcome");
       group.replies.push(event);
     }
-    if (event.event === "page.view.call.cancel") {
-      if (typeof fields.command !== "string" || fields.command.length === 0) throw new Error("page.view.call.cancel has no command");
+    if (event.event === "workbench.view.call.cancel") {
+      if (typeof fields.command !== "string" || fields.command.length === 0) throw new Error("workbench.view.call.cancel has no command");
       group.cancels.push(event);
     }
     groups.set(source, group);
@@ -207,17 +207,17 @@ export function currentPageViewCallCoverage(events, { window, page, calls }) {
     if (group.calls.length !== 1 || group.replies.length !== 1) return undefined;
     const reply = group.replies[0];
     if (!(["result", "error"].includes(reply.fields?.outcome))) {
-      throw new Error(`page.view.reply ${identity.replaceAll("\u0000", "/")} has an invalid outcome`);
+      throw new Error(`workbench.view.reply ${identity.replaceAll("\u0000", "/")} has an invalid outcome`);
     }
     const dispatches = events.filter((event) => event.layer === "host" && event.event === "host.view.reply.dispatch" &&
       event.fields?.page === page && event.fields?.surface === group.surface &&
       event.fields?.generation === group.generation && event.fields?.id === group.id);
     if (dispatches.length === 0) return undefined;
-    if (dispatches.length !== 1) throw new Error(`page.view.reply ${identity.replaceAll("\u0000", "/")} has ${dispatches.length} native dispatch records`);
+    if (dispatches.length !== 1) throw new Error(`workbench.view.reply ${identity.replaceAll("\u0000", "/")} has ${dispatches.length} native dispatch records`);
     const dispatch = dispatches[0].fields;
     if (dispatch.window !== window || dispatch.outcome !== reply.fields.outcome || dispatch.disposition !== "posted" ||
         Object.hasOwn(dispatch, "reason")) {
-      throw new Error(`page.view.reply ${identity.replaceAll("\u0000", "/")} has no matching posted native dispatch`);
+      throw new Error(`workbench.view.reply ${identity.replaceAll("\u0000", "/")} has no matching posted native dispatch`);
     }
     settled.push({ plugin: group.plugin, surface: group.surface, generation: group.generation, id: group.id,
       outcome: reply.fields.outcome });

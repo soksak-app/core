@@ -35,7 +35,7 @@ const bootOf = (name) => {
   return match === null ? null : Number(match[1]);
 };
 
-const RECORD_EVENT = /^(host|page|native|sidecar|plugin)\.record\.(error|warn|info|debug|trace)$/;
+const RECORD_EVENT = /^(host|workbench|native|sidecar|plugin)\.record\.(error|warn|info|debug|trace)$/;
 
 /**
  * The line of one event. A record event (`<layer>.record.<level>` `{where, text}`) is the text line `<level> <layer>
@@ -167,7 +167,7 @@ export async function untilEventLine(configDir, offsets, predicate, timeout, dec
 
 // The prefixes of the events of the trace and the layer of the row that each one makes. The events `sidecar.<name>.*` of a sidecar
 // make the layer `<name>-core`; `sidecar.record.<level>` are the lines of its standard error, not trace events.
-const TRACE_PREFIXES = [["page.trace.", "page"], ["host.trace.", "host"], ["host.sampler.", "sampler"]];
+const TRACE_PREFIXES = [["workbench.trace.", "workbench"], ["host.trace.", "host"], ["host.sampler.", "sampler"]];
 const SIDECAR_TRACE = /^sidecar\.(?!record\.)([a-z][a-z0-9-]*)\./;
 
 // The prefix of a trace event and the layer of its row, or undefined when the event is not a trace event.
@@ -179,7 +179,7 @@ function traceLayer(name) {
 }
 
 /**
- * The events of the trace of the page, the host and the sampler as rows in the shape of the trace file of earlier runs: the
+ * The events of the trace of the workbench, the host and the sampler as rows in the shape of the trace file of earlier runs: the
  * layer, the event name without the prefix, the time as an ISO-8601 text with milliseconds, and the fields of the event.
  */
 export function traceRows(events) {

@@ -34,11 +34,19 @@
       {
         "call": "trace",
         "fixed": "debug",
-        "prefix": "page.trace.",
+        "prefix": "workbench.trace.",
         "event": 0,
         "fields": 1,
         "bare": true,
         "only": "^packages/workbench/"
+      },
+      {
+        "call": "ownRecord",
+        "level": 1,
+        "event": 2,
+        "fields": 3,
+        "bare": true,
+        "only": "^packages/plugin-api/log-batch\\.js$"
       }
     ],
     "rs": [

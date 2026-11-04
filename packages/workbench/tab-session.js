@@ -32,7 +32,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
   // resolves to the error of a failed write instead of rejecting, so the next write still runs.
   function put(tab, regions) {
     const next = writing.then(() => store.tabSessionPut(tab, regions).then((bytes) => {
-      if (regions) emitEvent("debug", "page.tab.session.stored", { tab, bytes });
+      if (regions) emitEvent("debug", "workbench.tab.session.stored", { tab, bytes });
       return null;
     }, (error) => error));
     writing = next;
@@ -49,7 +49,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
     const regions = {};
     for (const [region, session] of Object.entries(history)) {
       const bytes = decodedBytes(session);
-      if (bytes > SESSION_LIMIT) emitEvent("warn", "page.tab.session.dropped", { tab, region, bytes });
+      if (bytes > SESSION_LIMIT) emitEvent("warn", "workbench.tab.session.dropped", { tab, region, bytes });
       else regions[region] = { session };
     }
     await put(tab, Object.keys(regions).length ? regions : null);
@@ -97,7 +97,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
     /** Removes each file that kept(id) does not keep (storedSurfaceKept of section-surfaces.js), with an event per file. */
     async reconcile(kept) {
       const orphans = (await store.tabSessions()).filter((tab) => !kept(tab));
-      for (const tab of orphans) emitEvent("info", "page.tab.session.orphan", { tab });
+      for (const tab of orphans) emitEvent("info", "workbench.tab.session.orphan", { tab });
       await Promise.all(orphans.map(remove));
     },
     /** Writes the session of every tab with attached regions now; the page calls it at quit, before the regions close. */

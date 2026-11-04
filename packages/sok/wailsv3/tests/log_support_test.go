@@ -112,7 +112,7 @@ const (
 
 var (
 	bigLevels = []string{"error", "warn", "info", "debug", "trace"}
-	bigLayers = []string{"native", "host", "page", "plugin", "sidecar", "sok"}
+	bigLayers = []string{"native", "host", "workbench", "page", "plugin", "sidecar", "sok"}
 	bigGroups = []string{"input", "window", "sidecar", "call"}
 	bigVerbs  = []string{"a", "b", "c"}
 )
@@ -130,7 +130,7 @@ func generateEach(n int, emit func(bigEvent)) {
 		switch i {
 		case 0:
 			e.level, e.layer, e.event = "info", "host", "log.open"
-			e.line = head + `"level":"info","layer":"host","event":"log.open","fields":{"schema":2,"pid":1,"role":"host","boot":"big"}}`
+			e.line = head + `"level":"info","layer":"host","event":"log.open","fields":{"schema":3,"pid":1,"role":"host","boot":"big"}}`
 		case 2000:
 			e.level, e.layer, e.event = "info", "host", "host.test.start"
 			e.line = head + `"level":"info","layer":"host","event":"host.test.start","fields":{"name":"a","run":"r-big"}}`
@@ -138,7 +138,7 @@ func generateEach(n int, emit func(bigEvent)) {
 			e.level, e.layer, e.event = "info", "host", "host.test.end"
 			e.line = head + `"level":"info","layer":"host","event":"host.test.end","fields":{"name":"a","run":"r-big","result":"pass"}}`
 		default:
-			e.level, e.layer = bigLevels[i%5], bigLayers[i%6]
+			e.level, e.layer = bigLevels[i%5], bigLayers[i%len(bigLayers)]
 			e.event = e.layer + "." + bigGroups[i%4] + "." + bigVerbs[i%3]
 			e.text = fmt.Sprintf("line %d", i)
 			var b strings.Builder

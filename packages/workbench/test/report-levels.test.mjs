@@ -24,14 +24,14 @@ test("a reported failure has the level error and an observation has the level in
   lines.length = 0;
   await report("surface probe mount failed: x");
   await log("focus moved to probe");
-  assert.deepEqual(lines.splice(0), ["error page surface probe mount failed: x", "info page page: focus moved to probe"]);
+  assert.deepEqual(lines.splice(0), ["error workbench surface probe mount failed: x", "info workbench workbench: focus moved to probe"]);
 });
 
 test("a surface module reports its failure as an error line", async () => {
   lines.length = 0;
   const runtime = surfaceContextRuntime({ surfaceId: "probe-1" });
   await runtime.native.call("report", "surface composition failed: probe");
-  assert.deepEqual(lines.splice(0), ["error page surface composition failed: probe"]);
+  assert.deepEqual(lines.splice(0), ["error workbench surface composition failed: probe"]);
 });
 
 test("a failed settling wait of a core command and a refused registration are error lines", async () => {
@@ -47,6 +47,6 @@ test("a failed settling wait of a core command and a refused registration are er
   });
   lines.length = 0;
   assert.equal(await registry.run("core.fixture.add", { n: 1 }), 2);
-  assert.deepEqual(lines.splice(0), ["error page exposure settled failed: surface tab-1 is not mounted"]);
+  assert.deepEqual(lines.splice(0), ["error workbench exposure settled failed: surface tab-1 is not mounted"]);
   assert.throws(() => revisitRegistrations(), /requires report/);
 });

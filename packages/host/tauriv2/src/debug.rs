@@ -317,10 +317,21 @@ fn prune_states(folder: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// The argument of the debugRecord call: the status values that the page collected.
+/// The argument of the debugRecord call: the status values that the workbench collected.
 #[derive(Debug, Deserialize)]
 pub struct RecordRequest {
-    pub page: Value,
+    pub workbench: Value,
+}
+
+/// The state file of a debugRecord call without its time: the host, the versions, the window records and the value of the
+/// workbench (docs/spec/debug.md#state).
+pub fn state_document(
+    host: &str,
+    versions: Value,
+    windows: Vec<Value>,
+    request: RecordRequest,
+) -> Value {
+    json!({"host": host, "versions": versions, "windows": windows, "workbench": request.workbench})
 }
 
 /// The argument of the debugSave call.
@@ -420,15 +431,12 @@ pub(crate) fn record(app: &AppHandle, request: RecordRequest) -> Result<Value, S
         .and_then(|data| serde_json::from_slice::<Value>(&data).map_err(|error| error.to_string()))
         // default: a value that cannot be read is recorded with its error, because the state file keeps every other value.
         .unwrap_or_else(|error| json!({"error": error}));
+    let versions =
+        json!({"core": soksak_sok::version::CORE_VERSION, "macos": macos, "installed": installed});
     let path = write_state(
         &directory,
         SystemTime::now(),
-        json!({
-            "host": "tauriv2",
-            "versions": {"core": soksak_sok::version::CORE_VERSION, "macos": macos, "installed": installed},
-            "windows": windows,
-            "page": request.page,
-        }),
+        state_document("tauriv2", versions, windows, request),
     )?;
     #[cfg(feature = "diagnostics")]
     {

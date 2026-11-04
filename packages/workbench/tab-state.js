@@ -34,7 +34,7 @@ export async function openTabStates({ store, failed, unloadOf }) {
     writing = writing.then(async () => {
       try {
         const bytes = await store.tabStatePut(tab, entry);
-        emitEvent("debug", "page.tab.state.stored", { tab, bytes });
+        emitEvent("debug", "workbench.tab.state.stored", { tab, bytes });
       } catch (error) {
         failed(new Error(`tab state of ${tab}: ${error.message}`));
       }
@@ -88,7 +88,7 @@ export async function openTabStates({ store, failed, unloadOf }) {
     /** Removes each entry that kept(id) does not keep (storedSurfaceKept of section-surfaces.js), with an event per entry. */
     async reconcile(kept) {
       const orphans = [...entries.keys()].filter((tab) => !kept(tab));
-      for (const tab of orphans) emitEvent("info", "page.tab.state.orphan", { tab });
+      for (const tab of orphans) emitEvent("info", "workbench.tab.state.orphan", { tab });
       await Promise.all(orphans.map(remove));
     },
     /** Writes every pending entry now; the page calls it at quit. */

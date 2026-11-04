@@ -53,7 +53,7 @@ impl Service for Fake {
 /// The lines of an event file of boot b1: `log.open` as seq 1 and then `host.x.y` events up to seq `count`.
 fn event_lines(count: i64) -> String {
     let mut text = String::from(
-        "{\"ts_us\":1000,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2,\"pid\":1,\"role\":\"host\",\"boot\":\"b1\"}}\n",
+        "{\"ts_us\":1000,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":3,\"pid\":1,\"role\":\"host\",\"boot\":\"b1\"}}\n",
     );
     for seq in 2..=count {
         text.push_str(&format!(
@@ -413,7 +413,7 @@ fn a_file_that_rotation_or_retention_removed_is_not_a_failure_of_the_index() {
     let logs = folder::Folder::new();
     let real = logs.path().join("host-b1.jsonl");
     let mut text = String::from(
-        "{\"ts_us\":1000,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2,\"pid\":1,\"role\":\"host\",\"boot\":\"b1\"}}\n",
+        "{\"ts_us\":1000,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":3,\"pid\":1,\"role\":\"host\",\"boot\":\"b1\"}}\n",
     );
     for seq in 2..=3 {
         text.push_str(&format!(

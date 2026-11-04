@@ -136,6 +136,39 @@ fn debug_write_state_writes_the_state_file() {
     assert_eq!(state["time"], "20261009T010203Z");
 }
 
+// contract: debug.record.names-the-value-of-the-workbench
+#[test]
+fn debug_state_names_the_value_of_the_workbench() {
+    let config = debug_config();
+    let request: debug::RecordRequest =
+        serde_json::from_value(serde_json::json!({"workbench": {"core.layout": {"tabs": 1}}}))
+            .unwrap();
+    let document = debug::state_document(
+        "tauriv2",
+        serde_json::json!({"core": "1"}),
+        Vec::new(),
+        request,
+    );
+    let path = debug::write_state(
+        config.path(),
+        UNIX_EPOCH + Duration::from_secs(1_791_507_723),
+        document,
+    )
+    .unwrap();
+    let state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(Path::new(config.path()).join(&path)).unwrap())
+            .unwrap();
+    assert_eq!(
+        state["workbench"],
+        serde_json::json!({"core.layout": {"tabs": 1}})
+    );
+    assert!(state.get("page").is_none(), "{state}");
+    let refused = serde_json::from_value::<debug::RecordRequest>(serde_json::json!({"page": {}}))
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("missing field `workbench`"), "{refused}");
+}
+
 // contract: debug.read.returns-the-end-of-a-text-file
 #[test]
 fn debug_read_returns_the_end_of_a_text_file() {

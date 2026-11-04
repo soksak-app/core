@@ -426,25 +426,25 @@ export function indexAcceptedFrameTrace(events, prompt, surface, session) {
   assert.ok(Array.isArray(events), "accepted frame trace requires event records");
   assert.ok(typeof surface === "string" && surface.length > 0, "accepted frame trace requires a surface");
   assert.ok(typeof session === "string" && session.length > 0, "accepted frame trace requires a terminal session");
-  const layers = new Set(["native", "host", "page", "plugin", "sidecar", "sok"]);
+  const layers = new Set(["native", "host", "workbench", "page", "plugin", "sidecar", "sok"]);
   const losses = events.filter((event) => {
     const fields = event.fields;
-    if (!["log.gated", "page.log.gated", "native.log.gated", "log.dropped", "log.pruned",
+    if (!["log.gated", "workbench.log.gated", "page.log.gated", "native.log.gated", "log.dropped", "log.pruned",
       "host.buffer.dropped"].includes(event.event)) return false;
     assert.ok(layers.has(event.layer), `${event.event} has an unknown or missing producer layer`);
     assert.ok(fields && typeof fields === "object" && !Array.isArray(fields),
       `${event.event} has malformed loss metadata`);
-    if (["log.gated", "page.log.gated", "native.log.gated"].includes(event.event)) {
+    if (["log.gated", "workbench.log.gated", "page.log.gated", "native.log.gated"].includes(event.event)) {
       assert.ok(typeof fields.class === "string" && typeof fields.level === "string" &&
         Number.isSafeInteger(fields.count) && fields.count > 0, `${event.event} has malformed gate metadata`);
-      const expectedLayer = event.event === "page.log.gated" ? "page" :
+      const expectedLayer = event.event === "workbench.log.gated" ? "workbench" : event.event === "page.log.gated" ? "page" :
         event.event === "native.log.gated" ? "native" : event.layer;
       assert.equal(event.layer, expectedLayer, `${event.event} has a mismatched producer layer`);
       if (event.event === "log.gated") assert.ok(["host", "sidecar", "sok"].includes(event.layer),
         "log.gated has a producer layer without a writer gate");
       if (event.layer === "host") return fields.level === "debug" &&
         (fields.class === "call" || fields.class === "frame");
-      return event.layer === "page" && fields.class === "frame" && fields.level === "debug";
+      return ["workbench", "page"].includes(event.layer) && fields.class === "frame" && fields.level === "debug";
     }
     if (event.event === "host.buffer.dropped") {
       assert.equal(event.layer, "host", "host.buffer.dropped has a mismatched producer layer");

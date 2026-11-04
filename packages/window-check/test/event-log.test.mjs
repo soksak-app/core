@@ -21,10 +21,10 @@ function configDir(t) {
 const CATALOG = { events: {
   "sidecar.probe.frame": { layer: "sidecar", class: "frame", level: "debug" },
   "host.record.<level>": { layer: "host", class: "lifecycle", level: ["error", "info"] },
-  "page.record.<level>": { layer: "page", class: "lifecycle", level: ["error", "info"] },
+  "workbench.record.<level>": { layer: "workbench", class: "lifecycle", level: ["error", "info"] },
 } };
-/** The declaration of a wait on the records of the host and the page. */
-const RECORDS = { catalog: CATALOG, records: ["host.record.info", "page.record.info"] };
+/** The declaration of a wait on the records of the host and the workbench. */
+const RECORDS = { catalog: CATALOG, records: ["host.record.info", "workbench.record.info"] };
 /** The policy that stores every level of every class (docs/spec/logging.md#policy-file). */
 const EVERY = JSON.stringify({ schema: 1, classes: { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" } });
 
@@ -34,7 +34,7 @@ const line = (seq, level, event, fields = {}, layer = "host") =>
 test("readEventErrors returns the events of level error and ignores the other levels", (t) => {
   const dir = configDir(t);
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"),
-    line(1, "info", "log.open", { schema: 2 }) + line(2, "warn", "host.test.warned") +
+    line(1, "info", "log.open", { schema: 3 }) + line(2, "warn", "host.test.warned") +
     line(3, "error", "host.test.failed", { where: "sidecar", text: "closed" }) + line(4, "error", "page.test.failed", {}, "page"));
   const { errors } = readEventErrors(dir, {});
   assert.deepEqual(errors, [
@@ -114,9 +114,16 @@ test("a file that the writer rotated is read on from its generation and the new 
 test("a record event reads as the line of the text form, and another event as its name and fields", () => {
   const record = { level: "error", layer: "host", event: "host.record.error", fields: { where: "page asset", text: "/missing.js: not found" } };
   assert.equal(eventLine(record), "error host page asset: /missing.js: not found");
-  assert.equal(eventLine({ ...record, level: "info", event: "page.record.info", layer: "page", fields: { where: "verify", text: "18 pass" } }), "info page verify: 18 pass");
+  assert.equal(eventLine({ ...record, level: "info", event: "workbench.record.info", layer: "workbench", fields: { where: "verify", text: "18 pass" } }), "info workbench verify: 18 pass");
   assert.equal(eventLine({ level: "warn", layer: "host", event: "host.test.warned", fields: { index: 1 } }), 'warn host host.test.warned: {"index":1}');
   assert.throws(() => eventLine({ level: "error", layer: "host", event: "host.record.error", fields: { where: "x" } }), /where and text/);
+});
+
+test("a record of the workbench reads as a line of the layer workbench, and the trace of the workbench as rows of the layer workbench", () => {
+  const record = { level: "error", layer: "workbench", start: "S1", event: "workbench.record.error", fields: { where: "start", text: "boom @ app.js:1" } };
+  assert.equal(eventLine(record), "error workbench start: boom @ app.js:1");
+  assert.deepEqual(traceRows([{ ts_us: 1_000, layer: "workbench", start: "S1", event: "workbench.trace.surface.mount", fields: { tab: "t" } }]),
+    [{ layer: "workbench", event: "surface.mount", ts: "1970-01-01T00:00:00.001Z", tab: "t" }]);
 });
 
 test("readEventErrors prints a record event as the line of the text form", (t) => {
@@ -143,8 +150,8 @@ test("untilEventLine returns the first line after the offsets that the predicate
   writeFileSync(join(dir, "log-policy.json"), EVERY);
   const { offsets } = readEventLines(dir, {});
   // The file changes after the watch is installed: the record arrives while the check waits.
-  setImmediate(() => appendFileSync(file, line(2, "info", "page.record.info", { where: "page", text: "focus in a" }, "page")));
-  assert.equal(await untilEventLine(dir, offsets, (text) => text.endsWith("focus in a"), 5000, RECORDS), "info page page: focus in a");
+  setImmediate(() => appendFileSync(file, line(2, "info", "workbench.record.info", { where: "workbench", text: "focus in a" }, "workbench")));
+  assert.equal(await untilEventLine(dir, offsets, (text) => text.endsWith("focus in a"), 5000, RECORDS), "info workbench workbench: focus in a");
   await assert.rejects(untilEventLine(dir, offsets, (text) => text.includes("never"), 100, RECORDS),
     /no event line matched within 100 ms; the lines after the offsets: \[.*focus in a/);
 });
@@ -190,17 +197,17 @@ test("untilEventLines sees a file that another process creates", async (t) => {
   assert.deepEqual(lines, ["info host w: new file"]);
 });
 
-test("traceRows turns the events of the trace of the page, the host and the sampler into rows with the layer, the event, the time and the fields", () => {
+test("traceRows turns the events of the trace of the workbench, the host and the sampler into rows with the layer, the event, the time and the fields", () => {
   const events = [
-    { ts_us: 1791000000123456, level: "debug", layer: "page", event: "page.trace.surface.registration", fields: { phase: "registered", name: "core.x" } },
+    { ts_us: 1791000000123456, level: "debug", layer: "workbench", event: "workbench.trace.surface.registration", fields: { phase: "registered", name: "core.x" } },
     { ts_us: 1791000000200000, level: "info", layer: "host", event: "host.record.info", fields: { where: "w", text: "t" } },
-    { ts_us: 1791000000300000, level: "debug", layer: "page", event: "page.trace.action", fields: { kind: "resize" } },
+    { ts_us: 1791000000300000, level: "debug", layer: "workbench", event: "workbench.trace.action", fields: { kind: "resize" } },
     { ts_us: 1791000000400000, level: "debug", layer: "host", event: "host.trace.sidecar.send", fields: { surface: "tab-1" } },
     { ts_us: 1791000000500000, level: "debug", layer: "host", event: "host.sampler.memory", fields: { rss_host_kb: 42 } },
   ];
   assert.deepEqual(traceRows(events), [
-    { layer: "page", event: "surface.registration", ts: "2026-10-03T04:00:00.123Z", phase: "registered", name: "core.x" },
-    { layer: "page", event: "action", ts: "2026-10-03T04:00:00.300Z", kind: "resize" },
+    { layer: "workbench", event: "surface.registration", ts: "2026-10-03T04:00:00.123Z", phase: "registered", name: "core.x" },
+    { layer: "workbench", event: "action", ts: "2026-10-03T04:00:00.300Z", kind: "resize" },
     { layer: "host", event: "sidecar.send", ts: "2026-10-03T04:00:00.400Z", surface: "tab-1" },
     { layer: "sampler", event: "memory", ts: "2026-10-03T04:00:00.500Z", rss_host_kb: 42 },
   ]);
@@ -220,11 +227,11 @@ test("currentEventOffsets is the end of the complete lines of every host event l
 
 test("the event file of a sidecar is read with the files of the host, and its events become rows with the surface, the session and the cids", (t) => {
   const dir = configDir(t);
-  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open", { schema: 2 }) + line(2, "error", "host.test.failed", { where: "w", text: "t" }));
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open", { schema: 3 }) + line(2, "error", "host.test.failed", { where: "w", text: "t" }));
   const sidecar = (seq, event, fields, extra = {}) =>
     `${JSON.stringify({ ts_us: 1791000000000000 + seq, seq, level: "info", layer: "sidecar", event, fields, ...extra })}\n`;
   writeFileSync(join(dir, "logs", "probe-1-11.jsonl"),
-    sidecar(1, "log.open", { schema: 2, pid: 11, role: "probe", boot: "1-11" }) +
+    sidecar(1, "log.open", { schema: 3, pid: 11, role: "probe", boot: "1-11" }) +
     sidecar(2, "sidecar.probe.pty_write", { bytes: 1, hex: "0d", text: "\r", ok: true }, { session: "s-1", cids: ["b1.7"] }) +
     sidecar(3, "sidecar.probe.request", { operation: "input", body: { surface: "tab-1" } }, { surface: "tab-1" }) +
     sidecar(4, "sidecar.record.error", { text: "stderr line" }));

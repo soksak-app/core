@@ -24,9 +24,9 @@ test("the plugin state and the application update are read again each time the h
   assert.deepEqual(calls.toSorted(), ["appUpdateState", "appUpdateState", "pluginsState", "pluginsState"]);
   // Each host event is recorded when the page receives it, and the registry reread is recorded after the state is read.
   assert.deepEqual(emitted, [
-    ["info", "page.window.active", {}],
-    ["info", "page.plugins.reread", { updates: 0 }],
-    ["info", "page.window.active", {}],
-    ["info", "page.plugins.reread", { updates: 0 }],
+    ["info", "workbench.window.active", {}],
+    ["info", "workbench.plugins.reread", { updates: 0 }],
+    ["info", "workbench.window.active", {}],
+    ["info", "workbench.plugins.reread", { updates: 0 }],
   ]);
 });

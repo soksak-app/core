@@ -54,13 +54,13 @@ test("the delay unloads a hidden tab and a show restores it", async () => {
   await settle();
   assert.equal(saver.unloaded("a"), true);
   assert.deepEqual(state.commits, [["a"]]);
-  assert.deepEqual(named("page.tab.unloaded"), [{ tab: "a", plugin: "fixture", trigger: "delay" }]);
+  assert.deepEqual(named("workbench.tab.unloaded"), [{ tab: "a", plugin: "fixture", trigger: "delay" }]);
   saver.observe(new Set(["a"]), tabs("a", "b"));
   assert.equal(saver.unloaded("a"), false);
   assert.equal(saver.state("a"), "restoring");
   saver.restored("a", false);
   assert.equal(saver.state("a"), "loaded");
-  assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: false }]);
+  assert.deepEqual(named("workbench.tab.restored"), [{ tab: "a", plugin: "fixture", history: false }]);
   assert.deepEqual(saver.place([{ id: "a" }, { id: "b" }]).surfaces.map((surface) => surface.id), ["a", "b"]);
 });
 
@@ -75,7 +75,7 @@ async function protectedBy(setup, options = {}) {
     await settle();
   }
   assert.equal(saver.unloaded(tab), false);
-  assert.deepEqual(named("page.tab.unloaded"), []);
+  assert.deepEqual(named("workbench.tab.unloaded"), []);
   return saver.reasons(tab);
 }
 
@@ -148,7 +148,7 @@ test("an unload stores the session of the tab first, and a restore gives the reg
   saver.observe(new Set(["a"]), tabs("a", "b"));
   assert.deepEqual(restored, ["a"]);
   saver.restored("a", true);
-  assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: true }]);
+  assert.deepEqual(named("workbench.tab.restored"), [{ tab: "a", plugin: "fixture", history: true }]);
 });
 
 test("turning the setting on keeps the hidden time of each tab", async () => {
@@ -198,7 +198,7 @@ test("one critical report unloads hidden tabs one at a time, least recently show
   saver.pressure({ level: "normal", seq: 2 });
   gates[2]();
   await settle();
-  assert.deepEqual(named("page.tab.unloaded").map((fields) => [fields.tab, fields.trigger]),
+  assert.deepEqual(named("workbench.tab.unloaded").map((fields) => [fields.tab, fields.trigger]),
     [["c", "pressure"], ["a", "pressure"], ["b", "pressure"]]);
   assert.equal(saver.unloaded("d"), false);
   // A normal report stops the unloads of a later critical report after the unload in progress.
@@ -211,16 +211,16 @@ test("one critical report unloads hidden tabs one at a time, least recently show
   gates[3]();
   await settle();
   assert.equal(gates.length, 4);
-  assert.equal(named("page.tab.unloaded").length, 4);
+  assert.equal(named("workbench.tab.unloaded").length, 4);
 });
 
-test("a pressure report without a candidate is page.tab.unload.skipped", async () => {
+test("a pressure report without a candidate is workbench.tab.unload.skipped", async () => {
   const { saver, state } = harness();
   state.keeps.set("a", ["keep:busy"]);
   saver.observe(new Set(["x"]), tabs("a", "x"));
   saver.pressure({ level: "warn", seq: 7 });
   await settle();
-  assert.deepEqual(named("page.tab.unload.skipped"), [{ trigger: "pressure", seq: 7, reasons: ["shown", "keep:busy"] }]);
+  assert.deepEqual(named("workbench.tab.unload.skipped"), [{ trigger: "pressure", seq: 7, reasons: ["shown", "keep:busy"] }]);
   assert.equal(saver.unloaded("a"), false);
 });
 
@@ -244,7 +244,7 @@ for (const [name, interrupt, reasons] of [
     await settle();
     assert.equal(saver.unloaded("a"), false);
     assert.deepEqual(state.commits, []);
-    assert.deepEqual(named("page.tab.unload.skipped"), [{ trigger: "delay", seq: 0, reasons }]);
+    assert.deepEqual(named("workbench.tab.unload.skipped"), [{ trigger: "delay", seq: 0, reasons }]);
   });
 }
 
@@ -278,7 +278,7 @@ test("a restart with the setting on starts hidden declaring tabs unloaded with t
   assert.equal(on.unloaded("u-b"), false);
   assert.equal(on.unloaded("x"), false);
   assert.deepEqual(labels, ["a"]);
-  assert.deepEqual(named("page.tab.unloaded"), []);
+  assert.deepEqual(named("workbench.tab.unloaded"), []);
   const off = create(false);
   off.observe(new Set(["x"]), tabs("x", "a"));
   off.start();
@@ -294,7 +294,7 @@ test("core.tab.unload unloads a hidden tab that recent and the regions protect",
   await saver.unload("a");
   assert.equal(saver.unloaded("a"), true);
   assert.deepEqual(state.commits, [["a"]]);
-  assert.deepEqual(named("page.tab.unloaded"), [{ tab: "a", plugin: "fixture", trigger: "command" }]);
+  assert.deepEqual(named("workbench.tab.unloaded"), [{ tab: "a", plugin: "fixture", trigger: "command" }]);
   assert.ok(state.changes > 0, "the unload is not announced");
   // An unloaded tab is unloaded again without another commit.
   await saver.unload("a");
@@ -330,7 +330,7 @@ test("core.tab.keep sets and clears the mark once per change", () => {
   assert.deepEqual(saver.reasons("a"), ["kept"]);
   saver.keep("a", false);
   assert.equal(state.kept.has("a"), false);
-  assert.deepEqual(named("page.tab.keep.changed"), [{ tab: "a", keep: true }, { tab: "a", keep: false }]);
+  assert.deepEqual(named("workbench.tab.keep.changed"), [{ tab: "a", keep: true }, { tab: "a", keep: false }]);
   assert.throws(() => saver.keep("u-a", true), { message: "tab u-a can never be unloaded: undeclared" });
   assert.throws(() => saver.keep("g-a", false), { message: "tab g-a can never be unloaded: background" });
   assert.throws(() => saver.keep("missing", true), { message: "unknown tab missing" });
@@ -362,7 +362,7 @@ test("a rejected interactionState read ends the attempt with a reported failure 
   await settle();
   assert.equal(saver.unloaded("a"), false);
   assert.deepEqual(state.commits, []);
-  assert.deepEqual(named("page.tab.unload.failed"),
+  assert.deepEqual(named("workbench.tab.unload.failed"),
     [{ tab: "a", plugin: "fixture", trigger: "delay", reason: "document region page is gone" }]);
   assert.deepEqual(state.failures, ["memory saver: tab a: unload failed: document region page is gone"]);
   assert.deepEqual(state.states, []);
@@ -375,11 +375,11 @@ test("a shown unloaded tab is restoring until its surface mounts, and a failed r
   await settle();
   saver.observe(new Set(["a"]), tabs("a", "b"));
   assert.deepEqual(state.states, [["a", "unloaded"], ["a", "restoring"]]);
-  assert.deepEqual(named("page.tab.restored"), []);
+  assert.deepEqual(named("workbench.tab.restored"), []);
   saver.restoreFailed("a", "stored format 2 is not the declared format 1");
   assert.equal(saver.unloaded("a"), false);
   assert.deepEqual(state.states.at(-1), ["a", "loaded"]);
-  assert.deepEqual(named("page.tab.restore.failed"),
+  assert.deepEqual(named("workbench.tab.restore.failed"),
     [{ tab: "a", plugin: "fixture", reason: "stored format 2 is not the declared format 1" }]);
   assert.deepEqual(state.failures, ["memory saver: tab a: restore failed: stored format 2 is not the declared format 1"]);
 });
@@ -402,8 +402,8 @@ test("a failed commit after the tab is marked returns it to loaded with a report
   assert.equal(saver.state("a"), "loaded");
   // The commit after the failure declares the surface of the tab again.
   assert.deepEqual(state.commits, [["a"], []]);
-  assert.deepEqual(named("page.tab.unloaded"), []);
-  assert.deepEqual(named("page.tab.unload.failed"),
+  assert.deepEqual(named("workbench.tab.unloaded"), []);
+  assert.deepEqual(named("workbench.tab.unload.failed"),
     [{ tab: "a", plugin: "fixture", trigger: "delay", reason: "host.place refused the layout" }]);
   assert.deepEqual(state.failures, ["memory saver: tab a: unload failed: host.place refused the layout"]);
   assert.deepEqual(state.states, [["a", "unloaded"], ["a", "loaded"]]);
@@ -413,12 +413,12 @@ test("a session history refused at the first show after a restart is reported fo
   const { saver, state } = harness();
   saver.historyRefused("a", "fixture", "document region page: the web view refused the interactionState");
   assert.equal(saver.state("a"), null);
-  assert.deepEqual(named("page.tab.restore.failed"),
+  assert.deepEqual(named("workbench.tab.restore.failed"),
     [{ tab: "a", plugin: "fixture", reason: "document region page: the web view refused the interactionState" }]);
   assert.deepEqual(state.failures, ["memory saver: tab a: restore failed: document region page: the web view refused the interactionState"]);
 });
 
-test("a refused session history keeps the restore open, and the later mount still emits page.tab.restored", async () => {
+test("a refused session history keeps the restore open, and the later mount still emits workbench.tab.restored", async () => {
   const { saver, state } = harness();
   saver.observe(new Set(["b"]), tabs("a", "b"));
   mock.timers.tick(120 * MINUTE);
@@ -427,17 +427,17 @@ test("a refused session history keeps the restore open, and the later mount stil
   // The region refuses its history during the mount and attaches again without it.
   saver.historyRefused("a", "fixture", "document region page: interactionState is not a session history");
   assert.equal(saver.state("a"), "restoring");
-  assert.deepEqual(named("page.tab.restore.failed"),
+  assert.deepEqual(named("workbench.tab.restore.failed"),
     [{ tab: "a", plugin: "fixture", reason: "document region page: interactionState is not a session history" }]);
   assert.deepEqual(state.failures,
     ["memory saver: tab a: restore failed: document region page: interactionState is not a session history"]);
   saver.restored("a", false);
   assert.equal(saver.state("a"), "loaded");
-  assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: false }]);
+  assert.deepEqual(named("workbench.tab.restored"), [{ tab: "a", plugin: "fixture", history: false }]);
   // A refusal after the mount ended reports the failure and leaves the tab loaded.
   saver.historyRefused("a", "fixture", "document region page: refused");
   assert.equal(saver.state("a"), "loaded");
-  assert.equal(named("page.tab.restore.failed").length, 2);
+  assert.equal(named("workbench.tab.restore.failed").length, 2);
 });
 
 test("a section surface is observed with the tabs and listed with kind section", async () => {

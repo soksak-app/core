@@ -18,7 +18,7 @@ const promptCount = (lines) => lines.filter((line) => line.startsWith("sh-")).le
 /** The upper bound of the wait for the frame of the output; the wait ends at the notice of the log that shows the frame. */
 const FRAME_LIMIT = 10_000;
 /** The records that the check reads, all below `error`, which the default policy does not store. */
-const READS = ["sidecar.vt.pty_read", "sidecar.vt.frame", "sidecar.vt.surface_mode", "page.background.session"];
+const READS = ["sidecar.vt.pty_read", "sidecar.vt.frame", "sidecar.vt.surface_mode", "workbench.background.session"];
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a terminal shown again after another tab of its card draws the output after Enter`, { timeout: 120000 }, async (t) => {
@@ -82,7 +82,7 @@ for (const app of Object.values(APPS)) {
     }
 
     const rows = async (event) => (await allRows(s, { channel: "all", event, since: sinceHide })).map((row) => row.event);
-    const decisions = (await rows("page.background.session")).filter((event) => event.fields?.tab === terminal.surface)
+    const decisions = (await rows("workbench.background.session")).filter((event) => event.fields?.tab === terminal.surface)
       .map((event) => `${event.fields.action}:${event.fields.surface}`);
     t.diagnostic(`${app.name}: background decisions of ${terminal.surface}: ${JSON.stringify(decisions)}`);
     assert.ok(!decisions.some((decision) => decision.startsWith("open:")),

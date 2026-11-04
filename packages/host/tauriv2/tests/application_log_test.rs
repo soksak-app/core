@@ -199,8 +199,13 @@ fn log_error_writes_an_error_event_to_the_event_log() {
 #[test]
 fn a_record_is_one_line_and_escapes_a_line_feed() {
     assert_eq!(
-        soksak_host_tauriv2::application_log::entry_line("error", "page", "start", "first\nsecond"),
-        r"error page start: first\nsecond"
+        soksak_host_tauriv2::application_log::entry_line(
+            "error",
+            "workbench",
+            "start",
+            "first\nsecond"
+        ),
+        r"error workbench start: first\nsecond"
     );
     let entry = soksak_host_tauriv2::application_log::Entry::new("info", "host", "w", "a\nb");
     assert!(

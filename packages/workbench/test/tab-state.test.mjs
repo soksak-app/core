@@ -63,8 +63,8 @@ test("writes of one tab are coalesced to one per second and each store write is 
     { tab: "tab-b", entry: { state: { format: 1, value: 3 } } },
   ]);
   assert.deepEqual(events.map((e) => [e.level, e.event, e.fields.tab, typeof e.fields.bytes]), [
-    ["debug", "page.tab.state.stored", "tab-a", "number"],
-    ["debug", "page.tab.state.stored", "tab-b", "number"],
+    ["debug", "workbench.tab.state.stored", "tab-a", "number"],
+    ["debug", "workbench.tab.state.stored", "tab-b", "number"],
   ]);
   states.setKept("tab-a", false);
   t.mock.timers.tick(1000);
@@ -112,7 +112,7 @@ test("load reconciliation removes each orphan entry with an event", async () => 
   const kept = new Set(["a", "b", "spc-aaaaaa/left/files.tree"]);
   await states.reconcile((tab) => kept.has(tab));
   assert.deepEqual(Object.keys(store.document.tabs), ["a", "spc-aaaaaa/left/files.tree"]);
-  assert.deepEqual(events.filter((e) => e.event === "page.tab.state.orphan").map((e) => [e.level, e.fields]),
+  assert.deepEqual(events.filter((e) => e.event === "workbench.tab.state.orphan").map((e) => [e.level, e.fields]),
     [["info", { tab: "gone" }], ["info", { tab: "lost" }]]);
   assert.equal(states.entry("gone"), null);
 });

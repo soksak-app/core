@@ -323,7 +323,7 @@ test('a change of the settings names its actor and its keys, and its identifiers
     });
     await change({ gap: 9, radius: 3 }, 'common', 'core.settings.set');
     assert.deepEqual(started.map(([event, fields]) => [event, fields]), [
-      ['page.settings.change', { scope: 'common', actor: 'core.settings.set', keys: 'gap,radius' }],
+      ['workbench.settings.change', { scope: 'common', actor: 'core.settings.set', keys: 'gap,radius' }],
     ]);
     assert.deepEqual(writes.map(([id, values, cids]) => [id, values, cids]), [[null, { gap: 9, radius: 3 }, started[0][2]]]);
     assert.throws(() => change({ gap: 10 }, 'common'), /set requires the actor that changes the settings/);

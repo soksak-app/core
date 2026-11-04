@@ -20,8 +20,8 @@ test("Tauri page regions expose operations but only composition places geometry"
           if (command === "log" && args.request.action === "policy-read") return Promise.resolve(policyRead);
           // The batches of events are kept apart: the calls of the page under test are asserted one by one.
           if (command === "log" && args.request.action === "clock") return Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 });
-          // The statement of the clock anchor (page.log.clock) leads the first batch of a page and has its own test in the workbench.
-          if (command === "log") logged.push([command, { ...args, request: { ...args.request, events: args.request.events.filter((event) => event.event !== "page.log.clock") } }]);
+          // The statement of the clock anchor (workbench.log.clock) leads the first batch of a page and has its own test in the workbench.
+          if (command === "log") logged.push([command, { ...args, request: { ...args.request, events: args.request.events.filter((event) => event.event !== "workbench.log.clock") } }]);
           else recorded.push([command, args]);
           return Promise.resolve(command === "wait_presented" ? { displayed: 42 }
             : command === "view_source_origins" ? { floor: 0, views: {} } : undefined);
@@ -99,7 +99,7 @@ test("Tauri page regions expose operations but only composition places geometry"
   assert.equal(request.events.length, 1);
   const [event] = request.events;
   assert.deepEqual({ level: event.level, event: event.event, fields: event.fields },
-    { level: "error", event: "page.record.error", fields: { where: "sidecar @x/side", text: "send failed: gone" } });
+    { level: "error", event: "workbench.record.error", fields: { where: "sidecar @x/side", text: "send failed: gone" } });
   assert.ok(Number.isInteger(event.ts_us) && event.ts_us > 1.7e15, "the event carries the wall clock in microseconds");
   assert.ok(Number.isInteger(event.mono_ns) && event.mono_ns > 0, "the event carries the monotonic clock in nanoseconds");
   await assert.rejects(async () => page.report("send failed"), /report requires \{level, where, text\} strings/);

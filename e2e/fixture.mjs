@@ -58,7 +58,7 @@ async function registrationTimeline(s, offsets) {
  */
 export async function fresh(s, { performanceTrace = TRACE, settings = {}, log = {}, reads = [], shell = "check" } = {}) {
   const traceOffsets = currentEventOffsets(s.app.configDir);
-  const declared = performanceTrace ? [...reads, "page.trace.surface.registration"] : reads;
+  const declared = performanceTrace ? [...reads, "workbench.trace.surface.registration"] : reads;
   const shellPath = terminalCheckShell(shell);
   // Window checks use fixed shell fixtures; the activation ZLE case never reads user shell startup files.
   await prepareFixture(s, { settings: { ...settings, "terminal.shell": shellPath }, performanceTrace, log, reads: declared,
@@ -108,10 +108,10 @@ export async function terminalReady(s) {
 /**
  * Waits until the page of the window has reloaded after a plugin operation that changed installed.json
  * (docs/spec/installation.md#applying-a-change). `offsets` are the positions of the event files before the operation: the new
- * document writes `page.start`, and `host.windows`, which the host answers while the page reloads, then reports the page ready.
+ * document writes `workbench.start`, and `host.windows`, which the host answers while the page reloads, then reports the page ready.
  */
 export async function pluginChangeApplied(s, offsets, action) {
-  await untilEventLine(s.app.configDir, offsets, (line) => line.includes("page.start"), 30000, reading(s.app, ["page.start"]));
+  await untilEventLine(s.app.configDir, offsets, (line) => line.includes("workbench.start"), 30000, reading(s.app, ["workbench.start"]));
   await s.windows(1, `the page was not ready again after ${action}`);
 }
 

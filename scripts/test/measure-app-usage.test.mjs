@@ -336,9 +336,9 @@ test("the idle wait waits for the cursor idle timeout of every term tab and then
 
 test("counts the error lines of the layout fault in the application log", () => {
   const lines = [
-    "error page surface presentation failed: diagnostic layout fault",
+    "error workbench surface presentation failed: diagnostic layout fault",
     "info host host run: soksak pid 10",
-    "error page core.page.error: another fault",
+    "error workbench core.page.error: another fault",
     "warn page surface presentation failed: diagnostic layout fault",
   ];
   assert.equal(faultErrorCount(lines), 1);

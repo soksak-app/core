@@ -34,7 +34,7 @@ export function createErrorDisplay({ document, changed }) {
       el.setAttribute("role", "alert");
       document.querySelector("header").after(el);
     }
-    showShownError(el, "page", String(reason), detail);
+    showShownError(el, "workbench", String(reason), detail);
     changed();
   };
 }

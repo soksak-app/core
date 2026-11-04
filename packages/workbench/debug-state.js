@@ -25,8 +25,8 @@ export function parseState(file, text, truncated) {
   if (typeof state.time !== "string") throw new Error(`${file}: time must be a string, found ${found(state.time)}`);
   if (!HOSTS.includes(state.host)) throw new Error(`${file}: host ${found(state.host)} is not one of ${HOSTS.join(", ")}`);
   if (state.versions === null || typeof state.versions !== "object" || Array.isArray(state.versions)) throw new Error(`${file}: versions must be an object, found ${found(state.versions)}`);
-  // `page` is the value the page sent (docs/spec/debug.md): the entries of its exposure, so an array is as valid as an object.
-  if (state.page === null || typeof state.page !== "object") throw new Error(`${file}: page must be an object or an array, found ${found(state.page)}`);
+  // `workbench` is the value the workbench sent (docs/spec/debug.md): the entries of its exposure, so an array is as valid as an object.
+  if (state.workbench === null || typeof state.workbench !== "object") throw new Error(`${file}: workbench must be an object or an array, found ${found(state.workbench)}`);
   if (!Array.isArray(state.windows)) throw new Error(`${file}: windows must be an array, found ${found(state.windows)}`);
   return state;
 }

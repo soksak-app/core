@@ -144,9 +144,16 @@ func TestPageClockAnchorPassesTheDefaultLifecyclePolicy(t *testing.T) {
 	if err != nil || !stored {
 		t.Fatalf("page clock anchor stored=%t error=%v, want stored under the default policy", stored, err)
 	}
+	stored, err = log.EmitRelayed(sok.RelayedEvent{
+		TsMicros: 2, MonoNs: 10, Layer: "workbench", Start: "workbench-start", Level: sok.LevelInfo,
+		Event: "workbench.log.clock", Fields: json.RawMessage(`{"trip_us":100,"resolution_us":1}`),
+	})
+	if err != nil || !stored {
+		t.Fatalf("workbench clock anchor stored=%t error=%v, want stored under the default policy", stored, err)
+	}
 	ordinary, err := log.EmitRelayed(sok.RelayedEvent{
-		TsMicros: 2, MonoNs: 10, Layer: "page", Page: "page-origin", Level: sok.LevelInfo,
-		Event: "page.background.session", Fields: json.RawMessage(`{}`),
+		TsMicros: 3, MonoNs: 11, Layer: "workbench", Start: "workbench-start", Level: sok.LevelInfo,
+		Event: "workbench.background.session", Fields: json.RawMessage(`{}`),
 	})
 	if err != nil || ordinary {
 		t.Fatalf("ordinary lifecycle info stored=%t error=%v, want default-policy refusal", ordinary, err)
@@ -155,19 +162,20 @@ func TestPageClockAnchorPassesTheDefaultLifecyclePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	log.Close()
-	var clockStored, ordinaryStored bool
+	var pageClock, workbenchClock, ordinaryStored bool
 	for _, event := range eventsOf(t, config) {
-		clockStored = clockStored || event.Event == "page.log.clock"
-		ordinaryStored = ordinaryStored || event.Event == "page.background.session"
+		pageClock = pageClock || event.Event == "page.log.clock"
+		workbenchClock = workbenchClock || event.Event == "workbench.log.clock"
+		ordinaryStored = ordinaryStored || event.Event == "workbench.background.session"
 	}
-	if !clockStored || ordinaryStored {
-		t.Fatalf("default-policy page records: clock=%t ordinary=%t; want only the clock metadata exception", clockStored, ordinaryStored)
+	if !pageClock || !workbenchClock || ordinaryStored {
+		t.Fatalf("default-policy document records: page clock=%t workbench clock=%t ordinary=%t; want only the clock metadata exceptions", pageClock, workbenchClock, ordinaryStored)
 	}
 }
 
-// A fixture step of the page passes the default lifecycle policy, so a window check finds each step of its fixture in the log.
-// contract: log.page.fixture-step-passes-default-policy
-func TestPageFixtureStepPassesTheDefaultLifecyclePolicy(t *testing.T) {
+// A fixture step of the workbench passes the default lifecycle policy, so a window check finds each step of its fixture in the log.
+// contract: log.workbench.fixture-step-passes-default-policy
+func TestWorkbenchFixtureStepPassesTheDefaultLifecyclePolicy(t *testing.T) {
 	config := t.TempDir()
 	log, err := sok.StartToolEventLog(config)
 	if err != nil {
@@ -175,8 +183,8 @@ func TestPageFixtureStepPassesTheDefaultLifecyclePolicy(t *testing.T) {
 	}
 	t.Cleanup(log.Close)
 	stored, err := log.EmitRelayed(sok.RelayedEvent{
-		TsMicros: 1, MonoNs: 9, Layer: "page", Page: "page-origin", Level: sok.LevelInfo,
-		Event: "page.fixture.step", Fields: json.RawMessage(`{"step":"settings.set","phase":"start"}`),
+		TsMicros: 1, MonoNs: 9, Layer: "workbench", Start: "workbench-start", Level: sok.LevelInfo,
+		Event: "workbench.fixture.step", Fields: json.RawMessage(`{"step":"settings.set","phase":"start"}`),
 	})
 	if err != nil || !stored {
 		t.Fatalf("fixture step stored=%t error=%v, want stored under the default policy", stored, err)
@@ -187,10 +195,10 @@ func TestPageFixtureStepPassesTheDefaultLifecyclePolicy(t *testing.T) {
 	log.Close()
 	var stepStored bool
 	for _, event := range eventsOf(t, config) {
-		stepStored = stepStored || event.Event == "page.fixture.step"
+		stepStored = stepStored || event.Event == "workbench.fixture.step"
 	}
 	if !stepStored {
-		t.Fatal("the default policy stored no page.fixture.step")
+		t.Fatal("the default policy stored no workbench.fixture.step")
 	}
 }
 

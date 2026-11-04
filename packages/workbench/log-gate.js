@@ -1,6 +1,6 @@
 // The gate of the page (docs/spec/logging.md#classes-and-policy): the policy says for each class the least severe level that is
 // stored. The page asks the gate before it builds the fields of an event, and the batcher counts the events that a closed gate
-// refused and reports the count as the event `page.log.gated`.
+// refused and reports the count as the event `workbench.log.gated`.
 import { CLASSES } from "./event-classes.js";
 
 const LEVELS = ["error", "warn", "info", "debug", "trace"];

@@ -3,12 +3,12 @@ import { spawnSync } from "node:child_process";
 import { availableParallelism, loadavg } from "node:os";
 
 /**
- * The page rows of the trace (earlier lines of the stages of the page) with their elapsed time from the first row: the layout
+ * The workbench rows of the trace (earlier lines of the stages of the workbench) with their elapsed time from the first row: the layout
  * queue phases, the actions and the command results. It reports which stage used the time when a project opens late.
  */
 export function openStages(rows) {
-  const stages = rows.filter((row) => row.layer === "page" && ["action", "layout", "command"].includes(row.event));
-  if (!stages.length) return "no page trace rows";
+  const stages = rows.filter((row) => row.layer === "workbench" && ["action", "layout", "command"].includes(row.event));
+  if (!stages.length) return "no workbench trace rows";
   const start = Date.parse(stages[0].ts);
   return stages.map((row) => `${row.event === "layout" ? `layout ${row.id} ${row.phase}` : `${row.event} ${row.kind ?? row.name}`}` +
     `@${Date.parse(row.ts) - start}ms`).join(", ");

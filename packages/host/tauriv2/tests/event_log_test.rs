@@ -70,7 +70,7 @@ fn the_first_line_is_log_open_and_seq_is_consecutive() {
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
     assert_eq!(events[0]["event"], "log.open");
-    assert_eq!(events[0]["fields"]["schema"], 2);
+    assert_eq!(events[0]["fields"]["schema"], 3);
     assert_eq!(events[0]["fields"]["role"], "host");
     assert_eq!(events[0]["fields"]["boot"], "b1");
     let seqs: Vec<u64> = events.iter().map(|e| e["seq"].as_u64().unwrap()).collect();
@@ -293,14 +293,86 @@ fn a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer() {
     assert_eq!(events[2]["fields"]["index"], 7);
 }
 
+// contract: log.writer.names-the-writing-document
+#[test]
+fn a_relayed_event_names_the_document_that_wrote_it_in_the_member_of_its_layer() {
+    let directory = folder::Folder::new();
+    let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
+    let named = |layer: &str, event: &str, page: Option<&str>, start: Option<&str>| RelayedEvent {
+        page: page.map(str::to_string),
+        start: start.map(str::to_string),
+        ..relayed(layer, event, Level::Info, json!({}))
+    };
+    for accepted in [
+        named("workbench", "workbench.test.event", None, Some("S1")),
+        named("page", "page.test.event", Some("P1"), None),
+        named("plugin", "plugin.probe.saved", None, Some("S1")),
+        named("plugin", "plugin.probe.saved", Some("P1"), None),
+    ] {
+        assert_eq!(log.emit_relayed(accepted), Ok(true));
+    }
+    for (event, want) in [
+        (
+            named("workbench", "workbench.test.event", None, None),
+            "the event workbench.test.event of the layer workbench names its writer in start",
+        ),
+        (
+            named("workbench", "workbench.test.event", Some("P1"), Some("S1")),
+            "the event workbench.test.event of the layer workbench names page, which only an event of the layer page or plugin names",
+        ),
+        (
+            named("page", "page.test.event", Some("P1"), Some("S1")),
+            "the event page.test.event of the layer page names start, which only an event of the layer workbench or plugin names",
+        ),
+        (
+            named("plugin", "plugin.probe.saved", Some("P1"), Some("S1")),
+            "the event plugin.probe.saved of the layer plugin names its writer in one of page and start, not both",
+        ),
+        (
+            named("plugin", "plugin.probe.saved", None, None),
+            "the event plugin.probe.saved of the layer plugin names its writer in page or start",
+        ),
+        (
+            named("native", "native.test.event", None, Some("S1")),
+            "the event native.test.event of the layer native names start, which only an event of the layer workbench or plugin names",
+        ),
+    ] {
+        assert_eq!(log.emit_relayed(event).unwrap_err(), want);
+    }
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    let events = read(&path);
+    assert_eq!(events.len(), 6, "{events:?}");
+    let members: Vec<(Option<&str>, Option<&str>)> = events[2..]
+        .iter()
+        .map(|event| {
+            (
+                event.get("page").and_then(Value::as_str),
+                event.get("start").and_then(Value::as_str),
+            )
+        })
+        .collect();
+    assert_eq!(
+        members,
+        [
+            (None, Some("S1")),
+            (Some("P1"), None),
+            (None, Some("S1")),
+            (Some("P1"), None)
+        ]
+    );
+}
+
 /// A relayed event of the layer with the time, the monotonic clock and the identifiers that the tests expect.
 fn relayed(layer: &str, event: &str, level: Level, fields: Value) -> RelayedEvent {
     RelayedEvent {
         ts_us: 1_791_000_000_000_123,
         mono_ns: 5_000_000_123,
         layer: layer.to_string(),
-        // An event of a document names its page; another layer names none.
+        // An event of a view page or a plugin names its page and an event of the workbench its start; another layer names none.
         page: matches!(layer, "page" | "plugin").then(|| "1791948729050".to_string()),
+        start: (layer == "workbench").then(|| "1791948729050".to_string()),
         level,
         event: event.to_string(),
         cids: vec!["b1.7".into(), "b1.8".into()],

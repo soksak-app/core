@@ -1,6 +1,6 @@
 // The operations of the page that change the application (docs/spec/logging.md#operation-chains): the page assigns a correlation
 // identifier when an operation starts, stores the first event of its chain with it, and passes it with the host calls that carry
-// the operation out, so the call (`page.call`) and the host (`host.binding.call`) are joined to the operation by it.
+// the operation out, so the call (`workbench.call`) and the host (`host.binding.call`) are joined to the operation by it.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { clockAnswer, settled, withoutClock } from "./support/records.mjs";
@@ -28,18 +28,18 @@ const events = () => calls.filter(([name]) => name === "log").flatMap(([, payloa
 
 test("an operation starts with an identifier of the page and the first event of its chain carries it", async () => {
   calls.length = 0;
-  const first = beginOperation("page.plugin.operation", { action: "install", plugin: "tty" });
-  const second = beginOperation("page.plugin.operation", { action: "remove", plugin: "tty" });
+  const first = beginOperation("workbench.plugin.operation", { action: "install", plugin: "tty" });
+  const second = beginOperation("workbench.plugin.operation", { action: "remove", plugin: "tty" });
   await settled();
   assert.match(first[0], /^p[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d+$/);
   assert.notEqual(first[0], second[0]);
   assert.deepEqual(events().map(({ level, event, fields, cids }) => [level, event, fields, cids]), [
-    ["info", "page.plugin.operation", { action: "install", plugin: "tty" }, first],
-    ["info", "page.plugin.operation", { action: "remove", plugin: "tty" }, second],
+    ["info", "workbench.plugin.operation", { action: "install", plugin: "tty" }, first],
+    ["info", "workbench.plugin.operation", { action: "remove", plugin: "tty" }, second],
   ]);
 });
 
-test("a call that continues an operation passes its identifiers to the transport and states them in page.call", async () => {
+test("a call that continues an operation passes its identifiers to the transport and states them in workbench.call", async () => {
   calls.length = 0;
   const sent = [];
   const wrapped = settlingCalls(async (name, arg, options) => { sent.push([name, arg, options]); if (name === "bad") throw new Error("refused"); });
@@ -64,7 +64,7 @@ test("a plugin operation is stored first and carried out with the same identifie
   const operations = createPluginOperations({ host, loaded: () => [], refused: () => new Set(), changed: () => {} });
   await operations.run("install", "tty");
   await settled();
-  const [operation] = events().filter(({ event }) => event === "page.plugin.operation");
+  const [operation] = events().filter(({ event }) => event === "workbench.plugin.operation");
   assert.deepEqual(operation.fields, { action: "install", plugin: "tty" });
   const run = host.calls.find(([name]) => name === "pluginsRun");
   assert.deepEqual(run, ["pluginsRun", { action: "install", plugin: "tty" }, { cids: operation.cids }]);
@@ -83,7 +83,7 @@ test("the application update passes one identifier to its stage and its apply", 
   await update.refresh();
   await update.update();
   await settled();
-  const [operation] = events().filter(({ event }) => event === "page.update.operation");
+  const [operation] = events().filter(({ event }) => event === "workbench.update.operation");
   assert.deepEqual(operation.fields, { action: "update", version: "0.0.9" });
   assert.deepEqual(host.calls.filter(([name]) => name === "appUpdateStage" || name === "appUpdateApply"), [
     ["appUpdateStage", { version: "0.0.9" }, { cids: operation.cids }],

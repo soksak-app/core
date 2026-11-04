@@ -9,7 +9,7 @@ import { clockAnswer, recordsOf, settled, shownRecord } from "./support/records.
 
 const TIMEOUT = "the current image raster did not present within 10s; pending tab-1/view generation 2 raster 1 sequence 0 presented 0/0 surface visible";
 
-test("one presentation timeout writes one page error line", async () => {
+test("one presentation timeout writes one workbench error line", async () => {
   const dom = new JSDOM('<div id="plane"></div><div id="applicationError"></div>');
   globalThis.document = dom.window.document;
   // The animation frame of the document. Node does not have one, so it runs at the requested place.
@@ -69,7 +69,7 @@ test("one presentation timeout writes one page error line", async () => {
 
   assert.equal(await registry.run("core.fixture.split"), null);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(lines, [`error page page: surface presentation failed: ${TIMEOUT}`],
+  assert.deepEqual(lines, [`error workbench workbench: surface presentation failed: ${TIMEOUT}`],
     "one presentation timeout must write exactly the line of the display that shows it");
   dom.window.close();
 });

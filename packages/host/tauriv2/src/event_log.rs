@@ -377,6 +377,7 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, RelayedEvent), (usize, Strin
             mono_ns,
             layer: "native".into(),
             page: None,
+            start: None,
             level,
             event: name,
             cids,

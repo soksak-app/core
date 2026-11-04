@@ -56,15 +56,15 @@ func TestQueryRefusesWhatBreaksTheContract(t *testing.T) {
 	if err := os.MkdirAll(logs, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	open := `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2}}` + "\n"
+	open := `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":3}}` + "\n"
 	cases := []struct{ name, text, want string }{
 		{"first line", `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"host.x"}` + "\n", `logs/host-b1.jsonl: the first line is not log.open: "host.x"`},
-		{"schema", `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":1}}` + "\n", "logs/host-b1.jsonl: schema 1 is not 2"},
+		{"schema", `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2}}` + "\n", "logs/host-b1.jsonl: schema 2 is not 3"},
 		{"not json", open + "not json\n", "logs/host-b1.jsonl:2: not JSON: not json"},
 		{"not object", open + "[1]\n", "logs/host-b1.jsonl:2: not an event object: [1]"},
 		{"seq", open + `{"ts_us":1,"seq":"x","level":"info","layer":"host","event":"a"}` + "\n", `logs/host-b1.jsonl:2: seq must be an integer, found "x"`},
 		{"level", open + `{"ts_us":1,"seq":1,"level":"loud","layer":"host","event":"a"}` + "\n", `logs/host-b1.jsonl:2: level "loud" is not one of error, warn, info, debug, trace`},
-		{"layer", open + `{"ts_us":1,"seq":1,"level":"info","layer":"x","event":"a"}` + "\n", `logs/host-b1.jsonl:2: layer "x" is not one of native, host, page, plugin, sidecar, sok`},
+		{"layer", open + `{"ts_us":1,"seq":1,"level":"info","layer":"x","event":"a"}` + "\n", `logs/host-b1.jsonl:2: layer "x" is not one of native, host, workbench, page, plugin, sidecar, sok`},
 		{"event", open + `{"ts_us":1,"seq":1,"level":"info","layer":"host","event":3}` + "\n", "logs/host-b1.jsonl:2: event must be a string, found 3"},
 		{"fields", open + `{"ts_us":1,"seq":1,"level":"info","layer":"host","event":"a","fields":[1]}` + "\n", "logs/host-b1.jsonl:2: fields must be an object, found [1]"},
 		{"cids", open + `{"ts_us":1,"seq":1,"level":"info","layer":"host","event":"a","cids":[1]}` + "\n", "logs/host-b1.jsonl:2: cids must be an array of strings, found [1]"},
@@ -112,7 +112,7 @@ func TestQueryRefusesAnInvalidFlagValueAsAUsageError(t *testing.T) {
 		{[]string{"--channel", "x"}, `log query channel "x" is not one of other, debug, all`},
 		{[]string{"--level", "loud"}, `log query level "loud" is not one of error, warn, info, debug, trace`},
 		{[]string{"--class", "x"}, `log query class "x" is not one of lifecycle, input, call, io, frame`},
-		{[]string{"--layer", "x"}, `log query layer "x" is not one of native, host, page, plugin, sidecar, sok`},
+		{[]string{"--layer", "x"}, `log query layer "x" is not one of native, host, workbench, page, plugin, sidecar, sok`},
 		{[]string{"--event", ""}, `log query event must be a non-empty string, found ""`},
 		{[]string{"--event", "a", "--event-prefix", "b"}, `log query takes event or event_prefix, not both`},
 		{[]string{"--from", "yesterday"}, `log query from "yesterday" is not a UTC time like 2026-10-08T22:53:20.123456Z`},

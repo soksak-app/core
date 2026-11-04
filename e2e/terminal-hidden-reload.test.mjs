@@ -10,7 +10,7 @@ import { allRows, tailOf } from "./chains.mjs";
 import { fresh } from "./fixture.mjs";
 import { ensureTerminals } from "./terminal-screen.mjs";
 
-const READS = ["page.start", "page.background.session", "sidecar.vt.request", "sidecar.vt.surface_mode"];
+const READS = ["workbench.start", "workbench.background.session", "sidecar.vt.request", "sidecar.vt.surface_mode"];
 
 async function waitForRows(s, since, predicate, description) {
   let last = [];
@@ -61,16 +61,16 @@ for (const app of Object.values(APPS)) {
     const document = await s.until("core.window.document", (value) => value.page !== oldDocument
       && value.readyState === "complete", "the replacement main document did not complete");
     const replacementPage = document.page;
-    let rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "page.start"
-      && row.event.page === replacementPage), "the replacement page did not record page.start");
-    const start = rows.find((row) => row.event.event === "page.start" && row.event.page === replacementPage);
-    assert.ok(start, `no page.start for ${replacementPage}`);
+    let rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "workbench.start"
+      && row.event.start === replacementPage), "the replacement page did not record workbench.start");
+    const start = rows.find((row) => row.event.event === "workbench.start" && row.event.start === replacementPage);
+    assert.ok(start, `no workbench.start for ${replacementPage}`);
 
-    rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "page.background.session"
+    rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "workbench.background.session"
       && row.event.fields.tab === surface && row.event.fields.action === "open" && row.event.fields.surface === "absent")
       && items.some((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
         && row.event.fields.mode === "headless"), `the hidden terminal ${surface} did not open headless`);
-    const background = rows.find((row) => row.event.event === "page.background.session" && row.event.fields.tab === surface
+    const background = rows.find((row) => row.event.event === "workbench.background.session" && row.event.fields.tab === surface
       && row.event.fields.action === "open" && row.event.fields.surface === "absent");
     const headless = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
       && row.event.fields.mode === "headless");
@@ -104,12 +104,12 @@ for (const app of Object.values(APPS)) {
 
     await s.flushLog();
     rows = await allRows(s, { channel: "all", since });
-    const failedCalls = rows.filter(({ event }) => ["page.call", "page.command", "host.binding.call", "host.endpoint.call"]
+    const failedCalls = rows.filter(({ event }) => ["workbench.call", "workbench.command", "host.binding.call", "host.endpoint.call"]
       .includes(event.event) && event.fields?.ok === false);
     assert.deepEqual(failedCalls, [], `reload and reveal produced failed runtime calls: ${JSON.stringify(failedCalls)}`);
     const errors = rows.filter(({ event }) => event.level === "error");
     assert.deepEqual(errors, [], `reload and reveal produced host, page, or supplier errors: ${JSON.stringify(errors)}`);
     assert.equal(await s.get("core.page.error"), null, "the reload or reveal displayed a page error");
-    t.diagnostic(`${app.name}: page.start ${JSON.stringify(start.event.fields.time_origin)}, sidecar seq ${headlessMode.event.seq}->${reattachedMode.event.seq}, attachment generation ${oldGeneration}->${newRegion.presented.generation}, session ${beforeSession.sessionId}`);
+    t.diagnostic(`${app.name}: workbench.start ${JSON.stringify(start.event.fields.started_at)}, sidecar seq ${headlessMode.event.seq}->${reattachedMode.event.seq}, attachment generation ${oldGeneration}->${newRegion.presented.generation}, session ${beforeSession.sessionId}`);
   });
 }

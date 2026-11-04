@@ -88,7 +88,15 @@ pub struct BigEvent {
 }
 
 const BIG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
-const BIG_LAYERS: [&str; 6] = ["native", "host", "page", "plugin", "sidecar", "sok"];
+const BIG_LAYERS: [&str; 7] = [
+    "native",
+    "host",
+    "workbench",
+    "page",
+    "plugin",
+    "sidecar",
+    "sok",
+];
 const BIG_GROUPS: [&str; 4] = ["input", "window", "sidecar", "call"];
 const BIG_VERBS: [&str; 3] = ["a", "b", "c"];
 
@@ -120,7 +128,7 @@ pub fn generate_each(n: usize, mut emit: impl FnMut(BigEvent)) {
                 event.layer = "host".into();
                 event.event = "log.open".into();
                 event.line = format!(
-                    "{head}\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{{\"schema\":2,\"pid\":1,\"role\":\"host\",\"boot\":\"big\"}}}}"
+                    "{head}\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{{\"schema\":3,\"pid\":1,\"role\":\"host\",\"boot\":\"big\"}}}}"
                 );
             }
             2000 => {
@@ -141,7 +149,7 @@ pub fn generate_each(n: usize, mut emit: impl FnMut(BigEvent)) {
             }
             _ => {
                 event.level = BIG_LEVELS[i % 5].into();
-                event.layer = BIG_LAYERS[i % 6].into();
+                event.layer = BIG_LAYERS[i % BIG_LAYERS.len()].into();
                 event.event = format!("{}.{}.{}", event.layer, BIG_GROUPS[i % 4], BIG_VERBS[i % 3]);
                 let mut line = head;
                 let _ = write!(

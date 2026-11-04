@@ -1,6 +1,7 @@
 // The debug view shows the events of the event files as a timeline that pages through the query of the host: the rows, the filters,
 // the older pages, the following, the status, the bound controls and the shown errors (docs/spec/debug.md#timeline).
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
@@ -16,9 +17,9 @@ const row = (seq, ts_us, name = "host.app.event", extra = {}, role = "host", boo
 });
 const rowId = (r) => `${r.role}-${r.boot}:${r.event.seq}`;
 const SMALL = [
-  row(1, 10, "log.open", { fields: { schema: 2, boot: "a" } }),
+  row(1, 10, "log.open", { fields: { schema: 3, boot: "a" } }),
   row(2, 20, "host.window.created", { level: "debug", window: "w1" }),
-  row(3, 30, "page.call.slow", { level: "warn", layer: "page", fields: { name: "windows.list" } }),
+  row(3, 30, "workbench.call.slow", { level: "warn", layer: "workbench", fields: { name: "windows.list" } }),
 ];
 
 /** The reference of the query that the fake host runs: it filters, orders by the key and cuts one page like the host does. */
@@ -125,7 +126,7 @@ test("the timeline asks for the newest page and shows it oldest first with the s
   const { ui } = await openView(t, { query });
   await ui.showDebugTimeline();
   assert.deepEqual(query.log.requests, [{ channel: "other", level: "trace", order: "desc", limit: PAGE_ROWS }]);
-  assert.deepEqual(names(), ["log.open", "host.window.created", "page.call.slow"]);
+  assert.deepEqual(names(), ["log.open", "host.window.created", "workbench.call.slow"]);
   assert.deepEqual(ui.debugState().timeline, {
     following: true, appended: 0, held: 3, older: false, omitted: 0, context: 0, selected: 0, warning: WARNING,
     channel: "other", level: "trace", class: "", layer: "all", text: "", event: "", event_prefix: "", surface: "", session: "", cid: "", run: "", from: "", to: "",
@@ -181,7 +182,7 @@ test("the filter asks the host for the newest page again with the members of the
   await ui.showDebugTimeline();
   await ui.filterDebugTimeline({ level: "warn" });
   assert.deepEqual(query.log.requests.at(-1), { channel: "other", level: "warn", order: "desc", limit: PAGE_ROWS });
-  assert.deepEqual(names(), ["page.call.slow"]);
+  assert.deepEqual(names(), ["workbench.call.slow"]);
   await ui.filterDebugTimeline({ level: "trace", layer: "host", text: "WINDOW", from: "1970-01-01T00:00:00.000020Z", to: "1970-01-01T00:00:00.000020Z" });
   assert.deepEqual(query.log.requests.at(-1), { channel: "other", level: "trace", layer: "host", text: "WINDOW", from_us: 20, to_us: 20, order: "desc", limit: PAGE_ROWS });
   assert.deepEqual(names(), ["host.window.created"]);
@@ -205,7 +206,7 @@ test("a query that the host refuses is shown through the error display and the s
   assert.match(ui.debugState().error, /^filter: log query level "loud" is not one of error, warn, info, debug, trace/);
   assert.equal(shown.at(-1).where, "debug");
   assert.equal(ui.debugState().timeline.level, "trace");
-  assert.deepEqual(names(), ["log.open", "host.window.created", "page.call.slow"]);
+  assert.deepEqual(names(), ["log.open", "host.window.created", "workbench.call.slow"]);
 });
 
 test("a query that fails when the timeline is shown leaves no timeline and shows the error with its file", async (t) => {
@@ -234,6 +235,21 @@ test("every interactive element of the timeline points to a declared command and
     assert.equal(el.dataset.value, el.dataset.set);
     assert.equal(el.dataset.expose, `core.debug.timeline.${el.dataset.set.replace("_", "-")}`);
   }
+});
+
+test("the layer choices of the timeline are every layer of the event contract, the workbench included, and the declarations list the same", async (t) => {
+  const { ui } = await openView(t, { query: served(SMALL) });
+  await ui.showDebugTimeline();
+  const layers = ["all", "native", "host", "workbench", "page", "plugin", "sidecar", "sok"];
+  const select = document.querySelector('[data-expose="core.debug.timeline.layer"]');
+  assert.deepEqual([...select.querySelectorAll("option")].map((option) => option.value), layers);
+  const exposure = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8"));
+  const status = exposure.exposes.status.find(({ name }) => name === "core.debug");
+  const command = exposure.exposes.commands.find(({ name }) => name === "core.debug.timeline.filter");
+  assert.deepEqual(status.schema.properties.timeline.properties.layer.enum, layers);
+  assert.deepEqual(command.params.properties.layer.enum, layers);
+  await ui.filterDebugTimeline({ layer: "workbench" });
+  assert.equal(ui.debugState().timeline.layer, "workbench");
 });
 
 const savedTexts = () => {
@@ -284,7 +300,7 @@ test("the selected rows are saved in timeline order as one text, also those that
   assert.match(saves[0].name, /^soksak-timeline-\d{8}T\d{6}Z\.txt$/);
   assert.deepEqual(saves[0].text.split("\n"), [
     "1970-01-01T00:00:00.000020Z debug host host.window.created window=w1",
-    '1970-01-01T00:00:00.000030Z warn page page.call.slow name="windows.list"',
+    '1970-01-01T00:00:00.000030Z warn workbench workbench.call.slow name="windows.list"',
     "",
   ]);
   assert.deepEqual(ui.debugState().operation, { action: "save-rows", path: saves[0].name, state: "done" });

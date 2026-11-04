@@ -3,7 +3,7 @@
 // check requires that:
 // 1. core.tab.unload of a hidden probe tab reports it unloaded in core.tab.memory and removes its document region from the
 //    host objects (diagnostics.objects);
-// 2. showing it again emits page.tab.restored and restores the same address and session history;
+// 2. showing it again emits workbench.tab.restored and restores the same address and session history;
 // 3. warn pressure (diagnostics.memory.pressure) unloads the hidden candidates one at a time, least recently shown first, and
 //    a normal report stops the unloading;
 // 4. a kept tab (core.tab.keep) and a modified tab are not unloaded.
@@ -72,9 +72,9 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: the memory saver unloads hidden tabs on the command and under pressure and restores them`, { timeout: 300000 }, async (t) => {
     const s = await open(t, app);
     // The delay of 720 minutes keeps the delay deadline out of the check, so every unload comes from the command or the pressure.
-    // The check reads the page.tab events, lifecycle events at the level info.
+    // The check reads the workbench.tab events, lifecycle events at the level info.
     await step(t, s, "prepare the fixture", () => fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 },
-      log: { lifecycle: "info" }, reads: ["page.tab.restored", "page.tab.unloaded", "page.tab.unload.skipped"] }));
+      log: { lifecycle: "info" }, reads: ["workbench.tab.restored", "workbench.tab.unloaded", "workbench.tab.unload.skipped"] }));
     const pages = await serve(s);
     const before = await s.get("core.plugins");
     const folder = fixtureRegistry({ sok: join(dirname(app.binary), "sok"), plugin: PROBE });
@@ -151,9 +151,9 @@ for (const app of Object.values(APPS)) {
       assert.deepEqual(at.history.entries.map((entry) => entry.url), [pages.a, pages.b], `the restored history is ${JSON.stringify(at.history)}`);
       assert.equal(at.history.index, 1, `the restored history is ${JSON.stringify(at.history)}`);
     });
-    const restored = (await eventsUntil(s, restoreFrom, (events) => events.some((event) => event.event === "page.tab.restored"), "page.tab.restored"))
-      .filter((event) => event.event === "page.tab.restored").map((event) => event.fields);
-    assert.deepEqual(restored, [{ tab: a, plugin: "probeunload", history: true }], `page.tab.restored after the show: ${JSON.stringify(restored)}`);
+    const restored = (await eventsUntil(s, restoreFrom, (events) => events.some((event) => event.event === "workbench.tab.restored"), "workbench.tab.restored"))
+      .filter((event) => event.event === "workbench.tab.restored").map((event) => event.fields);
+    assert.deepEqual(restored, [{ tab: a, plugin: "probeunload", history: true }], `workbench.tab.restored after the show: ${JSON.stringify(restored)}`);
     assert.equal(regionsOf(await s.request("diagnostics.objects"), a), 1, `probe ${a} has no document region after the restore`);
 
     // 3. Warn pressure unloads the hidden candidates one at a time, least recently shown first; 4. the kept and the modified tab stay.
@@ -166,11 +166,11 @@ for (const app of Object.values(APPS)) {
         && entryOf(memory, a)?.state === "unloaded" && entryOf(memory, b)?.state === "unloaded", `tabs ${a} and ${b} were not unloaded under warn pressure`);
     });
     const relief = await step(t, s, "wait for the end of the relief", () => eventsUntil(s, pressureFrom,
-      (events) => events.some((event) => event.event === "page.tab.unload.skipped" && event.fields.trigger === "pressure"), "end of the relief"));
-    const unloaded = relief.filter((event) => event.event === "page.tab.unloaded").map((event) => event.fields);
+      (events) => events.some((event) => event.event === "workbench.tab.unload.skipped" && event.fields.trigger === "pressure"), "end of the relief"));
+    const unloaded = relief.filter((event) => event.event === "workbench.tab.unloaded").map((event) => event.fields);
     assert.deepEqual(unloaded, [{ tab: b, plugin: "probeunload", trigger: "pressure" }, { tab: a, plugin: "probeunload", trigger: "pressure" }],
-      `page.tab.unloaded under pressure: ${JSON.stringify(unloaded)}`);
-    const skipped = relief.find((event) => event.event === "page.tab.unload.skipped").fields;
+      `workbench.tab.unloaded under pressure: ${JSON.stringify(unloaded)}`);
+    const skipped = relief.find((event) => event.event === "workbench.tab.unload.skipped").fields;
     assert.ok(skipped.reasons.includes("kept") && skipped.reasons.includes("keep:modified"), `the relief ended with ${JSON.stringify(skipped)}`);
     const pressed = await s.get("core.tab.memory");
     for (const [tab, reason] of [[kept, "kept"], [modified, "keep:modified"]]) {

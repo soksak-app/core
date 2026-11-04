@@ -177,11 +177,11 @@ func TestTheEventsOfTheWriterItselfPassAGateThatTurnsTheLifecycleOff(t *testing.
 	}
 }
 
-// contract: log.policy.gate-passes-the-start-of-a-page-document
-func TestTheStartOfAPageDocumentPassesAGateThatTurnsTheLifecycleOff(t *testing.T) {
+// contract: log.policy.gate-passes-the-start-of-the-workbench
+func TestTheStartOfTheWorkbenchPassesAGateThatTurnsTheLifecycleOff(t *testing.T) {
 	log := startPolicyLog(t, `{"schema":1,"classes":{"lifecycle":"off","input":"trace","call":"off","io":"trace","frame":"trace"}}`)
-	start := map[string]any{"ts_us": float64(1_791_000_000_000_001), "mono_ns": float64(5_000_000_001), "level": "info", "event": "page.start",
-		"page": "1791948729050", "fields": map[string]any{"time_origin": float64(1791948729050), "url": "wails://localhost/"}}
+	start := map[string]any{"ts_us": float64(1_791_000_000_000_001), "mono_ns": float64(5_000_000_001), "level": "info", "event": "workbench.start",
+		"start": "1791948729050", "fields": map[string]any{"started_at": float64(1791948729050), "url": "wails://localhost/"}}
 	if _, err := host.LogCommand(log, map[string]any{"action": "batch", "events": []any{start}}); err != nil {
 		t.Fatal(err)
 	}
@@ -192,8 +192,8 @@ func TestTheStartOfAPageDocumentPassesAGateThatTurnsTheLifecycleOff(t *testing.T
 	for _, event := range readEventLog(t, log.Path()) {
 		names = append(names, event["event"].(string))
 	}
-	if !slices.Contains(names, "page.start") {
-		t.Fatalf("the writer stored %v although page.start passes every gate", names)
+	if !slices.Contains(names, "workbench.start") {
+		t.Fatalf("the writer stored %v although workbench.start passes every gate", names)
 	}
 }
 

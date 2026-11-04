@@ -67,17 +67,17 @@ fn the_class_table_gives_the_catalog_class_of_events_and_families() {
         ("host.input.relay", Class::Input),
         ("host.sidecar.request", Class::Io),
         ("native.observe.counted", Class::Frame),
-        ("page.console.warn", Class::Lifecycle),
+        ("workbench.console.warn", Class::Lifecycle),
         ("host.trace.mark", Class::Call),
         ("host.trace.view.presentation-join", Class::Call),
-        ("page.trace.layout", Class::Frame),
+        ("workbench.trace.layout", Class::Frame),
     ] {
         assert_eq!(class_of(name), Some(want), "{name}");
     }
     for name in [
         "host.nothing",
-        "page.console.",
-        "page.console.WARN",
+        "workbench.console.",
+        "workbench.console.WARN",
         "plugin.editor.opened",
         "",
     ] {

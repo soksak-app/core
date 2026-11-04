@@ -35,7 +35,7 @@ test("whenRepliesSent resolves after the reply of a running command request is s
   assert.equal(sent, true, "whenRepliesSent resolved before the reply was sent");
 });
 
-test("a command request is the event page.command with its name, duration and outcome", async () => {
+test("a command request is the event workbench.command with its name, duration and outcome", async () => {
   registry.declare("core", { status: [], dom: [], commands: [
     { name: "core.fixture.fine", description: "Succeeds.", params: { type: "object", properties: {} }, result: { type: "null" } },
     { name: "core.fixture.broken", description: "Fails.", params: { type: "object", properties: {} }, result: { type: "null" } },
@@ -48,7 +48,7 @@ test("a command request is the event page.command with its name, duration and ou
   handlers.get("exposure-request")({ id: 22, method: "command.run", params: { name: "core.fixture.broken", params: {} } });
   await whenRepliesSent();
   await settled();
-  const events = calls.filter(([name]) => name === "log").flatMap(([, payload]) => payload.events ?? []).filter(({ event }) => event === "page.command");
+  const events = calls.filter(([name]) => name === "log").flatMap(([, payload]) => payload.events ?? []).filter(({ event }) => event === "workbench.command");
   // An event is stored when its command ends, so the order is the order of the ends.
   assert.deepEqual(events.map(({ level, fields }) => [level, fields.name, fields.ok, fields.error]).sort((a, b) => a[1].localeCompare(b[1])), [
     ["warn", "core.fixture.broken", false, "-32000: broken on purpose"],

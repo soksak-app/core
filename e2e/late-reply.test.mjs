@@ -18,7 +18,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     // The observation of the late reply is a record of the host at the level info, and the transcript lines are records of the
     // page at the level info.
-    await fresh(s, { log: { lifecycle: "info" }, reads: ["host.record.info", "page.record.info"] });
+    await fresh(s, { log: { lifecycle: "info" }, reads: ["host.record.info", "workbench.record.info"] });
     const { tab } = await s.run("core.card.add-tab", { card: "browser", plugin: "browser" });
     // If the check fails before it closes the tab, it closes the remaining tab. The hold of the closed surface ends then as well.
     s.cleanup(async () => {

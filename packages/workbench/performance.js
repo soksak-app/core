@@ -1,4 +1,4 @@
-// The trace of the page (docs/spec/performance-trace.md). An event of the trace is the event `page.trace.<event>` of the
+// The trace of the page (docs/spec/performance-trace.md). An event of the trace is the event `workbench.trace.<event>` of the
 // event contract (docs/spec/logging.md#writers): it is queued without waiting and relayed to the host in a batch through the
 // call `log`. The switch is the call `performance`; its requests run in the order they were made.
 import { host as bridge } from "@soksak/runtime";
@@ -41,9 +41,9 @@ export function createTracer(call, events = null) {
     });
   };
   const trace = (event, fields = {}) => {
-    if (!batcher || (!enabled && classOf(`page.trace.${event}`) !== "frame")) return;
+    if (!batcher || (!enabled && classOf(`workbench.trace.${event}`) !== "frame")) return;
     // The payload is built only for an event that the gate stores.
-    batcher.emit("debug", `page.trace.${event}`, () => {
+    batcher.emit("debug", `workbench.trace.${event}`, () => {
       const memory = globalThis.performance?.memory;
       return memory ? { ...fields, jsHeapMB: Math.round(memory.usedJSHeapSize / 1048576) } : fields;
     });

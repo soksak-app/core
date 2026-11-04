@@ -739,7 +739,7 @@ for (const app of Object.values(APPS)) {
     const card = (await s.get("core.grid")).cards.find((item) => item.active === terminal.surface);
     // The time limit that the display request of the split received is shown by the page as one error line. The host and other paths do not write the same failure again
     // (docs/spec/hosts.md#application-log).
-    s.expectError(/^error page page: surface presentation failed: the current image raster did not present within /);
+    s.expectError(/^error workbench workbench: surface presentation failed: the current image raster did not present within /);
     const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "terminal" });
     await s.until("core.page.error", (error) => /did not present/.test(error ?? ""),
       "the presentation did not fail while the terminal service was stopped");
@@ -800,8 +800,8 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a page start keeps the terminal sessions that the layouts hold`, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { log: { call: "debug", lifecycle: "info" }, reads: ["page.start", "page.log.clock", "page.view.call",
-      "page.view.reply", "page.view.call.cancel", "host.view.call", "host.view.reply.dispatch"] });
+    await fresh(s, { log: { call: "debug", lifecycle: "info" }, reads: ["workbench.start", "workbench.log.clock", "workbench.view.call",
+      "workbench.view.reply", "workbench.view.call.cancel", "host.view.call", "host.view.reply.dispatch"] });
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     const before = await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not open", { surface });
@@ -815,22 +815,22 @@ for (const app of Object.values(APPS)) {
       "the main document did not reload");
     const currentPage = reloadedDocument.page;
     await untilEventLine(s.app.configDir, offsets, (line) => {
-      if (!line.startsWith("info page page.start: ")) return false;
+      if (!line.startsWith("info workbench workbench.start: ")) return false;
       const fields = JSON.parse(line.slice(line.indexOf("{")));
-      return fields.time_origin === reloadedDocument.timeOrigin;
-    }, 30000, reading(s.app, ["page.start"]));
+      return fields.started_at === reloadedDocument.timeOrigin;
+    }, 30000, reading(s.app, ["workbench.start"]));
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
       item.surface === surface && item.exposes.includes("status terminal.session")), "the terminal did not return after the reload");
     const after = await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not return", { surface });
     let pageEvents = [];
     const accepted = await untilFolderState(join(s.app.configDir, "logs"), () => {
       const events = readEvents(s.app.configDir, offsets).events;
-      const starts = events.filter((event) => event.layer === "page" && event.event === "page.start" &&
-        event.page === currentPage && event.fields.time_origin === reloadedDocument.timeOrigin);
+      const starts = events.filter((event) => event.layer === "workbench" && event.event === "workbench.start" &&
+        event.start === currentPage && event.fields.started_at === reloadedDocument.timeOrigin);
       assert.equal(starts.length, 1,
-        `the reloaded document ${currentPage} has no unique page.start record: ${JSON.stringify(events)}`);
-      pageEvents = events.filter((event) => event.layer === "page" && event.page === currentPage &&
-        ["page.view.call", "page.view.reply", "page.view.call.cancel"].includes(event.event));
+        `the reloaded document ${currentPage} has no unique workbench.start record: ${JSON.stringify(events)}`);
+      pageEvents = events.filter((event) => event.layer === "workbench" && event.start === currentPage &&
+        ["workbench.view.call", "workbench.view.reply", "workbench.view.call.cancel"].includes(event.event));
       return acceptedCurrentViewReplies(events, { window: "main", page: currentPage, plugin: "terminal", surface })
         .find((reply) => reply.outcome === "result");
     }, 30000, () => new Error(`the terminal view had no accepted successful reply after reload: ${JSON.stringify(pageEvents)}`));
@@ -853,8 +853,8 @@ for (const app of Object.values(APPS)) {
     let observed = [];
     const coverage = await untilFolderState(join(s.app.configDir, "logs"), () => {
       const events = readEvents(s.app.configDir, offsets).events;
-      observed = events.filter((event) => event.layer === "page" && event.page === currentPage &&
-        ["page.view.call", "page.view.reply", "page.view.call.cancel"].includes(event.event));
+      observed = events.filter((event) => event.layer === "workbench" && event.start === currentPage &&
+        ["workbench.view.call", "workbench.view.reply", "workbench.view.call.cancel"].includes(event.event));
       return currentPageViewCallCoverage(events, { window: "main", page: currentPage, calls: nativeCalls });
     }, 30000, () => new Error(`the sealed native view calls did not all receive current-page settlements: ${JSON.stringify({
       calls: nativeCalls, pageEvents: observed,
@@ -1615,7 +1615,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: native terminal selection renders and copies through one explicit paste`, async (t) => {
     const s = await open(t, app);
     // The failure report holds the transcript lines, which are records of the page at the level info.
-    await fresh(s, { log: { lifecycle: "info" }, reads: ["page.record.info"] });
+    await fresh(s, { log: { lifecycle: "info" }, reads: ["workbench.record.info"] });
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     s.cleanup(() => closeTerminalTabs(s));

@@ -18,8 +18,8 @@ test("Wails page regions expose operations but only composition places geometry"
         if (method === "Log" && args[0].action === "policy-read") return Promise.resolve(policyRead);
         // The batches of events are kept apart: the calls of the page under test are asserted one by one.
         if (method === "Log" && args[0].action === "clock") return Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 });
-        // The statement of the clock anchor (page.log.clock) leads the first batch of a page and has its own test in the workbench.
-        if (method === "Log") logged.push([method, [{ ...args[0], events: args[0].events.filter((event) => event.event !== "page.log.clock") }]]);
+        // The statement of the clock anchor (workbench.log.clock) leads the first batch of a page and has its own test in the workbench.
+        if (method === "Log") logged.push([method, [{ ...args[0], events: args[0].events.filter((event) => event.event !== "workbench.log.clock") }]]);
         else recorded.push([method, args]);
         return Promise.resolve(method === "WaitPresented" ? { displayed: 42 }
           : method === "ViewSourceOrigins" ? { floor: 0, views: {} } : undefined);
@@ -67,7 +67,7 @@ test("Wails page regions expose operations but only composition places geometry"
   assert.equal(request.events.length, 1);
   const [event] = request.events;
   assert.deepEqual({ level: event.level, event: event.event, fields: event.fields },
-    { level: "error", event: "page.record.error", fields: { where: "sidecar @x/side", text: "send failed: gone" } });
+    { level: "error", event: "workbench.record.error", fields: { where: "sidecar @x/side", text: "send failed: gone" } });
   assert.ok(Number.isInteger(event.ts_us) && event.ts_us > 1.7e15, "the event carries the wall clock in microseconds");
   assert.ok(Number.isInteger(event.mono_ns) && event.mono_ns > 0, "the event carries the monotonic clock in nanoseconds");
   await assert.rejects(async () => page.report("send failed"), /report requires \{level, where, text\} strings/);

@@ -128,7 +128,7 @@ export const isOpen = (id) => openProjects.has(id) || owned.has(id);
  */
 /*
  * Runs an awaited step of a project operation. While diagnostics.fixture runs, the fixture records each step as the event
- * page.fixture.step (docs/spec/logging.md#bounds), so a step that does not end is named by its start without an end; otherwise the
+ * workbench.fixture.step (docs/spec/logging.md#bounds), so a step that does not end is named by its start without an end; otherwise the
  * step runs without a record. runSteps(null) restores that default.
  */
 const runStep = (name, work) => work();
@@ -174,7 +174,7 @@ export function browse() {
     changed();
   });
 }
-export const newWindow = () => windows.newWindow(beginOperation("page.window.operation", { action: "new" }));
+export const newWindow = () => windows.newWindow(beginOperation("workbench.window.operation", { action: "new" }));
 export const pin = (id, pinned) => store.patch(id, { pinned });
 export function onSwitch(callbacks) { listener = callbacks; }
 export function onChange(fn) { changed = fn; }
@@ -492,7 +492,7 @@ async function activateInTurn(id) {
     // default: a project whose window was never closed has no stored window position (null).
     id, root: project.root, geometry: project.geometry ?? null,
     separate: value("projectOpening") === "windows", current: active() && !owned.has(id) ? activeProjectId : null,
-  }, beginOperation("page.project.operation", { action: "open", project: id })));
+  }, beginOperation("workbench.project.operation", { action: "open", project: id })));
   if (!result.local) {
     if (active()) await showProject(activeProjectId);
     await store.patch(id, { lastOpened: Date.now() });
@@ -523,7 +523,7 @@ export async function close(id) {
   // The operation starts with the first host call that carries it out, so a removal that a kept tab refuses leaves no operation.
   let cids = null;
   const operation = () => {
-    if (cids === null) cids = beginOperation("page.project.operation", { action: "remove", project: id });
+    if (cids === null) cids = beginOperation("workbench.project.operation", { action: "remove", project: id });
     return cids;
   };
   // The window that shows the project asks here; another window shows it, the host asks that window.
@@ -637,13 +637,13 @@ async function closeWindow() {
   await Promise.allSettled([refreshing]);
   // A modified tab that the person keeps keeps the window open (docs/spec/plugins.md#tab-reports).
   if (!(await listener.settleTabs())) {
-    await windows.closeKept(beginOperation("page.window.operation", { action: "close_kept" }));
+    await windows.closeKept(beginOperation("workbench.window.operation", { action: "close_kept" }));
     return;
   }
   await flush();
   // The operation starts before the drain: its first event must be in the queue that the drain hands to the writer of the
   // host, because the call ends the page and the host refuses a batch of a window that is gone (F161.26).
-  const cids = beginOperation("page.window.operation", { action: "close" });
+  const cids = beginOperation("workbench.window.operation", { action: "close" });
   await flushEvents();
   await windows.close(cids);
 }

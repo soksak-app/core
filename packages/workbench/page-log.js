@@ -1,7 +1,8 @@
-// The records of the page (docs/spec/diagnostics.md#forms, docs/spec/logging.md#writers). A failure and an observation of the
-// page are the events `page.record.error` and `page.record.info` with the fields `where` and `text`. The page queues them
-// without waiting and relays the records of one turn to the host in one batch through the call `log`. A page without the
-// application host (the browser example) writes to its console.
+// The records of a document of the workbench (docs/spec/diagnostics.md#forms, docs/spec/logging.md#writers). A failure and an
+// observation of the workbench are the events `workbench.record.error` and `workbench.record.info` with the fields `where` and
+// `text`. The document queues them without waiting and relays the records of one turn to the host in one batch through the call
+// `log`; each event names the document in `start`. A document without the application host (the browser example) writes to its
+// console.
 import { LOG_LEVELS } from "@soksak/plugin-api";
 import { host } from "@soksak/runtime";
 import { boundedJson, byteLength, cutBytes } from "@soksak/plugin-api/bounded-json.js";
@@ -25,7 +26,7 @@ export const rawConsole = {
 };
 
 const batcher = host
-  ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => rawConsole.error(error.message), classify: classOf, gate: logGate, page: pageIdentity })
+  ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => rawConsole.error(error.message), classify: classOf, gate: logGate, writer: { layer: "workbench", member: "start", identity: pageIdentity } })
   : null;
 
 // The longest place and text of a record in an event, in bytes; a longer one is cut on a character boundary and the event says
@@ -36,7 +37,7 @@ const RECORD_TEXT_LIMIT = 8192;
 /**
  * Stores a record of the page and returns a promise that ends when the batch that carries it was relayed. `level` is `error`
  * for a failure and `info` for a state without a failure; `line` is `<where>: <text>`, and a line without `: ` has the place
- * `page`.
+ * `workbench`.
  */
 export function reportRecord(level, line) {
   if (!batcher) {
@@ -48,13 +49,13 @@ export function reportRecord(level, line) {
   const text = cutBytes(record.text, RECORD_TEXT_LIMIT);
   const fields = { where: where.text, text: text.text };
   if (where.truncated || text.truncated) fields.truncated = true;
-  return batcher.emitAndWait(level, `page.record.${level}`, fields);
+  return batcher.emitAndWait(level, `workbench.record.${level}`, fields);
 }
 
 // The first event of an operation of the page (docs/spec/logging.md#operation-chains) is stored with the identifiers of the operation.
 if (batcher) {
   installOperationSink((event, fields, cids) => {
-    // events: page.plugin.operation, page.project.operation, page.window.operation, page.settings.change, page.update.operation
+    // events: workbench.plugin.operation, workbench.project.operation, workbench.window.operation, workbench.settings.change, workbench.update.operation
     batcher.emit("info", event, fields, cids);
   });
 }
@@ -87,11 +88,11 @@ export function eventEnabled(level) {
 }
 
 /**
- * Queues the event `page.start`, which marks the start of this document in the timeline: a reload of the page starts a new
- * document with a new clock, and the events that follow belong to it. `timeOrigin` is `performance.timeOrigin`.
+ * Queues the event `workbench.start`, which marks the start of this document of the workbench in the timeline: a reload starts a
+ * new document with a new clock, and the events that follow belong to it. `startedAt` is `performance.timeOrigin`.
  */
-export function recordPageStart(location, timeOrigin) {
-  emitEvent("info", "page.start", { time_origin: timeOrigin, url: location.href });
+export function recordWorkbenchStart(location, startedAt) {
+  emitEvent("info", "workbench.start", { started_at: startedAt, url: location.href });
 }
 
 // The calls of the log and of the performance switch are not recorded: a recorded `log` call would record itself. The queries
@@ -100,7 +101,7 @@ export function recordPageStart(location, timeOrigin) {
 // modal are of the class `frame` (docs/spec/logging.md#classes), which is stored as aggregates and not as one event per call;
 // a view that follows the event file draws again for every row it appends, so recorded draws would feed it forever.
 const UNRECORDED_CALLS = new Set(["log", "performance", "logQuery", "overlayUpdate", "overlayPlace"]);
-// Every host call of the page is the event `page.call` at the level `debug`, and a refused call is at the level `warn`
+// Every host call of the page is the event `workbench.call` at the level `debug`, and a refused call is at the level `warn`
 // (docs/spec/logging.md#automatic-entrances). The callers report their own failures; the event does not fail a window check.
 if (batcher) {
   observeHostCalls(({ name, args, micros, ok, error, code, cids: operation }) => {
@@ -108,14 +109,14 @@ if (batcher) {
     // The gate is asked before the arguments are serialized: a call that the policy does not store costs one branch and is counted.
     if (!batcher.gate("call", ok ? "debug" : "warn")) return;
     const { level, event, fields, cids } = callEvent({ name, args, micros, ok, error, code, cids: operation });
-    // events: page.call
+    // events: workbench.call
     batcher.emit(level, event, fields, cids);
   });
 }
 
 // The methods of the console and the level of the event that each one makes. A console is the output of code that does not
 // use the entrance of the records, so `console.error` is stored at the level `warn`: it is in the log under its own event name
-// `page.console.error` and it does not fail a window check, as it did not before it was recorded. The entrance for errors is
+// `workbench.console.error` and it does not fail a window check, as it did not before it was recorded. The entrance for errors is
 // `reportRecord`, and for a plugin `context.runtime.log.error`.
 const CONSOLE_LEVELS = { error: "warn", warn: "warn", info: "info", log: "info", debug: "debug" };
 
@@ -155,7 +156,7 @@ function consoleText(args) {
 const captured = new WeakSet();
 
 /**
- * Records what the page writes to its console as the events `page.console.<method>` with the field `text`, and keeps the
+ * Records what the page writes to its console as the events `workbench.console.<method>` with the field `text`, and keeps the
  * console working: each method still runs. Calling it again for the same console changes nothing.
  */
 export function captureConsole(target = console) {
@@ -169,7 +170,7 @@ export function captureConsole(target = console) {
     target[method] = (...args) => {
       original(...args);
       const { text, truncated } = consoleText(args);
-      emitEvent(level, `page.console.${method}`, truncated ? { text, truncated } : { text });
+      emitEvent(level, `workbench.console.${method}`, truncated ? { text, truncated } : { text });
     };
   }
 }

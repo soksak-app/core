@@ -130,7 +130,7 @@ The drag evaluator validates shared recording evidence before judging geometry, 
    - The view reads its rows with `runtime.shortcuts.read`: the rows whose owner is `workbench` or `view`, each as `{key, owner, command}`. Rows of the native menu are not returned, so a view that follows this rule does not forward them.
    - Escape is an ordinary key. A view with its own Escape action decides it in its handler; a view with none runs `core.picker.close` for Escape while a page picker is open. The bridge enforces neither rule.
    - A key that a view leaves to its default action, or a key that is not a workbench row, keeps its default action.
-   - When a forwarded workbench command fails, the failure is written as `page.input.shortcut.failed {plugin, command}`, and the call replies with its error.
+   - When a forwarded workbench command fails, the failure is written as `workbench.input.shortcut.failed {plugin, command}`, and the call replies with its error.
    - IME input goes to the first responder of the view. The input method activation check verifies it.
    - The owner of Escape and of the text input keys is the view, because the first responder of the view receives them. The menu key equivalents of the View menu (Command `=`, `-`, `0`) are native menu shortcuts that run the text size commands ([text size](text-size.md)).
    - The complete shortcut table is [keyboard shortcuts](exposure.md#keyboard-shortcuts), with the machine-readable declaration `packages/workbench/shortcuts.json`. `scripts/test/shortcut-table.test.mjs` checks it against both hosts' menu table and the workbench key handlers.
@@ -161,7 +161,7 @@ The RPC protocol number is 1 in the 0.0 series.
 | `host.trace.view.callback-cancelled` | call | debug | `{surface, reason}`; reason is `retired-origin` or `window-closed` |
 | `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`; counter `losses.abandoned`; written by the host, which owns the wait |
 | `host.trace.view.presentation-join` | call | debug | `{phase, surface, generation, ticket}`; `phase` is `requested`, `result`, `presented` or `abandoned`; `result` also has `joined`, and `abandoned` also has `reason`; a presented callback may follow abandonment and does not mean the layout committed |
-| `page.input.shortcut.failed` | input | error | `{plugin, command}` |
+| `workbench.input.shortcut.failed` | input | error | `{plugin, command}` |
 | `host.trace.sidecar.restart-reset` | call | debug | `{sidecar, surface}` |
 
 The statuses `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views` are declared in `packages/workbench/exposure.json`.

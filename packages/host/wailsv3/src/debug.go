@@ -319,9 +319,15 @@ func debugPruneStates(folder string) error {
 	return nil
 }
 
-// DebugRecordRequest is the argument of the debugRecord call: the status values that the page collected.
+// DebugRecordRequest is the argument of the debugRecord call: the status values that the workbench collected.
 type DebugRecordRequest struct {
-	Page json.RawMessage `json:"page"`
+	Workbench json.RawMessage `json:"workbench"`
+}
+
+// DebugStateDocument is the state file of a debugRecord call without its time: the host, the versions, the window records and
+// the value of the workbench (docs/spec/debug.md#state).
+func DebugStateDocument(hostName string, versions map[string]any, windows []map[string]any, request DebugRecordRequest) map[string]any {
+	return map[string]any{"host": hostName, "versions": versions, "windows": windows, "workbench": request.Workbench}
 }
 
 // DebugSaveRequest is the argument of the debugSave call.
@@ -384,7 +390,7 @@ func (h *Host) DebugRead(requestJSON json.RawMessage) (DebugReadResult, error) {
 	return DebugRead(h.configDir, request.Path)
 }
 
-// DebugRecord is the page's debugRecord call. It writes the state file of every window and, in a diagnostic build,
+// DebugRecord is the debugRecord call of the workbench. It writes the state file of every window and, in a diagnostic build,
 // a still capture of each window.
 func (h *Host) DebugRecord(requestJSON json.RawMessage) (map[string]any, error) {
 	request, err := argument[DebugRecordRequest]("request", requestJSON)
@@ -417,9 +423,7 @@ func (h *Host) DebugRecord(requestJSON json.RawMessage) (map[string]any, error) 
 	} else {
 		versions["installed"] = json.RawMessage(installed)
 	}
-	path, err := DebugWriteState(h.configDir, time.Now(), map[string]any{
-		"host": "wailsv3", "versions": versions, "windows": windows, "page": request.Page,
-	})
+	path, err := DebugWriteState(h.configDir, time.Now(), DebugStateDocument("wailsv3", versions, windows, request))
 	if err != nil {
 		return nil, err
 	}

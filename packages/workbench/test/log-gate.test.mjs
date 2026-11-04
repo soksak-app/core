@@ -65,27 +65,27 @@ test("logPolicyOf completes the setting diagnostics.log with error for the class
   assert.throws(() => logPolicyOf({ audio: "off" }), /the class audio is not one of lifecycle, input, call, io, frame/);
 });
 
-test("a closed gate builds no fields, relays nothing, and reports the exact count as page.log.gated at a flush", async () => {
+test("a closed gate builds no fields, relays nothing, and reports the exact count as workbench.log.gated at a flush", async () => {
   const gate = createLogGate();
   gate.set({ ...everything, call: "info", io: "off" });
   const batches = [];
-  const batcher = createEventBatcher({ page: pageIdentity, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate });
+  const batcher = createEventBatcher({ writer: { layer: "workbench", member: "start", identity: pageIdentity }, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate });
   let built = 0;
   const fields = () => { built += 1; return { name: "x" }; };
-  for (let index = 0; index < 4; index += 1) assert.equal(batcher.emit("debug", "page.call", fields), false);
-  assert.equal(batcher.emit("warn", "page.call", fields), true, "a warning of the class call passes a policy that stores it from info on");
+  for (let index = 0; index < 4; index += 1) assert.equal(batcher.emit("debug", "workbench.call", fields), false);
+  assert.equal(batcher.emit("warn", "workbench.call", fields), true, "a warning of the class call passes a policy that stores it from info on");
   assert.equal(batcher.gate("call", "debug"), false);
   assert.equal(batcher.gate("call", "info"), true);
-  assert.equal(batcher.emit("info", "page.start", () => ({ time_origin: 1, url: "u" })), true);
+  assert.equal(batcher.emit("info", "workbench.start", () => ({ started_at: 1, url: "u" })), true);
   await batcher.flush();
   assert.equal(built, 1, "the fields of a closed gate were built");
   const events = batches.flatMap((request) => request.events);
-  assert.deepEqual(events.map((event) => event.event), ["page.log.gated", "page.call", "page.start"]);
+  assert.deepEqual(events.map((event) => event.event), ["workbench.log.gated", "workbench.call", "workbench.start"]);
   assert.deepEqual(events[0].fields, { class: "call", level: "debug", count: 5 });
   assert.equal(events[0].level, "info");
   assert.equal(batcher.gate("call", "debug"), false);
   await batcher.flush();
-  const later = batches.flatMap((request) => request.events).filter((event) => event.event === "page.log.gated");
+  const later = batches.flatMap((request) => request.events).filter((event) => event.event === "workbench.log.gated");
   assert.deepEqual(later.map((event) => event.fields), [{ class: "call", level: "debug", count: 5 }, { class: "call", level: "debug", count: 1 }]);
 });
 
@@ -93,11 +93,11 @@ test("an event that the catalog does not declare is not gated, and the report of
   const gate = createLogGate();
   gate.set({ ...everything, lifecycle: "off", call: "off" });
   const batches = [];
-  const batcher = createEventBatcher({ page: pageIdentity, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate });
+  const batcher = createEventBatcher({ writer: { layer: "workbench", member: "start", identity: pageIdentity }, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate });
   assert.equal(batcher.emit("debug", "plugin.editor.opened", { file: "a" }), true);
-  assert.equal(batcher.emit("debug", "page.call", { name: "x" }), false);
+  assert.equal(batcher.emit("debug", "workbench.call", { name: "x" }), false);
   await batcher.flush();
-  assert.deepEqual(batches.flatMap((request) => request.events).map((event) => event.event), ["page.log.gated", "plugin.editor.opened"]);
+  assert.deepEqual(batches.flatMap((request) => request.events).map((event) => event.event), ["workbench.log.gated", "plugin.editor.opened"]);
 });
 
 test("the counts of a closed gate leave each second and at a flush, not with each batch", async (t) => {
@@ -106,16 +106,16 @@ test("the counts of a closed gate leave each second and at a flush, not with eac
   gate.set({ ...everything, call: "info" });
   const batches = [];
   let clock = 0;
-  const batcher = createEventBatcher({ page: pageIdentity,
+  const batcher = createEventBatcher({ writer: { layer: "workbench", member: "start", identity: pageIdentity },
     call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate, now: () => clock,
   });
-  const gatedOf = () => batches.flatMap((request) => request.events).filter((event) => event.event === "page.log.gated").map((event) => event.fields);
+  const gatedOf = () => batches.flatMap((request) => request.events).filter((event) => event.event === "workbench.log.gated").map((event) => event.fields);
   // Ten batches within 900 ms each carry an event and follow refused events.
   for (let round = 0; round < 10; round += 1) {
     clock = round * 100;
-    batcher.emit("debug", "page.call", { name: "x" });
-    batcher.emit("debug", "page.call", { name: "x" });
-    batcher.emit("info", "page.start", { time_origin: 1, url: "u" });
+    batcher.emit("debug", "workbench.call", { name: "x" });
+    batcher.emit("debug", "workbench.call", { name: "x" });
+    batcher.emit("info", "workbench.start", { started_at: 1, url: "u" });
     await settle();
   }
   assert.deepEqual(gatedOf(), [], "the counts left with a batch within a second");
@@ -129,24 +129,24 @@ test("the counts of a closed gate leave each second and at a flush, not with eac
   await settle();
   assert.deepEqual(gatedOf(), [{ class: "call", level: "debug", count: 20 }]);
   clock = 1100;
-  batcher.emit("debug", "page.call", { name: "x" });
+  batcher.emit("debug", "workbench.call", { name: "x" });
   await batcher.flush();
   assert.deepEqual(gatedOf(), [{ class: "call", level: "debug", count: 20 }, { class: "call", level: "debug", count: 1 }]);
 });
 
-// The main page emits page.start in its first module, before the policy of its setting reaches the gate, and a window check
-// finds the reload of the page by it (docs/spec/logging.md#sources), so page.start passes every gate like the counts.
-test("page.start passes the gate before a policy is set and a gate that turns the class lifecycle off", async () => {
+// The main page emits workbench.start in its first module, before the policy of its setting reaches the gate, and a window check
+// finds the reload of the page by it (docs/spec/logging.md#sources), so workbench.start passes every gate like the counts.
+test("workbench.start passes the gate before a policy is set and a gate that turns the class lifecycle off", async () => {
   const batches = [];
   const unset = createLogGate();
-  const first = createEventBatcher({ page: pageIdentity, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate: unset });
-  assert.equal(first.emit("info", "page.start", { time_origin: 1, url: "http://localhost/" }), true);
+  const first = createEventBatcher({ writer: { layer: "workbench", member: "start", identity: pageIdentity }, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate: unset });
+  assert.equal(first.emit("info", "workbench.start", { started_at: 1, url: "http://localhost/" }), true);
   const off = createLogGate();
   off.set({ ...everything, lifecycle: "off" });
-  const second = createEventBatcher({ page: pageIdentity, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate: off });
-  assert.equal(second.emit("info", "page.start", { time_origin: 2, url: "http://localhost/" }), true);
+  const second = createEventBatcher({ writer: { layer: "workbench", member: "start", identity: pageIdentity }, call: answering(async (request) => { batches.push(request); }), report: assert.ifError, classify: classOf, gate: off });
+  assert.equal(second.emit("info", "workbench.start", { started_at: 2, url: "http://localhost/" }), true);
   await first.flush();
   await second.flush();
-  assert.deepEqual(batches.flatMap((request) => request.events).filter((event) => event.event === "page.start")
-    .map((event) => event.fields.time_origin), [1, 2]);
+  assert.deepEqual(batches.flatMap((request) => request.events).filter((event) => event.event === "workbench.start")
+    .map((event) => event.fields.started_at), [1, 2]);
 });

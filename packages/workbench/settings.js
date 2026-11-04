@@ -547,7 +547,7 @@ export const value = (key) => settings[key];
  * Changes part of the settings, applies the values and then notifies the change.
  *
  * This function is the only path of change. With a function per value, some function would omit the application. `actor` names
- * what changes the settings: the command, or the surface of a gesture. The change is the operation `page.settings.change`
+ * what changes the settings: the command, or the surface of a gesture. The change is the operation `workbench.settings.change`
  * (docs/spec/logging.md#operation-chains), and its identifiers go with the write to the host.
  */
 export function set(patch, scope = projectId ? "project" : "common", actor) {
@@ -566,7 +566,7 @@ export function set(patch, scope = projectId ? "project" : "common", actor) {
     else patched[key] = val;
   }
   checkValues(id ? effectiveSettings(defaults, applied(common), applied(patched)) : effectiveSettings(defaults, applied(patched), applied(overrides)));
-  const cids = beginOperation("page.settings.change", { scope: id ? "project" : "common", actor, keys: Object.keys(patch).join(",") });
+  const cids = beginOperation("workbench.settings.change", { scope: id ? "project" : "common", actor, keys: Object.keys(patch).join(",") });
   for (const [key, val] of Object.entries(patch)) {
     if (val === undefined) delete target[key];
     else target[key] = val;

@@ -238,14 +238,14 @@ fn the_events_of_the_writer_itself_pass_a_gate_that_turns_the_lifecycle_off() {
     }
 }
 
-// contract: log.policy.gate-passes-the-start-of-a-page-document
+// contract: log.policy.gate-passes-the-start-of-the-workbench
 #[test]
-fn the_start_of_a_page_document_passes_a_gate_that_turns_the_lifecycle_off() {
+fn the_start_of_the_workbench_passes_a_gate_that_turns_the_lifecycle_off() {
     let (_directory, log) = start_with_policy(
         r#"{"schema":1,"classes":{"lifecycle":"off","input":"trace","call":"off","io":"trace","frame":"trace"}}"#,
     );
-    let start = json!({"ts_us": 1_791_000_000_000_001u64, "mono_ns": 5_000_000_001u64, "level": "info", "event": "page.start",
-        "page": "1791948729050", "fields": {"time_origin": 1_791_948_729_050u64, "url": "tauri://localhost"}});
+    let start = json!({"ts_us": 1_791_000_000_000_001u64, "mono_ns": 5_000_000_001u64, "level": "info", "event": "workbench.start",
+        "start": "1791948729050", "fields": {"started_at": 1_791_948_729_050u64, "url": "tauri://localhost"}});
     log_command(&log, json!({"action": "batch", "events": [start]})).unwrap();
     log.flush(Duration::from_secs(5)).unwrap();
     let names: Vec<String> = read(log.path())
@@ -253,8 +253,8 @@ fn the_start_of_a_page_document_passes_a_gate_that_turns_the_lifecycle_off() {
         .map(|event| event["event"].as_str().unwrap().to_string())
         .collect();
     assert!(
-        names.iter().any(|name| name == "page.start"),
-        "the writer stored {names:?} although page.start passes every gate"
+        names.iter().any(|name| name == "workbench.start"),
+        "the writer stored {names:?} although workbench.start passes every gate"
     );
 }
 

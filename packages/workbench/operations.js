@@ -3,7 +3,7 @@
 //
 // The page assigns a correlation identifier `p<time origin>.<n>` when an operation starts and stores the first event of its chain
 // with it. The host calls that carry the operation out take the identifier as their options (`host.call(name, arg, {cids})`), so
-// the event `page.call` of the page and the event `host.binding.call` of the host carry it too, and the audit joins them.
+// the event `workbench.call` of the page and the event `host.binding.call` of the host carry it too, and the audit joins them.
 
 import { createOperationCids } from "@soksak/plugin-api";
 import { pageIdentity } from "./page-identity.js";

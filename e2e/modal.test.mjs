@@ -368,7 +368,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.debug.list");
     await assert.rejects(s.run("core.debug.save", { path: "settings.json" }),
       /debug: settings.json is not a file under logs\//);
-    s.expectError(/^error page .*debug: settings.json is not a file under logs\//);
+    s.expectError(/^error workbench .*debug: settings.json is not a file under logs\//);
     await s.run("core.debug.close");
     await s.until("core.debug", (debug) => !debug.open, "the debug view did not close");
     assert.equal((await s.get("core.screen")).modal, null);
@@ -432,7 +432,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.debug.timeline.select", { row: 0, selected: false });
     await s.until("core.debug", (debug) => debug.timeline.selected === 1, "the unselected row was not reported");
     await assert.rejects(s.run("core.debug.timeline.select", { row: shown.timeline.held + 1_000_000, selected: true }), /is not one of the/);
-    s.expectError(/^error page .*timeline row \d+ is not one of the \d+ rows/);
+    s.expectError(/^error workbench .*timeline row \d+ is not one of the \d+ rows/);
   });
 }
 
@@ -453,7 +453,7 @@ for (const app of Object.values(APPS)) {
     const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.held > 0, "the timeline did not show any row");
     assert.equal(shown.timeline.following, true, "a new timeline does not follow");
     assert.equal(shown.timeline.appended, 0);
-    // A run command stores the event page.command, which the host writes and announces with debug-log-changed.
+    // A run command stores the event workbench.command, which the host writes and announces with debug-log-changed.
     await s.run("core.debug.timeline.select", { row: 0, selected: false });
     const grown = await s.until("core.debug", (debug) => debug.timeline.held > shown.timeline.held, "the timeline did not append the rows of a command");
     assert.ok(grown.timeline.appended > 0, "the appended rows are not counted");

@@ -66,7 +66,7 @@ function callCids(name, args) {
 }
 
 /**
- * The event `page.call` of a host call (docs/spec/logging.md#automatic-entrances): the level is `debug`, and `warn` for a
+ * The event `workbench.call` of a host call (docs/spec/logging.md#automatic-entrances): the level is `debug`, and `warn` for a
  * refused call. The main page and the documents of the surfaces make the event here so that both record a call alike. `cids`
  * are the correlation identifiers that the call continues, or undefined.
  */
@@ -75,7 +75,7 @@ export function callEvent({ name, args, micros, ok, error, code, cids }) {
   // default: a failure without a code of its own has the internal code of the entrance (docs/spec/logging.md#result-form).
   if (!ok) fields.error = `${code ?? INTERNAL_CODE}: ${error}`;
   // default: a call that carries out no operation has the identifiers that its arguments carry, if any (a sidecar send).
-  return { level: ok ? "debug" : "warn", event: "page.call", fields, cids: cids ?? callCids(name, args) };
+  return { level: ok ? "debug" : "warn", event: "workbench.call", fields, cids: cids ?? callCids(name, args) };
 }
 
 /**

@@ -8,7 +8,7 @@ const state = (change = {}) => JSON.stringify({
   host: "wailsv3",
   versions: { core: "0.0.10", plugins: [{ id: "a" }] },
   windows: [],
-  page: { "core.screen": { modal: null } },
+  workbench: { "core.screen": { modal: null } },
   ...change,
 });
 
@@ -45,19 +45,21 @@ test("a comparison lists the paths whose values differ, including paths present 
   const b = parseState("logs/state-2.json", state({
     time: "20261010T110000Z",
     versions: { core: "0.0.11", plugins: [{ id: "a" }, { id: "b" }] },
-    page: { "core.screen": { modal: "debug" } },
+    workbench: { "core.screen": { modal: "debug" } },
   }), false);
   assert.deepEqual(compareStates(a, b), [
     { path: "time", a: '"20261010T100000Z"', b: '"20261010T110000Z"' },
     { path: "versions.core", a: '"0.0.10"', b: '"0.0.11"' },
-    { path: 'page["core.screen"].modal', a: "null", b: '"debug"' },
+    { path: 'workbench["core.screen"].modal', a: "null", b: '"debug"' },
     { path: "versions.plugins[1].id", a: null, b: '"b"' },
   ]);
   assert.deepEqual(compareStates(a, a), []);
 });
 
-test("the page member of a state file is the value the page sent: an array of entries is accepted", () => {
-  const state = { time: "20261010T151707Z", host: "wailsv3", versions: { core: "0.0.10" }, windows: [], page: [{ name: "core.screen", surface: null, result: { modal: null } }] };
-  assert.deepEqual(parseState("logs/state-a.json", JSON.stringify(state), false).page, state.page);
-  assert.throws(() => parseState("logs/state-a.json", JSON.stringify({ ...state, page: "text" }), false), /logs\/state-a\.json: page must be an object or an array, found "text"/);
+test("the workbench member of a state file is the value the workbench sent: an array of entries is accepted", () => {
+  const state = { time: "20261010T151707Z", host: "wailsv3", versions: { core: "0.0.10" }, windows: [], workbench: [{ name: "core.screen", surface: null, result: { modal: null } }] };
+  assert.deepEqual(parseState("logs/state-a.json", JSON.stringify(state), false).workbench, state.workbench);
+  assert.throws(() => parseState("logs/state-a.json", JSON.stringify({ ...state, workbench: "text" }), false), /logs\/state-a\.json: workbench must be an object or an array, found "text"/);
+  const { workbench, ...earlier } = state;
+  assert.throws(() => parseState("logs/state-a.json", JSON.stringify({ ...earlier, page: workbench }), false), /logs\/state-a\.json: workbench must be an object or an array, found undefined/);
 });

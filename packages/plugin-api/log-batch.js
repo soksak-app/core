@@ -42,10 +42,14 @@ function boundFields(fields) {
   return { stored: { head, truncated: true }, bytes: HEAD_BYTES + 32 };
 }
 
-// The events that pass every gate: page.start marks the start of a document and is emitted by its first module, before the
-// policy of the setting reaches the gate, and a reader finds the reload of a page by it (docs/spec/logging.md#policy);
-// page.fixture.step marks each step of a window check's fixture at the level that the diagnostic test marks use.
-const UNGATED = new Set(["page.start", "page.fixture.step"]);
+// The events of a writer that pass every gate, by the part of their name after the layer: `<layer>.start` marks the start of a
+// document and is emitted by its first module, before the policy of the setting reaches the gate, and a reader finds the reload of
+// a document by it (docs/spec/logging.md#policy); `<layer>.fixture.step` marks each step of a window check's fixture at the level
+// that the diagnostic test marks use.
+const UNGATED = ["start", "fixture.step"];
+
+/** Whether a value is a non-empty string. */
+const named = (value) => typeof value === "string" && value !== "";
 
 /**
  * The page has no wall clock or monotonic clock in microseconds: `Date.now()` has a resolution of a millisecond, and
@@ -55,9 +59,22 @@ const UNGATED = new Set(["page.start", "page.fixture.step"]);
  * that round trip as the moment of the answer. Every event then has the wall clock `ts_us` and the monotonic clock `mono_ns` of
  * the host at its own reading, so the layers of one input compare (docs/spec/logging.md#limits).
  */
+/**
+ * `writer` is `{layer, member, identity}`: the layer of the records of the batcher and of its ungated events, and the member that
+ * names the document on every event of a batch with its identity (docs/spec/logging.md#event). The workbench gives
+ * `{layer: "workbench", member: "start", identity}` and a view page `{layer: "page", member: "page", identity}`.
+ */
 export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES,
-  now = () => performance.now(), classify = () => undefined, gate = null, page }) {
-  if (typeof page !== "string" || page === "") throw new TypeError("createEventBatcher requires the page identity of the document");
+  now = () => performance.now(), classify = () => undefined, gate = null, writer }) {
+  if (!named(writer?.layer) || !named(writer?.member) || !named(writer?.identity)) {
+    throw new TypeError(`createEventBatcher requires the writer {layer, member, identity} of the document as non-empty strings, found ${JSON.stringify(writer)}`);
+  }
+  const { layer, member, identity } = writer;
+  const ungated = new Set(UNGATED.map((name) => `${layer}.${name}`));
+  // The names of the records that the batcher writes about itself, in the layer of its writer.
+  const own = { dropped: `${layer}.log.dropped`, gated: `${layer}.log.gated`, clock: `${layer}.log.clock` };
+  // A record of the batcher at the reading `at` of the clock of the page; `scripts/census.json` declares it as an emit site.
+  const ownRecord = (at, level, event, fields) => ({ at, level, event, fields });
   let queue = [];
   let queueBytes = 0;
   // The refused events by the bound that refused them: {count, bytes} for each reason.
@@ -116,13 +133,15 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     {
       // The refused events had no place in the queue; each loss is stored in front of the events that follow it.
       for (const [reason, { count, bytes }] of [...lost].reverse()) {
-        events.unshift({ at: now(), level: "warn", event: "page.log.dropped", fields: { count, bytes, reason } });
+        // events: page.log.dropped, workbench.log.dropped
+        events.unshift(ownRecord(now(), "warn", own.dropped, { count, bytes, reason }));
       }
       lost = new Map();
       // The events that the gate refused are reported with the exact count for each class and level; the report passes every gate.
       if (reportGated) {
         for (const entry of [...gated.values()].reverse()) {
-          events.unshift({ at: now(), level: "info", event: "page.log.gated", fields: { class: entry.class, level: entry.level, count: entry.count } });
+          // events: page.log.gated, workbench.log.gated
+          events.unshift(ownRecord(now(), "info", own.gated, { class: entry.class, level: entry.level, count: entry.count }));
         }
         gated = new Map();
         gatedAt = now();
@@ -135,14 +154,15 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
         // half of it, which a reader needs to order the events of the page among those of the host.
         if (!base.stated) {
           base.stated = true;
-          events.unshift({ at: base.at, level: "info", event: "page.log.clock",
-            fields: { trip_us: Math.round(base.trip * 1000), resolution_us: base.resolution_us } });
+          // events: page.log.clock, workbench.log.clock
+          events.unshift(ownRecord(base.at, "info", own.clock,
+            { trip_us: Math.round(base.trip * 1000), resolution_us: base.resolution_us }));
         }
-        // Every event names the document that wrote it by its page identity (docs/spec/logging.md#event).
+        // Every event names the document that wrote it in the member of its writer (docs/spec/logging.md#event).
         const stamped = events.map(({ at, cids, charge, waiter, ...rest }) => ({
           ts_us: Math.round(base.ts_us + (at - base.at) * 1000),
           mono_ns: Math.round(base.mono_ns + (at - base.at) * 1e6),
-          page,
+          [member]: identity,
           ...rest,
           ...(cids === undefined ? {} : { cids }),
         }));
@@ -206,7 +226,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   const emit = (level, event, fields = {}, cids = undefined) => {
     if (!LEVELS.has(level)) throw new TypeError(`event level ${JSON.stringify(level)} is not one of ${[...LEVELS].join(", ")}`);
     const klass = classify(event);
-    if (klass !== undefined && !UNGATED.has(event) && !open(klass, level)) return false;
+    if (klass !== undefined && !ungated.has(event) && !open(klass, level)) return false;
     const { stored, bytes } = boundFields(typeof fields === "function" ? fields() : fields);
     const charge = bytes + event.length + EVENT_OVERHEAD_BYTES;
     if (queue.length >= maxEvents) return refuse("the page queue was full", charge);

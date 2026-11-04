@@ -469,13 +469,13 @@ test("runtime.shortcuts.missing and runtime.shortcuts.run are not served and wri
   assert.deepEqual(ran.core, []);
 });
 
-test("runtime.command runs a core command through runCore, and a failed workbench row writes page.input.shortcut.failed", async () => {
+test("runtime.command runs a core command through runCore, and a failed workbench row writes workbench.input.shortcut.failed", async () => {
   const { ran, options } = fakes();
   assert.deepEqual(await answerViewCall({ id: 1, command: "core.probe.jump", params: {} }, options), { core: true });
   assert.deepEqual(ran.core, [{ name: "core.probe.jump", params: {} }]);
   options.runCore = async () => { throw new Error("no focus target"); };
   await assert.rejects(answerViewCall({ id: 2, command: "core.probe.jump", params: {} }, options), /no focus target/);
-  assert.deepEqual(ran.events, [{ level: "error", event: "page.input.shortcut.failed", fields: { plugin: "probe", command: "core.probe.jump" } }]);
+  assert.deepEqual(ran.events, [{ level: "error", event: "workbench.input.shortcut.failed", fields: { plugin: "probe", command: "core.probe.jump" } }]);
   await assert.rejects(answerViewCall({ id: 3, command: "core.picker.close", params: {} }, options), /no focus target/);
   assert.equal(ran.events.length, 1, "a core command that is not a workbench row wrote a shortcut record");
 });

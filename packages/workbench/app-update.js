@@ -64,7 +64,7 @@ export function createAppUpdate({ host, plugins = () => null, changed }) {
     const { version } = state.available;
     operation = { state: "staging", version, error: null };
     changed();
-    const cids = beginOperation("page.update.operation", { action: "update", version });
+    const cids = beginOperation("workbench.update.operation", { action: "update", version });
     try {
       const { bundle } = await host.call("appUpdateStage", { version }, { cids });
       operation = { state: "applying", version, error: null };

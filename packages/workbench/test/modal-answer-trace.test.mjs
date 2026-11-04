@@ -1,4 +1,4 @@
-// The answer of a native modal that the page receives is written as the page trace event `page.trace.modal.answer` with its key, at
+// The answer of a native modal that the page receives is written as the page trace event `workbench.trace.modal.answer` with its key, at
 // the receipt (docs/spec/performance-trace.md#producers). The overlay document has no trace switch, so the main page writes the event.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";

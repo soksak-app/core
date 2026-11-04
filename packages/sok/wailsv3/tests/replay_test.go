@@ -17,7 +17,7 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-const logOpen = `{"ts_us":%d,"mono_ns":%d,"seq":1,"level":"info","layer":"%s","event":"log.open","fields":{"schema":2,"pid":1,"role":"%s","boot":"b1"}}`
+const logOpen = `{"ts_us":%d,"mono_ns":%d,"seq":1,"level":"info","layer":"%s","event":"log.open","fields":{"schema":3,"pid":1,"role":"%s","boot":"b1"}}`
 
 // fakeReplay prints, for each frame record it reads, the number of bytes of the inputs read so far as 64 decimal digits.
 const fakeReplay = `#!/bin/sh
@@ -269,7 +269,7 @@ func segmentedConfig(t *testing.T, change func(first, second *replayEvents)) str
 		change(&first, &second)
 	}
 	config := replayConfig(t, replayEvents{sidecar: first.sidecar, page: append(first.page, second.page...)}, fakeReplay, "fake")
-	open := `{"ts_us":2000,"mono_ns":2000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":2,"pid":2,"role":"fake","boot":"b2"}}`
+	open := `{"ts_us":2000,"mono_ns":2000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":3,"pid":2,"role":"fake","boot":"b2"}}`
 	writeReplayFile(t, filepath.Join(config, "logs", "fake-b2.jsonl"), strings.Join(append([]string{open}, second.sidecar...), "\n")+"\n", 0o600)
 	return config
 }

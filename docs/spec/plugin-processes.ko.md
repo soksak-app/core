@@ -130,7 +130,7 @@ Drag evaluator는 공통 recording 증거를 검증한 뒤 geometry, source cade
    - view는 `runtime.shortcuts.read`로 자기 행을 읽는다. 주인이 `workbench` 또는 `view`인 행을 `{key, owner, command}`로 받는다. native 메뉴 행은 돌려주지 않으므로 이 규칙을 따르는 view는 그것을 넘기지 않는다.
    - Escape는 보통의 키다. 자기 Escape 동작이 있는 view는 자기 handler에서 정하고, 없는 view는 page picker가 열려 있을 때 Escape에 `core.picker.close`를 실행한다. bridge는 이 규칙들을 강제하지 않는다.
    - 넘기지 않은 키나 workbench 행이 아닌 키는 기본 동작을 그대로 지킨다.
-   - 넘긴 workbench 명령이 실패하면 `page.input.shortcut.failed {plugin, command}`로 알리고, call은 그 오류로 답한다.
+   - 넘긴 workbench 명령이 실패하면 `workbench.input.shortcut.failed {plugin, command}`로 알리고, call은 그 오류로 답한다.
    - IME는 view의 first responder가 받는다. 입력기 activation 검사로 확인한다.
    - Escape와 글 입력 키의 주인은 view다. view의 first responder가 이 키들을 받기 때문이다. View 메뉴의 메뉴 단축키(Command `=`, `-`, `0`)는 글자 크기 명령을 실행하는 native 메뉴 단축키다([글자 크기](text-size.ko.md)).
    - 단축키 표 전체는 [키보드 단축키](exposure.ko.md#키보드-단축키)이며, 기계가 읽는 선언은 `packages/workbench/shortcuts.json`이다. `scripts/test/shortcut-table.test.mjs`가 이 표를 두 호스트의 메뉴 표와 workbench 키 처리기에 대해 검사한다.
@@ -161,7 +161,7 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 | `host.trace.view.callback-cancelled` | call | debug | `{surface, reason}`; reason은 `retired-origin` 또는 `window-closed` |
 | `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`. 카운터 `losses.abandoned`. host가 wait를 소유하므로 host가 쓴다 |
 | `host.trace.view.presentation-join` | call | debug | `{phase, surface, generation, ticket}`. `phase`는 `requested`, `result`, `presented`, `abandoned` 중 하나다. `result`에는 `joined`, `abandoned`에는 `reason`이 추가된다. abandonment 뒤 callback이 올 수 있으며 `presented`는 layout commit을 뜻하지 않는다 |
-| `page.input.shortcut.failed` | input | error | `{plugin, command}` |
+| `workbench.input.shortcut.failed` | input | error | `{plugin, command}` |
 | `host.trace.sidecar.restart-reset` | call | debug | `{sidecar, surface}` |
 
 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `packages/workbench/exposure.json`에 선언한다.

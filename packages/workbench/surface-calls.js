@@ -1,6 +1,6 @@
 // The host calls of a surface document (docs/spec/logging.md#automatic-entrances). A surface is a separate webview without
 // the page log of the main page, so the runtime of each application sends the calls of its `page` object through this wrapper.
-// Every call is the event `page.call`, and the events of one turn travel to the host in one call `log`, like the events of
+// Every call is the event `workbench.call`, and the events of one turn travel to the host in one call `log`, like the events of
 // the main page (`@soksak/plugin-api/log-batch.js`). The records of the document (`page.report`) are queued behind the same batcher so that the
 // events of one document reach the host in the order they happened.
 import { callEvent, failureOf } from "./host-calls.js";
@@ -22,7 +22,7 @@ import { pageIdentity } from "./page-identity.js";
  */
 export function surfaceCalls({ send, log, listen }) {
   const report = (error) => console.error(error.message);
-  const batcher = createEventBatcher({ call: log, report, classify: classOf, gate: logGate, page: pageIdentity });
+  const batcher = createEventBatcher({ call: log, report, classify: classOf, gate: logGate, writer: { layer: "workbench", member: "start", identity: pageIdentity } });
   const apply = (classes) => {
     try {
       logGate.set(classes);
@@ -42,7 +42,7 @@ export function surfaceCalls({ send, log, listen }) {
         // The gate is asked before the arguments are serialized: a call that the policy does not store costs one branch and is counted.
         if (!batcher.gate("call", ok ? "debug" : "warn")) return;
         const { level, event, fields, cids } = callEvent({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, ...failure });
-        // events: page.call
+        // events: workbench.call
         batcher.emit(level, event, fields, cids);
       };
       let result;

@@ -9,7 +9,7 @@
 //
 // The update operation cannot run to its end offline: `appUpdateApply` would replace the running application. The check runs the
 // operation that the release refuses at `appUpdateStage`, which is the first host call of the chain and is recorded whether or not
-// it succeeds, so the chain `update` is checked through `page.update.operation`, `page.call` and `host.binding.call` of that call.
+// it succeeds, so the chain `update` is checked through `workbench.update.operation`, `workbench.call` and `host.binding.call` of that call.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

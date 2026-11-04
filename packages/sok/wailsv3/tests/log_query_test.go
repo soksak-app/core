@@ -125,7 +125,7 @@ func TestLogQueryAroundRefusesWhatItDoesNotTakeAndBoundsTheBytes(t *testing.T) {
 	// taken first, the earlier rows may use half of the rest and the later rows use what is left.
 	config := t.TempDir()
 	var b strings.Builder
-	b.WriteString(`{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2,"pid":1,"role":"host","boot":"b1"}}` + "\n")
+	b.WriteString(`{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":3,"pid":1,"role":"host","boot":"b1"}}` + "\n")
 	big := strings.Repeat("x", 1_000_000)
 	for seq := 2; seq <= 12; seq++ {
 		fmt.Fprintf(&b, `{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"host","event":"host.x.y","fields":{"text":%q}}`+"\n", 1000+seq, seq, seq, big)
@@ -355,7 +355,7 @@ func TestLogQueryRefusesInvalidParameters(t *testing.T) {
 		{`{"channel": 3}`, `log query channel 3 is not one of other, debug, all`},
 		{`{"level": "loud"}`, `log query level "loud" is not one of error, warn, info, debug, trace`},
 		{`{"class": "x"}`, `log query class "x" is not one of lifecycle, input, call, io, frame`},
-		{`{"layer": "x"}`, `log query layer "x" is not one of native, host, page, plugin, sidecar, sok`},
+		{`{"layer": "x"}`, `log query layer "x" is not one of native, host, workbench, page, plugin, sidecar, sok`},
 		{`{"event": ""}`, `log query event must be a non-empty string, found ""`},
 		{`{"surface": 7}`, `log query surface must be a non-empty string, found 7`},
 		{`{"text": null}`, `log query text must be a non-empty string, found null`},
@@ -460,6 +460,7 @@ func TestLogQueryAgreesWithTheReferenceOnTheGeneratedLog(t *testing.T) {
 		{"level": "warn"},
 		{"level": "error", "layer": "native"},
 		{"layer": "page", "level": "info"},
+		{"layer": "workbench", "level": "info"},
 		{"event": "host.call.b"},
 		{"event_prefix": "native.input"},
 		{"event_prefix": "sidecar"},

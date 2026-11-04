@@ -28,7 +28,7 @@ done
 
 fn log_open(ts: i64, layer: &str, role: &str) -> String {
     format!(
-        r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":1,"level":"info","layer":"{layer}","event":"log.open","fields":{{"schema":2,"pid":1,"role":"{role}","boot":"b1"}}}}"#
+        r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":1,"level":"info","layer":"{layer}","event":"log.open","fields":{{"schema":3,"pid":1,"role":"{role}","boot":"b1"}}}}"#
     )
 }
 
@@ -483,7 +483,7 @@ fn segmented_config(name: &str, change: impl Fn(&mut Events, &mut Events)) -> Fo
         FAKE_REPLAY,
         "fake",
     );
-    let open = r#"{"ts_us":2000,"mono_ns":2000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":2,"pid":2,"role":"fake","boot":"b2"}}"#;
+    let open = r#"{"ts_us":2000,"mono_ns":2000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":3,"pid":2,"role":"fake","boot":"b2"}}"#;
     write_file(
         &config.join("logs/fake-b2.jsonl"),
         &event_file(open.to_string(), &second.sidecar),

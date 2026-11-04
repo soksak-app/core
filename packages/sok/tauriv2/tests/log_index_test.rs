@@ -92,7 +92,7 @@ fn index_matches_the_golden_digest() {
 
 fn event_line_of(seq: i64) -> String {
     if seq == 1 {
-        return r#"{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2,"pid":1,"role":"host","boot":"a"}}"#.to_string();
+        return r#"{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":3,"pid":1,"role":"host","boot":"a"}}"#.to_string();
     }
     format!(
         r#"{{"ts_us":{},"mono_ns":{seq},"seq":{seq},"level":"debug","layer":"host","event":"host.x.y","fields":{{"n":{seq}}}}}"#,
@@ -226,7 +226,7 @@ fn index_counts_the_lines_that_announce_a_change() {
         "{}{}{}",
         read(5, "host.binding.call", "logQuery"),
         read(6, "host.binding.call", "debugFiles"),
-        read(7, "page.call", "logQuery")
+        read(7, "workbench.call", "logQuery")
     );
     let mut file = std::fs::OpenOptions::new()
         .append(true)
@@ -260,8 +260,8 @@ fn index_refuses_a_damaged_index_and_a_broken_line() {
     let damaged: Vec<(&str, Damage, String)> = vec![
         (
             "version",
-            Box::new(|data| data[STATE_BLOCK_BYTES + 4] = 2),
-            format!("{name}: version 2 is not 1"),
+            Box::new(|data| data[STATE_BLOCK_BYTES + 4] = 1),
+            format!("{name}: version 1 is not 2"),
         ),
         (
             "state checksum",
@@ -338,8 +338,8 @@ fn index_refuses_a_damaged_index_and_a_broken_line() {
     let open = event_line_of(1);
     let cases: Vec<(&str, String, &str)> = vec![
         ("first line", r#"{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"host.x"}"#.to_string() + "\n", r#"logs/host-f.jsonl: the first line is not log.open: "host.x""#),
-        ("schema", r#"{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":1}}"#.to_string() + "\n", "logs/host-f.jsonl: schema 1 is not 2"),
-        ("layer", format!("{open}\n{{\"ts_us\":1,\"mono_ns\":1,\"seq\":2,\"level\":\"info\",\"layer\":\"x\",\"event\":\"a\"}}\n"), r#"logs/host-f.jsonl:2: layer "x" is not one of native, host, page, plugin, sidecar, sok"#),
+        ("schema", r#"{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2}}"#.to_string() + "\n", "logs/host-f.jsonl: schema 2 is not 3"),
+        ("layer", format!("{open}\n{{\"ts_us\":1,\"mono_ns\":1,\"seq\":2,\"level\":\"info\",\"layer\":\"x\",\"event\":\"a\"}}\n"), r#"logs/host-f.jsonl:2: layer "x" is not one of native, host, workbench, page, plugin, sidecar, sok"#),
         ("class", format!("{open}\n{{\"ts_us\":1,\"mono_ns\":1,\"seq\":2,\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\",\"class\":\"loud\"}}\n"), r#"logs/host-f.jsonl:2: class "loud" is not one of lifecycle, input, call, io, frame"#),
         ("null surface", format!("{open}\n{{\"ts_us\":1,\"mono_ns\":1,\"seq\":2,\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\",\"surface\":null}}\n"), "logs/host-f.jsonl:2: surface must be a string, found null"),
         ("null cids", format!("{open}\n{{\"ts_us\":1,\"mono_ns\":1,\"seq\":2,\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\",\"cids\":null}}\n"), "logs/host-f.jsonl:2: cids must be an array of strings, found null"),

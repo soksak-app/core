@@ -122,7 +122,7 @@ fn an_update_of_the_index_announces_only_when_a_line_announces_a_change() {
 
 fn event_lines(count: i64) -> String {
     let mut text = String::from(
-        "{\"ts_us\":1000,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2,\"pid\":1,\"role\":\"host\",\"boot\":\"b1\"}}\n",
+        "{\"ts_us\":1000,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":3,\"pid\":1,\"role\":\"host\",\"boot\":\"b1\"}}\n",
     );
     for seq in 2..=count {
         text.push_str(&format!(

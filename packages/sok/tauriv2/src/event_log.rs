@@ -27,8 +27,9 @@ use crate::event_classes::{Class, class_of};
 use crate::log_policy::Gate;
 use crate::plugin_catalog::PluginCatalog;
 
-/// The schema number of the lines that this writer writes. Schema 2 adds `mono_ns` to every line.
-pub const SCHEMA: u64 = 2;
+/// The schema number of the lines that this writer writes. Schema 2 adds `mono_ns` to every line; schema 3 adds the layer
+/// workbench and the member `start` that names the start of the workbench that wrote an event.
+pub const SCHEMA: u64 = 3;
 
 /// The level of an event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -151,8 +152,8 @@ struct Pending {
     /// The correlation identifiers of the inputs the event belongs to; none for most events.
     cids: Vec<String>,
     layer: Cow<'static, str>,
-    /// The time origin of the document that wrote an event of the layer page or plugin; `None` for another layer.
-    page: Option<String>,
+    /// The members that name the document that wrote an event of the layer workbench, page or plugin; none for another layer.
+    document: Document,
     level: Level,
     event: String,
     /// The class that the catalog declares for the event, or lifecycle for an undeclared event of the layer plugin; `None`
@@ -184,7 +185,7 @@ impl Pending {
             mono_ns: clock(),
             cids: Vec::new(),
             layer: Cow::Borrowed(layer),
-            page: None,
+            document: Document::default(),
             level,
             event: event.into(),
             undeclared: class.is_none(),
@@ -266,25 +267,95 @@ pub struct EventLog {
 }
 
 /// The layers of the event contract that another layer of a process relays (docs/spec/logging.md#event).
-const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
+const LAYERS: [&str; 6] = ["native", "host", "workbench", "page", "plugin", "sidecar"];
 
-/// The events that pass every gate, so the policy never refuses them (docs/spec/logging.md#policy): `page.start`, which marks
-/// a document before its page policy reaches the gate; `page.log.clock`, the one-time clock uncertainty metadata required to
-/// compare that document's timestamps; host stall records, the only record of a main-thread stall; `host.view.killed`, which
-/// reports an ended view's unsent batch; `host.test.start`/`host.test.end`, whose flushed positions delimit a diagnostic
-/// window check under every selected policy; and `page.fixture.step`, the steps of the fixture of a window check.
+/// The members that name the writing document on an event of each layer that a document writes: the start of the workbench,
+/// the page identity of a view page, and one of them for an event of a plugin (docs/spec/logging.md#event).
+fn document_members(layer: &str) -> &'static [&'static str] {
+    match layer {
+        "workbench" => &["start"],
+        "page" => &["page"],
+        "plugin" => &["page", "start"],
+        _ => &[],
+    }
+}
+
+/// The layers whose events name the writing document in the member.
+fn member_layers(member: &str) -> &'static str {
+    if member == "page" {
+        "page or plugin"
+    } else {
+        "workbench or plugin"
+    }
+}
+
+/// The members of an event that name the document that wrote it: the page identity of a view page in `page` and the start
+/// of the workbench in `start` (docs/spec/logging.md#event).
+#[derive(Clone, Default)]
+struct Document {
+    page: Option<String>,
+    start: Option<String>,
+}
+
+/// An error unless the event names its writing document in exactly one member that its layer allows.
+fn check_writer(
+    event: &str,
+    layer: &str,
+    page: Option<&str>,
+    start: Option<&str>,
+) -> Result<(), String> {
+    let allowed = document_members(layer);
+    let named = [
+        ("page", page.is_some_and(|value| !value.is_empty())),
+        ("start", start.is_some_and(|value| !value.is_empty())),
+    ];
+    if let Some((member, _)) = named
+        .iter()
+        .find(|(member, set)| *set && !allowed.contains(member))
+    {
+        return Err(format!(
+            "the event {event} of the layer {layer} names {member}, which only an event of the layer {} names",
+            member_layers(member)
+        ));
+    }
+    let count = named
+        .iter()
+        .filter(|(member, set)| *set && allowed.contains(member))
+        .count();
+    match (allowed, count) {
+        ([member], 0) => Err(format!(
+            "the event {event} of the layer {layer} names its writer in {member}"
+        )),
+        ([first, second], 0) => Err(format!(
+            "the event {event} of the layer {layer} names its writer in {first} or {second}"
+        )),
+        ([first, second], 2) => Err(format!(
+            "the event {event} of the layer {layer} names its writer in one of {first} and {second}, not both"
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// The events that pass every gate, so the policy never refuses them (docs/spec/logging.md#policy): `workbench.start` and
+/// `page.start`, which mark a document of the workbench or a view page before its policy reaches the gate;
+/// `workbench.log.clock` and `page.log.clock`, the one-time clock uncertainty metadata required to compare that document's
+/// timestamps; host stall records, the only record of a main-thread stall; `host.view.killed`, which reports an ended view's
+/// unsent batch; `host.test.start`/`host.test.end`, whose flushed positions delimit a diagnostic window check under every
+/// selected policy; and `workbench.fixture.step`, the steps of the fixture of a window check.
 pub fn passes_every_gate(event: &str) -> bool {
     matches!(
         event,
-        "page.start"
+        "workbench.start"
+            | "page.start"
             | "host.stall"
             | "host.stall.sampled"
             | "host.stall.dump"
             | "host.view.killed"
             | "host.test.start"
             | "host.test.end"
+            | "workbench.log.clock"
             | "page.log.clock"
-            | "page.fixture.step"
+            | "workbench.fixture.step"
     )
 }
 
@@ -303,9 +374,12 @@ pub struct RelayedEvent {
     pub ts_us: u64,
     pub mono_ns: u64,
     pub layer: String,
-    /// The time origin of the document that wrote the event; an event of the layer page or plugin requires it, and another
-    /// layer has none (docs/spec/logging.md#event).
+    /// The page identity of the view page that wrote the event: an event of the layer page names it, an event of the layer
+    /// plugin names it or `start`, and another layer has none (docs/spec/logging.md#event).
     pub page: Option<String>,
+    /// The start of the workbench that wrote the event: an event of the layer workbench names it, an event of the layer
+    /// plugin names it or `page`, and another layer has none (docs/spec/logging.md#event).
+    pub start: Option<String>,
     pub level: Level,
     pub event: String,
     pub cids: Vec<String>,
@@ -532,7 +606,7 @@ impl EventLog {
             (self.clock)(),
             Vec::new(),
             Cow::Borrowed(self.layer),
-            None,
+            Document::default(),
             level,
             event,
             fields,
@@ -598,7 +672,7 @@ impl EventLog {
             (self.clock)(),
             cids.to_vec(),
             Cow::Borrowed(self.layer),
-            None,
+            Document::default(),
             level,
             event,
             fields,
@@ -616,6 +690,7 @@ impl EventLog {
             mono_ns,
             layer,
             page,
+            start,
             level,
             event,
             cids,
@@ -640,14 +715,7 @@ impl EventLog {
                 "the event {event:?} does not start with its layer {layer:?}"
             ));
         }
-        let document_layer = layer == "page" || layer == "plugin";
-        if document_layer != page.as_deref().is_some_and(|page| !page.is_empty()) {
-            // default: an event without a page prints the empty text, as the Go writer prints it.
-            let named = page.as_deref().unwrap_or("");
-            return Err(format!(
-                "the event {event} of the layer {layer} names the page {named:?}; only an event of the layer page or plugin names one, and it must"
-            ));
-        }
+        check_writer(event, layer, page.as_deref(), start.as_deref())?;
         // An event that passes every gate is named by passes_every_gate (docs/spec/logging.md#policy).
         let (class, _) = self.classify(event, layer);
         if let Some(class) = class
@@ -666,7 +734,7 @@ impl EventLog {
                 mono_ns,
                 cids,
                 Cow::Owned(layer.to_string()),
-                page,
+                Document { page, start },
                 level,
                 event,
                 fields,
@@ -682,7 +750,7 @@ impl EventLog {
         mono_ns: u64,
         cids: Vec<String>,
         layer: Cow<'static, str>,
-        page: Option<String>,
+        document: Document,
         level: Level,
         event: &str,
         fields: Fields,
@@ -711,7 +779,7 @@ impl EventLog {
             mono_ns,
             cids,
             layer,
-            page,
+            document,
             level,
             event: event.to_string(),
             class,
@@ -874,14 +942,15 @@ fn line(seq: u64, pending: &Pending) -> String {
     } else {
         ""
     };
-    // The document that wrote an event of the layer page or plugin follows the layer.
-    let page = match &pending.page {
-        Some(page) => format!(
-            ",\"page\":{}",
-            serde_json::to_string(page).expect("a string serializes")
+    // The members that name the document that wrote an event of the layer workbench, page or plugin follow the layer.
+    let member = |name: &str, value: &Option<String>| match value {
+        Some(value) => format!(
+            ",\"{name}\":{}",
+            serde_json::to_string(value).expect("a string serializes")
         ),
         None => String::new(),
     };
+    let page = member("page", &pending.document.page) + &member("start", &pending.document.start);
     format!(
         "{{\"ts_us\":{},\"mono_ns\":{},\"seq\":{},\"level\":\"{}\"{},\"layer\":\"{}\"{},\"event\":{}{},\"fields\":{}{}{}}}",
         pending.ts_us,
@@ -1218,7 +1287,10 @@ impl PullSink for Output {
             mono_ns: event.mono_ns,
             cids: event.cids,
             layer: Cow::Owned(event.layer),
-            page: event.page,
+            document: Document {
+                page: event.page,
+                start: event.start,
+            },
             level: event.level,
             event: event.event,
             class,

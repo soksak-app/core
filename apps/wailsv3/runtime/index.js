@@ -193,13 +193,13 @@ export const page = (() => {
       call("theme").then(fn);
       listen("theme", fn);
     },
-    // Stores a record of this document in the event log of the host as the event `page.record.<level>`, in the batch of the
+    // Stores a record of this document in the event log of the host as the event `workbench.record.<level>`, in the batch of the
     // events of its turn (docs/spec/diagnostics.md#forms, docs/spec/logging.md#writers).
     report: async (record) => {
       if (!record || typeof record !== "object" || typeof record.level !== "string" || typeof record.where !== "string" || typeof record.text !== "string") {
         throw new TypeError("report requires {level, where, text} strings");
       }
-      return calls.record(record.level, `page.record.${record.level}`, { where: record.where, text: record.text });
+      return calls.record(record.level, `workbench.record.${record.level}`, { where: record.where, text: record.text });
     },
     sidecar: (name) => ({
       send: (surface, body, cids = []) => call("sidecarSend", name, surface, body, cids),
@@ -225,7 +225,7 @@ export const page = (() => {
         throw new Error(`status ${name} of document ${surface} cannot be sent: a modal document has no status watch route`);
       },
       // A reply that the host refuses is stored as an error record of this document, as report stores one.
-      report: (text) => calls.record("error", "page.record.error", { where: "exposure", text }),
+      report: (text) => calls.record("error", "workbench.record.error", { where: "exposure", text }),
     },
     // The document region of this surface. The host verifies that the calling webview is the surface and sends the state only to this surface.
     document: {

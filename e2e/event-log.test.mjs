@@ -30,7 +30,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(events[0].event, "log.open");
     assert.equal(events[0].fields.pid, pid);
     assert.equal(events[0].fields.role, "host");
-    assert.equal(events[0].fields.schema, 2);
+    assert.equal(events[0].fields.schema, 3);
     // The policy in force at the start of the process is stored as log.policy, which passes every gate. host.app.event `started`
     // is below `error` and is stored only by a policy in force before the process started, so the test after the next one
     // starts the host again under its policy.
@@ -114,7 +114,7 @@ for (const app of Object.values(APPS)) {
 
 // The trace of the host (docs/spec/performance-trace.md): with the trace on, the host stores the lifecycle of a surface with its
 // geometry, the sampler stores the memory of the host and of every registered sidecar process, and a reload of the main page
-// starts a new document that the event `page.start` marks.
+// starts a new document that the event `workbench.start` marks.
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the trace stores the surface geometry, the memory of the sidecar and the start of each page document`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
@@ -138,8 +138,8 @@ for (const app of Object.values(APPS)) {
     await s.run("host.window.reload");
     await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), "the reloaded page did not report ready");
     await s.flushLog();
-    const starts = await untilEventLine(app.configDir, offsets, (line) => line.includes("page.start") && line.includes('"url"'), 30000,
-      reading(app, ["page.start"]));
-    assert.match(starts, /"time_origin":[0-9.]+/, `the page start event holds no clock origin: ${starts}`);
+    const starts = await untilEventLine(app.configDir, offsets, (line) => line.includes("workbench.start") && line.includes('"url"'), 30000,
+      reading(app, ["workbench.start"]));
+    assert.match(starts, /"started_at":[0-9.]+/, `the workbench start event holds no start time: ${starts}`);
   });
 }

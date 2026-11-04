@@ -1,4 +1,4 @@
-// The clock statement of a document (docs/spec/logging.md#writers): the main page states page.log.clock once, in its first
+// The clock statement of a document (docs/spec/logging.md#writers): the main page states workbench.log.clock once, in its first
 // batch, whichever writer of the page queued the first event; the records of the page and the events of its trace leave
 // through one writer.
 import assert from "node:assert/strict";
@@ -23,14 +23,14 @@ logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", fr
 
 test("the main page states its clock once for the events of its records and of its trace", async () => {
   await setTraceEnabled(true);
-  emitEvent("info", "page.start", { time_origin: 1, url: "wails://localhost/" });
+  emitEvent("info", "workbench.start", { started_at: 1, url: "wails://localhost/" });
   trace("surface.mount", { plugin: "probe", surface: "tab-a", ms: 1 });
   await settled();
   await flushEvents();
   await setTraceEnabled(false);
   const events = batches.flat();
-  const clocks = events.filter((event) => event.event === "page.log.clock");
+  const clocks = events.filter((event) => event.event === "workbench.log.clock");
   assert.equal(clocks.length, 1, `the page stated its clock ${clocks.length} times: ${JSON.stringify(events.map((event) => event.event))}`);
-  assert.deepEqual(events.filter((event) => event.event !== "page.log.clock").map((event) => event.event),
-    ["page.start", "page.trace.surface.mount"], "the records and the trace leave in the order the page queued them");
+  assert.deepEqual(events.filter((event) => event.event !== "workbench.log.clock").map((event) => event.event),
+    ["workbench.start", "workbench.trace.surface.mount"], "the records and the trace leave in the order the page queued them");
 });

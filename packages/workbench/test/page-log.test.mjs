@@ -1,5 +1,5 @@
 // The records of the page (docs/spec/diagnostics.md#forms, docs/spec/logging.md#writers): a failure and an observation of the
-// page are the events `page.record.error` and `page.record.info` with the fields `where` and `text`, queued without waiting
+// page are the events `workbench.record.error` and `workbench.record.info` with the fields `where` and `text`, queued without waiting
 // and relayed to the host in a batch through the call `log`.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
@@ -25,26 +25,26 @@ logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", fr
 
 const events = () => calls.filter(({ name }) => name === "log").flatMap(({ payload }) => payload.events);
 
-test("a failure is the event page.record.error with the place and the text, and the wait ends when it was relayed", async () => {
+test("a failure is the event workbench.record.error with the place and the text, and the wait ends when it was relayed", async () => {
   calls.length = 0;
   await reportRecord("error", "surface probe mount failed: x");
   assert.equal(calls.some(({ name }) => name === "report"), false, "the host call report is not used any more");
   const [event] = events();
-  assert.equal(event.event, "page.record.error");
+  assert.equal(event.event, "workbench.record.error");
   assert.equal(event.level, "error");
   assert.deepEqual(event.fields, { where: "surface probe mount failed", text: "x" });
   assert.ok(Number.isInteger(event.ts_us) && event.ts_us > 1.7e15);
 });
 
-test("a line without a place has the place page, an observation is the event page.record.info, and the order is kept", async () => {
+test("a line without a place has the place workbench, an observation is the event workbench.record.info, and the order is kept", async () => {
   calls.length = 0;
   reportRecord("info", "focus moved to probe");
   reportRecord("error", "second: failure\nsecond line");
   await reportRecord("info", "third");
   assert.deepEqual(events().map((event) => [event.event, event.fields.where, event.fields.text]), [
-    ["page.record.info", "page", "focus moved to probe"],
-    ["page.record.error", "second", "failure\nsecond line"],
-    ["page.record.info", "page", "third"],
+    ["workbench.record.info", "workbench", "focus moved to probe"],
+    ["workbench.record.error", "second", "failure\nsecond line"],
+    ["workbench.record.info", "workbench", "third"],
   ]);
   assert.equal(calls.filter(({ name }) => name === "log").length, 1, "the records of one turn travel in one call");
 });
@@ -97,11 +97,11 @@ test("captureConsole records what the page writes to its console and keeps the c
   await settled();
   assert.deepEqual(written.map(([kind]) => kind), ["error", "warn", "info", "log", "debug"], "the original methods still ran once each");
   assert.deepEqual(events().map((event) => [event.level, event.event, event.fields.text]), [
-    ["warn", "page.console.error", 'failed: {"code":7} Error: boom'],
-    ["warn", "page.console.warn", "careful"],
-    ["info", "page.console.info", "note 1"],
-    ["info", "page.console.log", "plain"],
-    ["debug", "page.console.debug", "undefined null d"],
+    ["warn", "workbench.console.error", 'failed: {"code":7} Error: boom'],
+    ["warn", "workbench.console.warn", "careful"],
+    ["info", "workbench.console.info", "note 1"],
+    ["info", "workbench.console.log", "plain"],
+    ["debug", "workbench.console.debug", "undefined null d"],
   ]);
 });
 
@@ -120,11 +120,11 @@ test("a failed relay is reported on the original console and does not become a c
   } finally {
     console.error = original;
   }
-  assert.equal(events().some((event) => event.event === "page.console.error"), false);
+  assert.equal(events().some((event) => event.event === "workbench.console.error"), false);
   assert.ok(reported.some((line) => line.includes("page event batch of 1 events failed: host closed")));
 });
 
-test("every host call is the event page.call with its name, arguments, duration and outcome, except the calls of the log itself and the queries of the debug timeline", async () => {
+test("every host call is the event workbench.call with its name, arguments, duration and outcome, except the calls of the log itself and the queries of the debug timeline", async () => {
   const { settlingCalls } = await import("../host-calls.js");
   calls.length = 0;
   const wrapped = settlingCalls((name) => (name === "bad" ? Promise.reject(new Error("refused")) : Promise.resolve()));
@@ -136,7 +136,7 @@ test("every host call is the event page.call with its name, arguments, duration 
   await wrapped.call("overlayPlace", { id: "debug", rect: { x: 0, y: 0, w: 1, h: 1 } });
   await wrapped.call("big", { text: "x".repeat(5000) });
   await settled();
-  const seen = events().filter(({ event }) => event === "page.call");
+  const seen = events().filter(({ event }) => event === "workbench.call");
   assert.deepEqual(seen.map(({ level, fields }) => [level, fields.name, fields.args, fields.ok, fields.error, fields.truncated]), [
     ["debug", "good", '[{"a":1}]', true, undefined, false],
     ["warn", "bad", "[]", false, "-32603: refused", false],
@@ -145,7 +145,7 @@ test("every host call is the event page.call with its name, arguments, duration 
   for (const { fields } of seen) assert.ok(Number.isInteger(fields.micros) && fields.micros >= 0);
 });
 
-test("a host call that the policy does not store is not built into an event, and the page reports the count as page.log.gated", async () => {
+test("a host call that the policy does not store is not built into an event, and the page reports the count as workbench.log.gated", async () => {
   const { settlingCalls } = await import("../host-calls.js");
   const { logGate } = await import("../log-gate.js");
   const { flushEvents } = await import("../page-log.js");
@@ -163,25 +163,25 @@ test("a host call that the policy does not store is not built into an event, and
     await assert.rejects(wrapped.call("bad", { b: 2 }), /refused/);
     await flushEvents();
     await settled();
-    const seen = events().filter(({ event }) => event === "page.call" || event === "page.log.gated");
+    const seen = events().filter(({ event }) => event === "workbench.call" || event === "workbench.log.gated");
     // The report of the count leaves each second and at a flush; its sum is the exact number of the calls that the gate refused.
-    const gatedCount = seen.filter(({ event }) => event === "page.log.gated").reduce((sum, { fields }) => sum + fields.count, 0);
+    const gatedCount = seen.filter(({ event }) => event === "workbench.log.gated").reduce((sum, { fields }) => sum + fields.count, 0);
     assert.equal(gatedCount, 2);
-    assert.ok(seen.filter(({ event }) => event === "page.log.gated").every(({ level, fields }) => level === "info" && fields.class === "call" && fields.level === "debug"));
-    assert.deepEqual(seen.filter(({ event }) => event === "page.call").map(({ level, fields }) => [level, fields.name]), [["warn", "bad"]]);
+    assert.ok(seen.filter(({ event }) => event === "workbench.log.gated").every(({ level, fields }) => level === "info" && fields.class === "call" && fields.level === "debug"));
+    assert.deepEqual(seen.filter(({ event }) => event === "workbench.call").map(({ level, fields }) => [level, fields.name]), [["warn", "bad"]]);
     assert.equal(read, 2, "the arguments of a call that the gate does not store were serialized for the event");
   } finally {
     logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
   }
 });
 
-test("the start of a page is the event page.start with the origin of the document clock and its address", async () => {
-  const { recordPageStart } = await import("../page-log.js");
+test("the start of a document of the workbench is the event workbench.start with the origin of the document clock and its address", async () => {
+  const { recordWorkbenchStart } = await import("../page-log.js");
   calls.length = 0;
-  recordPageStart({ href: "app://workbench/index.html?window=w1" }, 1791500000000.5);
+  recordWorkbenchStart({ href: "app://workbench/index.html?window=w1" }, 1791500000000.5);
   await settled();
   assert.deepEqual(events().map((event) => [event.level, event.event, event.fields]), [
-    ["info", "page.start", { time_origin: 1791500000000.5, url: "app://workbench/index.html?window=w1" }],
+    ["info", "workbench.start", { started_at: 1791500000000.5, url: "app://workbench/index.html?window=w1" }],
   ]);
 });
 

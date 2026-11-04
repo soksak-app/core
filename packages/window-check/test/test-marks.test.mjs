@@ -106,7 +106,7 @@ function configWithLog(folder) {
   const config = join(folder, "config");
   mkdirSync(join(config, "logs"), { recursive: true });
   writeFileSync(join(config, "logs", "host-1-1.jsonl"),
-    `${JSON.stringify({ ts_us: 1791000000000000, seq: 1, level: "info", layer: "host", event: "log.open", fields: { schema: 2 } })}\n`);
+    `${JSON.stringify({ ts_us: 1791000000000000, seq: 1, level: "info", layer: "host", event: "log.open", fields: { schema: 3 } })}\n`);
   return config;
 }
 

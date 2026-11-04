@@ -168,7 +168,7 @@ test("view presentation joins name the phases and abandonments of one surface in
     traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 4, phase: "result", joined: true }),
     traceRow("view.presentation-join", { surface: "terminal-b", generation: 1, ticket: 4, phase: "requested" }),
     traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 4, phase: "presented" }),
-    { layer: "page", event: "view.presentation-join", surface: "terminal-a", phase: "presented" },
+    { layer: "workbench", event: "view.presentation-join", surface: "terminal-a", phase: "presented" },
   ];
   assert.deepEqual(viewPresentationJoins(rows, "terminal-a"), {
     phases: ["requested", "result", "presented"], abandoned: [],

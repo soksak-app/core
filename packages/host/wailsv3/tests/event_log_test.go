@@ -81,7 +81,7 @@ func TestTheFirstLineOfAnEventLogIsLogOpenAndSeqIsConsecutive(t *testing.T) {
 		t.Fatalf("first event %v", events[0])
 	}
 	fields := events[0]["fields"].(map[string]any)
-	if fields["schema"] != float64(2) || fields["role"] != "host" || fields["boot"] != "b1" {
+	if fields["schema"] != float64(3) || fields["role"] != "host" || fields["boot"] != "b1" {
 		t.Fatalf("log.open fields %v", fields)
 	}
 	for position, event := range events {
@@ -400,6 +400,58 @@ func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T)
 	if stored["layer"] != "page" || stored["ts_us"] != float64(1_791_000_000_000_123) || stored["mono_ns"] != float64(5_000_000_123) || stored["seq"] != float64(3) ||
 		stored["level"] != "warn" || stored["fields"].(map[string]any)["index"] != float64(7) || len(stored["cids"].([]any)) != 1 || stored["cids"].([]any)[0] != "b1.9" {
 		t.Fatalf("relayed event %v", stored)
+	}
+}
+
+// contract: log.writer.names-the-writing-document
+func TestARelayedEventNamesTheDocumentThatWroteItInTheMemberOfItsLayer(t *testing.T) {
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	support.StoreEveryLevel(t, log)
+	relayed := func(layer, event, page, start string) host.RelayedEvent {
+		return host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: layer, Page: page, Start: start, Level: host.LevelInfo, Event: event, Fields: json.RawMessage(`{}`)}
+	}
+	for _, accepted := range []host.RelayedEvent{
+		relayed("workbench", "workbench.test.event", "", "S1"),
+		relayed("page", "page.test.event", "P1", ""),
+		relayed("plugin", "plugin.probe.saved", "", "S1"),
+		relayed("plugin", "plugin.probe.saved", "P1", ""),
+	} {
+		if ok, err := log.EmitRelayed(accepted); err != nil || !ok {
+			t.Fatalf("%+v: accepted %v, error %v", accepted, ok, err)
+		}
+	}
+	for _, c := range []struct {
+		event host.RelayedEvent
+		want  string
+	}{
+		{relayed("workbench", "workbench.test.event", "", ""), "the event workbench.test.event of the layer workbench names its writer in start"},
+		{relayed("workbench", "workbench.test.event", "P1", "S1"), "the event workbench.test.event of the layer workbench names page, which only an event of the layer page or plugin names"},
+		{relayed("page", "page.test.event", "P1", "S1"), "the event page.test.event of the layer page names start, which only an event of the layer workbench or plugin names"},
+		{relayed("plugin", "plugin.probe.saved", "P1", "S1"), "the event plugin.probe.saved of the layer plugin names its writer in one of page and start, not both"},
+		{relayed("plugin", "plugin.probe.saved", "", ""), "the event plugin.probe.saved of the layer plugin names its writer in page or start"},
+		{relayed("native", "native.test.event", "", "S1"), "the event native.test.event of the layer native names start, which only an event of the layer workbench or plugin names"},
+	} {
+		if _, err := log.EmitRelayed(c.event); err == nil || err.Error() != c.want {
+			t.Errorf("%+v: error %v, want %q", c.event, err, c.want)
+		}
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	if len(events) != 6 {
+		t.Fatalf("events %v", events)
+	}
+	for index, want := range []map[string]any{{"start": "S1"}, {"page": "P1"}, {"start": "S1"}, {"page": "P1"}} {
+		stored := events[2+index]
+		_, page := stored["page"]
+		_, start := stored["start"]
+		if (want["page"] != nil) != page || (want["start"] != nil) != start || (page && stored["page"] != want["page"]) || (start && stored["start"] != want["start"]) {
+			t.Fatalf("event %d %v, want %v", index, stored, want)
+		}
 	}
 }
 

@@ -22,7 +22,7 @@ import (
 // eventLines returns the lines of an event file of boot b1: log.open as seq 1 and then host.x.y events up to seq count.
 func eventLines(count int) string {
 	var b strings.Builder
-	b.WriteString(`{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2,"pid":1,"role":"host","boot":"b1"}}` + "\n")
+	b.WriteString(`{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":3,"pid":1,"role":"host","boot":"b1"}}` + "\n")
 	for seq := 2; seq <= count; seq++ {
 		fmt.Fprintf(&b, `{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"host","event":"host.x.y","fields":{"n":%d}}`+"\n", 1000+seq, seq, seq, seq)
 	}
