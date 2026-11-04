@@ -543,7 +543,7 @@ type Index struct {
 }
 
 // CoreHosts are the hosts of an application release.
-var CoreHosts = []string{"tauriv2", "wailsv3"}
+var CoreHosts = []string{"mygo", "tauriv2", "wailsv3"}
 
 // CoreRelease is one core release of the registry: the zip of the application bundle for each platform and host.
 type CoreRelease struct {

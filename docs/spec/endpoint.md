@@ -41,7 +41,7 @@ The host opens `<config-dir>/process.lock` (creating it when it is missing) befo
 | `transport` | `unix` or `pipe` |
 | `address` | Socket path or pipe name |
 | `pid` | Host process id |
-| `application` | `wailsv3` or `tauriv2` |
+| `application` | `wailsv3`, `tauriv2` or `mygo` |
 | `version` | Application version |
 | `executable` | Absolute path of the host executable with symbolic links resolved |
 | `started` | Start time in ISO 8601 |
