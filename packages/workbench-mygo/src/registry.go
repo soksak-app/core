@@ -13,6 +13,10 @@ import (
 // Command is the handler of a declared command. params is the JSON of its parameters, which is empty when it has none.
 type Command func(params json.RawMessage) (any, error)
 
+// LaterCommand is the handler of a declared command whose answer depends on a host call, which answers in a later step of the
+// main thread, so a step cannot wait for it. params is as for Command, and the handler calls answer once.
+type LaterCommand func(params json.RawMessage, answer func(value any, err error))
+
 // Status reads the current value of a declared status.
 type Status func() any
 
@@ -55,13 +59,15 @@ type Registry struct {
 	declared *Declarations
 	mu       sync.Mutex
 	commands map[string]Command
+	later    map[string]LaterCommand
 	statuses map[string]Status
 	watches  map[string]*watch
 }
 
 // NewRegistry returns an empty registry of the names of declared.
 func NewRegistry(declared *Declarations) *Registry {
-	return &Registry{declared: declared, commands: map[string]Command{}, statuses: map[string]Status{}, watches: map[string]*watch{}}
+	return &Registry{declared: declared, commands: map[string]Command{}, later: map[string]LaterCommand{}, statuses: map[string]Status{},
+		watches: map[string]*watch{}}
 }
 
 // Command registers the handler of the declared command name.
@@ -71,10 +77,23 @@ func (r *Registry) Command(name string, run Command) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.commands[name] != nil {
+	if r.commands[name] != nil || r.later[name] != nil {
 		panic(fmt.Sprintf("command %s is already registered", name))
 	}
 	r.commands[name] = run
+}
+
+// CommandLater registers the handler of the declared command name that answers in a later step.
+func (r *Registry) CommandLater(name string, run LaterCommand) {
+	if !r.declared.Commands[name] {
+		panic(fmt.Sprintf("command %s is not declared", name))
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.commands[name] != nil || r.later[name] != nil {
+		panic(fmt.Sprintf("command %s is already registered", name))
+	}
+	r.later[name] = run
 }
 
 // Status registers the reader of the declared status name.
@@ -93,12 +112,28 @@ func (r *Registry) Status(name string, read Status) {
 // Run runs the command name with params.
 func (r *Registry) Run(name string, params json.RawMessage) (any, error) {
 	r.mu.Lock()
-	run := r.commands[name]
+	run, later := r.commands[name], r.later[name]
 	r.mu.Unlock()
+	if later != nil {
+		return nil, fmt.Errorf("command %s answers in a later step", name)
+	}
 	if run == nil {
 		return nil, Refuse(Unregistered, "command %s is not registered", name)
 	}
 	return run(params)
+}
+
+// RunLater runs the command name with params and gives answer its result: at once for a command that returns, and in a later
+// step for a command that answers later.
+func (r *Registry) RunLater(name string, params json.RawMessage, answer func(value any, err error)) {
+	r.mu.Lock()
+	later := r.later[name]
+	r.mu.Unlock()
+	if later != nil {
+		later(params, answer)
+		return
+	}
+	answer(r.Run(name, params))
 }
 
 // Read returns the current value of the status name.
@@ -117,6 +152,9 @@ func (r *Registry) Names() (commands, statuses []string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for name := range r.commands {
+		commands = append(commands, name)
+	}
+	for name := range r.later {
 		commands = append(commands, name)
 	}
 	for name := range r.statuses {
